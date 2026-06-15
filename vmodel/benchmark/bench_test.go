@@ -12,7 +12,7 @@ import (
 // wire-correct OpenAI and Anthropic responses and that the capture layer counts
 // hits and records the forwarded request.
 func TestProductionServer_RealModels(t *testing.T) {
-	srv := NewProductionServer()
+	srv := NewModelServer()
 	url := srv.InProcess()
 	defer srv.Close()
 
@@ -76,7 +76,7 @@ func TestScenarioServer_Fixtures(t *testing.T) {
 
 // TestListenTransport verifies the real-TCP transport path works end to end.
 func TestListenTransport(t *testing.T) {
-	srv := NewProductionServer()
+	srv := NewModelServer()
 	url, err := srv.Listen(":0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)

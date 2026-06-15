@@ -63,7 +63,7 @@ pluggable:
 ```
 bench.Server = observing middleware (capture + EndpointKind hits + counts)
                wrapped around ANY inner provider http.Handler
-   ├── NewProductionServer()  → inner = virtualserver.Service routes (real vmodel models)
+   ├── NewModelServer()  → inner = virtualserver.Service routes (real vmodel models)
    │                            used by servertest (opt-in), external projects, load tests
    └── NewScenarioServer(reg) → inner = scenario/MockResponseBuilder mux (4 formats)
                                 used by protocoltest's transform matrix and servertest's byte-exact mocks
@@ -78,7 +78,7 @@ bench.Server = observing middleware (capture + EndpointKind hits + counts)
 | Error simulation | pre-content + mid-stream injection, delay | **shared** | reuse `vmodel.ErrorInjection` | `vmodel/error_injection.go` |
 | Check logic | `Assertion` + `RoundTripResult` (`AssertContentContains`, `AssertHasToolCalls`, `AssertHTTPStatus`, …) | **shared** | `benchmark/check/` | elevated from `protocoltest/assertions.go` + `types.go` |
 | Response generation | how a request becomes a response body | **pluggable** | inner `http.Handler` | two responders ↓ |
-| ↳ Production responder | real vmodel models → protocol-correct bytes | plug A | `NewProductionServer()` | `vmodel/virtualserver.Service` |
+| ↳ Model responder | real vmodel models → protocol-correct bytes | plug A | `NewModelServer()` | `vmodel/virtualserver.Service` |
 | ↳ Scenario responder | `MockResponseBuilder` fixtures across 4 formats | plug B | `NewScenarioServer(reg)` | `protocoltest/scenarios.go` |
 
 ### Package layout (extend `vmodel/benchmark`)
@@ -87,9 +87,9 @@ bench.Server = observing middleware (capture + EndpointKind hits + counts)
 vmodel/benchmark/
 ├── client.go            (existing) load generator — unchanged
 ├── server.go            (existing) LocalServer load target — kept; thin alias over
-│                        bench.NewProductionServer().Listen()
+│                        bench.NewModelServer().Listen()
 ├── bench.go             NEW  Server: observing wrapper; InProcess() (httptest) + Listen(addr) (TCP);
-│                             NewProductionServer() + NewScenarioServer(reg) constructors
+│                             NewModelServer() + NewScenarioServer(reg) constructors
 ├── capture.go           NEW  CapturedRequest, EndpointKind, recorder — elevated from
 │                             protocoltest.VirtualServer (capture / recordHit / EndpointHits / LastRequest)
 ├── check/               NEW subpkg — reusable preset check logic
@@ -132,17 +132,17 @@ one shared vocabulary instead of re-deriving checks per package.
   reusable check layer ships with its *producer*, not just the assertions. This
   is exactly how `protocoltest` uses `VirtualServer` today, generalized.
 - **Secondary — simple runnable server.** `vmodel/benchmark/examples/server` is
-  the canonical example: a `main` that calls `NewProductionServer().Listen(addr)`
-  and serves the production responder (real vmodel models) over loopback for
+  the canonical example: a `main` that calls `NewModelServer().Listen(addr)`
+  and serves the model responder (real vmodel models) over loopback for
   non-Go drivers — i.e. it demonstrates the foundation itself. No new CLI surface
   beyond this example.
 
 ### Two production-backed servers, one router
 
-`NewProductionServer()` (observable: capture + endpoint hits) and `LocalServer`
+`NewModelServer()` (observable: capture + endpoint hits) and `LocalServer`
 (the capture-free load target used by the load generator) both serve the same
 `virtualserver.Service` and share their route wiring via the package-private
-`productionRouter()` helper — so there is one place that mounts
+`modelRouter()` helper — so there is one place that mounts
 `/v1`,`/openai/v1`,`/anthropic/v1`. `LocalServer` deliberately omits the capture
 middleware to keep the load hot-path overhead-free; `Server.Service()` exposes
 the underlying service so production-server callers can register extra models.
@@ -285,7 +285,7 @@ Verified against current usage, not assumed:
   not apply, and the migration is **deferred / demand-driven** (see Phase 3
   decision). It stays a standalone gateway-level mock for now.
 
-This is the payoff of the pluggable split: the production responder serves
+This is the payoff of the pluggable split: the model responder serves
 protocol-correct paths, the scenario responder serves the transform matrix, and
 a (future) endpoint responder could serve servertest's byte-exact needs — one
 shared observability + transport layer underneath, response generation pluggable

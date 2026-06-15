@@ -31,7 +31,7 @@ func main() {
 	// listener, with request capture / endpoint-hit counting. This is the
 	// canonical "run the benchmark as a standalone mock provider" example for
 	// external (non-Go) drivers.
-	srv := benchmark.NewProductionServer()
+	srv := benchmark.NewModelServer()
 	if _, err := srv.Listen(addr); err != nil {
 		log.Fatalf("start benchmark server: %v", err)
 	}

@@ -17,9 +17,9 @@ const DefaultPort = 12580
 // LocalServer is the capture-free load target: a virtualserver.Service exposed
 // over a real HTTP listener so the benchmark load client can hit a loopback
 // target with no per-request observability overhead. It shares route wiring with
-// the observable reference Server via productionRouter (see bench.go) but
+// the observable reference Server via modelRouter (see bench.go) but
 // deliberately omits the capture middleware — for an observable server (request
-// capture, endpoint-hit counts) use NewProductionServer().Listen() instead.
+// capture, endpoint-hit counts) use NewModelServer().Listen() instead.
 type LocalServer struct {
 	svc      *virtualserver.Service
 	listener net.Listener
@@ -32,7 +32,7 @@ type LocalServer struct {
 // shut down. The underlying virtualmodel registries come pre-populated with
 // the same defaults as production via virtualserver.NewService.
 func NewLocalServer(addr string) (*LocalServer, error) {
-	router, svc := productionRouter()
+	router, svc := modelRouter()
 
 	if addr == "" {
 		addr = fmt.Sprintf(":%d", DefaultPort)

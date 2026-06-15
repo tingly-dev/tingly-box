@@ -8,7 +8,7 @@
 //
 //   - Reference bench: Server (bench.go) — an observable mock-provider that
 //     wraps any inner provider handler with a request-capture / hit-count layer
-//     and offers two response strategies (NewProductionServer for real vmodel
+//     and offers two response strategies (NewModelServer for real vmodel
 //     models, NewScenarioServer for fixture builders) over both in-process and
 //     real-TCP transports. The reusable check-logic and scenario fixtures live
 //     in the check/ and scenario/ sub-packages, consumed by protocoltest (and

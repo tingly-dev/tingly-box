@@ -24,7 +24,7 @@ import (
 //
 // Response generation is pluggable via the constructor used:
 //
-//   - NewProductionServer() serves real vmodel models (protocol-correct bytes),
+//   - NewModelServer() serves real vmodel models (protocol-correct bytes),
 //     the same registries that back the production /virtual/v1/* endpoint.
 //   - NewScenarioServer() serves registered scenario fixtures across all four
 //     provider formats (OpenAI chat / responses, Anthropic, Google).
@@ -37,7 +37,7 @@ import (
 type Server struct {
 	handler   http.Handler
 	rec       *recorder
-	svc       *virtualserver.Service                     // non-nil only for production servers
+	svc       *virtualserver.Service                     // non-nil only for model servers
 	scenarios *vmodel.GenericRegistry[scenario.Scenario] // non-nil only for scenario servers
 
 	ts      *httptest.Server
@@ -52,25 +52,25 @@ func NewServer(inner http.Handler) *Server {
 	return &Server{handler: captureMiddleware(rec, inner), rec: rec}
 }
 
-// NewProductionServer builds a Server whose inner handler is the production
+// NewModelServer builds a Server whose inner handler is the production
 // virtualserver.Service mounted under /v1, /openai/v1, and /anthropic/v1 — the
 // same wiring (and default model registries) as the production endpoint, so the
 // responses are wire-format-correct. Use this for servertest, load tests, and
 // external projects that want a realistic provider.
-func NewProductionServer() *Server {
-	router, svc := productionRouter()
+func NewModelServer() *Server {
+	router, svc := modelRouter()
 	s := NewServer(router)
 	s.svc = svc
 	return s
 }
 
-// productionRouter builds a gin engine serving the production
+// modelRouter builds a gin engine serving the production
 // virtualserver.Service (the same default vmodel registries as /virtual/v1/*)
 // under /v1, /openai/v1, and /anthropic/v1, and returns the engine plus the
-// service so callers can register extra models. Shared by NewProductionServer
+// service so callers can register extra models. Shared by NewModelServer
 // (which wraps it with capture) and LocalServer (the capture-free load target),
 // so the route wiring lives in exactly one place.
-func productionRouter() (*gin.Engine, *virtualserver.Service) {
+func modelRouter() (*gin.Engine, *virtualserver.Service) {
 	svc := virtualserver.NewService()
 
 	gin.SetMode(gin.ReleaseMode)
@@ -82,7 +82,7 @@ func productionRouter() (*gin.Engine, *virtualserver.Service) {
 	return router, svc
 }
 
-// Service returns the underlying virtualserver.Service for a production server
+// Service returns the underlying virtualserver.Service for a model server
 // (so callers can register additional virtual models), or nil for scenario /
 // arbitrary-handler servers.
 func (s *Server) Service() *virtualserver.Service { return s.svc }
@@ -99,7 +99,7 @@ func NewScenarioServer() *Server {
 }
 
 // RegisterScenario registers (or replaces) a scenario on a scenario server. It
-// is a no-op on a production server. The registry ordinarily errors on duplicate
+// is a no-op on a model server. The registry ordinarily errors on duplicate
 // IDs, so a prior entry with the same name is cleared first.
 func (s *Server) RegisterScenario(sc scenario.Scenario) {
 	if s.scenarios == nil {
