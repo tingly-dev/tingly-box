@@ -150,6 +150,31 @@ func (d *DescriptionCollector) Snapshot() []string {
 	return out
 }
 
+// BuildVisionDescriptionPrefix turns a snapshot of wrapped descriptions
+// into the single text prefix the response-side injector prepends before
+// the model's first text output. Each description sits on its own line;
+// a blank line separates the whole block from the model's reply:
+//
+//	<image-description>d1</image-description>
+//	<image-description>d2</image-description>
+//
+//	...model output...
+//
+// Returns "" for an empty snapshot so callers can treat the no-image
+// case as a no-op.
+func BuildVisionDescriptionPrefix(descs []string) string {
+	if len(descs) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for _, d := range descs {
+		sb.WriteString(strings.TrimSpace(d))
+		sb.WriteByte('\n')
+	}
+	sb.WriteByte('\n')
+	return sb.String()
+}
+
 // ctxKeyCollector is the per-Process context key used to thread the
 // DescriptionCollector down to describe() without rippling it through
 // every walk/replacement signature. Resolved once at Process entry and

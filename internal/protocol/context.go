@@ -34,11 +34,45 @@ type HandleContext struct {
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.
+//
+// Any factories registered via RegisterDefaultStreamEventHookFactory are
+// invoked here and their non-nil hooks appended to OnStreamEventHooks, so
+// cross-cutting response-stream concerns (e.g. vision-proxy description
+// injection) attach automatically without each transport handler opting
+// in. Factories run in registration order; the resulting hooks therefore
+// run before any hook the handler adds later (e.g. the recorder).
 func NewHandleContext(c *gin.Context, responseModel string) *HandleContext {
-	return &HandleContext{
+	hc := &HandleContext{
 		GinContext:    c,
 		ResponseModel: responseModel,
 	}
+	for _, f := range defaultStreamEventHookFactories {
+		if hook := f(hc); hook != nil {
+			hc.OnStreamEventHooks = append(hc.OnStreamEventHooks, hook)
+		}
+	}
+	return hc
+}
+
+// DefaultStreamEventHookFactory builds a per-request stream-event hook from
+// the HandleContext, or returns nil to opt out for this request. Factories
+// are consulted once per NewHandleContext call.
+type DefaultStreamEventHookFactory func(hc *HandleContext) func(event interface{}) error
+
+var defaultStreamEventHookFactories []DefaultStreamEventHookFactory
+
+// RegisterDefaultStreamEventHookFactory installs a factory consulted for
+// every HandleContext built via NewHandleContext. Intended to be called at
+// server boot; not safe for concurrent registration once requests are in
+// flight.
+func RegisterDefaultStreamEventHookFactory(f DefaultStreamEventHookFactory) {
+	defaultStreamEventHookFactories = append(defaultStreamEventHookFactories, f)
+}
+
+// ResetDefaultStreamEventHookFactories clears all registered factories.
+// Test-only helper to keep boot-time registration isolated between tests.
+func ResetDefaultStreamEventHookFactories() {
+	defaultStreamEventHookFactories = nil
 }
 
 type HandleGuardrails struct {
