@@ -144,8 +144,10 @@ one shared vocabulary instead of re-deriving checks per package.
 `virtualserver.Service` and share their route wiring via the package-private
 `modelRouter()` helper — so there is one place that mounts
 `/v1`,`/openai/v1`,`/anthropic/v1`. `LocalServer` deliberately omits the capture
-middleware to keep the load hot-path overhead-free; `Server.Service()` exposes
-the underlying service so production-server callers can register extra models.
+middleware to keep the load hot-path overhead-free. A server that needs *custom*
+models (rather than the defaults) builds its own router over a registered
+`virtualserver.Service` and wraps it with `NewServer(router)` — the same generic
+seam — so no dedicated `Service()` accessor is shipped until a caller needs one.
 
 ## Migration phases (foundation-first)
 

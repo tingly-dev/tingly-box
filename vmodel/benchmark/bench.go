@@ -37,7 +37,6 @@ import (
 type Server struct {
 	handler   http.Handler
 	rec       *recorder
-	svc       *virtualserver.Service                     // non-nil only for model servers
 	scenarios *vmodel.GenericRegistry[scenario.Scenario] // non-nil only for scenario servers
 
 	ts      *httptest.Server
@@ -58,18 +57,18 @@ func NewServer(inner http.Handler) *Server {
 // responses are wire-format-correct. Use this for servertest, load tests, and
 // external projects that want a realistic provider.
 func NewModelServer() *Server {
-	router, svc := modelRouter()
-	s := NewServer(router)
-	s.svc = svc
-	return s
+	router, _ := modelRouter()
+	return NewServer(router)
 }
 
 // modelRouter builds a gin engine serving the production
 // virtualserver.Service (the same default vmodel registries as /virtual/v1/*)
 // under /v1, /openai/v1, and /anthropic/v1, and returns the engine plus the
-// service so callers can register extra models. Shared by NewModelServer
-// (which wraps it with capture) and LocalServer (the capture-free load target),
-// so the route wiring lives in exactly one place.
+// service. Shared by NewModelServer (which wraps it with capture) and
+// LocalServer (the capture-free load target), so the route wiring lives in
+// exactly one place. A server that needs *custom* models builds its own router
+// over a registered virtualserver.Service and wraps it with NewServer — no
+// dedicated accessor needed.
 func modelRouter() (*gin.Engine, *virtualserver.Service) {
 	svc := virtualserver.NewService()
 
@@ -81,11 +80,6 @@ func modelRouter() (*gin.Engine, *virtualserver.Service) {
 	}
 	return router, svc
 }
-
-// Service returns the underlying virtualserver.Service for a model server
-// (so callers can register additional virtual models), or nil for scenario /
-// arbitrary-handler servers.
-func (s *Server) Service() *virtualserver.Service { return s.svc }
 
 // NewScenarioServer builds a Server whose inner handler serves registered
 // scenario fixtures (scenario.MockResponseBuilder) across all four provider
