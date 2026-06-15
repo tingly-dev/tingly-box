@@ -10,6 +10,14 @@ import (
 // EndpointKind identifies which provider-native endpoint a request hit. chat and
 // responses are deliberately distinct: they are two different OpenAI protocols,
 // and observers assert which one was actually forwarded to.
+//
+// This is a test-observability axis ("which route did this request hit"),
+// cross-provider, distinct from two adjacent production enums it must NOT be
+// conflated with: ai.OpenAIEndpointMode ({unknown,chat,responses,both}) is a
+// provider *configuration* (which OpenAI endpoints a provider supports, OpenAI
+// only), and ai.APIType / APIStyle is the protocol *family*. EndpointKind only
+// shares the "chat"/"responses" literals with the former — different concept,
+// different layer.
 type EndpointKind string
 
 const (
