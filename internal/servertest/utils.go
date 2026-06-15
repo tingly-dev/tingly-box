@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +19,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -193,101 +191,6 @@ func AssertJSONResponse(t *testing.T, resp *http.Response, expectedStatus int, c
 
 	if checkFields != nil {
 		checkFields(data)
-	}
-}
-
-// CreateTestProvider creates a test provider configuration
-func CreateTestProvider(name, apiBase, token string) *typ.Provider {
-	return &typ.Provider{
-		Name:    name,
-		APIBase: apiBase,
-		Token:   token,
-		Enabled: true,
-		Timeout: int64(constant.DefaultRequestTimeout),
-	}
-}
-
-// CaptureRequest captures HTTP request details
-func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interface{}, error) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	// Create a test request
-	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model":    "test-model",
-		"messages": []map[string]string{{"role": "user", "content": "test"}},
-	})
-
-	req, _ := http.NewRequest("POST", "/test", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	c.Request = req
-
-	handler(c)
-
-	var requestData map[string]interface{}
-	json.NewDecoder(c.Request.Body).Decode(&requestData)
-
-	return req, requestData, nil
-}
-
-// AddTestProvider adds a single test provider
-func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle string, enabled bool) {
-	provider := &typ.Provider{
-		UUID:     name, // for test, use name as uuid for convenience
-		Name:     name,
-		APIBase:  apiBase,
-		APIStyle: protocol.APIStyle(apiStyle),
-		Token:    "test-token",
-		Enabled:  enabled,
-		Timeout:  int64(constant.DefaultRequestTimeout),
-	}
-	if err := ts.appConfig.AddProvider(provider); err != nil {
-		t.Fatalf("Failed to add provider %s: %v", name, err)
-	}
-}
-
-// AddTestProviderWithURL adds a provider with a specific URL
-func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle string, enabled bool) {
-	provider := &typ.Provider{
-		UUID:     name, // use name as uuid for convenience
-		Name:     name,
-		APIBase:  url,
-		APIStyle: protocol.APIStyle(apiStyle),
-		Token:    "test-token",
-		Enabled:  enabled,
-		Timeout:  int64(constant.DefaultRequestTimeout),
-	}
-	if err := ts.appConfig.AddProvider(provider); err != nil {
-		t.Fatalf("Failed to add provider %s: %v", name, err)
-	}
-}
-
-// AddTestRule adds a test rule that routes to a specific provider
-func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
-	// Create a simple rule with proper LBTactic
-	rule := typ.Rule{
-		UUID:          requestModel,
-		Scenario:      typ.ScenarioOpenAI,
-		RequestModel:  requestModel,
-		ResponseModel: model,
-		Services: []*loadbalance.Service{
-			{
-				Provider:   providerName,
-				Model:      model,
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
-		},
-		Active: true,
-	}
-
-	if err := ts.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {
-		t.Fatalf("Failed to add rule %s: %v", requestModel, err)
 	}
 }
 

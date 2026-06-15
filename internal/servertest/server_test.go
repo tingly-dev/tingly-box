@@ -382,10 +382,12 @@ func runLoadBalancingOpenAI(t *testing.T, ts *TestServer) {
 
 	t.Logf("Second load balance request status: %d", w2.Code)
 
-	// Both requests should be handled (may fail at provider level but routing works)
-	// Include 422 for cases where the model rule is not properly configured
-	assert.True(t, containsStatus(w1.Code, []int{200, 400, 422, 500}))
-	assert.True(t, containsStatus(w2.Code, []int{200, 400, 422, 500}))
+	// Both requests should be handled (may fail at provider level but routing works).
+	// Accept 401 (fake-token test providers legitimately return Unauthorized),
+	// 422 (model rule not fully configured), and other forwarding outcomes — the
+	// point is that routing reached a provider, not the upstream's verdict.
+	assert.True(t, containsStatus(w1.Code, []int{200, 400, 401, 422, 500}))
+	assert.True(t, containsStatus(w2.Code, []int{200, 400, 401, 422, 500}))
 }
 
 func runLoadBalancingAnthropic(t *testing.T, ts *TestServer) {
@@ -437,10 +439,12 @@ func runLoadBalancingAnthropic(t *testing.T, ts *TestServer) {
 
 	t.Logf("Second Anthropic load balance request status: %d", w2.Code)
 
-	// Both requests should be handled (may fail at provider level but routing works)
-	// Include 422 for cases where the model rule is not properly configured
-	assert.True(t, containsStatus(w1.Code, []int{200, 400, 422, 500}))
-	assert.True(t, containsStatus(w2.Code, []int{200, 400, 422, 500}))
+	// Both requests should be handled (may fail at provider level but routing works).
+	// Accept 401 (fake-token test providers legitimately return Unauthorized),
+	// 422 (model rule not fully configured), and other forwarding outcomes — the
+	// point is that routing reached a provider, not the upstream's verdict.
+	assert.True(t, containsStatus(w1.Code, []int{200, 400, 401, 422, 500}))
+	assert.True(t, containsStatus(w2.Code, []int{200, 400, 401, 422, 500}))
 }
 
 func runDirectMockServerTest(t *testing.T) {

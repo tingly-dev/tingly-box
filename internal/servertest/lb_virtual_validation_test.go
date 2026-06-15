@@ -4,7 +4,6 @@
 package servertest
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -131,18 +130,19 @@ func TestLB_VirtualValidation_EqualProviders(t *testing.T) {
 		}
 	}
 
-	// Print a verdict table. A healthy balancer keeps the dominant provider
-	// well under ~70% for equal providers. Flag anything that concentrates.
-	fmt.Println("\n================ LOAD BALANCING VIRTUAL VALIDATION ================")
-	fmt.Printf("%-30s %8s %8s %14s\n", "TACTIC", "prov1", "prov2", "max-share")
+	// Log a verdict table (visible under `go test -v`). A healthy balancer keeps
+	// the dominant provider well under ~70% for equal providers; flag anything
+	// that concentrates.
+	t.Logf("================ LOAD BALANCING VIRTUAL VALIDATION ================")
+	t.Logf("%-30s %8s %8s %14s", "TACTIC", "prov1", "prov2", "max-share")
 	for _, r := range results {
 		verdict := "OK"
 		if r.maxSharePct >= 70.0 {
 			verdict = "BAD (concentrated)"
 		}
-		fmt.Printf("%-30s %8d %8d %12.1f%%  %s\n", r.name, r.p1, r.p2, r.maxSharePct, verdict)
+		t.Logf("%-30s %8d %8d %12.1f%%  %s", r.name, r.p1, r.p2, r.maxSharePct, verdict)
 	}
-	fmt.Println("==================================================================")
+	t.Logf("==================================================================")
 }
 
 func max(a, b int) int {
