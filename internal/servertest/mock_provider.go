@@ -7,17 +7,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
-	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/server"
-
-	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// MockProviderServer represents a mock AI provider server
+// MockProviderServer is a minimal, endpoint-keyed mock AI provider: callers set
+// an exact response (or error / streaming events) per endpoint and assert on
+// call counts and the last forwarded request. It is intentionally a "dumb echo"
+// — gateway-level tests (load balancing, auth, concurrency) want byte-exact
+// control over upstream responses, not protocol-correct generated ones. For
+// wire-format-correct fixtures use the vmodel benchmark instead
+// (see .design/vmodel-benchmark.md, "Phase 3 — servertest").
 type MockProviderServer struct {
 	server             *httptest.Server
 	responses          map[string]MockResponse
@@ -48,37 +47,6 @@ func CreateMockChatCompletionResponse(id, model, content string) map[string]inte
 			"prompt_tokens":     10,
 			"completion_tokens": 5,
 			"total_tokens":      15,
-		},
-	}
-}
-
-// CreateMockChatCompletionResponseWithToolCalls creates a mock response with function/tool calls
-func CreateMockChatCompletionResponseWithToolCalls(id, model, content string, toolCalls []map[string]interface{}) map[string]interface{} {
-	message := map[string]interface{}{
-		"role":    "assistant",
-		"content": content,
-	}
-
-	if len(toolCalls) > 0 {
-		message["tool_calls"] = toolCalls
-	}
-
-	return map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   model,
-		"choices": []map[string]interface{}{
-			{
-				"index":         0,
-				"message":       message,
-				"finish_reason": "tool_calls",
-			},
-		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     15,
-			"completion_tokens": 10,
-			"total_tokens":      25,
 		},
 	}
 }
@@ -119,14 +87,12 @@ func NewMockProviderServer() *MockProviderServer {
 // SetResponse configures a mock response for a specific endpoint
 func (m *MockProviderServer) SetResponse(endpoint string, response MockResponse) {
 	key := strings.TrimPrefix(endpoint, "/")
-	fmt.Printf("Setting response for endpoint: %s (key: %s)\n", endpoint, key)
 	m.responses[key] = response
 }
 
 // SetStreamingResponse configures a mock streaming response for a specific endpoint
 func (m *MockProviderServer) SetStreamingResponse(endpoint string, response MockStreamingResponse) {
 	key := strings.TrimPrefix(endpoint, "/")
-	fmt.Printf("Setting streaming response for endpoint: %s (key: %s)\n", endpoint, key)
 	m.streamingResponses = make(map[string]MockStreamingResponse)
 	m.streamingResponses[key] = response
 }
@@ -139,17 +105,13 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 	m.callCount[endpoint]++
 	m.mutex.Unlock()
 
-	// Parse request for debugging
+	// Parse request to record it and detect streaming.
 	var reqBody map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
 		m.mutex.Lock()
 		m.lastRequest[endpoint] = reqBody
 		m.mutex.Unlock()
 
-		// Debug: log the received request
-		fmt.Printf("Mock server received request for %s: %+v\n", endpoint, reqBody)
-
-		// Check if this is a streaming request
 		if stream, ok := reqBody["stream"].(bool); ok && stream {
 			m.handleStreamingRequest(w, r, endpoint, reqBody)
 			return
@@ -159,13 +121,10 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 	response, exists := m.responses[endpoint]
 	if !exists {
 		// Default successful response
-		fmt.Printf("No configured response for %s, using default\n", endpoint)
 		response = MockResponse{
 			StatusCode: 200,
 			Body:       CreateMockChatCompletionResponse("chatcmpl-mock", "gpt-3.5-turbo", "Mock response from provider"),
 		}
-	} else {
-		fmt.Printf("Found configured response for %s\n", endpoint)
 	}
 
 	// Apply delay if configured
@@ -198,29 +157,16 @@ func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Reque
 	m.callCount[endpoint]++
 	m.mutex.Unlock()
 
-	// Debug: log the endpoint
-	fmt.Printf("handleMessages called for endpoint: %s (URL: %s)\n", endpoint, r.URL.Path)
-
-	// Parse request for debugging
+	// Parse request to record it and detect streaming.
 	var reqBody map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
 		m.mutex.Lock()
 		m.lastRequest[endpoint] = reqBody
 		m.mutex.Unlock()
 
-		// Debug: log the received request body
-		fmt.Printf("Mock server received request for %s: %+v\n", endpoint, reqBody)
-
-		// Check if this is a streaming request
-		if stream, ok := reqBody["stream"].(bool); ok {
-			fmt.Printf("Stream flag detected: %v\n", stream)
-			if stream {
-				fmt.Printf("Handling streaming request for %s\n", endpoint)
-				m.handleStreamingRequest(w, r, endpoint, reqBody)
-				return
-			}
-		} else {
-			fmt.Printf("No stream flag in request\n")
+		if stream, ok := reqBody["stream"].(bool); ok && stream {
+			m.handleStreamingRequest(w, r, endpoint, reqBody)
+			return
 		}
 	}
 
@@ -284,7 +230,6 @@ func (m *MockProviderServer) handleStreamingRequest(w http.ResponseWriter, r *ht
 	// Get streaming response configuration
 	streamingResp, exists := m.streamingResponses[endpoint]
 	if !exists {
-		fmt.Printf("No configured streaming response for %s, using default\n", endpoint)
 		// Default streaming response
 		streamingResp = MockStreamingResponse{
 			Events: []string{
@@ -294,13 +239,10 @@ func (m *MockProviderServer) handleStreamingRequest(w http.ResponseWriter, r *ht
 				`data: [DONE]`,
 			},
 		}
-	} else {
-		fmt.Printf("Found configured streaming response for %s with %d events\n", endpoint, len(streamingResp.Events))
 	}
 
 	// Send streaming events
 	for _, event := range streamingResp.Events {
-		fmt.Printf("Sending event: %s\n", event)
 		fmt.Fprintf(w, "%s\n\n", event)
 		flusher.Flush()
 		// Small delay to simulate real streaming
@@ -346,262 +288,4 @@ func (m *MockProviderServer) Reset() {
 	defer m.mutex.Unlock()
 	m.callCount = make(map[string]int)
 	m.lastRequest = make(map[string]interface{})
-}
-
-// MockProviderTestSuite provides a comprehensive test suite for provider testing
-type MockProviderTestSuite struct {
-	t            *testing.T
-	mockServer   *MockProviderServer
-	testServer   *TestServer
-	originalBase string
-}
-
-// NewMockProviderTestSuite creates a new test suite
-func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
-	suite := &MockProviderTestSuite{
-		t:          t,
-		mockServer: NewMockProviderServer(),
-	}
-
-	// Setup test server
-	suite.testServer = NewTestServer(t)
-
-	// Add mock provider
-	providerName := "mock-provider"
-
-	// Add provider through the config
-	provider := &typ.Provider{
-		UUID:    providerName,
-		Name:    providerName,
-		APIBase: suite.mockServer.GetURL(),
-		Token:   "mock-token",
-		Enabled: true,
-		Timeout: int64(constant.DefaultRequestTimeout),
-	}
-	err := suite.testServer.appConfig.AddProvider(provider)
-	if err != nil {
-		suite.t.Fatalf("Failed to add mock provider: %v", err)
-	}
-
-	return suite
-}
-
-// TestSuccessfulRequest tests a successful chat completion request
-func (suite *MockProviderTestSuite) TestSuccessfulRequest() {
-	// Configure mock response
-	mockResponse := map[string]interface{}{
-		"id":      "chatcmpl-test123",
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   "gpt-3.5-turbo",
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": "Hello! This is a test response.",
-				},
-				"finish_reason": "stop",
-			},
-		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     12,
-			"completion_tokens": 8,
-			"total_tokens":      20,
-		},
-	}
-
-	suite.mockServer.SetResponse("/v1/chat/completions", MockResponse{
-		StatusCode: 200,
-		Body:       mockResponse,
-	})
-
-	// Create test request
-	requestBody := CreateTestChatRequest("gpt-3.5-turbo", []map[string]string{
-		{"role": "user", "content": "Hello, test!"},
-	})
-
-	// Make request
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-	req.Header.Set("Authorization", "Bearer valid-test-token")
-
-	suite.testServer.ginEngine.ServeHTTP(w, req)
-
-	// Assertions
-	assert.Equal(suite.t, 200, w.Code)
-	assert.Equal(suite.t, 1, suite.mockServer.GetCallCount("/v1/chat/completions"))
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(suite.t, err)
-	assert.Equal(suite.t, "chatcmpl-test123", response["id"])
-
-	choices, ok := response["choices"].([]interface{})
-	assert.True(suite.t, ok)
-	assert.Len(suite.t, choices, 1)
-
-	firstChoice, ok := choices[0].(map[string]interface{})
-	assert.True(suite.t, ok)
-
-	message, ok := firstChoice["message"].(map[string]interface{})
-	assert.True(suite.t, ok)
-	assert.Equal(suite.t, "Hello! This is a test response.", message["content"])
-
-	usage, ok := response["usage"].(map[string]interface{})
-	assert.True(suite.t, ok)
-	assert.Equal(suite.t, float64(20), usage["total_tokens"]) // JSON numbers are float64
-}
-
-// TestProviderError tests error handling from provider
-func (suite *MockProviderTestSuite) TestProviderError() {
-	// Configure mock error response
-	suite.mockServer.SetResponse("/v1/chat/completions", MockResponse{
-		StatusCode: 401,
-		Error:      "Invalid API key",
-	})
-
-	// Create test request
-	requestBody := CreateTestChatRequest("gpt-3.5-turbo", []map[string]string{
-		{"role": "user", "content": "Hello, test!"},
-	})
-
-	// Make request
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-	req.Header.Set("Authorization", "Bearer valid-test-token")
-
-	suite.testServer.ginEngine.ServeHTTP(w, req)
-
-	// Assertions
-	assert.Equal(suite.t, 500, w.Code) // Internal server error due to provider error
-
-	var errorResp server.ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &errorResp)
-	assert.NoError(suite.t, err)
-	assert.Contains(suite.t, errorResp.Error.Message, "provider error")
-}
-
-// TestNetworkTimeout tests timeout handling
-func (suite *MockProviderTestSuite) TestNetworkTimeout() {
-	// Configure mock response with delay
-	suite.mockServer.SetResponse("/v1/chat/completions", MockResponse{
-		StatusCode: 200,
-		Delay:      2 * time.Second, // Longer than client timeout
-		Body:       CreateMockChatCompletionResponse("chatcmpl-timeout", "gpt-3.5-turbo", "Delayed response"),
-	})
-
-	// Create test request
-	requestBody := CreateTestChatRequest("gpt-3.5-turbo", []map[string]string{
-		{"role": "user", "content": "Hello, test!"},
-	})
-
-	// Make request
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-	req.Header.Set("Authorization", "Bearer valid-test-token")
-
-	suite.testServer.ginEngine.ServeHTTP(w, req)
-
-	// Assertions - should fail due to timeout (client timeout is 30s in the actual implementation)
-	// For testing purposes, we'll just verify the call was made
-	assert.Equal(suite.t, 1, suite.mockServer.GetCallCount("/v1/chat/completions"))
-}
-
-// TestInvalidRequest tests handling of invalid requests
-func (suite *MockProviderTestSuite) TestInvalidRequest() {
-	// Test with missing model
-	requestBody := map[string]interface{}{
-		"messages": []map[string]string{
-			{"role": "user", "content": "Hello, test!"},
-		},
-	}
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-	req.Header.Set("Authorization", "Bearer valid-test-token")
-
-	suite.testServer.ginEngine.ServeHTTP(w, req)
-
-	// Assertions
-	assert.Equal(suite.t, 400, w.Code)
-
-	var errorResp server.ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &errorResp)
-	assert.NoError(suite.t, err)
-	assert.Contains(suite.t, errorResp.Error.Message, "Model is required")
-}
-
-// TestRequestForwarding verifies correct request forwarding to provider
-func (suite *MockProviderTestSuite) TestRequestForwarding() {
-	// Configure mock response
-	suite.mockServer.SetResponse("/v1/chat/completions", MockResponse{
-		StatusCode: 200,
-		Body:       CreateMockChatCompletionResponse("chatcmpl-forward-test", "gpt-3.5-turbo", "Forwarded request response"),
-	})
-
-	// Create test request with specific parameters
-	requestBody := map[string]interface{}{
-		"model": "gpt-3.5-turbo",
-		"messages": []map[string]string{
-			{"role": "system", "content": "You are a helpful assistant."},
-			{"role": "user", "content": "Hello!"},
-		},
-		"stream":      false,
-		"temperature": 0.7,
-	}
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-	req.Header.Set("Authorization", "Bearer valid-test-token")
-
-	suite.testServer.ginEngine.ServeHTTP(w, req)
-
-	// Verify request was forwarded correctly
-	assert.Equal(suite.t, 1, suite.mockServer.GetCallCount("/v1/chat/completions"))
-
-	lastRequest := suite.mockServer.GetLastRequest("/v1/chat/completions")
-	assert.NotNil(suite.t, lastRequest)
-	assert.Equal(suite.t, "gpt-3.5-turbo", lastRequest["model"])
-	assert.Equal(suite.t, false, lastRequest["stream"])
-	assert.Equal(suite.t, 0.7, lastRequest["temperature"])
-}
-
-// Cleanup cleans up the test suite
-func (suite *MockProviderTestSuite) Cleanup() {
-	suite.mockServer.Close()
-	Cleanup()
-}
-
-// RunMockProviderTests runs all mock provider tests
-func RunMockProviderTests(t *testing.T) {
-	t.Run("MockProvider_SuccessfulRequest", func(t *testing.T) {
-		suite := NewMockProviderTestSuite(t)
-		defer suite.Cleanup()
-		suite.TestSuccessfulRequest()
-	})
-
-	t.Run("MockProvider_ProviderError", func(t *testing.T) {
-		suite := NewMockProviderTestSuite(t)
-		defer suite.Cleanup()
-		suite.TestProviderError()
-	})
-
-	t.Run("MockProvider_NetworkTimeout", func(t *testing.T) {
-		suite := NewMockProviderTestSuite(t)
-		defer suite.Cleanup()
-		suite.TestNetworkTimeout()
-	})
-
-	t.Run("MockProvider_InvalidRequest", func(t *testing.T) {
-		suite := NewMockProviderTestSuite(t)
-		defer suite.Cleanup()
-		suite.TestInvalidRequest()
-	})
-
-	t.Run("MockProvider_RequestForwarding", func(t *testing.T) {
-		suite := NewMockProviderTestSuite(t)
-		defer suite.Cleanup()
-		suite.TestRequestForwarding()
-	})
 }
