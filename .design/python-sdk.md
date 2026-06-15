@@ -50,6 +50,69 @@ connect(scenario="experiment")
           .guardrails  → GET /api/v1/guardrails/config (admin token)
 ```
 
+## How it works (pencil)
+
+Two phases. **Provisioning** happens once in `connect()` (admin token, dashed
+lines). **Inference** happens on every call (model token, solid lines) and
+reuses the exact same gateway pipeline as any other tb client — the SDK adds no
+new path through the box.
+
+```
+        YOUR PYTHON                          tingly-box GATEWAY                      UPSTREAMS
+  ┌───────────────────────┐         ┌──────────────────────────────────┐      ┌───────────────┐
+  │  import tingly         │         │                                  │      │  Anthropic    │
+  │  tb = tingly.connect() │         │   /api/v1/...   (admin auth)      │      │  OpenAI       │
+  │                        │         │   /tingly/:scn  (model auth)      │      │  Deepseek     │
+  └───────────┬───────────┘         └──────────────────────────────────┘      │  vLLM / local │
+              │                                                                └───────▲───────┘
+   ── PROVISION (once, admin token) ─────────────────────────────────────────────────┊────────
+              │                                                                       ┊
+   config.resolve()                                                                   ┊
+   args→env→sdk.json→config.json→localhost                                            ┊
+              │                                                                       ┊
+              │  GET  /api/v1/info/version  (liveness) ┄┄┄┄┄┄┄┄►┐                      ┊
+              │  POST /api/v1/sdk/session   {scenario,name} ┄┄┄►│ CreateSDKSession    ┊
+              │     Authorization: Bearer <ADMIN/UserToken>     │  · validate scenario in registry
+              │                                                 │  · transport = openai|anthropic|both
+              │  ◄┄┄┄ {base_url, token=<ModelToken>,            │  · ready/services from active rule
+              │        transport, ready, services} ┄┄┄┄┄┄┄┄┄┄┄┄┄┘
+              ▼
+   Client  ── builds lazily ──►  openai.OpenAI(base_url = root+"/v1",  api_key=ModelToken)
+                                 anthropic.Anthropic(base_url = root,  api_key=ModelToken)
+
+   ══ INFERENCE (every call, model token) ═══════════════════════════════════════════════════
+              │
+   tb.ask("...", model="auto")
+   tb.openai.chat.completions.create(...)
+   tb.anthropic.messages.create(...)
+              │  POST /tingly/experiment/v1/chat/completions     ┌─────────────────────────┐
+              │  POST /tingly/experiment/v1/messages             │   the SAME pipeline as   │
+              │     Authorization: Bearer <ModelToken> ─────────►│   any other tb client    │
+              │                                                  │                          │
+              │                                                  │  scenario → rule resolve │
+              │                                                  │  guard rails (in/out)    │
+              │                                                  │  smart routing / tiers   │
+              │                                                  │  circuit-breaker failover│──► pick
+              │                                                  │  quota + usage logging   │    upstream
+              │                                                  │  protocol transform      │──────────►
+              │  ◄──────────── response (+ usage recorded) ──────└─────────────────────────┘   (solid)
+              ▼
+   tb.usage.this_session()     GET /api/v1/requests          (admin token, read-back)
+   tb.guardrails.status()      GET /api/v1/guardrails/config (admin token, read-back)
+```
+
+Key reading of the graph:
+
+- The SDK never talks to providers directly — the rightmost column is reachable
+  **only** through the gateway box in the middle. That is the whole point: the
+  experiment inherits routing/fallback/guard-rails/quota for free.
+- Provisioning (dashed) uses the **admin** token and the `/api/v1/*` control
+  plane; inference (solid) uses the **model** token and the `/tingly/:scenario`
+  data plane. Different tokens, different surfaces.
+- The inference box is *unchanged* tb internals — the SDK contributes the new
+  `experiment` scenario and the one provisioning endpoint, nothing in the hot
+  path.
+
 ## Two-token model
 
 - **Admin token** (tb's `UserToken`): authorizes `POST /sdk/session`. Resolved
