@@ -76,10 +76,12 @@ if __name__ == "__main__":
 
 ```bash
 tingly plugin init my-rag                 # scaffold module + tingly.toml
-tingly plugin run my_rag_plugin.py        # serve
-tingly plugin register my-rag \           # one step: provider + rule
-   --url http://127.0.0.1:8765/v1 --model-id plugin/my-rag --scenario experiment
+tingly plugin run my_rag_plugin.py        # serve AND register with tb (ephemeral)
 ```
+
+`serve()` (and `tingly plugin run`) **dynamically registers** the plugin with tb
+while it runs — leased, heartbeated, and auto-removed on exit. Nothing is
+persisted; if the plugin stops, tb's lease expires and routing falls back.
 
 The server is stdlib-only (no FastAPI), supports streaming, and `plugin.llm`
 calls back into tb so the plugin reuses the gateway for its own LLM work.

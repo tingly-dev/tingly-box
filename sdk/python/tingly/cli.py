@@ -160,20 +160,6 @@ def _plugin_run(target: str) -> int:
     return 0
 
 
-def _plugin_register(name, plugin_url, model_id, token, scenario) -> int:
-    from .plugin.register import register_with_tb
-
-    result = register_with_tb(
-        name, plugin_url, model_id, scenario=scenario or None, token=token
-    )
-    status = OK if result.ready else WARN
-    _row("plugin", f"{result.name} → {result.api_base}", status)
-    if result.rule_uuid:
-        _row("rule", f"{result.scenario}: {result.model_id}", OK)
-    print("\n" + result.note)
-    return 0
-
-
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(prog="tingly", description="tingly-box Python SDK")
     sub = parser.add_subparsers(dest="command")
@@ -186,20 +172,14 @@ def main(argv: Optional[list] = None) -> int:
         "--link", action="store_true", help="prompt for and save gateway URL + token"
     )
 
-    p_plugin = sub.add_parser("plugin", help="author / run / register a plugin")
+    p_plugin = sub.add_parser("plugin", help="author / run a plugin")
     psub = p_plugin.add_subparsers(dest="plugin_command")
     p_init = psub.add_parser("init", help="scaffold a starter plugin")
     p_init.add_argument("name", help="plugin name, e.g. my-rag")
-    p_run = psub.add_parser("run", help="serve a plugin (module:attr or path.py)")
+    # `run` serves the plugin AND self-registers with tb (heartbeat + deregister
+    # on exit), so there is no separate one-shot register command.
+    p_run = psub.add_parser("run", help="serve a plugin and register it with tb")
     p_run.add_argument("target", help="e.g. my_rag_plugin:plugin or my_rag_plugin.py")
-    p_reg = psub.add_parser("register", help="register a running plugin with tb")
-    p_reg.add_argument("name", help="provider name to create in tb")
-    p_reg.add_argument("--url", required=True, help="plugin OpenAI base, e.g. http://127.0.0.1:8765/v1")
-    p_reg.add_argument("--model-id", required=True, help="model id, e.g. plugin/my-rag")
-    p_reg.add_argument("--token", default="", help="token tb should send to the plugin")
-    p_reg.add_argument(
-        "--scenario", default="", help="bind a rule under this scenario (e.g. experiment)"
-    )
 
     args = parser.parse_args(argv)
     if args.command == "doctor":
@@ -209,10 +189,6 @@ def main(argv: Optional[list] = None) -> int:
             return _plugin_init(args.name)
         if args.plugin_command == "run":
             return _plugin_run(args.target)
-        if args.plugin_command == "register":
-            return _plugin_register(
-                args.name, args.url, args.model_id, args.token, args.scenario
-            )
         p_plugin.print_help()
         return 0
 

@@ -53,23 +53,17 @@ type VModelDetail struct {
 	LatencyProfile string   `json:"latency_profile,omitempty"`
 }
 
-// PluginDetail marks a provider as backed by external plugin code. A plugin
-// provider is otherwise an ordinary OpenAI HTTP upstream (APIStyle=openai,
-// APIBase=<plugin>/v1, api_key / no_key auth) — there is NO routing change, the
-// dispatcher treats it exactly like any other provider. This marker exists so
-// plugins are a first-class concept (grouped in the UI, discoverable by future
-// lifecycle tooling) and so "configure this rule with a plugin" is one step.
+// PluginDetail marks a provider as backed by external plugin code. It is an
+// in-memory marker only — plugins register dynamically and are never persisted,
+// so the synthesized provider carries this to identify plugin traffic. A plugin
+// is otherwise an ordinary OpenAI HTTP upstream (APIStyle=openai, api_key /
+// no_key), so there is NO routing change.
 //
-// Note: this is distinct from VModelDetail / AuthTypeVirtual, which is the
-// in-process synthetic-model path. A plugin runs out-of-process and is reached
-// over HTTP.
+// Distinct from VModelDetail / AuthTypeVirtual (the in-process synthetic-model
+// path): a plugin runs out-of-process and is reached over HTTP.
 type PluginDetail struct {
 	// ModelID is the model id the plugin advertises (e.g. "plugin/my-rag").
 	ModelID string `json:"model_id,omitempty"`
-	// Managed reports whether tingly-box supervises the plugin process.
-	// Reserved for the tb-side supervisor; false means the plugin is run
-	// externally and tb only routes to it.
-	Managed bool `json:"managed,omitempty"`
 }
 
 // CredentialBundle holds the credential fields for multi-field auth types
