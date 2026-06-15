@@ -2,7 +2,7 @@
 
 Run a local tingly-box, then:
 
-    pip install -e ".[all]"      # from sdk/python
+    pip install -e .             # from sdk/python
     python examples/rag_experiment.py
 
 Everything below routes through tb: provider selection, fallback, guard rails,
