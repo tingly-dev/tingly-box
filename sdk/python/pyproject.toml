@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tingly"
+version = "0.1.0"
+description = "Python SDK for tingly-box — write an LLM experiment or plugin in a handful of lines and reuse the gateway's routing, fallback, guard rails, quota and logging."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MPL-2.0" }
+authors = [{ name = "tingly.dev", email = "ops@tingly.dev" }]
+keywords = ["tingly-box", "llm", "gateway", "openai", "anthropic", "plugin"]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+# The LLM SDKs are optional so a plugin that only uses `tb.ask()` (which goes
+# through httpx) does not have to pull both. `connect().openai` /.anthropic
+# raise a clear error if the matching extra is missing.
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.40"]
+all = ["openai>=1.0", "anthropic>=0.40"]
+dev = ["pytest>=8", "respx>=0.21", "openai>=1.0", "anthropic>=0.40"]
+
+[project.scripts]
+tingly = "tingly.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/tingly-dev/tingly-box"
+Documentation = "https://github.com/tingly-dev/tingly-box/blob/main/.design/python-sdk.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tingly"]
+
+[tool.pytest.ini_options]
+markers = [
+    "needs_tb: integration tests that require a running tingly-box gateway (opt-in)",
+]
+addopts = "-m 'not needs_tb'"

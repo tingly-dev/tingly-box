@@ -87,6 +87,15 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(gin.H{}),
 	)
 
+	// SDK session endpoint — mints a scenario-bound session (base URL, token,
+	// transports) for the `tingly` Python SDK / plugin experiments.
+	apiV1.POST("/sdk/session", s.CreateSDKSession,
+		swagger.WithTags("sdk"),
+		swagger.WithDescription("Mint a scoped SDK session for a scenario"),
+		swagger.WithRequestModel(SDKSessionRequest{}),
+		swagger.WithResponseModel(SDKSessionResponse{}),
+	)
+
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
 

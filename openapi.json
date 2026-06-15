@@ -3598,6 +3598,39 @@
         }
       }
     },
+    "/api/v1/sdk/session": {
+      "post": {
+        "tags": [
+          "sdk"
+        ],
+        "summary": "Mint a scoped SDK session for a scenario",
+        "description": "Mint a scoped SDK session for a scenario",
+        "operationId": "apiV1SdkSessionPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SDKSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SDKSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/server/restart": {
       "post": {
         "tags": [
@@ -7155,6 +7188,10 @@
             "format": "int64",
             "description": "Field context"
           },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -8833,6 +8870,10 @@
             "type": "boolean",
             "description": "Field clean_header"
           },
+          "context_1m": {
+            "type": "boolean",
+            "description": "Field context_1m"
+          },
           "cursor_compat": {
             "type": "boolean",
             "description": "Field cursor_compat"
@@ -8908,6 +8949,65 @@
         "required": [
           "success",
           "data"
+        ]
+      },
+      "SDKSessionRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          }
+        },
+        "required": [
+          "scenario",
+          "name"
+        ]
+      },
+      "SDKSessionResponse": {
+        "type": "object",
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "description": "Field base_url"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Field expires_at"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "services": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field services"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          },
+          "transport": {
+            "type": "string",
+            "description": "Field transport"
+          }
+        },
+        "required": [
+          "base_url",
+          "token",
+          "scenario",
+          "transport",
+          "ready",
+          "services"
         ]
       },
       "ScanIdesResponse": {
@@ -9085,10 +9185,6 @@
             "type": "boolean",
             "description": "Field claude_code_compat"
           },
-          "clean_header": {
-            "type": "boolean",
-            "description": "Field clean_header"
-          },
           "custom_user_agent": {
             "type": "string",
             "description": "Field custom_user_agent"
@@ -9100,11 +9196,6 @@
           "separate": {
             "type": "boolean",
             "description": "Field separate"
-          },
-          "session_affinity": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field session_affinity"
           },
           "skip_usage": {
             "type": "boolean",
@@ -10966,6 +11057,22 @@
   },
   "tags": [
     {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "imbot-admin",
+      "description": "Operations related to imbot-admin"
+    },
+    {
       "name": "feishu",
       "description": "Operations related to feishu"
     },
@@ -10974,88 +11081,20 @@
       "description": "Operations related to config"
     },
     {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
       "name": "mcp-transport",
       "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
     },
     {
       "name": "requests",
       "description": "Operations related to requests"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
       "name": "scenarios",
       "description": "Operations related to scenarios"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "imbot-admin",
-      "description": "Operations related to imbot-admin"
-    },
-    {
-      "name": "weixin",
-      "description": "Operations related to weixin"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
     },
     {
       "name": "guardrails",
@@ -11066,12 +11105,68 @@
       "description": "Operations related to onboarding"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "token",
+      "description": "Operations related to token"
     },
     {
       "name": "oauth",
       "description": "Operations related to oauth"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "sdk",
+      "description": "Operations related to sdk"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
     }
   ]
 }
