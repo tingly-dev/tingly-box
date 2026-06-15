@@ -141,9 +141,15 @@ one shared vocabulary instead of re-deriving checks per package.
    relocated `check`/`scenario` symbols via `aliases.go`, so its existing suite
    doubles as the regression net for the elevated code. `servertest` is
    unchanged.
-2. **Phase 2 — protocoltest (later).** `protocoltest.VirtualServer` becomes a
-   thin wrapper over `bench.NewScenarioServer`; `Scenario`/`Assertion` re-export
-   from `benchmark`. Parity by construction (same code, moved down).
+2. **Phase 2 — protocoltest (✅ landed).** `protocoltest.VirtualServer` is now a
+   thin wrapper over `benchmark.NewScenarioServer` — the scenario-serving
+   handlers, request capture, and endpoint-hit counting live in
+   `vmodel/benchmark` (`scenario_responder.go` + `capture.go`). `EndpointKind`,
+   its constants, and `CapturedRequest` are aliased to the benchmark types; the
+   protocoltest-facing API (`Client()`, `RegisterScenario`, `EndpointHits`,
+   `LastRequest`, …) is unchanged, so the matrix/flags/agent suites and
+   `cli/harness` keep working. Validated by the full harness matrix
+   (`--mode=all` + gosdk/python/node/aisdk drivers), 0 failures.
 3. **Phase 3 — servertest (later).** Replace `MockProviderServer` with a compat
    adapter over `bench.NewScenarioServer` (preserving `SetResponse` /
    `GetCallCount` / `GetLastRequest` ergonomics), dropping the `fmt.Printf`
