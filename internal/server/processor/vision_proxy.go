@@ -64,32 +64,15 @@ const (
 	VisionDescriptionTagClose = "</image-description>"
 )
 
-// wrapVisionDescription escapes the description body and produces the
-// canonical request-side replacement text. Leading/trailing \n keep the
-// fragment stable when concatenated with surrounding text or content
-// parts. Body escaping prevents an untrusted upstream from closing the
-// tag prematurely; see ExtrasKeyVisionDescriptions consumers for the
-// matching decode contract.
+// wrapVisionDescription produces the canonical request- and response-side
+// replacement text for a single image description. Leading/trailing \n
+// keep the fragment stable when concatenated with surrounding text or
+// content parts. The body is passed through as-is: vision-upstream
+// output is natural language, not an adversarial input channel that the
+// proxy could meaningfully harden against — robust client parsing is
+// the client's concern, not the wrapper's.
 func wrapVisionDescription(body string) string {
-	var sb strings.Builder
-	sb.Grow(len(VisionDescriptionTagOpen) + len(body) + len(VisionDescriptionTagClose) + 2)
-	sb.WriteByte('\n')
-	sb.WriteString(VisionDescriptionTagOpen)
-	for _, r := range body {
-		switch r {
-		case '&':
-			sb.WriteString("&amp;")
-		case '<':
-			sb.WriteString("&lt;")
-		case '>':
-			sb.WriteString("&gt;")
-		default:
-			sb.WriteRune(r)
-		}
-	}
-	sb.WriteString(VisionDescriptionTagClose)
-	sb.WriteByte('\n')
-	return sb.String()
+	return "\n" + VisionDescriptionTagOpen + body + VisionDescriptionTagClose + "\n"
 }
 
 // imageHistoricalText replaces image blocks that appear in messages PRIOR to

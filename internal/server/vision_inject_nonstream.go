@@ -1,7 +1,7 @@
 package server
 
 import (
-	"bytes"
+	"fmt"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -162,7 +162,7 @@ func spliceOpenAIResponsesBody(body []byte, prefix string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	keyPath := joinPath("output", foundOutputIdx, "content", foundContentIdx, "text")
+	keyPath := fmt.Sprintf("output.%d.content.%d.text", foundOutputIdx, foundContentIdx)
 	patched, err := sjson.SetBytes(body, keyPath, prefix+foundText)
 	if err != nil {
 		return nil, false
@@ -196,53 +196,10 @@ func spliceAnthropicMessagesBody(body []byte, prefix string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	keyPath := joinPath("content", foundIdx, "text")
+	keyPath := fmt.Sprintf("content.%d.text", foundIdx)
 	patched, err := sjson.SetBytes(body, keyPath, prefix+foundText)
 	if err != nil {
 		return nil, false
 	}
 	return patched, true
-}
-
-// joinPath builds a dotted sjson path from mixed string / int segments.
-// sjson's syntax uses dots for object keys and integers for array
-// indices: "output.0.content.1.text".
-func joinPath(segments ...any) string {
-	var sb bytes.Buffer
-	for i, s := range segments {
-		if i > 0 {
-			sb.WriteByte('.')
-		}
-		switch v := s.(type) {
-		case string:
-			sb.WriteString(v)
-		case int:
-			sb.WriteString(intToStr(v))
-		}
-	}
-	return sb.String()
-}
-
-func intToStr(i int) string {
-	// Strconv-free to keep the hot path zero-dep; sjson indices are
-	// small positive ints so this two-line implementation is enough.
-	if i == 0 {
-		return "0"
-	}
-	neg := i < 0
-	if neg {
-		i = -i
-	}
-	var buf [20]byte
-	pos := len(buf)
-	for i > 0 {
-		pos--
-		buf[pos] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
 }

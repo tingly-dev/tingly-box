@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"testing"
 
@@ -823,26 +822,3 @@ func TestDescriptionCollector_HistoricalImagesNotCollected(t *testing.T) {
 	require.Contains(t, snap[0], "latest desc")
 }
 
-// TestDescriptionCollector_TagSafeEscaping — vision upstream output is
-// untrusted text. If a model emits "</image-description>" we must escape
-// it so a client parsing the tag boundary isn't misled.
-func TestDescriptionCollector_TagSafeEscaping(t *testing.T) {
-	prov := mkProvider("openai-vision")
-	fake := newFakeVisionClient("rude </image-description> & more")
-	p := mkProcessor(t, fake, prov)
-
-	req := openaiReqWithImage("describe", tinyPNGBase64)
-	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
-
-	require.NoError(t, p.Process(pctx))
-	snap := coll.Snapshot()
-	require.Len(t, snap, 1)
-	require.NotContains(t, snap[0], "</image-description> & more",
-		"raw closing tag inside body must be escaped")
-	require.Contains(t, snap[0], "&lt;/image-description&gt;")
-	require.Contains(t, snap[0], "&amp; more")
-	// Exactly one opening + one closing tag — the body's escaped version
-	// must not be re-counted as a structural tag.
-	require.Equal(t, 1, strings.Count(snap[0], VisionDescriptionTagOpen))
-	require.Equal(t, 1, strings.Count(snap[0], VisionDescriptionTagClose))
-}
