@@ -150,27 +150,63 @@ one shared vocabulary instead of re-deriving checks per package.
    `LastRequest`, …) is unchanged, so the matrix/flags/agent suites and
    `cli/harness` keep working. Validated by the full harness matrix
    (`--mode=all` + gosdk/python/node/aisdk drivers), 0 failures.
-3. **Phase 3 — servertest (later, designed below).** `servertest.MockProviderServer`
-   is a *dumb echo* keyed by endpoint (arbitrary `Body`/`Error`/`StatusCode` +
-   `Delay`, with default-filling), not a scenario fixture server — so it rides a
-   **new third responder** (`benchmark.NewEndpointServer`), not the scenario one.
-   See "Phase 3 — servertest migration (how-to)".
+3. **Phase 3 — servertest (✅ decided: do NOT migrate; clean up instead).**
+   `servertest.MockProviderServer` is an endpoint-keyed *dumb echo* that
+   intentionally wants byte-exact upstream control, **not** protocol-correct
+   responses — so the foundation's main value does not apply to it, and a
+   migration would be net-new code (a third responder) for a single consumer at
+   gateway-test risk. Decision: leave it standalone; instead deleted its
+   ~250 lines of dead `MockProviderTestSuite`/`RunMockProviderTests` and removed
+   the 13 `fmt.Printf` debug lines (607 → 322 lines). The endpoint-responder
+   design below is **deferred / demand-driven** — build it only if an external
+   project needs a reusable dumb-echo provider; then `servertest` can adopt it.
+   See "Phase 3 — servertest: decision & deferred design".
 
-## Phase 3 — servertest migration (how-to)
+## Phase 3 — servertest: decision & deferred design
 
-Phase 3 is **not** a Phase-2-style delegation, because `MockProviderServer`'s
-response model is fundamentally different from the scenario one:
+**Decision: do not migrate `servertest` onto the foundation now.** The analysis
+that led here (grounded in actual usage, not assumed):
 
-| Axis | `protocoltest.VirtualServer` (Phase 2) | `servertest.MockProviderServer` (Phase 3) |
-|---|---|---|
-| Keyed by | scenario (from request `model`) | **endpoint** (`/v1/chat/completions`, `/v1/messages`) |
-| Response source | `MockResponseBuilder` per format | arbitrary `Body`/`Error`/`StatusCode` set at runtime |
-| When unset | 500 "no mock for scenario" | **sensible default** body (tests rely on this) |
-| Extra knobs | `StreamHTTPError` | **`Delay`** (timeout tests), per-endpoint call counts |
+- **Lower benefit than Phase 2.** `servertest.MockProviderServer`'s response model
+  is fundamentally different from the scenario one:
 
-This is exactly the design's thesis a third time: **observability + transport are
-shared; response generation is pluggable.** So Phase 3 adds a *third responder*
-rather than bending servertest onto the scenario one.
+  | Axis | `protocoltest.VirtualServer` (Phase 2) | `servertest.MockProviderServer` |
+  |---|---|---|
+  | Keyed by | scenario (from request `model`) | **endpoint** (`/v1/chat/completions`, `/v1/messages`) |
+  | Response source | `MockResponseBuilder` per format | arbitrary `Body`/`Error`/`StatusCode` set at runtime |
+  | When unset | 500 "no mock for scenario" | **sensible default** body (tests rely on this) |
+  | Extra knobs | `StreamHTTPError` | **`Delay`** (timeout), per-endpoint call counts |
+
+  servertest *deliberately* wants a dumb echo with byte-exact control — it does
+  **not** want the foundation's headline value (wire-correct generated responses),
+  so migrating would not improve its behavior.
+- **Higher cost than Phase 2.** Phase 2 was a delegation (parity by construction).
+  Phase 3 would be **net-new code** — a third `EndpointMock` responder
+  (`SetResponse`/`Delay`/defaults/error-envelope/streaming, ~150 lines) whose
+  *only* consumer is servertest. The "duplication" removed is just the small
+  generic httptest+capture plumbing; the bulk (echo/default logic) would merely
+  move, not shrink — and it sits under gateway-level tests (LB / auth /
+  concurrency), so the swap carries risk for little gain.
+- **Already "supported".** The original goal — a foundation servertest *can*
+  reuse — is met: the foundation exists and is proven across five client
+  drivers. Support ≠ forced absorption. Migrating now is speculative
+  gold-plating (violates "done ≠ locked", "reduce noise", avoid speculative
+  abstraction).
+
+**What was done instead (cleanup, zero benchmark coupling):** deleted the dead
+`MockProviderTestSuite` + `RunMockProviderTests` (~250 lines, never invoked) and
+removed all 13 `fmt.Printf` debug lines. `mock_provider.go` went 607 → 322
+lines; `go test ./internal/servertest/...` stays green. A doc comment now states
+the dumb-echo intent and points here.
+
+---
+
+The rest of this section is the **deferred / demand-driven** design: build it
+only when an external project actually needs a reusable dumb-echo provider; at
+that point servertest can adopt it as a bonus. It is exactly the design's thesis
+a third time — **observability + transport are shared; response generation is
+pluggable** — so it adds a *third responder* rather than bending servertest onto
+the scenario one.
 
 ### Step 1 — add an endpoint responder to `vmodel/benchmark`
 
@@ -191,7 +227,8 @@ func NewEndpointServer() (*Server, *EndpointMock)   // inner = EndpointMock mux;
   `internal/protocol/sse` writer as the scenario responder.
 - Default bodies (the current `CreateMockChatCompletionResponse` / Anthropic
   default) move here as exported helpers so the "when unset" behavior is
-  preserved — **drop all the `fmt.Printf` debug spam** (UX: reduce noise).
+  preserved. (The `fmt.Printf` debug spam was already removed from the live
+  servertest mock in the Phase 3 cleanup.)
 - Per-endpoint counts/last-request come from the shared `recorder` via
   `classify(path)`; `GetCallCount(endpoint)`/`GetLastRequest(endpoint)` map the
   endpoint string through `classify` to an `EndpointKind`.
@@ -202,8 +239,7 @@ Keep its exact public signatures (`NewMockProviderServer`, `SetResponse`,
 `SetStreamingResponse`, `GetURL`, `GetCallCount`, `GetLastRequest`, `Reset`,
 `Close`) but back them with `benchmark.NewEndpointServer()`. `MockResponse` /
 `MockStreamingResponse` become aliases of the benchmark types (like Phase 2's
-`EndpointKind`/`CapturedRequest`). No `servertest` test changes; the
-`MockProviderTestSuite` keeps working.
+`EndpointKind`/`CapturedRequest`). No `servertest` test changes.
 
 ### Risks / decisions
 
@@ -216,8 +252,8 @@ Keep its exact public signatures (`NewMockProviderServer`, `SetResponse`,
   quick grep confirms before implementing).
 - **`GetLastRequest` returns `map[string]interface{}`** today; the benchmark
   `CapturedRequest.JSON()` returns the same shape — adapter calls `.JSON()`.
-- Validation: `go test ./internal/servertest/...` (unchanged) + the existing
-  `MockProviderTestSuite`; no matrix involvement (servertest is gateway-level).
+- Validation: `go test ./internal/servertest/...` (unchanged); no matrix
+  involvement (servertest is gateway-level).
 
 ## Parity check — does the foundation serve both with the same effect?
 
@@ -226,21 +262,20 @@ Verified against current usage, not assumed:
 - **protocoltest — parity by construction.** The scenario responder + `capture.go`
   + `check/` *are* today's `VirtualServer` and `assertions.go` elevated verbatim;
   Phase 2 is a thin re-export wrapper, so nothing can drift.
-- **servertest — full parity via a compat adapter.** Its mock surface is small
-  and reproducible — `SetResponse` (`{StatusCode, Body, Delay, Error}`),
-  `SetStreamingResponse`, `GetCallCount`, `GetLastRequest`, `GetURL`, `Reset`,
-  `Close`. Mapping: `Body`/`Error`/`StatusCode` → a one-off `MockResponseBuilder`
-  (`NonStream` / `StreamHTTPError`); `Delay` → `SimulatedDelay`; counts +
-  last-request → shared `capture.go`. Constraint this surfaces: servertest
-  *intentionally* wants a **dumb echo** (arbitrary bytes to exercise gateway
-  forwarding), **not** generated protocol-correct responses — so it binds to the
-  **scenario responder**, not the production responder.
+- **servertest — parity achievable on demand, but not pursued.** Its mock
+  surface is small and reproducible via a future `EndpointMock` responder
+  (`SetResponse`/`SetStreamingResponse`/`GetCallCount`/`GetLastRequest`/`GetURL`/
+  `Reset`/`Close` over the shared `capture.go`). But servertest *intentionally*
+  wants a **dumb echo** (arbitrary bytes to exercise gateway forwarding), **not**
+  generated protocol-correct responses — so the foundation's headline value does
+  not apply, and the migration is **deferred / demand-driven** (see Phase 3
+  decision). It stays a standalone gateway-level mock for now.
 
-This is the payoff of the pluggable split: the production responder alone could
-**not** serve servertest's byte-exact needs, and a scenario-only server could not
-back the production `/virtual/v1/*` path with real models. Keeping response
-generation pluggable is precisely what lets one foundation serve both with the
-same effect.
+This is the payoff of the pluggable split: the production responder serves
+protocol-correct paths, the scenario responder serves the transform matrix, and
+a (future) endpoint responder could serve servertest's byte-exact needs — one
+shared observability + transport layer underneath, response generation pluggable
+on top. No single responder is forced on a consumer it doesn't fit.
 
 ## Risks & non-goals
 

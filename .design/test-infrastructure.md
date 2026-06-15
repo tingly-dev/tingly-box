@@ -5,16 +5,42 @@ Overview of the test packages, their responsibilities, and how they relate.
 ## Package Hierarchy
 
 ```
+vmodel/benchmark/           ← reference test-bench foundation:
+  ├ check/                    reusable RoundTripResult + Assertion library (no test-framework deps)
+  ├ scenario/                 reusable mock-provider fixtures (Scenario, MockResponseBuilder)
+  └ Server                    observable mock provider (capture + hits) over pluggable responders
+    ↑ wrapped / re-exported by
 vmodel/vmodeltest/          ← HTTP test client + response parser (no test-framework deps)
     ↑ embedded by
-internal/protocoltest/      ← Protocol transform validation (VirtualServer + TestEnv + Matrix)
+internal/protocoltest/      ← Protocol transform validation; VirtualServer wraps benchmark.Server,
+                              re-exports check/scenario via aliases.go (TestEnv + Matrix on top)
     ↑ imported by
 cli/harness/                ← CLI entry points for matrix, agent, replay harnesses
 
-internal/servertest/        ← Gateway integration tests (independent, shares nothing above)
+internal/servertest/        ← Gateway integration tests; standalone dumb-echo mock (by design,
+                              not migrated onto benchmark — see vmodel-benchmark.md Phase 3)
 ```
 
 ## Packages
+
+### `vmodel/benchmark`
+
+The shared **reference test-bench** (and load generator). It is the single source
+of reusable mock-provider building blocks; protocoltest consumes them.
+
+- **`check/`** — protocol-neutral `RoundTripResult` + the named `Assertion`
+  library (`AssertContentContains`, `AssertHasToolCalls`, …). No test-framework
+  dependency, so any `*test` package or external Go project can reuse it.
+- **`scenario/`** — reusable fixtures: `Scenario` (implements `vmodel.VirtualModel`),
+  `MockResponseBuilder` per `ResponseFormat`, and the built-in scenario set.
+- **`Server`** — observable mock provider: capture / per-endpoint hit counts over
+  pluggable response generation. `NewProductionServer()` serves real vmodel
+  models; `NewScenarioServer()` serves scenario fixtures. In-process (`InProcess`)
+  or real-TCP (`Listen`) transport.
+- **Load generator** — `BenchmarkClient` / `LocalServer` (throughput/latency),
+  the package's original role.
+
+See [`vmodel-benchmark.md`](./vmodel-benchmark.md).
 
 ### `vmodel/vmodeltest`
 
@@ -31,11 +57,11 @@ No dependency on `protocoltest` or `servertest`. Used by `vmodel/virtualserver/`
 End-to-end protocol transform validation framework. Tests that the gateway correctly converts between provider formats (OpenAI ↔ Anthropic ↔ Google).
 
 **Mock provider layer** (from former `server_validate`):
-- **`VirtualServer`** — scenario-driven mock HTTP provider speaking OpenAI/Anthropic/Google formats at provider-native routes (`/v1/chat/completions`, `/v1/messages`, etc.)
+- **`VirtualServer`** — a thin wrapper over `benchmark.NewScenarioServer` (the scenario-serving handlers, request capture, and endpoint-hit counting live in `vmodel/benchmark`). Speaks OpenAI/Anthropic/Google formats at provider-native routes. `EndpointKind` / `CapturedRequest` are aliased to the benchmark types.
 - **`VirtualClient`** — embeds `vmodeltest.Client`, adds scenario-based send methods (`SendOpenAIChat`, `SendAnthropicV1`, `SendGoogle`) with auto-registration on a bound `VirtualServer`
 
 **Test framework layer** (from former `protocol_validate`):
-- **`Scenario`** — named test case with `MockResponses` per `ResponseFormat` + `Assertions`. Implements `vmodel.VirtualModel` for registry storage.
+- **`Scenario`** / **`Assertion`** / **`RoundTripResult`** — re-exported from `vmodel/benchmark/{scenario,check}` via `aliases.go`; `protocoltest` is a thin consumer of the foundation.
 - **`TestEnv`** — wires a real gateway server to a VirtualServer, manages routing rules. Provides `SetupRoute()` + `SendAs()` for full round-trip testing.
 - **`AgentTestEnv`** — variant for agent CLI testing (Claude Code, Codex, OpenCode).
 - **`Matrix`** — combinatorial executor: sources × targets × scenarios × streaming modes.
@@ -47,9 +73,9 @@ Built-in scenarios: `text`, `tool_use`, `tool_result`, `thinking`, `multi_turn`,
 
 ### `internal/servertest`
 
-Gateway-level integration tests. Tests server features (auth, routing, load balancing) using a simpler mock approach.
+Gateway-level integration tests. Tests server features (auth, routing, load balancing) using a deliberately simple mock approach.
 
-- **`MockProviderServer`** — endpoint-level mock (set response per endpoint, track call counts). Simpler than VirtualServer — no scenario registry, no multi-format awareness.
+- **`MockProviderServer`** — an endpoint-keyed *dumb echo*: set an exact response/error per endpoint, track call counts, capture the last request. By design it wants byte-exact upstream control, **not** protocol-correct responses — so it is intentionally **not** migrated onto `vmodel/benchmark` (see [`vmodel-benchmark.md`](./vmodel-benchmark.md) Phase 3). It stays standalone and minimal.
 - **`TestServer`** — wraps a real gateway server + config. Helpers: `AddTestProviders`, `AddTestRule`, `EnsureLoadBalancingRule`.
 - **Request/response helpers** — `CreateTestChatRequest`, `CreateJSONBody`, `AssertJSONResponse`.
 
@@ -66,11 +92,18 @@ Uses `//go:build e2e` tag for some tests. Not imported by any other package.
 | Run the full validation matrix from CLI | `cli/harness/` (imports `protocoltest`) |
 | Validate the gateway against real SDK clients (Go in-process, Python/Node subprocess) | `cli/harness matrix --client=...` — see "Client drivers" in [`harness-matrix.md`](./harness-matrix.md) |
 
-## Future direction
+## Benchmark unification — current state
 
-The three mock layers above (`virtualserver`, `protocoltest.VirtualServer`,
-`servertest.MockProviderServer`) are being unified onto a single observable
-reference bench under `vmodel/benchmark` — shared transport, request capture,
-and a reusable check-logic layer (`check/`) with pluggable response generation.
-See [`vmodel-benchmark.md`](./vmodel-benchmark.md) for the design and migration
-phases. This table will be updated as Phases 2–3 land.
+The reusable mock-provider foundation now lives in `vmodel/benchmark` (shared
+transport + request capture, a reusable `check/` assertion layer, and pluggable
+response generation). Status:
+
+- **Phase 1 (done)** — foundation built: `check/`, `scenario/`, observable `Server`.
+- **Phase 2 (done)** — `protocoltest.VirtualServer` delegates to
+  `benchmark.NewScenarioServer`; `check`/`scenario` re-exported via aliases.
+- **Phase 3 (decided: no migration)** — `servertest.MockProviderServer` stays a
+  standalone dumb-echo by design (it wants byte-exact control, not protocol
+  correctness); it was cleaned up (dead code + debug spam removed) but not folded
+  in. A reusable endpoint responder is deferred / demand-driven.
+
+See [`vmodel-benchmark.md`](./vmodel-benchmark.md) for the full design and rationale.
