@@ -24,13 +24,19 @@ this same module and the same `/sdk/session` provisioning seam.
 ```
 sdk/python/
   tingly/
-    client.py        # Client + connect()  ← the whole user surface
+    client.py        # Layer 1: Client + connect()  ← consume tb
     discovery.py     # probe gateway + POST /sdk/session
     config.py        # (base_url, admin_token) resolution precedence
     scenarios.py     # scenario + transport constants
     transports/      # build openai.OpenAI / anthropic.Anthropic bound to tb
     helpers/         # usage + guardrails views
-    cli.py           # `tingly doctor`
+    plugin/          # Layer 2: be an AI server tb routes to
+      core.py        #   Plugin class (@plugin.chat, .llm, .serve)
+      server.py      #   stdlib OpenAI-compatible HTTP server (+ SSE)
+      types.py       #   ChatRequest / Message
+      manifest.py    #   tingly.toml read/write
+      register.py    #   register the plugin as a tb provider (Layer 3)
+    cli.py           # `tingly doctor` + `tingly plugin {init,run,register}`
     errors.py        # TinglyError hierarchy
 ```
 
@@ -182,9 +188,70 @@ users can name parallel experiments via profiles (`experiment:p1`).
 2. Dedicated `GET /api/v1/sdk/usage?session=` so usage doesn't scan
    `/api/v1/requests`.
 3. Async client (`AsyncClient`, `aask`) — transports already have async builders.
-4. Layer 2: `tingly.Plugin`, manifest, sub-process supervision (reuse
-   `agentboot/process`), `/plugins/<name>/*` reverse proxy, lifecycle UI.
-5. Layer 3: expose a plugin as a model tb can route to (see below).
+4. Layer 2 — Python side **done** (`tingly.Plugin`, manifest, OpenAI server,
+   `register`); remaining tb-side: sub-process supervisor from the manifest
+   (reuse `agentboot/process`), `/plugins/<name>/*` reverse proxy, lifecycle UI.
+   See the "Layer 2" section below.
+5. Layer 3: expose a plugin as a model tb can route to (see "Layer 3" below).
+
+## Layer 2: write an AI server (`tingly.Plugin`)
+
+A plugin is an **OpenAI-compatible upstream**: the author writes one chat
+handler, and `serve()` runs the HTTP server. The whole surface is one class.
+
+```python
+from tingly import Plugin
+
+plugin = Plugin(name="my-rag")          # model_id defaults to "plugin/my-rag"
+
+@plugin.chat
+def handle(req):                        # req: ChatRequest
+    docs = retrieve(req.last_user_text())
+    return plugin.llm.ask(              # ← calls BACK into tb (Layer 1)
+        f"Using {docs}, answer: {req.last_user_text()}", model="auto"
+    )
+
+if __name__ == "__main__":
+    plugin.serve()                      # http://127.0.0.1:8765/v1
+```
+
+Design choices:
+
+- **No framework dependency.** The server is `http.server.ThreadingHTTPServer`
+  (stdlib), so a plugin is one `pip install tingly` away. It serves
+  `POST /v1/chat/completions` (buffered **and** real SSE streaming),
+  `GET /v1/models`, `GET /health` — exactly what tb needs to treat it as an
+  OpenAI upstream.
+- **Handler contract is minimal.** Return a `str` (buffered) or an iterator of
+  `str` (streamed); the server shapes both into `chat.completion` /
+  `chat.completion.chunk`. The author never touches wire format.
+- **`plugin.llm` is a lazy Layer-1 client.** The plugin reuses the gateway for
+  its own generation instead of hard-coding a provider/key — the recursion in
+  the Layer 3 graph.
+- **`tingly.toml` manifest** (`manifest.py`) declares name / model_id /
+  entrypoint / transport / port, so a future tb-side supervisor can install and
+  run the plugin. `tingly plugin init` scaffolds a module + manifest.
+- **Optional token auth.** `Plugin(api_key=...)` enforces a bearer token so only
+  tb (carrying the matching provider token) can call it.
+
+CLI:
+
+```
+tingly plugin init my-rag                 # scaffold my_rag_plugin.py + tingly.toml
+tingly plugin run my_rag_plugin.py        # serve it
+tingly plugin register my-rag \           # wire it into tb as a provider (Layer 3)
+   --url http://127.0.0.1:8765/v1 --model-id plugin/my-rag
+```
+
+`register` uses the existing `POST /api/v1/providers` endpoint (admin token,
+resolved like `connect()`). Creating the *rule/service* that maps the model into
+a scenario is still a user/UI step — the provider is the part the SDK does
+idempotently.
+
+**Not yet built (tb-side):** a sub-process supervisor that boots plugins from
+their manifest (reuse `agentboot/process`), a `/plugins/<name>/*` reverse-proxy
+mount, and the install/enable/logs/disable lifecycle UI. The Python side and the
+provider wiring are complete; those are the remaining backend pieces.
 
 ## Layer 3: can tb *use* a plugin as a model? (yes — as an upstream)
 
