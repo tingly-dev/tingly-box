@@ -56,7 +56,7 @@ class Plugin:
         self.scenario = scenario
 
         self._handler: Optional[ChatHandler] = None
-        self._llm = None  # lazy Layer-1 client
+        self._clients: dict = {}  # scenario -> lazily-connected client
         self._httpd = None
 
     # -- authoring -------------------------------------------------------
@@ -72,16 +72,32 @@ class Plugin:
 
     @property
     def llm(self):
-        """A lazily-connected Layer-1 client for calling back into tingly-box.
+        """A lazily-connected client for calling back into tingly-box.
 
-        Lets a plugin reuse the gateway for its own model calls, so it never
-        hard-codes a provider or key.
+        This is the plugin's default calling context (``self.scenario``). The
+        plugin reuses the gateway for its own model calls, so it never hard-codes
+        a provider or key — and ``ask(model=...)`` can target *any* model tb
+        routes. To drive a *different* rule-set, use :meth:`use`.
         """
-        if self._llm is None:
+        return self.use(self.scenario)
+
+    def use(self, scenario: str):
+        """Return a client bound to a specific scenario (rule-set) in tb.
+
+        A plugin composes the box: it can hold clients to several scenarios and
+        pick a model on each, so "the plugin can use any other rule / model
+        configured in tb" is one call:
+
+            self.use("claude_code").ask("…", model="claude-sonnet-4-6")
+            self.use("experiment").ask("…", model="auto")
+        """
+        client = self._clients.get(scenario)
+        if client is None:
             from ..client import connect
 
-            self._llm = connect(scenario=self.scenario, name=f"plugin:{self.name}")
-        return self._llm
+            client = connect(scenario=scenario, name=f"plugin:{self.name}")
+            self._clients[scenario] = client
+        return client
 
     # -- dispatch --------------------------------------------------------
 

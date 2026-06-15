@@ -14,10 +14,57 @@ with the right base URL, token and scenario path. There was no fast seam for
 (prompt, retrieval, agent loop) and **reuses the gateway's power** — provider
 routing, tier/fallback, guard rails, quota, logging — for free.
 
-This is **Layer 1** (client-side library). It deliberately ships before Layer 2
-(tb-hosted plugins with a manifest + sub-process supervision) and Layer 3
-(plugin-as-virtual-model via `vmodel/virtualserver`), both of which build on
-this same module and the same `/sdk/session` provisioning seam.
+## Architecture (one idea, not three layers)
+
+There is a single concept:
+
+> **tb is a hub of rules. A rule's upstream can be a plugin. A plugin can
+> originate calls against any other rule.**
+
+A client request matches a **rule** (as today). That rule's upstream is **plugin
+code** instead of a provider — the only new thing. The plugin does its custom
+work and, for any LLM work, calls **back into tb against any other rule / model /
+provider** you have configured. tb stays the single router; a plugin is just a
+graph node that happens to be user code and can also originate edges.
+
+```
+                         ┌──────────────────── tingly-box (the hub) ───────────────────┐
+   clients               │                                                              │
+   ┌─────────────┐  req  │   rule A ──upstream──►  PLUGIN CODE (your logic)             │
+   │ Claude Code │──────►│   (model=plugin/x)          │                                │
+   │ Cursor      │       │                             │ calls back into tb:            │
+   │ tb UI       │       │   rule B ◄──────────────────┤  use("…").ask(model="…")       │
+   │ tingly.ask()│       │   (→ Anthropic real)        │                                │
+   └─────────────┘       │   rule C ◄──────────────────┤  (another model / provider)    │
+                         │   rule D ◄──────────────────┘  (even another plugin)         │
+                         │      │                                                       │
+                         │      ▼  every edge gets: guard rails · routing/tiers ·       │
+                         │         failover · quota · logging                           │
+                         └──────────────────────────────────────────────────────────────┘
+                                          │
+                                          ▼  real upstreams (Anthropic / OpenAI / local …)
+```
+
+Everything else in this document is *how* that relationship is implemented with
+today's pieces — three verbs for the one rule⇄plugin relationship:
+
+| verb | what it is | SDK surface |
+|------|------------|-------------|
+| **connect** | a plugin (or experiment) *consumes* a rule | `tingly.connect()` / `plugin.use(scenario).ask(model=…)` |
+| **serve**   | a plugin *is* a rule's upstream | `tingly.Plugin` (OpenAI server) |
+| **register**| point a rule's upstream at the plugin | `register_with_tb()` → tb provider + rule |
+
+The historical "Layer 1/2/3" headings below map exactly to connect / serve /
+register. They are an implementation tour, not three separate products.
+
+### tb-side direction (UX)
+
+Today "register" is *provider + rule binding* (two steps; provider-with-
+`api_base` is the mechanism). The intended tb-side UX is **one step: a rule whose
+service is a plugin** — same as `vmodel`'s in-process models are selected, but
+for external plugin code. That eliminates the mode-picker (`ux-principles.md`)
+and makes "configure this rule with a plugin" literal.
+
 
 ## Shape
 
