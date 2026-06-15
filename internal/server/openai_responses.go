@@ -108,7 +108,10 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	s.applyVisionProxy(c, scenarioType, rule, &req.ResponseNewParams)
+	// NOTE: applyVisionProxy is deferred until after convertToResponsesParams
+	// below. Calling it here would mutate the partially-parsed copy embedded
+	// in req, only to have those mutations overwritten when params replaces
+	// req.ResponseNewParams. See the call site after `req.Model = actualModel`.
 
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)
@@ -147,6 +150,16 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	req.ResponseNewParams = params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
+
+	// Apply vision proxy AFTER convertToResponsesParams replaces
+	// req.ResponseNewParams: calling it earlier would mutate the
+	// minimally-parsed copy, only to have those mutations discarded when
+	// params (a fresh parse of the original bodyBytes) overwrites
+	// req.ResponseNewParams above. This is the only point where mutations
+	// land on the structure that both the vmodel chat conversion (below)
+	// and the protocol transform chain (called from dispatchChainResult)
+	// actually read.
+	s.applyVisionProxy(c, scenarioType, rule, &req.ResponseNewParams)
 
 	// Virtual-model providers are served by the in-process vmodel handler.
 	// The vmodel handler speaks OpenAI Chat format, so the Responses request is
