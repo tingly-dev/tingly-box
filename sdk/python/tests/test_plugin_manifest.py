@@ -39,3 +39,24 @@ def test_plugin_builds_manifest():
     assert man.entrypoint == "rag_plugin:plugin"
     assert man.port == 8080
     assert man.transport == "openai"
+
+
+def test_plugin_use_caches_per_scenario(monkeypatch):
+    import tingly.client as client_mod
+    from tingly import Plugin
+
+    calls = []
+
+    def fake_connect(scenario, name):
+        calls.append((scenario, name))
+        return object()
+
+    monkeypatch.setattr(client_mod, "connect", fake_connect)
+
+    plugin = Plugin(name="p", scenario="experiment")
+    a1 = plugin.llm
+    a2 = plugin.llm                 # default scenario, cached
+    b1 = plugin.use("claude_code")  # different rule-set
+    assert a1 is a2
+    assert b1 is not a1
+    assert calls == [("experiment", "plugin:p"), ("claude_code", "plugin:p")]
