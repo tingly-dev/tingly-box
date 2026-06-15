@@ -5,9 +5,18 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/processor"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// GinKeyVisionDescriptions is the gin.Context key under which
+// applyVisionProxy stashes the snapshot of descriptions emitted during a
+// request. The response-side injectors (protocol hook + non-stream
+// middleware) read this slice once per request. Each entry is already
+// wrapped in <image-description>…</image-description> by the processor;
+// consumers splice them in verbatim.
+const GinKeyVisionDescriptions = "vision_proxy.descriptions"
 
 // applyVisionProxy is the single entry point for the vision proxy plugin,
 // covering both the rule-level and scenario-level scopes. It must run before
@@ -22,11 +31,22 @@ func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario,
 	if svc == nil {
 		return
 	}
+	collector := &processor.DescriptionCollector{}
 	_ = s.visionProxyProcessor.Process(&smartrouting.ProcessorContext{
 		Ctx:      c.Request.Context(),
 		Request:  typedRequest,
 		Services: []*loadbalance.Service{svc},
+		Extras: map[string]any{
+			processor.ExtrasKeyVisionDescriptions: collector,
+		},
 	})
+	// Stash collected descriptions on the gin context so the response-side
+	// injector (protocol stream hook + non-stream middleware) can prepend
+	// them to the model's reply. Empty snapshot is fine — downstream checks
+	// the slice length and short-circuits.
+	if descs := collector.Snapshot(); len(descs) > 0 {
+		c.Set(GinKeyVisionDescriptions, descs)
+	}
 }
 
 // resolveVisionService picks the effective vision service for this request.

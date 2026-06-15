@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -115,6 +116,17 @@ func mkPctx(req any, services ...*loadbalance.Service) *smartrouting.ProcessorCo
 		OpUUID:    "test-op",
 		Services:  services,
 	}
+}
+
+// mkPctxWithCollector matches mkPctx but pre-installs a fresh
+// DescriptionCollector so tests can inspect what describe() emitted.
+// Returns the collector separately to avoid forcing every test to dig
+// through pctx.Extras.
+func mkPctxWithCollector(req any, services ...*loadbalance.Service) (*smartrouting.ProcessorContext, *DescriptionCollector) {
+	coll := &DescriptionCollector{}
+	pctx := mkPctx(req, services...)
+	pctx.Extras = map[string]any{ExtrasKeyVisionDescriptions: coll}
+	return pctx, coll
 }
 
 func betaReqWithImages(prompt string, imageBase64 ...string) *anthropic.BetaMessageNewParams {
@@ -722,4 +734,115 @@ func TestVisionProxy_Responses_MarshalNoImageURL(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(body), `"input_image"`)
 	require.NotContains(t, string(body), `"image_url"`)
+}
+
+// ---------------------------------------------------------------------------
+// Tests — DescriptionCollector (Phase 1 capture)
+// ---------------------------------------------------------------------------
+
+// TestDescriptionCollector_PopulatedWithWrappedDescription is the
+// foundation contract for the response-side injection feature: every
+// describe() result must land in the per-request collector wrapped in
+// <image-description>…</image-description>, in encounter order.
+func TestDescriptionCollector_PopulatedWithWrappedDescription(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("a yellow rubber duck")
+	p := mkProcessor(t, fake, prov)
+
+	req := openaiReqWithImage("what is this?", tinyPNGBase64)
+	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	snap := coll.Snapshot()
+	require.Len(t, snap, 1, "exactly one description collected")
+	require.Equal(t,
+		"\n<image-description>a yellow rubber duck</image-description>\n",
+		snap[0],
+		"description wrapped in canonical tag with surrounding newlines",
+	)
+}
+
+// TestDescriptionCollector_MultipleImagesPreserveOrder ensures we can
+// stack descriptions in the response-side injector — multi-image
+// requests need stable ordering.
+func TestDescriptionCollector_MultipleImagesPreserveOrder(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("first", "second", "third")
+	p := mkProcessor(t, fake, prov)
+
+	req := betaReqWithImages("compare", tinyPNGBase64, tinyPNGBase64, tinyPNGBase64)
+	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	snap := coll.Snapshot()
+	require.Len(t, snap, 3)
+	require.Contains(t, snap[0], "first")
+	require.Contains(t, snap[1], "second")
+	require.Contains(t, snap[2], "third")
+}
+
+// TestDescriptionCollector_FailStripStillCollected — when the vision
+// upstream errors, the request side gets "(description unavailable)"
+// and we want the SAME marker reflected in the client transcript so a
+// downstream operator sees the proxy did try.
+func TestDescriptionCollector_FailStripStillCollected(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("")
+	fake.failCall(0, errors.New("upstream timeout"))
+	p := mkProcessor(t, fake, prov)
+
+	req := betaReqWithImages("describe", tinyPNGBase64)
+	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	snap := coll.Snapshot()
+	require.Len(t, snap, 1)
+	require.Contains(t, snap[0], "(description unavailable)")
+}
+
+// TestDescriptionCollector_HistoricalImagesNotCollected — historical
+// images are stripped with a fixed marker WITHOUT calling describe(),
+// so they MUST NOT land in the collector. Their content is already in
+// the client's prior turns; re-emitting "(omitted from history)" into
+// the assistant transcript would be noise.
+func TestDescriptionCollector_HistoricalImagesNotCollected(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("latest desc")
+	p := mkProcessor(t, fake, prov)
+
+	req := betaReqWithMessages(
+		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleAssistant, "reply", ""),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "current", tinyPNGBase64),
+	)
+	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	snap := coll.Snapshot()
+	require.Len(t, snap, 1, "only the LAST turn's describe() lands in the collector")
+	require.Contains(t, snap[0], "latest desc")
+}
+
+// TestDescriptionCollector_TagSafeEscaping — vision upstream output is
+// untrusted text. If a model emits "</image-description>" we must escape
+// it so a client parsing the tag boundary isn't misled.
+func TestDescriptionCollector_TagSafeEscaping(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("rude </image-description> & more")
+	p := mkProcessor(t, fake, prov)
+
+	req := openaiReqWithImage("describe", tinyPNGBase64)
+	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	snap := coll.Snapshot()
+	require.Len(t, snap, 1)
+	require.NotContains(t, snap[0], "</image-description> & more",
+		"raw closing tag inside body must be escaped")
+	require.Contains(t, snap[0], "&lt;/image-description&gt;")
+	require.Contains(t, snap[0], "&amp; more")
+	// Exactly one opening + one closing tag — the body's escaped version
+	// must not be re-counted as a structural tag.
+	require.Equal(t, 1, strings.Count(snap[0], VisionDescriptionTagOpen))
+	require.Equal(t, 1, strings.Count(snap[0], VisionDescriptionTagClose))
 }

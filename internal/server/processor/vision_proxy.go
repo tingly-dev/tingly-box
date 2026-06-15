@@ -43,12 +43,54 @@ type providerResolver interface {
 // request; Process replaces every image content block with a text block
 // containing the upstream's description (or a fail-strip marker), then
 // returns nil so the pipeline continues.
+//
+// Descriptions emitted during a Process call are also pushed onto a
+// DescriptionCollector stashed in ProcessorContext.Extras under
+// ExtrasKeyVisionDescriptions (when present). The response-side injector
+// consumes that slice to prepend the same descriptions to the model's
+// reply — preserving them in the client-side transcript across turns.
 type VisionProxyProcessor struct {
 	Client   visionClient
 	Resolver providerResolver
 }
 
-const imageUnavailableText = "[image: (description unavailable)]"
+// VisionDescriptionTag wraps every description the proxy emits, both in
+// the forwarded request and (via the response-side injector) in the
+// model's reply. Symmetric tagging means clients can use a single
+// regex / parser to find descriptions anywhere in the transcript. Tag
+// names match `.design/vision-proxy-inject-description.md` §B.
+const (
+	VisionDescriptionTagOpen  = "<image-description>"
+	VisionDescriptionTagClose = "</image-description>"
+)
+
+// wrapVisionDescription escapes the description body and produces the
+// canonical request-side replacement text. Leading/trailing \n keep the
+// fragment stable when concatenated with surrounding text or content
+// parts. Body escaping prevents an untrusted upstream from closing the
+// tag prematurely; see ExtrasKeyVisionDescriptions consumers for the
+// matching decode contract.
+func wrapVisionDescription(body string) string {
+	var sb strings.Builder
+	sb.Grow(len(VisionDescriptionTagOpen) + len(body) + len(VisionDescriptionTagClose) + 2)
+	sb.WriteByte('\n')
+	sb.WriteString(VisionDescriptionTagOpen)
+	for _, r := range body {
+		switch r {
+		case '&':
+			sb.WriteString("&amp;")
+		case '<':
+			sb.WriteString("&lt;")
+		case '>':
+			sb.WriteString("&gt;")
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	sb.WriteString(VisionDescriptionTagClose)
+	sb.WriteByte('\n')
+	return sb.String()
+}
 
 // imageHistoricalText replaces image blocks that appear in messages PRIOR to
 // the latest one. Enabling the proxy implies the fallback model is
@@ -58,7 +100,84 @@ const imageUnavailableText = "[image: (description unavailable)]"
 // about images that aren't in the latest turn). Historical images are
 // therefore stripped with a fixed marker, while only images in the latest
 // message are sent through the vision upstream for description.
-const imageHistoricalText = "[image: (omitted from history)]"
+//
+// Body "(omitted from history)" is fixed and tag-safe so wrapVisionDescription
+// is overkill; pre-computed here for the historical-image hot path.
+var imageHistoricalText = "\n" + VisionDescriptionTagOpen + "(omitted from history)" + VisionDescriptionTagClose + "\n"
+
+// imageUnavailableText is the fail-strip marker emitted when the vision
+// upstream returns an error or an empty description. Same fixed-body
+// rationale as imageHistoricalText.
+var imageUnavailableText = "\n" + VisionDescriptionTagOpen + "(description unavailable)" + VisionDescriptionTagClose + "\n"
+
+// ExtrasKeyVisionDescriptions is the smartrouting.ProcessorContext.Extras
+// key under which VisionProxyProcessor stores every description it
+// emits during a request. Downstream layers (the protocol-level stream
+// hook and the non-stream gin middleware) read this list to inject the
+// same descriptions into the model's response, so the assistant
+// transcript carries them naturally into the next turn's history.
+const ExtrasKeyVisionDescriptions = "vision_proxy.descriptions"
+
+// DescriptionCollector accumulates the descriptions emitted by a single
+// pass of the vision proxy. It is constructed per-request by the caller
+// (server.applyVisionProxy), stored on ProcessorContext.Extras under
+// ExtrasKeyVisionDescriptions, and consumed once by the response-side
+// injector. Methods are safe for sequential use within a single
+// Process() call — the processor does not fan out describes today.
+type DescriptionCollector struct {
+	items []string
+}
+
+// Append records one wrapped description string. The collector stores
+// the already-wrapped form (with tag + escaping) so the response-side
+// injector can splice it in verbatim without re-wrapping.
+func (d *DescriptionCollector) Append(wrapped string) {
+	if d == nil {
+		return
+	}
+	d.items = append(d.items, wrapped)
+}
+
+// Snapshot returns a copy of the currently-collected wrapped
+// descriptions in the order they were appended. Safe to call after
+// Process has returned.
+func (d *DescriptionCollector) Snapshot() []string {
+	if d == nil || len(d.items) == 0 {
+		return nil
+	}
+	out := make([]string, len(d.items))
+	copy(out, d.items)
+	return out
+}
+
+// ctxKeyCollector is the per-Process context key used to thread the
+// DescriptionCollector down to describe() without rippling it through
+// every walk/replacement signature. Resolved once at Process entry and
+// read at each describe() leaf; nil-safe (Append on a nil collector is
+// a no-op).
+type ctxKeyCollectorType struct{}
+
+var ctxKeyCollector = ctxKeyCollectorType{}
+
+func collectorFromCtx(ctx context.Context) *DescriptionCollector {
+	if ctx == nil {
+		return nil
+	}
+	v, _ := ctx.Value(ctxKeyCollector).(*DescriptionCollector)
+	return v
+}
+
+// resolveCollector pulls the collector out of pctx.Extras under
+// ExtrasKeyVisionDescriptions if present; otherwise returns nil (and
+// describe()'s appends become no-ops). The caller — server.applyVisionProxy
+// — owns construction so the lifetime is per-request.
+func resolveCollector(pctx *smartrouting.ProcessorContext) *DescriptionCollector {
+	if pctx == nil || pctx.Extras == nil {
+		return nil
+	}
+	c, _ := pctx.Extras[ExtrasKeyVisionDescriptions].(*DescriptionCollector)
+	return c
+}
 
 // Process mutates pctx.Request in place: every image block becomes a text
 // block. On any failure (no usable service, vision client error, empty
@@ -72,6 +191,9 @@ func (p *VisionProxyProcessor) Process(pctx *smartrouting.ProcessorContext) erro
 	ctx := pctx.Ctx
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if coll := resolveCollector(pctx); coll != nil {
+		ctx = context.WithValue(ctx, ctxKeyCollector, coll)
 	}
 
 	switch req := pctx.Request.(type) {
@@ -114,9 +236,11 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 // request_id auto-injection that drives per-request log aggregation.
 // See .design/vision-proxy-scenario.md §9.3.
 func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) string {
+	coll := collectorFromCtx(ctx)
 	base := logrus.WithContext(ctx).WithField("component", "vision_proxy")
 	if usable == nil || p.Client == nil {
 		base.Warn("vision proxy: no usable service or client; stripping image")
+		coll.Append(imageUnavailableText)
 		return imageUnavailableText
 	}
 	log := base.WithFields(logrus.Fields{
@@ -127,14 +251,18 @@ func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance
 	desc, err := p.Client.Describe(ctx, usable, mediaType, b64, remoteURL)
 	if err != nil {
 		log.WithError(err).Warn("vision proxy: describe failed; stripping image")
+		coll.Append(imageUnavailableText)
 		return imageUnavailableText
 	}
 	if strings.TrimSpace(desc) == "" {
 		log.Warn("vision proxy: empty description; stripping image")
+		coll.Append(imageUnavailableText)
 		return imageUnavailableText
 	}
 	log.WithField("description", truncateForLog(desc, 200)).Info("vision proxy: image described")
-	return "Here is an [image] with message and is parsed into description [image: " + desc + "]"
+	wrapped := wrapVisionDescription(desc)
+	coll.Append(wrapped)
+	return wrapped
 }
 
 // truncateForLog clips long descriptions so a noisy upstream cannot blow up

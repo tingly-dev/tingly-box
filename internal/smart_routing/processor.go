@@ -21,6 +21,11 @@ type OpProcessor interface {
 // request struct (e.g. *anthropic.BetaMessageNewParams) and may be mutated
 // in place. Services is the matched rule's Services slice — the processor's
 // upstream candidate pool, NOT the downstream selection set.
+//
+// Extras is a free-form side channel for processor-emitted, request-scoped
+// data that downstream layers (response hooks, recording, etc.) want to
+// consume. Keys must be package-scoped strings to avoid collisions —
+// processors that need an Extras key should expose a const for it.
 type ProcessorContext struct {
 	Ctx       context.Context
 	Request   any
@@ -28,6 +33,7 @@ type ProcessorContext struct {
 	RuleIndex int
 	OpUUID    string
 	Services  []*loadbalance.Service
+	Extras    map[string]any
 }
 
 var (
