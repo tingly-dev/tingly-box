@@ -150,11 +150,74 @@ one shared vocabulary instead of re-deriving checks per package.
    `LastRequest`, …) is unchanged, so the matrix/flags/agent suites and
    `cli/harness` keep working. Validated by the full harness matrix
    (`--mode=all` + gosdk/python/node/aisdk drivers), 0 failures.
-3. **Phase 3 — servertest (later).** Replace `MockProviderServer` with a compat
-   adapter over `bench.NewScenarioServer` (preserving `SetResponse` /
-   `GetCallCount` / `GetLastRequest` ergonomics), dropping the `fmt.Printf`
-   debug spam. Multi-provider load-balancing tests get one `bench.Server` per
-   provider URL.
+3. **Phase 3 — servertest (later, designed below).** `servertest.MockProviderServer`
+   is a *dumb echo* keyed by endpoint (arbitrary `Body`/`Error`/`StatusCode` +
+   `Delay`, with default-filling), not a scenario fixture server — so it rides a
+   **new third responder** (`benchmark.NewEndpointServer`), not the scenario one.
+   See "Phase 3 — servertest migration (how-to)".
+
+## Phase 3 — servertest migration (how-to)
+
+Phase 3 is **not** a Phase-2-style delegation, because `MockProviderServer`'s
+response model is fundamentally different from the scenario one:
+
+| Axis | `protocoltest.VirtualServer` (Phase 2) | `servertest.MockProviderServer` (Phase 3) |
+|---|---|---|
+| Keyed by | scenario (from request `model`) | **endpoint** (`/v1/chat/completions`, `/v1/messages`) |
+| Response source | `MockResponseBuilder` per format | arbitrary `Body`/`Error`/`StatusCode` set at runtime |
+| When unset | 500 "no mock for scenario" | **sensible default** body (tests rely on this) |
+| Extra knobs | `StreamHTTPError` | **`Delay`** (timeout tests), per-endpoint call counts |
+
+This is exactly the design's thesis a third time: **observability + transport are
+shared; response generation is pluggable.** So Phase 3 adds a *third responder*
+rather than bending servertest onto the scenario one.
+
+### Step 1 — add an endpoint responder to `vmodel/benchmark`
+
+A new `endpoint_responder.go` + `Server` constructor, reusing the existing
+capture middleware and transports:
+
+```go
+type MockResponse struct { StatusCode int; Body []byte; Delay time.Duration; Error string }
+type EndpointMock struct { /* mu; per-endpoint MockResponse + stream events */ }
+func (m *EndpointMock) SetResponse(endpoint string, r MockResponse)
+func (m *EndpointMock) SetStreamingResponse(endpoint string, events []string)
+func NewEndpointServer() (*Server, *EndpointMock)   // inner = EndpointMock mux; capture for free
+```
+
+- The inner mux serves `/v1/chat/completions` (+ `/chat/completions`),
+  `/v1/messages` (+ `/messages`); honors `Delay` (sleep), `Error` (envelope),
+  `stream` flag → `sse.WriteSSEResponse(events)`. Reuses the **same**
+  `internal/protocol/sse` writer as the scenario responder.
+- Default bodies (the current `CreateMockChatCompletionResponse` / Anthropic
+  default) move here as exported helpers so the "when unset" behavior is
+  preserved — **drop all the `fmt.Printf` debug spam** (UX: reduce noise).
+- Per-endpoint counts/last-request come from the shared `recorder` via
+  `classify(path)`; `GetCallCount(endpoint)`/`GetLastRequest(endpoint)` map the
+  endpoint string through `classify` to an `EndpointKind`.
+
+### Step 2 — make `servertest.MockProviderServer` a thin adapter
+
+Keep its exact public signatures (`NewMockProviderServer`, `SetResponse`,
+`SetStreamingResponse`, `GetURL`, `GetCallCount`, `GetLastRequest`, `Reset`,
+`Close`) but back them with `benchmark.NewEndpointServer()`. `MockResponse` /
+`MockStreamingResponse` become aliases of the benchmark types (like Phase 2's
+`EndpointKind`/`CapturedRequest`). No `servertest` test changes; the
+`MockProviderTestSuite` keeps working.
+
+### Risks / decisions
+
+- **`Delay` lives on the echo `MockResponse`, not on `scenario.MockResponseBuilder`** —
+  the two response strategies stay separate; no change to the scenario path.
+- **Counter keying**: `servertest` counts per endpoint *string*; the benchmark
+  `recorder` counts per `EndpointKind`. The `classify` mapping is 1:1 for these
+  routes, but if a test ever distinguished `/v1/chat/completions` from
+  `/chat/completions` by count, that nuance is lost — current tests do not (a
+  quick grep confirms before implementing).
+- **`GetLastRequest` returns `map[string]interface{}`** today; the benchmark
+  `CapturedRequest.JSON()` returns the same shape — adapter calls `.JSON()`.
+- Validation: `go test ./internal/servertest/...` (unchanged) + the existing
+  `MockProviderTestSuite`; no matrix involvement (servertest is gateway-level).
 
 ## Parity check — does the foundation serve both with the same effect?
 
