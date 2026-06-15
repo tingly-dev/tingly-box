@@ -69,18 +69,7 @@ func (s *Server) RegisterPlugin(c *gin.Context) {
 		modelID = "plugin/" + req.Name
 	}
 
-	provider := &typ.Provider{
-		UUID:          config.GenerateUUID(),
-		Name:          req.Name,
-		APIBase:       req.Endpoint,
-		APIStyle:      "openai",
-		Token:         req.Token,
-		NoKeyRequired: req.Token == "",
-		Enabled:       true,
-		AuthType:      typ.AuthTypeAPIKey,
-		Timeout:       constant.DefaultRequestTimeout,
-		PluginDetail:  &typ.PluginDetail{ModelID: modelID},
-	}
+	provider := buildPluginProvider(config.GenerateUUID(), req.Name, req.Endpoint, modelID, req.Token)
 	if err := s.config.AddProvider(provider); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -290,3 +279,22 @@ func (s *Server) ensurePluginRule(scenario, modelID, providerID, name string, ti
 type pluginBindError struct{ msg string }
 
 func (e *pluginBindError) Error() string { return e.msg }
+
+// buildPluginProvider constructs the plugin-kind provider shared by persistent
+// registration and live (ephemeral) resolution. A plugin is an ordinary OpenAI
+// HTTP upstream (api_key / no_key) plus the PluginDetail marker — routing is
+// unchanged.
+func buildPluginProvider(uuid, name, endpoint, modelID, token string) *typ.Provider {
+	return &typ.Provider{
+		UUID:          uuid,
+		Name:          name,
+		APIBase:       endpoint,
+		APIStyle:      "openai",
+		Token:         token,
+		NoKeyRequired: token == "",
+		Enabled:       true,
+		AuthType:      typ.AuthTypeAPIKey,
+		Timeout:       constant.DefaultRequestTimeout,
+		PluginDetail:  &typ.PluginDetail{ModelID: modelID},
+	}
+}

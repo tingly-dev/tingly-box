@@ -14,6 +14,7 @@ from typing import Optional
 import httpx
 
 from .. import config as _config
+from .._http import safe_json
 from ..errors import AuthError, GatewayUnreachableError
 
 
@@ -77,7 +78,7 @@ def register_with_tb(
     if resp.status_code == 401:
         raise AuthError("tingly-box rejected the admin token while registering the plugin")
 
-    payload_data = _safe_json(resp) or {}
+    payload_data = safe_json(resp) or {}
     if resp.status_code not in (200, 201) or not payload_data.get("success"):
         raise GatewayUnreachableError(
             f"plugin registration failed: HTTP {resp.status_code} {resp.text[:200]}"
@@ -94,10 +95,3 @@ def register_with_tb(
         ready=bool(data.get("ready", False)),
         note=data.get("note", ""),
     )
-
-
-def _safe_json(resp: httpx.Response):
-    try:
-        return resp.json()
-    except ValueError:
-        return None
