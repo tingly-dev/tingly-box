@@ -739,11 +739,12 @@ func TestVisionProxy_Responses_MarshalNoImageURL(t *testing.T) {
 // Tests — DescriptionCollector (Phase 1 capture)
 // ---------------------------------------------------------------------------
 
-// TestDescriptionCollector_PopulatedWithWrappedDescription is the
+// TestDescriptionCollector_PopulatedWithDescriptionBody is the
 // foundation contract for the response-side injection feature: every
-// describe() result must land in the per-request collector wrapped in
-// <image-description>…</image-description>, in encounter order.
-func TestDescriptionCollector_PopulatedWithWrappedDescription(t *testing.T) {
+// describe() result must land in the per-request collector as the raw
+// body (unwrapped), in encounter order. BuildVisionDescriptionPrefix
+// wraps at consumption time.
+func TestDescriptionCollector_PopulatedWithDescriptionBody(t *testing.T) {
 	prov := mkProvider("openai-vision")
 	fake := newFakeVisionClient("a yellow rubber duck")
 	p := mkProcessor(t, fake, prov)
@@ -752,13 +753,7 @@ func TestDescriptionCollector_PopulatedWithWrappedDescription(t *testing.T) {
 	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
 
 	require.NoError(t, p.Process(pctx))
-	snap := coll.Snapshot()
-	require.Len(t, snap, 1, "exactly one description collected")
-	require.Equal(t,
-		"\n<image-description>a yellow rubber duck</image-description>\n",
-		snap[0],
-		"description wrapped in canonical tag with surrounding newlines",
-	)
+	require.Equal(t, []string{"a yellow rubber duck"}, coll.Snapshot())
 }
 
 // TestDescriptionCollector_MultipleImagesPreserveOrder ensures we can
@@ -773,11 +768,7 @@ func TestDescriptionCollector_MultipleImagesPreserveOrder(t *testing.T) {
 	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
 
 	require.NoError(t, p.Process(pctx))
-	snap := coll.Snapshot()
-	require.Len(t, snap, 3)
-	require.Contains(t, snap[0], "first")
-	require.Contains(t, snap[1], "second")
-	require.Contains(t, snap[2], "third")
+	require.Equal(t, []string{"first", "second", "third"}, coll.Snapshot())
 }
 
 // TestDescriptionCollector_FailStripStillCollected — when the vision
@@ -794,9 +785,7 @@ func TestDescriptionCollector_FailStripStillCollected(t *testing.T) {
 	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
 
 	require.NoError(t, p.Process(pctx))
-	snap := coll.Snapshot()
-	require.Len(t, snap, 1)
-	require.Contains(t, snap[0], "(description unavailable)")
+	require.Equal(t, []string{"(description unavailable)"}, coll.Snapshot())
 }
 
 // TestDescriptionCollector_HistoricalImagesNotCollected — historical
@@ -817,8 +806,7 @@ func TestDescriptionCollector_HistoricalImagesNotCollected(t *testing.T) {
 	pctx, coll := mkPctxWithCollector(req, mkService(prov.UUID, true))
 
 	require.NoError(t, p.Process(pctx))
-	snap := coll.Snapshot()
-	require.Len(t, snap, 1, "only the LAST turn's describe() lands in the collector")
-	require.Contains(t, snap[0], "latest desc")
+	require.Equal(t, []string{"latest desc"}, coll.Snapshot(),
+		"only the LAST turn's describe() lands in the collector")
 }
 

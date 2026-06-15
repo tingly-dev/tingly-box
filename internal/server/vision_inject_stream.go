@@ -45,7 +45,7 @@ func visionStreamInjectFactory(hc *protocol.HandleContext) func(event interface{
 		}
 		switch ev := event.(type) {
 		case *openai.ChatCompletionChunk:
-			if firstOpenAIText(ev) {
+			if ev != nil && len(ev.Choices) > 0 && ev.Choices[0].Delta.Content != "" {
 				writeSyntheticOpenAIChatText(hc, ev, prefix)
 				injected = true
 			}
@@ -60,25 +60,15 @@ func visionStreamInjectFactory(hc *protocol.HandleContext) func(event interface{
 				injected = true
 			}
 		case wire.ResponsesOutputTextDeltaEvent:
-			// Converter-based paths (OpenAI Responses) deliver concrete
-			// wire-event values rather than a single union. The text-delta
-			// arm carries item_id / output_index / content_index, the
-			// minimum framing needed to land a synthetic delta in the
-			// same content part the model is about to fill.
+			// Converters deliver wire-event values (not pointers); we
+			// trigger on the text-delta arm because it carries the
+			// (item_id, output_index, content_index) needed to land
+			// the synthetic delta in the model's content part.
 			writeSyntheticResponsesText(hc, ev, prefix)
 			injected = true
 		}
 		return nil
 	}
-}
-
-// firstOpenAIText reports whether this chunk carries the first piece of
-// assistant text (not a role-only preamble, not a tool_call chunk).
-func firstOpenAIText(chunk *openai.ChatCompletionChunk) bool {
-	if chunk == nil || len(chunk.Choices) == 0 {
-		return false
-	}
-	return chunk.Choices[0].Delta.Content != ""
 }
 
 // writeSyntheticOpenAIChatText emits one extra chat.completion.chunk whose
@@ -153,13 +143,9 @@ func writeSyntheticAnthropicText(hc *protocol.HandleContext, index int, prefix s
 }
 
 // writeSyntheticResponsesText emits one extra response.output_text.delta
-// event that lands in the same content part the model's first text was
-// about to fill. The triple (item_id, output_index, content_index) is
-// what binds the delta to a specific content part; the sequence_number
-// echoes the real event's so clients that expect monotonic numbering
-// see a stable progression. The synthetic event runs BEFORE the model's
-// real delta (hooks fire before handleFunc) so the prefix appears at
-// the start of the assembled text.
+// at the same (item_id, output_index, content_index) as the model's
+// first delta. Hooks fire before handleFunc, so this lands ahead of the
+// real delta in the same content part.
 func writeSyntheticResponsesText(hc *protocol.HandleContext, real wire.ResponsesOutputTextDeltaEvent, prefix string) {
 	synthetic := wire.ResponsesOutputTextDeltaEvent{
 		Type:           "response.output_text.delta",

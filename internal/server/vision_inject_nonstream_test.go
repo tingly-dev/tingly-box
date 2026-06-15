@@ -41,7 +41,7 @@ func runRoute(t *testing.T, path string, descs []string, handlerBody string, han
 // choices[0].message.content and the rest of the body is byte-stable.
 func TestVisionInjectNonStream_OpenAIChat(t *testing.T) {
 	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"Hello world"},"finish_reason":"stop"}]}`
-	got := runRoute(t, "/v1/chat/completions", []string{wrappedDuck}, body, "application/json")
+	got := runRoute(t, "/v1/chat/completions", []string{duckBody}, body, "application/json")
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(got), &parsed))
@@ -61,7 +61,7 @@ func TestVisionInjectNonStream_OpenAIResponses(t *testing.T) {
 			{"type":"output_text","text":"Hello world"}
 		]}
 	]}`
-	got := runRoute(t, "/v1/responses", []string{wrappedDuck}, body, "application/json")
+	got := runRoute(t, "/v1/responses", []string{duckBody}, body, "application/json")
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(got), &parsed))
@@ -76,7 +76,7 @@ func TestVisionInjectNonStream_Anthropic(t *testing.T) {
 	body := `{"id":"msg_01","type":"message","role":"assistant","content":[
 		{"type":"text","text":"Hello world"}
 	]}`
-	got := runRoute(t, "/v1/messages", []string{wrappedDuck}, body, "application/json")
+	got := runRoute(t, "/v1/messages", []string{duckBody}, body, "application/json")
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(got), &parsed))
@@ -92,7 +92,7 @@ func TestVisionInjectNonStream_Anthropic(t *testing.T) {
 // the wrapper short-circuits at first Write.
 func TestVisionInjectNonStream_SSEPassthrough(t *testing.T) {
 	body := "data: {\"id\":\"c\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n"
-	got := runRoute(t, "/v1/chat/completions", []string{wrappedDuck}, body, "text/event-stream")
+	got := runRoute(t, "/v1/chat/completions", []string{duckBody}, body, "text/event-stream")
 	require.Equal(t, body, got, "SSE bytes must be byte-identical pass-through")
 }
 
@@ -108,7 +108,7 @@ func TestVisionInjectNonStream_NoDescriptions(t *testing.T) {
 // tool_use blocks (no text) must pass through untouched, not crash.
 func TestVisionInjectNonStream_NoTextField(t *testing.T) {
 	body := `{"content":[{"type":"tool_use","id":"tu_1","name":"get_weather","input":{}}]}`
-	got := runRoute(t, "/v1/messages", []string{wrappedDuck}, body, "application/json")
+	got := runRoute(t, "/v1/messages", []string{duckBody}, body, "application/json")
 	require.Equal(t, body, got, "no text block → pass-through")
 }
 
@@ -117,10 +117,7 @@ func TestVisionInjectNonStream_NoTextField(t *testing.T) {
 // text. Multi-image conversation case.
 func TestVisionInjectNonStream_MultipleDescriptionsAllAppear(t *testing.T) {
 	body := `{"choices":[{"message":{"content":"reply"}}]}`
-	descs := []string{
-		"\n<image-description>first</image-description>\n",
-		"\n<image-description>second</image-description>\n",
-	}
+	descs := []string{"first", "second"}
 	got := runRoute(t, "/v1/chat/completions", descs, body, "application/json")
 
 	var parsed map[string]any

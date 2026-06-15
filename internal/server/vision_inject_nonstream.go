@@ -83,12 +83,6 @@ func (w *visionInjectWriter) Write(b []byte) (int, error) {
 	if !ok {
 		return w.ResponseWriter.Write(b)
 	}
-	// gin's status header may already be committed by the time JSON
-	// body lands; the Content-Length header (if set) needs adjusting.
-	// gin.ResponseWriter writes Content-Length lazily based on the
-	// Write payload size, so writing the patched bytes through the
-	// embedded writer is enough — the wrapper does not interpose any
-	// length math.
 	n, err := w.ResponseWriter.Write(patched)
 	if n == len(patched) && err == nil {
 		// Caller expects the byte count of THEIR payload, not ours.

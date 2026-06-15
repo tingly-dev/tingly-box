@@ -50,12 +50,12 @@ func newInjectGinCtx(descs []string) (*gin.Context, *httptest.ResponseRecorder) 
 	return c, rec
 }
 
-const wrappedDuck = "\n<image-description>a yellow duck</image-description>\n"
+const duckBody = "a yellow duck"
 
 // TestVisionStreamInject_OpenAIChat_PrependsSyntheticChunk proves the hook
 // emits a synthetic content chunk before the model's first text chunk.
 func TestVisionStreamInject_OpenAIChat_PrependsSyntheticChunk(t *testing.T) {
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "downstream-text-model")
 
 	hook := visionStreamInjectFactory(hc)
@@ -82,7 +82,7 @@ func TestVisionStreamInject_OpenAIChat_PrependsSyntheticChunk(t *testing.T) {
 // TestVisionStreamInject_OpenAIChat_SkipsRolePreamble ensures the prefix is
 // not injected on a role-only / empty-content chunk.
 func TestVisionStreamInject_OpenAIChat_SkipsRolePreamble(t *testing.T) {
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "m")
 	hook := visionStreamInjectFactory(hc)
 
@@ -98,7 +98,7 @@ func TestVisionStreamInject_OpenAIChat_SkipsRolePreamble(t *testing.T) {
 // cross-transport proof: Anthropic forwards upstream RawJSON, so the hook
 // must PREPEND a synthetic content_block_delta rather than mutate.
 func TestVisionStreamInject_Anthropic_PrependsTextDelta(t *testing.T) {
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "m")
 	hook := visionStreamInjectFactory(hc)
 	require.NotNil(t, hook)
@@ -125,7 +125,7 @@ func TestVisionStreamInject_Anthropic_PrependsTextDelta(t *testing.T) {
 // content_block_start (no text yet) do not trigger injection — important
 // when the first block is thinking/tool_use.
 func TestVisionStreamInject_Anthropic_SkipsNonText(t *testing.T) {
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "m")
 	hook := visionStreamInjectFactory(hc)
 
@@ -143,7 +143,7 @@ func TestVisionStreamInject_Anthropic_SkipsNonText(t *testing.T) {
 // delta. The client accumulates deltas in the same content part →
 // description text lands ahead of the model text.
 func TestVisionStreamInject_Responses_PrependsTextDelta(t *testing.T) {
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "m")
 	hook := visionStreamInjectFactory(hc)
 	require.NotNil(t, hook)
@@ -175,7 +175,7 @@ func TestVisionStreamInject_Responses_PrependsTextDelta(t *testing.T) {
 // delta) — only the text-delta event has the framing needed to land
 // the synthetic delta correctly.
 func TestVisionStreamInject_Responses_SkipsNonText(t *testing.T) {
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "m")
 	hook := visionStreamInjectFactory(hc)
 
@@ -200,7 +200,7 @@ func TestVisionStreamInject_AutoAttach(t *testing.T) {
 	t.Cleanup(protocol.ResetDefaultStreamEventHookFactories)
 	protocol.RegisterDefaultStreamEventHookFactory(visionStreamInjectFactory)
 
-	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	c, rec := newInjectGinCtx([]string{duckBody})
 	hc := protocol.NewHandleContext(c, "m")
 	require.Len(t, hc.OnStreamEventHooks, 1, "factory auto-attached one hook")
 
