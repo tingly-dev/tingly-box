@@ -51,7 +51,7 @@ import {
     IconPuzzle,
     IconAlertCircle,
     IconAlertTriangle,
-    IconArrowMerge,
+    IconArrowsSplit2,
     IconArrowsLeftRight,
     IconCircleCheck,
     IconCircleX,
@@ -227,7 +227,7 @@ export const BugReport = tablerMui(IconBug);
 export const AutoFixHigh = tablerMui(IconWand);
 export const AutoAwesome = tablerMui(IconSparkles);
 export const CompareArrows = tablerMui(IconArrowsLeftRight);
-export const Dual = tablerMui(IconArrowMerge);
+export const Dual = tablerMui(IconArrowsSplit2);
 export const Outbound = tablerMui(IconArrowUpRight);
 export const UpgradeOutlined = tablerMui(IconArrowUp);
 export const LocationOn = tablerMui(IconMapPin);
