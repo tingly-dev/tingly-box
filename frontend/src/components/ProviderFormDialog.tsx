@@ -25,8 +25,8 @@ import {type UniqueProvider, useProviderTemplates} from '../services/serviceProv
 import {api} from '../services/api';
 import ApiKeyField from './providerFormDialog/ApiKeyField';
 import CustomEndpointField from './providerFormDialog/CustomEndpointField';
-import FusionToggle from './providerFormDialog/FusionToggle';
-import FusionUrlFields from './providerFormDialog/FusionUrlFields';
+import DualToggle from './providerFormDialog/DualToggle';
+import DualUrlFields from './providerFormDialog/DualUrlFields';
 import KeyNameField from './providerFormDialog/KeyNameField';
 import ProtocolSelector from './providerFormDialog/ProtocolSelector';
 import ProviderAutocomplete from './providerFormDialog/ProviderAutocomplete';
@@ -48,11 +48,11 @@ export interface EnhancedProviderFormData {
     authType?: 'api_key' | 'oauth';
     protocols?: ('openai' | 'anthropic')[];
     providerBaseUrls?: { openai?: string; anthropic?: string };
-    // Fusion-mode optional URLs. When both are set, the backend routes per
+    // Dual-mode optional URLs. When both are set, the backend routes per
     // inbound protocol natively. When only one is set, falls back to apiBase.
     apiBaseOpenAI?: string;
     apiBaseAnthropic?: string;
-    createFusionProvider?: boolean;
+    createDualProvider?: boolean;
 }
 
 interface PresetProviderFormDialogProps {
@@ -77,13 +77,13 @@ interface PresetProviderFormDialogProps {
      *  dropdown and show a plain URL text field instead. Custom endpoints are
      *  strictly single-protocol. */
     customMode?: boolean;
-    /** When true, the user entered via "Fusion endpoint" — show two URL fields
+    /** When true, the user entered via "Dual endpoint" — show two URL fields
      *  (OpenAI + Anthropic) under one key and always save a single fused record.
      *  No protocol selector, no topology toggle. */
-    fusionMode?: boolean;
-    /** Edit-mode upgrade: convert a single custom provider into a fusion one. */
-    onConvertToFusion?: () => void;
-    /** Edit-mode downgrade: convert a fusion provider back to a single endpoint. */
+    dualMode?: boolean;
+    /** Edit-mode upgrade: convert a single custom provider into a dual one. */
+    onConvertToDual?: () => void;
+    /** Edit-mode downgrade: convert a dual provider back to a single endpoint. */
     onConvertToSingle?: () => void;
 }
 
@@ -100,15 +100,15 @@ const ProviderFormDialog = ({
                                 isFirstProvider = false,
                                 optionalEditableToken = false,
                                 customMode = false,
-                                fusionMode = false,
-                                onConvertToFusion,
+                                dualMode = false,
+                                onConvertToDual,
                                 onConvertToSingle,
                             }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
-    const defaultTitle = fusionMode
+    const defaultTitle = dualMode
         ? (mode === 'add'
-            ? t('providerDialog.fusionForm.title', {defaultValue: 'Add Fusion endpoint'})
-            : t('providerDialog.fusionForm.editTitle', {defaultValue: 'Edit Fusion endpoint'}))
+            ? t('providerDialog.dualForm.title', {defaultValue: 'Add Dual endpoint'})
+            : t('providerDialog.dualForm.editTitle', {defaultValue: 'Edit Dual endpoint'}))
         : (mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle'));
     const defaultSubmitText = mode === 'add' ? t('providerDialog.addButton') : t('common.saveChanges');
 
@@ -127,17 +127,17 @@ const ProviderFormDialog = ({
     const [providerInputValue, setProviderInputValue] = useState('');
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
-    const [createFusionProvider, setCreateFusionProvider] = useState(false);
+    const [createDualProvider, setCreateDualProvider] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [baseUrlError, setBaseUrlError] = useState(false);
-    // Fusion-form local mirrors for the two URL fields (snappy typing; committed
+    // Dual-form local mirrors for the two URL fields (snappy typing; committed
     // to data.apiBaseOpenAI / data.apiBaseAnthropic on blur / submit).
     const [fusOpenAIUrl, setFusOpenAIUrl] = useState('');
     const [fusAnthropicUrl, setFusAnthropicUrl] = useState('');
-    // Whether the provider being edited already has both fusion URLs stored.
-    const [isExistingFusion, setIsExistingFusion] = useState(false);
-    // Snapshot of fusion URLs captured on dialog open, used for downgrade/revert.
-    const initialFusionRef = useRef<{ openAI: string; anthropic: string; apiBase: string; apiStyle: string }>({
+    // Whether the provider being edited already has both dual URLs stored.
+    const [isExistingDual, setIsExistingDual] = useState(false);
+    // Snapshot of dual URLs captured on dialog open, used for downgrade/revert.
+    const initialDualRef = useRef<{ openAI: string; anthropic: string; apiBase: string; apiStyle: string }>({
         openAI: '', anthropic: '', apiBase: '', apiStyle: 'openai',
     });
 
@@ -177,8 +177,8 @@ const ProviderFormDialog = ({
     }, [data.noKeyRequired]);
 
     useEffect(() => {
-        setCreateFusionProvider(!!data.createFusionProvider);
-    }, [data.createFusionProvider]);
+        setCreateDualProvider(!!data.createDualProvider);
+    }, [data.createDualProvider]);
 
     // Fetch global proxy URL once on mount
     useEffect(() => {
@@ -195,7 +195,7 @@ const ProviderFormDialog = ({
 
         setVerificationResult(null);
         setBaseUrlError(false);
-        // Seed the fusion-form URL mirrors. By convention apiBase carries the
+        // Seed the dual-form URL mirrors. By convention apiBase carries the
         // OpenAI URL, so fall back to it when apiBaseOpenAI is empty.
         setFusOpenAIUrl(data.apiBaseOpenAI || data.apiBase || '');
         setFusAnthropicUrl(data.apiBaseAnthropic || '');
@@ -206,22 +206,22 @@ const ProviderFormDialog = ({
         setShowNameField(mode === 'edit');
 
         if (mode === 'edit') {
-            // Hydrate fusion state: existing fusion URLs imply the protocol
+            // Hydrate dual state: existing dual URLs imply the protocol
             // is already enabled, regardless of the legacy apiStyle pin.
-            const hasFusionOpenAI = !!data.apiBaseOpenAI;
-            const hasFusionAnthropic = !!data.apiBaseAnthropic;
-            const existingFusion = hasFusionOpenAI && hasFusionAnthropic;
-            setIsExistingFusion(existingFusion);
+            const hasDualOpenAI = !!data.apiBaseOpenAI;
+            const hasDualAnthropic = !!data.apiBaseAnthropic;
+            const existingDual = hasDualOpenAI && hasDualAnthropic;
+            setIsExistingDual(existingDual);
             // Snapshot for downgrade/revert operations.
-            initialFusionRef.current = {
+            initialDualRef.current = {
                 openAI: data.apiBaseOpenAI || '',
                 anthropic: data.apiBaseAnthropic || '',
                 apiBase: data.apiBase,
                 apiStyle: data.apiStyle || 'openai',
             };
-            setCreateFusionProvider(false);
-            setProtocolOpenAI(hasFusionOpenAI || data.apiStyle === 'openai');
-            setProtocolAnthropic(hasFusionAnthropic || data.apiStyle === 'anthropic');
+            setCreateDualProvider(false);
+            setProtocolOpenAI(hasDualOpenAI || data.apiStyle === 'openai');
+            setProtocolAnthropic(hasDualAnthropic || data.apiStyle === 'anthropic');
             setSelectedProvider(matchingProvider);
             setProviderInputValue(
                 matchingProvider ? matchingProvider.alias || matchingProvider.name : data.apiBase
@@ -248,8 +248,8 @@ const ProviderFormDialog = ({
                 setProtocolOpenAI(false);
                 setProtocolAnthropic(false);
             }
-            setIsExistingFusion(false);
-            setCreateFusionProvider(false);
+            setIsExistingDual(false);
+            setCreateDualProvider(false);
             // If the parent prefilled apiBase to a known provider (onboarding
             // browse / paste-detect), seed the Autocomplete with it so users see
             // the picked provider rather than a blank field. In custom mode
@@ -280,15 +280,15 @@ const ProviderFormDialog = ({
     // Helper: push protocol-related fields to parent in one batch.
     // Called only from user-driven handlers (not from a render-triggered effect).
     //
-    // Fusion-mode rule: when BOTH protocols are checked and we have a known
+    // Dual-mode rule: when BOTH protocols are checked and we have a known
     // template (provider) with both base URLs, emit `apiBaseOpenAI` +
-    // `apiBaseAnthropic` so the backend stores them as fusion fields. The
+    // `apiBaseAnthropic` so the backend stores them as dual fields. The
     // legacy `apiBase`/`apiStyle` still get populated (set to the openai URL
     // by convention) so single-protocol consumers keep working.
     //
     // When only ONE protocol is checked, behavior matches the previous
     // single-protocol UX: pick the matching URL into `apiBase` and clear the
-    // other-side fusion field.
+    // other-side dual field.
     const syncProtocolsToParent = useCallback(
         (
             nextOpenAI: boolean,
@@ -309,11 +309,11 @@ const ProviderFormDialog = ({
                     anthropic: provider.baseUrlAnthropic,
                 });
 
-                const fusion = createFusionProvider
+                const dual = createDualProvider
                     && nextOpenAI && nextAnthropic
                     && !!provider.baseUrlOpenAI && !!provider.baseUrlAnthropic;
 
-                if (fusion) {
+                if (dual) {
                     cb('apiBaseOpenAI', provider.baseUrlOpenAI);
                     cb('apiBaseAnthropic', provider.baseUrlAnthropic);
                     // Use the OpenAI URL as the legacy primary so single-
@@ -333,13 +333,13 @@ const ProviderFormDialog = ({
                     cb('apiBaseAnthropic', '');
                 }
             } else {
-                // Free-form / custom single endpoint — no fusion fields here.
-                // (Two-endpoint fusion is configured via the dedicated Fusion form.)
+                // Free-form / custom single endpoint — no dual fields here.
+                // (Two-endpoint dual is configured via the dedicated Dual form.)
                 cb('apiBaseOpenAI', '');
                 cb('apiBaseAnthropic', '');
             }
         },
-        [createFusionProvider]
+        [createDualProvider]
     );
 
     const handleUseGlobalProxyChange = (checked: boolean) => {
@@ -353,17 +353,17 @@ const ProviderFormDialog = ({
     };
 
     // OAuth-bound providers are issuer-locked to a single protocol.
-    // In edit mode, non-fusion providers are also locked — protocol changes
-    // require upgrading to fusion (via the fusion toggle) or creating a new entry.
-    const fusionLocked = data.authType === 'oauth';
-    const protocolLocked = mode === 'edit' && !isExistingFusion;
-    const effectiveLocked = fusionLocked || protocolLocked;
+    // In edit mode, non-dual providers are also locked — protocol changes
+    // require upgrading to dual (via the dual toggle) or creating a new entry.
+    const dualLocked = data.authType === 'oauth';
+    const protocolLocked = mode === 'edit' && !isExistingDual;
+    const effectiveLocked = dualLocked || protocolLocked;
 
-    // For an existing fusion provider being edited: deselecting one side
+    // For an existing dual provider being edited: deselecting one side
     // downgrades it to a single-protocol provider.
-    const handleFusionDowngrade = (nextOpenAI: boolean, nextAnthropic: boolean) => {
+    const handleDualDowngrade = (nextOpenAI: boolean, nextAnthropic: boolean) => {
         const cb = onChangeRef.current;
-        const snap = initialFusionRef.current;
+        const snap = initialDualRef.current;
         if (nextOpenAI && !nextAnthropic) {
             cb('apiBase', snap.openAI || snap.apiBase);
             cb('apiStyle', 'openai');
@@ -392,10 +392,10 @@ const ProviderFormDialog = ({
         if (selectedProvider && !selectedProvider.supportsOpenAI) return;
         if (customMode) { if (!protocolOpenAI) selectCustomProtocol(true); return; }
         const next = !protocolOpenAI;
-        if (isExistingFusion && !next && !protocolAnthropic) return;
+        if (isExistingDual && !next && !protocolAnthropic) return;
         setProtocolOpenAI(next);
         setVerificationResult(null);
-        if (isExistingFusion) handleFusionDowngrade(next, protocolAnthropic);
+        if (isExistingDual) handleDualDowngrade(next, protocolAnthropic);
         else syncProtocolsToParent(next, protocolAnthropic, selectedProvider);
     };
 
@@ -404,10 +404,10 @@ const ProviderFormDialog = ({
         if (selectedProvider && !selectedProvider.supportsAnthropic) return;
         if (customMode) { if (!protocolAnthropic) selectCustomProtocol(false); return; }
         const next = !protocolAnthropic;
-        if (isExistingFusion && !next && !protocolOpenAI) return;
+        if (isExistingDual && !next && !protocolOpenAI) return;
         setProtocolAnthropic(next);
         setVerificationResult(null);
-        if (isExistingFusion) handleFusionDowngrade(protocolOpenAI, next);
+        if (isExistingDual) handleDualDowngrade(protocolOpenAI, next);
         else syncProtocolsToParent(protocolOpenAI, next, selectedProvider);
     };
 
@@ -504,13 +504,13 @@ const ProviderFormDialog = ({
         if (selectedProvider) {
             return selectedProvider.alias || selectedProvider.name;
         }
-        const raw = (fusionMode ? fusOpenAIUrl : data.apiBase) || providerInputValue || '';
+        const raw = (dualMode ? fusOpenAIUrl : data.apiBase) || providerInputValue || '';
         try {
             const host = new URL(raw).hostname;
             if (host) return host;
         } catch { /* not a URL */ }
         return t('providerDialog.keyName.fallback', {defaultValue: 'Custom Provider'});
-    }, [selectedProvider, fusionMode, fusOpenAIUrl, data.apiBase, providerInputValue, t]);
+    }, [selectedProvider, dualMode, fusOpenAIUrl, data.apiBase, providerInputValue, t]);
 
     // Ensure a name exists before submit/verify. Writes back to parent so the
     // submit payload carries the generated value.
@@ -532,10 +532,10 @@ const ProviderFormDialog = ({
             networkError: t('providerDialog.verification.networkError'),
         };
 
-        // Fusion form: a fused provider answers BOTH protocols, so verifying
+        // Dual form: a fused provider answers BOTH protocols, so verifying
         // only one URL would leave the other (often the just-typed one) untested.
         // Probe both endpoints and report per-side results.
-        if (fusionMode) {
+        if (dualMode) {
             const openai = fusOpenAIUrl.trim();
             const anthropic = fusAnthropicUrl.trim();
             const effectiveName = ensureName();
@@ -564,10 +564,10 @@ const ProviderFormDialog = ({
             setVerificationResult({
                 success,
                 message: success
-                    ? t('providerDialog.fusionForm.verifyBothOk', {defaultValue: 'Both endpoints verified'})
+                    ? t('providerDialog.dualForm.verifyBothOk', {defaultValue: 'Both endpoints verified'})
                     : !oRes.success && !aRes.success
-                        ? t('providerDialog.fusionForm.verifyBothFailed', {defaultValue: 'Both endpoints failed'})
-                        : t('providerDialog.fusionForm.verifyOneFailed', {
+                        ? t('providerDialog.dualForm.verifyBothFailed', {defaultValue: 'Both endpoints failed'})
+                        : t('providerDialog.dualForm.verifyOneFailed', {
                             defaultValue: '{{side}} endpoint failed',
                             side: oRes.success ? 'Anthropic' : 'OpenAI',
                         }),
@@ -610,8 +610,8 @@ const ProviderFormDialog = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (fusionMode) {
-            // Fusion form: two URLs, one key, always a single fused record.
+        if (dualMode) {
+            // Dual form: two URLs, one key, always a single fused record.
             const openai = fusOpenAIUrl.trim();
             const anthropic = fusAnthropicUrl.trim();
             if (!openai || !anthropic) {
@@ -623,7 +623,7 @@ const ProviderFormDialog = ({
                 apiBaseAnthropic: anthropic,
                 apiBase: openai,
                 apiStyle: 'openai',
-                createFusionProvider: true,
+                createDualProvider: true,
                 name: ensureName(),
                 protocols: ['openai', 'anthropic'] as any,
             };
@@ -677,8 +677,8 @@ const ProviderFormDialog = ({
         }
     };
 
-    // Fusion form implies both protocols; its own URL validation gates submit.
-    const hasAnyProtocol = fusionMode || protocolOpenAI || protocolAnthropic;
+    // Dual form implies both protocols; its own URL validation gates submit.
+    const hasAnyProtocol = dualMode || protocolOpenAI || protocolAnthropic;
 
     // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
     // protocol is selected and the user has typed a URL that doesn't already
@@ -697,18 +697,18 @@ const ProviderFormDialog = ({
 
     // When both protocols are checked on a template that exposes two base URLs,
     // the outcome ("merge into one" vs "create two") is otherwise invisible.
-    // Surface it as a one-line hint that tracks the fusion toggle.
+    // Surface it as a one-line hint that tracks the dual toggle.
     const hasBothBaseUrls = !!selectedProvider?.baseUrlOpenAI && !!selectedProvider?.baseUrlAnthropic;
     // add mode: shown when both protocols are selected
-    // edit mode: shown for non-fusion providers when the template supports both sides (upgrade path)
-    // Fusion toggle / topology hint are template-only concerns (presets keep the
-    // split-vs-merge choice). Custom and fusion paths never show them.
-    const isPresetMode = !customMode && !fusionMode;
-    const showFusionToggle = isPresetMode && (mode === 'add'
+    // edit mode: shown for non-dual providers when the template supports both sides (upgrade path)
+    // Dual toggle / topology hint are template-only concerns (presets keep the
+    // split-vs-merge choice). Custom and dual paths never show them.
+    const isPresetMode = !customMode && !dualMode;
+    const showDualToggle = isPresetMode && (mode === 'add'
         ? (protocolOpenAI && protocolAnthropic)
-        : (!isExistingFusion && hasBothBaseUrls));
+        : (!isExistingDual && hasBothBaseUrls));
     const showTopologyHint = isPresetMode && protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
-    const willMergeBaseUrls = createFusionProvider;
+    const willMergeBaseUrls = createDualProvider;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
@@ -734,8 +734,8 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        {fusionMode ? (
-                            <FusionUrlFields
+                        {dualMode ? (
+                            <DualUrlFields
                                 openAIUrl={fusOpenAIUrl}
                                 anthropicUrl={fusAnthropicUrl}
                                 onOpenAIChange={(v) => {
@@ -804,12 +804,12 @@ const ProviderFormDialog = ({
                             }}
                         />
 
-                        {!fusionMode && (
+                        {!dualMode && (
                             <ProtocolSelector
                                 selectedProvider={selectedProvider}
                                 protocolOpenAI={protocolOpenAI}
                                 protocolAnthropic={protocolAnthropic}
-                                fusionLocked={effectiveLocked}
+                                dualLocked={effectiveLocked}
                                 singleSelect={customMode}
                                 openAICapabilities={openAICapabilities}
                                 onToggleOpenAI={toggleOpenAIProtocol}
@@ -818,28 +818,28 @@ const ProviderFormDialog = ({
                             />
                         )}
 
-                        {/* Edit-mode upgrade: turn a single endpoint into a fusion one.
-                            Suppressed when the template-driven FusionToggle is visible —
+                        {/* Edit-mode upgrade: turn a single endpoint into a dual one.
+                            Suppressed when the template-driven DualToggle is visible —
                             one upgrade affordance per dialog, never two. */}
-                        {mode === 'edit' && !fusionMode && !showFusionToggle && data.authType !== 'oauth' && onConvertToFusion && (
+                        {mode === 'edit' && !dualMode && !showDualToggle && data.authType !== 'oauth' && onConvertToDual && (
                             <Link
                                 component="button"
                                 type="button"
                                 variant="caption"
                                 underline="hover"
                                 sx={{alignSelf: 'flex-start'}}
-                                onClick={onConvertToFusion}
+                                onClick={onConvertToDual}
                             >
-                                {t('providerDialog.providerSingle.convertToFusion', {defaultValue: 'Add an Anthropic endpoint (make it a Fusion provider)'})}
+                                {t('providerDialog.providerSingle.convertToDual', {defaultValue: 'Add an Anthropic endpoint (make it a Dual provider)'})}
                             </Link>
                         )}
 
-                        {showFusionToggle && (
-                            <FusionToggle
-                                checked={createFusionProvider}
+                        {showDualToggle && (
+                            <DualToggle
+                                checked={createDualProvider}
                                 onChange={(checked) => {
-                                    setCreateFusionProvider(checked);
-                                    onChange('createFusionProvider', checked);
+                                    setCreateDualProvider(checked);
+                                    onChange('createDualProvider', checked);
                                     if (mode === 'edit' && selectedProvider) {
                                         if (checked) {
                                             // Upgrade: auto-select both protocols and populate URLs from template.
@@ -851,7 +851,7 @@ const ProviderFormDialog = ({
                                             onChange('apiStyle', 'openai');
                                         } else {
                                             // Revert: restore original single-protocol state.
-                                            const snap = initialFusionRef.current;
+                                            const snap = initialDualRef.current;
                                             setProtocolOpenAI(snap.apiStyle === 'openai');
                                             setProtocolAnthropic(snap.apiStyle === 'anthropic');
                                             onChange('apiBaseOpenAI', '');
@@ -883,8 +883,8 @@ const ProviderFormDialog = ({
                                 <InfoOutlined sx={{fontSize: 16, mt: 0.2, color: 'text.secondary'}}/>
                                 <Typography variant="caption" color="text.secondary" sx={{lineHeight: 1.4}}>
                                     {willMergeBaseUrls
-                                        ? t('providerDialog.fusion.outcomeMerged')
-                                        : t('providerDialog.fusion.outcomeSplit')}
+                                        ? t('providerDialog.dual.outcomeMerged')
+                                        : t('providerDialog.dual.outcomeSplit')}
                                 </Typography>
                             </Stack>
                         )}

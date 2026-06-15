@@ -1,7 +1,7 @@
 import {Link, Stack, TextField} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 
-interface FusionUrlFieldsProps {
+interface DualUrlFieldsProps {
     openAIUrl: string;
     anthropicUrl: string;
     /** Called with the new value on each keystroke (parent owns the state). */
@@ -13,16 +13,16 @@ interface FusionUrlFieldsProps {
     /** When true, empty fields render in their error state. */
     baseUrlError: boolean;
     mode: 'add' | 'edit';
-    /** Edit-mode downgrade link: convert the fusion provider to a single endpoint. */
+    /** Edit-mode downgrade link: convert the dual provider to a single endpoint. */
     onConvertToSingle?: () => void;
 }
 
 /**
- * The two-URL body of the Fusion endpoint form: an OpenAI base URL and an
+ * The two-URL body of the Dual endpoint form: an OpenAI base URL and an
  * Anthropic base URL that share one API key (rendered separately by the parent).
  * Both sides are required; the parent's submit/verify logic gates on them.
  */
-const FusionUrlFields = ({
+const DualUrlFields = ({
                              openAIUrl,
                              anthropicUrl,
                              onOpenAIChange,
@@ -32,7 +32,7 @@ const FusionUrlFields = ({
                              baseUrlError,
                              mode,
                              onConvertToSingle,
-                         }: FusionUrlFieldsProps) => {
+                         }: DualUrlFieldsProps) => {
     const {t} = useTranslation();
     const commonProps = {size: 'small' as const, fullWidth: true, required: true};
 
@@ -40,7 +40,7 @@ const FusionUrlFields = ({
         <Stack spacing={2}>
             <TextField
                 {...commonProps}
-                label={t('providerDialog.customFusion.openAILabel')}
+                label={t('providerDialog.customDual.openAILabel')}
                 placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
                 value={openAIUrl}
                 onChange={(e) => onOpenAIChange(e.target.value)}
@@ -49,13 +49,13 @@ const FusionUrlFields = ({
             />
             <TextField
                 {...commonProps}
-                label={t('providerDialog.customFusion.anthropicLabel')}
-                placeholder={t('providerDialog.fusionForm.anthropicPlaceholder', {defaultValue: 'https://api.example.com/anthropic'})}
+                label={t('providerDialog.customDual.anthropicLabel')}
+                placeholder={t('providerDialog.dualForm.anthropicPlaceholder', {defaultValue: 'https://api.example.com/anthropic'})}
                 value={anthropicUrl}
                 onChange={(e) => onAnthropicChange(e.target.value)}
                 onBlur={onAnthropicBlur}
                 error={baseUrlError && !anthropicUrl.trim()}
-                helperText={t('providerDialog.fusionForm.help', {defaultValue: 'Both protocols share the API key below. Inbound requests are routed to the matching endpoint.'})}
+                helperText={t('providerDialog.dualForm.help', {defaultValue: 'Both protocols share the API key below. Inbound requests are routed to the matching endpoint.'})}
             />
             {mode === 'edit' && onConvertToSingle && (
                 <Link
@@ -66,11 +66,11 @@ const FusionUrlFields = ({
                     sx={{alignSelf: 'flex-start'}}
                     onClick={onConvertToSingle}
                 >
-                    {t('providerDialog.fusionForm.convertToSingle', {defaultValue: 'Convert to a single endpoint'})}
+                    {t('providerDialog.dualForm.convertToSingle', {defaultValue: 'Convert to a single endpoint'})}
                 </Link>
             )}
         </Stack>
     );
 };
 
-export default FusionUrlFields;
+export default DualUrlFields;

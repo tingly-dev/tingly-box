@@ -121,20 +121,20 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		req.AuthType = string(typ.AuthTypeAPIKey)
 	}
 
-	// Fusion-mode constraints: optional dual base URLs are only valid for
+	// Dual-mode constraints: optional dual base URLs are only valid for
 	// api_key auth, and Google-style providers cannot opt in.
 	if req.APIBaseOpenAI != "" || req.APIBaseAnthropic != "" {
 		if req.AuthType != string(typ.AuthTypeAPIKey) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Fusion base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
+				"error":   "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
 			})
 			return
 		}
 		if req.APIStyle == string(protocol.APIStyleGoogle) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Fusion base URLs are not supported for Google-style providers",
+				"error":   "Dual base URLs are not supported for Google-style providers",
 			})
 			return
 		}
@@ -324,21 +324,21 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		provider.UserAgent = *req.UserAgent
 	}
 
-	// Fusion-mode constraints: dual base URLs are only valid for api_key auth,
+	// Dual-mode constraints: dual base URLs are only valid for api_key auth,
 	// and Google-style providers cannot opt in. Validate post-merge so we
 	// catch combinations introduced by partial PATCHes.
 	if provider.APIBaseOpenAI != "" || provider.APIBaseAnthropic != "" {
 		if provider.AuthType != typ.AuthTypeAPIKey && provider.AuthType != "" {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Fusion base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
+				"error":   "Dual base URLs (api_base_openai / api_base_anthropic) are only supported for api_key auth providers",
 			})
 			return
 		}
 		if provider.APIStyle == protocol.APIStyleGoogle {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Fusion base URLs are not supported for Google-style providers",
+				"error":   "Dual base URLs are not supported for Google-style providers",
 			})
 			return
 		}

@@ -196,8 +196,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex
 	detectAndApplyContext1MFromIncomingRequest(c, rule)
 
-	// Resolve fusion endpoint: when the provider has an OpenAI-compatible
-	// fusion URL configured, route there natively to avoid a transform.
+	// Resolve dual endpoint: when the provider has an OpenAI-compatible
+	// dual URL configured, route there natively to avoid a transform.
 	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)
 
 	isStreaming := req.Stream

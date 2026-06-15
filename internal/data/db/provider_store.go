@@ -38,7 +38,7 @@ type ProviderRecord struct {
 	Tags          string `gorm:"column:tags;type:text"` // JSON array
 	LastUpdated   string `gorm:"column:last_updated"`
 
-	// Fusion-mode optional fields. Independent of APIBase/APIStyle.
+	// Dual-mode optional fields. Independent of APIBase/APIStyle.
 	APIBaseOpenAI    string `gorm:"column:api_base_openai"`
 	APIBaseAnthropic string `gorm:"column:api_base_anthropic"`
 

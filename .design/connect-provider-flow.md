@@ -25,19 +25,19 @@ Scrollbar is always visible on the card area.
 
 | Section | Grid | Badge | Notes |
 |---|---|---|---|
-| Custom | 2-column | Key | "Custom endpoint" (single URL), "Fusion endpoint" (two URLs, one key), "Import" |
+| Custom | 2-column | Key | "Custom endpoint" (single URL), "Dual endpoint" (two URLs, one key), "Import" |
 | OAuth sign-in | 2-column | OAuth (green) | Short names fit side-by-side |
 | Self-hosted | 2-column | Self-hosted (amber) | Ollama, LM Studio, LocalAI, Jan, vLLM, SGLang |
 | API key providers | 1-column | Key | Long localized names need full width |
 
-**Custom vs Fusion** — two shapes, two cards (`kind: 'custom'` / `'fusion'`):
+**Custom vs Dual** — two shapes, two cards (`kind: 'custom'` / `'dual'`):
 - **Custom endpoint** → single-protocol form (one base URL + OpenAI/Anthropic radio).
-- **Fusion endpoint** → `fusionMode` form: *OpenAI Base URL* + *Anthropic Base URL*
+- **Dual endpoint** → `dualMode` form: *OpenAI Base URL* + *Anthropic Base URL*
   + one key, always a single fused record. See
-  [fusion-provider.md](fusion-provider.md).
+  [dual-provider.md](dual-provider.md).
 
 **Routing on card click:**
-- **Custom / Fusion / Key provider / Self-hosted** → opens the form dialog (pre-filled)
+- **Custom / Dual / Key provider / Self-hosted** → opens the form dialog (pre-filled)
 - **OAuth** → opens OAuthDialog in direct mode (skips the provider grid, straight to auth)
 
 ### Flow at a glance
@@ -49,11 +49,11 @@ Scrollbar is always visible on the card area.
                        └──────────────┬───────────────┘
                                       │ onSelect(ConnectSelection)
         ┌───────────────┬─────────────┼─────────────┬───────────────┐
-        │ kind:'custom' │ kind:'fusion'│ kind:'key'  │ kind:'local'  │ kind:'oauth'
+        │ kind:'custom' │ kind:'dual'│ kind:'key'  │ kind:'local'  │ kind:'oauth'
         ▼               ▼              ▼             ▼               ▼
   ┌───────────┐  ┌─────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────────┐
-  │ Custom    │  │ Fusion form │ │ preset   │ │ self-hosted│ │ OAuthDialog  │
-  │ endpoint  │  │ (fusionMode)│ │ pre-fill │ │ pre-fill   │ │ direct mode  │
+  │ Custom    │  │ Dual form │ │ preset   │ │ self-hosted│ │ OAuthDialog  │
+  │ endpoint  │  │ (dualMode)│ │ pre-fill │ │ pre-fill   │ │ direct mode  │
   │ 1 URL +   │  │ OpenAI URL +│ │ from     │ │ localhost  │ │ autoStart    │
   │ proto     │  │ Anthropic   │ │ template │ │ :port +    │ │ ProviderId   │
   │ radio     │  │ URL, 1 key  │ │          │ │ key conv.  │ │ ▸ sign in    │
@@ -69,13 +69,13 @@ Scrollbar is always visible on the card area.
                                │ submit
                                ▼
                     ┌─────────────────────┐
-                    │  api.addProvider     │  fusion → single record with
+                    │  api.addProvider     │  dual → single record with
                     │  (1 or 2 records)    │  api_base_openai + api_base_anthropic
                     └─────────────────────┘
 ```
 
 Three surfaces render this picker → form sequence and each wires the same
-`ConnectSelection` kinds (so the Fusion card must be handled in all three):
+`ConnectSelection` kinds (so the Dual card must be handled in all three):
 `CredentialPage.tsx` (full edit/upgrade), `useProviderDialog.tsx` (onboarding
 templates), and `ConnectProviderFlow.tsx` (the scenario "Use …" pages).
 
@@ -88,7 +88,7 @@ Layout top → bottom:
 1. **Base URL \*** — required; inline error if submitted empty
 2. **API Key** — password field with show/hide toggle
 3. **No API Key Required** — right-aligned checkbox; disables the key field
-4. **API Style** — OpenAI / Anthropic checkboxes; when both are checked on a dual-URL template a **Fusion mode** toggle and topology hint appear (see [fusion-provider.md](fusion-provider.md))
+4. **API Style** — OpenAI / Anthropic checkboxes; when both are checked on a dual-URL template a **Dual mode** toggle and topology hint appear (see [dual-provider.md](dual-provider.md))
 5. **Advanced accordion** — collapsed by default in add mode, auto-expanded in edit mode
 
 When opened from the picker, the form shows a **← Back** button (bottom-left) that
@@ -149,14 +149,14 @@ enter their key without unchecking a separate toggle.
 | File | Role |
 |---|---|
 | `frontend/src/components/ConnectProviderDialog.tsx` | Step 1 — unified picker; `SELF_HOSTED_PROVIDERS` constant with default keys |
-| `frontend/src/components/ProviderFormDialog.tsx` | Step 2 — API key / custom / fusion form; `onBack` prop for picker navigation |
+| `frontend/src/components/ProviderFormDialog.tsx` | Step 2 — API key / custom / dual form; `onBack` prop for picker navigation |
 | `frontend/src/components/OAuthDialog.tsx` | Step 2 — OAuth flow; `autoStartProviderId` for direct mode |
-| `frontend/src/pages/CredentialPage.tsx` | Wires picker → form routing (surface 1); `fromConnectPicker` + `isLocalProvider` + `isFusionMode` state |
-| `frontend/src/hooks/useProviderDialog.tsx` | Picker → form routing for onboarding templates (surface 2); `fusionMode` |
-| `frontend/src/components/ConnectProviderFlow.tsx` | Picker → form routing for scenario "Use …" pages (surface 3); `isFusionMode` |
+| `frontend/src/pages/CredentialPage.tsx` | Wires picker → form routing (surface 1); `fromConnectPicker` + `isLocalProvider` + `isDualMode` state |
+| `frontend/src/hooks/useProviderDialog.tsx` | Picker → form routing for onboarding templates (surface 2); `dualMode` |
+| `frontend/src/components/ConnectProviderFlow.tsx` | Picker → form routing for scenario "Use …" pages (surface 3); `isDualMode` |
 | `frontend/src/components/providerFormDialog/ApiKeyField.tsx` | Key field; `hideCheckbox` + `optionalEditable` props |
 | `frontend/src/components/providerFormDialog/CustomEndpointField.tsx` | Single base-URL input for custom mode; persistent "append /v1" tooltip |
-| `frontend/src/components/providerFormDialog/FusionUrlFields.tsx` | Two-URL body (OpenAI + Anthropic) for `fusionMode`; downgrade link |
+| `frontend/src/components/providerFormDialog/DualUrlFields.tsx` | Two-URL body (OpenAI + Anthropic) for `dualMode`; downgrade link |
 | `frontend/src/components/providerFormDialog/ProviderAutocomplete.tsx` | Base URL field; `required`/`error`/`helperText` props |
 | `frontend/src/components/providerFormDialog/VerificationResultPanel.tsx` | Test result panel; filters empty detail rows |
 | `internal/data/providers.json` | Provider templates; self-hosted entries use `type: "self-hosted"` |

@@ -3,12 +3,12 @@ import {Box, Checkbox, FormControlLabel, Stack, Tooltip, Typography} from '@mui/
 import React from 'react';
 import {useTranslation} from 'react-i18next';
 
-interface FusionToggleProps {
+interface DualToggleProps {
     checked: boolean;
     onChange: (checked: boolean) => void;
 }
 
-const FusionToggle: React.FC<FusionToggleProps> = ({checked, onChange}) => {
+const DualToggle: React.FC<DualToggleProps> = ({checked, onChange}) => {
     const {t} = useTranslation();
 
     return (
@@ -24,7 +24,7 @@ const FusionToggle: React.FC<FusionToggleProps> = ({checked, onChange}) => {
                 label={(
                     <Stack direction="row" spacing={0.75} alignItems="center">
                         <Typography variant="body2">
-                            {t('providerDialog.fusion.modeLabel')}
+                            {t('providerDialog.dual.modeLabel')}
                         </Typography>
                         <Tooltip
                             arrow
@@ -56,13 +56,13 @@ const FusionToggle: React.FC<FusionToggleProps> = ({checked, onChange}) => {
                             title={
                                 <Box>
                                     <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
-                                        {t('providerDialog.fusion.tooltipTitle')}
+                                        {t('providerDialog.dual.tooltipTitle')}
                                     </Typography>
                                     <Typography variant="caption" sx={{display: 'block'}}>
-                                        {t('providerDialog.fusion.normalModeDesc')}
+                                        {t('providerDialog.dual.normalModeDesc')}
                                     </Typography>
                                     <Typography variant="caption" sx={{display: 'block', mt: 0.75}}>
-                                        {t('providerDialog.fusion.fusionModeDesc')}
+                                        {t('providerDialog.dual.dualModeDesc')}
                                     </Typography>
                                 </Box>
                             }
@@ -77,4 +77,4 @@ const FusionToggle: React.FC<FusionToggleProps> = ({checked, onChange}) => {
     );
 };
 
-export default FusionToggle;
+export default DualToggle;

@@ -562,7 +562,7 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 		wantStyle   APIStyle
 	}{
 		{
-			name: "fusion provider, openai client picks openai fusion URL",
+			name: "dual provider, openai client picks openai dual URL",
 			provider: &Provider{
 				AuthType:         AuthTypeAPIKey,
 				APIBase:          "https://primary.example.com/v1",
@@ -575,7 +575,7 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 			wantStyle:   APIStyleOpenAI,
 		},
 		{
-			name: "fusion provider, anthropic client picks anthropic fusion URL",
+			name: "dual provider, anthropic client picks anthropic dual URL",
 			provider: &Provider{
 				AuthType:         AuthTypeAPIKey,
 				APIBase:          "https://primary.example.com/v1",
@@ -588,7 +588,7 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 			wantStyle:   APIStyleAnthropic,
 		},
 		{
-			name: "partial fusion (only openai), anthropic client falls back to legacy",
+			name: "partial dual (only openai), anthropic client falls back to legacy",
 			provider: &Provider{
 				AuthType:      AuthTypeAPIKey,
 				APIBase:       "https://primary.example.com",
@@ -600,7 +600,7 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 			wantStyle:   APIStyleAnthropic,
 		},
 		{
-			name: "partial fusion (only openai), openai client uses fusion URL",
+			name: "partial dual (only openai), openai client uses dual URL",
 			provider: &Provider{
 				AuthType:      AuthTypeAPIKey,
 				APIBase:       "https://primary.example.com",
@@ -612,7 +612,7 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 			wantStyle:   APIStyleOpenAI,
 		},
 		{
-			name: "no fusion fields, returns legacy",
+			name: "no dual fields, returns legacy",
 			provider: &Provider{
 				AuthType: AuthTypeAPIKey,
 				APIBase:  "https://primary.example.com",
@@ -623,7 +623,7 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 			wantStyle:   APIStyleOpenAI,
 		},
 		{
-			name: "OAuth provider ignores fusion fields",
+			name: "OAuth provider ignores dual fields",
 			provider: &Provider{
 				AuthType:         AuthTypeOAuth,
 				APIBase:          "https://primary.example.com",
@@ -657,14 +657,14 @@ func TestProvider_ResolveEndpoint(t *testing.T) {
 	}
 }
 
-func TestProvider_IsFusion(t *testing.T) {
+func TestProvider_IsDual(t *testing.T) {
 	tests := []struct {
 		name     string
 		provider *Provider
 		want     bool
 	}{
 		{
-			name: "both fusion URLs set, api_key auth",
+			name: "both dual URLs set, api_key auth",
 			provider: &Provider{
 				AuthType:         AuthTypeAPIKey,
 				APIBaseOpenAI:    "https://oai.example.com/v1",
@@ -673,7 +673,7 @@ func TestProvider_IsFusion(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "only openai fusion URL set",
+			name: "only openai dual URL set",
 			provider: &Provider{
 				AuthType:      AuthTypeAPIKey,
 				APIBaseOpenAI: "https://oai.example.com/v1",
@@ -681,7 +681,7 @@ func TestProvider_IsFusion(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "both fusion URLs set, oauth auth",
+			name: "both dual URLs set, oauth auth",
 			provider: &Provider{
 				AuthType:         AuthTypeOAuth,
 				APIBaseOpenAI:    "https://oai.example.com/v1",
@@ -690,7 +690,7 @@ func TestProvider_IsFusion(t *testing.T) {
 			want: false,
 		},
 		{
-			name:     "no fusion fields",
+			name:     "no dual fields",
 			provider: &Provider{AuthType: AuthTypeAPIKey, APIBase: "https://primary.example.com"},
 			want:     false,
 		},
@@ -702,8 +702,8 @@ func TestProvider_IsFusion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.provider.IsFusion(); got != tt.want {
-				t.Errorf("IsFusion() = %v, want %v", got, tt.want)
+			if got := tt.provider.IsDual(); got != tt.want {
+				t.Errorf("IsDual() = %v, want %v", got, tt.want)
 			}
 		})
 	}

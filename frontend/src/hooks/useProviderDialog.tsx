@@ -23,7 +23,7 @@ interface UseProviderDialogReturn {
     handleConnectSelect: (selection: ConnectSelection) => void;
     handleCloseConnect: () => void;
     customMode: boolean;
-    fusionMode: boolean;
+    dualMode: boolean;
     fromConnectPicker: boolean;
 }
 
@@ -46,14 +46,14 @@ export const useProviderDialog = (
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
     const [connectDialogOpen, setConnectDialogOpen] = useState(false);
     const [customMode, setCustomMode] = useState(false);
-    const [fusionMode, setFusionMode] = useState(false);
+    const [dualMode, setDualMode] = useState(false);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
     const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>(emptyForm(defaultApiStyle));
 
     const handleAddProviderClick = () => {
         setProviderFormData(emptyForm(defaultApiStyle));
         setCustomMode(false);
-        setFusionMode(false);
+        setDualMode(false);
         setFromConnectPicker(false);
         setProviderDialogOpen(true);
     };
@@ -69,7 +69,7 @@ export const useProviderDialog = (
     const handleConnectSelect = useCallback((selection: ConnectSelection) => {
         setConnectDialogOpen(false);
         setFromConnectPicker(true);
-        setFusionMode(false);
+        setDualMode(false);
 
         if (selection.kind === 'oauth') {
             return;
@@ -87,16 +87,16 @@ export const useProviderDialog = (
             return;
         }
 
-        if (selection.kind === 'fusion') {
-            // Fusion endpoint: two URLs (OpenAI + Anthropic) under one key, always
+        if (selection.kind === 'dual') {
+            // Dual endpoint: two URLs (OpenAI + Anthropic) under one key, always
             // saved as a single fused record. No protocol selector / topology toggle.
             setCustomMode(false);
-            setFusionMode(true);
+            setDualMode(true);
             setProviderFormData({
                 ...emptyForm('openai'),
                 apiBaseOpenAI: '',
                 apiBaseAnthropic: '',
-                createFusionProvider: true,
+                createDualProvider: true,
                 protocols: ['openai', 'anthropic'],
             });
             setProviderDialogOpen(true);
@@ -133,7 +133,7 @@ export const useProviderDialog = (
             noKeyRequired: false,
             proxyUrl: '',
             userAgent: '',
-            createFusionProvider: false,
+            createDualProvider: false,
             providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
             protocols: p.supportsOpenAI && p.supportsAnthropic
                 ? ['openai', 'anthropic']
@@ -198,7 +198,7 @@ export const useProviderDialog = (
     const handleCloseDialog = () => {
         setProviderDialogOpen(false);
         setCustomMode(false);
-        setFusionMode(false);
+        setDualMode(false);
         setFromConnectPicker(false);
     };
 
@@ -219,7 +219,7 @@ export const useProviderDialog = (
         handleConnectSelect,
         handleCloseConnect,
         customMode,
-        fusionMode,
+        dualMode,
         fromConnectPicker,
     };
 };
