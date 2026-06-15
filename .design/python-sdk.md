@@ -184,5 +184,54 @@ users can name parallel experiments via profiles (`experiment:p1`).
 3. Async client (`AsyncClient`, `aask`) — transports already have async builders.
 4. Layer 2: `tingly.Plugin`, manifest, sub-process supervision (reuse
    `agentboot/process`), `/plugins/<name>/*` reverse proxy, lifecycle UI.
-5. Layer 3: auto-register a plugin tool as a virtual model via
-   `vmodel/virtualserver`.
+5. Layer 3: expose a plugin as a model tb can route to (see below).
+
+## Layer 3: can tb *use* a plugin as a model? (yes — as an upstream)
+
+Layer 1 points the **data-flow into** tb: the plugin is a *consumer*. For tb to
+*select* a plugin as a model, the flow inverts — the plugin becomes a
+*producer*, an HTTP upstream tb calls out to. That is Layer 2's `Plugin.serve()`.
+
+There are two distinct "virtual model" notions; only one fits an out-of-process
+Python plugin:
+
+| | in-process `vmodel` (`AuthType=virtual`) | provider-as-upstream |
+|---|---|---|
+| what | Go code implementing `openai.VirtualModel` / `anthropic.VirtualModel`, compiled in (`ai/provider.go:IsVirtual` → `virtualModelService`) | a normal provider whose `api_base` is an external HTTP server speaking `/v1/chat/completions` or `/v1/messages` |
+| lives | inside tb's process | out-of-process, any language |
+| Python plugin fit | ✗ (needs a Go shim forwarding to Python) | ✓ natural route |
+
+So a Python plugin is selected by registering it as a **provider/upstream**, not
+via the in-process `vmodel` package.
+
+```
+   ANY tb client                tingly-box GATEWAY                      UPSTREAMS
+  ┌──────────────┐        ┌──────────────────────────────┐
+  │ Claude Code  │        │  HandleOpenAIChatCompletions   │     tier 1 ┌──────────────┐
+  │ Cursor       │  model │   scenario → rule resolve      │  ┌───────► │ Anthropic /  │
+  │ tb UI        ├───────►│   guard rails (in/out)         │  │ fallback│ OpenAI (real)│
+  │ tingly.ask() │ "plugin│   smart routing / TIERS  ──────┼──┤         └──────────────┘
+  └──────────────┘ /my-rag"│   circuit-breaker failover    │  │ tier 0  ┌──────────────┐
+                          │   quota + usage logging        │  └───────► │ my-rag PLUGIN│ ◄─ Layer 2
+                          │   provider.api_base = plugin    │   POST     │ POST /v1/chat│    Plugin.serve()
+                          └────────────────────────────────┘  /v1/chat  │ /completions │
+                                                                        └──────┬───────┘
+                                                              ctx.llm.ask() ┄┄┄┘  (plugin may
+                                                              back INTO tb for its own LLM calls)
+```
+
+Wiring (no new gateway hot-path code — it's just a provider):
+
+1. **Plugin serves** `POST /v1/chat/completions` (Layer 2 `Plugin.serve()`).
+2. **Register a provider**: `{name:"my-rag", api_base:"http://127.0.0.1:<port>",
+   api_style:"openai", models:["plugin/my-rag"]}` — a *normal* provider, not
+   `AuthType=virtual`.
+3. **Bind a rule/service**: model `plugin/my-rag` → that provider.
+4. Now `model:"plugin/my-rag"` from any client resolves through the same
+   dispatcher as every other model. Put the plugin in tier 0 and a real model in
+   tier 1 and tb fails over automatically when the plugin is down.
+
+The deeper option — a true in-process `AuthType=virtual` vmodel — means writing
+a small Go adapter implementing `openai.VirtualModel` that forwards to the Python
+process. Only worth it to bundle the plugin with no separate port;
+provider-as-upstream is simpler and already fully supported.
