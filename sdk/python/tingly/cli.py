@@ -36,8 +36,8 @@ def doctor(scenario: str, link: bool) -> int:
     resolved = _config.resolve()
 
     # 1. gateway reachable
-    version = _discovery.probe_version(resolved.base_url)
-    if version is None:
+    alive = _discovery.probe_version(resolved.base_url)
+    if alive is None:
         _row("gateway", resolved.base_url, FAIL)
         print(
             f"\nNo tingly-box gateway responding at {resolved.base_url} "
@@ -45,7 +45,7 @@ def doctor(scenario: str, link: bool) -> int:
             "Start tb, set TINGLY_BOX_URL, or run `tingly doctor --link`."
         )
         return 1
-    _row("gateway", f"{resolved.base_url}  (v{version})", OK)
+    _row("gateway", f"{resolved.base_url}  (reachable)", OK)
     _row("token", f"{resolved.source}", OK if resolved.token else WARN)
 
     # 2. mint a session (real path)

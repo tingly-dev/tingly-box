@@ -10,21 +10,18 @@ from tingly.errors import AuthError, GatewayUnreachableError, ScenarioNotFoundEr
 BASE = "http://tb.test:12580"
 
 
-def _version_route():
-    return respx.get(f"{BASE}/api/v1/info/version").mock(
-        return_value=httpx.Response(200, json={"version": "1.2.3"})
-    )
-
-
 @respx.mock
 def test_probe_version_ok():
-    _version_route()
-    assert disco.probe_version(BASE) == "1.2.3"
+    # Discovery probes the unauthenticated health endpoint, not /info/version.
+    respx.get(f"{BASE}/api/v1/info/health").mock(
+        return_value=httpx.Response(200, json={"health": True, "status": "healthy"})
+    )
+    assert disco.probe_version(BASE) == "ok"
 
 
 @respx.mock
 def test_probe_version_down():
-    respx.get(f"{BASE}/api/v1/info/version").mock(
+    respx.get(f"{BASE}/api/v1/info/health").mock(
         return_value=httpx.Response(503)
     )
     assert disco.probe_version(BASE) is None
