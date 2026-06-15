@@ -160,12 +160,16 @@ def _plugin_run(target: str) -> int:
     return 0
 
 
-def _plugin_register(name: str, plugin_url: str, model_id: str, token: str) -> int:
+def _plugin_register(name, plugin_url, model_id, token, scenario) -> int:
     from .plugin.register import register_with_tb
 
-    result = register_with_tb(name, plugin_url, model_id, token=token)
-    status = OK if result.created else WARN
-    _row("provider", f"{result.name} → {result.api_base}", status)
+    result = register_with_tb(
+        name, plugin_url, model_id, scenario=scenario or None, token=token
+    )
+    status = OK if result.ready else WARN
+    _row("plugin", f"{result.name} → {result.api_base}", status)
+    if result.rule_uuid:
+        _row("rule", f"{result.scenario}: {result.model_id}", OK)
     print("\n" + result.note)
     return 0
 
@@ -193,6 +197,9 @@ def main(argv: Optional[list] = None) -> int:
     p_reg.add_argument("--url", required=True, help="plugin OpenAI base, e.g. http://127.0.0.1:8765/v1")
     p_reg.add_argument("--model-id", required=True, help="model id, e.g. plugin/my-rag")
     p_reg.add_argument("--token", default="", help="token tb should send to the plugin")
+    p_reg.add_argument(
+        "--scenario", default="", help="bind a rule under this scenario (e.g. experiment)"
+    )
 
     args = parser.parse_args(argv)
     if args.command == "doctor":
@@ -203,7 +210,9 @@ def main(argv: Optional[list] = None) -> int:
         if args.plugin_command == "run":
             return _plugin_run(args.target)
         if args.plugin_command == "register":
-            return _plugin_register(args.name, args.url, args.model_id, args.token)
+            return _plugin_register(
+                args.name, args.url, args.model_id, args.token, args.scenario
+            )
         p_plugin.print_help()
         return 0
 

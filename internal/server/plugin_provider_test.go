@@ -1,0 +1,131 @@
+package server
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+func newPluginTestServer(t *testing.T) *Server {
+	t.Helper()
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	return &Server{config: cfg}
+}
+
+func postJSON(t *testing.T, h gin.HandlerFunc, body any) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	raw, _ := json.Marshal(body)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(raw))
+	c.Request.Header.Set("Content-Type", "application/json")
+	h(c)
+	var parsed map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &parsed)
+	return w, parsed
+}
+
+func TestRegisterPlugin_BindsRule(t *testing.T) {
+	s := newPluginTestServer(t)
+
+	w, resp := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+		Name:     "my-rag",
+		Endpoint: "http://127.0.0.1:8765/v1",
+		ModelID:  "plugin/my-rag",
+		Scenario: string(typ.ScenarioExperiment),
+	})
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+	data, _ := resp["data"].(map[string]any)
+	if data["ready"] != true {
+		t.Fatalf("expected ready=true, got %v (note=%v)", data["ready"], data["note"])
+	}
+	if data["model_id"] != "plugin/my-rag" {
+		t.Fatalf("model_id = %v", data["model_id"])
+	}
+	providerUUID, _ := data["provider_uuid"].(string)
+	if providerUUID == "" {
+		t.Fatalf("expected a provider_uuid")
+	}
+
+	// The provider must be a plugin-kind provider.
+	prov, err := s.config.GetProviderByUUID(providerUUID)
+	if err != nil {
+		t.Fatalf("GetProviderByUUID: %v", err)
+	}
+	if !prov.IsPlugin() {
+		t.Fatalf("provider is not marked as plugin: %+v", prov)
+	}
+	if prov.PluginDetail.ModelID != "plugin/my-rag" {
+		t.Fatalf("plugin model id = %q", prov.PluginDetail.ModelID)
+	}
+
+	// A rule must exist under the scenario whose single service is the plugin.
+	var found bool
+	for _, rule := range s.config.GetRequestConfigs() {
+		if rule.GetScenario() == typ.ScenarioExperiment && rule.RequestModel == "plugin/my-rag" {
+			found = true
+			if len(rule.Services) != 1 || rule.Services[0].Provider != providerUUID {
+				t.Fatalf("rule service does not point at plugin provider: %+v", rule.Services)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no rule bound for the plugin under experiment scenario")
+	}
+}
+
+func TestRegisterPlugin_ProviderOnly(t *testing.T) {
+	s := newPluginTestServer(t)
+
+	_, resp := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+		Name:     "solo",
+		Endpoint: "http://127.0.0.1:9000/v1",
+	})
+	data, _ := resp["data"].(map[string]any)
+	if data["ready"] == true {
+		t.Fatalf("expected ready=false when no scenario given")
+	}
+	// model id defaults to plugin/<name>
+	if data["model_id"] != "plugin/solo" {
+		t.Fatalf("model_id default = %v", data["model_id"])
+	}
+}
+
+func TestListPlugins_FiltersPluginKind(t *testing.T) {
+	s := newPluginTestServer(t)
+	// a normal provider
+	if err := s.config.AddProvider(&typ.Provider{
+		Name: "real", APIBase: "https://api.example.com/v1", APIStyle: "openai", Enabled: true,
+	}); err != nil {
+		t.Fatalf("AddProvider: %v", err)
+	}
+	// a plugin provider via the handler
+	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{Name: "plug", Endpoint: "http://127.0.0.1:8765/v1"})
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	s.ListPlugins(c)
+
+	var resp PluginsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Name != "plug" {
+		t.Fatalf("expected exactly the plugin provider, got %+v", resp.Data)
+	}
+}

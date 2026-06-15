@@ -412,6 +412,21 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithResponseModel(ProvidersResponse{}),
 	)
 
+	// Plugin registration: a plugin is a first-class provider kind (external
+	// OpenAI upstream). POST wires it in (provider + optional rule) in one step.
+	api.POST("/plugins", s.RegisterPlugin,
+		swagger.WithDescription("Register external plugin code as an upstream (and optionally bind a rule)"),
+		swagger.WithTags("plugins"),
+		swagger.WithRequestModel(RegisterPluginRequest{}),
+		swagger.WithResponseModel(RegisterPluginResponse{}),
+	)
+
+	api.GET("/plugins", s.ListPlugins,
+		swagger.WithDescription("List registered plugin-kind providers"),
+		swagger.WithTags("plugins"),
+		swagger.WithResponseModel(PluginsResponse{}),
+	)
+
 	api.GET("/providers/:uuid", s.GetProvider,
 		swagger.WithDescription("Get specific provider details with masked token"),
 		swagger.WithTags("providers"),

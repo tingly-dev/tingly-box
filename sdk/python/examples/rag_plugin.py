@@ -5,9 +5,11 @@ Run it:
     pip install -e ".[all]"          # from sdk/python
     python examples/rag_plugin.py    # serves on http://127.0.0.1:8765/v1
 
-Then register it with tb so any client can select model `plugin/rag-demo`:
+Then wire it into tb in one step (creates the provider + a rule) so any client
+can select model `plugin/rag-demo`:
 
-    tingly plugin register rag-demo --url http://127.0.0.1:8765/v1 --model-id plugin/rag-demo
+    tingly plugin register rag-demo --url http://127.0.0.1:8765/v1 \
+        --model-id plugin/rag-demo --scenario experiment
 
 Now `model="plugin/rag-demo"` from Claude Code, Cursor, the tb UI, or another
 `tingly.connect()` experiment routes here — with tb's guard rails, quota,
