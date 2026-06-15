@@ -57,13 +57,31 @@ today's pieces — three verbs for the one rule⇄plugin relationship:
 The historical "Layer 1/2/3" headings below map exactly to connect / serve /
 register. They are an implementation tour, not three separate products.
 
-### tb-side direction (UX)
+### tb-side: a first-class "plugin" provider kind (implemented)
 
-Today "register" is *provider + rule binding* (two steps; provider-with-
-`api_base` is the mechanism). The intended tb-side UX is **one step: a rule whose
-service is a plugin** — same as `vmodel`'s in-process models are selected, but
-for external plugin code. That eliminates the mode-picker (`ux-principles.md`)
-and makes "configure this rule with a plugin" literal.
+"Register" is now **one step**: `POST /api/v2/plugins` creates a plugin-kind
+provider *and* (when a scenario is given) the rule whose upstream is that plugin.
+
+- **`ai.PluginDetail`** + `Provider.PluginDetail` + `Provider.IsPlugin()` mark a
+  provider as backed by plugin code. It is **distinct from `AuthTypeVirtual`**
+  (in-process `vmodel`): a plugin is an ordinary OpenAI HTTP upstream
+  (`APIStyle=openai`, `api_key`/`no_key`), so **routing is unchanged** — the
+  marker is metadata for UI grouping + lifecycle discovery only. Persisted via a
+  new `plugin_detail` column, reconstructed unconditionally (independent of auth
+  type), AutoMigrate-created.
+- **`POST /api/v2/plugins`** `{name, endpoint, model_id?, token?, scenario?, tier?}`
+  → creates the provider; if `scenario` is bindable, also creates a rule
+  (`RequestModel=model_id`, single tier service → the plugin). Returns
+  `{provider_uuid, model_id, scenario, rule_uuid, ready}`.
+- **`GET /api/v2/plugins`** lists plugin-kind providers for the UI's plugin
+  section.
+- SDK: `register_with_tb(..., scenario=…)` and `tingly plugin register
+  --scenario experiment` do the full one-step wire-in.
+
+This makes "configure this rule with a plugin" literal and eliminates the
+provider+rule two-step mode-picker (`ux-principles.md`). Remaining tb-side work:
+the rule-editor UI surfacing "plugin" as a service kind (frontend, codegen), and
+the process supervisor/lifecycle.
 
 
 ## Shape

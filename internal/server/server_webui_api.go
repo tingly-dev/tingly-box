@@ -400,6 +400,21 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
 	providermodule.RegisterRoutes(apiV2, providerHandler)
 
+	// Plugin registration: a plugin is a first-class provider kind (external
+	// OpenAI upstream). POST wires it in (provider + optional rule) in one step.
+	api.POST("/plugins", s.RegisterPlugin,
+		swagger.WithDescription("Register external plugin code as an upstream (and optionally bind a rule)"),
+		swagger.WithTags("plugins"),
+		swagger.WithRequestModel(RegisterPluginRequest{}),
+		swagger.WithResponseModel(RegisterPluginResponse{}),
+	)
+
+	api.GET("/plugins", s.ListPlugins,
+		swagger.WithDescription("List registered plugin-kind providers"),
+		swagger.WithTags("plugins"),
+		swagger.WithResponseModel(PluginsResponse{}),
+	)
+
 	// Provider template endpoints
 	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
 	providertemplate.RegisterRoutes(apiV2, providerTemplateHandler)

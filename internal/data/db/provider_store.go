@@ -59,6 +59,12 @@ type ProviderRecord struct {
 	// VModel-specific fields (only populated when AuthType == "vmodel")
 	VModelDetail string `gorm:"column:vmodel_detail;type:text"` // JSON-encoded typ.VModelDetail
 
+	// PluginDetail marks a provider as backed by external plugin code. Unlike
+	// VModelDetail it is independent of AuthType (a plugin uses api_key auth), so
+	// it is persisted/loaded unconditionally. JSON-encoded typ.PluginDetail; empty
+	// for non-plugin providers. Added additively; AutoMigrate creates the column.
+	PluginDetail string `gorm:"column:plugin_detail;type:text"`
+
 	// Credential holds multi-field credentials for non-bearer auth types
 	// (aws_sigv4, azure_key, gcp_sa). JSON-encoded typ.CredentialBundle.
 	// Empty for api_key/oauth/vmodel. Added additively; AutoMigrate creates
@@ -130,6 +136,14 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		provider.AuthType = typ.AuthTypeAPIKey
 	}
 
+	// PluginDetail is independent of auth type — reconstruct it for any provider.
+	if r.PluginDetail != "" {
+		var detail typ.PluginDetail
+		if err := json.Unmarshal([]byte(r.PluginDetail), &detail); err == nil {
+			provider.PluginDetail = &detail
+		}
+	}
+
 	return provider
 }
 
@@ -167,6 +181,12 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 	if len(p.Tags) > 0 {
 		tagsJSON, _ := json.Marshal(p.Tags)
 		record.Tags = string(tagsJSON)
+	}
+
+	// PluginDetail is independent of auth type.
+	if p.PluginDetail != nil {
+		pdJSON, _ := json.Marshal(p.PluginDetail)
+		record.PluginDetail = string(pdJSON)
 	}
 
 	// Set credentials based on auth type
@@ -220,6 +240,14 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 		record.Tags = string(tagsJSON)
 	} else {
 		record.Tags = ""
+	}
+
+	// PluginDetail is independent of auth type; set or clear unconditionally.
+	if p.PluginDetail != nil {
+		pdJSON, _ := json.Marshal(p.PluginDetail)
+		record.PluginDetail = string(pdJSON)
+	} else {
+		record.PluginDetail = ""
 	}
 
 	// Set credentials based on auth type
