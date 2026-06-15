@@ -20,11 +20,14 @@ from .errors import (
     TinglyError,
     UpstreamError,
 )
+from .plugin import ChatRequest, Plugin
 
 __all__ = [
     "__version__",
     "connect",
     "Client",
+    "Plugin",
+    "ChatRequest",
     "TinglyError",
     "GatewayUnreachableError",
     "AuthError",

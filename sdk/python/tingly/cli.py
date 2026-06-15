@@ -116,6 +116,60 @@ def _do_link() -> None:
     print(f"Wrote {path}")
 
 
+def _plugin_init(name: str) -> int:
+    """Scaffold a minimal plugin: a starter module + tingly.toml."""
+    from pathlib import Path
+
+    from .plugin.manifest import Manifest
+
+    safe = name.replace("-", "_")
+    module = f"{safe}_plugin.py"
+    Path(module).write_text(_PLUGIN_TEMPLATE.format(name=name), encoding="utf-8")
+    Manifest(
+        name=name,
+        model_id=f"plugin/{name}",
+        entrypoint=f"{safe}_plugin:plugin",
+        description=f"{name} plugin",
+    ).write(Path.cwd())
+    print(f"Created {module} and tingly.toml.")
+    print(f"Run it with:  python {module}   (or: tingly plugin run {module})")
+    return 0
+
+
+def _plugin_run(target: str) -> int:
+    """Import a plugin (``module:attr`` or a .py path) and serve it."""
+    import importlib
+    import importlib.util
+    from pathlib import Path
+
+    if target.endswith(".py") or "/" in target:
+        path = Path(target)
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        plugin = getattr(mod, "plugin", None)
+    else:
+        mod_name, _, attr = target.partition(":")
+        mod = importlib.import_module(mod_name)
+        plugin = getattr(mod, attr or "plugin", None)
+
+    if plugin is None:
+        print(f"No `plugin` found in {target!r}")
+        return 1
+    plugin.serve()
+    return 0
+
+
+def _plugin_register(name: str, plugin_url: str, model_id: str, token: str) -> int:
+    from .plugin.register import register_with_tb
+
+    result = register_with_tb(name, plugin_url, model_id, token=token)
+    status = OK if result.created else WARN
+    _row("provider", f"{result.name} → {result.api_base}", status)
+    print("\n" + result.note)
+    return 0
+
+
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(prog="tingly", description="tingly-box Python SDK")
     sub = parser.add_subparsers(dest="command")
@@ -128,12 +182,52 @@ def main(argv: Optional[list] = None) -> int:
         "--link", action="store_true", help="prompt for and save gateway URL + token"
     )
 
+    p_plugin = sub.add_parser("plugin", help="author / run / register a plugin")
+    psub = p_plugin.add_subparsers(dest="plugin_command")
+    p_init = psub.add_parser("init", help="scaffold a starter plugin")
+    p_init.add_argument("name", help="plugin name, e.g. my-rag")
+    p_run = psub.add_parser("run", help="serve a plugin (module:attr or path.py)")
+    p_run.add_argument("target", help="e.g. my_rag_plugin:plugin or my_rag_plugin.py")
+    p_reg = psub.add_parser("register", help="register a running plugin with tb")
+    p_reg.add_argument("name", help="provider name to create in tb")
+    p_reg.add_argument("--url", required=True, help="plugin OpenAI base, e.g. http://127.0.0.1:8765/v1")
+    p_reg.add_argument("--model-id", required=True, help="model id, e.g. plugin/my-rag")
+    p_reg.add_argument("--token", default="", help="token tb should send to the plugin")
+
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return doctor(args.scenario, args.link)
+    if args.command == "plugin":
+        if args.plugin_command == "init":
+            return _plugin_init(args.name)
+        if args.plugin_command == "run":
+            return _plugin_run(args.target)
+        if args.plugin_command == "register":
+            return _plugin_register(args.name, args.url, args.model_id, args.token)
+        p_plugin.print_help()
+        return 0
 
     parser.print_help()
     return 0
+
+
+_PLUGIN_TEMPLATE = '''"""A tingly-box plugin: an OpenAI-compatible AI server backed by the gateway."""
+
+from tingly import Plugin
+
+plugin = Plugin(name="{name}")
+
+
+@plugin.chat
+def handle(req):
+    question = req.last_user_text()
+    # Your logic here. Call back into tingly-box for LLM work via plugin.llm:
+    return plugin.llm.ask(f"Answer concisely: {{question}}", model="auto")
+
+
+if __name__ == "__main__":
+    plugin.serve()
+'''
 
 
 if __name__ == "__main__":

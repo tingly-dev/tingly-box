@@ -53,8 +53,40 @@ tingly doctor --link     # save gateway URL + token to ~/.tingly-box/sdk.json
 
 A green `tingly doctor` is a guarantee your code will run.
 
+## Write a plugin (an AI server tb can route to)
+
+A plugin is an OpenAI-compatible upstream. Write one handler, serve it, register
+it — then any tb client can select it as a model.
+
+```python
+from tingly import Plugin
+
+plugin = Plugin(name="my-rag")          # model id: plugin/my-rag
+
+@plugin.chat
+def handle(req):
+    docs = retrieve(req.last_user_text())
+    return plugin.llm.ask(f"Using {docs}, answer: {req.last_user_text()}")
+
+if __name__ == "__main__":
+    plugin.serve()                      # http://127.0.0.1:8765/v1
+```
+
+```bash
+tingly plugin init my-rag                 # scaffold module + tingly.toml
+tingly plugin run my_rag_plugin.py        # serve
+tingly plugin register my-rag \           # wire into tb as a provider
+   --url http://127.0.0.1:8765/v1 --model-id plugin/my-rag
+```
+
+The server is stdlib-only (no FastAPI), supports streaming, and `plugin.llm`
+calls back into tb so the plugin reuses the gateway for its own LLM work.
+
 ## Status
 
-This is **Layer 1** (client-side library). Layer 2 (tb-hosted plugins with a
-manifest and lifecycle UI) and Layer 3 (plugin-as-virtual-model) build on the
-same module. See `.design/python-sdk.md` in the repo for the full design.
+- **Layer 1** (consume tb): `connect()` → `Client`. Done.
+- **Layer 2** (be an AI server): `tingly.Plugin` + manifest + `register`. Python
+  side done; tb-side supervisor/lifecycle UI pending.
+- **Layer 3** (tb routes to the plugin as a model): via provider-as-upstream.
+
+See `.design/python-sdk.md` in the repo for the full design and diagrams.
