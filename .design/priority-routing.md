@@ -63,44 +63,35 @@ The breaker is a three-state machine (`Closed → Open → HalfOpen`):
 
 Recovery requires **no separate scheduler**. Selection re-evaluates the tier list every request, and the breaker's lazy state transition admits one probe naturally. Active probing was considered and rejected for v1 — for hot rules it's redundant, and for cold rules there is no one to serve anyway.
 
-### Breaker threshold — why 3, and when to revisit it
+### Breaker threshold — why 3
 
-`FailureThreshold = 3` means **3 *consecutive* failures**, and **any success resets the count to 0**
-(`Breaker.RecordSuccess`). Because a request attempts each service at most once (the in-request `tried`
-map), one request contributes **at most one** failure to a given service — so for a tier primary that is
-tried first on every request, "3 strikes" means *3 consecutive requests routed to it failed*, and it trips
-on the 3rd.
+`FailureThreshold = 3` = **3 consecutive failures**; any success resets the count. A request hits each
+service at most once (the `tried` map), so for a tier primary "3 strikes" = 3 consecutive requests to it
+failed.
 
-Picking the number is a sensitivity/stability trade-off, and the key fact is that **failover masks the
-client impact**: while a service accrues strikes the client still gets a 200 from the next tier, so an early
-trip is never a correctness problem — it only costs "a wasted primary attempt + one extra hop per request"
-until it trips, and a *premature* trip only costs "tier preference lost for `OpenDuration`." That asymmetry
-means we can lean slightly sensitive:
+Why 3? Failover hides the failure from the client (they still get a 200 from the next tier), so an early
+trip is never a correctness problem — at worst a wasted hop until it trips, or 30 s of lost tier preference
+if it trips too eagerly. So we can lean sensitive:
 
-- **Lower (→1)** trips on a single 500 → fastest protection, but a lone transient blip evicts the service
-  for the whole `OpenDuration` (30 s) — too twitchy for a "primary account that occasionally 500s".
-- **Higher (→8)** tolerates blips but drags a genuinely-dead service through many wasted primary attempts
-  before evicting it.
-- **3** tolerates 1–2 blips and still trips within 3 requests on sustained failure — a reasonable middle.
+- **1** — trips on a single 500; one blip evicts the service for 30 s. Too twitchy.
+- **8** — drags a dead service through many wasted attempts before evicting it.
+- **3** — tolerates a blip or two, trips within 3 requests on sustained failure. A good middle.
 
-**The real limitation is the *consecutive-reset* condition, not the number.** A service that fails
-*intermittently* (e.g. 500s ~30 % of the time) keeps getting its counter reset by the interleaved
-successes, so it may **never** trip — the breaker gives it no protection and every blip pays a failover hop
-forever. The original report ("one 500 then *sustained* 500s") is the consecutive case, which 3 handles
-well; the intermittent case is the gap. Closing it needs a **rolling-window / error-rate** trip condition
-(e.g. "≥ N failures in the last M outcomes"), at which point the exact threshold matters much less.
+The bigger limitation is the **consecutive-reset**, not the number. A service that fails *intermittently*
+(say 30 % of the time) keeps getting reset by the successes in between, so it may never trip. The original
+"sustained 500s" bug is the consecutive case (3 handles it); flapping is the gap — catching it needs a
+rolling-window / error-rate trigger, at which point the exact number barely matters.
 
-Tuning notes for whoever revisits this:
-- `FailureThreshold` and `OpenDuration` must be tuned **together** — an aggressive threshold with a long
-  open window causes frequent mis-evictions; pair a lower threshold with a shorter open window.
-- The right value depends on the upstream's transient-error profile, so this is a natural **per-rule /
-  per-scenario config** (tracked as Future work #4) rather than a single global constant.
+Tuning: move `FailureThreshold` and `OpenDuration` together (aggressive threshold + long open = frequent
+mis-evictions). The right value depends on the upstream, so it's a natural per-rule config (Future work #4).
 
 ### Session affinity must respect tier priority
 
-Session affinity (`Flags.SessionAffinity`) pins a session to whichever service first served it, so a conversation keeps hitting the same backend (prompt-cache continuity, etc.). For tier rules this created a sharp bug: the `AffinityStage` ran **before** the tier strategy and short-circuited to the pinned service *without consulting the breaker*. So if a session got pinned to a fallback tier during a brief primary-tier outage, it stuck there indefinitely — the primary tier could recover and the session would never return ("configured t1 but long-term auto-jumps to t2"; and a pinned-but-failing t2 would keep 500ing instead of failing over).
+Session affinity (`Flags.SessionAffinity`) pins a session to the service it first landed on (prompt-cache continuity, etc.).
 
-Fix: `AffinityStage` honors a pin only while the pinned service is one the strategy would actually pick right now — `typ.IsAffinityEligible`. This is **driven by the rule's config shape, not its tactic label** (there is no independent "tier mode"; "tier" is just the emergent shape of a multi-layer rule), so one rule covers every shape:
+For tier rules this was buggy: `AffinityStage` ran **before** the tier strategy and honored the pin **without consulting the breaker**. So a session pinned to a fallback tier during a brief primary outage stuck there forever — the primary could recover and the session never came back ("configured t1 but auto-jumps to t2"; or a pinned-but-failing t2 that keeps 500ing instead of failing over).
+
+Fix: the pin is honored only while the pinned service is one the strategy would pick *right now* — `typ.IsAffinityEligible`. It keys off **config shape, not tactic label** ("tier" is just the emergent shape of a multi-layer rule), so one check covers every shape:
 
 - **one service** — always eligible (nothing else to pick).
 - **one layer, many services** — eligible iff the pinned service's own breaker is available; a pin to a *dead peer* is dropped while healthy peers exist.
@@ -121,13 +112,12 @@ flowchart TD
     LOW -- no --> DROP
 ```
 
-`available` = breaker closed or half-open (read via the non-consuming `IsAvailable`, so it never steals the
-half-open probe). A drop falls through to the strategy, which re-selects a currently-valid service, and
-`postProcess` re-pins there. The two ways `P in T* and P available?` fails are the only "drop" cases:
-**cross-tier demote** (a higher tier recovered, so `P`'s lower tier is no longer `T*`) and **within-tier
-dead peer** (`P` is in `T*` but its own breaker is open while a peer is up).
+Notes:
 
-`IsAffinityEligible` mirrors `TierTactic`'s bucket walk but uses the non-consuming `BreakerStore.IsAvailable` so it never steals the half-open probe; when every service is tripped it degrades to "honor a pin to the lowest tier" rather than wedging. On decline, the pipeline falls through to the strategy, which re-selects a currently-valid service, and the existing `ServiceSelector.postProcess` automatically **re-pins** the session there — no change to the failover layer. The global-affinity pipeline is ordered **health → affinity → strategy** (`pipelineModeGlobalAffinity`). Note `typ.HealthFilter` only tracks 429/auth; the 500-driven signal lives in the breaker, which is why the affinity scoping consults the breaker directly rather than relying on the health stage.
+- `available` = breaker closed or half-open, read via the non-consuming `IsAvailable` (never steals the half-open probe).
+- On a drop, the strategy re-selects and `postProcess` re-pins — the failover layer is untouched.
+- The pipeline runs **health → affinity → strategy**. `HealthFilter` only sees 429/auth, so the 500 signal comes straight from the breaker.
+- The two "drop" cases (both are `P in T* and P available? → no`): **cross-tier demote** (a higher tier recovered, so P's tier is no longer T\*) and **within-tier dead peer** (P is in T\* but its own breaker is open while a peer is up).
 
 ### End-to-end flow: how the tactic switch actually takes effect
 
