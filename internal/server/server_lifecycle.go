@@ -267,9 +267,9 @@ func (s *Server) Stop(ctx context.Context) error {
 		logrus.WithError(err).Warn("Failed to auto-undo Codex import on stop")
 	}
 
-	// Stop bad-request disk sink
-	if s.badReqSink != nil {
-		s.badReqSink.Stop()
+	// Stop the access-log middleware's owned resources (bad-request disk sink)
+	if s.memoryLogMW != nil {
+		s.memoryLogMW.Close()
 	}
 
 	// Stop configuration watcher

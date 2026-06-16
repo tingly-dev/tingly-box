@@ -124,8 +124,25 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger, opts ...Optio
 // SetBadRequestSink attaches a dedicated, expr-filtered disk sink for
 // bad/error requests. The unified middleware feeds it the same captured
 // request/response bytes it already holds, so bodies are captured once.
+// Once attached the middleware owns the sink's lifecycle (filter + close).
 func (m *MultiModeMemoryLogMiddleware) SetBadRequestSink(sink *BadRequestSink) {
 	m.badReqSink = sink
+}
+
+// SetBadRequestFilter updates the attached sink's filter expression (no-op when
+// no sink is attached). Lets callers reconfigure the sink without holding it.
+func (m *MultiModeMemoryLogMiddleware) SetBadRequestFilter(expr string) error {
+	if m.badReqSink == nil {
+		return nil
+	}
+	return m.badReqSink.SetFilterExpression(expr)
+}
+
+// Close releases resources the middleware owns (currently the bad-request sink).
+func (m *MultiModeMemoryLogMiddleware) Close() {
+	if m.badReqSink != nil {
+		m.badReqSink.Stop()
+	}
 }
 
 // Middleware returns a Gin middleware compatible with gin.Logger()

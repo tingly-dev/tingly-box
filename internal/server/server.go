@@ -58,7 +58,6 @@ type Server struct {
 	multiLogger *pkgobs.MultiLogger
 
 	// middleware
-	badReqSink      *middleware.BadRequestSink
 	authMW          *middleware.AuthMiddleware
 	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
@@ -259,7 +258,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
-	capCfg := cfg.GetHTTPLogCapture()
+	capCfg := cfg.GetHTTPCapture()
 	badReqSink := middleware.NewBadRequestSink(errorLogPath)
 
 	// Set filter expression from config
@@ -278,7 +277,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
-	server.badReqSink = badReqSink
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()
@@ -592,11 +590,11 @@ func (s *Server) setupConfigWatcher() {
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
 
-		// Update bad-request filter expression if changed
-		if s.badReqSink != nil {
+		// Update bad-request filter expression if changed (sink owned by the mw)
+		if s.memoryLogMW != nil {
 			newFilterExpr := newConfig.GetErrorLogFilterExpression()
 			if newFilterExpr != "" {
-				if err := s.badReqSink.SetFilterExpression(newFilterExpr); err != nil {
+				if err := s.memoryLogMW.SetBadRequestFilter(newFilterExpr); err != nil {
 					logrus.Errorf("Failed to update bad-request filter expression: %v", err)
 				} else {
 					logrus.Debugf("Bad-request filter expression updated: %s", newFilterExpr)

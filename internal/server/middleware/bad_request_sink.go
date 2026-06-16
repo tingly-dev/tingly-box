@@ -34,21 +34,23 @@ const (
 	badRequestMaxFiles  = 5
 )
 
-// logEntry represents a single bad-request log entry written to disk.
+// logEntry is the in-memory record the middleware hands to the sink. It is not
+// serialized directly — maybeLog renders the on-disk JSON (bodies as raw JSON
+// when valid, else quoted; duration in ms) — so it carries no json tags.
 type logEntry struct {
-	Timestamp             time.Time         `json:"timestamp"`
-	Method                string            `json:"method"`
-	Path                  string            `json:"path"`
-	Query                 string            `json:"query,omitempty"`
-	StatusCode            int               `json:"status_code"`
-	Duration              time.Duration     `json:"duration_ms"`
-	RequestBody           []byte            `json:"request_body,omitempty"`
-	RequestBodyTruncated  bool              `json:"request_body_truncated,omitempty"`
-	ResponseBody          []byte            `json:"response_body,omitempty"`
-	ResponseBodyTruncated bool              `json:"response_body_truncated,omitempty"`
-	Headers               map[string]string `json:"headers,omitempty"`
-	UserAgent             string            `json:"user_agent,omitempty"`
-	ClientIP              string            `json:"client_ip,omitempty"`
+	Timestamp             time.Time
+	Method                string
+	Path                  string
+	Query                 string
+	StatusCode            int
+	Duration              time.Duration
+	RequestBody           []byte
+	RequestBodyTruncated  bool
+	ResponseBody          []byte
+	ResponseBodyTruncated bool
+	Headers               map[string]string
+	UserAgent             string
+	ClientIP              string
 }
 
 // BadRequestSink persistently records request/response pairs that match a
