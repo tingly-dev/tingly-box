@@ -1263,10 +1263,20 @@ func groupServicesByTier(services []*loadbalance.Service) []tierBucket {
 // tier" (matching TierTactic's degrade-don't-disappear behavior) so a pin is
 // honored rather than wedging.
 func IsAffinityEligible(services []*loadbalance.Service, target *loadbalance.Service) bool {
-	if target == nil {
+	if target == nil || !target.Active {
 		return false
 	}
-	buckets := groupServicesByTier(services)
+	// Mirror GetActiveServices: inactive services are not selectable, so they
+	// must not influence the tier-availability computation (e.g. an inactive
+	// service whose breaker happens to be closed must not make its tier look
+	// "available" and wrongly demote a healthy pin in a lower tier).
+	active := make([]*loadbalance.Service, 0, len(services))
+	for _, svc := range services {
+		if svc != nil && svc.Active {
+			active = append(active, svc)
+		}
+	}
+	buckets := groupServicesByTier(active)
 	if len(buckets) == 0 {
 		return false
 	}

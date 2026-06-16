@@ -101,6 +101,34 @@ func TestIsAffinityEligible_SingleService(t *testing.T) {
 	}
 }
 
+// An inactive service whose breaker is closed must not make its tier look
+// "available" and demote a healthy pin in a lower tier.
+func TestIsAffinityEligible_InactiveDoesNotMaskLowerTier(t *testing.T) {
+	t0 := mkService("ita-inact-p0", "m", 0)
+	t0.Active = false // configured but disabled; breaker untouched (closed)
+	t1 := mkService("ita-inact-p1", "m", 1)
+	svcs := []*loadbalance.Service{t0, t1}
+
+	// t0 is inactive → top active tier is t1 → a pin to t1 is eligible.
+	if !IsAffinityEligible(svcs, t1) {
+		t.Fatal("t1 should be eligible when the only higher tier is inactive")
+	}
+}
+
+func TestIsAffinityEligible_InactiveTargetDeclined(t *testing.T) {
+	a := mkService("ita-inact-target-a", "m", 0)
+	a.Active = false
+	b := mkService("ita-inact-target-b", "m", 0)
+	svcs := []*loadbalance.Service{a, b}
+
+	if IsAffinityEligible(svcs, a) {
+		t.Fatal("an inactive pinned service must never be eligible")
+	}
+	if !IsAffinityEligible(svcs, b) {
+		t.Fatal("the active peer should still be eligible")
+	}
+}
+
 func TestIsAffinityEligible_NilAndEmpty(t *testing.T) {
 	t0 := mkService("ita-d-p0", "m", 0)
 	if IsAffinityEligible([]*loadbalance.Service{t0}, nil) {

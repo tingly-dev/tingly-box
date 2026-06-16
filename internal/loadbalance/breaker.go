@@ -20,6 +20,20 @@ const (
 	DefaultBreakerOpenDuration     = 30 * time.Second
 )
 
+// nowFn is the clock the breaker reads. It is a package-level seam so tests can
+// drive Open→HalfOpen transitions deterministically without sleeping. Production
+// always uses time.Now.
+var nowFn = time.Now
+
+// SetClockForTest overrides the breaker clock and returns a restore function.
+// Test-only: callers must defer the returned restore to avoid leaking the fake
+// clock into other tests.
+func SetClockForTest(fn func() time.Time) (restore func()) {
+	prev := nowFn
+	nowFn = fn
+	return func() { nowFn = prev }
+}
+
 // Breaker is a simple three-state circuit breaker for a single service.
 //
 // State transitions:
@@ -69,7 +83,7 @@ func (b *Breaker) Allow() bool {
 	case BreakerClosed:
 		return true
 	case BreakerOpen:
-		if time.Since(b.openedAt) >= b.OpenDuration {
+		if nowFn().Sub(b.openedAt) >= b.OpenDuration {
 			b.state = BreakerHalfOpen
 			b.halfOpenInFlight = true
 			return true
@@ -102,14 +116,14 @@ func (b *Breaker) RecordFailure() {
 
 	if b.state == BreakerHalfOpen {
 		b.state = BreakerOpen
-		b.openedAt = time.Now()
+		b.openedAt = nowFn()
 		b.halfOpenInFlight = false
 		return
 	}
 	b.consecFails++
 	if b.consecFails >= b.FailureThreshold {
 		b.state = BreakerOpen
-		b.openedAt = time.Now()
+		b.openedAt = nowFn()
 	}
 }
 
@@ -118,7 +132,7 @@ func (b *Breaker) State() BreakerState {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	// Apply the lazy Open→HalfOpen transition for read consistency.
-	if b.state == BreakerOpen && time.Since(b.openedAt) >= b.OpenDuration {
+	if b.state == BreakerOpen && nowFn().Sub(b.openedAt) >= b.OpenDuration {
 		return BreakerHalfOpen
 	}
 	return b.state
