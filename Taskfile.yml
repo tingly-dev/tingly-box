@@ -34,6 +34,7 @@ tasks:
     cmds:
       - task: web:dist
       - task: go:build
+  
   dev:
     aliases:
       - cli:dev
@@ -41,7 +42,7 @@ tasks:
       - task: web:dist
       - task: start
 
-  e2e:
+  test:e2e:
     cmds:
       - go build ./... && go test -v -tags=e2e ./internal/protocol/transform -run TestE2E
   
@@ -54,10 +55,6 @@ tasks:
   restart:
     cmds:
       - go run ./cli/tingly-box --verbose restart --debug --port 12580 --browser=false
- 
-  record:
-    cmds:
-      - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
 
   swagger:
     aliases:
@@ -69,6 +66,7 @@ tasks:
 
   codegen:
     cmds:
+      - task: swagger
       - |
         cd frontend
         pnpm install
@@ -190,38 +188,6 @@ tasks:
           exit 1
         fi
         echo "Found: $(zig version)"
-
-  # remote-coder Service tasks
-  remote-coder:run:
-    summary: Run remote-coder service via tingly-box rc
-    env:
-      RCC_PORT: "18080"
-      RCC_SESSION_TIMEOUT: "30m"
-    cmds:
-      - |
-        go run ./cli/tingly-box rc
-
-  remote-coder:test:
-    summary: Run tests for remote-coder service
-    cmds:
-      - |
-        go test ./internal/remote_coder/... -v
-
-  remote-coder-token:build:
-    summary: Build the remote-coder-token binary
-    cmds:
-      - |
-        # Determine binary extension based on OS
-        BINARY_EXT=""
-        if [ "$(go env GOOS)" = "windows" ]; then
-          BINARY_EXT=".exe"
-        fi
-        go build -o ./bin/remote-coder-token${BINARY_EXT} ./cmd/remote-coder
-
-  remote-coder-token:run:
-    summary: Generate an API token (run via SSH)
-    cmds:
-      - go run ./cmd/remote-coder
 
   submodule:
     summary: Show git HEAD and branch for each submodule in libs/
