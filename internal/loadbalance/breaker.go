@@ -20,15 +20,15 @@ const (
 	DefaultBreakerOpenDuration     = 30 * time.Second
 )
 
-// nowFn is the clock the breaker reads. It is a package-level seam so tests can
-// drive Open→HalfOpen transitions deterministically without sleeping. Production
-// always uses time.Now.
+// nowFn is the clock the breaker reads. It is a package-level seam so the LB
+// simulator and tests can drive Open→HalfOpen transitions deterministically
+// without sleeping. Production always uses time.Now.
 var nowFn = time.Now
 
-// SetClockForTest overrides the breaker clock and returns a restore function.
-// Test-only: callers must defer the returned restore to avoid leaking the fake
-// clock into other tests.
-func SetClockForTest(fn func() time.Time) (restore func()) {
+// SetClock overrides the breaker clock and returns a restore function. Used by
+// the LB simulator (cli/harness lb) and tests; callers must defer the returned
+// restore to avoid leaking the fake clock. Not for production request paths.
+func SetClock(fn func() time.Time) (restore func()) {
 	prev := nowFn
 	nowFn = fn
 	return func() { nowFn = prev }

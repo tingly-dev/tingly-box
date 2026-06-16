@@ -240,6 +240,76 @@ providers.
 
 ---
 
+## Tier LB — `lb`
+
+Simulates **load-balancing dynamics** — tier selection, mid-request failover,
+the circuit breaker (trip + *timed* recovery), and session-affinity stickiness /
+re-pinning — over a **request sequence**, against programmable fake upstreams.
+The other tiers validate protocol/transform fidelity; this one validates *routing
+behavior over time*. It runs the real path (`routing.ServiceSelector.Select` →
+`dispatchWithPriorityFailover`) with a deterministic breaker clock, so recovery
+is exercised without sleeping.
+
+```bash
+./harness lb --example cascade        # built-in: cascade | flat | grid | single | regression
+./harness lb --file scenario.yaml     # your own shape
+./harness lb --example grid --json    # machine-readable trace
+```
+
+It shares one simulation engine (`internal/server.LBSimulator`) with the Go
+scenario tests (`internal/server/lb_scenario_test.go`), so the CLI and CI assert
+the same behavior.
+
+### Output
+
+```
+LB scenario "cascade"  tactic=tier  affinity=1800s
+services: t0/gpt-4 (T0)  t1/gpt-4 (T1)
+
+#    session    attempts                status  pin
+1    s1         t0/gpt-4 → t1/gpt-4     200     t0/gpt-4
+...
+4    s1         t1/gpt-4                200     t1/gpt-4     # breaker open → pin moved to t1
+     -- advance 31s --
+5    s1         t0/gpt-4                200     t0/gpt-4     # recovered → snapped back to t0
+
+final breakers: t0/gpt-4=closed  t1/gpt-4=closed
+```
+
+The `attempts` column shows the per-request failover hops; `pin` shows the
+affinity pin after each request. `--json` emits the same data structurally.
+
+### Scenario file
+
+A small YAML describes the rule *shape*, per-service fault scripts, and a program
+of requests / clock-advances (see `testdata/lb/cascade.yaml`):
+
+```yaml
+rule_uuid: cascade
+tactic: tier                 # tier | random
+affinity_secs: 1800          # 0 = off
+services:
+  - { provider: t0, model: gpt-4, tier: 0 }
+  - { provider: t1, model: gpt-4, tier: 1 }
+faults:                      # serviceID -> per-call status sequence (last entry repeats)
+  t0/gpt-4: [500, 500, 500, 200]
+  t1/gpt-4: [200]
+seed_pin: { session: s1, provider: t2, model: gpt-4 }   # optional: pre-lock a stale pin
+program:
+  - { request: s1 }          # request on session s1 (omit/"" = no affinity)
+  - { advance: 31s }         # move the breaker clock forward
+```
+
+The shapes map to the **"Rule config shapes" taxonomy** in
+`.design/priority-routing.md` (Single / Flat / Cascade / Grid). The
+**G1 horizontal-tactic breaker-blind gap** documented there is *not* yet modeled
+here (random/token tactics ignore the breaker at selection).
+
+**Use it for:** reproducing a customer's rule shape + outage pattern and watching
+exactly how routing, failover, the breaker, and affinity behave over a sequence.
+
+---
+
 ## Agent reference
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
@@ -254,12 +324,16 @@ providers.
 
 ```
 cli/harness/
-  main.go            Kong CLI root: version / matrix / agent / replay /
+  main.go            Kong CLI root: version / matrix / agent / replay / lb /
                      provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstreams, skip list
   agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
+  lb.go              Tier LB command — load-balancing scenario simulator
+                     (engine: internal/server.LBSimulator; shapes per
+                     .design/priority-routing.md)
+  testdata/lb/       sample LB scenario YAML files
   config.go          init-config: generates providers.yaml from provider templates
   provider.go        Tier D placeholder (live provider API tests — not impl.)
   summary.go         CSV summary persistence / resume bookkeeping
