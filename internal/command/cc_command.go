@@ -142,9 +142,6 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
 
 	// Discover claude binary
 	variant, err := claude.FindClaudeCLI(context.Background())

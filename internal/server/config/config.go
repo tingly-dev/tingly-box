@@ -1527,17 +1527,13 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
-	// Create fresh profile rules. Seed them with the services already configured
-	// on the base scenario so the profile works immediately without manual setup.
+	// Create fresh profile rules from the DefaultRules templates. For claude_code:
+	// unified mode → one "cc" rule; separate mode → five individual model rules.
+	// Rules start with empty Services/SmartRouting so the user configures the
+	// upstream providers for the new profile explicitly.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	if baseScenario == typ.ScenarioClaudeCode {
-		rules := newCCProfileRules(profiledScenario, unified)
-		if refServices := c.referenceServicesFor(baseScenario); refServices != nil {
-			for i := range rules {
-				rules[i].Services = cloneServices(refServices)
-			}
-		}
-		c.Rules = append(c.Rules, rules...)
+		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, unified)...)
 	}
 
 	return meta, c.Save()
