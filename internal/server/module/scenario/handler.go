@@ -2,7 +2,9 @@ package scenario
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -10,6 +12,24 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// baseURLFromRequest returns the base URL reachable by the client, honoring
+// X-Forwarded-Proto for reverse-proxy deployments.
+func baseURLFromRequest(c *gin.Context, defaultPort int) string {
+	host := c.Request.Host
+	scheme := c.GetHeader("X-Forwarded-Proto")
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	if !strings.Contains(host, ":") {
+		host = fmt.Sprintf("%s:%d", host, defaultPort)
+	}
+	return fmt.Sprintf("%s://%s", scheme, host)
+}
 
 // RemoteControlController defines the interface for controlling remote coder service
 type RemoteControlController interface {
@@ -471,6 +491,16 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
+	}
+
+	// Auto-generate the Claude Code settings file for the new profile so it is
+	// immediately usable without manual configuration.
+	profiledScenario := string(typ.ProfiledScenarioName(scenario, meta.ID))
+	baseURL := baseURLFromRequest(c, h.config.GetServerPort())
+	apiKey := h.config.GetModelToken()
+	env := config.GenerateCCProfileEnv(h.config, profiledScenario, meta.Unified, baseURL, apiKey)
+	if _, settingsErr := config.BuildCCProfileSettings(meta.ID, profiledScenario, env); settingsErr != nil {
+		logrus.WithError(settingsErr).Warn("failed to create Claude Code settings for new profile")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
