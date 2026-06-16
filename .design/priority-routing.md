@@ -63,6 +63,12 @@ The breaker is a three-state machine (`Closed → Open → HalfOpen`):
 
 Recovery requires **no separate scheduler**. Selection re-evaluates the tier list every request, and the breaker's lazy state transition admits one probe naturally. Active probing was considered and rejected for v1 — for hot rules it's redundant, and for cold rules there is no one to serve anyway.
 
+### Session affinity must respect tier priority
+
+Session affinity (`Flags.SessionAffinity`) pins a session to whichever service first served it, so a conversation keeps hitting the same backend (prompt-cache continuity, etc.). For tier rules this created a sharp bug: the `AffinityStage` ran **before** the tier strategy and short-circuited to the pinned service *without consulting the breaker*. So if a session got pinned to a fallback tier during a brief primary-tier outage, it stuck there indefinitely — the primary tier could recover and the session would never return ("configured t1 but long-term auto-jumps to t2"; and a pinned-but-failing t2 would keep 500ing instead of failing over).
+
+Fix: affinity is now **scoped to the highest currently-available tier**. `AffinityStage` honors a pin only when the pinned service is in the top tier that currently has a breaker-available service (`typ.IsInTopAvailableTier`, which mirrors `TierTactic`'s bucket walk but uses the non-consuming `BreakerStore.IsAvailable` so it never steals the half-open probe). When a higher-priority tier recovers, the stale pin is declined, the strategy re-selects the primary tier, and the existing `ServiceSelector.postProcess` automatically **re-pins** the session there — no change to the failover layer. Within a single tier (two equivalent accounts) stickiness is fully preserved. The global-affinity pipeline is correspondingly ordered **health → affinity → strategy** (`pipelineModeGlobalAffinity`). Note `typ.HealthFilter` only tracks 429/auth; the 500-driven signal lives in the breaker, which is why the affinity scoping consults the breaker directly rather than relying on the health stage.
+
 ### End-to-end flow: how the tactic switch actually takes effect
 
 The "user moves a service card to a different tier" event has to cross five layers before it changes how the next API request is routed. Each layer is wired explicitly:

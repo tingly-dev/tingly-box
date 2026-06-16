@@ -1244,5 +1244,41 @@ func groupServicesByTier(services []*loadbalance.Service) []tierBucket {
 	return out
 }
 
+// IsInTopAvailableTier reports whether target sits in the highest-priority
+// tier (lowest Tier number) that currently has at least one breaker-available
+// service. It mirrors TierTactic.SelectService's bucket walk but uses the
+// non-consuming breaker read (IsAvailable) so it does not steal the half-open
+// probe.
+//
+// Used by session affinity to avoid pinning a session below a recovered tier:
+// once a higher-priority tier's breaker closes (or goes half-open), a pin to a
+// lower tier is no longer in the top available tier and should be dropped so
+// the session returns to its primary tier.
+//
+// When every bucket is tripped it falls back to the lowest-numbered tier
+// (matching TierTactic's degrade-don't-disappear behavior), so a pin to that
+// tier is still honored rather than wedging.
+func IsInTopAvailableTier(services []*loadbalance.Service, target *loadbalance.Service) bool {
+	if target == nil {
+		return false
+	}
+	buckets := groupServicesByTier(services)
+	if len(buckets) == 0 {
+		return false
+	}
+
+	store := loadbalance.DefaultBreakerStore()
+	for _, group := range buckets {
+		for _, svc := range group.services {
+			if store.IsAvailable(svc.ServiceID()) {
+				return target.Tier == group.tier
+			}
+		}
+	}
+	// Every tier is tripped — fall back to the lowest-numbered (highest
+	// priority) tier, which groupServicesByTier returns first.
+	return target.Tier == buckets[0].tier
+}
+
 // Pre-created singleton priority tactic for the default-tactic registry.
 var defaultTierTactic = NewTierTactic(loadbalance.TacticRandom)

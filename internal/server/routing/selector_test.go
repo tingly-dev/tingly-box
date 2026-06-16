@@ -286,5 +286,47 @@ func TestNewServiceSelector_SmartAffinityPipelineOrder(t *testing.T) {
 	require.Equal(t, "load_balancer", pipeline[3].Name())
 }
 
+func TestNewServiceSelector_GlobalAffinityPipelineOrder(t *testing.T) {
+	sel := NewServiceSelector(&mockConfig{}, newMockAffinityStore(), &mockLoadBalancer{})
+
+	pipeline := sel.pipelines[pipelineModeGlobalAffinity]
+	require.Len(t, pipeline, 4)
+	require.Equal(t, "health", pipeline[0].Name(), "health must run before affinity")
+	require.Equal(t, "affinity", pipeline[1].Name())
+	require.Equal(t, "smart_routing", pipeline[2].Name())
+	require.Equal(t, "load_balancer", pipeline[3].Name())
+}
+
+// End-to-end fix for "configured t1 but long-term auto-jumps to t2": a session
+// pinned to a lower tier must return to the primary tier once it is healthy,
+// and the affinity pin must be rewritten to the primary (automatic re-pin via
+// postProcess — no failover-layer change needed).
+func TestSelect_TierAffinity_RepinsToPrimaryAfterRecovery(t *testing.T) {
+	t0 := tierService("e2e-t0", "m", 0)
+	t1 := tierService("e2e-t1", "m", 1)
+	lb := &mockLoadBalancer{service: t0} // strategy selects the primary tier
+	store := newMockAffinityStore()
+	store.Set("rule-e2e", testSessionKey("s1"), testAffinityEntry(t1)) // stale pin to t1
+	cfg := &mockConfig{
+		providers: map[string]*typ.Provider{
+			"e2e-t0": testProvider("e2e-t0", "T0", true),
+			"e2e-t1": testProvider("e2e-t1", "T1", true),
+		},
+	}
+
+	rule := tierRule("rule-e2e", "m", []*loadbalance.Service{t0, t1})
+
+	sel := NewServiceSelector(cfg, store, lb)
+	result, err := sel.Select(testContext(rule, "s1"))
+	require.NoError(t, err)
+	require.Equal(t, "load_balancer", result.Source, "stale lower-tier pin should be declined")
+	require.Equal(t, t0.ServiceID(), result.Service.ServiceID())
+
+	entry, ok := store.Get("rule-e2e", testSessionKey("s1"))
+	require.True(t, ok)
+	require.Equal(t, t0.ServiceID(), entry.Service.ServiceID(),
+		"affinity must be re-pinned to the recovered primary tier")
+}
+
 // ErrNoService is a sentinel error for tests
 var ErrNoService = errors.New("no service available")

@@ -2,6 +2,9 @@ package routing
 
 import (
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // AffinityStage checks if a session has a locked service from previous requests.
@@ -57,6 +60,20 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 		logrus.Debugf("[affinity] locked service %s not in candidate set, skipping",
 			entry.Service.ServiceID())
 		return nil, false
+	}
+
+	// Tier scoping: for tier-based rules, only honor a pin while the locked
+	// service is still in the highest currently-available tier (breaker-aware).
+	// Once a higher-priority tier recovers, the pin to a lower tier is stale —
+	// decline it so the strategy re-selects the primary tier and postProcess
+	// re-pins the session there. Without this, a session pinned to a fallback
+	// tier during a brief primary-tier outage would stick there indefinitely.
+	if state != nil && rule.LBTactic.Instantiate().GetType() == loadbalance.TacticTier {
+		if !typ.IsInTopAvailableTier(state.candidateServices, entry.Service) {
+			logrus.Infof("[affinity] locked service %s is below the top available tier for session %s; dropping pin so strategy re-selects",
+				entry.Service.ServiceID(), ctx.SessionID.String())
+			return nil, false
+		}
 	}
 
 	result := NewResult(entry.Service, "affinity")

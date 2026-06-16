@@ -7,7 +7,23 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// tierService builds an active service at the given tier for affinity tests.
+func tierService(provider, model string, tier int) *loadbalance.Service {
+	svc := testService(provider, model, true)
+	svc.Tier = tier
+	return svc
+}
+
+// tierRule builds a tier-tactic rule with affinity enabled.
+func tierRule(uuid, model string, services []*loadbalance.Service) *typ.Rule {
+	rule := testRule(uuid, model, services)
+	rule.Flags.SessionAffinity = 3600
+	rule.LBTactic = typ.Tactic{Type: loadbalance.TacticTier, Params: typ.DefaultTierParams()}
+	return rule
+}
 
 func TestAffinity_LockedSession(t *testing.T) {
 	store := newMockAffinityStore()
@@ -109,6 +125,91 @@ func TestAffinity_SmartRuleScope_NoIndex(t *testing.T) {
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when smart_rule scope but no index")
+}
+
+// --- Tier-scoped affinity (breaker-aware) ---
+
+// When the primary tier (t0) is healthy, a stale pin to a lower tier (t1) must
+// be declined so the strategy re-selects the primary. This is the fix for
+// "configured t1 but long-term auto-jumps to t2".
+func TestAffinity_TierScope_DeclinesStalePinWhenPrimaryHealthy(t *testing.T) {
+	store := newMockAffinityStore()
+	t0 := tierService("aff-tier-a-p0", "m", 0)
+	t1 := tierService("aff-tier-a-p1", "m", 1)
+	store.Set("rule-tier-a", testSessionKey("s1"), testAffinityEntry(t1))
+
+	rule := tierRule("rule-tier-a", "m", []*loadbalance.Service{t0, t1})
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled,
+		"stale pin to a lower tier must be declined while the primary tier is healthy")
+}
+
+// While the primary tier (t0) is down (breaker open), the pin to the now-top
+// available tier (t1) must be honored — within-failover stickiness.
+func TestAffinity_TierScope_HonorsPinWhilePrimaryDown(t *testing.T) {
+	store := newMockAffinityStore()
+	t0 := tierService("aff-tier-b-p0", "m", 0)
+	t1 := tierService("aff-tier-b-p1", "m", 1)
+	store.Set("rule-tier-b", testSessionKey("s1"), testAffinityEntry(t1))
+
+	rule := tierRule("rule-tier-b", "m", []*loadbalance.Service{t0, t1})
+
+	bs := loadbalance.DefaultBreakerStore()
+	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+		bs.RecordFailure(t0.ServiceID())
+	}
+	defer bs.RecordSuccess(t0.ServiceID())
+
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled, "pin must be honored while the primary tier breaker is open")
+	require.Equal(t, t1.ServiceID(), result.Service.ServiceID())
+}
+
+// When the pinned service's own breaker is open and a higher tier is available,
+// the pin must be declined (subsumed by the top-available-tier check).
+func TestAffinity_TierScope_DeclinesWhenPinnedBreakerOpen(t *testing.T) {
+	store := newMockAffinityStore()
+	t0 := tierService("aff-tier-c-p0", "m", 0)
+	t1 := tierService("aff-tier-c-p1", "m", 1)
+	store.Set("rule-tier-c", testSessionKey("s1"), testAffinityEntry(t1))
+
+	rule := tierRule("rule-tier-c", "m", []*loadbalance.Service{t0, t1})
+
+	bs := loadbalance.DefaultBreakerStore()
+	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+		bs.RecordFailure(t1.ServiceID())
+	}
+	defer bs.RecordSuccess(t1.ServiceID())
+
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled,
+		"pin to an open lower-tier service must be declined when a higher tier is available")
+}
+
+// Two services sharing one tier: the pin is honored regardless of which one,
+// preserving within-tier stickiness.
+func TestAffinity_TierScope_WithinTierStickinessPreserved(t *testing.T) {
+	store := newMockAffinityStore()
+	a := tierService("aff-tier-d-pa", "m", 0)
+	b := tierService("aff-tier-d-pb", "m", 0)
+	store.Set("rule-tier-d", testSessionKey("s1"), testAffinityEntry(b))
+
+	rule := tierRule("rule-tier-d", "m", []*loadbalance.Service{a, b})
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled, "within-tier pin must be honored")
+	require.Equal(t, b.ServiceID(), result.Service.ServiceID())
 }
 
 func TestAffinity_Name(t *testing.T) {
