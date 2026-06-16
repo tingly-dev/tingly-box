@@ -6,14 +6,16 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/clock"
 )
 
 // HealthStatus represents the health state of a service
 type HealthStatus int
 
 const (
-	HealthHealthy HealthStatus = iota // Service is healthy and available
-	HealthUnhealthy                    // Service is unhealthy (rate limited, failing)
+	HealthHealthy   HealthStatus = iota // Service is healthy and available
+	HealthUnhealthy                     // Service is unhealthy (rate limited, failing)
 )
 
 // String returns the string representation of HealthStatus
@@ -140,7 +142,7 @@ func (hm *HealthMonitor) IsHealthy(serviceID string) bool {
 		return true
 	}
 
-	now := time.Now()
+	now := clock.Now()
 
 	// If rate limited, check if the rate limit window has passed
 	if rateLimited && now.Before(rateLimitedUntil) {
@@ -149,7 +151,7 @@ func (hm *HealthMonitor) IsHealthy(serviceID string) bool {
 	}
 
 	// Check if recovery timeout has elapsed
-	if time.Since(lastErrorTime) > recoveryTimeout {
+	if now.Sub(lastErrorTime) > recoveryTimeout {
 		// Probe before auto-recover (if probing is enabled and probe func is set)
 		if hm.config.ProbeEnabled && hm.probeFunc != nil {
 			if hm.probeFunc(serviceID) {
@@ -207,7 +209,7 @@ func (hm *HealthMonitor) extendRecoveryTimeout(serviceID string) {
 	defer health.mutex.Unlock()
 
 	// Extend timeout by another recovery period (exponential backoff could be added here)
-	health.LastErrorTime = time.Now()
+	health.LastErrorTime = clock.Now()
 }
 
 // ReportRateLimit reports a 429 rate limit error for a service
@@ -216,7 +218,7 @@ func (hm *HealthMonitor) ReportRateLimit(serviceID string) {
 	health.mutex.Lock()
 	defer health.mutex.Unlock()
 
-	now := time.Now()
+	now := clock.Now()
 	health.Status = HealthUnhealthy
 	health.RateLimited = true
 	health.LastErrorTime = now
@@ -242,8 +244,8 @@ func (hm *HealthMonitor) ReportAuthError(serviceID string, statusCode int) {
 	health.Status = HealthUnhealthy
 	health.AuthError = true
 	health.LastError = errors.New("auth error")
-	health.LastErrorTime = time.Now()
-	health.LastHealthCheck = time.Now()
+	health.LastErrorTime = clock.Now()
+	health.LastHealthCheck = clock.Now()
 }
 
 // ReportError reports a retryable error for a service
@@ -254,8 +256,8 @@ func (hm *HealthMonitor) ReportError(serviceID string, err error) {
 
 	health.ConsecutiveErrors++
 	health.LastError = err
-	health.LastErrorTime = time.Now()
-	health.LastHealthCheck = time.Now()
+	health.LastErrorTime = clock.Now()
+	health.LastHealthCheck = clock.Now()
 
 	// Only mark unhealthy after threshold
 	if health.ConsecutiveErrors >= hm.consecutiveErrorThreshold {
@@ -273,7 +275,7 @@ func (hm *HealthMonitor) ReportSuccess(serviceID string) {
 	health.mutex.Lock()
 	defer health.mutex.Unlock()
 
-	now := time.Now()
+	now := clock.Now()
 
 	// If rate limited, check if the recovery timeout has elapsed
 	if health.RateLimited && now.Before(health.RateLimitedUntil) {

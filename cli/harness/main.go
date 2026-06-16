@@ -1,8 +1,10 @@
 // Package main provides the CLI harness for protocol validation testing.
 //
-// The harness provides three testing modes:
+// The harness provides several testing modes:
 //   - matrix: Virtual provider e2e tests (protocol transformations)
+//   - replay: Fixture replay through the in-process gateway
 //   - agent: Real agent CLI runs against mock or real upstreams
+//   - lb: Load-balancing scenario simulator (tier/failover/breaker/affinity)
 //   - provider: Real provider API e2e tests (live API compatibility) - Phase 3
 package main
 
@@ -26,6 +28,7 @@ type CLI struct {
 	Matrix     MatrixCmd     `kong:"cmd,help='Run protocol validation matrix tests'"`
 	Agent      AgentCmd      `kong:"cmd,help='Run agent e2e tests (use --mock or --config <file>)'"`
 	Replay     ReplayCmd     `kong:"cmd,help='Replay a captured agent request fixture through the gateway'"`
+	Lb         LbCmd         `kong:"cmd,help='Simulate load-balancing (tier/failover/breaker/affinity) over a request sequence'"`
 	Provider   ProviderCmd   `kong:"cmd,help='Real provider API tests (Phase 3 - not yet implemented)'"`
 	InitConfig InitConfigCmd `kong:"cmd,name='init-config',help='Create a providers config file template for agent --config'"`
 }

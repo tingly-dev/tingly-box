@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 )
 
@@ -47,8 +48,11 @@ func (s *AffinityStore) Get(ruleUUID, sessionID string) (*routing.AffinityEntry,
 		return nil, false
 	}
 
-	// Check if expired
-	if time.Now().After(entry.ExpiresAt) {
+	// Check if expired. Uses the shared affinity clock (routing.Now) so the
+	// store's expiry stays on the same timeline as the stage's strict-TTL check
+	// and pin creation — production resolves to time.Now; the lb simulator drives
+	// all three deterministically off one fake clock.
+	if clock.Now().After(entry.ExpiresAt) {
 		return nil, false
 	}
 
@@ -102,7 +106,7 @@ func (s *AffinityStore) GC() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now()
+	now := clock.Now()
 	for key, entry := range s.entries {
 		if now.After(entry.ExpiresAt) {
 			delete(s.entries, key)

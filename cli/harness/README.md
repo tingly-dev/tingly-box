@@ -240,6 +240,95 @@ providers.
 
 ---
 
+## Tier LB — `lb`
+
+Simulates **load-balancing dynamics** — tier selection, mid-request failover, the breaker (trip + *timed*
+recovery), and affinity stickiness / re-pinning — over a **request sequence** against programmable fake
+upstreams. It runs the real `ServiceSelector.Select → dispatchWithPriorityFailover` path with a
+deterministic breaker clock, so recovery is exercised without sleeping.
+
+```bash
+./harness lb --example cascade        # cascade | flat | grid | single | regression | ratelimit | authflip | crossmodel
+./harness lb --file scenario.yaml     # your own shape
+./harness lb --example grid --table   # compact table instead of the default graph
+./harness lb --example grid --json    # machine-readable trace
+```
+
+### Output
+
+The default is a pencil graph — per request, the failover hops plus a state line (each svc's breaker/health
++ the affinity pin), so the trip, health exclusion, and pin movement are visible step by step:
+
+```
+#3  s1   t0/gpt-4 ✗500  →  t1/gpt-4 ✓200   →  client=200
+       state: t0/gpt-4=open/unhealthy   t1/gpt-4=closed/healthy   pin=t0/gpt-4
+#4  s1   t1/gpt-4 ✓200   →  client=200
+       state: t0/gpt-4=open/unhealthy   t1/gpt-4=closed/healthy   pin=t1/gpt-4
+```
+
+`--table` gives a compact one-line-per-request form; `--json` the same data structurally. The engine
+(`internal/server.LBSimulator`) is shared with the Go scenario tests, so the CLI and CI assert the same thing.
+
+### HTTP status semantics
+
+The fault scripts are status codes, and the sim classifies them into the **two
+production feedback channels** exactly as a real request would (mirroring
+`Server.reportHealthStatus` + the breaker recorder), so the *special* codes
+behave faithfully:
+
+| status | failover (real loop) | breaker | health monitor |
+|--------|----------------------|---------|----------------|
+| 2xx | commit | success | `ReportSuccess` |
+| 429 | retry | failure | **rate-limited** (unhealthy for a window) |
+| 500/502/503/504 | retry | failure | error (3-strike) |
+| 401/403 | **terminal** | failure | **auth — immediately unhealthy** |
+| 400/404/other | **terminal** | failure | error (3-strike) |
+
+So a single **429** or **401/403** marks the service unhealthy on the *first* hit (health channel) and skips
+it next request — distinct from the breaker's 3-strike trip; `final health` / JSON `final_health` show it.
+Try `--example ratelimit` (429 → skipped → recovers) and `--example authflip` (401 → terminal + excluded).
+
+### Cross-model failover and strict affinity TTL
+
+Two behaviours the sim also models faithfully, matching recent fixes on the routing path:
+
+- **Cross-model failover** — when tiers carry different models, a failover hop dispatches the *fallback's own*
+  model, not the primary's. `--example crossmodel` shows it in the attempt column (`t0/model-a → t1/model-b`).
+- **Strict affinity TTL** — a lock expires exactly at `LockedAt + affinity_secs`; an in-window request is
+  honored but does **not** extend it. The affinity TTL rides the same fake clock as the breaker/health
+  (one `advance` moves all three), so the Go scenario suite asserts expiry-and-re-lock deterministically.
+
+### Scenario file
+
+A small YAML describes the rule *shape*, per-service fault scripts, and a program
+of requests / clock-advances (see `testdata/lb/cascade.yaml`):
+
+```yaml
+rule_uuid: cascade
+tactic: tier                 # tier | random
+affinity_secs: 1800          # 0 = off
+services:
+  - { provider: t0, model: gpt-4, tier: 0 }
+  - { provider: t1, model: gpt-4, tier: 1 }
+faults:                      # serviceID -> per-call status sequence (last entry repeats)
+  t0/gpt-4: [500, 500, 500, 200]
+  t1/gpt-4: [200]
+seed_pin: { session: s1, provider: t2, model: gpt-4 }   # optional: pre-lock a stale pin
+program:
+  - { request: s1 }          # request on session s1 (omit/"" = no affinity)
+  - { advance: 31s }         # move the breaker clock forward
+```
+
+The shapes map to the **"Rule config shapes" taxonomy** in
+`.design/priority-routing.md` (Single / Flat / Cascade / Grid). The
+**G1 horizontal-tactic breaker-blind gap** documented there is *not* yet modeled
+here (random/token tactics ignore the breaker at selection).
+
+**Use it for:** reproducing a customer's rule shape + outage pattern and watching
+exactly how routing, failover, the breaker, and affinity behave over a sequence.
+
+---
+
 ## Agent reference
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
@@ -254,12 +343,16 @@ providers.
 
 ```
 cli/harness/
-  main.go            Kong CLI root: version / matrix / agent / replay /
+  main.go            Kong CLI root: version / matrix / agent / replay / lb /
                      provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstreams, skip list
   agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
+  lb.go              Tier LB command — load-balancing scenario simulator
+                     (engine: internal/server.LBSimulator; shapes per
+                     .design/priority-routing.md)
+  testdata/lb/       sample LB scenario YAML files
   config.go          init-config: generates providers.yaml from provider templates
   provider.go        Tier D placeholder (live provider API tests — not impl.)
   summary.go         CSV summary persistence / resume bookkeeping

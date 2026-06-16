@@ -1,0 +1,33 @@
+# LB scenario: cascade (direct + fallback) with breaker trip & timed recovery.
+#
+# Run:  ./harness lb --file cli/harness/testdata/lb/cascade.yaml
+#
+# t0 is the primary tier, t1 the fallback. t0 fails 3 times (tripping its
+# breaker) then recovers; the {500,500,500,200} script self-recovers because the
+# 4th *call* to t0 (after the breaker reopens) returns 200. Watch the affinity
+# pin move t0 → t1 when the breaker opens, and snap back to t0 after the open
+# window elapses (the `advance` step).
+
+rule_uuid: cascade
+tactic: tier          # tier | random
+affinity_secs: 1800   # 0 disables session affinity
+
+services:
+  - { provider: t0, model: gpt-4, tier: 0 }   # T0 = highest priority
+  - { provider: t1, model: gpt-4, tier: 1 }   # T1 = fallback
+
+faults:                 # serviceID ("provider/model") -> per-call status sequence (last repeats)
+  t0/gpt-4: [500, 500, 500, 200]
+  t1/gpt-4: [200]
+
+# Optional: pre-lock a session before the program runs (reproduce a stale pin).
+# seed_pin: { session: s1, provider: t1, model: gpt-4 }
+
+program:                # ordered steps: `request: <session>` or `advance: <dur>`
+  - { request: s1 }
+  - { request: s1 }
+  - { request: s1 }     # t0 breaker opens here
+  - { request: s1 }     # pin moves to t1
+  - { advance: 31s }    # past the breaker's 30s open window
+  - { request: s1 }     # half-open probe → t0 recovers → pin snaps back to t0
+  - { request: s1 }
