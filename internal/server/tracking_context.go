@@ -111,7 +111,15 @@ func GetFirstTokenTime(c *gin.Context) (time.Time, bool) {
 }
 
 // CalculateTTFT calculates Time To First Token in milliseconds.
-// Returns TTFT if firstTokenTime is set, otherwise returns total latency.
+//
+// TTFT only has meaning for streaming requests, where SetFirstTokenTime is
+// called when the first chunk arrives. When the first token time is recorded,
+// TTFT = firstTokenTime - startTime.
+//
+// For non-streaming requests (or when the first token time was never recorded)
+// there is no distinct "first token" moment, so TTFT is not applicable and we
+// return 0. Returning 0 lets the dashboard render "-" instead of mistakenly
+// showing a value identical to the total latency.
 func CalculateTTFT(c *gin.Context) int64 {
 	startTime := time.Time{}
 	if t, exists := c.Get(ContextKeyStartTime); exists {
@@ -124,13 +132,13 @@ func CalculateTTFT(c *gin.Context) int64 {
 		return 0
 	}
 
-	// Try to get first token time
+	// Only report TTFT when the first token time was actually recorded
+	// (streaming requests). Otherwise TTFT is not applicable.
 	if firstTokenTime, hasTTFT := GetFirstTokenTime(c); hasTTFT {
 		return firstTokenTime.Sub(startTime).Milliseconds()
 	}
 
-	// Fallback: TTFT = total latency for non-streaming or if first token time not set
-	return time.Since(startTime).Milliseconds()
+	return 0
 }
 
 // SetCacheHit records whether this request was a cache hit.
