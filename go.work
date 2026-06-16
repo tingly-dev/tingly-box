@@ -9,4 +9,5 @@ use (
 	./gui/wails3
 	./imbot
 	./swagger
+	./afk
 )
