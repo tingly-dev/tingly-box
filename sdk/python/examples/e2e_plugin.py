@@ -32,4 +32,5 @@ def handle(req):
 
 
 if __name__ == "__main__":
-    plugin.serve(port=8765)
+    # Short lease so the e2e can show auto-removal on death without a long wait.
+    plugin.serve(port=8765, ttl_seconds=4)
