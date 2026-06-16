@@ -222,6 +222,11 @@ func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error
 			break
 		}
 		event := stream.Current()
+
+		// The interceptor never commits through CommitFirstChunk, so record
+		// TTFT here on the first upstream event.
+		protocol.MarkFirstToken(i.c)
+
 		i.accumulateRoundEvent(event)
 
 		// Call guardrails hooks if enabled

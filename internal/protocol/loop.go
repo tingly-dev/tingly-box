@@ -3,8 +3,11 @@ package protocol
 import (
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 // RunLoop drives a streaming response, handling client-disconnect detection,
@@ -49,10 +52,27 @@ func RunLoop(c *gin.Context, step func(w io.Writer) bool) bool {
 // CommitFirstChunk signals a failover gate wrapping c.Writer (if any) that
 // the first real stream chunk has been produced, so it flushes buffered
 // output and switches to pass-through. No-op when no gate is installed.
+//
+// As the "first chunk reached the client" moment for every committing
+// streaming path, it also records TTFT via MarkFirstToken.
 func CommitFirstChunk(c *gin.Context) {
+	MarkFirstToken(c)
 	if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
 		cm.CommitFirstChunk()
 	}
+}
+
+// MarkFirstToken is the single source of truth for recording the first-token
+// time used for TTFT: idempotent (earliest signal wins), safe to call
+// repeatedly. Non-streaming handlers never call it, so their TTFT stays unset.
+func MarkFirstToken(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	if _, exists := c.Get(constant.CtxKeyFirstTokenTime); exists {
+		return
+	}
+	c.Set(constant.CtxKeyFirstTokenTime, time.Now())
 }
 
 func commitFirstChunk(c *gin.Context) { CommitFirstChunk(c) }

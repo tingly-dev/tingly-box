@@ -375,16 +375,6 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
 
-	// Add TTFT tracking
-	firstTokenRecorded := false
-	hc.WithOnStreamEvent(func(_ interface{}) error {
-		if !firstTokenRecorded {
-			SetFirstTokenTime(c)
-			firstTokenRecorded = true
-		}
-		return nil
-	})
-
 	// Add recorder hooks if available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
@@ -486,16 +476,6 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
 
-	// Add TTFT tracking
-	firstTokenRecorded := false
-	hc.WithOnStreamEvent(func(_ interface{}) error {
-		if !firstTokenRecorded {
-			SetFirstTokenTime(c)
-			firstTokenRecorded = true
-		}
-		return nil
-	})
-
 	// Add recorder hooks if available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
@@ -586,16 +566,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
-
-	// Add TTFT tracking
-	firstTokenRecorded := false
-	hc.WithOnStreamEvent(func(_ interface{}) error {
-		if !firstTokenRecorded {
-			SetFirstTokenTime(c)
-			firstTokenRecorded = true
-		}
-		return nil
-	})
 
 	// Add recorder hooks if available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)

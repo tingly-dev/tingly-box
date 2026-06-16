@@ -244,19 +244,20 @@ func TestCalculateTTFT(t *testing.T) {
 		assert.LessOrEqual(t, ttft, int64(350))
 	})
 
-	t.Run("non-streaming fallback to total latency", func(t *testing.T) {
+	t.Run("no first token time is not applicable", func(t *testing.T) {
 		c := &gin.Context{}
 
 		startTime := time.Now().Add(-500 * time.Millisecond)
 		c.Set(ContextKeyStartTime, startTime)
-		// No first token time set
+		// No first token time set (e.g. non-streaming request)
 
 		ttft := CalculateTTFT(c)
 
-		// Should fallback to total latency (~500ms)
-		// Allow tolerance (450-550ms)
-		assert.GreaterOrEqual(t, ttft, int64(450))
-		assert.LessOrEqual(t, ttft, int64(550))
+		// TTFT only has meaning once a first token time was recorded.
+		// Without it we must NOT fall back to the total latency, otherwise
+		// the dashboard would show TTFT identical to latency. Return 0 so the
+		// frontend renders "-".
+		assert.Equal(t, int64(0), ttft)
 	})
 
 	t.Run("no start time", func(t *testing.T) {
@@ -269,23 +270,31 @@ func TestCalculateTTFT(t *testing.T) {
 	})
 }
 
-// TestSetGetFirstTokenTime tests first token time tracking
-func TestSetGetFirstTokenTime(t *testing.T) {
+// TestMarkAndGetFirstTokenTime tests first token time tracking. TTFT is
+// recorded by the single source of truth, protocol.MarkFirstToken, and read
+// back through GetFirstTokenTime.
+func TestMarkAndGetFirstTokenTime(t *testing.T) {
 	c := &gin.Context{}
 
 	// Initially should not exist
 	_, exists := GetFirstTokenTime(c)
 	assert.False(t, exists)
 
-	// Set first token time
+	// Mark first token time
 	now := time.Now()
-	SetFirstTokenTime(c)
+	protocol.MarkFirstToken(c)
 
 	// Should exist now
 	firstTokenTime, exists := GetFirstTokenTime(c)
 	assert.True(t, exists)
 	assert.False(t, firstTokenTime.IsZero())
 	assert.WithinDuration(t, now, firstTokenTime, 100*time.Millisecond)
+
+	// Idempotent: a later mark must not overwrite the earliest signal.
+	time.Sleep(5 * time.Millisecond)
+	protocol.MarkFirstToken(c)
+	again, _ := GetFirstTokenTime(c)
+	assert.Equal(t, firstTokenTime, again)
 }
 
 // TestSetGetCacheHit tests cache hit tracking
