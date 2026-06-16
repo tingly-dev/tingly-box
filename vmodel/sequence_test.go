@@ -113,6 +113,45 @@ func TestSequence_PerStepContentAndMessage(t *testing.T) {
 	}
 }
 
+// TestStepsFactory verifies the Steps(...) shorthand builds a status-only
+// program and that bare success steps fall back to the module default content.
+func TestStepsFactory(t *testing.T) {
+	seq := NewSequence(SequenceConfig{Steps: Steps(200, 429)})
+	ok := seq.Next()
+	if ok.Status != 200 || ok.Content != DefaultSequenceContent || ok.Error != nil {
+		t.Fatalf("success step: got %+v, want module-default content", ok)
+	}
+	fail := seq.Next()
+	if fail.Error == nil || fail.Error.Status != 429 || fail.Error.Type != "rate_limit_error" {
+		t.Fatalf("error step: defaults not applied: %+v", fail.Error)
+	}
+}
+
+// TestStepFactoryOptions verifies Step(status, opts...) applies overrides while
+// leaving status as the only mandatory input.
+func TestStepFactoryOptions(t *testing.T) {
+	got := Step(503, WithMessage("down"), WithErrorType("overloaded_error"), WithRepeat(2))
+	want := SequenceStep{Status: 503, Message: "down", Type: "overloaded_error", Repeat: 2}
+	if got != want {
+		t.Fatalf("Step options: got %+v, want %+v", got, want)
+	}
+
+	okStep := Step(200, WithContent("hi"))
+	if okStep.Status != 200 || okStep.Content != "hi" {
+		t.Fatalf("Step success: got %+v", okStep)
+	}
+
+	// Bare Step(429) carries only status; defaults are resolved by the engine.
+	bare := Step(429)
+	if bare.Status != 429 || bare.Message != "" || bare.Type != "" {
+		t.Fatalf("bare Step should hold status only: %+v", bare)
+	}
+	resolved := NewSequence(SequenceConfig{Steps: []SequenceStep{bare}}).Next()
+	if resolved.Error == nil || resolved.Error.Type != "rate_limit_error" {
+		t.Fatalf("bare Step(429) should resolve to rate_limit_error: %+v", resolved.Error)
+	}
+}
+
 // TestSequence_ConcurrentNextIsAtomic verifies the atomic cursor hands out each
 // position exactly once under concurrency (no duplicates, no gaps).
 func TestSequence_ConcurrentNextIsAtomic(t *testing.T) {

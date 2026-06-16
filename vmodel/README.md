@@ -468,21 +468,35 @@ fail every time, a sequence model fails *on schedule*.
 ### Configuration
 
 A `vmodel.SequenceConfig` is an ordered program of `SequenceStep`s, each of
-which is either a success (status `0`/`200` → returns `Content`, falling back
-to `DefaultContent`) or a pre-content failure (any other status → the matching
-HTTP error envelope, with `Type`/`Message` derived from the status when not set
-explicitly). The program loops by default (`NoLoop` clamps to the last step
-instead). `Repeat` expands a step into N consecutive copies.
+which is either a success (status `0`/`200` → returns content) or a pre-content
+failure (any other status → the matching HTTP error envelope). The program
+loops by default (`NoLoop` clamps to the last step instead).
+
+**Status is the only required field.** Everything else falls back to a default
+provided by the module, so you rarely write a struct literal:
+
+- success content ← step `Content` → `SequenceConfig.DefaultContent` → `vmodel.DefaultSequenceContent`
+- error `Type`/`Message` ← derived from the status code (`429 → rate_limit_error`, …)
+
+Use the factories — `Steps(...)` for the common status-only case, `Step(status, opts...)` for the rest:
 
 ```go
 // Anthropic; identical API in the openai sub-package.
+
+// Common case: just the status program.
 m := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
-    ID:             "flaky-provider",
-    Name:           "Flaky Provider",
-    DefaultContent: "ok",
+    ID:    "flaky-provider",
+    Name:  "Flaky Provider",
+    Steps: vmodel.Steps(200, 200, 429), // 200, 200, 429, looping
+})
+
+// Per-step overrides via options when you need them.
+m2 := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
+    ID:   "burst-then-fail",
+    Name: "Burst Then Fail",
     Steps: []vmodel.SequenceStep{
-        {Status: 200, Repeat: 5}, // succeed 5×
-        {Status: 429},            // then rate-limit once
+        vmodel.Step(200, vmodel.WithRepeat(5)),                  // succeed 5×
+        vmodel.Step(503, vmodel.WithMessage("scheduled outage")), // then fail once
     },
 })
 _ = reg.Register(m)
