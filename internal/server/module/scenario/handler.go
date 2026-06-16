@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -498,8 +499,8 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 	profiledScenario := string(typ.ProfiledScenarioName(scenario, meta.ID))
 	baseURL := baseURLFromRequest(c, h.config.GetServerPort())
 	apiKey := h.config.GetModelToken()
-	env := config.GenerateCCProfileEnv(h.config, profiledScenario, meta.Unified, baseURL, apiKey)
-	if _, settingsErr := config.BuildCCProfileSettings(meta.ID, profiledScenario, env); settingsErr != nil {
+	env := agent.GenerateCCEnv(h.config, baseURL, apiKey, profiledScenario, meta.Unified, true)
+	if _, settingsErr := agent.BuildCCProfileSettings(meta.ID, profiledScenario, env); settingsErr != nil {
 		logrus.WithError(settingsErr).Warn("failed to create Claude Code settings for new profile")
 	}
 
