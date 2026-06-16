@@ -31,9 +31,9 @@ func TestSelect_NoAffinity_FallsToLoadBalancer(t *testing.T) {
 }
 
 func TestSelect_GlobalAffinity_Hit(t *testing.T) {
-	// With affinity enabled, selectPipeline picks the global-affinity pipeline
-	// whose AffinityStage reads the ruleUUID:sessionID key written on lock.
-	// A locked session must short-circuit to the locked service.
+	// With affinity enabled, the AffinityStage (global scope) reads the
+	// ruleUUID:sessionID key written on lock. A locked session must
+	// short-circuit to the locked service.
 	lockedSvc := testService("provider-a", "gpt-4", true)
 	otherSvc := testService("provider-b", "claude-3", true)
 	lb := &mockLoadBalancer{service: otherSvc} // LB would pick a different service
@@ -273,28 +273,15 @@ func TestUpdateServiceIndex(t *testing.T) {
 	require.True(t, lb.updateIndexCalled, "UpdateServiceIndex should call LB")
 }
 
-func TestNewServiceSelector_SmartAffinityPipelineOrder(t *testing.T) {
-	lb := &mockLoadBalancer{}
-	store := newMockAffinityStore()
-	sel := NewServiceSelector(&mockConfig{}, store, lb)
-
-	pipeline := sel.pipelines[pipelineModeSmartAffinity]
-	require.Len(t, pipeline, 4)
-	require.Equal(t, "health", pipeline[0].Name())
-	require.Equal(t, "affinity", pipeline[1].Name())
-	require.Equal(t, "smart_routing", pipeline[2].Name())
-	require.Equal(t, "load_balancer", pipeline[3].Name())
-}
-
-func TestNewServiceSelector_GlobalAffinityPipelineOrder(t *testing.T) {
+func TestNewServiceSelector_PipelineOrder(t *testing.T) {
+	// One pipeline serves every rule: health → affinity → smart → load_balancer.
 	sel := NewServiceSelector(&mockConfig{}, newMockAffinityStore(), &mockLoadBalancer{})
 
-	pipeline := sel.pipelines[pipelineModeGlobalAffinity]
-	require.Len(t, pipeline, 4)
-	require.Equal(t, "health", pipeline[0].Name(), "health must run before affinity")
-	require.Equal(t, "affinity", pipeline[1].Name())
-	require.Equal(t, "smart_routing", pipeline[2].Name())
-	require.Equal(t, "load_balancer", pipeline[3].Name())
+	require.Len(t, sel.pipeline, 4)
+	require.Equal(t, "health", sel.pipeline[0].Name(), "health must run before affinity")
+	require.Equal(t, "affinity", sel.pipeline[1].Name())
+	require.Equal(t, "smart_routing", sel.pipeline[2].Name())
+	require.Equal(t, "load_balancer", sel.pipeline[3].Name())
 }
 
 // End-to-end fix for "configured t1 but long-term auto-jumps to t2": a session

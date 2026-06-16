@@ -42,15 +42,6 @@ type AffinityEntry struct {
 	ExpiresAt time.Time
 }
 
-// pipelineMode determines which pipeline configuration to use.
-type pipelineMode int
-
-const (
-	pipelineModeNoAffinity     pipelineMode = iota // Smart Routing -> Load Balancer
-	pipelineModeGlobalAffinity                     // Affinity -> Smart Routing -> Load Balancer
-	pipelineModeSmartAffinity                      // Smart Routing -> Affinity -> Load Balancer
-)
-
 // ServiceSelector is the main entry point for service selection.
 // It orchestrates a pipeline of selection stages and validates the final result.
 type ServiceSelector struct {
@@ -58,8 +49,9 @@ type ServiceSelector struct {
 	affinityStore AffinityStore
 	loadBalancer  LoadBalancer
 
-	// Pre-built pipelines keyed by mode, built once at construction
-	pipelines map[pipelineMode][]SelectionStage
+	// One pipeline serves every rule — each stage self-guards (see the comment
+	// in NewServiceSelectorWithLogger). Built once at construction.
+	pipeline []SelectionStage
 }
 
 type healthFilterProvider interface {
@@ -133,7 +125,6 @@ func NewServiceSelectorWithLogger(
 		config:        cfg,
 		affinityStore: affinity,
 		loadBalancer:  lb,
-		pipelines:     make(map[pipelineMode][]SelectionStage),
 	}
 
 	var healthFilter *typ.HealthFilter
@@ -149,24 +140,21 @@ func NewServiceSelectorWithLogger(
 		return stage
 	}
 
-	// Pre-build all pipeline variants
-	s.pipelines[pipelineModeNoAffinity] = []SelectionStage{
-		newSmart(),
-		NewLoadBalancerStage(lb),
-	}
-	s.pipelines[pipelineModeGlobalAffinity] = []SelectionStage{
-		// Health first, then affinity, then strategy. HealthStage narrows the
-		// candidate set (429/auth-driven health) before affinity scoping runs;
-		// the breaker-driven (500) signal is consulted inside AffinityStage's
-		// tier check and the load-balancer/tier tactic itself.
+	// One pipeline serves every rule — order is health → affinity → strategy.
+	// Each stage self-guards, so there is no need for per-mode variants:
+	//   - Health  narrows the candidate set by 429/auth health; passes through
+	//     when no filter is set or filtering would empty the set (degrade).
+	//   - Affinity returns nothing when affinity is disabled or there's no
+	//     session, so it is a no-op for non-affinity rules. It uses the global
+	//     (ruleUUID:sessionID) scope because it runs before smart routing, so
+	//     the matched-smart-rule index isn't available yet. The breaker-driven
+	//     (500) signal is consulted inside the affinity tier check and the
+	//     tier tactic; Health feeds it the 429/auth signal.
+	//   - Smart   passes through when smart routing is off or unmatched.
+	//   - LB      always selects (the terminal fallback).
+	s.pipeline = []SelectionStage{
 		NewHealthStage(healthFilter),
 		NewAffinityStage(affinity, "global"),
-		newSmart(),
-		NewLoadBalancerStage(lb),
-	}
-	s.pipelines[pipelineModeSmartAffinity] = []SelectionStage{
-		NewHealthStage(healthFilter),
-		NewAffinityStage(affinity, "smart_rule"),
 		newSmart(),
 		NewLoadBalancerStage(lb),
 	}
@@ -177,14 +165,13 @@ func NewServiceSelectorWithLogger(
 // Select is the main entry point for service selection.
 // It picks a pre-built pipeline based on rule configuration and executes it.
 func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error) {
-	pipeline := s.selectPipeline(ctx.Rule)
 	state := newSelectionState(ctx.Rule)
 
 	logrus.Debugf("[selector] executing pipeline with %d stages for rule %s",
-		len(pipeline), ctx.Rule.UUID)
+		len(s.pipeline), ctx.Rule.UUID)
 
 	// Execute pipeline stages in order
-	for _, stage := range pipeline {
+	for _, stage := range s.pipeline {
 		stageName := stage.Name()
 		logrus.Debugf("[selector] evaluating stage: %s", stageName)
 
@@ -239,30 +226,6 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 
 	return nil, fmt.Errorf("no service available for rule %s (model: %s)",
 		ctx.Rule.UUID, ctx.Rule.RequestModel)
-}
-
-// selectPipeline picks the appropriate pre-built pipeline based on rule configuration.
-func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
-	logrus.Debugf("[selector] selectPipeline for rule %s: AffinityEnabled=%v, SmartEnabled=%v, SmartRouting count=%d",
-		rule.RequestModel, rule.AffinityEnabled(), rule.SmartEnabled, len(rule.SmartRouting))
-	if !rule.AffinityEnabled() {
-		return s.pipelines[pipelineModeNoAffinity]
-	}
-
-	// Use global affinity scope: the affinity stage runs first and reads the
-	// ruleUUID:sessionID key that postProcess writes. The smart_rule-scoped
-	// pipeline can't read here because affinity is evaluated before smart
-	// routing (MatchedSmartRuleIndex is still unset), so it would never pin.
-	// TODO: Read from rule.AffinityScope when per-smart-rule scoping lands.
-	return s.pipelines[pipelineModeGlobalAffinity]
-}
-
-// getHealthFilter returns the health filter from the load balancer
-func (s *ServiceSelector) getHealthFilter() *typ.HealthFilter {
-	if p, ok := s.loadBalancer.(healthFilterProvider); ok {
-		return p.HealthFilter()
-	}
-	return nil
 }
 
 // postProcess handles post-selection logic like affinity locking.

@@ -73,11 +73,13 @@ func TestHealthStage_AllUnhealthy(t *testing.T) {
 	ctx := testContext(rule, "")
 	state := newSelectionState(ctx.Rule)
 
+	// Degrade, don't disappear: when every candidate is unhealthy, keep the full
+	// set so a service (and the real upstream 429/auth) still reaches the client.
 	result, handled := stage.Evaluate(ctx, state)
 	require.False(t, handled, "should continue even when all unhealthy")
 	require.NotNil(t, result)
 	state.candidateServices = result.FilteredServices
-	require.Len(t, state.candidateServices, 0, "all services should be filtered out")
+	require.Len(t, state.candidateServices, 2, "all-unhealthy degrades to the full set, not empty")
 }
 
 func TestHealthStage_NilServices(t *testing.T) {
