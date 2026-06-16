@@ -10,8 +10,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tingly-dev/tingly-box/internal/afk"
-	"github.com/tingly-dev/tingly-box/internal/afk/skill"
+	"github.com/tingly-dev/tingly-box/afk"
+	"github.com/tingly-dev/tingly-box/afk/skill"
 )
 
 // fakeTool is a simple test tool that returns a fixed result

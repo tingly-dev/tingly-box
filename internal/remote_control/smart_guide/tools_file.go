@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/tingly-dev/tingly-box/internal/afk"
+	"github.com/tingly-dev/tingly-box/afk"
 )
 
 // maxFileOpSize is the maximum file/content size (10MB) these tools will handle,
