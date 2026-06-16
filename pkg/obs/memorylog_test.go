@@ -3,6 +3,7 @@ package obs
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,9 +12,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// bigEntry builds an entry whose footprint is dominated by a fixed-size field,
+// so byte-budget tests have predictable per-entry sizes (~193 bytes here:
+// 64 base + 13 key + 16 per-field overhead + 100 value).
+func bigEntry() *logrus.Entry {
+	return &logrus.Entry{
+		Time:    time.Now(),
+		Level:   logrus.InfoLevel,
+		Message: "",
+		Data:    logrus.Fields{"response_body": strings.Repeat("x", 100)},
+	}
+}
+
 // TestNewMemoryLogHook verifies hook initialization.
 func TestNewMemoryLogHook(t *testing.T) {
-	hook := NewMemoryLogHook(100)
+	hook := NewMemoryLogHook(100, 0)
 
 	assert.Equal(t, 100, cap(hook.entries))
 	assert.Equal(t, 0, hook.Size())
@@ -22,7 +35,7 @@ func TestNewMemoryLogHook(t *testing.T) {
 
 // TestFire verifies log entry storage.
 func TestFire(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -37,7 +50,7 @@ func TestFire(t *testing.T) {
 
 // TestRotate verifies circular buffer overwrites oldest entries.
 func TestRotate(t *testing.T) {
-	hook := NewMemoryLogHook(3)
+	hook := NewMemoryLogHook(3, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -56,7 +69,7 @@ func TestRotate(t *testing.T) {
 
 // TestTee verifies simultaneous output to multiple writers.
 func TestTee(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.SetOutput(io.Discard) // Suppress default output
 	logger.AddHook(hook)
@@ -77,7 +90,7 @@ func TestTee(t *testing.T) {
 
 // TestGetEntries verifies retrieving all entries in chronological order.
 func TestGetEntries(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -94,7 +107,7 @@ func TestGetEntries(t *testing.T) {
 
 // TestGetEntriesSince verifies time-based filtering.
 func TestGetEntriesSince(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -111,7 +124,7 @@ func TestGetEntriesSince(t *testing.T) {
 
 // TestGetEntriesByLevel verifies level filtering.
 func TestGetEntriesByLevel(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -130,7 +143,7 @@ func TestGetEntriesByLevel(t *testing.T) {
 
 // TestGetEntriesByLevelRange verifies level range filtering.
 func TestGetEntriesByLevelRange(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -149,7 +162,7 @@ func TestGetEntriesByLevelRange(t *testing.T) {
 
 // TestGetLatest verifies retrieving newest N entries.
 func TestGetLatest(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -165,7 +178,7 @@ func TestGetLatest(t *testing.T) {
 
 // TestGetLatestExceedCount verifies requesting more than available.
 func TestGetLatestExceedCount(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -178,7 +191,7 @@ func TestGetLatestExceedCount(t *testing.T) {
 
 // TestClear verifies clearing all entries.
 func TestClear(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -191,7 +204,7 @@ func TestClear(t *testing.T) {
 
 // TestDeepCopy verifies stored entries are independent from originals.
 func TestDeepCopy(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -209,7 +222,7 @@ func TestDeepCopy(t *testing.T) {
 
 // TestConcurrentAccess verifies thread safety.
 func TestConcurrentAccess(t *testing.T) {
-	hook := NewMemoryLogHook(1000)
+	hook := NewMemoryLogHook(1000, 0)
 	logger := logrus.New()
 	logger.AddHook(hook)
 
@@ -246,9 +259,33 @@ func TestConcurrentAccess(t *testing.T) {
 	assert.Equal(t, 1000, hook.Size())
 }
 
+// TestMemoryLogHook_ByteBudgetEviction verifies the byte budget evicts oldest
+// entries even when the count cap is far from reached.
+func TestMemoryLogHook_ByteBudgetEviction(t *testing.T) {
+	// ~193 bytes/entry; budget 400 => at most 2 retained.
+	hook := NewMemoryLogHook(100, 400)
+	for i := 0; i < 5; i++ {
+		_ = hook.Fire(bigEntry())
+	}
+	assert.Equal(t, 2, hook.Size(), "expected byte budget to bound retained entries")
+	assert.LessOrEqual(t, hook.Bytes(), 400)
+	assert.Greater(t, hook.Bytes(), 0)
+	// Ordered view must remain consistent (oldest derived correctly post-eviction).
+	assert.Len(t, hook.GetEntries(), 2)
+}
+
+// TestMemoryLogHook_ByteBudgetKeepsAtLeastOne verifies a single oversized entry
+// is retained rather than producing an empty ring.
+func TestMemoryLogHook_ByteBudgetKeepsAtLeastOne(t *testing.T) {
+	hook := NewMemoryLogHook(100, 10) // budget smaller than one entry
+	_ = hook.Fire(bigEntry())
+	assert.Equal(t, 1, hook.Size())
+	assert.Len(t, hook.GetEntries(), 1)
+}
+
 // TestEmptyHook verifies behavior with no entries.
 func TestEmptyHook(t *testing.T) {
-	hook := NewMemoryLogHook(10)
+	hook := NewMemoryLogHook(10, 0)
 
 	assert.Equal(t, 0, hook.Size())
 	assert.Empty(t, hook.GetEntries())

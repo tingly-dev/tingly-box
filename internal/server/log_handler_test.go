@@ -33,7 +33,10 @@ func setupTestLogServer() (*Server, *middleware.MultiModeMemoryLogMiddleware) {
 	if err != nil {
 		panic(err)
 	}
-	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(multiLogger)
+	// Small store byte budget so the truncation test exercises last-resort
+	// per-body truncation (a single body exceeding the whole budget).
+	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(multiLogger,
+		middleware.WithCaptureConfig(middleware.CaptureConfig{MaxRequestBodyStoreBytes: 1024}))
 
 	return &Server{
 		memoryLogMW: memoryLogMW,
@@ -46,7 +49,7 @@ func TestGetRequestBody_Success(t *testing.T) {
 	// Store a request body
 	store := memoryLogMW.GetRequestBodyStore()
 	testBody := `{"test": "data", "value": 123}`
-	bodyID := store.Store("POST", "/v1/chat/completions", testBody, 1024)
+	bodyID := store.Store("POST", "/v1/chat/completions", testBody)
 
 	// Create gin context
 	w := httptest.NewRecorder()
@@ -109,8 +112,8 @@ func TestGetRequestBody_TruncatedBody(t *testing.T) {
 
 	// Store a body that will be truncated
 	store := memoryLogMW.GetRequestBodyStore()
-	longBody := string(make([]byte, 2048))                 // 2KB body
-	bodyID := store.Store("POST", "/test", longBody, 1024) // Max 1KB
+	longBody := string(make([]byte, 2048))           // 2KB body
+	bodyID := store.Store("POST", "/test", longBody) // Max 1KB
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -133,8 +136,8 @@ func TestClearRequestBodies_Success(t *testing.T) {
 
 	// Store some bodies
 	store := memoryLogMW.GetRequestBodyStore()
-	store.Store("POST", "/test1", "body1", 1024)
-	store.Store("POST", "/test2", "body2", 1024)
+	store.Store("POST", "/test1", "body1")
+	store.Store("POST", "/test2", "body2")
 
 	assert.Equal(t, 2, store.Size())
 
@@ -157,9 +160,9 @@ func TestGetRequestBodyStats_Success(t *testing.T) {
 
 	// Store some bodies
 	store := memoryLogMW.GetRequestBodyStore()
-	store.Store("POST", "/test1", "body1", 1024)
-	store.Store("POST", "/test2", "body2", 1024)
-	store.Store("POST", "/test3", "body3", 1024)
+	store.Store("POST", "/test1", "body1")
+	store.Store("POST", "/test2", "body2")
+	store.Store("POST", "/test3", "body3")
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

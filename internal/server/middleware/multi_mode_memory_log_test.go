@@ -417,8 +417,11 @@ func TestMiddleware_RequestBodyTruncation(t *testing.T) {
 	storedBody := store.Get(bodyRef.(string))
 
 	assert.NotNil(t, storedBody)
-	assert.True(t, storedBody.Truncated, "Expected body to be truncated")
+	// Truncation now happens at the capture mirror (capped at MaxRequestBodySize)
+	// and is signalled on the log entry, while the store's own Truncated flag only
+	// reflects store-budget truncation. The mirror clipped 2MB -> 1MB here.
 	assert.LessOrEqual(t, len(storedBody.Body), MaxRequestBodySize, "Expected stored body to be at most MaxRequestBodySize")
+	assert.Equal(t, true, entry.Data["request_body_truncated"], "Expected request_body_truncated flag on the entry")
 }
 
 func TestMiddleware_RequestBodyNotStoredForGET(t *testing.T) {
@@ -495,7 +498,7 @@ func TestMiddleware_RequestBodyCircularEviction(t *testing.T) {
 	middleware := NewMultiModeMemoryLogMiddleware(multiLogger)
 
 	// Manually set a small RequestBodyStore for testing eviction
-	middleware.requestBodyStore = obs.NewRequestBodyStore(2) // Only store 2 bodies
+	middleware.requestBodyStore = obs.NewRequestBodyStore(2, 0) // Only store 2 bodies
 
 	engine := gin.New()
 	engine.Use(middleware.Middleware())
