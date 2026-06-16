@@ -270,23 +270,31 @@ func TestCalculateTTFT(t *testing.T) {
 	})
 }
 
-// TestSetGetFirstTokenTime tests first token time tracking
-func TestSetGetFirstTokenTime(t *testing.T) {
+// TestMarkAndGetFirstTokenTime tests first token time tracking. TTFT is
+// recorded by the single source of truth, protocol.MarkFirstToken, and read
+// back through GetFirstTokenTime.
+func TestMarkAndGetFirstTokenTime(t *testing.T) {
 	c := &gin.Context{}
 
 	// Initially should not exist
 	_, exists := GetFirstTokenTime(c)
 	assert.False(t, exists)
 
-	// Set first token time
+	// Mark first token time
 	now := time.Now()
-	SetFirstTokenTime(c)
+	protocol.MarkFirstToken(c)
 
 	// Should exist now
 	firstTokenTime, exists := GetFirstTokenTime(c)
 	assert.True(t, exists)
 	assert.False(t, firstTokenTime.IsZero())
 	assert.WithinDuration(t, now, firstTokenTime, 100*time.Millisecond)
+
+	// Idempotent: a later mark must not overwrite the earliest signal.
+	time.Sleep(5 * time.Millisecond)
+	protocol.MarkFirstToken(c)
+	again, _ := GetFirstTokenTime(c)
+	assert.Equal(t, firstTokenTime, again)
 }
 
 // TestSetGetCacheHit tests cache hit tracking

@@ -93,12 +93,6 @@ func calculateLatencyFromStart(startTime time.Time) int {
 	return int(elapsed.Milliseconds())
 }
 
-// SetFirstTokenTime records when the first token was received (for TTFT calculation).
-// This should be called when the first chunk is received in streaming requests.
-func SetFirstTokenTime(c *gin.Context) {
-	c.Set(ContextKeyFirstTokenTime, time.Now())
-}
-
 // GetFirstTokenTime retrieves the first token time from the context.
 // Returns the timestamp and true if it exists, zero time and false otherwise.
 func GetFirstTokenTime(c *gin.Context) (time.Time, bool) {
@@ -112,9 +106,9 @@ func GetFirstTokenTime(c *gin.Context) (time.Time, bool) {
 
 // CalculateTTFT calculates Time To First Token in milliseconds.
 //
-// TTFT only has meaning for streaming requests, where SetFirstTokenTime is
-// called when the first chunk arrives. When the first token time is recorded,
-// TTFT = firstTokenTime - startTime.
+// TTFT only has meaning for streaming requests, where protocol.MarkFirstToken
+// records the first-token time when the first chunk arrives. When that time is
+// recorded, TTFT = firstTokenTime - startTime.
 //
 // For non-streaming requests (or when the first token time was never recorded)
 // there is no distinct "first token" moment, so TTFT is not applicable and we

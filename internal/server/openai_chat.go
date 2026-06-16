@@ -363,16 +363,7 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 	hc := protocol.NewHandleContext(c, responseModel)
 	hc.DisableStreamUsage = disableStreamUsage
 
-	// Record TTFT when the first streaming chunk arrives
-	firstTokenRecorded := false
-	hc.WithOnStreamEvent(func(_ interface{}) error {
-		if !firstTokenRecorded {
-			SetFirstTokenTime(c)
-			firstTokenRecorded = true
-		}
-		return nil
-	})
-
+	// TTFT is recorded centrally via protocol.MarkFirstToken (CommitFirstChunk).
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 
 	// Track usage from stream handler
