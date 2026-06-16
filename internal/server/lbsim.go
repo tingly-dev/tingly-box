@@ -40,8 +40,12 @@ type LBSimulator struct {
 type LBTrace struct {
 	Session     string   `json:"session"`
 	Attempts    []string `json:"attempts"`     // serviceIDs attempted, in order (failover hops)
+	Statuses    []int    `json:"statuses"`     // per-attempt status, parallel to Attempts
 	FinalStatus int      `json:"final_status"` // status the client would see
 	PinAfter    string   `json:"pin_after"`    // affinity pin after this request ("" if none)
+	// State snapshots taken AFTER this request, keyed by serviceID.
+	BreakerAfter map[string]string `json:"breaker_after"` // closed/open/half_open
+	HealthAfter  map[string]string `json:"health_after"`  // healthy/unhealthy
 }
 
 // lbUpstreamScript yields a status per call. When calls outrun the script the
@@ -197,6 +201,7 @@ func (s *LBSimulator) Request(session string) (LBTrace, error) {
 		sid := loadbalance.FormatServiceID(provider.UUID, model)
 		tr.Attempts = append(tr.Attempts, sid)
 		status := s.scriptFor(sid).next()
+		tr.Statuses = append(tr.Statuses, status)
 		tr.FinalStatus = status
 
 		// Feed BOTH production feedback channels exactly as a real request would:
@@ -222,6 +227,8 @@ func (s *LBSimulator) Request(session string) (LBTrace, error) {
 	s.server.dispatchWithPriorityFailover(c, s.rule, res.Provider, res.Service.Model, attempt)
 
 	tr.PinAfter = s.pinLocked(session)
+	tr.BreakerAfter = s.BreakerStates()
+	tr.HealthAfter = s.HealthStates()
 	return tr, nil
 }
 

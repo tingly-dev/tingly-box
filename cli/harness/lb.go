@@ -25,6 +25,7 @@ type LbCmd struct {
 	File    string `kong:"name='file',short='f',help='Scenario YAML file (see --example for the schema)'"`
 	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression|ratelimit|authflip'"`
 	JSON    bool   `kong:"name='json',help='Emit the trace as JSON'"`
+	Graph   bool   `kong:"name='graph',short='g',help='Pencil-graph view: per-request hops + svc state evolution'"`
 	Verbose bool   `kong:"name='verbose',short='v',help='Show gateway logs (default: quiet)'"`
 }
 
@@ -117,12 +118,22 @@ func (c *LbCmd) Run() error {
 	out.FinalBreakers = sim.BreakerStates()
 	out.FinalHealth = sim.HealthStates()
 
-	if c.JSON {
+	// Ordered service IDs (rule order) for the per-request state line.
+	orderedIDs := make([]string, 0, len(rule.Services))
+	for _, svc := range rule.Services {
+		orderedIDs = append(orderedIDs, svc.ServiceID())
+	}
+
+	switch {
+	case c.JSON:
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
+	case c.Graph:
+		out.renderGraph(os.Stdout, orderedIDs)
+	default:
+		out.renderTable(os.Stdout)
 	}
-	out.renderTable(os.Stdout)
 	return nil
 }
 
@@ -243,6 +254,57 @@ func (o lbRunOutput) renderTable(w *os.File) {
 
 	fmt.Fprintf(w, "\nfinal breakers: %s\n", formatBreakers(o.FinalBreakers))
 	fmt.Fprintf(w, "final health:   %s\n", formatBreakers(o.FinalHealth))
+}
+
+// renderGraph prints a pencil-graph view: per request a hop line (failover path
+// annotated with ✓/✗ + status) and a state line (each svc's breaker/health +
+// the affinity pin) — mirroring .design/priority-routing.pencil.md.
+func (o lbRunOutput) renderGraph(w *os.File, orderedIDs []string) {
+	tactic := o.Tactic
+	if tactic == "" {
+		tactic = "tier"
+	}
+	fmt.Fprintf(w, "LB scenario %q  tactic=%s  affinity=%ds\n", o.Rule, tactic, o.Affinity)
+	fmt.Fprintf(w, "services: %s\n", strings.Join(o.Services, "  "))
+	fmt.Fprintf(w, "legend:   ✓=2xx committed   ✗=non-2xx (buffered/terminal)   →=in-request failover hop\n\n")
+
+	n := 0
+	for _, st := range o.Steps {
+		if st.Advance != "" {
+			fmt.Fprintf(w, "        ⋯ advance %s (breaker + health clocks move) ⋯\n\n", st.Advance)
+			continue
+		}
+		n++
+		tr := st.Trace
+
+		hops := make([]string, len(tr.Attempts))
+		for i, sid := range tr.Attempts {
+			status := 0
+			if i < len(tr.Statuses) {
+				status = tr.Statuses[i]
+			}
+			mark := "✗"
+			if status >= 200 && status < 300 {
+				mark = "✓"
+			}
+			hops[i] = fmt.Sprintf("%s %s%d", sid, mark, status)
+		}
+		sess := tr.Session
+		if sess == "" {
+			sess = "-"
+		}
+		fmt.Fprintf(w, "#%-2d %-8s %s   →  client=%d\n", n, sess, strings.Join(hops, "  →  "), tr.FinalStatus)
+
+		states := make([]string, 0, len(orderedIDs))
+		for _, id := range orderedIDs {
+			states = append(states, fmt.Sprintf("%s=%s/%s", id, tr.BreakerAfter[id], tr.HealthAfter[id]))
+		}
+		line := strings.Join(states, "   ")
+		if tr.PinAfter != "" {
+			line += "   pin=" + tr.PinAfter
+		}
+		fmt.Fprintf(w, "       state: %s\n\n", line)
+	}
 }
 
 func dashIfEmpty(s string) string {

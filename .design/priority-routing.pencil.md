@@ -16,6 +16,7 @@ Contents:
 - Commit-seam coverage map
 - selectFallbackService filter pipeline
 - Key invariants
+- Worked example — 500 retry, request-by-request (with / without affinity)
 
 ## Two complementary failover levels
 
@@ -368,3 +369,72 @@ rule.GetActiveServices()
 - `Status() == 0` (untouched writer) ⇒ non-retryable — matches a client disconnect / no-write completion.
 - Budget cap = `len(activeServices)` — worst case visits each service once.
 - The assembly path (`HandleResponsesToAnthropic{V1,Beta}Assembly`) never commits mid-stream: it buffers a struct and emits one terminal `c.JSON`, so it flows through the gate like a non-streaming response.
+
+## Worked example — 500 retry, request-by-request
+
+A `t0`/`t1` tier rule. `t0` returns `500` three times then recovers; `t1` is healthy. A 500 is retried on
+**two independent timescales** — this is the whole mechanism:
+
+```
+  IN-REQUEST   (instant)     the gate BUFFERS t0's 500 (client never sees it) and retries t1 in the
+                             SAME request → the client gets t1's 200.
+
+  CROSS-REQUEST (cumulative) each 500 still counts against t0's breaker; 3 in a row TRIP it, so later
+                             requests skip t0 at selection time — failover isn't even needed.
+```
+
+```
+Legend:  ✗500 = t0 failed (buffered, hidden)    ✓200 = committed to client    → = in-request failover hop
+         ×N   = consecutive failures on t0 (trips at ×3)
+         DOWN = t0 breaker OPEN + health UNHEALTHY; both recover ~30s after the last failure
+```
+
+### With session affinity
+
+```
+ REQ  path                  client   t0 state         t1   pin
+ ───  ────────────────────  ──────   ──────────────   ──   ──
+  1   t0 ✗500 → t1 ✓200     200      healthy  ×1      ✓    t0
+  2   t0 ✗500 → t1 ✓200     200      healthy  ×2      ✓    t0
+  3   t0 ✗500 → t1 ✓200     200      DOWN     ×3      ✓    t0    ← t0 trips
+  4   t1 ✓200               200      down (skipped)   ✓    t1    ← pin follows the selection
+      ───── wait 30s: t0 breaker half-opens, health recovers ─────
+  5   t0 ✓200  (probe)      200      healthy          ✓    t0    ← snaps back to primary
+  6   t0 ✓200               200      healthy          ✓    t0
+```
+
+- **The client sees 200 the whole time** — failover hides all four 500s; they surface only as t0's state.
+- **The pin tracks the *selected* service, not the one that served.** Reqs 1–3 select t0 (which fails over
+  to t1), so `pin=t0`; it moves to t1 only at req 4 when *selection* itself moves. A blip never drags the
+  session off its primary.
+- **Tripping removes the hop:** reqs 1–3 cost two attempts each; from req 4 t0 isn't selected — one attempt.
+
+### Without session affinity
+
+Drop the `pin` column — selection re-walks the tier from T0 every request, so everything else is identical:
+
+```
+ REQ  path                  client   t0 state         t1
+  1   t0 ✗500 → t1 ✓200     200      healthy  ×1      ✓
+  2   t0 ✗500 → t1 ✓200     200      healthy  ×2      ✓
+  3   t0 ✗500 → t1 ✓200     200      DOWN     ×3      ✓
+  4   t1 ✓200               200      down (skipped)   ✓
+      ───── wait 30s ─────
+  5   t0 ✓200               200      healthy          ✓
+  6   t0 ✓200               200      healthy          ✓
+```
+
+**What affinity adds:** without it, tier is re-evaluated from T0 on every request, so recovery is automatic.
+Affinity layers a session→service lock on top; the Phase-1 fix makes that lock consult the **same breaker
+signal** (`IsAffinityEligible`), so it declines a pin sitting below a recovered tier (req 5) and snaps back —
+instead of pinning a session below a recovered tier forever.
+
+### When does a 500 actually reach the client?
+
+Only on **exhaustion**. Failover retries `429 / 500 / 502 / 503 / 504`; `401/403`, other `4xx`, and `2xx`
+are terminal (flushed as-is). If *every* tier 500s (t1 also fails), the loop runs out of candidates and the
+deferred `gate.CommitIfBuffered()` flushes the last buffered 500 to the client.
+
+> Verified against `harness lb --example cascade` (and the same shape with `affinity_secs: 0`): the `lb`
+> simulator drives the real `ServiceSelector.Select → dispatchWithPriorityFailover` path, so these match
+> runtime, not intent. Run `harness lb --example cascade --graph` to watch it live.
