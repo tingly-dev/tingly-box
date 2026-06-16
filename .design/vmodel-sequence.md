@@ -32,17 +32,21 @@ deterministic, in-process, wire-correct substrate, but driven by a configurable
 default, resolved at `NewSequence` time:
 
 - success content: step `Content` → `SequenceConfig.DefaultContent` → `vmodel.DefaultSequenceContent`
-- error `Type`/`Message`: derived from `Status` via `defaultErrorMeta`
+- error `ErrorType`/`ErrorMessage`: derived from `Status` via `defaultErrorMeta`
 
 So the ergonomic surface is the factory, not struct literals:
 
 - `Steps(200, 200, 429)` — the common status-only program.
-- `Step(status, opts...)` with `WithContent` / `WithMessage` / `WithErrorType` /
+- `Step(status, opts...)` with `WithContent` / `WithErrorMessage` / `WithErrorType` /
   `WithRepeat` for the uncommon per-step overrides.
 
-`SequenceConfig` is the ordered program plus identity/metadata and a `NoLoop`
-flag (default loops back to the first step so the model is reusable
-indefinitely; `NoLoop` clamps to the last step once exhausted).
+`SequenceConfig` is the ordered program plus identity/metadata and an
+`OnExhaust ExhaustPolicy` enum governing behaviour once the program is consumed:
+`ExhaustLoop` (default — wrap to the first step and repeat indefinitely),
+`ExhaustClamp` (repeat the last step), or `ExhaustFail` (serve a terminal
+`410` / `sequence_exhausted` error). The enum's zero value is `ExhaustLoop`, so
+omitting it preserves the looping default while leaving room for the terminal
+case without a negative-sense boolean.
 
 Error steps map onto the **existing** `ErrorInjection` pre-content path — the
 status's conventional `Type`/`Message` mirror the always-fail mocks

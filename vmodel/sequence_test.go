@@ -64,11 +64,11 @@ func TestSequence_Repeat(t *testing.T) {
 	}
 }
 
-// TestSequence_NoLoop clamps to the last step once the program is exhausted.
-func TestSequence_NoLoop(t *testing.T) {
+// TestSequence_ExhaustClamp repeats the last step once the program is exhausted.
+func TestSequence_ExhaustClamp(t *testing.T) {
 	seq := NewSequence(SequenceConfig{
 		DefaultContent: "ok",
-		NoLoop:         true,
+		OnExhaust:      ExhaustClamp,
 		Steps: []SequenceStep{
 			{Status: 200},
 			{Status: 503},
@@ -78,6 +78,34 @@ func TestSequence_NoLoop(t *testing.T) {
 	for i, w := range want {
 		if got := seq.Next().Status; got != w {
 			t.Fatalf("request %d: status = %d, want %d", i, got, w)
+		}
+	}
+}
+
+// TestSequence_ExhaustFail serves a terminal 410 error once the program is
+// exhausted, distinct from any scripted step.
+func TestSequence_ExhaustFail(t *testing.T) {
+	seq := NewSequence(SequenceConfig{
+		DefaultContent: "ok",
+		OnExhaust:      ExhaustFail,
+		Steps: []SequenceStep{
+			{Status: 200},
+			{Status: 429},
+		},
+	})
+	// In-program steps behave normally.
+	if got := seq.Next().Status; got != 200 {
+		t.Fatalf("step 0: status = %d, want 200", got)
+	}
+	if got := seq.Next(); got.Status != 429 || got.Error == nil {
+		t.Fatalf("step 1: got %+v, want scripted 429 error", got)
+	}
+	// Every request past the end is the terminal exhausted error.
+	for i := 0; i < 3; i++ {
+		got := seq.Next()
+		if got.Status != 410 || got.Error == nil ||
+			got.Error.Type != "sequence_exhausted" || got.Error.Message != "sequence exhausted" {
+			t.Fatalf("exhausted request %d: got %+v, want terminal 410 sequence_exhausted", i, got)
 		}
 	}
 }
@@ -99,7 +127,7 @@ func TestSequence_PerStepContentAndMessage(t *testing.T) {
 		DefaultContent: "default",
 		Steps: []SequenceStep{
 			{Status: 200, Content: "custom-ok"},
-			{Status: 418, Message: "i am a teapot", Type: "teapot_error"},
+			{Status: 418, ErrorMessage: "i am a teapot", ErrorType: "teapot_error"},
 		},
 	})
 	ok := seq.Next()
@@ -130,8 +158,8 @@ func TestStepsFactory(t *testing.T) {
 // TestStepFactoryOptions verifies Step(status, opts...) applies overrides while
 // leaving status as the only mandatory input.
 func TestStepFactoryOptions(t *testing.T) {
-	got := Step(503, WithMessage("down"), WithErrorType("overloaded_error"), WithRepeat(2))
-	want := SequenceStep{Status: 503, Message: "down", Type: "overloaded_error", Repeat: 2}
+	got := Step(503, WithErrorMessage("down"), WithErrorType("overloaded_error"), WithRepeat(2))
+	want := SequenceStep{Status: 503, ErrorMessage: "down", ErrorType: "overloaded_error", Repeat: 2}
 	if got != want {
 		t.Fatalf("Step options: got %+v, want %+v", got, want)
 	}
@@ -143,7 +171,7 @@ func TestStepFactoryOptions(t *testing.T) {
 
 	// Bare Step(429) carries only status; defaults are resolved by the engine.
 	bare := Step(429)
-	if bare.Status != 429 || bare.Message != "" || bare.Type != "" {
+	if bare.Status != 429 || bare.ErrorMessage != "" || bare.ErrorType != "" {
 		t.Fatalf("bare Step should hold status only: %+v", bare)
 	}
 	resolved := NewSequence(SequenceConfig{Steps: []SequenceStep{bare}}).Next()
