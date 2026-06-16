@@ -82,5 +82,26 @@ curl -s "${UMODEL[@]}" -X POST "$BASE/tingly/experiment/v1/chat/completions" -d 
   "messages":[{"role":"user","content":"What is tingly-box?"}]}' | python3 -m json.tool
 
 echo "== plugin log tail =="
-tail -5 /tmp/plugin_e2e.log
+tail -6 /tmp/plugin_e2e.log
+
+echo "== 7. EPHEMERAL: kill the plugin → tb auto-removes it when the lease lapses =="
+echo "   (hard SIGKILL = simulate a crash; no graceful deregister, nothing persisted)"
+kill -KILL "$PLUG_PID" 2>/dev/null
+PLUG_PID=""
+echo "   waiting for the 4s lease to expire..."
+for i in $(seq 1 20); do
+  LIST=$(curl -s "${UADMIN[@]}" "$BASE/api/v2/plugins")
+  echo "$LIST" | grep -q 'rag-demo' || break
+  sleep 0.5
+done
+echo "   GET /api/v2/plugins now: $LIST"
+
+echo "== 8. client call after the plugin is gone → instance no longer routable =="
+echo "   (the durable rule's only service is the dead plugin; a real setup would"
+echo "    keep a tier-1 real model and tier-failover here)"
+curl -s "${UMODEL[@]}" -X POST "$BASE/tingly/experiment/v1/chat/completions" -d '{
+  "model":"plugin/rag-demo",
+  "messages":[{"role":"user","content":"still there?"}]}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error', d); print('   ->', (json.dumps(e) if isinstance(e,dict) else str(e))[:200])"
+
 echo "== done =="
