@@ -91,15 +91,20 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		// This minimizes storage overhead while keeping logging capability.
 		var bodyBuffer *bytes.Buffer
 		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
+			// Mirror the request body for diagnostics, but cap the in-memory mirror
+			// so a large (e.g. base64 vision) upload can't buffer unbounded. The
+			// handler still reads the full body. The cap is MaxRequestBodySize+1 so
+			// the store's existing truncation check (len > MaxRequestBodySize) still
+			// fires for oversized bodies while memory stays bounded at ~1MB.
 			bodyBuffer = &bytes.Buffer{}
-			teeReader := io.TeeReader(c.Request.Body, bodyBuffer)
+			teeReader := io.TeeReader(c.Request.Body, &limitedBufferWriter{buf: bodyBuffer, limit: MaxRequestBodySize + 1})
 			c.Request.Body = io.NopCloser(teeReader)
 		}
 
-		// Wrap response writer to capture body for error responses
+		// Wrap response writer to capture body for error responses (lazily;
+		// only buffered for status >= 400 — see responseBodyWriter).
 		w := &responseBodyWriter{
 			ResponseWriter: c.Writer,
-			body:           &bytes.Buffer{},
 		}
 		c.Writer = w
 
@@ -166,8 +171,9 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			}
 		}
 
-		// Add response body for error responses (4xx/5xx)
-		if statusCode >= 400 && w.body.Len() > 0 {
+		// Add response body for error responses (4xx/5xx); w.body is lazily
+		// allocated and only populated when the status warranted capture.
+		if statusCode >= 400 && w.body != nil && w.body.Len() > 0 {
 			respBytes := w.body.Bytes()
 			fields["response_body"] = string(respBytes)
 		}

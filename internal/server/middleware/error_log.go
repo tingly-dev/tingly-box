@@ -208,10 +208,9 @@ func (dm *ErrorLogMiddleware) Middleware() gin.HandlerFunc {
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 		}
 
-		// Create response writer wrapper to capture response
+		// Create response writer wrapper to capture response (errors only, lazily)
 		w := &responseBodyWriter{
 			ResponseWriter: c.Writer,
-			body:           &bytes.Buffer{},
 		}
 		c.Writer = w
 
@@ -219,6 +218,12 @@ func (dm *ErrorLogMiddleware) Middleware() gin.HandlerFunc {
 		start := time.Now()
 		c.Next()
 		duration := time.Since(start)
+
+		// Captured only for error responses; nil on the happy path.
+		var responseBody []byte
+		if w.body != nil {
+			responseBody = w.body.Bytes()
+		}
 
 		// Log the request and response
 		dm.logEntry(&logEntry{
@@ -229,7 +234,7 @@ func (dm *ErrorLogMiddleware) Middleware() gin.HandlerFunc {
 			StatusCode:   c.Writer.Status(),
 			Duration:     duration,
 			RequestBody:  requestBody,
-			ResponseBody: w.body.Bytes(),
+			ResponseBody: responseBody,
 			Headers:      getHeaders(c),
 			UserAgent:    c.GetHeader("User-Agent"),
 			ClientIP:     c.ClientIP(),
