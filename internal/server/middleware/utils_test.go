@@ -168,33 +168,22 @@ func TestCaptureDisabled(t *testing.T) {
 	assert.False(t, hasRef, "disabled capture must not record body_ref")
 }
 
-// TestBadRequestSink_CapturesBelow400 verifies filter appetite detection.
-func TestBadRequestSink_CapturesBelow400(t *testing.T) {
-	dir := t.TempDir()
-	s := NewBadRequestSink(dir + "/bad.log")
-	assert.False(t, s.CapturesBelow400(), "default >=400 filter must not want sub-400 bodies")
-
-	assert.NoError(t, s.SetFilterExpression("StatusCode >= 200"))
-	assert.True(t, s.CapturesBelow400(), "a >=200 filter must want sub-400 bodies")
-	s.Stop()
-}
-
-// TestBadRequestSink_FilterWrites verifies the disk sink honors its filter.
-func TestBadRequestSink_FilterWrites(t *testing.T) {
+// TestBadRequestSink_PredicateWrites verifies the sink records only error
+// responses on the AI/proxy paths (200 skipped, 500 on /api written).
+func TestBadRequestSink_PredicateWrites(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/bad.log"
 	s := NewBadRequestSink(path)
 	defer s.Stop()
 
-	// Default filter: 200 on /api not written, 500 on /api written.
 	s.maybeLog(&logEntry{Timestamp: time.Now(), Method: "POST", Path: "/api/ok", StatusCode: 200, ResponseBody: []byte("ok")})
 	s.maybeLog(&logEntry{Timestamp: time.Now(), Method: "POST", Path: "/api/err", StatusCode: 500, ResponseBody: []byte("boom")})
 
 	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
 	out := string(data)
-	assert.NotContains(t, out, "/api/ok", "200 must not be written under default filter")
-	assert.Contains(t, out, "/api/err", "500 must be written under default filter")
+	assert.NotContains(t, out, "/api/ok", "200 must not be written")
+	assert.Contains(t, out, "/api/err", "500 on /api must be written")
 	assert.Contains(t, out, "boom")
 }
 

@@ -34,7 +34,6 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
-	github.com/expr-lang/expr v1.17.8
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gen2brain/beeep v0.11.2
 	github.com/gin-gonic/gin v1.12.0

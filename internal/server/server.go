@@ -260,18 +260,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
 	capCfg := cfg.GetHTTPCapture()
 	badReqSink := middleware.NewBadRequestSink(errorLogPath)
-
-	// Set filter expression from config
-	filterExpr := cfg.GetErrorLogFilterExpression()
-	if filterExpr != "" {
-		if err := badReqSink.SetFilterExpression(filterExpr); err != nil {
-			logrus.Debugf("Warning: Failed to set bad-request filter expression '%s': %v, using default", filterExpr, err)
-		} else {
-			logrus.Debugf("Bad-request sink initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
-		}
-	} else {
-		logrus.Debugf("Bad-request sink initialized with default filter, logging to: %s", errorLogPath)
-	}
+	logrus.Debugf("Bad-request sink logging to: %s", errorLogPath)
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
@@ -589,18 +578,6 @@ func (s *Server) setupConfigWatcher() {
 		// Update JWT manager with new secret if changed
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
-
-		// Update bad-request filter expression if changed (sink owned by the mw)
-		if s.memoryLogMW != nil {
-			newFilterExpr := newConfig.GetErrorLogFilterExpression()
-			if newFilterExpr != "" {
-				if err := s.memoryLogMW.SetBadRequestFilter(newFilterExpr); err != nil {
-					logrus.Errorf("Failed to update bad-request filter expression: %v", err)
-				} else {
-					logrus.Debugf("Bad-request filter expression updated: %s", newFilterExpr)
-				}
-			}
-		}
 
 		// Re-sync guardrails based on updated config flags.
 		s.syncGuardrailsFromConfig()

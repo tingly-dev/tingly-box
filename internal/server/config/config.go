@@ -69,9 +69,6 @@ type Config struct {
 	// Value is the JSON-encoded config for that tool type
 	ToolConfigs map[string]json.RawMessage `json:"tool_configs,omitempty"`
 
-	// Error log settings
-	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
-
 	// HTTPCapture controls in-memory diagnostic capture of request/response
 	// bodies by the access-log middleware. Zero values use built-in defaults.
 	HTTPCapture HTTPCaptureConfig `json:"http_capture,omitempty" yaml:"http_capture,omitempty"`
@@ -412,10 +409,6 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	}
 	if cfg.DefaultMaxTokens == 0 {
 		cfg.DefaultMaxTokens = constant.DefaultMaxTokens
-		updated = true
-	}
-	if cfg.ErrorLogFilterExpression == "" {
-		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
 		updated = true
 	}
 	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(configDir)
@@ -1334,13 +1327,6 @@ func (c *Config) SetOpenBrowser(openBrowser bool) error {
 	return nil
 }
 
-// GetErrorLogFilterExpression returns the error log filter expression
-func (c *Config) GetErrorLogFilterExpression() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.ErrorLogFilterExpression
-}
-
 // HTTPCaptureConfig configures the access-log middleware's in-memory
 // diagnostic capture of request/response bodies. All size fields are in bytes;
 // a zero value means "use the built-in default". Capture is for error
@@ -1361,14 +1347,6 @@ func (c *Config) GetHTTPCapture() HTTPCaptureConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.HTTPCapture
-}
-
-// SetErrorLogFilterExpression updates the error log filter expression
-func (c *Config) SetErrorLogFilterExpression(expr string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.ErrorLogFilterExpression = expr
-	return c.Save()
 }
 
 // ============
@@ -2153,10 +2131,6 @@ func (c *Config) CreateDefaultConfig() error {
 	c.Providers = make([]*typ.Provider, 0)
 	c.ServerPort = 12580
 	c.JWTSecret = generateSecret()
-	// Set default error log filter expression
-	if c.ErrorLogFilterExpression == "" {
-		c.ErrorLogFilterExpression = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
-	}
 	_, defaultEnterpriseRS256PublicRef, keyErr := ensureEnterpriseContextRS256KeyPair(c.ConfigDir)
 	if keyErr != nil {
 		return keyErr

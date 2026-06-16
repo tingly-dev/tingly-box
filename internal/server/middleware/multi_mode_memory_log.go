@@ -121,21 +121,12 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger, opts ...Optio
 	return m
 }
 
-// SetBadRequestSink attaches a dedicated, expr-filtered disk sink for
-// bad/error requests. The unified middleware feeds it the same captured
-// request/response bytes it already holds, so bodies are captured once.
-// Once attached the middleware owns the sink's lifecycle (filter + close).
+// SetBadRequestSink attaches a dedicated disk sink for bad/error requests. The
+// unified middleware feeds it the same captured request/response bytes it
+// already holds, so bodies are captured once. Once attached the middleware owns
+// the sink's lifecycle (Close).
 func (m *MultiModeMemoryLogMiddleware) SetBadRequestSink(sink *BadRequestSink) {
 	m.badReqSink = sink
-}
-
-// SetBadRequestFilter updates the attached sink's filter expression (no-op when
-// no sink is attached). Lets callers reconfigure the sink without holding it.
-func (m *MultiModeMemoryLogMiddleware) SetBadRequestFilter(expr string) error {
-	if m.badReqSink == nil {
-		return nil
-	}
-	return m.badReqSink.SetFilterExpression(expr)
 }
 
 // Close releases resources the middleware owns (currently the bad-request sink).
@@ -188,16 +179,12 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		// Wrap response writer to capture body for error responses only. Capture
-		// is status-gated and the buffer is lazily allocated, so successful
+		// is status-gated (>=400) and the buffer is lazily allocated, so successful
 		// responses — including every 200 streaming SSE response — buffer nothing.
-		// The gate is normally 400; it is lowered only when an admin's custom
-		// bad-request filter targets sub-400 statuses (then bounded by the cap).
 		// When capture is disabled, the gate is set so nothing is ever buffered.
 		gate := 400
 		if m.captureDisabled {
 			gate = captureNever
-		} else if m.badReqSink != nil && m.badReqSink.CapturesBelow400() {
-			gate = 0
 		}
 		w := &responseBodyWriter{
 			ResponseWriter:   c.Writer,

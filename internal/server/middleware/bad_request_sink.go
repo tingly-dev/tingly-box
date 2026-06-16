@@ -2,31 +2,16 @@ package middleware
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/expr-lang/expr"
-	"github.com/expr-lang/expr/vm"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
-
-// FilterContext provides the context for filter expression evaluation.
-type FilterContext struct {
-	StatusCode int    `expr:"StatusCode"`
-	Method     string `expr:"Method"`
-	Path       string `expr:"Path"`
-	Query      string `expr:"Query"`
-}
-
-// defaultBadRequestFilter matches API/TBE error responses. Kept identical to the
-// previous ErrorLogMiddleware default so existing config stays compatible.
-const defaultBadRequestFilter = "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')"
 
 // Rotation settings for the bad-request sink (smart defaults, not user-tunable).
 const (
@@ -53,43 +38,21 @@ type logEntry struct {
 	ClientIP              string
 }
 
-// BadRequestSink persistently records request/response pairs that match a
-// configurable expr filter (default: 4xx/5xx on /api or /tbe) to a dedicated
-// rotating file, independent of the general structured log. It owns no
-// middleware: the unified logging middleware feeds it the already-captured
-// request/response bytes, so bodies are captured exactly once.
-//
-// Rotation is delegated to the standard lumberjack rotator (the same library
-// pkg/obs uses for the json/text logs) — no bespoke size/rename/glob logic.
+// BadRequestSink persistently records error request/response pairs (4xx/5xx on
+// the /api or /tbe proxy paths) to a dedicated rotating file, independent of the
+// general structured log. It owns no middleware: the unified logging middleware
+// feeds it the already-captured request/response bytes, so bodies are captured
+// exactly once. Rotation is delegated to lumberjack (as in pkg/obs).
 type BadRequestSink struct {
 	writer  *lumberjack.Logger
-	mu      sync.RWMutex
+	mu      sync.Mutex
 	enabled bool
-
-	// Compiled expression program for filtering.
-	filterProgram  *vm.Program
-	filterCompiled bool
-	// matchesSub400 is true when the compiled filter can match a <400 status,
-	// meaning the unified middleware must capture response bodies for some
-	// non-error responses too. Recomputed whenever the filter changes.
-	matchesSub400 bool
 }
 
 // NewBadRequestSink creates a sink writing to logPath, rotated by lumberjack
 // with smart defaults (badRequestMaxFileMB per file, badRequestMaxFiles kept).
 func NewBadRequestSink(logPath string) *BadRequestSink {
-	s := &BadRequestSink{
-		enabled: true,
-	}
-
-	if program, err := expr.Compile(defaultBadRequestFilter, expr.Env(FilterContext{})); err != nil {
-		logrus.Errorf("Failed to compile default bad-request filter: %v", err)
-	} else {
-		s.filterProgram = program
-		s.filterCompiled = true
-		s.matchesSub400 = computeMatchesSub400(program)
-	}
-
+	s := &BadRequestSink{enabled: true}
 	if logPath != "" {
 		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
 			logrus.Errorf("Failed to create bad-request log directory: %v", err)
@@ -102,101 +65,26 @@ func NewBadRequestSink(logPath string) *BadRequestSink {
 			Compress:   false, // keep readable for diagnostics
 		}
 	}
-
 	return s
 }
 
-// SetFilterExpression recompiles and sets a new filter expression. An empty
-// expression resets to the default.
-func (s *BadRequestSink) SetFilterExpression(expression string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if expression == "" {
-		expression = defaultBadRequestFilter
-	}
-
-	program, err := expr.Compile(expression, expr.Env(FilterContext{}))
-	if err != nil {
-		return fmt.Errorf("failed to compile filter expression: %w", err)
-	}
-
-	s.filterProgram = program
-	s.filterCompiled = true
-	s.matchesSub400 = computeMatchesSub400(program)
-	return nil
+// shouldLog records error responses (>=400) on the AI/proxy paths. This is a
+// fixed predicate by design — a configurable filter was carried over from the
+// old middleware but never actually used, so it's not worth the machinery.
+func shouldLog(entry *logEntry) bool {
+	return entry.StatusCode >= 400 &&
+		(strings.HasPrefix(entry.Path, "/api/") || strings.HasPrefix(entry.Path, "/tbe/"))
 }
 
-// CapturesBelow400 reports whether the current filter can match a <400 status,
-// so the unified middleware knows it must capture bodies for some non-error
-// responses. False for the default (>=400) filter — the common case — which
-// keeps the happy path allocation-free.
-func (s *BadRequestSink) CapturesBelow400() bool {
-	if s == nil {
-		return false
-	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.enabled && s.matchesSub400
-}
-
-// computeMatchesSub400 probes the compiled program with representative sub-400
-// contexts; if any matches, the filter is considered to want non-error bodies.
-func computeMatchesSub400(program *vm.Program) bool {
-	if program == nil {
-		return false
-	}
-	probes := []FilterContext{
-		{StatusCode: 200, Method: "POST", Path: "/api/_probe"},
-		{StatusCode: 200, Method: "POST", Path: "/tbe/_probe"},
-		{StatusCode: 301, Method: "GET", Path: "/api/_probe"},
-	}
-	for _, ctx := range probes {
-		if out, err := expr.Run(program, ctx); err == nil {
-			if matched, ok := out.(bool); ok && matched {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// shouldLog evaluates the filter against the entry's metadata.
-func (s *BadRequestSink) shouldLog(entry *logEntry) bool {
-	if s.filterCompiled && s.filterProgram != nil {
-		result, err := expr.Run(s.filterProgram, FilterContext{
-			StatusCode: entry.StatusCode,
-			Method:     entry.Method,
-			Path:       entry.Path,
-			Query:      entry.Query,
-		})
-		if err != nil {
-			logrus.Errorf("Failed to evaluate bad-request filter: %v", err)
-			// Fallback: API errors only.
-			return entry.StatusCode >= 400 && strings.HasPrefix(entry.Path, "/api/")
-		}
-		if matched, ok := result.(bool); ok {
-			return matched
-		}
-		return true
-	}
-	// Fallback when no filter compiled.
-	return entry.StatusCode >= 400 && strings.HasPrefix(entry.Path, "/api/")
-}
-
-// maybeLog writes entry to disk when it is enabled and the filter matches.
+// maybeLog writes entry to disk when it is enabled and matches the predicate.
 // Rotation is handled transparently by the lumberjack writer.
 func (s *BadRequestSink) maybeLog(entry *logEntry) {
-	if s == nil {
+	if s == nil || !shouldLog(entry) {
 		return
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.enabled || s.writer == nil {
-		return
-	}
-	if !s.shouldLog(entry) {
 		return
 	}
 
@@ -233,7 +121,6 @@ func (s *BadRequestSink) maybeLog(entry *logEntry) {
 		logrus.Errorf("Failed to marshal bad-request log entry: %v", err)
 		return
 	}
-
 	if _, err := s.writer.Write(append(jsonData, '\n')); err != nil {
 		logrus.Errorf("Failed to write bad-request log entry: %v", err)
 	}
