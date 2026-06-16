@@ -30,6 +30,7 @@ type LBSimulator struct {
 	server   *Server
 	selector *routing.ServiceSelector
 	affinity *AffinityStore
+	health   *loadbalance.HealthMonitor
 	rule     *typ.Rule
 	scripts  map[string]*lbUpstreamScript
 	clock    *lbFakeClock
@@ -125,7 +126,15 @@ func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, 
 		}
 	}
 
-	hm := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
+	// Align the health monitor with the breaker so the two feedback channels
+	// trip and recover on the same deterministic timeline: same failure
+	// threshold, and a recovery window equal to the breaker's open duration so
+	// one sim.Advance recovers both. Probing off (the sim has no live probe).
+	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{
+		ConsecutiveErrorThreshold: loadbalance.DefaultBreakerFailureThreshold,
+		RecoveryTimeoutSeconds:    int(loadbalance.DefaultBreakerOpenDuration.Seconds()),
+		ProbeEnabled:              false,
+	})
 	hf := typ.NewHealthFilter(hm)
 	lb := NewLoadBalancer(cfg, hf)
 	affinity := NewAffinityStore(0)
@@ -147,6 +156,7 @@ func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, 
 		server:   &Server{config: cfg, loadBalancer: lb, healthMonitor: hm},
 		selector: routing.NewServiceSelector(cfg, affinity, lb),
 		affinity: affinity,
+		health:   hm,
 		rule:     rule,
 		scripts:  scripts,
 		clock:    clock,
@@ -188,15 +198,25 @@ func (s *LBSimulator) Request(session string) (LBTrace, error) {
 		tr.Attempts = append(tr.Attempts, sid)
 		status := s.scriptFor(sid).next()
 		tr.FinalStatus = status
+
+		// Feed BOTH production feedback channels exactly as a real request would:
+		//   - breaker: binary success/failure (mirrors the recorder).
+		//   - health monitor: status-classified, via the production classifier
+		//     reportHealthStatus (429→rate-limit, 401/403→auth, 5xx/4xx/other→
+		//     error, 2xx→success). The synthesized message routes through its
+		//     substring matcher exactly.
 		if status == http.StatusOK {
 			c.Writer.WriteHeader(http.StatusOK)
 			if gate, ok := c.Writer.(*firstChunkGate); ok {
 				gate.CommitFirstChunk() // simulate the stream's first real chunk
 			}
 			loadbalance.RecordServiceSuccess(sid)
+			s.server.reportHealthStatus(provider, model, nil, "")
 		} else {
 			c.Writer.WriteHeader(status)
 			loadbalance.RecordServiceFailure(sid)
+			s.server.reportHealthStatus(provider, model,
+				fmt.Errorf("upstream returned HTTP %d", status), "")
 		}
 	}
 	s.server.dispatchWithPriorityFailover(c, s.rule, res.Provider, res.Service.Model, attempt)
@@ -250,6 +270,23 @@ func (s *LBSimulator) BreakerStates() map[string]string {
 	for _, svc := range s.rule.Services {
 		id := svc.ServiceID()
 		out[id] = store.Get(id).State().String()
+	}
+	return out
+}
+
+// HealthStates returns a snapshot of every rule service's health-monitor state,
+// keyed by serviceID (values: "healthy" / "unhealthy"). This is the channel fed
+// by the special status codes (429 → rate-limit, 401/403 → auth), separate from
+// the breaker.
+func (s *LBSimulator) HealthStates() map[string]string {
+	out := make(map[string]string, len(s.rule.Services))
+	for _, svc := range s.rule.Services {
+		id := svc.ServiceID()
+		if s.health.IsHealthy(id) {
+			out[id] = "healthy"
+		} else {
+			out[id] = "unhealthy"
+		}
 	}
 	return out
 }

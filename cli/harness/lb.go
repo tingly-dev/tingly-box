@@ -23,7 +23,7 @@ import (
 // "Rule config shapes (taxonomy)".
 type LbCmd struct {
 	File    string `kong:"name='file',short='f',help='Scenario YAML file (see --example for the schema)'"`
-	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression'"`
+	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression|ratelimit|authflip'"`
 	JSON    bool   `kong:"name='json',help='Emit the trace as JSON'"`
 	Verbose bool   `kong:"name='verbose',short='v',help='Show gateway logs (default: quiet)'"`
 }
@@ -115,6 +115,7 @@ func (c *LbCmd) Run() error {
 		out.Steps = append(out.Steps, lbStepOutput{Trace: &tr})
 	}
 	out.FinalBreakers = sim.BreakerStates()
+	out.FinalHealth = sim.HealthStates()
 
 	if c.JSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -147,7 +148,7 @@ func (c *LbCmd) loadScenario() (*lbScenario, error) {
 	}
 	scn, ok := lbExamples[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown --example %q (have: cascade, flat, grid, single, regression)", name)
+		return nil, fmt.Errorf("unknown --example %q (have: cascade, flat, grid, single, regression, ratelimit, authflip)", name)
 	}
 	return scn, nil
 }
@@ -207,6 +208,7 @@ type lbRunOutput struct {
 	Services      []string          `json:"services"`
 	Steps         []lbStepOutput    `json:"steps"`
 	FinalBreakers map[string]string `json:"final_breakers"`
+	FinalHealth   map[string]string `json:"final_health"`
 }
 
 type lbStepOutput struct {
@@ -240,6 +242,7 @@ func (o lbRunOutput) renderTable(w *os.File) {
 	}
 
 	fmt.Fprintf(w, "\nfinal breakers: %s\n", formatBreakers(o.FinalBreakers))
+	fmt.Fprintf(w, "final health:   %s\n", formatBreakers(o.FinalHealth))
 }
 
 func dashIfEmpty(s string) string {
@@ -311,5 +314,30 @@ var lbExamples = map[string]*lbScenario{
 		Faults:   map[string][]int{"t1/gpt-4": {200}, "t2/gpt-4": {200}},
 		SeedPin:  &lbSeedSpec{Session: "s1", Provider: "t2", Model: "gpt-4"}, // stale pin to the fallback tier
 		Program:  []lbStep{{Request: sess("s1")}, {Request: sess("s1")}},
+	},
+	// Rate-limit: a single 429 marks t0 unhealthy via the health monitor, so it's
+	// skipped on the NEXT request even though its breaker has one strike — then it
+	// recovers after the rate-limit window.
+	"ratelimit": {
+		RuleUUID: "ratelimit", Tactic: "tier", AffinitySecs: 0,
+		Services: []lbServiceSpec{{Provider: "t0", Model: "gpt-4", Tier: 0}, {Provider: "t1", Model: "gpt-4", Tier: 1}},
+		Faults:   map[string][]int{"t0/gpt-4": {429, 200}, "t1/gpt-4": {200}},
+		Program: []lbStep{
+			{Request: sess("")}, // t0 429 → fail over to t1; t0 rate-limited
+			{Request: sess("")}, // t0 health-excluded → straight to t1
+			{Advance: "31s"},
+			{Request: sess("")}, // window elapsed → back to t0
+		},
+	},
+	// Auth flip: 401 is terminal (no failover masks it) AND marks t0 immediately
+	// unhealthy, so it's excluded next request.
+	"authflip": {
+		RuleUUID: "authflip", Tactic: "tier", AffinitySecs: 0,
+		Services: []lbServiceSpec{{Provider: "t0", Model: "gpt-4", Tier: 0}, {Provider: "t1", Model: "gpt-4", Tier: 1}},
+		Faults:   map[string][]int{"t0/gpt-4": {401, 200}, "t1/gpt-4": {200}},
+		Program: []lbStep{
+			{Request: sess("")}, // t0 401 → terminal (client sees 401); t0 unhealthy
+			{Request: sess("")}, // t0 excluded → t1
+		},
 	},
 }

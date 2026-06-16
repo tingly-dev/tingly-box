@@ -75,6 +75,10 @@ Fix: `AffinityStage` honors a pin only while the pinned service is one the strat
 
 `IsAffinityEligible` mirrors `TierTactic`'s bucket walk but uses the non-consuming `BreakerStore.IsAvailable` so it never steals the half-open probe; when every service is tripped it degrades to "honor a pin to the lowest tier" rather than wedging. On decline, the pipeline falls through to the strategy, which re-selects a currently-valid service, and the existing `ServiceSelector.postProcess` automatically **re-pins** the session there — no change to the failover layer. The global-affinity pipeline is ordered **health → affinity → strategy** (`pipelineModeGlobalAffinity`). Note `typ.HealthFilter` only tracks 429/auth; the 500-driven signal lives in the breaker, which is why the affinity scoping consults the breaker directly rather than relying on the health stage.
 
+#### Two feedback channels, and the `lb` simulator
+
+Each request outcome feeds **two independent channels**: the **breaker** (binary success/failure, 3-strike trip, 30s open window — drives tier demotion and affinity eligibility) and the **health monitor** (`Server.reportHealthStatus`, status-classified — 429 → rate-limit window, 401/403 → *immediate* unhealthy, 5xx/other → 3-strike error — drives `HealthStage` filtering). The "special" statuses 429 and 401/403 therefore exclude a service on the *first* occurrence via the health channel, well before the breaker trips. The `harness lb` simulator (`cli/harness`, engine `internal/server.LBSimulator`) models **both** channels faithfully by reusing `reportHealthStatus` + the breaker recorder, and routes both through the shared `loadbalance` clock seam (`SetClock`/`nowFn`, used by `breaker.go` and `health_monitor.go`), aligning the health recovery window to the breaker's open duration so one simulated clock advance recovers both deterministically.
+
 ### End-to-end flow: how the tactic switch actually takes effect
 
 The "user moves a service card to a different tier" event has to cross five layers before it changes how the next API request is routed. Each layer is wired explicitly:

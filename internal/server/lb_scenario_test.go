@@ -144,6 +144,74 @@ func TestLBScenario_RegressionStalePinReturnsToPrimary(t *testing.T) {
 	require.Equal(t, id1, sim.Pin(sess), "stale pin must be rewritten to the primary tier")
 }
 
+// ============ Special status: 429 rate-limit ============
+//
+// A single 429 marks the service unhealthy via the health monitor (rate-limit
+// window) on the FIRST occurrence, so it is skipped on the next request — even
+// though the breaker has only one strike (well below its 3-strike trip). This is
+// the health channel, distinct from the breaker.
+func TestLBScenario_RateLimit_HealthExclusion(t *testing.T) {
+	t0 := svc("rl-t0", "gpt-4", 0, true)
+	t1 := svc("rl-t1", "gpt-4", 1, true)
+	id0, id1 := t0.ServiceID(), t1.ServiceID()
+	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-rl", 0, t0, t1), map[string][]int{
+		id0: {429, 200},
+		id1: {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	// req1: t0 → 429 (retryable) → fail over to t1; t0 marked rate-limited.
+	tr, err := sim.Request("")
+	require.NoError(t, err)
+	require.Equal(t, []string{id0, id1}, tr.Attempts)
+	require.Equal(t, 200, tr.FinalStatus)
+	require.Equal(t, "unhealthy", sim.HealthStates()[id0], "a single 429 marks the service unhealthy")
+	require.Equal(t, "closed", sim.BreakerStates()[id0], "one 429 is below the breaker's 3-strike trip")
+
+	// req2: t0 health-excluded (rate-limit window) → straight to t1, no t0 attempt.
+	tr, err = sim.Request("")
+	require.NoError(t, err)
+	require.Equal(t, []string{id1}, tr.Attempts, "rate-limited t0 must be skipped though its breaker is closed")
+
+	// After the rate-limit window, t0 recovers and is used again.
+	sim.Advance(loadbalance.DefaultBreakerOpenDuration + time.Second)
+	tr, err = sim.Request("")
+	require.NoError(t, err)
+	require.Equal(t, []string{id0}, tr.Attempts, "t0 returns after the rate-limit window")
+	require.Equal(t, 200, tr.FinalStatus)
+}
+
+// ============ Special status: 401 auth error ============
+//
+// 401 is terminal (not retryable — no failover masks it) AND marks the service
+// immediately unhealthy (auth error, no threshold), so it's excluded next request.
+func TestLBScenario_AuthError_TerminalAndExcluded(t *testing.T) {
+	t0 := svc("auth-t0", "gpt-4", 0, true)
+	t1 := svc("auth-t1", "gpt-4", 1, true)
+	id0, id1 := t0.ServiceID(), t1.ServiceID()
+	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-auth", 0, t0, t1), map[string][]int{
+		id0: {401, 200},
+		id1: {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	// req1: t0 → 401. Non-retryable → terminal: the client sees 401 even though
+	// t1 is healthy (auth errors are never failed over).
+	tr, err := sim.Request("")
+	require.NoError(t, err)
+	require.Equal(t, []string{id0}, tr.Attempts, "401 is terminal — no failover to t1")
+	require.Equal(t, 401, tr.FinalStatus)
+	require.Equal(t, "unhealthy", sim.HealthStates()[id0], "401 marks the service immediately unhealthy")
+
+	// req2: t0 health-excluded → t1 selected.
+	tr, err = sim.Request("")
+	require.NoError(t, err)
+	require.Equal(t, []string{id1}, tr.Attempts, "auth-errored t0 is excluded on the next request")
+	require.Equal(t, 200, tr.FinalStatus)
+}
+
 // ============ Scenario B: flat (one tier, many services) ============
 
 func TestLBScenario_B_FlatStickiness(t *testing.T) {

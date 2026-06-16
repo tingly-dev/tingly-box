@@ -251,7 +251,7 @@ behavior over time*. It runs the real path (`routing.ServiceSelector.Select` →
 is exercised without sleeping.
 
 ```bash
-./harness lb --example cascade        # built-in: cascade | flat | grid | single | regression
+./harness lb --example cascade        # cascade | flat | grid | single | regression | ratelimit | authflip
 ./harness lb --file scenario.yaml     # your own shape
 ./harness lb --example grid --json    # machine-readable trace
 ```
@@ -274,10 +274,34 @@ services: t0/gpt-4 (T0)  t1/gpt-4 (T1)
 5    s1         t0/gpt-4                200     t0/gpt-4     # recovered → snapped back to t0
 
 final breakers: t0/gpt-4=closed  t1/gpt-4=closed
+final health:   t0/gpt-4=healthy  t1/gpt-4=healthy
 ```
 
 The `attempts` column shows the per-request failover hops; `pin` shows the
 affinity pin after each request. `--json` emits the same data structurally.
+
+### HTTP status semantics
+
+The fault scripts are status codes, and the sim classifies them into the **two
+production feedback channels** exactly as a real request would (mirroring
+`Server.reportHealthStatus` + the breaker recorder), so the *special* codes
+behave faithfully:
+
+| status | failover (real loop) | breaker | health monitor |
+|--------|----------------------|---------|----------------|
+| 2xx | commit | success | `ReportSuccess` |
+| 429 | retry | failure | **rate-limited** (unhealthy for a window) |
+| 500/502/503/504 | retry | failure | error (3-strike) |
+| 401/403 | **terminal** | failure | **auth — immediately unhealthy** |
+| 400/404/other | **terminal** | failure | error (3-strike) |
+
+So a single **429** or **401/403** marks the service unhealthy on the *first*
+occurrence (health channel) and is skipped on the next request — distinct from
+the breaker's 3-strike trip. The `final health` line and JSON `final_health`
+surface this. The sim aligns the health-monitor recovery window to the breaker's
+open duration so one `advance` recovers both deterministically. Try
+`--example ratelimit` (429 → skipped → recovers) and `--example authflip`
+(401 → terminal + immediately excluded).
 
 ### Scenario file
 
