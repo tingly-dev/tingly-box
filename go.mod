@@ -23,7 +23,7 @@ require (
 )
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.37.0
+	github.com/anthropics/anthropic-sdk-go v1.50.2
 	github.com/openai/openai-go/v3 v3.33.0
 	google.golang.org/genai v1.50.0
 )

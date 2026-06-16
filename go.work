@@ -4,10 +4,10 @@ toolchain go1.26.0
 
 use (
 	.
+	./afk
 	./agentboot
 	./ai
 	./gui/wails3
 	./imbot
 	./swagger
-	./afk
 )
