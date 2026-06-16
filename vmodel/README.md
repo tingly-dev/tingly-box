@@ -10,6 +10,9 @@ The same primitives are reused as an in-process LLM substitute by test
 packages that need wire-format-correct fixtures (see
 `internal/protocoltest`).
 
+> **Design docs.** This README is the usage guide. Architecture rationale and
+> per-topic design notes are indexed in [`.design/vmodel.md`](../.design/vmodel.md).
+
 ## Layout
 
 ```
@@ -518,7 +521,9 @@ result, _ := client.RunChatBenchmark(ctx, benchmark.BenchmarkConfig{
 fmt.Printf("TPS: %.1f  p99: %v\n", result.TPS, result.P99Latency)
 ```
 
-See `benchmark/examples/` for runnable server and client programs.
+See `benchmark/examples/` for runnable server and client programs, and
+[`.design/vmodel-benchmark.md`](../.design/vmodel-benchmark.md) for the
+shared test-bench design.
 
 ## Related packages
 
