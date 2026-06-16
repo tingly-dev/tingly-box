@@ -28,6 +28,18 @@ deterministic, in-process, wire-correct substrate, but driven by a configurable
 | `Message` / `Type` | error envelope overrides; derived from `Status` when empty     |
 | `Repeat`  | serve this step N consecutive times (default 1)                        |
 
+**Status is the only required field.** Every other field has a module-provided
+default, resolved at `NewSequence` time:
+
+- success content: step `Content` → `SequenceConfig.DefaultContent` → `vmodel.DefaultSequenceContent`
+- error `Type`/`Message`: derived from `Status` via `defaultErrorMeta`
+
+So the ergonomic surface is the factory, not struct literals:
+
+- `Steps(200, 200, 429)` — the common status-only program.
+- `Step(status, opts...)` with `WithContent` / `WithMessage` / `WithErrorType` /
+  `WithRepeat` for the uncommon per-step overrides.
+
 `SequenceConfig` is the ordered program plus identity/metadata and a `NoLoop`
 flag (default loops back to the first step so the model is reusable
 indefinitely; `NoLoop` clamps to the last step once exhausted).

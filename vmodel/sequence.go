@@ -36,6 +36,59 @@ type SequenceStep struct {
 	Repeat int `json:"repeat,omitempty" yaml:"repeat,omitempty"`
 }
 
+// DefaultSequenceContent is the module-level fallback body for a success step
+// that sets neither its own Content nor SequenceConfig.DefaultContent. It keeps
+// a bare Step(200) useful out of the box.
+const DefaultSequenceContent = "Sequenced virtual response."
+
+// StepOption customizes a SequenceStep built by Step. Only Status is required;
+// these options override the otherwise-defaulted fields for the uncommon cases.
+type StepOption func(*SequenceStep)
+
+// WithContent sets a success step's response body (overrides the config/module
+// default content).
+func WithContent(content string) StepOption {
+	return func(s *SequenceStep) { s.Content = content }
+}
+
+// WithMessage overrides an error step's message (otherwise derived from Status).
+func WithMessage(message string) StepOption {
+	return func(s *SequenceStep) { s.Message = message }
+}
+
+// WithErrorType overrides an error step's type (otherwise derived from Status).
+func WithErrorType(typ string) StepOption {
+	return func(s *SequenceStep) { s.Type = typ }
+}
+
+// WithRepeat serves the step n consecutive times before advancing.
+func WithRepeat(n int) StepOption {
+	return func(s *SequenceStep) { s.Repeat = n }
+}
+
+// Step builds a SequenceStep from a status code plus optional overrides. Status
+// is the only required input — content for a success step and the error
+// type/message for a failure step are filled from defaults at build time
+// (module DefaultSequenceContent / defaultErrorMeta), so Step(429) and
+// Step(200) are both immediately usable.
+func Step(status int, opts ...StepOption) SequenceStep {
+	s := SequenceStep{Status: status}
+	for _, opt := range opts {
+		opt(&s)
+	}
+	return s
+}
+
+// Steps builds a program from a bare list of status codes — the common case,
+// e.g. Steps(200, 200, 429). Each step takes default content / error metadata.
+func Steps(statuses ...int) []SequenceStep {
+	out := make([]SequenceStep, len(statuses))
+	for i, status := range statuses {
+		out[i] = SequenceStep{Status: status}
+	}
+	return out
+}
+
 // SequenceConfig describes a SequenceModel: an ordered program of steps that
 // is walked one step per request. By default the program loops (wraps back to
 // the first step) so the model is reusable across an unbounded number of
@@ -122,6 +175,9 @@ func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 		if content == "" {
 			content = s.defaultContent
 		}
+		if content == "" {
+			content = DefaultSequenceContent
+		}
 		return ResolvedStep{Status: 200, Content: content}
 	}
 	typ, msg := step.Type, step.Message
@@ -187,13 +243,7 @@ func DefaultSequenceConfigs() []SequenceConfig {
 			Name:        "Virtual Sequence (200, 200, 429)",
 			Description: "Cycles through HTTP 200, 200, 429 on successive requests — simulates a provider that intermittently rate-limits. Useful for exercising failover/retry/backoff without a real upstream.",
 			Delay:       50 * time.Millisecond,
-			DefaultContent: "Sequenced virtual response: this request succeeded. " +
-				"Every third request returns HTTP 429 instead.",
-			Steps: []SequenceStep{
-				{Status: 200},
-				{Status: 200},
-				{Status: 429},
-			},
+			Steps:       Steps(200, 200, 429),
 		},
 	}
 }
