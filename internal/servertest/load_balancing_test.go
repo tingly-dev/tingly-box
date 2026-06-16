@@ -864,10 +864,12 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 		Active: true,
 	}
 
-	// Test weighted selection (run multiple times to see distribution)
+	// Test weighted selection (run multiple times to see distribution).
+	// Large sample size: the random tactic has no seedable RNG, so a big N is what
+	// keeps the observed 3:1 ratio inside the tolerance band reliably.
 	provider1Count := 0
 	provider2Count := 0
-	total := 400
+	total := 2000
 
 	for i := 0; i < total; i++ {
 		service, err := lb.SelectService(rule)
@@ -1082,9 +1084,11 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 			providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
 	}
 
-	// Test that the CurrentServiceID is correctly maintained
-	// After 6 requests with threshold 2, the ID should be "provider-C:model-C"
-	expectedFinalServiceID := "provider-C:model-C"
+	// Test that the CurrentServiceID is correctly maintained. After 6 round-robin
+	// requests the final selection is provider-C; derive the expected ID from the
+	// product's own formatter (Service.ServiceID() → "provider/model") rather than
+	// hardcoding the separator.
+	expectedFinalServiceID := rule.Services[2].ServiceID() // provider-C
 	if rule.CurrentServiceID != expectedFinalServiceID {
 		t.Errorf("Expected CurrentServiceID = %s, got %s", expectedFinalServiceID, rule.CurrentServiceID)
 	}

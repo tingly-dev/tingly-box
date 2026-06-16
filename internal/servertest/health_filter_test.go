@@ -171,8 +171,10 @@ func TestHealthFilter_Recovery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, service)
 
-	// Wait for recovery timeout
-	time.Sleep(1100 * time.Millisecond)
+	// Poll until the service actually recovers (asserts the unhealthy→healthy
+	// transition directly), instead of a fixed sleep that over/under-waits.
+	require.Eventually(t, func() bool { return healthMonitor.IsHealthy(serviceID) },
+		3*time.Second, 50*time.Millisecond, "service should recover to healthy")
 
 	// Service should be healthy again
 	service, err = lb.SelectService(rule)
