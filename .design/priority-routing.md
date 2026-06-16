@@ -108,32 +108,24 @@ Fix: `AffinityStage` honors a pin only while the pinned service is one the strat
 
 Decision flow (pinned service = `P`):
 
+```mermaid
+flowchart TD
+    P{"P == nil or inactive?"} -- yes --> DROP["NO — drop pin"]
+    P -- no --> W["active services → buckets by Tier (asc)<br/>find top tier T* with a breaker-available svc"]
+    W --> AV{"any tier available?"}
+    AV -- "yes (T*)" --> IN{"P in T* and P available?"}
+    AV -- "no (all open)" --> LOW{"P in lowest tier?"}
+    IN -- yes --> HON["YES — honor pin"]
+    IN -- no --> DROP
+    LOW -- yes --> HON2["YES — degrade (honor, surface real error)"]
+    LOW -- no --> DROP
 ```
-IsAffinityEligible(services, P)  — "is P a service the strategy would pick right now?"
 
-  P == nil  OR  P inactive ? ───────────────────────────────────────▶ NO (drop pin)
-        │ no
-        ▼
-  active  = services with Active==true      (inactive can't make a tier look "available")
-  buckets = group by Tier, ascending        (T0 = highest priority, first)
-        │
-        ▼
-  walk tiers top→down; the FIRST tier with any breaker-available service = top tier T*
-        │            (available = closed OR half-open; read via IsAvailable —
-        │             non-consuming, never steals the half-open probe)
-        ├──────────────────────────────┬───────────────────────────────────────
-        ▼ found T*                      ▼ no tier available (every breaker open)
-   P in T*  AND  P available ?     P in the lowest-numbered tier ?
-        ├─ yes ─▶ YES (honor)           ├─ yes ─▶ YES (degrade: honor, surface
-        └─ no  ─▶ NO  (drop)            │                real upstream error)
-                                        └─ no  ─▶ NO
-
-  the two "drop" cases:
-    cross-tier demote                     within-tier dead peer
-    T0: t0 (recovered) ◀ T*               T0: a (available) ◀ T*   b (open)
-    T1: P=t2 (available)                      P=b ∈ T* but not available
-    → P ∉ T* → drop → re-pick t0          → drop → re-pick a
-```
+`available` = breaker closed or half-open (read via the non-consuming `IsAvailable`, so it never steals the
+half-open probe). A drop falls through to the strategy, which re-selects a currently-valid service, and
+`postProcess` re-pins there. The two ways `P in T* and P available?` fails are the only "drop" cases:
+**cross-tier demote** (a higher tier recovered, so `P`'s lower tier is no longer `T*`) and **within-tier
+dead peer** (`P` is in `T*` but its own breaker is open while a peer is up).
 
 `IsAffinityEligible` mirrors `TierTactic`'s bucket walk but uses the non-consuming `BreakerStore.IsAvailable` so it never steals the half-open probe; when every service is tripped it degrades to "honor a pin to the lowest tier" rather than wedging. On decline, the pipeline falls through to the strategy, which re-selects a currently-valid service, and the existing `ServiceSelector.postProcess` automatically **re-pins** the session there — no change to the failover layer. The global-affinity pipeline is ordered **health → affinity → strategy** (`pipelineModeGlobalAffinity`). Note `typ.HealthFilter` only tracks 429/auth; the 500-driven signal lives in the breaker, which is why the affinity scoping consults the breaker directly rather than relying on the health stage.
 
