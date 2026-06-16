@@ -53,10 +53,8 @@ func RunLoop(c *gin.Context, step func(w io.Writer) bool) bool {
 // the first real stream chunk has been produced, so it flushes buffered
 // output and switches to pass-through. No-op when no gate is installed.
 //
-// It is the centralized "first chunk reached the client" moment for every
-// committing streaming path (RunLoop-based producers commit here once,
-// hand-rolled producers call it explicitly), so it also records the Time To
-// First Token via MarkFirstToken.
+// As the "first chunk reached the client" moment for every committing
+// streaming path, it also records TTFT via MarkFirstToken.
 func CommitFirstChunk(c *gin.Context) {
 	MarkFirstToken(c)
 	if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
@@ -64,14 +62,9 @@ func CommitFirstChunk(c *gin.Context) {
 	}
 }
 
-// MarkFirstToken stamps the first-token time used for TTFT metrics. It is the
-// single source of truth for recording TTFT: it records only on the first call
-// for a request (earliest signal wins) and is safe to call repeatedly.
-//
-// Streaming producers reach it through CommitFirstChunk on their first chunk;
-// the MCP interceptor (which does not commit) calls it directly on its first
-// event. Non-streaming handlers never call it, so their TTFT stays unset and
-// the dashboard renders "-" instead of a value identical to total latency.
+// MarkFirstToken is the single source of truth for recording the first-token
+// time used for TTFT: idempotent (earliest signal wins), safe to call
+// repeatedly. Non-streaming handlers never call it, so their TTFT stays unset.
 func MarkFirstToken(c *gin.Context) {
 	if c == nil {
 		return

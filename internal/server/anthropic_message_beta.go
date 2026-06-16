@@ -117,8 +117,6 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 	hc := protocol.NewHandleContext(c, respModel)
 	actualModel := string(req.Model)
 
-	// TTFT is recorded centrally via protocol.MarkFirstToken (CommitFirstChunk).
-
 	// Add recorder hooks if recorder is available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 

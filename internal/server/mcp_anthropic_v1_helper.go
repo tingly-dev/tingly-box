@@ -375,9 +375,6 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
 
-	// TTFT is recorded centrally by the MCP interceptor via
-	// protocol.MarkFirstToken on its first upstream event.
-
 	// Add recorder hooks if available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
@@ -479,9 +476,6 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
 
-	// TTFT is recorded centrally by the MCP interceptor via
-	// protocol.MarkFirstToken on its first upstream event.
-
 	// Add recorder hooks if available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
@@ -572,9 +566,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
-
-	// TTFT is recorded centrally by the MCP interceptor via
-	// protocol.MarkFirstToken on its first upstream event.
 
 	// Add recorder hooks if available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)

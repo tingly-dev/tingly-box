@@ -846,7 +846,6 @@ func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.Transfo
 	}
 
 	hc := protocol.NewHandleContext(c, responseModel)
-	// TTFT is recorded centrally via protocol.MarkFirstToken (CommitFirstChunk).
 	usage, err := stream.HandleResponsesToOpenAIChatStream(hc, primedStream, responseModel)
 	s.trackUsageWithTokenUsage(c, usage, err)
 	if recorder != nil {
@@ -937,7 +936,6 @@ func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Transfo
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
-	// TTFT is recorded centrally via protocol.MarkFirstToken (CommitFirstChunk).
 	usage, err := stream.HandleOpenAIResponsesStream(hc, primedStream, responseModel)
 
 	// Track usage from stream handler
@@ -1042,7 +1040,6 @@ func (s *Server) streamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transf
 	}
 
 	hc := protocol.NewHandleContext(c, responseModel)
-	// TTFT is recorded centrally via protocol.MarkFirstToken (CommitFirstChunk).
 	usage, err := stream.HandleAnthropicBetaToOpenAIResponsesStream(hc, anthropicStream, responseModel)
 	s.trackUsageWithTokenUsage(c, usage, err)
 }

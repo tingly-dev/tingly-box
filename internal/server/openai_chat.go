@@ -363,7 +363,6 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 	hc := protocol.NewHandleContext(c, responseModel)
 	hc.DisableStreamUsage = disableStreamUsage
 
-	// TTFT is recorded centrally via protocol.MarkFirstToken (CommitFirstChunk).
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 
 	// Track usage from stream handler
