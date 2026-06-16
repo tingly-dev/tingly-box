@@ -25,7 +25,7 @@ type LbCmd struct {
 	File    string `kong:"name='file',short='f',help='Scenario YAML file (see --example for the schema)'"`
 	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression|ratelimit|authflip'"`
 	JSON    bool   `kong:"name='json',help='Emit the trace as JSON'"`
-	Graph   bool   `kong:"name='graph',short='g',help='Pencil-graph view: per-request hops + svc state evolution'"`
+	Table   bool   `kong:"name='table',short='t',help='Compact table view (default is the pencil graph)'"`
 	Verbose bool   `kong:"name='verbose',short='v',help='Show gateway logs (default: quiet)'"`
 }
 
@@ -129,10 +129,10 @@ func (c *LbCmd) Run() error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
-	case c.Graph:
-		out.renderGraph(os.Stdout, orderedIDs)
-	default:
+	case c.Table:
 		out.renderTable(os.Stdout)
+	default:
+		out.renderGraph(os.Stdout, orderedIDs)
 	}
 	return nil
 }

@@ -253,14 +253,15 @@ is exercised without sleeping.
 ```bash
 ./harness lb --example cascade        # cascade | flat | grid | single | regression | ratelimit | authflip
 ./harness lb --file scenario.yaml     # your own shape
-./harness lb --example cascade --graph  # pencil-graph view: hops + per-request svc state
+./harness lb --example grid --table   # compact table instead of the default graph
 ./harness lb --example grid --json    # machine-readable trace
 ```
 
-`--graph` renders the pencil-graph view from
+The **default** output is the pencil-graph view from
 `.design/priority-routing.pencil.md` — each request shows the failover hops
 (`t0 ✗500 → t1 ✓200`) and a state line (`t0=open/unhealthy … pin=t1`), so the
 breaker trip, health exclusion, and pin movement are visible request by request.
+`--table` gives the compact one-line-per-request form.
 
 It shares one simulation engine (`internal/server.LBSimulator`) with the Go
 scenario tests (`internal/server/lb_scenario_test.go`), so the CLI and CI assert
