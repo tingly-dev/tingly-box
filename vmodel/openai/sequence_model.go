@@ -58,6 +58,19 @@ func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
 	}
 }
 
+// NewStatusSequence is the shorthand for the common case: a sequence model
+// driven purely by a list of status codes, e.g.
+// NewStatusSequence("flaky", "Flaky", 200, 200, 429). Success content and error
+// type/message come from module defaults; build a SequenceConfig and call
+// NewSequenceModel when you need per-step content, repeats, or no-loop.
+func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
+	return NewSequenceModel(&vmodel.SequenceConfig{
+		ID:    id,
+		Name:  name,
+		Steps: vmodel.Steps(statuses...),
+	})
+}
+
 // ResolveRequest advances the sequence and returns the MockModel snapshot for
 // this request. This is the single point at which the cursor advances.
 func (m *SequenceModel) ResolveRequest() VirtualModel {

@@ -483,8 +483,11 @@ Use the factories — `Steps(...)` for the common status-only case, `Step(status
 ```go
 // Anthropic; identical API in the openai sub-package.
 
-// Common case: just the status program.
-m := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
+// Quickest path: a status-only model in one call.
+m := anthropic.NewStatusSequence("flaky-provider", "Flaky Provider", 200, 200, 429)
+
+// Equivalent, when you also want delay / description / no-loop:
+m = anthropic.NewSequenceModel(&vmodel.SequenceConfig{
     ID:    "flaky-provider",
     Name:  "Flaky Provider",
     Steps: vmodel.Steps(200, 200, 429), // 200, 200, 429, looping
@@ -501,6 +504,14 @@ m2 := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
 })
 _ = reg.Register(m)
 ```
+
+The factory ladder, simplest → most explicit:
+
+| Factory | Use when |
+| ------- | -------- |
+| `anthropic.NewStatusSequence(id, name, statuses...)` | Status-only program, one call |
+| `vmodel.Steps(statuses...)` inside a `SequenceConfig` | You also need delay / description / `NoLoop` |
+| `vmodel.Step(status, opts...)` per step | Per-step content, repeat, or custom error text |
 
 ### How it works (per-request resolution)
 

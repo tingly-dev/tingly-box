@@ -102,6 +102,26 @@ func TestSequence_Anthropic_NonStreaming(t *testing.T) {
 	}
 }
 
+// TestSequence_StatusFactory verifies the NewStatusSequence shorthand wires a
+// status-only program end-to-end (Anthropic side; OpenAI is symmetric).
+func TestSequence_StatusFactory(t *testing.T) {
+	model := anthropicvm.NewStatusSequence("seq-factory", "Seq Factory", 200, 503)
+	require.Equal(t, vmodel.VirtualModelTypeSequence, model.GetType())
+	srv := newInjectionServer(t, nil, model)
+
+	want := []int{http.StatusOK, http.StatusServiceUnavailable, http.StatusOK}
+	for i, w := range want {
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", map[string]any{
+			"model":      "seq-factory",
+			"max_tokens": 16,
+			"messages":   []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		require.Equalf(t, w, resp.StatusCode, "request %d: body=%s", i, body)
+	}
+}
+
 // TestSequence_DefaultDemoRegistered verifies the user-facing demo sequence
 // (virtual-sequence-429) ships in both default registries and behaves as
 // advertised (200,200,429).
