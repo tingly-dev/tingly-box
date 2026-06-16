@@ -106,6 +106,35 @@ Fix: `AffinityStage` honors a pin only while the pinned service is one the strat
 - **one layer, many services** — eligible iff the pinned service's own breaker is available; a pin to a *dead peer* is dropped while healthy peers exist.
 - **many layers** — eligible iff the pinned service is breaker-available *and* in the highest-priority tier that currently has any available service; a pin to a fallback tier is dropped once the primary recovers.
 
+Decision flow (pinned service = `P`):
+
+```
+IsAffinityEligible(services, P)  — "is P a service the strategy would pick right now?"
+
+  P == nil  OR  P inactive ? ───────────────────────────────────────▶ NO (drop pin)
+        │ no
+        ▼
+  active  = services with Active==true      (inactive can't make a tier look "available")
+  buckets = group by Tier, ascending        (T0 = highest priority, first)
+        │
+        ▼
+  walk tiers top→down; the FIRST tier with any breaker-available service = top tier T*
+        │            (available = closed OR half-open; read via IsAvailable —
+        │             non-consuming, never steals the half-open probe)
+        ├──────────────────────────────┬───────────────────────────────────────
+        ▼ found T*                      ▼ no tier available (every breaker open)
+   P in T*  AND  P available ?     P in the lowest-numbered tier ?
+        ├─ yes ─▶ YES (honor)           ├─ yes ─▶ YES (degrade: honor, surface
+        └─ no  ─▶ NO  (drop)            │                real upstream error)
+                                        └─ no  ─▶ NO
+
+  the two "drop" cases:
+    cross-tier demote                     within-tier dead peer
+    T0: t0 (recovered) ◀ T*               T0: a (available) ◀ T*   b (open)
+    T1: P=t2 (available)                      P=b ∈ T* but not available
+    → P ∉ T* → drop → re-pick t0          → drop → re-pick a
+```
+
 `IsAffinityEligible` mirrors `TierTactic`'s bucket walk but uses the non-consuming `BreakerStore.IsAvailable` so it never steals the half-open probe; when every service is tripped it degrades to "honor a pin to the lowest tier" rather than wedging. On decline, the pipeline falls through to the strategy, which re-selects a currently-valid service, and the existing `ServiceSelector.postProcess` automatically **re-pins** the session there — no change to the failover layer. The global-affinity pipeline is ordered **health → affinity → strategy** (`pipelineModeGlobalAffinity`). Note `typ.HealthFilter` only tracks 429/auth; the 500-driven signal lives in the breaker, which is why the affinity scoping consults the breaker directly rather than relying on the health stage.
 
 ### End-to-end flow: how the tactic switch actually takes effect
