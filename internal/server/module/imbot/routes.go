@@ -2,7 +2,7 @@ package imbot
 
 import (
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all ImBot settings routes with swagger documentation

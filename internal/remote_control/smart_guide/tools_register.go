@@ -1,7 +1,7 @@
 package smart_guide
 
 import (
-	"github.com/tingly-dev/tingly-box/internal/afk"
+	"github.com/tingly-dev/tingly-box/afk"
 )
 
 // BuildTools assembles the Smart Guide toolset for the ReAct engine.

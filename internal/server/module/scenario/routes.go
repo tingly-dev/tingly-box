@@ -1,6 +1,6 @@
 package scenario
 
-import "github.com/tingly-dev/tingly-box/pkg/swagger"
+import "github.com/tingly-dev/tingly-box/swagger"
 
 // RegisterRoutes registers all scenario routes with swagger documentation
 func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {

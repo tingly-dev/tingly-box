@@ -1,7 +1,7 @@
 package configapply
 
 import (
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all config apply routes with swagger documentation

@@ -9,8 +9,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/afk"
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/internal/afk"
 )
 
 // AgentType constants. Defined here (not in agentboot core) so Smart Guide can

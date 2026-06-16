@@ -3,7 +3,7 @@ package virtualmodel
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers virtual-model management routes under the given

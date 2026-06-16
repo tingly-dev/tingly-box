@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/afk"
+	"github.com/tingly-dev/tingly-box/afk"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"

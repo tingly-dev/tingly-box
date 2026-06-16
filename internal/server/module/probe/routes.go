@@ -2,7 +2,7 @@ package probe
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/probe"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all probe-module endpoints on the given route group.

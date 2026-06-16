@@ -4,7 +4,7 @@ import (
 	"html/template"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers OAuth API routes with swagger documentation

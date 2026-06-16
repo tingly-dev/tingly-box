@@ -1,7 +1,7 @@
 package usage
 
 import (
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers the usage API routes with swagger documentation
