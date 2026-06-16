@@ -111,11 +111,11 @@ func TestMultiModeMemoryLog_BuffersEntireStreamingResponse(t *testing.T) {
 
 	// Against fixed code the middleware retains ~nothing, so the bug no longer
 	// reproduces: self-skip (the regression is locked down by the dedicated
-	// NotBuffered test). If the status gate is reverted, reproPeakDelta jumps
-	// back to ~64 MiB and we fall through to the CONFIRMED log below.
+	// ConcurrentStreamsStayFlat guard). If the status gate is reverted,
+	// reproPeakDelta jumps back to ~64 MiB and we fall through to CONFIRMED below.
 	if reproPeakDelta < streamTotal*8/10 {
 		t.Skipf("status-gated capture is in place: a 200 streaming request retained only %d MiB; "+
-			"OOM no longer reproduces (regression guarded by TestMultiModeMemoryLog_StreamingResponseNotBuffered)",
+			"OOM no longer reproduces (regression guarded by TestMultiModeMemoryLog_ConcurrentStreamsStayFlat)",
 			reproPeakDelta>>20)
 	}
 
@@ -123,58 +123,12 @@ func TestMultiModeMemoryLog_BuffersEntireStreamingResponse(t *testing.T) {
 		"N concurrent streams scale this linearly to OOM.", reproPeakDelta>>20)
 }
 
-// TestMultiModeMemoryLog_StreamingResponseNotBuffered is the regression guard for
-// the OOM fix above. With status-gated capture, a 200 streaming response is
-// passed straight through and the middleware retains (almost) nothing — the
-// response buffer is only ever allocated for statusCode >= 400, so the happy
-// path (long-lived LLM-proxy streams) costs no per-stream heap.
-func TestMultiModeMemoryLog_StreamingResponseNotBuffered(t *testing.T) {
-	const (
-		streamTotal = 64 << 20 // 64 MiB
-		chunkSize   = 16 << 10 // 16 KiB
-	)
-
-	// sample streams streamTotal bytes through an engine (optionally wrapped by
-	// the middleware) and returns the heap retained while the request is still
-	// in flight.
-	sample := func(useMiddleware bool) uint64 {
-		engine := gin.New()
-		if useMiddleware {
-			m, _ := setupTestMiddleware()
-			engine.Use(m.Middleware())
-		}
-		var delta uint64
-		engine.GET("/stream", func(c *gin.Context) {
-			before := heapAlloc()
-			streamBytes(c, streamTotal, chunkSize)
-			delta = retainedDelta(before, heapAlloc())
-		})
-		req, _ := http.NewRequest("GET", "/stream", nil)
-		engine.ServeHTTP(discardRecorder(), req)
-		return delta
-	}
-
-	controlDelta := sample(false)
-	mwDelta := sample(true)
-
-	t.Logf("streamed bytes:        %d MiB", streamTotal>>20)
-	t.Logf("control retained heap: %d MiB (no middleware)", controlDelta>>20)
-	t.Logf("middleware retained:   %d MiB (status-gated capture)", mwDelta>>20)
-
-	// The middleware must NOT pin the streamed body: retained heap stays in the
-	// same low band as the pass-through control, far below the full stream size.
-	if mwDelta > streamTotal/4 {
-		t.Fatalf("middleware retained %d MiB of a 200 streaming response; "+
-			"status-gated capture must buffer ~nothing on the happy path", mwDelta>>20)
-	}
-}
-
 // TestMultiModeMemoryLog_ErrorResponseCaptureBounded validates the other half of
 // the design: error (>=400) responses ARE captured for diagnostics, but the
 // captured body is bounded by MaxCapturedBodySize even when the error body is
 // large — so capture stays useful without reintroducing unbounded buffering.
 func TestMultiModeMemoryLog_ErrorResponseCaptureBounded(t *testing.T) {
-	const errorBody = 8 << 20 // 8 MiB error body, far larger than the cap
+	const errorBody = 256 << 10 // comfortably larger than the 64KiB cap
 
 	m, _ := setupTestMiddleware()
 	engine := gin.New()
