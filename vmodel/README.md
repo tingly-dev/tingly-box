@@ -468,14 +468,20 @@ fail every time, a sequence model fails *on schedule*.
 
 A `vmodel.SequenceConfig` is an ordered program of `SequenceStep`s, each of
 which is either a success (status `0`/`200` → returns content) or a pre-content
-failure (any other status → the matching HTTP error envelope). The program
-loops by default (`NoLoop` clamps to the last step instead).
+failure (any other status → the matching HTTP error envelope). What happens
+once the program is consumed is set by `OnExhaust`:
+
+| `OnExhaust` | Behaviour after the last step |
+| ----------- | ----------------------------- |
+| `ExhaustLoop` (default) | Wraps back to the first step, repeats forever |
+| `ExhaustClamp` | Keeps serving the last step (`200, 503 → 200, 503, 503, …`) |
+| `ExhaustFail` | Serves a terminal `410` / `sequence_exhausted` error for every later request |
 
 **Status is the only required field.** Everything else falls back to a default
 provided by the module, so you rarely write a struct literal:
 
 - success content ← step `Content` → `SequenceConfig.DefaultContent` → `vmodel.DefaultSequenceContent`
-- error `Type`/`Message` ← derived from the status code (`429 → rate_limit_error`, …)
+- error `ErrorType`/`ErrorMessage` ← derived from the status code (`429 → rate_limit_error`, …)
 
 Use the factories — `Steps(...)` for the common status-only case, `Step(status, opts...)` for the rest:
 
@@ -498,7 +504,7 @@ m2 := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
     Name: "Burst Then Fail",
     Steps: []vmodel.SequenceStep{
         vmodel.Step(200, vmodel.WithRepeat(5)),                  // succeed 5×
-        vmodel.Step(503, vmodel.WithMessage("scheduled outage")), // then fail once
+        vmodel.Step(503, vmodel.WithErrorMessage("scheduled outage")), // then fail once
     },
 })
 _ = reg.Register(m)
@@ -509,7 +515,7 @@ The factory ladder, simplest → most explicit:
 | Factory | Use when |
 | ------- | -------- |
 | `anthropic.NewStatusSequence(id, name, statuses...)` | Status-only program, one call |
-| `vmodel.Steps(statuses...)` inside a `SequenceConfig` | You also need delay / description / `NoLoop` |
+| `vmodel.Steps(statuses...)` inside a `SequenceConfig` | You also need delay / description / `OnExhaust` |
 | `vmodel.Step(status, opts...)` per step | Per-step content, repeat, or custom error text |
 
 ### How it works (per-request resolution)

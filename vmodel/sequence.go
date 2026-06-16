@@ -24,11 +24,11 @@ type SequenceStep struct {
 	// SequenceConfig.DefaultContent is used. Ignored for error steps.
 	Content string `json:"content,omitempty" yaml:"content,omitempty"`
 
-	// Message and Type override the error envelope for an error step. When
-	// empty they are derived from Status (see defaultErrorMeta). Ignored for
-	// success steps.
-	Message string `json:"message,omitempty" yaml:"message,omitempty"`
-	Type    string `json:"type,omitempty" yaml:"type,omitempty"`
+	// ErrorMessage and ErrorType override the error envelope for an error
+	// step. When empty they are derived from Status (see defaultErrorMeta).
+	// Ignored for success steps.
+	ErrorMessage string `json:"error_message,omitempty" yaml:"error_message,omitempty"`
+	ErrorType    string `json:"error_type,omitempty" yaml:"error_type,omitempty"`
 
 	// Repeat serves this step Repeat consecutive times before advancing to
 	// the next one. Values <= 0 are treated as 1. Useful for compact configs
@@ -51,14 +51,15 @@ func WithContent(content string) StepOption {
 	return func(s *SequenceStep) { s.Content = content }
 }
 
-// WithMessage overrides an error step's message (otherwise derived from Status).
-func WithMessage(message string) StepOption {
-	return func(s *SequenceStep) { s.Message = message }
+// WithErrorMessage overrides an error step's message (otherwise derived from
+// Status).
+func WithErrorMessage(message string) StepOption {
+	return func(s *SequenceStep) { s.ErrorMessage = message }
 }
 
 // WithErrorType overrides an error step's type (otherwise derived from Status).
 func WithErrorType(typ string) StepOption {
-	return func(s *SequenceStep) { s.Type = typ }
+	return func(s *SequenceStep) { s.ErrorType = typ }
 }
 
 // WithRepeat serves the step n consecutive times before advancing.
@@ -89,10 +90,29 @@ func Steps(statuses ...int) []SequenceStep {
 	return out
 }
 
+// ExhaustPolicy selects what a sequence serves once every step has been
+// consumed once. The zero value loops, which is the common default.
+type ExhaustPolicy string
+
+const (
+	// ExhaustLoop wraps back to the first step and repeats the program
+	// indefinitely. This is the zero value / default.
+	ExhaustLoop ExhaustPolicy = ""
+
+	// ExhaustClamp keeps serving the last step forever once the program is
+	// exhausted (e.g. 200, 503 → 200, 503, 503, 503, …).
+	ExhaustClamp ExhaustPolicy = "clamp"
+
+	// ExhaustFail serves a terminal pre-content error (HTTP 410, type
+	// "sequence_exhausted") for every request after the program is exhausted,
+	// modelling an upstream whose scripted run is over.
+	ExhaustFail ExhaustPolicy = "fail"
+)
+
 // SequenceConfig describes a SequenceModel: an ordered program of steps that
 // is walked one step per request. By default the program loops (wraps back to
 // the first step) so the model is reusable across an unbounded number of
-// requests.
+// requests; set OnExhaust to change what happens once it is consumed.
 type SequenceConfig struct {
 	ID          string
 	Name        string
@@ -106,9 +126,10 @@ type SequenceConfig struct {
 	// count at construction time.
 	Steps []SequenceStep
 
-	// NoLoop, when true, clamps to the last step after the program is
-	// exhausted instead of wrapping back to the start. Default (false) loops.
-	NoLoop bool
+	// OnExhaust selects the behaviour after the program is consumed once:
+	// ExhaustLoop (default) wraps around, ExhaustClamp repeats the last step,
+	// ExhaustFail serves a terminal error.
+	OnExhaust ExhaustPolicy
 }
 
 // ResolvedStep is the concrete outcome of advancing a Sequence: either a
@@ -126,7 +147,8 @@ type ResolvedStep struct {
 type Sequence struct {
 	flat           []ResolvedStep
 	defaultContent string
-	noLoop         bool
+	onExhaust      ExhaustPolicy
+	exhausted      ResolvedStep // served by Next when onExhaust == ExhaustFail
 	cursor         atomic.Uint64
 }
 
@@ -137,7 +159,8 @@ type Sequence struct {
 func NewSequence(cfg SequenceConfig) *Sequence {
 	s := &Sequence{
 		defaultContent: cfg.DefaultContent,
-		noLoop:         cfg.NoLoop,
+		onExhaust:      cfg.OnExhaust,
+		exhausted:      exhaustedStep(),
 	}
 	for _, step := range cfg.Steps {
 		repeat := step.Repeat
@@ -157,13 +180,34 @@ func NewSequence(cfg SequenceConfig) *Sequence {
 
 // Next atomically advances the cursor and returns the step for this request.
 // It is safe for concurrent use; each caller observes a distinct cursor value.
+// Behaviour past the end of the program is governed by OnExhaust.
 func (s *Sequence) Next() ResolvedStep {
 	n := s.cursor.Add(1) - 1
-	idx := int(n % uint64(len(s.flat)))
-	if s.noLoop && n >= uint64(len(s.flat)) {
-		idx = len(s.flat) - 1
+	if n >= uint64(len(s.flat)) {
+		switch s.onExhaust {
+		case ExhaustClamp:
+			return s.flat[len(s.flat)-1]
+		case ExhaustFail:
+			return s.exhausted
+		}
+		// ExhaustLoop (default): fall through to modulo wrap-around.
 	}
-	return s.flat[idx]
+	return s.flat[int(n%uint64(len(s.flat)))]
+}
+
+// exhaustedStep is the terminal error served once an ExhaustFail program is
+// consumed: a non-retryable HTTP 410 with a dedicated type so callers can tell
+// "the script is over" apart from a scripted in-band failure.
+func exhaustedStep() ResolvedStep {
+	return ResolvedStep{
+		Status: 410,
+		Error: &ErrorInjection{
+			Stage:   ErrorStagePreContent,
+			Status:  410,
+			Message: "sequence exhausted",
+			Type:    "sequence_exhausted",
+		},
+	}
 }
 
 // Len reports the number of (post-expansion) steps in the program.
@@ -180,7 +224,7 @@ func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 		}
 		return ResolvedStep{Status: 200, Content: content}
 	}
-	typ, msg := step.Type, step.Message
+	typ, msg := step.ErrorType, step.ErrorMessage
 	dtyp, dmsg := defaultErrorMeta(step.Status)
 	if typ == "" {
 		typ = dtyp
