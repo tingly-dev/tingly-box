@@ -3,7 +3,6 @@ package routing
 import (
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -62,18 +61,21 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 		return nil, false
 	}
 
-	// Tier scoping: for tier-based rules, only honor a pin while the locked
-	// service is still in the highest currently-available tier (breaker-aware).
-	// Once a higher-priority tier recovers, the pin to a lower tier is stale —
-	// decline it so the strategy re-selects the primary tier and postProcess
-	// re-pins the session there. Without this, a session pinned to a fallback
-	// tier during a brief primary-tier outage would stick there indefinitely.
-	if state != nil && rule.LBTactic.Instantiate().GetType() == loadbalance.TacticTier {
-		if !typ.IsInTopAvailableTier(state.candidateServices, entry.Service) {
-			logrus.Infof("[affinity] locked service %s is below the top available tier for session %s; dropping pin so strategy re-selects",
-				entry.Service.ServiceID(), ctx.SessionID.String())
-			return nil, false
-		}
+	// Health scoping (breaker-aware): only honor a pin while the locked service
+	// is one the strategy would actually pick right now. This is driven by the
+	// rule's config shape, not its tactic label — "tier" is just the emergent
+	// shape of a multi-layer rule:
+	//   - many layers: drop a pin to a fallback tier once the primary recovers.
+	//   - one layer, many services: drop a pin to a dead peer when healthy
+	//     peers exist.
+	//   - one service: always honored (nothing else to pick).
+	// On decline the pipeline falls through to the strategy, which re-selects a
+	// currently-valid service, and postProcess re-pins the session there.
+	if state != nil && len(state.candidateServices) > 0 &&
+		!typ.IsAffinityEligible(state.candidateServices, entry.Service) {
+		logrus.Infof("[affinity] locked service %s is not currently selectable for session %s; dropping pin so strategy re-selects",
+			entry.Service.ServiceID(), ctx.SessionID.String())
+		return nil, false
 	}
 
 	result := NewResult(entry.Service, "affinity")

@@ -1244,21 +1244,25 @@ func groupServicesByTier(services []*loadbalance.Service) []tierBucket {
 	return out
 }
 
-// IsInTopAvailableTier reports whether target sits in the highest-priority
-// tier (lowest Tier number) that currently has at least one breaker-available
-// service. It mirrors TierTactic.SelectService's bucket walk but uses the
-// non-consuming breaker read (IsAvailable) so it does not steal the half-open
-// probe.
+// IsAffinityEligible reports whether target is a service the routing strategy
+// would actually select right now, so session affinity can decide whether a
+// pin is still valid. It is config-shape driven rather than tactic-label
+// driven — "tier" is just the emergent shape of a multi-layer rule, so this
+// answers the same question for every shape:
 //
-// Used by session affinity to avoid pinning a session below a recovered tier:
-// once a higher-priority tier's breaker closes (or goes half-open), a pin to a
-// lower tier is no longer in the top available tier and should be dropped so
-// the session returns to its primary tier.
+//   - one service           → the only service; eligible whenever present.
+//   - one tier, many services → eligible iff target's own breaker is available
+//     (don't stick a session to a dead peer when healthy peers exist).
+//   - many tiers             → eligible iff target is breaker-available AND its
+//     tier is the highest-priority tier that currently has any available
+//     service (don't stay on a fallback tier after the primary recovers).
 //
-// When every bucket is tripped it falls back to the lowest-numbered tier
-// (matching TierTactic's degrade-don't-disappear behavior), so a pin to that
-// tier is still honored rather than wedging.
-func IsInTopAvailableTier(services []*loadbalance.Service, target *loadbalance.Service) bool {
+// It mirrors TierTactic.SelectService's bucket walk but uses the non-consuming
+// breaker read (IsAvailable) so it never steals the half-open probe. When
+// every service is tripped it falls back to "target is in the lowest-numbered
+// tier" (matching TierTactic's degrade-don't-disappear behavior) so a pin is
+// honored rather than wedging.
+func IsAffinityEligible(services []*loadbalance.Service, target *loadbalance.Service) bool {
 	if target == nil {
 		return false
 	}
@@ -1269,14 +1273,25 @@ func IsInTopAvailableTier(services []*loadbalance.Service, target *loadbalance.S
 
 	store := loadbalance.DefaultBreakerStore()
 	for _, group := range buckets {
+		available := false
+		targetAvailableHere := false
 		for _, svc := range group.services {
 			if store.IsAvailable(svc.ServiceID()) {
-				return target.Tier == group.tier
+				available = true
+				if svc.ServiceID() == target.ServiceID() {
+					targetAvailableHere = true
+				}
 			}
 		}
+		if available {
+			// This is the top available tier. The pin is valid only if the
+			// target itself is the (or an) available service in it.
+			return targetAvailableHere
+		}
 	}
-	// Every tier is tripped — fall back to the lowest-numbered (highest
-	// priority) tier, which groupServicesByTier returns first.
+	// Every service is tripped — honor a pin to the lowest-numbered (highest
+	// priority) tier, which groupServicesByTier returns first, so the request
+	// still surfaces a real upstream error instead of wedging.
 	return target.Tier == buckets[0].tier
 }
 

@@ -212,6 +212,34 @@ func TestAffinity_TierScope_WithinTierStickinessPreserved(t *testing.T) {
 	require.Equal(t, b.ServiceID(), result.Service.ServiceID())
 }
 
+// Shape 2: one layer, many services, NO tier tactic label (plain horizontal
+// rule). A pin to a service whose breaker is open must still be dropped when a
+// healthy peer exists — the scoping is config-shape driven, not gated on the
+// tactic label.
+func TestAffinity_HorizontalRule_DropsPinToDeadPeer(t *testing.T) {
+	store := newMockAffinityStore()
+	a := testService("aff-horiz-a", "m", true) // tier 0 (default)
+	b := testService("aff-horiz-b", "m", true) // tier 0 (default)
+	store.Set("rule-horiz", testSessionKey("s1"), testAffinityEntry(a))
+
+	// Plain rule: testRule leaves LBTactic unset (defaults to random).
+	rule := testRule("rule-horiz", "m", []*loadbalance.Service{a, b})
+	rule.Flags.SessionAffinity = 3600
+
+	bs := loadbalance.DefaultBreakerStore()
+	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+		bs.RecordFailure(a.ServiceID())
+	}
+	defer bs.RecordSuccess(a.ServiceID())
+
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled,
+		"pin to a dead same-tier peer must be dropped even without a tier tactic label")
+}
+
 func TestAffinity_Name(t *testing.T) {
 	stage := NewAffinityStage(newMockAffinityStore(), "global")
 	require.Equal(t, "affinity", stage.Name())
