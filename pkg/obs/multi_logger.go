@@ -108,6 +108,7 @@ type MultiLoggerConfig struct {
 // MemorySinkConfig holds configuration for a memory sink
 type MemorySinkConfig struct {
 	MaxEntries int // Maximum entries to keep in memory (default varies by source)
+	MaxBytes   int // Total-byte budget across retained entries; 0 = source default, <0 = unlimited
 }
 
 // DefaultMultiLoggerConfig returns default configuration
@@ -126,7 +127,11 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 		JSONMaxBackups: 3,
 		JSONMaxAge:     7,
 
-		// Default memory sink sizes
+		// Default memory sink sizes. Each sink is bounded on two axes: a count
+		// cap (here) and a total-byte budget (left zero => resolved from
+		// getDefaultMemorySinkBytes, the single source of truth for byte budgets,
+		// since entries can inline large bodies and the count cap alone does not
+		// bound memory).
 		MemorySinkConfig: map[LogSource]MemorySinkConfig{
 			LogSourceHTTP:         {MaxEntries: 1000}, // HTTP requests: high volume
 			LogSourceSystem:       {MaxEntries: 500},  // System logs: medium volume
@@ -172,7 +177,11 @@ func NewMultiLogger(cfg *MultiLoggerConfig) (*MultiLogger, error) {
 
 	// Pre-initialize memory sinks from config
 	for source, sinkCfg := range cfg.MemorySinkConfig {
-		ml.getOrCreateMemorySink(source, sinkCfg.MaxEntries)
+		maxBytes := sinkCfg.MaxBytes
+		if maxBytes == 0 {
+			maxBytes = ml.getDefaultMemorySinkBytes(source)
+		}
+		ml.getOrCreateMemorySink(source, sinkCfg.MaxEntries, maxBytes)
 	}
 
 	return ml, nil
@@ -241,11 +250,11 @@ func (m *MultiLogger) GetMemorySink(source LogSource) *MemoryLogHook {
 
 	// Create with default size based on source
 	defaultSize := m.getDefaultMemorySinkSize(source)
-	return m.getOrCreateMemorySink(source, defaultSize)
+	return m.getOrCreateMemorySink(source, defaultSize, m.getDefaultMemorySinkBytes(source))
 }
 
 // getOrCreateMemorySink creates or returns an existing memory sink
-func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries int) *MemoryLogHook {
+func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries, maxBytes int) *MemoryLogHook {
 	m.memorySinksMu.Lock()
 	defer m.memorySinksMu.Unlock()
 
@@ -254,7 +263,7 @@ func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries int) *M
 		return sink
 	}
 
-	sink := NewMemoryLogHook(maxEntries)
+	sink := NewMemoryLogHook(maxEntries, maxBytes)
 	m.memorySinks[source] = sink
 	return sink
 }
@@ -274,6 +283,23 @@ func (m *MultiLogger) getDefaultMemorySinkSize(source LogSource) int {
 		return 1000
 	default:
 		return 100
+	}
+}
+
+// getDefaultMemorySinkBytes returns the default total-byte budget for a source.
+// Sized to match the count defaults while bounding worst-case footprint when
+// entries inline large bodies (e.g. response_body up to the capture cap).
+func (m *MultiLogger) getDefaultMemorySinkBytes(source LogSource) int {
+	const mib = 1024 * 1024
+	switch source {
+	case LogSourceHTTP, LogSourceModelRequest:
+		return 16 * mib
+	case LogSourceSystem, LogSourceSmartRouting:
+		return 4 * mib
+	case LogSourceAction:
+		return 1 * mib
+	default:
+		return 1 * mib
 	}
 }
 

@@ -32,15 +32,21 @@
 // Non-AI routes (system/management APIs) produce no routing fields.
 // Request bodies are stored only for 4xx/5xx responses to limit memory use;
 // they are referenced by a body_ref ID that can be retrieved via
-// GET /api/v1/log/request/:id.
+// GET /api/v1/log/request/:id. The in-memory diagnostic structures are bounded
+// on two axes — entry/body count AND a total-byte budget (LRU-evicted) — so a
+// burst of large error bodies cannot grow the heap without limit.
 //
-// ErrorLogMiddleware (error_log.go)
+// BadRequestSink (bad_request_sink.go)
 //
-// Writes filtered request/response detail to a rotating debug log file
-// (default: <configDir>/logs/debug.log, 10 MB / 5 files).  An Expr expression
+// A dedicated, expr-filtered disk sink (not a middleware) owned by the unified
+// MultiModeMemoryLogMiddleware. It writes filtered request/response detail to a
+// lumberjack-rotated file (<configDir>/log/bad_requests.log). An Expr expression
 // controls which requests are recorded; the default captures anything under
-// /api/ or /tbe/ with a 4xx/5xx status.  The filter can be reloaded at
-// runtime without restarting the server.
+// /api/ or /tbe/ with a 4xx/5xx status, and can be reloaded at runtime. Bodies
+// are captured once by the unified middleware and fed to this sink (no second
+// buffering pass); the on-disk copy keeps the full captured body for diagnostic
+// fidelity even when the tighter in-memory store truncates it, and flags
+// request_body_truncated / response_body_truncated when the body was clipped.
 //
 // AuthMiddleware (auth.go)
 //

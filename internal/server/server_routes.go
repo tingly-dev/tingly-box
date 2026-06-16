@@ -16,14 +16,11 @@ func (s *Server) setupMiddleware() {
 	// Recovery middleware
 	s.engine.Use(gin.Recovery())
 
-	// Memory log middleware for HTTP request logging
+	// Unified HTTP logging middleware: records request metadata + status code,
+	// captures request/response bodies once, and fans out to the memory ring,
+	// the request-body store, and the dedicated bad-request disk sink.
 	if s.memoryLogMW != nil {
 		s.engine.Use(s.memoryLogMW.Middleware())
-	}
-
-	// Debug middleware for logging requests/responses (only if enabled)
-	if s.errorMW != nil {
-		s.engine.Use(s.errorMW.Middleware())
 	}
 
 	// CORS middleware

@@ -72,6 +72,10 @@ type Config struct {
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && (Path matches '^/api/' || Path matches '^/tbe/')")
 
+	// HTTPLogCapture controls in-memory diagnostic capture of request/response
+	// bodies by the access-log middleware. Zero values use built-in defaults.
+	HTTPLogCapture HTTPLogCaptureConfig `json:"http_log_capture,omitempty" yaml:"http_log_capture,omitempty"`
+
 	// Health monitor settings
 	HealthMonitor loadbalance.HealthMonitorConfig `json:"health_monitor,omitempty" yaml:"health_monitor,omitempty"`
 
@@ -1335,6 +1339,28 @@ func (c *Config) GetErrorLogFilterExpression() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.ErrorLogFilterExpression
+}
+
+// HTTPLogCaptureConfig configures the access-log middleware's in-memory
+// diagnostic capture of request/response bodies. All size fields are in bytes;
+// a zero value means "use the built-in default". Capture is for error
+// diagnostics only and never affects what the client receives.
+//
+// The capture caps double as the fidelity ceiling for the on-disk bad-request
+// sink (a larger cap => more complete bad requests on disk). In-memory totals
+// are bounded by smart defaults (count + byte budget) and are not exposed here.
+type HTTPLogCaptureConfig struct {
+	Disabled            bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`                             // true = never buffer request/response bodies
+	MaxCapturedBodySize int  `json:"max_captured_body_size,omitempty" yaml:"max_captured_body_size,omitempty"` // response capture cap; 0 = default (64KiB)
+	MaxRequestBodySize  int  `json:"max_request_body_size,omitempty" yaml:"max_request_body_size,omitempty"`   // request capture cap; 0 = default (1MiB)
+	MaxRequestBodies    int  `json:"max_request_bodies,omitempty" yaml:"max_request_bodies,omitempty"`         // request body store count cap; 0 = default (50)
+}
+
+// GetHTTPLogCapture returns the HTTP log capture configuration.
+func (c *Config) GetHTTPLogCapture() HTTPLogCaptureConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.HTTPLogCapture
 }
 
 // SetErrorLogFilterExpression updates the error log filter expression

@@ -5,19 +5,31 @@ import (
 	"sync"
 )
 
-// RequestBodyStore stores request bodies in an in-memory circular buffer.
+// RequestBodyStore stores request bodies in an in-memory FIFO buffer.
 // Each entry is indexed by a unique ID for retrieval.
 //
 // This is designed for debugging and troubleshooting: request bodies are
 // stored in memory only (no disk persistence) and automatically discarded
-// when the buffer is full.
+// when either bound is exceeded.
+//
+// The store is bounded on TWO axes (mirroring MemoryLogHook):
+//   - maxCount: how many request bodies to retain.
+//   - maxBytes: a total-byte budget across retained bodies.
+//
+// A single body is truncated only when it alone exceeds the whole byte budget
+// (the "capacity is still insufficient" fallback); otherwise bodies are kept
+// whole and the oldest are evicted to stay within both bounds.
 type RequestBodyStore struct {
-	// Circular buffer storing request bodies
+	// Map from ID to stored entry.
 	bodies map[string]*RequestBodyEntry
-	// Circular queue of IDs for LRU eviction
-	ids      []string
-	writeIdx int
-	maxSize  int
+	// FIFO order of IDs (front = oldest), used for eviction.
+	order []string
+	// maxCount bounds the number of retained entries (<=0 = unlimited count).
+	maxCount int
+	// maxBytes bounds the total bytes of retained entries (<=0 = unlimited bytes).
+	maxBytes int
+	// Running sum of retained entry sizes.
+	bytes    int
 	entrySeq int64 // sequence counter for generating IDs
 	mu       sync.RWMutex
 }
@@ -31,20 +43,27 @@ type RequestBodyEntry struct {
 	Truncated bool   // True if body was truncated due to size limits
 }
 
-// NewRequestBodyStore creates a new request body store with the specified capacity.
-func NewRequestBodyStore(maxSize int) *RequestBodyStore {
+func (e *RequestBodyEntry) size() int {
+	if e == nil {
+		return 0
+	}
+	return len(e.Body) + len(e.Method) + len(e.Path) + len(e.ID)
+}
+
+// NewRequestBodyStore creates a new request body store bounded by a count cap
+// (maxCount) and a total-byte budget (maxBytes; <=0 disables the byte budget).
+func NewRequestBodyStore(maxCount, maxBytes int) *RequestBodyStore {
 	return &RequestBodyStore{
-		bodies:   make(map[string]*RequestBodyEntry, maxSize),
-		ids:      make([]string, maxSize),
-		writeIdx: 0,
-		maxSize:  maxSize,
-		entrySeq: 0,
+		bodies:   make(map[string]*RequestBodyEntry),
+		maxCount: maxCount,
+		maxBytes: maxBytes,
 	}
 }
 
-// Store stores a request body and returns its unique ID.
-// If the buffer is full, the oldest entry is evicted.
-func (s *RequestBodyStore) Store(method, path, body string, maxBodySize int) string {
+// Store stores a request body and returns its unique ID. Oldest entries are
+// evicted to keep the store within both the count and byte bounds. If the body
+// alone exceeds the whole byte budget it is truncated (Truncated=true).
+func (s *RequestBodyStore) Store(method, path, body string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -52,10 +71,10 @@ func (s *RequestBodyStore) Store(method, path, body string, maxBodySize int) str
 	s.entrySeq++
 	id := generateRequestID(s.entrySeq)
 
-	// Truncate body if too large (keep first N chars)
+	// Last-resort truncation: only when the body alone can't fit the budget.
 	truncated := false
-	if len(body) > maxBodySize {
-		body = body[:maxBodySize]
+	if s.maxBytes > 0 && len(body) > s.maxBytes {
+		body = body[:s.maxBytes]
 		truncated = true
 	}
 
@@ -67,25 +86,32 @@ func (s *RequestBodyStore) Store(method, path, body string, maxBodySize int) str
 		Truncated: truncated,
 	}
 
-	// Calculate storage index (circular)
-	idx := s.writeIdx % s.maxSize
-
-	// Evict oldest entry if buffer is full
-	if len(s.ids) >= s.maxSize && idx < len(s.ids) {
-		oldID := s.ids[idx]
-		delete(s.bodies, oldID)
-	}
-
-	// Store ID in circular buffer
-	if idx < len(s.ids) {
-		s.ids[idx] = id
-	} else {
-		s.ids = append(s.ids, id)
-	}
 	s.bodies[id] = entry
-	s.writeIdx++
+	s.order = append(s.order, id)
+	s.bytes += entry.size()
+
+	// Evict oldest until within both bounds, always keeping the new entry.
+	for len(s.order) > 1 && s.overBudget() {
+		oldID := s.order[0]
+		s.order = s.order[1:]
+		if old, ok := s.bodies[oldID]; ok {
+			s.bytes -= old.size()
+			delete(s.bodies, oldID)
+		}
+	}
 
 	return id
+}
+
+// overBudget reports whether either bound is currently exceeded.
+func (s *RequestBodyStore) overBudget() bool {
+	if s.maxCount > 0 && len(s.order) > s.maxCount {
+		return true
+	}
+	if s.maxBytes > 0 && s.bytes > s.maxBytes {
+		return true
+	}
+	return false
 }
 
 // Get retrieves a request body by ID.
@@ -102,9 +128,9 @@ func (s *RequestBodyStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.bodies = make(map[string]*RequestBodyEntry, s.maxSize)
-	s.ids = make([]string, s.maxSize)
-	s.writeIdx = 0
+	s.bodies = make(map[string]*RequestBodyEntry)
+	s.order = s.order[:0]
+	s.bytes = 0
 }
 
 // Size returns the current number of stored entries.
@@ -113,6 +139,13 @@ func (s *RequestBodyStore) Size() int {
 	defer s.mu.RUnlock()
 
 	return len(s.bodies)
+}
+
+// Bytes returns the estimated total byte footprint of the retained bodies.
+func (s *RequestBodyStore) Bytes() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.bytes
 }
 
 // generateRequestID generates a unique request ID from a sequence number.

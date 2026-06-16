@@ -58,7 +58,7 @@ type Server struct {
 	multiLogger *pkgobs.MultiLogger
 
 	// middleware
-	errorMW         *middleware.ErrorLogMiddleware
+	badReqSink      *middleware.BadRequestSink
 	authMW          *middleware.AuthMiddleware
 	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
@@ -258,27 +258,27 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
-	var errorMW *middleware.ErrorLogMiddleware
 	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
-	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
+	capCfg := cfg.GetHTTPLogCapture()
+	badReqSink := middleware.NewBadRequestSink(errorLogPath)
 
 	// Set filter expression from config
 	filterExpr := cfg.GetErrorLogFilterExpression()
 	if filterExpr != "" {
-		if err := errorMW.SetFilterExpression(filterExpr); err != nil {
-			logrus.Debugf("Warning: Failed to set error log filter expression '%s': %v, using default", filterExpr, err)
+		if err := badReqSink.SetFilterExpression(filterExpr); err != nil {
+			logrus.Debugf("Warning: Failed to set bad-request filter expression '%s': %v, using default", filterExpr, err)
 		} else {
-			logrus.Debugf("ErrorLog middleware initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
+			logrus.Debugf("Bad-request sink initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
 		}
 	} else {
-		logrus.Debugf("ErrorLog middleware initialized with default filter, logging to: %s", errorLogPath)
+		logrus.Debugf("Bad-request sink initialized with default filter, logging to: %s", errorLogPath)
 	}
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
-	server.errorMW = errorMW
+	server.badReqSink = badReqSink
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()
@@ -314,7 +314,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize multi-mode memory log middleware for HTTP request logging
 	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
-	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger)
+	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger,
+		middleware.WithCaptureConfig(middleware.CaptureConfig{
+			Disabled:            capCfg.Disabled,
+			MaxCapturedBodySize: capCfg.MaxCapturedBodySize,
+			MaxRequestBodySize:  capCfg.MaxRequestBodySize,
+			MaxRequestBodies:    capCfg.MaxRequestBodies,
+		}))
+	// Attach the dedicated bad-request disk sink so the single capture path feeds it.
+	memoryLogMW.SetBadRequestSink(badReqSink)
 
 	// Initialize API token manager (for multi-tenant authentication)
 	var apiTokenManager *auth.APITokenManager
@@ -584,14 +592,14 @@ func (s *Server) setupConfigWatcher() {
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
 
-		// Update error log filter expression if changed
-		if s.errorMW != nil {
+		// Update bad-request filter expression if changed
+		if s.badReqSink != nil {
 			newFilterExpr := newConfig.GetErrorLogFilterExpression()
 			if newFilterExpr != "" {
-				if err := s.errorMW.SetFilterExpression(newFilterExpr); err != nil {
-					logrus.Errorf("Failed to update error log filter expression: %v", err)
+				if err := s.badReqSink.SetFilterExpression(newFilterExpr); err != nil {
+					logrus.Errorf("Failed to update bad-request filter expression: %v", err)
 				} else {
-					logrus.Debugf("Error log filter expression updated: %s", newFilterExpr)
+					logrus.Debugf("Bad-request filter expression updated: %s", newFilterExpr)
 				}
 			}
 		}
@@ -603,4 +611,3 @@ func (s *Server) setupConfigWatcher() {
 		s.registerAdviserFromConfig()
 	})
 }
-

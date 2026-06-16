@@ -15,13 +15,57 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-// Request body storage configuration
+// Request body storage defaults (used when config leaves a field at zero).
 const (
-	// MaxRequestBodySize is the maximum size of request body to store (1MB)
+	// MaxRequestBodySize is the default request-body capture cap (1MB). This bounds
+	// how much of a request body is mirrored during the request, which is both the
+	// transient in-memory cost (≈ concurrency × cap) and the maximum the disk
+	// bad-request sink can record. Raise it (via config) when full-fidelity capture
+	// of large bad requests matters; bodies beyond it are recorded truncated.
 	MaxRequestBodySize = 1024 * 1024
-	// MaxRequestBodies is the maximum number of request bodies to keep in memory
+	// MaxRequestBodies is the default maximum number of request bodies to keep in memory
 	MaxRequestBodies = 50
+	// MaxRequestBodyStoreBytes is the default total-byte budget for the in-memory
+	// request body store (16MiB), bounding it independent of the per-body cap.
+	MaxRequestBodyStoreBytes = 16 * 1024 * 1024
 )
+
+// captureNever is a sentinel response-capture gate that no real HTTP status can
+// reach, used to disable response-body capture entirely.
+const captureNever = 1 << 30
+
+// CaptureConfig tunes the middleware's in-memory body capture. Zero size fields
+// fall back to the package defaults; Disabled turns body capture off entirely
+// (request metadata + status code are still logged).
+type CaptureConfig struct {
+	Disabled                 bool
+	MaxCapturedBodySize      int
+	MaxRequestBodySize       int
+	MaxRequestBodies         int
+	MaxRequestBodyStoreBytes int
+}
+
+// Option customizes a MultiModeMemoryLogMiddleware at construction.
+type Option func(*MultiModeMemoryLogMiddleware)
+
+// WithCaptureConfig applies body-capture tuning (size caps / disable toggle).
+func WithCaptureConfig(cfg CaptureConfig) Option {
+	return func(m *MultiModeMemoryLogMiddleware) {
+		m.captureDisabled = cfg.Disabled
+		if cfg.MaxCapturedBodySize > 0 {
+			m.maxCapturedBodySize = cfg.MaxCapturedBodySize
+		}
+		if cfg.MaxRequestBodySize > 0 {
+			m.maxRequestBodySize = cfg.MaxRequestBodySize
+		}
+		if cfg.MaxRequestBodies > 0 {
+			m.maxRequestBodies = cfg.MaxRequestBodies
+		}
+		if cfg.MaxRequestBodyStoreBytes > 0 {
+			m.maxRequestBodyStoreBytes = cfg.MaxRequestBodyStoreBytes
+		}
+	}
+}
 
 // GinRequestIDKey is the gin context key under which the per-request
 // correlation id is stored. Handlers and later stages read it via
@@ -37,30 +81,51 @@ type MultiModeMemoryLogMiddleware struct {
 	logger           *logrus.Logger
 	multiLogger      *obs.MultiLogger
 	requestBodyStore *obs.RequestBodyStore
+	badReqSink       *BadRequestSink
+
+	// Capture tuning (resolved from defaults + options).
+	captureDisabled          bool
+	maxCapturedBodySize      int
+	maxRequestBodySize       int
+	maxRequestBodies         int
+	maxRequestBodyStoreBytes int
 }
 
 // NewMultiModeMemoryLogMiddleware creates a new middleware with both persistent and memory logging
-func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMemoryLogMiddleware {
+func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger, opts ...Option) *MultiModeMemoryLogMiddleware {
+	m := &MultiModeMemoryLogMiddleware{
+		maxCapturedBodySize:      MaxCapturedBodySize,
+		maxRequestBodySize:       MaxRequestBodySize,
+		maxRequestBodies:         MaxRequestBodies,
+		maxRequestBodyStoreBytes: MaxRequestBodyStoreBytes,
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+
 	if multiLogger == nil {
 		// Fallback for test environments where no multi-logger is configured.
 		l := logrus.New()
 		if gin.Mode() == gin.TestMode {
 			l.SetOutput(io.Discard)
 		}
-		return &MultiModeMemoryLogMiddleware{
-			logger:           l,
-			multiLogger:      nil,
-			requestBodyStore: nil,
-		}
+		m.logger = l
+		return m
 	}
-	// Get a logger scoped to HTTP source
-	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
 
-	return &MultiModeMemoryLogMiddleware{
-		logger:           httpLogger,
-		multiLogger:      multiLogger,
-		requestBodyStore: obs.NewRequestBodyStore(MaxRequestBodies),
+	m.logger = multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
+	m.multiLogger = multiLogger
+	if !m.captureDisabled {
+		m.requestBodyStore = obs.NewRequestBodyStore(m.maxRequestBodies, m.maxRequestBodyStoreBytes)
 	}
+	return m
+}
+
+// SetBadRequestSink attaches a dedicated, expr-filtered disk sink for
+// bad/error requests. The unified middleware feeds it the same captured
+// request/response bytes it already holds, so bodies are captured once.
+func (m *MultiModeMemoryLogMiddleware) SetBadRequestSink(sink *BadRequestSink) {
+	m.badReqSink = sink
 }
 
 // Middleware returns a Gin middleware compatible with gin.Logger()
@@ -88,18 +153,39 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 
 		// Capture request body using TeeReader for logging.
 		// We ALWAYS read (to support error debugging), but only STORE on errors (4xx/5xx).
-		// This minimizes storage overhead while keeping logging capability.
+		// The mirror is capped (limitedBufferWriter) so large bodies — e.g. base64
+		// vision payloads — are not buffered in full just to be discarded on success.
 		var bodyBuffer *bytes.Buffer
-		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
-			bodyBuffer = &bytes.Buffer{}
-			teeReader := io.TeeReader(c.Request.Body, bodyBuffer)
+		var reqMirror *limitedBufferWriter
+		if !m.captureDisabled && (m.requestBodyStore != nil || m.badReqSink != nil) &&
+			c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
+			// Mirror at most maxRequestBodySize bytes (the capture cap). This bounds
+			// the transient per-request buffer and is the max the disk sink can
+			// record; reqMirror.truncated flags when a larger body was clipped. The
+			// buffer is pooled to cut GC churn.
+			bodyBuffer = getReqBodyBuf()
+			defer putReqBodyBuf(bodyBuffer)
+			reqMirror = &limitedBufferWriter{buf: bodyBuffer, limit: m.maxRequestBodySize}
+			teeReader := io.TeeReader(c.Request.Body, reqMirror)
 			c.Request.Body = io.NopCloser(teeReader)
 		}
 
-		// Wrap response writer to capture body for error responses
+		// Wrap response writer to capture body for error responses only. Capture
+		// is status-gated and the buffer is lazily allocated, so successful
+		// responses — including every 200 streaming SSE response — buffer nothing.
+		// The gate is normally 400; it is lowered only when an admin's custom
+		// bad-request filter targets sub-400 statuses (then bounded by the cap).
+		// When capture is disabled, the gate is set so nothing is ever buffered.
+		gate := 400
+		if m.captureDisabled {
+			gate = captureNever
+		} else if m.badReqSink != nil && m.badReqSink.CapturesBelow400() {
+			gate = 0
+		}
 		w := &responseBodyWriter{
-			ResponseWriter: c.Writer,
-			body:           &bytes.Buffer{},
+			ResponseWriter:   c.Writer,
+			limit:            m.maxCapturedBodySize,
+			minCaptureStatus: gate,
 		}
 		c.Writer = w
 
@@ -152,10 +238,14 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		// Add body reference - ONLY for error responses (4xx/5xx) to minimize storage overhead
-		// Happy path (2xx) requests don't store body, saving memory and CPU
-		if bodyBuffer != nil && statusCode >= 400 && bodyBuffer.Len() > 0 {
-			bodyRef := m.requestBodyStore.Store(method, path, bodyBuffer.String(), MaxRequestBodySize)
+		// Happy path (2xx) requests don't store body, saving memory and CPU. The store
+		// applies its own count/byte bounds (truncating only as a last resort).
+		if m.requestBodyStore != nil && bodyBuffer != nil && statusCode >= 400 && bodyBuffer.Len() > 0 {
+			bodyRef := m.requestBodyStore.Store(method, path, bodyBuffer.String())
 			fields["body_ref"] = bodyRef
+			if reqMirror != nil && reqMirror.truncated {
+				fields["request_body_truncated"] = true
+			}
 		}
 
 		// Add error message field if error occurred
@@ -166,10 +256,14 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			}
 		}
 
-		// Add response body for error responses (4xx/5xx)
-		if statusCode >= 400 && w.body.Len() > 0 {
+		// Add response body for error responses (4xx/5xx). w.body is lazily
+		// allocated and only populated when the status warranted capture.
+		if statusCode >= 400 && w.body != nil && w.body.Len() > 0 {
 			respBytes := w.body.Bytes()
 			fields["response_body"] = string(respBytes)
+			if w.truncated {
+				fields["response_body_truncated"] = true
+			}
 		}
 
 		// Append routing metadata when set by AI handlers (absent for non-AI routes)
@@ -194,6 +288,31 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		}
 		if tactic := c.GetString(constant.CtxKeyLBTactic); tactic != "" {
 			fields["lb_tactic"] = tactic
+		}
+
+		// Feed the dedicated bad-request disk sink (expr-filtered). It reuses the
+		// request/response bytes already captured above, so bodies are read once.
+		if m.badReqSink != nil {
+			entry := &logEntry{
+				Timestamp:  start,
+				Method:     method,
+				Path:       c.Request.URL.Path,
+				Query:      raw,
+				StatusCode: statusCode,
+				Duration:   latency,
+				Headers:    getHeaders(c),
+				UserAgent:  c.Request.UserAgent(),
+				ClientIP:   clientIP,
+			}
+			if bodyBuffer != nil {
+				entry.RequestBody = bodyBuffer.Bytes()
+				entry.RequestBodyTruncated = reqMirror != nil && reqMirror.truncated
+			}
+			if w.body != nil {
+				entry.ResponseBody = w.body.Bytes()
+				entry.ResponseBodyTruncated = w.truncated
+			}
+			m.badReqSink.maybeLog(entry)
 		}
 
 		// Log with structured fields including error details
