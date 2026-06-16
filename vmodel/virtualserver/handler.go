@@ -102,6 +102,10 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
+	// Resolve per-request behaviour (sequence models advance their cursor
+	// here, exactly once) into a concrete snapshot before any dispatch.
+	vm = openaivm.ResolveRequest(vm)
+
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorOpenAI(c, e)
 		return
@@ -166,6 +170,10 @@ func (h *Handler) Messages(c *gin.Context) {
 		}})
 		return
 	}
+
+	// Resolve per-request behaviour (sequence models advance their cursor
+	// here, exactly once) into a concrete snapshot before any dispatch.
+	vm = anthropicvm.ResolveRequest(vm)
 
 	if e := vmodel.ExtractErrorInjection(vm); e != nil && e.Stage == vmodel.ErrorStagePreContent {
 		writePreContentErrorAnthropic(c, e)

@@ -30,6 +30,11 @@ func RegisterDefaults(r *Registry) {
 			Error:    spec.Error,
 		}))
 	}
+
+	for _, sc := range vmodel.DefaultSequenceConfigs() {
+		sc := sc
+		_ = r.Register(NewSequenceModel(&sc))
+	}
 }
 
 // RegisterStreamTestMocks registers the opt-in stream-test fixtures
