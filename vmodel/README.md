@@ -213,6 +213,7 @@ extension UI and registry consumers can group by behavior:
 | `static` | Returns a fixed text response                                                                        | `virtual-claude-3`, `virtual-gpt-4`, `echo-model` |
 | `tool`   | Returns a `tool_use` / `tool_calls` block                                                           | `ask-user-question`, `ask-confirmation`, `web-search-example` |
 | `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-round-only`, `claude-code-compact`   |
+| `sequence` | Walks a configured program of per-request outcomes (status + content) to simulate a flaky upstream | `virtual-sequence-429`                       |
 
 ## Error models
 
@@ -452,6 +453,53 @@ Extended error models require opt-in registration via `RegisterExtendedErrorMock
 Failover e2e tests (`internal/protocoltest`) use these directly via
 `SetupFailoverRoute(... primaryFailModel: pt.FailMockPreContent429)` instead
 of standing up ad-hoc `httptest.Server` instances.
+
+## Sequence models
+
+A **sequence model** simulates a real provider that varies its response from
+one request to the next — e.g. `200, 200, 429, 200, …` — so failover, retry,
+and backoff logic can be exercised deterministically without a real or ad-hoc
+upstream. It is the natural complement to the always-fail error models: those
+fail every time, a sequence model fails *on schedule*.
+
+### Configuration
+
+A `vmodel.SequenceConfig` is an ordered program of `SequenceStep`s, each of
+which is either a success (status `0`/`200` → returns `Content`, falling back
+to `DefaultContent`) or a pre-content failure (any other status → the matching
+HTTP error envelope, with `Type`/`Message` derived from the status when not set
+explicitly). The program loops by default (`NoLoop` clamps to the last step
+instead). `Repeat` expands a step into N consecutive copies.
+
+```go
+// Anthropic; identical API in the openai sub-package.
+m := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
+    ID:             "flaky-provider",
+    Name:           "Flaky Provider",
+    DefaultContent: "ok",
+    Steps: []vmodel.SequenceStep{
+        {Status: 200, Repeat: 5}, // succeed 5×
+        {Status: 429},            // then rate-limit once
+    },
+})
+_ = reg.Register(m)
+```
+
+### How it works (per-request resolution)
+
+The registry holds **one** shared instance, but a sequence inherently has a
+cursor. Rather than thread per-request state through the handler, a
+`SequenceModel` implements `RequestResolver`: the virtualserver handler calls
+`ResolveRequest()` **exactly once per request**, which atomically advances the
+cursor and returns a plain stateless `MockModel` snapshot for that step. From
+that point on every existing dispatch path — `ExtractErrorInjection`, the
+`Handle*` methods, the mid-stream gate — works unchanged. The atomic cursor is
+the only shared mutable state, so concurrent requests are safe and each grabs a
+distinct, monotonically advancing step.
+
+`virtual-sequence-429` (`200, 200, 429`) ships in **both** default registries
+as a user-facing demo for failover dry-runs. Construct your own
+`SequenceModel` for bespoke programs. See `.design/vmodel-sequence.md`.
 
 ## Benchmarking (`benchmark/`)
 

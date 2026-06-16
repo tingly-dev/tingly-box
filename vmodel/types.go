@@ -12,6 +12,11 @@ const (
 
 	// VirtualModelTypeTool represents tool models that return tool_use blocks.
 	VirtualModelTypeTool VirtualModelType = "tool"
+
+	// VirtualModelTypeSequence represents sequence models that walk a configured
+	// program of per-request outcomes (e.g. 200, 200, 429) to simulate a flaky
+	// upstream provider.
+	VirtualModelTypeSequence VirtualModelType = "sequence"
 )
 
 // Model represents a virtual model in the models list (OpenAI-compatible format).

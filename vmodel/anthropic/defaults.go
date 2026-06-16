@@ -64,6 +64,11 @@ func RegisterDefaults(r *Registry) {
 	for i := range compactModels {
 		_ = r.Register(NewTransformModel(&compactModels[i]))
 	}
+
+	for _, sc := range vmodel.DefaultSequenceConfigs() {
+		sc := sc
+		_ = r.Register(NewSequenceModel(&sc))
+	}
 }
 
 // RegisterStreamTestMocks registers the opt-in stream-test fixtures
