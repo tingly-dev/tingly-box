@@ -10,34 +10,9 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// getBaseURLFromRequest constructs the base URL from the incoming HTTP request
-// This ensures users get the URL they actually used to access the server
-func getBaseURLFromRequest(c *gin.Context, defaultPort int) string {
-	// Get the host from the request (includes port if non-standard)
-	host := c.Request.Host
-
-	// Get the scheme from X-Forwarded-Proto header (set by reverse proxies)
-	// or detect from the request
-	scheme := c.GetHeader("X-Forwarded-Proto")
-	if scheme == "" {
-		// Fall back to detecting from the request
-		if c.Request.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-
-	// If host doesn't include port, add the default port
-	if !strings.Contains(host, ":") {
-		host = fmt.Sprintf("%s:%d", host, defaultPort)
-	}
-
-	return fmt.Sprintf("%s://%s", scheme, host)
-}
 
 // Handler handles config apply HTTP requests
 type Handler struct {
@@ -210,7 +185,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := getBaseURLFromRequest(c, port)
+	baseURL := middleware.BaseURLFromRequest(c, port)
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
@@ -379,7 +354,7 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := getBaseURLFromRequest(c, port)
+	baseURL := middleware.BaseURLFromRequest(c, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
 	// Use the model token from config (tingly-box- prefixed JWT)
@@ -531,7 +506,7 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := getBaseURLFromRequest(c, port)
+	baseURL := middleware.BaseURLFromRequest(c, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
 	// Use the model token from config (tingly-box- prefixed JWT)
@@ -694,7 +669,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	if port == 0 {
 		port = 12580
 	}
-	codexBaseURL := getBaseURLFromRequest(c, port) + "/tingly/codex"
+	codexBaseURL := middleware.BaseURLFromRequest(c, port) + "/tingly/codex"
 	apiKey := h.config.GetModelToken()
 
 	writeCatalog := req.WriteCatalog == nil || *req.WriteCatalog
@@ -804,7 +779,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 	if port == 0 {
 		port = 12580
 	}
-	codexBaseURL := getBaseURLFromRequest(c, port) + "/tingly/codex"
+	codexBaseURL := middleware.BaseURLFromRequest(c, port) + "/tingly/codex"
 	apiKey := h.config.GetModelToken()
 
 	writeCatalog := req.WriteCatalog == nil || *req.WriteCatalog

@@ -1465,7 +1465,7 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 			// mid-conversation system role (ClaudeCodeCompat) so third-party
 			// providers accept the request, and strip the billing header
 			// (CleanHeader) so it never leaks to external providers.
-			Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
+			Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
 			Active: true,
 		}
 	}
@@ -1527,9 +1527,10 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
-	// Create fresh profile rules from DefaultRules templates (not copied from existing rules).
-	// For claude_code: unified mode → one "cc" rule; separate mode → five individual model rules.
-	// All profile rules start with empty Services/SmartRouting for users to configure.
+	// Create fresh profile rules from the DefaultRules templates. For claude_code:
+	// unified mode → one "cc" rule; separate mode → five individual model rules.
+	// Rules start with empty Services/SmartRouting so the user configures the
+	// upstream providers for the new profile explicitly.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	if baseScenario == typ.ScenarioClaudeCode {
 		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, unified)...)
