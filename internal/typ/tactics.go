@@ -1244,5 +1244,66 @@ func groupServicesByTier(services []*loadbalance.Service) []tierBucket {
 	return out
 }
 
+// IsAffinityEligible reports whether target is a service the routing strategy
+// would actually select right now, so session affinity can decide whether a
+// pin is still valid. It is config-shape driven rather than tactic-label
+// driven — "tier" is just the emergent shape of a multi-layer rule, so this
+// answers the same question for every shape:
+//
+//   - one service           → the only service; eligible whenever present.
+//   - one tier, many services → eligible iff target's own breaker is available
+//     (don't stick a session to a dead peer when healthy peers exist).
+//   - many tiers             → eligible iff target is breaker-available AND its
+//     tier is the highest-priority tier that currently has any available
+//     service (don't stay on a fallback tier after the primary recovers).
+//
+// It mirrors TierTactic.SelectService's bucket walk but uses the non-consuming
+// breaker read (IsAvailable) so it never steals the half-open probe. When
+// every service is tripped it falls back to "target is in the lowest-numbered
+// tier" (matching TierTactic's degrade-don't-disappear behavior) so a pin is
+// honored rather than wedging.
+func IsAffinityEligible(services []*loadbalance.Service, target *loadbalance.Service) bool {
+	if target == nil || !target.Active {
+		return false
+	}
+	// Mirror GetActiveServices: inactive services are not selectable, so they
+	// must not influence the tier-availability computation (e.g. an inactive
+	// service whose breaker happens to be closed must not make its tier look
+	// "available" and wrongly demote a healthy pin in a lower tier).
+	active := make([]*loadbalance.Service, 0, len(services))
+	for _, svc := range services {
+		if svc != nil && svc.Active {
+			active = append(active, svc)
+		}
+	}
+	buckets := groupServicesByTier(active)
+	if len(buckets) == 0 {
+		return false
+	}
+
+	store := loadbalance.DefaultBreakerStore()
+	for _, group := range buckets {
+		available := false
+		targetAvailableHere := false
+		for _, svc := range group.services {
+			if store.IsAvailable(svc.ServiceID()) {
+				available = true
+				if svc.ServiceID() == target.ServiceID() {
+					targetAvailableHere = true
+				}
+			}
+		}
+		if available {
+			// This is the top available tier. The pin is valid only if the
+			// target itself is the (or an) available service in it.
+			return targetAvailableHere
+		}
+	}
+	// Every service is tripped — honor a pin to the lowest-numbered (highest
+	// priority) tier, which groupServicesByTier returns first, so the request
+	// still surfaces a real upstream error instead of wedging.
+	return target.Tier == buckets[0].tier
+}
+
 // Pre-created singleton priority tactic for the default-tactic registry.
 var defaultTierTactic = NewTierTactic(loadbalance.TacticRandom)

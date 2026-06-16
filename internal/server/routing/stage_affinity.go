@@ -2,6 +2,8 @@ package routing
 
 import (
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // AffinityStage checks if a session has a locked service from previous requests.
@@ -56,6 +58,23 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 	if state != nil && len(state.candidateServices) > 0 && !ContainsService(state.candidateServices, entry.Service) {
 		logrus.Debugf("[affinity] locked service %s not in candidate set, skipping",
 			entry.Service.ServiceID())
+		return nil, false
+	}
+
+	// Health scoping (breaker-aware): only honor a pin while the locked service
+	// is one the strategy would actually pick right now. This is driven by the
+	// rule's config shape, not its tactic label — "tier" is just the emergent
+	// shape of a multi-layer rule:
+	//   - many layers: drop a pin to a fallback tier once the primary recovers.
+	//   - one layer, many services: drop a pin to a dead peer when healthy
+	//     peers exist.
+	//   - one service: always honored (nothing else to pick).
+	// On decline the pipeline falls through to the strategy, which re-selects a
+	// currently-valid service, and postProcess re-pins the session there.
+	if state != nil && len(state.candidateServices) > 0 &&
+		!typ.IsAffinityEligible(state.candidateServices, entry.Service) {
+		logrus.Infof("[affinity] locked service %s is not currently selectable for session %s; dropping pin so strategy re-selects",
+			entry.Service.ServiceID(), ctx.SessionID.String())
 		return nil, false
 	}
 

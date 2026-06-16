@@ -155,6 +155,11 @@ func NewServiceSelectorWithLogger(
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeGlobalAffinity] = []SelectionStage{
+		// Health first, then affinity, then strategy. HealthStage narrows the
+		// candidate set (429/auth-driven health) before affinity scoping runs;
+		// the breaker-driven (500) signal is consulted inside AffinityStage's
+		// tier check and the load-balancer/tier tactic itself.
+		NewHealthStage(healthFilter),
 		NewAffinityStage(affinity, "global"),
 		newSmart(),
 		NewLoadBalancerStage(lb),

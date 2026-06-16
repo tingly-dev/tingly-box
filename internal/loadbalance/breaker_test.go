@@ -85,6 +85,36 @@ func TestBreakerStoreLazyCreation(t *testing.T) {
 	}
 }
 
+func TestBreakerStoreIsAvailable(t *testing.T) {
+	store := NewBreakerStore(2, 20*time.Millisecond)
+
+	// Closed → available.
+	if !store.IsAvailable("svc:avail") {
+		t.Fatal("fresh (closed) breaker should be available")
+	}
+
+	// Open → not available.
+	store.RecordFailure("svc:avail")
+	store.RecordFailure("svc:avail")
+	if store.IsAvailable("svc:avail") {
+		t.Fatal("open breaker should not be available")
+	}
+
+	// After the open window, HalfOpen → available, and the read must NOT
+	// consume the half-open probe: a following Allow() must still succeed.
+	time.Sleep(30 * time.Millisecond)
+	if !store.IsAvailable("svc:avail") {
+		t.Fatal("half-open breaker should report available")
+	}
+	if !store.Allow("svc:avail") {
+		t.Fatal("IsAvailable must not consume the half-open probe; Allow() should still pass")
+	}
+	// The probe is now claimed, so a concurrent Allow() is rejected.
+	if store.Allow("svc:avail") {
+		t.Fatal("half-open should only admit a single probe")
+	}
+}
+
 func TestBreakerStoreConcurrent(t *testing.T) {
 	store := NewBreakerStore(5, time.Second)
 	var wg sync.WaitGroup

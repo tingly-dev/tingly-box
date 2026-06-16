@@ -63,6 +63,51 @@ The breaker is a three-state machine (`Closed → Open → HalfOpen`):
 
 Recovery requires **no separate scheduler**. Selection re-evaluates the tier list every request, and the breaker's lazy state transition admits one probe naturally. Active probing was considered and rejected for v1 — for hot rules it's redundant, and for cold rules there is no one to serve anyway.
 
+### Breaker threshold — why 3, and when to revisit it
+
+`FailureThreshold = 3` means **3 *consecutive* failures**, and **any success resets the count to 0**
+(`Breaker.RecordSuccess`). Because a request attempts each service at most once (the in-request `tried`
+map), one request contributes **at most one** failure to a given service — so for a tier primary that is
+tried first on every request, "3 strikes" means *3 consecutive requests routed to it failed*, and it trips
+on the 3rd.
+
+Picking the number is a sensitivity/stability trade-off, and the key fact is that **failover masks the
+client impact**: while a service accrues strikes the client still gets a 200 from the next tier, so an early
+trip is never a correctness problem — it only costs "a wasted primary attempt + one extra hop per request"
+until it trips, and a *premature* trip only costs "tier preference lost for `OpenDuration`." That asymmetry
+means we can lean slightly sensitive:
+
+- **Lower (→1)** trips on a single 500 → fastest protection, but a lone transient blip evicts the service
+  for the whole `OpenDuration` (30 s) — too twitchy for a "primary account that occasionally 500s".
+- **Higher (→8)** tolerates blips but drags a genuinely-dead service through many wasted primary attempts
+  before evicting it.
+- **3** tolerates 1–2 blips and still trips within 3 requests on sustained failure — a reasonable middle.
+
+**The real limitation is the *consecutive-reset* condition, not the number.** A service that fails
+*intermittently* (e.g. 500s ~30 % of the time) keeps getting its counter reset by the interleaved
+successes, so it may **never** trip — the breaker gives it no protection and every blip pays a failover hop
+forever. The original report ("one 500 then *sustained* 500s") is the consecutive case, which 3 handles
+well; the intermittent case is the gap. Closing it needs a **rolling-window / error-rate** trip condition
+(e.g. "≥ N failures in the last M outcomes"), at which point the exact threshold matters much less.
+
+Tuning notes for whoever revisits this:
+- `FailureThreshold` and `OpenDuration` must be tuned **together** — an aggressive threshold with a long
+  open window causes frequent mis-evictions; pair a lower threshold with a shorter open window.
+- The right value depends on the upstream's transient-error profile, so this is a natural **per-rule /
+  per-scenario config** (tracked as Future work #4) rather than a single global constant.
+
+### Session affinity must respect tier priority
+
+Session affinity (`Flags.SessionAffinity`) pins a session to whichever service first served it, so a conversation keeps hitting the same backend (prompt-cache continuity, etc.). For tier rules this created a sharp bug: the `AffinityStage` ran **before** the tier strategy and short-circuited to the pinned service *without consulting the breaker*. So if a session got pinned to a fallback tier during a brief primary-tier outage, it stuck there indefinitely — the primary tier could recover and the session would never return ("configured t1 but long-term auto-jumps to t2"; and a pinned-but-failing t2 would keep 500ing instead of failing over).
+
+Fix: `AffinityStage` honors a pin only while the pinned service is one the strategy would actually pick right now — `typ.IsAffinityEligible`. This is **driven by the rule's config shape, not its tactic label** (there is no independent "tier mode"; "tier" is just the emergent shape of a multi-layer rule), so one rule covers every shape:
+
+- **one service** — always eligible (nothing else to pick).
+- **one layer, many services** — eligible iff the pinned service's own breaker is available; a pin to a *dead peer* is dropped while healthy peers exist.
+- **many layers** — eligible iff the pinned service is breaker-available *and* in the highest-priority tier that currently has any available service; a pin to a fallback tier is dropped once the primary recovers.
+
+`IsAffinityEligible` mirrors `TierTactic`'s bucket walk but uses the non-consuming `BreakerStore.IsAvailable` so it never steals the half-open probe; when every service is tripped it degrades to "honor a pin to the lowest tier" rather than wedging. On decline, the pipeline falls through to the strategy, which re-selects a currently-valid service, and the existing `ServiceSelector.postProcess` automatically **re-pins** the session there — no change to the failover layer. The global-affinity pipeline is ordered **health → affinity → strategy** (`pipelineModeGlobalAffinity`). Note `typ.HealthFilter` only tracks 429/auth; the 500-driven signal lives in the breaker, which is why the affinity scoping consults the breaker directly rather than relying on the health stage.
+
 ### End-to-end flow: how the tactic switch actually takes effect
 
 The "user moves a service card to a different tier" event has to cross five layers before it changes how the next API request is routed. Each layer is wired explicitly:
@@ -157,6 +202,63 @@ The routing graph always renders tier rows, even when only one tier exists (T0 i
 The design choice here is **implicit mode activation**: assigning any service a tier flips the rule's `lb_tactic` to `tier` on save. No separate tactic-selector UI is exposed. Moving all services back to a single tier leaves the tactic as `tier` (consistent; the round-trip is safe).
 
 Why implicit: tactic concepts are jargon for most users. "Move this service to a fallback tier" is concrete and matches a real intent ("I want this one only when the first fails"). The tactic switch is plumbing — it shouldn't be a separate question.
+
+## Rule config shapes (taxonomy)
+
+There is **no independent "tier mode"** in tingly-box — every routing behavior is emergent from the rule's config *shape*. A user assembles a rule out of services; the shape that assembly takes determines the strategy, the failover, and how affinity behaves. The frontend flips `lb_tactic=tier` purely as a consequence of shape (any `Service.Tier > 0`, see `frontend/src/components/rule-card/utils.ts` `pickLbTactic`/`hasTierAssigned`); routing code should reason about the shape and runtime state, not the tactic label.
+
+### Primary structural grid — tiers × services-per-tier
+
+`Service.Tier` (default `0`) groups services into layers; lower number = higher priority.
+
+| Shape | Config | Strategy | Failover | Affinity (when enabled) |
+|---|---|---|---|---|
+| **A. Single** | 1 tier, 1 svc | none (direct) | none — single-svc bypass in `dispatchWithPriorityFailover` | trivial: always the one service |
+| **B. Flat** | 1 tier, N svc | horizontal (`random`/`token_based`/`latency`/…) | among peers in the tier | honor pin iff the pinned peer's breaker is available; drop to a healthy peer if it is open |
+| **C. Cascade** | M tiers, 1 svc each | `tier` (direct + fallback) | next tier down | follow the top available tier; return to the primary on recovery |
+| **D. Grid** | M tiers, N svc each | `tier` + within-tier sub-tactic | within the tier, then the next tier down | top available tier; within it, per-peer stickiness |
+
+### Orthogonal modifiers (multiply onto A–D)
+
+- **Within-tier sub-tactic** (`TierParams.WithinTierTactic`) — only matters when a tier holds > 1 service.
+- **Multi-model across services** (`Service.Model` is per-service) — valid; a cross-tier failover changes the model (the already-transformed body is reused, see **G2**).
+- **Multi-API-style** (`Provider.APIStyle`) — failover is **same-API-style only** (`selectFallbackService` filters on `requireAPIStyle`).
+- **Smart routing** (`SmartEnabled` / `SmartRouting[].Services`) — selects a service *subset* by request content; each subset is itself one of shapes A–D (with its own tiers).
+- **Affinity** (`Flags.SessionAffinity`, seconds) — session stickiness, governed by `typ.IsAffinityEligible`.
+
+### Runtime state that determines the actual pick
+
+Config shape sets the *space* of choices; runtime state picks within it:
+
+- **Breaker** per service (closed / open / half-open, process-wide `DefaultBreakerStore`) — drives tier demotion, the half-open recovery probe, and affinity eligibility. It is the authoritative signal for 5xx failures.
+- **Active** flag — inactive services are excluded everywhere (`GetActiveServices`); `IsAffinityEligible` mirrors this (an inactive service must not make its tier look "available").
+- **Health** (429 / auth) via `HealthFilter`/`HealthMonitor` — a *separate* signal from the breaker (5xx feed only the breaker), applied by the `HealthStage` filter.
+
+### Affinity-eligibility truth table
+
+What `typ.IsAffinityEligible(activeServices, P)` encodes for a pinned service `P` (it mirrors `TierTactic`'s bucket walk using the non-consuming `BreakerStore.IsAvailable`, so it never steals the half-open probe):
+
+| Situation | Honor pin to P? |
+|---|---|
+| Single service | yes (always) |
+| Flat, P breaker available | yes |
+| Flat, P breaker open, a peer available | no → re-pin to a healthy peer |
+| Cascade/Grid, P available **and** P.tier == top available tier | yes |
+| Cascade/Grid, a higher tier has recovered (P sits below it) | no → re-pin up to the recovered tier |
+| Every breaker open | yes iff P is in the lowest tier (degrade-don't-disappear) |
+| P inactive | no (declined) |
+
+On a decline the pipeline falls through to the strategy, which re-selects a currently-valid service, and `ServiceSelector.postProcess` re-pins the session there automatically.
+
+### Known gaps (explicit)
+
+- **G1 — horizontal tactics are breaker-blind.** Only `TierTactic` consults `DefaultBreakerStore`. `random`/`token_based`/`latency`/… select across the health-filtered set *ignoring the breaker*, so in the **Flat** shape a dead peer can still be re-selected at the selection layer (per-request failover still masks it from the client; affinity already drops the *pin* to a dead peer). *Deferred.* Surfaced as a `t.Skip` in `internal/server/lb_scenario_test.go` (`TestLBScenario_B_Flat_DeadPeerSelection_KnownGap`).
+- **G2 — heterogeneous failover.** A fallback reuses the already-transformed request body and is restricted to the same `Provider.APIStyle`; mixing API styles (and, in practice, models) across tiers within one failover is constrained.
+- **G3 — affinity is global-scope.** Affinity runs before smart routing on the union of all the rule's services (`selector.go` TODO); per-smart-rule affinity scoping is not implemented.
+
+### Verifying shapes end-to-end
+
+`internal/server/lb_scenario_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin). Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
 
 ## Value
 

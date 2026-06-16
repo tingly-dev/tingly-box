@@ -191,6 +191,16 @@ func (s *BreakerStore) Allow(serviceID string) bool {
 	return s.Get(serviceID).Allow()
 }
 
+// IsAvailable reports whether the service's breaker currently permits traffic,
+// without consuming a half-open probe slot. Closed and HalfOpen are available;
+// Open is not. Unlike Allow(), this is a side-effect-free read — callers that
+// only need to know "is this service usable right now" (e.g. affinity scoping)
+// should use it so they don't steal the single half-open probe from the
+// selection path.
+func (s *BreakerStore) IsAvailable(serviceID string) bool {
+	return s.Get(serviceID).State() != BreakerOpen
+}
+
 // RecordSuccess is a convenience over Get(serviceID).RecordSuccess().
 func (s *BreakerStore) RecordSuccess(serviceID string) {
 	s.Get(serviceID).RecordSuccess()
