@@ -1,6 +1,6 @@
 package onboarding
 
-import "github.com/tingly-dev/tingly-box/pkg/swagger"
+import "github.com/tingly-dev/tingly-box/swagger"
 
 // RegisterRoutes wires the onboarding endpoints onto a swagger route group.
 // The route group is expected to already carry the user auth middleware.

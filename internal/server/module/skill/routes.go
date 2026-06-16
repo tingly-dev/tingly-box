@@ -1,7 +1,7 @@
 package skill
 
 import (
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all skill management routes with swagger documentation

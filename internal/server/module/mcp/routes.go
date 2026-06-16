@@ -2,7 +2,7 @@ package mcp
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/mcp/local"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // RegisterRoutes registers all MCP configuration routes with swagger documentation

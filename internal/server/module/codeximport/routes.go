@@ -1,6 +1,6 @@
 package codeximport
 
-import "github.com/tingly-dev/tingly-box/pkg/swagger"
+import "github.com/tingly-dev/tingly-box/swagger"
 
 func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	router.POST("/codex/import/openai", handler.ImportOpenAISessions,

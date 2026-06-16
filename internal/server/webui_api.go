@@ -11,7 +11,7 @@ import (
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
 	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // NewGinHandlerWrapper converts gin.HandlerFunc to swagger.Handler

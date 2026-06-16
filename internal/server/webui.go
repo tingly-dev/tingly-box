@@ -24,13 +24,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
 	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/remote/scenario/builtin/claudecode"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // GlobalServerManager manages the global server instance for web UI control

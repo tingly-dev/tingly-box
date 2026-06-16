@@ -14,7 +14,7 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
-	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // GenerateOpenAPI creates an OpenAPI v3 schema without starting the server
