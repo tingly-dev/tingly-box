@@ -313,6 +313,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                             <TableCell>Provider / Model</TableCell>
                             <TableCell>Scenario</TableCell>
                             <TableCell align="right">Cache</TableCell>
+                            <TableCell align="right">Cache Hit</TableCell>
                             <TableCell align="right">Input</TableCell>
                             <TableCell align="right">Output</TableCell>
                             <TableCell align="right">Latency</TableCell>
@@ -324,7 +325,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                     <TableBody>
                         {records.length === 0 && !loading ? (
                             <TableRow>
-                                <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
+                                <TableCell colSpan={11} align="center" sx={{ py: 5 }}>
                                     <Typography variant="body2" color="text.secondary">No requests found</Typography>
                                     <Typography variant="caption" color="text.disabled">Try changing the status filter</Typography>
                                 </TableCell>
@@ -363,6 +364,18 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 <TableCell align="right">
                                     <Typography sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: TOKEN_COLORS.cache.main }}>
                                         {r.cache_input_tokens > 0 ? fmtTokens(r.cache_input_tokens) : '-'}
+                                    </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                    <Typography sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
+                                        {(() => {
+                                            const cacheTokens = r.cache_input_tokens || 0;
+                                            const inputTokens = r.input_tokens || 0;
+                                            const total = cacheTokens + inputTokens;
+                                            if (total === 0) return '-';
+                                            const ratio = (cacheTokens / total) * 100;
+                                            return `${ratio.toFixed(1)}%`;
+                                        })()}
                                     </Typography>
                                 </TableCell>
                                 <TableCell align="right">

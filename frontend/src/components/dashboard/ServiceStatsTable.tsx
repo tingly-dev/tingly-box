@@ -125,6 +125,9 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                 Cache Tokens
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                Cache Hit
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
                                 Input Tokens
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
@@ -139,7 +142,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                     <TableBody>
                         {stats.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                                <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
                                     <Box sx={{ textAlign: 'center' }}>
                                         <Box
                                             sx={{
@@ -208,6 +211,23 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                         </TableCell>
                                         <TableCell align="right">{formatRequests(stat.request_count)}</TableCell>
                                         <TableCell align="right">{formatTokens(stat.cache_input_tokens || 0)}</TableCell>
+                                        <TableCell align="right">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: 'text.secondary',
+                                                }}
+                                            >
+                                                {(() => {
+                                                    const cacheTokens = stat.cache_input_tokens || 0;
+                                                    const inputTokens = stat.total_input_tokens || 0;
+                                                    const ratio = (cacheTokens + inputTokens) > 0
+                                                        ? (cacheTokens / (cacheTokens + inputTokens)) * 100
+                                                        : 0;
+                                                    return `${ratio.toFixed(2)}%`;
+                                                })()}
+                                            </Typography>
+                                        </TableCell>
                                         <TableCell align="right">{formatTokens(stat.total_input_tokens)}</TableCell>
                                         <TableCell align="right">{formatTokens(stat.total_output_tokens)}</TableCell>
                                         {/* <TableCell align="right">
@@ -227,7 +247,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                 ))}
                                 {emptyRows > 0 && (
                                     <TableRow style={{ height: 53 * emptyRows }}>
-                                        <TableCell colSpan={7} />
+                                        <TableCell colSpan={8} />
                                     </TableRow>
                                 )}
                             </>
