@@ -2,6 +2,7 @@ import {Autocomplete, Box, TextField, Typography, Stack} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {UniqueProvider} from '../../services/serviceProviders';
+import {searchProviders} from '../../services/serviceProviders';
 import ProviderIcon from '../ProviderIcon';
 import RegionBadge from '../RegionBadge';
 
@@ -60,16 +61,7 @@ const ProviderAutocomplete: React.FC<ProviderAutocompleteProps> = ({
             size="small"
             options={groupedOptions}
             filterOptions={(opts, state) => {
-                const needle = state.inputValue.trim().toLowerCase();
-                if (!needle) return opts;
-                return opts.filter(option => {
-                    const displayName = (option.alias || option.name).toLowerCase();
-                    return (
-                        displayName.includes(needle) ||
-                        (option.baseUrlOpenAI || '').toLowerCase().includes(needle) ||
-                        (option.baseUrlAnthropic || '').toLowerCase().includes(needle)
-                    );
-                });
+                return searchProviders(opts, state.inputValue);
             }}
             getOptionLabel={(option) => {
                 if (typeof option === 'string') return option;
