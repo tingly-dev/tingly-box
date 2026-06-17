@@ -97,6 +97,11 @@ func (s *Server) dispatchChainResult(
 	case protocol.TypeAnthropicV1:
 		s.passthroughAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeAnthropicBeta:
+		// Virtual model providers are handled in-process regardless of source API
+		if provider.IsVirtual() && s.virtualModelService != nil {
+			s.dispatchVirtualModelAnthropic(c, reqCtx, rule, provider, isStreaming, recorder)
+			break
+		}
 		switch reqCtx.SourceAPI {
 		case protocol.TypeOpenAIChat:
 			s.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
@@ -248,6 +253,12 @@ func (s *Server) passthroughAnthropicV1(
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
+	// Virtual model providers are handled in-process
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		s.dispatchVirtualModelAnthropic(c, reqCtx, rule, provider, isStreaming, recorder)
+		return
+	}
+
 	if !isStreaming {
 		s.dispatchGenericAnthropicV1NonStream(c, reqCtx, rule, provider, recorder)
 		return
