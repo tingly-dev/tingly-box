@@ -15,7 +15,7 @@ import {
     alpha,
 } from '@mui/material';
 import React, {useMemo, useState} from 'react';
-import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
+import {type UniqueProvider, useProviderTemplates, searchProviders} from '../services/serviceProviders';
 import ProviderIcon from './ProviderIcon';
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './OAuthDialog';
 
@@ -233,12 +233,12 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
         []
     );
 
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim();
     const filteredKey = needle
-        ? keyProviders.filter((p) => (p.alias || p.name).toLowerCase().includes(needle))
+        ? searchProviders(keyProviders, needle)
         : keyProviders;
     const filteredOAuth = needle
-        ? oauthProviders.filter((p) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle))
+        ? oauthProviders.filter((p) => `${p.name} ${p.displayName} ${p.id}`.toLowerCase().includes(needle.toLowerCase()))
         : oauthProviders;
     const showCustom = !needle || 'custom endpoint dual import'.includes(needle);
 

@@ -214,6 +214,27 @@ export function getAllUniqueProviders(): UniqueProvider[] {
     return providers;
 }
 
+// Unified search function for provider templates
+// Searches across: display name (alias/name), base URLs, website, and ID
+// This ensures consistent search behavior across all UI components
+export function searchProviders(providers: UniqueProvider[], query: string): UniqueProvider[] {
+    const needle = query.trim().toLowerCase();
+    if (!needle) {
+        return providers;
+    }
+
+    return providers.filter(provider => {
+        const displayName = (provider.alias || provider.name).toLowerCase();
+        return (
+            displayName.includes(needle) ||
+            (provider.id || '').toLowerCase().includes(needle) ||
+            (provider.baseUrlOpenAI || '').toLowerCase().includes(needle) ||
+            (provider.baseUrlAnthropic || '').toLowerCase().includes(needle) ||
+            (provider.website || '').toLowerCase().includes(needle)
+        );
+    });
+}
+
 // React hook for provider templates
 // This ensures components re-render when providers are loaded
 export function useProviderTemplates(): UniqueProvider[] {
