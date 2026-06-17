@@ -555,7 +555,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="caption" color="text.secondary">
-                            {t('probe.request')}
+                            {t('probe.shape')}
                         </Typography>
                         <ToggleButtonGroup
                             size="small"

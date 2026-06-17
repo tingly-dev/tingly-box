@@ -386,7 +386,7 @@ export default {
   "probe": {
     "testRule": "Test Rule",
     "testProvider": "Test Service",
-    "shape": "Shape",
+    "shape": "Request",
     "nonstream": "Nonstream",
     "stream": "Stream",
     "scope": "Scope",
@@ -395,7 +395,7 @@ export default {
     "scopeHint": "Direct skips Tingly-Box's routing & middleware, to tell whether a failure is upstream or inside TB.",
     "run": "Run Test",
     "running": "Testing…",
-    "runHint": "Pick a shape, then click Run Test",
+    "runHint": "Pick a request type, then click Run Test",
     "rerun": "Re-run",
     "copyResponse": "Copy response",
     "copied": "Copied!",

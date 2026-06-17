@@ -387,7 +387,7 @@ export default {
   "probe": {
     "testRule": "测试规则",
     "testProvider": "测试服务",
-    "shape": "形态",
+    "shape": "请求",
     "nonstream": "非流式",
     "stream": "流式",
     "scope": "范围",
@@ -396,7 +396,7 @@ export default {
     "scopeHint": "直连上游会绕过 Tingly-Box 的路由与中间件,用于判断故障在上游还是 TB 内部。",
     "run": "运行测试",
     "running": "测试中…",
-    "runHint": "选择形态后点击「运行测试」",
+    "runHint": "选择请求类型后点击「运行测试」",
     "rerun": "重新测试",
     "copyResponse": "复制响应",
     "copied": "已复制!",
