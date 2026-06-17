@@ -551,11 +551,11 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             </DialogTitle>
 
             <DialogContent>
-                {/* Controls: 形态 (request shape) + 范围 (scope) */}
+                {/* Controls: request type + scope */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="caption" color="text.secondary">
-                            {t('probe.shape')}
+                            {t('probe.request')}
                         </Typography>
                         <ToggleButtonGroup
                             size="small"
