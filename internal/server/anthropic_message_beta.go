@@ -106,7 +106,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	reqCtx.ResponseModel = proxyModel
 
 	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
-		func(p *typ.Provider, _ string) {
+		func(p *typ.Provider, retryModel string) {
+			reqCtx.RequestModel = retryModel
 			retryProvider := s.resolveProviderForClient(p, protocol.APIStyleAnthropic)
 			s.dispatchChainResult(c, reqCtx, rule, retryProvider, isStreaming, recorder)
 		})

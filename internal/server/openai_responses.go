@@ -229,7 +229,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 
 	// Use unified dispatch with mid-request failover (non-streaming only).
 	s.dispatchWithPriorityFailover(c, rule, provider, string(req.Model),
-		func(p *typ.Provider, _ string) {
+		func(p *typ.Provider, retryModel string) {
+			reqCtx.RequestModel = retryModel
 			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
 		})
 }
