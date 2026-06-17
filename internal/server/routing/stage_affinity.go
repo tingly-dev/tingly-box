@@ -1,6 +1,8 @@
 package routing
 
 import (
+	"time"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -49,6 +51,15 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 	// TODO: Extend AffinityStore to support smart_rule scope keys
 	entry, ok := s.store.Get(rule.UUID, ctx.SessionID.String())
 	if !ok {
+		return nil, false
+	}
+
+	// Strict TTL: honor the pin only while the entry has not expired.
+	// Once the lock expires, the session must re-enter the selection pipeline
+	// and postProcess will create a new lock with a fresh TTL.
+	if time.Now().After(entry.ExpiresAt) {
+		logrus.Infof("[affinity] affinity entry for session %s expired at %s; dropping pin so strategy re-selects",
+			ctx.SessionID.String(), entry.ExpiresAt)
 		return nil, false
 	}
 

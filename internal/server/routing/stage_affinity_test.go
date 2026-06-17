@@ -306,3 +306,54 @@ func TestAffinity_MultipleSessions(t *testing.T) {
 	require.True(t, handledB)
 	require.Equal(t, "provider-b", resultB.Service.Provider)
 }
+
+// --- Strict TTL tests ---
+
+// TestAffinity_StrictTTL_Expired verifies that an expired affinity entry is
+// dropped and the session passes through to the strategy for re-selection.
+func TestAffinity_StrictTTL_Expired(t *testing.T) {
+	store := newMockAffinityStore()
+	svc := testService("provider-a", "gpt-4", true)
+
+	// Create an already-expired entry
+	entry := &AffinityEntry{
+		Service:   svc,
+		LockedAt:  time.Now().Add(-2 * time.Hour),
+		ExpiresAt: time.Now().Add(-1 * time.Hour), // expired 1 hour ago
+	}
+	store.Set("rule-ttl", testSessionKey("s1"), entry)
+
+	rule := testRule("rule-ttl", "gpt-4", nil)
+	rule.Flags.SessionAffinity = 3600
+
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled, "expired affinity entry must be dropped")
+}
+
+// TestAffinity_StrictTTL_NotExpired verifies that a valid (unexpired) affinity
+// entry is honored normally.
+func TestAffinity_StrictTTL_NotExpired(t *testing.T) {
+	store := newMockAffinityStore()
+	svc := testService("provider-a", "gpt-4", true)
+
+	// Create a still-valid entry (expires in the future)
+	entry := &AffinityEntry{
+		Service:   svc,
+		LockedAt:  time.Now(),
+		ExpiresAt: time.Now().Add(1 * time.Hour), // expires in 1 hour
+	}
+	store.Set("rule-ttl", testSessionKey("s1"), entry)
+
+	rule := testRule("rule-ttl", "gpt-4", nil)
+	rule.Flags.SessionAffinity = 3600
+
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "s1")
+
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled, "valid affinity entry must be honored")
+	require.Equal(t, "provider-a", result.Service.Provider)
+}
