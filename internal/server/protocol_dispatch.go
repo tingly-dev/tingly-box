@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -376,6 +377,12 @@ func (s *Server) passthroughAnthropicBeta(
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
+	// Virtual model providers are handled in-process
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		s.dispatchVirtualModelAnthropic(c, reqCtx, rule, provider, isStreaming, recorder)
+		return
+	}
+
 	useGeneric := s.mcpEnabled() && s.shouldUseGenericMCPForProvider(provider)
 
 	if useGeneric {
@@ -710,6 +717,12 @@ func (s *Server) dispatchOpenAIChat(
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+
+	// Virtual model providers are handled in-process
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		s.dispatchVirtualModelOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
+		return
+	}
 
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 	if seg, ok := mcp.PopOpenAIContinuationSegment(typ.GetSessionID(c.Request.Context()), provider.UUID); ok {
@@ -1095,4 +1108,198 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 	}
 
 	s.trackUsageWithTokenUsage(c, usage, nil)
+}
+
+// dispatchVirtualModelOpenAIChat handles virtual model providers for OpenAI Chat format
+func (s *Server) dispatchVirtualModelOpenAIChat(
+	c *gin.Context,
+	reqCtx *transform.TransformContext,
+	rule *typ.Rule,
+	provider *typ.Provider,
+	isStreaming bool,
+	recorder *ProtocolRecorder,
+) {
+	if s.virtualModelService == nil {
+		err := fmt.Errorf("virtual model service not initialized")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "internal_error",
+			},
+		})
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	// The request is already in OpenAI Chat format after transform chain processing
+	var oaiChat *openai.ChatCompletionNewParams
+	var ok bool
+	if oaiChat, ok = reqCtx.Request.(*openai.ChatCompletionNewParams); ok {
+
+	} else if resp, ok := reqCtx.Request.(*responses.ResponseNewParams); ok {
+		// Responses API was converted to Chat format by the transform chain
+		chatParams := request.ConvertOpenAIResponsesToChat(resp, 100000) // maxAllowed
+		oaiChat = chatParams
+	} else {
+		err := fmt.Errorf("unexpected request type %T for OpenAI virtual model", reqCtx.Request)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "internal_error",
+			},
+		})
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	// Set the actual model from service selection
+	oaiChat.Model = reqCtx.RequestModel
+
+	var req = &protocol.OpenAIChatCompletionRequest{
+		ChatCompletionNewParams: *oaiChat,
+		Stream:                  isStreaming,
+	}
+
+	// Marshal and call vmodel handler
+	rewritten, err := json.Marshal(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to prepare virtual-model request: " + err.Error(),
+				Type:    "internal_error",
+			},
+		})
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	c.Request.Body = io.NopCloser(strings.NewReader(string(rewritten)))
+	c.Request.ContentLength = int64(len(rewritten))
+
+	// Call vmodel handler - it handles the request natively in OpenAI Chat format
+	s.virtualModelService.GetHandler().ChatCompletions(c)
+
+	// Record response outcome based on HTTP status
+	if recorder != nil {
+		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
+			recorder.RecordResponse(provider, reqCtx.RequestModel)
+		} else if c.Writer.Status() >= 500 {
+			recorder.RecordError(fmt.Errorf("virtual model returned status %d", c.Writer.Status()))
+		}
+	}
+}
+
+// dispatchVirtualModelAnthropic handles virtual model providers for Anthropic Messages format
+func (s *Server) dispatchVirtualModelAnthropic(
+	c *gin.Context,
+	reqCtx *transform.TransformContext,
+	rule *typ.Rule,
+	provider *typ.Provider,
+	isStreaming bool,
+	recorder *ProtocolRecorder,
+) {
+	if s.virtualModelService == nil {
+		err := fmt.Errorf("virtual model service not initialized")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "internal_error",
+			},
+		})
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	// The request is already in Anthropic format after transform chain processing
+	var msg *anthropic.BetaMessageNewParams
+
+	if beta, ok := reqCtx.Request.(*anthropic.BetaMessageNewParams); ok {
+		msg = beta
+	} else if v1, ok := reqCtx.Request.(*anthropic.MessageNewParams); ok {
+		// v1 needs to be lifted to beta format for the vmodel handler
+		raw, err := json.Marshal(v1)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to convert v1 to beta format: " + err.Error(),
+					Type:    "internal_error",
+				},
+			})
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+		msg = &anthropic.BetaMessageNewParams{}
+		if err := json.Unmarshal(raw, msg); err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to convert v1 to beta format: " + err.Error(),
+					Type:    "internal_error",
+				},
+			})
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+	} else {
+		err := fmt.Errorf("unexpected request type %T for Anthropic virtual model", reqCtx.Request)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "internal_error",
+			},
+		})
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	// Set the actual model from service selection
+	msg.Model = reqCtx.RequestModel
+
+	anthropicReq := &protocol.AnthropicBetaMessagesRequest{
+		BetaMessageNewParams: *msg,
+		Stream:               isStreaming,
+	}
+
+	// Marshal and call vmodel handler
+	rewritten, err := json.Marshal(anthropicReq)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to prepare virtual-model request: " + err.Error(),
+				Type:    "internal_error",
+			},
+		})
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
+		return
+	}
+
+	c.Request.Body = io.NopCloser(strings.NewReader(string(rewritten)))
+	c.Request.ContentLength = int64(len(rewritten))
+
+	// Call vmodel handler - it handles the request natively in Anthropic Messages format
+	s.virtualModelService.GetHandler().Messages(c)
+
+	// Record response outcome based on HTTP status
+	if recorder != nil {
+		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
+			recorder.RecordResponse(provider, reqCtx.RequestModel)
+		} else if c.Writer.Status() >= 500 {
+			recorder.RecordError(fmt.Errorf("virtual model returned status %d", c.Writer.Status()))
+		}
+	}
 }
