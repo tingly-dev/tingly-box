@@ -131,6 +131,20 @@ func SetCacheHit(c *gin.Context, isHit bool) {
 	c.Set(ContextKeyCacheHit, isHit)
 }
 
+// UpdateTrackingForFailover updates provider and model tracking during failover retry.
+// This ensures that logging/middleware shows the final successful service after failover,
+// not the initially-selected failed service.
+//
+// Parameters:
+//   - c: Gin context
+//   - provider: The new provider being tried in this failover attempt
+//   - model: The new model being tried in this failover attempt
+func UpdateTrackingForFailover(c *gin.Context, provider *typ.Provider, model string) {
+	c.Set(ContextKeyProvider, provider)
+	c.Set(ContextKeyModel, model)
+	c.Set(ContextKeyLBServiceID, provider.UUID+"/"+model)
+}
+
 // GetCacheHit retrieves the cache hit status from the context.
 // Returns the cache hit status and true if it exists, false and false otherwise.
 func GetCacheHit(c *gin.Context) (bool, bool) {

@@ -354,6 +354,9 @@ func (s *Server) dispatchWithPriorityFailover(
 			"model":          model,
 		}).Infof("[failover] attempt %d/%d: trying: %s/%s", i+1, len(activeServices), provider.UUID, model)
 
+		// Update context for logging/middleware to show current attempt
+		UpdateTrackingForFailover(c, provider, model)
+
 		if rec != nil {
 			rec.SetActiveService(provider, model)
 		}
