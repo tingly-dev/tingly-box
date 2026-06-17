@@ -3,13 +3,9 @@ import { useTranslation } from 'react-i18next';
 import {
     Add as AddIcon,
     BugReport as TroubleshootIcon,
-    FoldUp as FoldUpIcon,
-    FoldDown as FoldDownIcon,
     Key as KeyIcon,
-    Speed as SpeedIcon,
-    HelpOutline as HelpOutlineIcon,
 } from '@/components/icons';
-import { Button, IconButton, Stack, Tooltip } from '@mui/material';
+import { Button, Stack, Tooltip } from '@mui/material';
 import { ProbeMenu } from '@/components/probe';
 
 export interface TemplatePageActionsProps {
@@ -22,9 +18,7 @@ export interface TemplatePageActionsProps {
     onCreateRule: () => void;
     showExpandCollapseButton?: boolean;
     onViewLogs?: () => void;
-    // Opens the routing walkthrough. Rendered as a "?" at the end of the toolbar
-    // so it's a single, page-level entry point (and a persistent hint that the
-    // guide can be reopened here later).
+    // Icon button actions - these will be rendered next to the title instead
     onShowGuide?: () => void;
     // Probe V2 props
     scenario?: string;
@@ -57,7 +51,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     };
 
     return (
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1.5} alignItems="center">
             {onViewLogs && (
                 <Button
                     variant="outlined"
@@ -90,25 +84,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     >
                         {t('templateActions.newRule')}
                     </Button>
-                </Tooltip>
-            )}
-            {showExpandCollapseButton && collapsible && (
-                <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
-                    <IconButton size="small" onClick={onToggleExpandAll}>
-                        {allExpanded ? <FoldUpIcon fontSize="small" /> : <FoldDownIcon fontSize="small" />}
-                    </IconButton>
-                </Tooltip>
-            )}
-            {onShowGuide && (
-                <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
-                    <IconButton
-                        size="small"
-                        aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
-                        onClick={onShowGuide}
-                        sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                    >
-                        <HelpOutlineIcon fontSize="small" />
-                    </IconButton>
                 </Tooltip>
             )}
         </Stack>

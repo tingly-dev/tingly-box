@@ -68,7 +68,7 @@ export const hasModelOnAnyRule = (rules: any[] | null | undefined): boolean =>
     rules.some(r => Array.isArray(r?.services) && r.services.some((s: any) => s?.provider && s?.model));
 
 /**
- * Smoothly scroll the "Models and Forwarding Rules" card into view, then
+ * Smoothly scroll the "Model Rules" card into view, then
  * spotlight the "+ Add model" target so "Select a Model" actually points the
  * user at where to click — not just near it. The pulse is fired after the
  * scroll settles so it lands in view.
@@ -340,7 +340,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         <Collapse in={(!modelDone && firstIncomplete === 1) || expandedDoneSteps.has(1)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" color="text.secondary">
-                                    Choose which model {agentName} will use in the <em>Models and Forwarding Rules</em> section below.
+                                    Choose which model {agentName} will use in the <em>Model Rules</em> section below.
                                 </Typography>
                                 {onSelectModel && (
                                     <Box>

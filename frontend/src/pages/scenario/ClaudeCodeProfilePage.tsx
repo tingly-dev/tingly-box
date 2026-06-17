@@ -29,7 +29,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -52,11 +52,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         notification,
         copyToClipboard,
         baseUrl,
+        isLoading,
     } = useScenarioPageInternal(scenario);
-
-    // Rules state
-    const [rules, setRules] = useState<any[]>([]);
-    const [loadingRule, setLoadingRule] = useState(true);
 
     // Profile state
     const { getProfiles, refresh: refreshProfiles } = useProfileContext();
@@ -67,27 +64,12 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
-    const [isUpdatingMode, setIsUpdatingMode] = useState(false);
     const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
 
     // Update unified mode when profile changes
     useEffect(() => {
         setUnifiedMode(currentProfile?.unified || false);
     }, [currentProfile]);
-
-    // Load rules for this profile
-    const loadRules = useCallback(async () => {
-        setLoadingRule(true);
-        // Profile rules have their own scenario (e.g., claude_code:p1)
-        // Just load all rules for this profile scenario
-        const result = await api.getRules(scenario);
-        setRules(result.success ? result.data : []);
-        setLoadingRule(false);
-    }, [scenario]);
-
-    useEffect(() => {
-        loadRules();
-    }, [loadRules]);
 
     // Load app version for npm command
     useEffect(() => {
@@ -140,30 +122,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         }
     };
 
-    // Handle mode toggle
-    const handleModeToggle = async () => {
-        if (!profileId) return;
-        const newMode = !unifiedMode;
-        try {
-            setIsUpdatingMode(true);
-            // Only pass unified mode, let backend use existing name
-            const result = await api.updateProfile(BASE_SCENARIO, profileId, '', newMode);
-            if (result.success) {
-                setUnifiedMode(newMode);
-                showNotification(t('claudeCode.profile.modeUpdated', { mode: newMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate') }), 'success');
-                refreshProfiles();
-                // Reload rules after mode change
-                await loadRules();
-            } else {
-                showNotification(`${t('claudeCode.profile.modeUpdateFailed')}: ${result.error || 'Unknown error'}`, 'error');
-            }
-        } catch {
-            showNotification(t('claudeCode.profile.modeUpdateFailed'), 'error');
-        } finally {
-            setIsUpdatingMode(false);
-        }
-    };
-
+    // Load rules for this profile
     const ccCommand = React.useMemo(() => {
         if (commandMode === 'npx' && appVersion) {
             return `npx -y tingly-box@${appVersion} cc --profile ${profileId}`;
@@ -172,7 +131,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     }, [commandMode, appVersion, profileId]);
 
     return (
-        <PageLayout loading={loadingRule} notification={notification}>
+        <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     size="full"
@@ -283,40 +242,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                             onTabChange={() => {}}
                         />
                     </Box>
-                    <Box sx={{ px: 2, py: 0.5 }}>
-                        <ConfigRow
-                            tabs={[
-                                {
-                                    key: 'mode',
-                                    label: t('claudeCode.profile.mode'),
-                                    content: (
-                                        <Typography
-                                            variant="subtitle2"
-                                            color="text.secondary"
-                                            sx={{
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.75rem',
-                                                cursor: 'pointer',
-                                                '&:hover': {
-                                                    textDecoration: 'underline',
-                                                    backgroundColor: 'action.hover'
-                                                },
-                                                padding: 1,
-                                                borderRadius: 1,
-                                                transition: 'all 0.2s ease-in-out'
-                                            }}
-                                        >
-                                            {unifiedMode
-                                                ? t('claudeCode.profile.unifiedDescription')
-                                                : t('claudeCode.profile.separateDescription')}
-                                        </Typography>
-                                    ),
-                                },
-                            ]}
-                            activeTab="mode"
-                            onTabChange={() => {}}
-                        />
-                    </Box>
                     <ProviderConfigCard
                         title={`Claude Code [${profileId}]`}
                         baseUrlPath={`/tingly/${scenario}`}
@@ -330,10 +255,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                 </UnifiedCard>
 
                 <TemplatePage
-                    title="Models and Forwarding Rules"
                     scenario={scenario}
-                    rules={rules}
-                    onRulesChange={setRules}
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}

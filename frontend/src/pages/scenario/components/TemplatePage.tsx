@@ -11,8 +11,9 @@ import ProviderFormDialog from '@/components/ProviderFormDialog';
 import ConnectProviderDialog from '@/components/ConnectProviderDialog';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
-import type {TabTemplatePageProps} from './TemplatePage.types';
+import type {TemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
+import {TitleIconButtons} from './TitleIconButtons';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
@@ -29,47 +30,29 @@ const ROUTING_GUIDE_SEEN_KEY = 'tb.routingGuideAutoShown';
 let routingGuideAutoOpenedThisSession = false;
 
 /**
- * TemplatePage component that supports two modes:
+ * TemplatePage component with internally-managed state and optional overrides.
  *
  * INTERNAL MODE (recommended):
- * Only provide `scenario` prop - TemplatePage fetches all data internally.
+ * Just provide `scenario` prop - TemplatePage fetches all data internally.
  * <TemplatePage scenario="agent" />
  *
- * EXTERNAL MODE (legacy):
- * Provide all props - for backward compatibility with existing code.
- * <TemplatePage rules={rules} providers={providers} scenario="agent" ... />
+ * HYBRID MODE (for custom logic):
+ * Provide `scenario` plus override specific data props for custom behavior.
+ * <TemplatePage scenario="custom" rules={customRules} onRulesChange={customHandler} />
  *
- * MODAL STATE (shared via context):
- * The ApiKeyModal state is shared via ScenarioPageModalProvider context.
- * This ensures that ProviderConfigCard (in the parent page) and TemplatePage
- * show the same modal when "View Token" is clicked.
+ * Modal state (ApiKeyModal) is shared via ScenarioPageModalProvider context.
  */
-const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
+const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     // Get modal state from context (shared with ProviderConfigCard)
     const { showTokenModal, setShowTokenModal, token, copyToClipboard } = useScenarioPageModal();
 
-    // Determine which mode we're in
-    // If `rules` is provided, use external mode (legacy)
-    // If only `scenario` is provided, use internal mode (recommended)
-    const isInternalMode = !props.rules && Boolean(props.scenario);
-
     // Internal mode: fetch all data internally (excluding modal - that's from context)
-    const internalData = useScenarioPageInternal(
-        isInternalMode ? (props.scenario as string) : ''
-    );
+    const internalData = useScenarioPageInternal(props.scenario);
 
-    // External mode: use props directly
     const {
-        rules = internalData.rules,
-        showNotification = internalData.showNotification,
-        providers = internalData.providers,
-        onRulesChange = internalData.handleRulesChange,
-        onProvidersLoad = internalData.loadProviders,
-        loadRules = internalData.loadRules,
-        title = "",
+        title = "Model Rules",
         collapsible = false,
         allowDeleteRule = false,
-        onRuleDelete = internalData.handleRuleDelete,
         allowToggleRule = true,
         allowAddRule = true,
         scenario,
@@ -80,11 +63,19 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         showEmptyState = true,
         rightAction: customRightAction,
         onAddApiKeyClick,
-        newlyCreatedRuleUuids = internalData.newlyCreatedRuleUuids,
         onContext1MToggle,
     } = props;
 
-    const isLoading = isInternalMode ? internalData.isLoading : false;
+    // Use provided props or fallback to internal data
+    const rules = props.rules ?? internalData.rules;
+    const showNotification = props.showNotification ?? internalData.showNotification;
+    const providers = props.providers ?? internalData.providers;
+    const onRulesChange = props.onRulesChange ?? internalData.handleRulesChange;
+    const onProvidersLoad = props.onProvidersLoad ?? internalData.loadProviders;
+    const loadRules = props.loadRules ?? internalData.loadRules;
+    const onRuleDelete = props.onRuleDelete ?? internalData.handleRuleDelete;
+    const newlyCreatedRuleUuids = internalData.newlyCreatedRuleUuids;
+    const isLoading = internalData.isLoading;
 
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
@@ -401,6 +392,15 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                 id="models-and-forwarding-rules"
                 size="full"
                 title={title}
+                leftAction={
+                    <TitleIconButtons
+                        collapsible={collapsible}
+                        allExpanded={allExpanded}
+                        onToggleExpandAll={handleToggleExpandAll}
+                        showExpandCollapseButton={showExpandCollapseButton}
+                        onShowGuide={() => setShowGuide(true)}
+                    />
+                }
                 rightAction={rightAction}
                 sx={{ scrollMarginTop: 16 }}
             >

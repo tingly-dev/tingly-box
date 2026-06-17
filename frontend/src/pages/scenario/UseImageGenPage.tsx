@@ -65,7 +65,7 @@ const UseImageGenPageContent: React.FC = () => {
                 />
                 <TemplatePage
                     scenario={scenario}
-                    title="Image Generation Models and Forwarding Rules"
+                    title="Image Generation Model Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />

@@ -6,9 +6,7 @@ import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "anthropic";
-
 const UseAnthropicPageContent: React.FC = () => {
     const {
         isLoading,
@@ -16,7 +14,6 @@ const UseAnthropicPageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
     } = useScenarioPageInternal(scenario);
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -38,7 +35,6 @@ const UseAnthropicPageContent: React.FC = () => {
                 </UnifiedCard>
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />
@@ -46,7 +42,6 @@ const UseAnthropicPageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseAnthropicPage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -54,5 +49,4 @@ const UseAnthropicPage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseAnthropicPage;

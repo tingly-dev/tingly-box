@@ -13,9 +13,7 @@ import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "codex";
-
 const UseCodexPageContent: React.FC = () => {
     const {
         isLoading,
@@ -25,12 +23,10 @@ const UseCodexPageContent: React.FC = () => {
         baseUrl,
         rules,
     } = useScenarioPageInternal(scenario);
-
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
     const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
-
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
@@ -57,13 +53,11 @@ const UseCodexPageContent: React.FC = () => {
             setIsApplyLoading(false);
         }
     };
-
     const handleContext1MToggle = (newState: boolean) => {
         // Store the pending change and directly open config panel
         setPendingContext1MChange(newState);
         setConfigModalOpen(true);
     };
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -98,7 +92,6 @@ const UseCodexPageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
-
                 <AgentSetupCard
                     agentKey={scenario}
                     agentName="Codex"
@@ -111,15 +104,12 @@ const UseCodexPageContent: React.FC = () => {
                     onSelectModel={scrollToModelsCard}
                     onConnectProvider={() => setConnectProviderOpen(true)}
                 />
-
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                     onContext1MToggle={handleContext1MToggle}
                 />
-
                 <CodexConfigModal
                     open={configModalOpen}
                     onClose={() => {
@@ -129,7 +119,6 @@ const UseCodexPageContent: React.FC = () => {
                     copyToClipboard={copyToClipboard}
                     pendingContext1MChange={pendingContext1MChange}
                 />
-
                 <ConnectProviderFlow
                     open={connectProviderOpen}
                     onClose={() => setConnectProviderOpen(false)}
@@ -140,7 +129,6 @@ const UseCodexPageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseCodexPage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -148,5 +136,4 @@ const UseCodexPage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseCodexPage;

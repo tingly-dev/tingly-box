@@ -387,7 +387,7 @@ export default {
   "probe": {
     "testRule": "测试规则",
     "testProvider": "测试服务",
-    "shape": "形态",
+    "shape": "请求",
     "nonstream": "非流式",
     "stream": "流式",
     "scope": "范围",
@@ -396,7 +396,7 @@ export default {
     "scopeHint": "直连上游会绕过 Tingly-Box 的路由与中间件,用于判断故障在上游还是 TB 内部。",
     "run": "运行测试",
     "running": "测试中…",
-    "runHint": "选择形态后点击「运行测试」",
+    "runHint": "选择请求类型后点击「运行测试」",
     "rerun": "重新测试",
     "copyResponse": "复制响应",
     "copied": "已复制!",
@@ -874,11 +874,7 @@ export default {
       "deleteFailed": "删除配置文件失败",
       "mode": "模式",
       "unified": "统一",
-      "separate": "分离",
-      "unifiedDescription": "所有模型使用相同的路由规则",
-      "separateDescription": "每个模型使用自己的路由规则",
-      "modeUpdated": "配置文件模式已更新为 {{mode}}",
-      "modeUpdateFailed": "配置文件模式更新失败"
+      "separate": "分离"
     }
   },
   "prompt": {

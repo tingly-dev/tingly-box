@@ -7,13 +7,13 @@ import {
     Typography,
     Chip,
     LinearProgress,
-    Alert,
     IconButton,
     Tooltip,
     Button,
     ToggleButton,
     ToggleButtonGroup,
     Collapse,
+    Alert,
 } from '@mui/material';
 import {
     CheckCircle as CheckIcon,
@@ -23,6 +23,8 @@ import {
     ContentCopy as CopyIcon,
     Refresh as RefreshIcon,
     PlayArrow as RunIcon,
+    ExpandMore as ExpandMoreIcon,
+    ExpandLess as ExpandLessIcon,
 } from '@/components/icons';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -174,11 +176,52 @@ const JourneyRow = memo(({ label, value, muted }: { label: string; value: React.
     );
 });
 
-const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-    <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mt: 2, mb: 0.5 }}>
-        {children}
-    </Typography>
-);
+// CollapsibleSection: a section with title and expand/collapse functionality
+interface CollapsibleSectionProps {
+    title: string;
+    defaultExpanded?: boolean;
+    children: React.ReactNode;
+}
+
+const CollapsibleSection = memo(({ title, defaultExpanded = false, children }: CollapsibleSectionProps) => {
+    const [expanded, setExpanded] = useState(defaultExpanded);
+    const theme = useTheme();
+
+    return (
+        <Box
+            sx={{
+                mt: 2,
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 1.5,
+                overflow: 'hidden',
+            }}
+        >
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    px: 1.5,
+                    py: 1,
+                    bgcolor: 'action.hover',
+                    cursor: 'pointer',
+                    '&:hover': {
+                        bgcolor: 'action.selected',
+                    },
+                }}
+                onClick={() => setExpanded(!expanded)}
+            >
+                <Typography variant="subtitle2" fontWeight={600} color="text.primary">
+                    {title}
+                </Typography>
+                {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </Box>
+            <Collapse in={expanded}>
+                <Box sx={{ p: 1.5 }}>{children}</Box>
+            </Collapse>
+        </Box>
+    );
+});
 
 // StatusBar: the one-glance verdict — success/failure, latency, tokens.
 const StatusBar = memo(({ result }: { result: ProbeResult }) => {
@@ -187,28 +230,69 @@ const StatusBar = memo(({ result }: { result: ProbeResult }) => {
     const ok = result.success;
     const d = result.data;
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {ok ? (
-                <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 24 }} />
-            ) : (
-                <ErrorIcon sx={{ color: theme.palette.error.main, fontSize: 24 }} />
+        <Alert
+            severity={ok ? 'success' : 'error'}
+            variant="outlined"
+            sx={{
+                mt: 2,
+                borderRadius: 2,
+                borderWidth: 2,
+                '& .MuiAlert-icon': {
+                    fontSize: 28,
+                },
+            }}
+            icon={ok ? <CheckIcon sx={{ fontSize: 28 }} /> : <ErrorIcon sx={{ fontSize: 28 }} />}
+        >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ fontSize: '1rem' }}>
+                    {ok ? t('probe.success') : t('probe.failed')}
+                </Typography>
+                {d?.latency_ms ? (
+                    <Chip
+                        icon={<SpeedIcon sx={{ fontSize: 16 }} />}
+                        label={`${d.latency_ms}ms`}
+                        size="medium"
+                        sx={{
+                            height: 28,
+                            bgcolor: ok ? 'success.main' : 'error.main',
+                            color: 'common.white',
+                            '& .MuiChip-icon': {
+                                color: 'common.white',
+                            },
+                        }}
+                    />
+                ) : null}
+                {d?.total_tokens ? (
+                    <Chip
+                        icon={<TokenIcon sx={{ fontSize: 16 }} />}
+                        label={`${d.total_tokens} tokens`}
+                        size="medium"
+                        sx={{
+                            height: 28,
+                            bgcolor: ok ? 'success.main' : 'error.main',
+                            color: 'common.white',
+                            '& .MuiChip-icon': {
+                                color: 'common.white',
+                            },
+                        }}
+                    />
+                ) : null}
+            </Box>
+            {!ok && result.error && (
+                <Typography
+                    variant="body2"
+                    sx={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.85rem',
+                        mt: 1,
+                        color: 'text.primary',
+                        wordBreak: 'break-word',
+                    }}
+                >
+                    {result.error.message}
+                </Typography>
             )}
-            <Typography variant="subtitle2" fontWeight={600}>
-                {ok ? t('probe.success') : t('probe.failed')}
-            </Typography>
-            {d?.latency_ms ? (
-                <Chip icon={<SpeedIcon sx={{ fontSize: 14 }} />} label={`${d.latency_ms}ms`} size="small" sx={{ height: 24 }} />
-            ) : null}
-            {d?.total_tokens ? (
-                <Chip
-                    icon={<TokenIcon sx={{ fontSize: 14 }} />}
-                    label={`${d.total_tokens} tokens`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ height: 24 }}
-                />
-            ) : null}
-        </Box>
+        </Alert>
     );
 });
 
@@ -241,7 +325,6 @@ const Journey = memo(
 
         return (
             <Box>
-                <SectionTitle>{t('probe.journey')}</SectionTitle>
                 {isRule && (
                     <JourneyRow label={t('probe.row.rule')} value={`${ruleLabel}${scenario ? `  ·  ${scenario}` : ''}`} />
                 )}
@@ -300,7 +383,6 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     const [direct, setDirect] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<ProbeResult | null>(null);
-    const [rawExpanded, setRawExpanded] = useState(false);
     const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
 
     // Reset on open — do NOT auto-run; the user clicks 运行测试.
@@ -310,14 +392,12 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             setDirect(false);
             setResult(null);
             setIsLoading(false);
-            setRawExpanded(false);
         }
     }, [open, testMode]);
 
     const runTest = useCallback(async () => {
         setIsLoading(true);
         setResult(null);
-        setRawExpanded(false);
 
         const body = {
             target_type: targetType,
@@ -371,40 +451,108 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { minHeight: 420 } }}>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                        {targetType === 'rule' ? t('probe.testRule') : t('probe.testProvider')}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0, overflow: 'hidden' }}>
+                    <Typography
+                        variant="subtitle1"
+                        fontWeight={600}
+                        sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        {model ? `${targetName} · ${model}` : targetName}
                     </Typography>
-                    <Chip
-                        label={model ? `${targetName} | ${model}` : targetName}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 360 }}
-                    />
                 </Box>
-                {result && (
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Tooltip
-                            title={copyTooltipOpen ? t('probe.copied') : t('probe.copyResponse')}
-                            open={copyTooltipOpen || undefined}
-                            disableHoverListener={copyTooltipOpen}
-                        >
-                            <IconButton onClick={handleCopy} size="small" sx={{ color: 'text.secondary' }}>
-                                <CopyIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('probe.rerun')}>
-                            <IconButton onClick={runTest} size="small" sx={{ color: 'text.secondary' }} disabled={isLoading}>
-                                <RefreshIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                )}
+                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                    {import.meta.env.DEV && (
+                        <>
+                            <Tooltip title="Simulate Success">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                        setResult({
+                                            success: true,
+                                            data: {
+                                                content: 'Simulated success response for demo purposes',
+                                                latency_ms: 450,
+                                                request_url: 'https://api.example.com/v1/chat',
+                                                stream: mode === 'streaming',
+                                                prompt_tokens: 25,
+                                                completion_tokens: 18,
+                                                total_tokens: 43,
+                                                selected_provider: targetName,
+                                                selected_model: model || 'claude-sonnet-4-20250514',
+                                                routing_source: 'smart_routing',
+                                                matched_smart_rule: 1,
+                                                upstream_api: 'anthropic_v1',
+                                                upstream_url: 'https://api.anthropic.com/v1/messages',
+                                                matched_rule: 'test-rule',
+                                                matched_rule_desc: 'Test Rule Description',
+                                                applied_flags: 'stream,bypass_cache',
+                                            },
+                                        });
+                                        setIsLoading(false);
+                                    }}
+                                    sx={{ color: 'success.main' }}
+                                >
+                                    <CheckIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Simulate Failure">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                        setResult({
+                                            success: false,
+                                            error: {
+                                                message: 'Simulated error for demo purposes: Connection timeout',
+                                                type: 'upstream_error',
+                                            },
+                                        });
+                                        setIsLoading(false);
+                                    }}
+                                    sx={{ color: 'error.main' }}
+                                >
+                                    <ErrorIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
+                    {result && (
+                        <>
+                            <Tooltip
+                                title={copyTooltipOpen ? t('probe.copied') : t('probe.copyResponse')}
+                                open={copyTooltipOpen || undefined}
+                                disableHoverListener={copyTooltipOpen}
+                            >
+                                <IconButton onClick={handleCopy} size="small" sx={{ color: 'text.secondary' }}>
+                                    <CopyIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title={t('probe.rerun')}>
+                                <IconButton onClick={runTest} size="small" sx={{ color: 'text.secondary' }} disabled={isLoading}>
+                                    <RefreshIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
+                    <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={isLoading ? null : <RunIcon fontSize="small" />}
+                        onClick={runTest}
+                        disabled={isLoading}
+                        sx={{ minWidth: 100 }}
+                    >
+                        {isLoading ? t('probe.running') : t('probe.run')}
+                    </Button>
+                </Box>
             </DialogTitle>
 
             <DialogContent>
-                {/* Controls: 形态 (request shape) + 范围 (scope) + run */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
+                {/* Controls: request type + scope */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="caption" color="text.secondary">
                             {t('probe.shape')}
@@ -443,17 +591,6 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                             </ToggleButtonGroup>
                         </Box>
                     )}
-
-                    <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<RunIcon fontSize="small" />}
-                        onClick={runTest}
-                        disabled={isLoading}
-                        sx={{ ml: 'auto' }}
-                    >
-                        {isLoading ? t('probe.running') : t('probe.run')}
-                    </Button>
                 </Box>
 
                 {isLoading && <LinearProgress sx={{ height: 6, borderRadius: 3, mt: 1 }} />}
@@ -468,35 +605,21 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
 
                 {!isLoading && result && (
                     <Box>
-                        <Box sx={{ mt: 1 }}>
-                            <StatusBar result={result} />
-                        </Box>
+                        <StatusBar result={result} />
 
-                        {!result.success && result.error && (
-                            <Alert severity="error" variant="outlined" sx={{ mt: 2, borderRadius: 2 }}>
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                                    {result.error.message}
-                                </Typography>
-                                {result.error.type && (
-                                    <Typography variant="caption" color="text.secondary">
-                                        Type: {result.error.type}
-                                    </Typography>
-                                )}
-                            </Alert>
-                        )}
-
-                        <Journey
-                            result={result}
-                            targetType={targetType}
-                            targetName={targetName}
-                            scenario={scenario}
-                            model={model}
-                            bypassed={bypassed}
-                        />
+                        <CollapsibleSection title={t('probe.journey')} defaultExpanded={false}>
+                            <Journey
+                                result={result}
+                                targetType={targetType}
+                                targetName={targetName}
+                                scenario={scenario}
+                                model={model}
+                                bypassed={bypassed}
+                            />
+                        </CollapsibleSection>
 
                         {result.success && (
-                            <Box>
-                                <SectionTitle>{t('probe.response')}</SectionTitle>
+                            <CollapsibleSection title={t('probe.response')} defaultExpanded={false}>
                                 <Box
                                     sx={{
                                         p: 1.5,
@@ -512,31 +635,27 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                                 >
                                     {extracted || t('probe.noText')}
                                 </Box>
-                                {result.data?.content && (
-                                    <>
-                                        <Button size="small" onClick={() => setRawExpanded((v) => !v)} sx={{ mt: 0.5, textTransform: 'none' }}>
-                                            {rawExpanded ? t('probe.rawJsonHide') : t('probe.rawJson')}
-                                        </Button>
-                                        <Collapse in={rawExpanded}>
-                                            <Box
-                                                sx={{
-                                                    p: 1.5,
-                                                    bgcolor: 'grey.50',
-                                                    borderRadius: 1.5,
-                                                    fontFamily: 'monospace',
-                                                    fontSize: '0.72rem',
-                                                    whiteSpace: 'pre-wrap',
-                                                    wordBreak: 'break-all',
-                                                    maxHeight: 240,
-                                                    overflow: 'auto',
-                                                }}
-                                            >
-                                                {result.data.content}
-                                            </Box>
-                                        </Collapse>
-                                    </>
-                                )}
-                            </Box>
+                            </CollapsibleSection>
+                        )}
+
+                        {result.success && result.data?.content && (
+                            <CollapsibleSection title={t('probe.rawJson')} defaultExpanded={false}>
+                                <Box
+                                    sx={{
+                                        p: 1.5,
+                                        bgcolor: 'grey.50',
+                                        borderRadius: 1.5,
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.72rem',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-all',
+                                        maxHeight: 240,
+                                        overflow: 'auto',
+                                    }}
+                                >
+                                    {result.data.content}
+                                </Box>
+                            </CollapsibleSection>
                         )}
                     </Box>
                 )}

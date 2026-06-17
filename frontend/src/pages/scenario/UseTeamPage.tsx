@@ -6,9 +6,7 @@ import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "team";
-
 const UseTeamPageContent: React.FC = () => {
     const {
         isLoading,
@@ -16,7 +14,6 @@ const UseTeamPageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
     } = useScenarioPageInternal(scenario);
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -37,10 +34,8 @@ const UseTeamPageContent: React.FC = () => {
                         scenario={scenario}
                     />
                 </UnifiedCard>
-
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />
@@ -48,7 +43,6 @@ const UseTeamPageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseTeamPage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -56,5 +50,4 @@ const UseTeamPage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseTeamPage;

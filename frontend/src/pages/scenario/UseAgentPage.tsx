@@ -40,7 +40,6 @@ const UseAgentPageContent: React.FC = () => {
 
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />

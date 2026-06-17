@@ -9,9 +9,7 @@ import TemplatePage from './components/TemplatePage.tsx';
 import ClaudeDesktopConfigModal from './components/ClaudeDesktopConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "claude_desktop";
-
 const UseClaudeDesktopPageContent: React.FC = () => {
     const {
         isLoading,
@@ -22,20 +20,16 @@ const UseClaudeDesktopPageContent: React.FC = () => {
         loadRules,
         showNotification,
     } = useScenarioPageInternal(scenario);
-
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
-
     const handleOpenConfigModal = () => {
         setConfigModalOpen(true);
     };
-
     const handleContext1MToggle = (newState: boolean) => {
         // Store the pending change and directly open config panel
         setPendingContext1MChange(newState);
         setConfigModalOpen(true);
     };
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -72,15 +66,12 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
-
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                     onContext1MToggle={handleContext1MToggle}
                 />
-
                 <ClaudeDesktopConfigModal
                     open={configModalOpen}
                     onClose={() => {
@@ -97,7 +88,6 @@ const UseClaudeDesktopPageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseClaudeDesktopPage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -105,5 +95,4 @@ const UseClaudeDesktopPage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseClaudeDesktopPage;

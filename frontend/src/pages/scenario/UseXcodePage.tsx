@@ -9,9 +9,7 @@ import TemplatePage from './components/TemplatePage.tsx';
 import XcodeConfigModal from './components/XcodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "xcode";
-
 const UseXcodePageContent: React.FC = () => {
     const {
         isLoading,
@@ -19,13 +17,10 @@ const UseXcodePageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
     } = useScenarioPageInternal(scenario);
-
     const [configModalOpen, setConfigModalOpen] = useState(false);
-
     const handleOpenConfigModal = () => {
         setConfigModalOpen(true);
     };
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -62,14 +57,11 @@ const UseXcodePageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
-
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />
-
                 <XcodeConfigModal
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
@@ -80,7 +72,6 @@ const UseXcodePageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseXcodePage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -88,5 +79,4 @@ const UseXcodePage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseXcodePage;

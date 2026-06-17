@@ -38,7 +38,7 @@ const UseEmbedPageContent: React.FC = () => {
                 </UnifiedCard>
                 <TemplatePage
                     scenario={scenario}
-                    title="Embedding Models and Forwarding Rules"
+                    title="Embedding Model Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />

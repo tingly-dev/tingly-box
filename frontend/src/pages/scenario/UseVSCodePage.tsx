@@ -11,12 +11,9 @@ import TemplatePage from './components/TemplatePage.tsx';
 import VSCodeConfigModal from './components/VSCodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "vscode";
-
 const MARKETPLACE_URL = 'https://marketplace.visualstudio.com/items?itemName=Tingly-Dev.vscode-tingly-box';
 const VSCODE_INSTALL_URL = 'vscode:extension/Tingly-Dev.vscode-tingly-box';
-
 const UseVSCodePageContent: React.FC = () => {
     const {
         isLoading,
@@ -26,14 +23,11 @@ const UseVSCodePageContent: React.FC = () => {
         baseUrl,
         rules,
     } = useScenarioPageInternal(scenario);
-
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
-
     const handleOpenConfigModal = () => {
         setConfigModalOpen(true);
     };
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -70,7 +64,6 @@ const UseVSCodePageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
-
                 <AgentSetupCard
                     agentKey={scenario}
                     agentName="VS Code"
@@ -88,19 +81,15 @@ const UseVSCodePageContent: React.FC = () => {
                     onSelectModel={scrollToModelsCard}
                     onConnectProvider={() => setConnectProviderOpen(true)}
                 />
-
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />
-
                 <VSCodeConfigModal
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                 />
-
                 <ConnectProviderFlow
                     open={connectProviderOpen}
                     onClose={() => setConnectProviderOpen(false)}
@@ -111,7 +100,6 @@ const UseVSCodePageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseVSCodePage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -119,5 +107,4 @@ const UseVSCodePage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseVSCodePage;

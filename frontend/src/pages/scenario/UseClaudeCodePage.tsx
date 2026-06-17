@@ -279,7 +279,6 @@ const UseClaudeCodePageContent: React.FC = () => {
                 />
 
                 <TemplatePage
-                    title="Models and Forwarding Rules"
                     scenario={SCENARIO}
                     rules={rules}
                     onRulesChange={setRules}

@@ -12,9 +12,7 @@ import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-
 const scenario = "opencode";
-
 const UseOpenCodePageContent: React.FC = () => {
     const {
         isLoading,
@@ -24,7 +22,6 @@ const UseOpenCodePageContent: React.FC = () => {
         baseUrl,
         rules,
     } = useScenarioPageInternal(scenario);
-
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
@@ -32,7 +29,6 @@ const UseOpenCodePageContent: React.FC = () => {
     const [scriptWindows, setScriptWindows] = useState('');
     const [scriptUnix, setScriptUnix] = useState('');
     const [isConfigLoading, setIsConfigLoading] = useState(false);
-
     const fetchConfigPreview = async () => {
         setIsConfigLoading(true);
         try {
@@ -57,7 +53,6 @@ const UseOpenCodePageContent: React.FC = () => {
             setIsConfigLoading(false);
         }
     };
-
     const handleOpenConfigModal = async () => {
         setConfigJson('// Loading...');
         setScriptWindows('// Loading...');
@@ -65,7 +60,6 @@ const UseOpenCodePageContent: React.FC = () => {
         await fetchConfigPreview();
         setConfigModalOpen(true);
     };
-
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
@@ -83,7 +77,6 @@ const UseOpenCodePageContent: React.FC = () => {
             setIsApplyLoading(false);
         }
     };
-
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -119,7 +112,6 @@ const UseOpenCodePageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
-
                 <AgentSetupCard
                     agentKey={scenario}
                     agentName="OpenCode"
@@ -132,14 +124,11 @@ const UseOpenCodePageContent: React.FC = () => {
                     onSelectModel={scrollToModelsCard}
                     onConnectProvider={() => setConnectProviderOpen(true)}
                 />
-
                 <TemplatePage
                     scenario={scenario}
-                    title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
                 />
-
                 <OpenCodeConfigModal
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
@@ -151,7 +140,6 @@ const UseOpenCodePageContent: React.FC = () => {
                     isApplyLoading={isApplyLoading}
                     isLoading={isConfigLoading}
                 />
-
                 <ConnectProviderFlow
                     open={connectProviderOpen}
                     onClose={() => setConnectProviderOpen(false)}
@@ -162,7 +150,6 @@ const UseOpenCodePageContent: React.FC = () => {
         </PageLayout>
     );
 };
-
 const UseOpenCodePage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -170,5 +157,4 @@ const UseOpenCodePage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
-
 export default UseOpenCodePage;

@@ -663,6 +663,36 @@ const mockRemoteGraphs: any[] = [
     }
 ]
 
+// ============================================
+// Mock Claude Code Profiles
+// ============================================
+const mockClaudeCodeProfiles = [
+    {
+        id: 'p1',
+        name: 'ds',
+        description: 'DeepSeek profile for cost-effective development',
+        unified: true,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+    },
+    {
+        id: 'p2',
+        name: 'sonnet',
+        description: 'Claude Sonnet profile for balanced performance',
+        unified: false,
+        created_at: '2024-01-15T00:00:00Z',
+        updated_at: '2024-01-15T00:00:00Z',
+    },
+    {
+        id: 'p3',
+        name: 'codex',
+        description: 'Codex profile for code generation tasks',
+        unified: true,
+        created_at: '2024-02-01T00:00:00Z',
+        updated_at: '2024-02-01T00:00:00Z',
+    },
+]
+
 const mockRules = {
     tingly: {
         provider: "openai",
@@ -1350,6 +1380,7 @@ export const handlers = [
     http.get('/api/v1/rules', ({ request }) => {
         const url = new URL(request.url)
         const scenario = url.searchParams.get('scenario')
+
         if (scenario === 'imagegen') {
             return HttpResponse.json({
                 success: true,
@@ -1371,6 +1402,30 @@ export const handlers = [
                 ],
             })
         }
+
+        // Handle profile-specific rules (e.g., claude_code:p1)
+        if (scenario?.startsWith('claude_code:')) {
+            const profileId = scenario.split(':')[1];
+            // Return mock rules for the specific profile
+            return HttpResponse.json({
+                success: true,
+                data: [
+                    {
+                        uuid: `mock-rule-cc-${profileId}-1`,
+                        scenario: `claude_code:${profileId}`,
+                        request_model: 'claude-sonnet-4-6',
+                        response_model: '',
+                        active: true,
+                        description: `Profile ${profileId} - Smart routing rule`,
+                        flags: { claude_code_compat: true, clean_header: true },
+                        services: [
+                            { uuid: `svc-cc-${profileId}-1`, provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
+                        ],
+                    },
+                ],
+            })
+        }
+
         const rules = scenario ? (mockV1Rules[scenario] ?? []) : []
         return HttpResponse.json({ success: true, data: rules })
     }),
@@ -1887,6 +1942,22 @@ export const handlers = [
         return HttpResponse.json({ total: logs.length, logs })
     }),
 
+    // ============================================
+    // Scenario Descriptors API
+    // ============================================
+    http.get('/api/v1/scenario-descriptors', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { id: 'claude_code', supports_profiles: true },
+                { id: 'claude_desktop', supports_profiles: false },
+                { id: 'openai', supports_profiles: false },
+                { id: 'anthropic', supports_profiles: false },
+                { id: 'codex', supports_profiles: false },
+            ],
+        })
+    }),
+
     http.get('/api/v1/requests', ({ request }) => {
         const url = new URL(request.url)
         const scenario = url.searchParams.get('scenario')
@@ -1922,5 +1993,95 @@ export const handlers = [
                 time: new Date(base + i * 120).toISOString(),
             })),
         })
+    }),
+
+    // ============================================
+    // Claude Code Profiles API (v1)
+    // ============================================
+    http.get('/api/v1/scenario/:scenario/profiles', ({ params }) => {
+        const { scenario } = params as { scenario: string }
+        if (scenario === 'claude_code') {
+            return HttpResponse.json({
+                success: true,
+                data: mockClaudeCodeProfiles,
+            })
+        }
+        return HttpResponse.json({
+            success: true,
+            data: [],
+        })
+    }),
+
+    http.post('/api/v1/scenario/:scenario/profiles', async ({ params, request }) => {
+        const { scenario } = params as { scenario: string }
+        const body = await request.json() as any
+        const newProfile = {
+            id: `profile-${Date.now()}`,
+            name: body.name,
+            description: body.description || '',
+            unified: body.unified ?? true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }
+        mockClaudeCodeProfiles.push(newProfile)
+        return HttpResponse.json({
+            success: true,
+            data: newProfile,
+        })
+    }),
+
+    http.put('/api/v1/scenario/:scenario/profiles/:profileId', async ({ params, request }) => {
+        const { scenario, profileId } = params as { scenario: string; profileId: string }
+        const body = await request.json() as any
+
+        if (scenario !== 'claude_code') {
+            return HttpResponse.json({
+                success: false,
+                error: 'Scenario not supported',
+            }, { status: 400 })
+        }
+
+        const profile = mockClaudeCodeProfiles.find(p => p.id === profileId)
+        if (!profile) {
+            return HttpResponse.json({
+                success: false,
+                error: 'Profile not found',
+            }, { status: 404 })
+        }
+
+        if (body.name !== undefined) profile.name = body.name
+        if (body.description !== undefined) profile.description = body.description
+        if (body.unified !== undefined) profile.unified = body.unified
+        profile.updated_at = new Date().toISOString()
+
+        return HttpResponse.json({
+            success: true,
+            data: profile,
+        })
+    }),
+
+    http.delete('/api/v1/scenario/:scenario/profiles/:profileId', ({ params }) => {
+        const { scenario, profileId } = params as { scenario: string; profileId: string }
+
+        if (scenario !== 'claude_code') {
+            return HttpResponse.json({
+                success: false,
+                error: 'Scenario not supported',
+            }, { status: 400 })
+        }
+
+        const index = mockClaudeCodeProfiles.findIndex(p => p.id === profileId)
+        if (index >= 0) {
+            mockClaudeCodeProfiles.splice(index, 1)
+            return HttpResponse.json({
+                success: true,
+                message: 'Profile deleted successfully',
+            })
+        }
+
+        return HttpResponse.json({
+            success: false,
+            error: 'Profile not found',
+        }, { status: 404 })
     }),
 ]
