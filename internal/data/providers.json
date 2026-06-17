@@ -1289,8 +1289,8 @@
     },
     "volces-com-coding": {
       "id": "volces-com-coding",
-      "name": "Volcengine Coding Plan (CN)",
-      "alias": "Volcengine Coding Plan (CN) | 火山方舟 Coding Plan（中国）",
+      "name": "Volcengine Ark Coding Plan (CN)",
+      "alias": "Volcengine Ark Coding Plan (CN) | 火山方舟 Coding Plan（中国）",
       "status": "active",
       "valid": true,
       "canonical_domain": "ark.cn-beijing.volces.com",
