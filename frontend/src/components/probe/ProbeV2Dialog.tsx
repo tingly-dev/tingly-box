@@ -325,7 +325,6 @@ const Journey = memo(
 
         return (
             <Box>
-                <SectionTitle>{t('probe.journey')}</SectionTitle>
                 {isRule && (
                     <JourneyRow label={t('probe.row.rule')} value={`${ruleLabel}${scenario ? `  ·  ${scenario}` : ''}`} />
                 )}
