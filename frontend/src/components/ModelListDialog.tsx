@@ -12,97 +12,9 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import ModelSelectDialog from './ModelSelectDialog.tsx';
-import ProbeModal from '@/components/ProbeModal';
+import { ProbeV2Dialog } from './probe/ProbeV2Dialog';
 import type { Provider } from '../types/provider';
-import type { ProbeResponse } from '../client';
-
-interface TestResultDialogProps {
-    open: boolean;
-    onClose: () => void;
-    probeResult: ProbeResponse | null;
-    model: string;
-    provider: Provider;
-}
-
-const TestResultDialog = ({ open, onClose, probeResult, model, provider }: TestResultDialogProps) => {
-    const handleCopyCurl = async () => {
-        if (probeResult?.data?.curl_command) {
-            try {
-                await navigator.clipboard.writeText(probeResult.data.curl_command);
-            } catch (err) {
-                console.error('Failed to copy curl command:', err);
-            }
-        }
-    };
-
-    const curlCommand = probeResult?.data?.curl_command || '';
-
-    return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">Connection Test Result</Typography>
-                <IconButton onClick={onClose} size="small">
-                    <CloseIcon />
-                </IconButton>
-            </DialogTitle>
-            <DialogContent sx={{ pb: 2 }}>
-                <Stack spacing={2}>
-                    {/* Provider Info */}
-                    <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                            Provider
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {provider.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            Model: {model}
-                        </Typography>
-                    </Box>
-
-                    {/* Test Result */}
-                    <Box>
-                        <ProbeModal
-                            provider={provider}
-                            model={model}
-                            probeResult={probeResult}
-                            isProbing={false}
-                        />
-                    </Box>
-
-                    {/* Curl Command */}
-                    <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                curl Command
-                            </Typography>
-                            <Tooltip title="Copy curl command">
-                                <IconButton size="small" color="primary" onClick={handleCopyCurl}>
-                                    <ContentCopy fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </Stack>
-                        <Box
-                            sx={{
-                                p: 2,
-                                bgcolor: 'grey.50',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.8rem',
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-all',
-                                border: '1px solid',
-                                borderColor: 'divider',
-                            }}
-                        >
-                            {curlCommand}
-                        </Box>
-                    </Box>
-                </Stack>
-            </DialogContent>
-        </Dialog>
-    );
-};
+import type { ProbeV2Response } from '@/types/probe-v2';
 
 interface ModelListDialogProps {
     open: boolean;
@@ -113,9 +25,8 @@ interface ModelListDialogProps {
 const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [testing, setTesting] = useState(false);
-    const [testResults, setTestResults] = useState<Map<string, ProbeResponse>>(new Map());
-    const [resultDialogOpen, setResultDialogOpen] = useState(false);
-    const [viewResultModel, setViewResultModel] = useState<string | null>(null);
+    const [probeDialogOpen, setProbeDialogOpen] = useState(false);
+    const [probeModel, setProbeModel] = useState<string>('');
 
     // Ref to track if dialog is still open (to avoid showing results after closing)
     const isDialogOpenRef = useRef(true);
@@ -126,8 +37,8 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
             isDialogOpenRef.current = false;
             setTesting(false);
             setSelectedModel('');
-            setTestResults(new Map());
-            setViewResultModel(null);
+            setProbeDialogOpen(false);
+            setProbeModel('');
         } else {
             isDialogOpenRef.current = true;
         }
@@ -137,37 +48,17 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
         if (!provider || testing) return;
 
         setTesting(true);
-        try {
-            const result = await api.probeModel(provider.uuid, model);
-            // Only show results if dialog is still open
-            if (isDialogOpenRef.current) {
-                setTestResults(prev => new Map(prev).set(model, result));
-                setViewResultModel(model);
-                setResultDialogOpen(true);
-            }
-        } catch (err: any) {
-            // Only show error if dialog is still open
-            if (isDialogOpenRef.current) {
-                const errorResult: ProbeResponse = {
-                    success: false,
-                    error: { message: err?.message || 'Test failed', type: 'client_error' },
-                };
-                setTestResults(prev => new Map(prev).set(model, errorResult));
-                setViewResultModel(model);
-                setResultDialogOpen(true);
-            }
-        } finally {
-            // Only reset testing state if dialog is still open
-            // (if dialog was closed, useEffect already reset it)
-            if (isDialogOpenRef.current) {
-                setTesting(false);
-            }
-        }
+        setProbeModel(model);
+        setProbeDialogOpen(true);
+
+        // Note: ProbeV2Dialog handles the API call internally
+        // We just need to open the dialog with the right parameters
+        setTesting(false);
     };
 
-    const handleCloseResultDialog = () => {
-        setResultDialogOpen(false);
-        setViewResultModel(null);
+    const handleCloseProbeDialog = () => {
+        setProbeDialogOpen(false);
+        setProbeModel('');
     };
 
     const handleClose = () => {
@@ -207,14 +98,16 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                 </DialogContent>
             </Dialog>
 
-            {/* Test Result Dialog */}
-            {viewResultModel && provider && (
-                <TestResultDialog
-                    open={resultDialogOpen}
-                    onClose={handleCloseResultDialog}
-                    probeResult={testResults.get(viewResultModel) || null}
-                    model={viewResultModel}
-                    provider={provider}
+            {/* Probe V2 Dialog */}
+            {provider && probeModel && (
+                <ProbeV2Dialog
+                    open={probeDialogOpen}
+                    onClose={handleCloseProbeDialog}
+                    targetType="provider"
+                    targetId={provider.uuid}
+                    targetName={provider.name}
+                    model={probeModel}
+                    testMode="streaming"
                 />
             )}
         </>

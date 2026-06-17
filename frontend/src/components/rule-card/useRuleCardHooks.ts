@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/services/api';
-import type { ProbeResponse } from '@/client';
 import type { ConfigRecord, Rule, SmartRouting } from '@/components/RoutingGraphTypes';
 import {
     ruleToConfigRecord,
@@ -190,79 +189,6 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
     );
 
     return { autoSave, updateField, updateRecord };
-}
-
-/**
- * Manages the probe functionality for testing model connectivity
- */
-export function useRuleProbe(configRecord: ConfigRecord | null) {
-    const [isProbing, setIsProbing] = useState(false);
-    const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
-    const [detailsExpanded, setDetailsExpanded] = useState(false);
-    const [probeDialogOpen, setProbeDialogOpen] = useState(false);
-    const [providerName, setProviderName] = useState<string>('');
-
-    useEffect(() => {
-        if (probeDialogOpen && configRecord?.providers[0]?.provider) {
-            const fetchProviderName = async () => {
-                try {
-                    const providerUuid = configRecord.providers[0].provider;
-                    const result = await api.getProvider(providerUuid);
-                    setProviderName(result.data?.name || 'Unknown Provider');
-                } catch {
-                    setProviderName('Unknown Provider');
-                }
-            };
-            fetchProviderName();
-        }
-    }, [probeDialogOpen, configRecord]);
-
-    const handleProbe = useCallback(async () => {
-        if (!configRecord?.providers.length || !configRecord.providers[0].provider || !configRecord.providers[0].model) {
-            return;
-        }
-
-        const providerUuid = configRecord.providers[0].provider;
-        const model = configRecord.providers[0].model;
-
-        setIsProbing(true);
-        setProbeResult(null);
-        setProbeDialogOpen(true);
-
-        try {
-            const result = await api.probeModel(providerUuid, model);
-            setProbeResult(result);
-        } catch (error) {
-            setProbeResult({
-                success: false,
-                error: {
-                    message: (error as Error).message,
-                    type: 'client_error',
-                },
-            });
-        } finally {
-            setIsProbing(false);
-        }
-    }, [configRecord]);
-
-    const handleToggleDetails = useCallback(() => {
-        setDetailsExpanded((prev) => !prev);
-    }, []);
-
-    const handleCloseDialog = useCallback(() => {
-        setProbeDialogOpen(false);
-    }, []);
-
-    return {
-        isProbing,
-        probeResult,
-        detailsExpanded,
-        dialogOpen: probeDialogOpen,
-        providerName,
-        handleProbe,
-        handleToggleDetails,
-        handleCloseDialog,
-    };
 }
 
 /**
