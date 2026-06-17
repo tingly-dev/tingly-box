@@ -453,9 +453,6 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
                     <Typography variant="subtitle1" fontWeight={600}>
-                        {targetType === 'rule' ? t('probe.testRule') : t('probe.testProvider')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                         {targetName}
                     </Typography>
                     {model && (
