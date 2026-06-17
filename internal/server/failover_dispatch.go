@@ -343,6 +343,17 @@ func (s *Server) dispatchWithPriorityFailover(
 	for i := 0; i < len(activeServices); i++ {
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)
 		tried[serviceID] = true
+
+		// Log each attempt with clear numbering
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"stage":          "failover_attempt",
+			"attempt":        i + 1,
+			"total_attempts": len(activeServices),
+			"service":        serviceID,
+			"provider":       provider.Name,
+			"model":          model,
+		}).Infof("[failover] attempt %d/%d: trying: %s/%s", i+1, len(activeServices), provider.UUID, model)
+
 		if rec != nil {
 			rec.SetActiveService(provider, model)
 		}
@@ -352,39 +363,63 @@ func (s *Server) dispatchWithPriorityFailover(
 		// A committed gate means the stream's first real chunk reached
 		// the wire — bytes have left the process, retry is impossible.
 		if gate.Committed() {
+			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+				"stage":          "failover_success",
+				"attempt":        i + 1,
+				"total_attempts": len(activeServices),
+				"service":        serviceID,
+				"provider":       provider.Name,
+				"model":          model,
+			}).Infof("[failover] succeeded on attempt %d with %s/%s", i+1, provider.UUID, model)
 			return
 		}
 		status := gate.Status()
 		if !isRetryableStatus(status) {
+			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+				"stage":          "failover_terminal",
+				"attempt":        i + 1,
+				"total_attempts": len(activeServices),
+				"service":        serviceID,
+				"provider":       provider.Name,
+				"model":          model,
+				"status":         status,
+			}).Warnf("[failover] attempt %d returned status %d with %s/%s", i+1, status, provider.UUID, model)
 			return
 		}
 
 		nextProvider, nextService, err := s.selectFallbackService(rule, tried, initialProvider.APIStyle)
 		if err != nil {
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"stage":   "failover",
-				"attempt": i + 1,
-				"status":  status,
-				"error":   err.Error(),
+				"stage":          "failover_error",
+				"attempt":        i + 1,
+				"total_attempts": len(activeServices),
+				"status":         status,
+				"error":          err.Error(),
 			}).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
 			return
 		}
 		if nextProvider == nil || nextService == nil {
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"stage":   "failover",
-				"attempt": i + 1,
-				"status":  status,
+				"stage":          "failover_exhausted",
+				"attempt":        i + 1,
+				"total_attempts": len(activeServices),
+				"status":         status,
 			}).Warnf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
 			return
 		}
+
+		nextServiceID := loadbalance.FormatServiceID(nextProvider.UUID, nextService.Model)
 		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-			"stage":        "failover",
-			"attempt":      i + 1,
-			"status":       status,
-			"from_service": serviceID,
-			"to_provider":  nextProvider.Name,
-			"to_model":     nextService.Model,
-		}).Infof("[failover] status=%d → retrying with %s/%s", status, nextProvider.Name, nextService.Model)
+			"stage":          "failover_retry",
+			"attempt":        i + 1,
+			"total_attempts": len(activeServices),
+			"status":         status,
+			"from_service":   serviceID,
+			"to_service":     nextServiceID,
+			"to_provider":    nextProvider.Name,
+			"to_model":       nextService.Model,
+		}).Warnf("[failover] attempt %d failed with %d, retrying with %s/%s",
+			i+1, status, nextProvider.UUID, nextService.Model)
 
 		gate.Discard()
 		provider = nextProvider
