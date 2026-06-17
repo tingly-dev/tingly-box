@@ -3,9 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -13,7 +11,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -160,34 +157,6 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	// and the protocol transform chain (called from dispatchChainResult)
 	// actually read.
 	s.applyVisionProxy(c, scenarioType, rule, &req.ResponseNewParams)
-
-	// Virtual-model providers are served by the in-process vmodel handler.
-	// The vmodel handler speaks OpenAI Chat format, so the Responses request is
-	// converted before forwarding. req.ResponseNewParams already carries actualModel.
-	//
-	// NOTE: this path intentionally skips outbound dispatch helpers (pre-chain,
-	// guardrails, post-recording). Usage/quota tracking for vmodel is tracked separately.
-	if provider.IsVirtual() && s.virtualModelService != nil {
-		chatParams := request.ConvertOpenAIResponsesToChat(&req.ResponseNewParams, int64(maxAllowed))
-		chatReq := protocol.OpenAIChatCompletionRequest{
-			ChatCompletionNewParams: *chatParams,
-			Stream:                  req.Stream,
-		}
-		rewritten, err := json.Marshal(chatReq)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to prepare virtual-model request: " + err.Error(),
-					Type:    "internal_error",
-				},
-			})
-			return
-		}
-		c.Request.Body = io.NopCloser(strings.NewReader(string(rewritten)))
-		c.Request.ContentLength = int64(len(rewritten))
-		s.virtualModelService.GetHandler().ChatCompletions(c)
-		return
-	}
 
 	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
