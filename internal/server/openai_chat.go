@@ -223,7 +223,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = responseModel
 	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
-		func(p *typ.Provider, _ string) {
+		func(p *typ.Provider, retryModel string) {
+			reqCtx.RequestModel = retryModel
 			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
 		})
 }
