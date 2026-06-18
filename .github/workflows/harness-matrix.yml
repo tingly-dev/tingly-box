@@ -36,6 +36,7 @@ on:
           - node
           - aisdk
           - replay
+          - lb
 
 permissions:
   contents: read
@@ -108,6 +109,10 @@ jobs:
             tier: replay
             focus: replay
             cmd: replay batch --upstream=vmodel
+          - name: lb
+            tier: lb
+            focus: lb
+            cmd: lb --all
     steps:
       - name: Skip unfocused leg
         id: gate
