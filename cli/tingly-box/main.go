@@ -4,8 +4,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
+	_ "net/http/pprof"
 	_ "time/tzdata" // Embed timezone data for static builds
 
 	"github.com/alecthomas/kong"
@@ -28,6 +30,7 @@ var (
 type CLI struct {
 	ConfigDir string `kong:"flag,name='config-dir',help='Configuration directory'"`
 	Verbose   bool   `kong:"flag,name='verbose',short='v',help='Verbose output'"`
+	PProf     bool   `kong:"flag,name='pprof',help='Run with pprof in :6060'"`
 
 	// Server commands
 	Start   command.StartCmdKong   `kong:"cmd,help='Start the server'"`
@@ -93,6 +96,12 @@ func main() {
 		},
 		kong.ConfigureHelp(kong.HelpOptions{NoExpandSubcommands: true}),
 	)
+
+	if cli.PProf {
+		go func() {
+			_ = http.ListenAndServe("127.0.0.1:6060", nil)
+		}()
+	}
 
 	// Setup verbose logging
 	if cli.Verbose {
