@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -42,18 +41,4 @@ func HandleResponsesToOpenAIChatStream(
 
 	OpenAISSEDone(c)
 	return usage, nil
-}
-
-// openaiChatSSEWriter returns a handleFunc that writes OpenAI Chat wire chunks
-// (both normal chunks and error chunks) as SSE.
-func openaiChatSSEWriter(c *gin.Context) func(event interface{}) error {
-	return func(event interface{}) error {
-		OpenAISSE(c, event)
-		return nil
-	}
-}
-
-// writeSSEChunk writes a single SSE chunk — kept for callers in other files.
-func writeSSEChunk(c *gin.Context, _ interface{ Flush() }, chunk any) {
-	OpenAISSE(c, chunk)
 }

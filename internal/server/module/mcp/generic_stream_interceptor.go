@@ -11,8 +11,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -34,7 +34,6 @@ type GenericStreamInterceptor struct {
 	config          InterceptorConfig
 
 	// Cross-round state (not reset)
-	ttftRecorded      bool
 	totalInputTokens  int64
 	totalOutputTokens int64
 	totalCacheTokens  int64
@@ -222,10 +221,6 @@ func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error
 			break
 		}
 		event := stream.Current()
-
-		// The interceptor never commits through CommitFirstChunk, so record
-		// TTFT here on the first upstream event.
-		protocol.MarkFirstToken(i.c)
 
 		i.accumulateRoundEvent(event)
 
@@ -446,11 +441,8 @@ func (i *GenericStreamInterceptor) handleTextEvent(event any) error {
 		return err
 	}
 
-	// Record TTFT
-	if !i.ttftRecorded {
-		i.recordTTFT()
-		i.ttftRecorded = true
-	}
+	// Mark TTFT on the first content token; MarkFirstToken is idempotent.
+	i.recordTTFT()
 
 	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
 }
@@ -502,6 +494,8 @@ func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
 	if err != nil {
 		return err
 	}
+	// A tool input delta is content; mark TTFT (idempotent).
+	i.recordTTFT()
 	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
 }
 
@@ -685,10 +679,9 @@ func (i *GenericStreamInterceptor) resultsToAny(results []ToolExecutionResult) [
 }
 
 func (i *GenericStreamInterceptor) recordTTFT() {
-	// Time To First Token (TTFT) tracking is handled at the dispatch layer
-	// through HandleContext hooks. This method is called for consistency
-	// but the actual tracking is done in the dispatch functions.
-	// See: mcp_anthropic_v1_helper.go - dispatchGeneric*Stream functions
+	// The interceptor writes SSE directly, so it marks TTFT itself. Only reached
+	// for content events (text / tool-input deltas); MarkFirstToken is idempotent.
+	protocol.MarkFirstToken(i.c)
 }
 
 func (i *GenericStreamInterceptor) isSuppressedContentBlockEvent(event any) bool {

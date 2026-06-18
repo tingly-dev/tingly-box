@@ -52,11 +52,9 @@ func RunLoop(c *gin.Context, step func(w io.Writer) bool) bool {
 // CommitFirstChunk signals a failover gate wrapping c.Writer (if any) that
 // the first real stream chunk has been produced, so it flushes buffered
 // output and switches to pass-through. No-op when no gate is installed.
-//
-// As the "first chunk reached the client" moment for every committing
-// streaming path, it also records TTFT via MarkFirstToken.
+// It does NOT record TTFT: the first byte is a structural event, not a
+// content token. Each protocol marks the first content event itself.
 func CommitFirstChunk(c *gin.Context) {
-	MarkFirstToken(c)
 	if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
 		cm.CommitFirstChunk()
 	}

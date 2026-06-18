@@ -105,8 +105,12 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 	return usage, nil
 }
 
-// sendOpenAIStreamChunkForce helper function to send a chunk in OpenAI format
+// sendOpenAIStreamChunkForce sends a chunk in OpenAI format and marks TTFT on
+// the first content-bearing chunk. MarkFirstToken is idempotent.
 func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
+	if isOpenAIChatChunkMapContent(chunk) {
+		protocol.MarkFirstToken(c)
+	}
 	OpenAISSE(c, chunk)
 }
 

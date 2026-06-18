@@ -470,6 +470,12 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 			delta["tool_calls"] = choice.Delta.ToolCalls
 		}
 
+		// Mark TTFT on the first chunk carrying content (text / tool call /
+		// refusal), not the leading role-only delta. MarkFirstToken is idempotent.
+		if choice.Delta.Content != "" || choice.Delta.Refusal != "" || len(choice.Delta.ToolCalls) > 0 || choice.Delta.JSON.FunctionCall.Valid() {
+			protocol.MarkFirstToken(c)
+		}
+
 		finishReason := &choice.FinishReason
 		if finishReason != nil && *finishReason == "" {
 			finishReason = nil
