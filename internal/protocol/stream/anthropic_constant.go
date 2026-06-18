@@ -28,3 +28,9 @@ const (
 	deltaTypeThinkingDelta  = "thinking_delta"
 	deltaTypeInputJSONDelta = "input_json_delta"
 )
+
+// isAnthropicContentDeltaEvent reports whether an Anthropic SSE event carries
+// model-generated content (a token) rather than structural framing.
+func isAnthropicContentDeltaEvent(eventType string) bool {
+	return eventType == eventTypeContentBlockDelta
+}

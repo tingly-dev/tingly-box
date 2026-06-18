@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 )
 
@@ -380,6 +381,10 @@ func HandleAnthropicToGoogleStreamResponse(c *gin.Context, stream *anthropicstre
 
 // sendGoogleStreamChunk sends a GenerateContentResponse as a JSON chunk
 func sendGoogleStreamChunk(c *gin.Context, resp *genai.GenerateContentResponse, flusher http.Flusher) {
+	// Mark TTFT on the first chunk with content; MarkFirstToken is idempotent.
+	if isGoogleContentChunk(resp) {
+		protocol.MarkFirstToken(c)
+	}
 	// Use the SDK's JSON marshal to ensure proper format
 	chunkJSON, err := json.Marshal(resp)
 	if err != nil {
@@ -388,4 +393,23 @@ func sendGoogleStreamChunk(c *gin.Context, resp *genai.GenerateContentResponse, 
 	}
 	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
 	flusher.Flush()
+}
+
+// isGoogleContentChunk reports whether a Google response carries content
+// (a text or function-call part).
+func isGoogleContentChunk(resp *genai.GenerateContentResponse) bool {
+	if resp == nil {
+		return false
+	}
+	for _, cand := range resp.Candidates {
+		if cand.Content == nil {
+			continue
+		}
+		for _, part := range cand.Content.Parts {
+			if part.Text != "" || part.FunctionCall != nil {
+				return true
+			}
+		}
+	}
+	return false
 }

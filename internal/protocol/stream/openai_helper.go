@@ -6,13 +6,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
+// OpenAIResponsesEvent writes one Responses API SSE event, flushes, and marks
+// TTFT on the first content-bearing (*.delta) event. MarkFirstToken is idempotent.
 func OpenAIResponsesEvent(c *gin.Context, event string, v any) {
+	if isOpenAIResponsesContentEvent(event) {
+		protocol.MarkFirstToken(c)
+	}
 	switch vv := v.(type) {
 	case []byte:
 		c.Writer.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", event, string(vv)))
@@ -26,6 +35,53 @@ func OpenAIResponsesEvent(c *gin.Context, event string, v any) {
 		}
 		c.Writer.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", event, data))
 	}
+}
+
+// isOpenAIResponsesContentEvent reports whether a Responses API event carries
+// content, which always arrives as a *.delta event.
+func isOpenAIResponsesContentEvent(eventType string) bool {
+	return strings.HasSuffix(eventType, ".delta")
+}
+
+// isOpenAIChatContentChunk reports whether an OpenAI Chat chunk carries content
+// (text / tool calls / reasoning), skipping the leading role-only delta.
+func isOpenAIChatContentChunk(chunk wire.ChatStreamChunk) bool {
+	for _, choice := range chunk.Choices {
+		if choice.Delta.Content != "" ||
+			len(choice.Delta.ToolCalls) > 0 ||
+			choice.Delta.ReasoningContent != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// isOpenAIChatChunkMapContent is the raw-map variant of isOpenAIChatContentChunk
+// for handlers that build OpenAI Chat chunks directly as maps.
+func isOpenAIChatChunkMapContent(chunk map[string]interface{}) bool {
+	choices, ok := chunk["choices"].([]map[string]interface{})
+	if !ok {
+		return false
+	}
+	for _, choice := range choices {
+		delta, ok := choice["delta"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if c, _ := delta["content"].(string); c != "" {
+			return true
+		}
+		if tc, _ := delta["tool_calls"].([]map[string]interface{}); len(tc) > 0 {
+			return true
+		}
+		if rc, _ := delta["reasoning_content"].(string); rc != "" {
+			return true
+		}
+		if rf, _ := delta["refusal"].(string); rf != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // OpenAISSE marshals v to JSON and writes it as an OpenAI-style SSE data line, then flushes.
@@ -183,4 +239,24 @@ type pendingToolCall struct {
 	name  string
 	input string
 	emit  bool
+}
+
+// openaiChatSSEWriter returns a handleFunc that writes OpenAI Chat wire chunks
+// (both normal chunks and error chunks) as SSE, and marks TTFT on the first
+// content-bearing chunk.
+func openaiChatSSEWriter(c *gin.Context) func(event interface{}) error {
+	return func(event interface{}) error {
+		if chunk, ok := event.(wire.ChatStreamChunk); ok {
+			if isOpenAIChatContentChunk(chunk) {
+				protocol.MarkFirstToken(c)
+			}
+		}
+		OpenAISSE(c, event)
+		return nil
+	}
+}
+
+// writeSSEChunk writes a single SSE chunk — kept for callers in other files.
+func writeSSEChunk(c *gin.Context, _ interface{ Flush() }, chunk any) {
+	OpenAISSE(c, chunk)
 }

@@ -39,21 +39,20 @@ func TestMarkFirstToken_RecordsOnceEarliestWins(t *testing.T) {
 	assert.Equal(t, first, v2.(time.Time), "later mark must not overwrite earliest signal")
 }
 
-// TestCommitFirstChunk_RecordsFirstToken verifies the commit seam records TTFT
-// even when no failover gate is installed on the writer.
-func TestCommitFirstChunk_RecordsFirstToken(t *testing.T) {
+// TestCommitFirstChunk_DoesNotRecordFirstToken verifies the commit seam does not
+// record TTFT — only the first content token does, marked by each protocol.
+func TestCommitFirstChunk_DoesNotRecordFirstToken(t *testing.T) {
 	c := &gin.Context{}
 
 	CommitFirstChunk(c)
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
-	assert.True(t, ok, "CommitFirstChunk must record the first-token time")
+	assert.False(t, ok, "CommitFirstChunk must not record TTFT; only content events do")
 }
 
-// TestRunLoop_RecordsFirstTokenOnFirstChunk exercises the real streaming wiring:
-// RunLoop -> commitFirstChunk -> MarkFirstToken. Before any chunk the first-token
-// time is unset; once the first chunk is produced it is recorded.
-func TestRunLoop_RecordsFirstTokenOnFirstChunk(t *testing.T) {
+// TestRunLoop_DoesNotRecordFirstTokenOnFirstChunk verifies RunLoop does not
+// record TTFT on the first chunk; it sees raw bytes, not content events.
+func TestRunLoop_DoesNotRecordFirstTokenOnFirstChunk(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := &closeNotifyRecorder{httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
@@ -72,5 +71,5 @@ func TestRunLoop_RecordsFirstTokenOnFirstChunk(t *testing.T) {
 	})
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
-	assert.True(t, ok, "RunLoop must record the first-token time after the first chunk")
+	assert.False(t, ok, "RunLoop must not record TTFT on the first byte; handlers mark content events")
 }

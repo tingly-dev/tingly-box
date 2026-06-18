@@ -146,7 +146,13 @@ func sendMessageStart(
 
 // sendAnthropicStreamEvent sends one Anthropic SSE event and optionally records it
 // via StreamEventRecorder if one is stored in the Gin context.
+// It also marks TTFT on the first content_block_delta event; MarkFirstToken is
+// idempotent.
 func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
+	if isAnthropicContentDeltaEvent(eventType) {
+		protocol.MarkFirstToken(c)
+	}
+
 	eventJSON, err := json.Marshal(eventData)
 	if err != nil {
 		logrus.WithContext(c.Request.Context()).Errorf("Failed to marshal Anthropic stream event: %v", err)
