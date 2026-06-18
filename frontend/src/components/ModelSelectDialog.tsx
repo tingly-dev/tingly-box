@@ -133,21 +133,17 @@ function ModelSelectTabInner({
         closeCustomModelDialog();
     }, [customModelDialog, saveCustomModel, updateCustomModel, onCustomModelSave, closeCustomModelDialog]);
 
-    // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
-    // Use ref to track which provider we've initialized for to prevent re-initialization
+    // Auto-switch to selected provider tab and navigate to selected model on component mount
+    // Use ref to track which provider we've initialized for to prevent duplicate fetches
     const initializedProviderRef = useRef<string | null>(null);
-    const isFirstRenderRef = useRef(true);
 
     useEffect(() => {
-        // Only run initialization on first render or when provider actually changes
-        if (!isFirstRenderRef.current) {
-            return;
-        };
-
-        // Clear first render flag so this only runs once
-        isFirstRenderRef.current = false;
-
         if (selectedProvider) {
+            // Skip if already initialized for this provider
+            if (initializedProviderRef.current === selectedProvider) {
+                return;
+            }
+
             const targetProviderIndex = flattenedProviders.findIndex(provider => provider.uuid === selectedProvider);
 
             // Auto-switch to the selected provider's tab
@@ -156,7 +152,7 @@ function ModelSelectTabInner({
                     setInternalCurrentTab(selectedProvider);
                 }
 
-                // Fetch models for the selected provider on initial load
+                // Fetch models for the selected provider
                 fetchModels(selectedProvider);
 
                 // Notify parent component about provider change
@@ -168,7 +164,7 @@ function ModelSelectTabInner({
                 // Mark this provider as initialized
                 initializedProviderRef.current = selectedProvider;
             }
-        } else if (lastProvider) {
+        } else if (lastProvider && initializedProviderRef.current !== lastProvider) {
             // No selection yet: open on the most recently used provider.
             // Fetch its models so the right panel is populated on first open.
             if (externalActiveTab === undefined) {
