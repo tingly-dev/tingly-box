@@ -1,0 +1,16 @@
+# single — one service; a 500 has nowhere to fail over to. The fault script
+# returns 200, 500, 200 across three calls, so the final request is a clean 200.
+rule_uuid: single
+tactic: tier
+affinity_secs: 0
+services:
+  - { provider: deepseek, model: deepseek-pro, tier: 0 }
+faults:
+  deepseek/deepseek-pro: [200, 500, 200]
+expect:
+  final_status: 200
+  attempts: [deepseek/deepseek-pro]
+program:
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }

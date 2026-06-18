@@ -96,6 +96,11 @@ func (f *lbFakeClock) advance(d time.Duration) {
 func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, cleanup func(), err error) {
 	gin.SetMode(gin.TestMode)
 
+	// Start from a clean breaker store. DefaultBreakerStore() is process-global,
+	// so without this a simulator would inherit leftover breaker state from an
+	// earlier test/example that happened to reuse the same serviceID.
+	loadbalance.DefaultBreakerStore().Reset()
+
 	dir, err := os.MkdirTemp("", "lbsim-")
 	if err != nil {
 		return nil, nil, fmt.Errorf("temp dir: %w", err)

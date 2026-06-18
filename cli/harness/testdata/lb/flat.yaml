@@ -1,0 +1,18 @@
+# flat — one tier, two peers, random tactic. Demonstrates affinity stickiness to
+# one peer. The last request sticks to whichever peer the first request pinned
+# to; the exact peer is not asserted because random is non-deterministic.
+rule_uuid: flat
+tactic: random
+affinity_secs: 1800
+services:
+  - { provider: anthropic, model: claude-opus, tier: 0 }
+  - { provider: anthropic, model: claude-sonnet, tier: 0 }
+faults:
+  anthropic/claude-opus: [200]
+  anthropic/claude-sonnet: [200]
+expect:
+  final_status: 200
+program:
+  - { request: session1 }
+  - { request: session1 }
+  - { request: session1 }

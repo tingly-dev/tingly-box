@@ -1,0 +1,28 @@
+# grid — two tiers x two peers; the whole top tier 500s and trips, then
+# selection drops to the low tier. By request 3 both top-tier peers have tripped
+# and requests 3+ land on the low tier. Which low-tier peer is selected is
+# non-deterministic, so only final status + breaker states are asserted.
+rule_uuid: grid
+tactic: tier
+affinity_secs: 0
+services:
+  - { provider: openai, model: gpt-5.4, tier: 0 }
+  - { provider: openai, model: gpt-5.5, tier: 0 }
+  - { provider: openai, model: gpt-4.1, tier: 1 }
+  - { provider: anthropic, model: claude-haiku, tier: 1 }
+faults:
+  openai/gpt-5.4: [500]
+  openai/gpt-5.5: [500]
+  openai/gpt-4.1: [200]
+  anthropic/claude-haiku: [200]
+expect:
+  final_status: 200
+  breaker:
+    openai/gpt-5.4: open
+    openai/gpt-5.5: open
+program:
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }

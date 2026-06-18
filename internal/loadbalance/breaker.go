@@ -224,6 +224,14 @@ func (s *BreakerStore) Snapshot() map[string]BreakerState {
 	return out
 }
 
+// Reset clears all breaker entries. Useful for tests/harness to avoid state leakage
+// between scenarios when reusing the global store.
+func (s *BreakerStore) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.breakers = make(map[string]*Breaker)
+}
+
 // defaultStore is the process-wide breaker registry used by tactics and
 // the recorder integration. Tests may replace it; production code should
 // use the package-level helpers below.

@@ -1,0 +1,21 @@
+# regression — a stale pin (seed_pin) to the fallback tier must snap back to the
+# healthy primary on the next request. The seeded pin is ineligible (fallback
+# tier when primary is healthy), so affinity drops it and selection returns to
+# the primary.
+rule_uuid: regression
+tactic: tier
+affinity_secs: 1800
+services:
+  - { provider: anthropic, model: claude-opus, tier: 0 }
+  - { provider: anthropic, model: claude-sonnet, tier: 1 }
+faults:
+  anthropic/claude-opus: [200]
+  anthropic/claude-sonnet: [200]
+seed_pin: { session: session1, provider: anthropic, model: claude-sonnet }   # stale pin to the fallback tier
+expect:
+  final_status: 200
+  attempts: [anthropic/claude-opus]   # pin dropped, back to primary
+  pin: anthropic/claude-opus
+program:
+  - { request: session1 }
+  - { request: session1 }

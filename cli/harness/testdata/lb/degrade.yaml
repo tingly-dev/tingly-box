@@ -1,0 +1,27 @@
+# degrade — all tiers tripped, degrade to T0 (surface a real upstream error).
+# Cascade shape; both the primary and fallback always 500, so both breakers trip,
+# then TierTactic falls back to the highest-priority bucket (T0) so the client
+# sees a real 500 rather than "no service". attempts_contain + final_status keep
+# this robust to the internal hop ordering once both tiers are open.
+rule_uuid: degrade
+tactic: tier
+affinity_secs: 0
+services:
+  - { provider: openai, model: gpt-5.4, tier: 0 }
+  - { provider: openai, model: gpt-5.5, tier: 1 }
+faults:
+  openai/gpt-5.4: [500]
+  openai/gpt-5.5: [500]
+expect:
+  final_status: 500                # client sees real 500 from the primary tier
+  attempts_contain: [openai/gpt-5.4]   # T0 is the last resort
+  breaker:
+    openai/gpt-5.4: open
+    openai/gpt-5.5: open
+program:
+  - { request: "" }   # gpt-5.4 500 (strike 1)
+  - { request: "" }   # gpt-5.4 500 (strike 2)
+  - { request: "" }   # gpt-5.4 500 (strike 3 → gpt-5.4 open) → gpt-5.5 500 (strike 1)
+  - { request: "" }   # gpt-5.5 500 (strike 2)
+  - { request: "" }   # gpt-5.5 500 (strike 3 → gpt-5.5 open)
+  - { request: "" }   # both open → fallback to T0 → gpt-5.4 500

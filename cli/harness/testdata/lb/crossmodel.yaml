@@ -1,0 +1,17 @@
+# crossmodel — each tier carries a different model. On failover the hop must
+# dispatch the fallback's OWN model, not reuse the primary's (the bug fixed in
+# #1233). Read the attempt column: the second hop carries the fallback's model.
+rule_uuid: crossmodel
+tactic: tier
+affinity_secs: 0
+services:
+  - { provider: openai, model: gpt-5.4, tier: 0 }
+  - { provider: anthropic, model: claude-opus, tier: 1 }
+faults:
+  openai/gpt-5.4: [500]
+  anthropic/claude-opus: [200]
+expect:
+  final_status: 200
+  attempts: [openai/gpt-5.4, anthropic/claude-opus]   # failover hop carries fallback's model
+program:
+  - { request: "" }

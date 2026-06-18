@@ -248,7 +248,7 @@ upstreams. It runs the real `ServiceSelector.Select → dispatchWithPriorityFail
 deterministic breaker clock, so recovery is exercised without sleeping.
 
 ```bash
-./harness lb --example cascade        # cascade | flat | grid | single | regression | ratelimit | authflip | crossmodel
+./harness lb --example cascade        # cascade | flat | grid | single | regression | ratelimit | authflip | crossmodel | halfopen | degrade | inactive | withintier | multiaffinity
 ./harness lb --file scenario.yaml     # your own shape
 ./harness lb --example grid --table   # compact table instead of the default graph
 ./harness lb --example grid --json    # machine-readable trace
@@ -260,10 +260,10 @@ The default is a pencil graph — per request, the failover hops plus a state li
 + the affinity pin), so the trip, health exclusion, and pin movement are visible step by step:
 
 ```
-#3  s1   t0/gpt-4 ✗500  →  t1/gpt-4 ✓200   →  client=200
-       state: t0/gpt-4=open/unhealthy   t1/gpt-4=closed/healthy   pin=t0/gpt-4
-#4  s1   t1/gpt-4 ✓200   →  client=200
-       state: t0/gpt-4=open/unhealthy   t1/gpt-4=closed/healthy   pin=t1/gpt-4
+#3  s1   openai/gpt-5.4 ✗500  →  openai/gpt-5.5 ✓200   →  client=200
+       state: openai/gpt-5.4=open/unhealthy   openai/gpt-5.5=closed/healthy   pin=openai/gpt-5.4
+#4  s1   openai/gpt-5.5 ✓200   →  client=200
+       state: openai/gpt-5.4=open/unhealthy   openai/gpt-5.5=closed/healthy   pin=openai/gpt-5.5
 ```
 
 `--table` gives a compact one-line-per-request form; `--json` the same data structurally. The engine
@@ -293,10 +293,27 @@ Try `--example ratelimit` (429 → skipped → recovers) and `--example authflip
 Two behaviours the sim also models faithfully, matching recent fixes on the routing path:
 
 - **Cross-model failover** — when tiers carry different models, a failover hop dispatches the *fallback's own*
-  model, not the primary's. `--example crossmodel` shows it in the attempt column (`t0/model-a → t1/model-b`).
+  model, not the primary's. `--example crossmodel` shows it in the attempt column (`openai/gpt-5.4 → anthropic/claude-opus`).
 - **Strict affinity TTL** — a lock expires exactly at `LockedAt + affinity_secs`; an in-window request is
   honored but does **not** extend it. The affinity TTL rides the same fake clock as the breaker/health
   (one `advance` moves all three), so the Go scenario suite asserts expiry-and-re-lock deterministically.
+
+### Self-check (`expect`)
+
+Built-in examples include an optional `expect` block that self-checks expected outcomes after the program runs. On mismatch, the CLI exits non-zero — useful for CI and for validating user `--file` scenarios. Fields (all optional):
+
+- `final_status` — last request's `FinalStatus`
+- `attempts` — last request's `Attempts` (exact, in order)
+- `attempts_contain` / `attempts_exclude` — set membership checks
+- `pin` / `pins` — final affinity pin (single-session or per-session)
+- `breaker` / `health` — final snapshot subsets
+- `distinct_first_attempts` — set of first-attempt serviceIDs across ALL request steps (within-tier load sharing)
+
+All 13 built-in examples self-verify. The `expect` block is also available in `--file` scenarios, so users can self-check their own rules.
+
+### Within-tier sub-tactic
+
+The `tier` tactic supports a `within_tier_tactic` field (`random` by default; also `token_based`, `latency_based`, etc.) to choose how load is shared among services in the same tier. `--example withintier` demonstrates it with `random`, asserting that both top-tier peers appear as first attempts across 20 requests.
 
 ### Scenario file
 
@@ -306,14 +323,20 @@ of requests / clock-advances (see `testdata/lb/cascade.yaml`):
 ```yaml
 rule_uuid: cascade
 tactic: tier                 # tier | random
+within_tier_tactic: random   # optional: within-tier sub-tactic (default: random); tier tactic only
 affinity_secs: 1800          # 0 = off
 services:
-  - { provider: t0, model: gpt-4, tier: 0 }
-  - { provider: t1, model: gpt-4, tier: 1 }
+  - { provider: openai, model: gpt-5.4, tier: 0 }
+  - { provider: openai, model: gpt-5.5, tier: 1 }
 faults:                      # serviceID -> per-call status sequence (last entry repeats)
-  t0/gpt-4: [500, 500, 500, 200]
-  t1/gpt-4: [200]
-seed_pin: { session: s1, provider: t2, model: gpt-4 }   # optional: pre-lock a stale pin
+  openai/gpt-5.4: [500, 500, 500, 200]
+  openai/gpt-5.5: [200]
+seed_pin: { session: s1, provider: anthropic, model: claude-sonnet }   # optional: pre-lock a stale pin
+expect:                      # optional: self-check assertions (all fields optional)
+  final_status: 200
+  attempts: [openai/gpt-5.4]
+  pin: openai/gpt-5.4
+  breaker: { openai/gpt-5.4: closed, openai/gpt-5.5: closed }
 program:
   - { request: s1 }          # request on session s1 (omit/"" = no affinity)
   - { advance: 31s }         # move the breaker clock forward

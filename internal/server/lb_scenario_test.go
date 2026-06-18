@@ -28,7 +28,7 @@ func tierTacticRule(uuid string, affinitySecs int, services ...*loadbalance.Serv
 	r := &typ.Rule{
 		UUID:         uuid,
 		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "gpt-4",
+		RequestModel: "gpt-5.4",
 		Active:       true,
 		Services:     services,
 		LBTactic:     typ.Tactic{Type: loadbalance.TacticTier, Params: typ.DefaultTierParams()},
@@ -41,7 +41,7 @@ func randomTacticRule(uuid string, affinitySecs int, services ...*loadbalance.Se
 	r := &typ.Rule{
 		UUID:         uuid,
 		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "gpt-4",
+		RequestModel: "gpt-5.4",
 		Active:       true,
 		Services:     services,
 		LBTactic:     typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.DefaultRandomParams()},
@@ -50,10 +50,25 @@ func randomTacticRule(uuid string, affinitySecs int, services ...*loadbalance.Se
 	return r
 }
 
+func tierTacticRuleWithin(uuid string, affinitySecs int, within loadbalance.TacticType, services ...*loadbalance.Service) *typ.Rule {
+	params := typ.DefaultTierParams().(*typ.TierParams)
+	params.WithinTierTactic = within
+	r := &typ.Rule{
+		UUID:         uuid,
+		Scenario:     typ.ScenarioOpenAI,
+		RequestModel: "gpt-5.4",
+		Active:       true,
+		Services:     services,
+		LBTactic:     typ.Tactic{Type: loadbalance.TacticTier, Params: params},
+	}
+	r.Flags.SessionAffinity = affinitySecs
+	return r
+}
+
 // ===================== Scenario A: single service =====================
 
 func TestLBScenario_A_Single(t *testing.T) {
-	s0 := svc("solo", "gpt-4", 0, true)
+	s0 := svc("deepseek", "deepseek-pro", 0, true)
 	id := s0.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-A", 0, s0), map[string][]int{id: {200}})
 	require.NoError(t, err)
@@ -65,7 +80,7 @@ func TestLBScenario_A_Single(t *testing.T) {
 	require.Equal(t, 200, tr.FinalStatus)
 
 	// A 500 on the only service cannot fail over — surfaces to the client.
-	s1 := svc("solo2", "gpt-4", 0, true)
+	s1 := svc("openai", "gpt-5.4", 0, true)
 	id2 := s1.ServiceID()
 	sim2, cleanup2, err := NewLBSimulator(tierTacticRule("rule-A2", 0, s1), map[string][]int{id2: {500}})
 	require.NoError(t, err)
@@ -87,8 +102,8 @@ func TestLBScenario_A_Single(t *testing.T) {
 //   - selection then goes straight to t1 (no wasted t0 attempt),
 //   - after the open window AND t0 recovering, the session returns to t0.
 func TestLBScenario_C_CascadeFailoverAndRecovery(t *testing.T) {
-	t0 := svc("cas-t0", "gpt-4", 0, true)
-	t1 := svc("cas-t1", "gpt-4", 1, true)
+	t0 := svc("openai", "gpt-5.4", 0, true)
+	t1 := svc("openai", "gpt-5.5", 1, true)
 	id0, id1 := t0.ServiceID(), t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-C", 1800, t0, t1), map[string][]int{
 		id0: {500, 500, 500, 200},
@@ -127,8 +142,8 @@ func TestLBScenario_C_CascadeFailoverAndRecovery(t *testing.T) {
 // Session already pinned to the lower tier (t2) while the primary (t1) is
 // healthy → the request must return to t1 and the pin be rewritten to t1.
 func TestLBScenario_RegressionStalePinReturnsToPrimary(t *testing.T) {
-	t1 := svc("reg-t1", "gpt-4", 0, true) // primary
-	t2 := svc("reg-t2", "gpt-4", 1, true) // fallback
+	t1 := svc("anthropic", "claude-opus", 0, true) // primary
+	t2 := svc("anthropic", "claude-sonnet", 1, true) // fallback
 	id1 := t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-reg", 1800, t1, t2),
 		map[string][]int{id1: {200}, t2.ServiceID(): {200}})
@@ -136,7 +151,7 @@ func TestLBScenario_RegressionStalePinReturnsToPrimary(t *testing.T) {
 	defer cleanup()
 
 	const sess = "sess-reg"
-	sim.SeedPin(sess, "reg-t2", "gpt-4") // stale pin to the fallback tier
+	sim.SeedPin(sess, "anthropic", "claude-sonnet") // stale pin to the fallback tier
 
 	tr, err := sim.Request(sess)
 	require.NoError(t, err)
@@ -151,8 +166,8 @@ func TestLBScenario_RegressionStalePinReturnsToPrimary(t *testing.T) {
 // though the breaker has only one strike (well below its 3-strike trip). This is
 // the health channel, distinct from the breaker.
 func TestLBScenario_RateLimit_HealthExclusion(t *testing.T) {
-	t0 := svc("rl-t0", "gpt-4", 0, true)
-	t1 := svc("rl-t1", "gpt-4", 1, true)
+	t0 := svc("openai", "gpt-5.4", 0, true)
+	t1 := svc("openai", "gpt-5.5", 1, true)
 	id0, id1 := t0.ServiceID(), t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-rl", 0, t0, t1), map[string][]int{
 		id0: {429, 200},
@@ -187,8 +202,8 @@ func TestLBScenario_RateLimit_HealthExclusion(t *testing.T) {
 // 401 is terminal (not retryable — no failover masks it) AND marks the service
 // immediately unhealthy (auth error, no threshold), so it's excluded next request.
 func TestLBScenario_AuthError_TerminalAndExcluded(t *testing.T) {
-	t0 := svc("auth-t0", "gpt-4", 0, true)
-	t1 := svc("auth-t1", "gpt-4", 1, true)
+	t0 := svc("deepseek", "deepseek-pro", 0, true)
+	t1 := svc("deepseek", "deepseek-flash", 1, true)
 	id0, id1 := t0.ServiceID(), t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-auth", 0, t0, t1), map[string][]int{
 		id0: {401, 200},
@@ -215,8 +230,8 @@ func TestLBScenario_AuthError_TerminalAndExcluded(t *testing.T) {
 // ============ Scenario B: flat (one tier, many services) ============
 
 func TestLBScenario_B_FlatStickiness(t *testing.T) {
-	a := svc("flat-a", "gpt-4", 0, true)
-	b := svc("flat-b", "gpt-4", 0, true)
+	a := svc("anthropic", "claude-opus", 0, true)
+	b := svc("anthropic", "claude-sonnet", 0, true)
 	sim, cleanup, err := NewLBSimulator(randomTacticRule("rule-B", 1800, a, b),
 		map[string][]int{a.ServiceID(): {200}, b.ServiceID(): {200}})
 	require.NoError(t, err)
@@ -247,10 +262,10 @@ func TestLBScenario_B_Flat_DeadPeerSelection_KnownGap(t *testing.T) {
 //
 // When the entire top tier trips, selection drops to the next tier.
 func TestLBScenario_D_GridWholeTopTierTrips(t *testing.T) {
-	t0a := svc("grid-t0a", "gpt-4", 0, true)
-	t0b := svc("grid-t0b", "gpt-4", 0, true)
-	t1a := svc("grid-t1a", "gpt-4", 1, true)
-	t1b := svc("grid-t1b", "gpt-4", 1, true)
+	t0a := svc("openai", "gpt-5.4", 0, true)
+	t0b := svc("openai", "gpt-5.5", 0, true)
+	t1a := svc("openai", "gpt-4.1", 1, true)
+	t1b := svc("anthropic", "claude-haiku", 1, true)
 	top := map[string]bool{t0a.ServiceID(): true, t0b.ServiceID(): true}
 	low := map[string]bool{t1a.ServiceID(): true, t1b.ServiceID(): true}
 
@@ -286,8 +301,8 @@ func TestLBScenario_D_GridWholeTopTierTrips(t *testing.T) {
 // attempted serviceID ("provider/model") per hop, so a wrong model is visible
 // directly in the attempt trace.
 func TestLBScenario_CrossModelFailover(t *testing.T) {
-	t0 := svc("xm-t0", "model-a", 0, true) // primary, model-a
-	t1 := svc("xm-t1", "model-b", 1, true) // fallback, model-b
+	t0 := svc("openai", "gpt-5.4", 0, true) // primary, model-a
+	t1 := svc("anthropic", "claude-opus", 1, true) // fallback, model-b
 	id0, id1 := t0.ServiceID(), t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-xm", 0, t0, t1), map[string][]int{
 		id0: {500}, // primary fails (retryable) → fail over
@@ -298,7 +313,7 @@ func TestLBScenario_CrossModelFailover(t *testing.T) {
 
 	tr, err := sim.Request("")
 	require.NoError(t, err)
-	require.Equal(t, []string{"xm-t0/model-a", "xm-t1/model-b"}, tr.Attempts,
+	require.Equal(t, []string{"openai/gpt-5.4", "anthropic/claude-opus"}, tr.Attempts,
 		"failover must dispatch the fallback's own model (model-b), not reuse the primary's (model-a)")
 	require.Equal(t, 200, tr.FinalStatus, "fallback with its correct model succeeds")
 }
@@ -313,8 +328,8 @@ func TestLBScenario_CrossModelFailover(t *testing.T) {
 // lock is dropped and re-created with a new LockedAt.
 func TestLBScenario_AffinityStrictTTLRelock(t *testing.T) {
 	const ttlSecs = 60
-	a := svc("ttl-a", "gpt-4", 0, true)
-	b := svc("ttl-b", "gpt-4", 0, true)
+	a := svc("deepseek", "deepseek-pro", 0, true)
+	b := svc("deepseek", "deepseek-flash", 0, true)
 	sim, cleanup, err := NewLBSimulator(randomTacticRule("rule-ttl", ttlSecs, a, b),
 		map[string][]int{a.ServiceID(): {200}, b.ServiceID(): {200}})
 	require.NoError(t, err)
@@ -352,3 +367,230 @@ func TestLBScenario_AffinityStrictTTLRelock(t *testing.T) {
 	require.True(t, ok, "a fresh lock is created on re-selection")
 	require.True(t, lockedAt2.After(lockedAt0), "re-lock must carry a fresh LockedAt")
 }
+
+// ============ Half-open probe recovery ============
+//
+// When a breaker trips and stays open for OpenDuration, the next request after
+// the window admits a half-open probe. On success, the breaker closes; on
+// failure, it re-opens with a fresh timer. The CLI halfopen scenario asserts
+// the final state (closed + lands on t0); this test additionally asserts the
+// open snapshot pre-advance to lock the closed→open→closed transition.
+func TestLBScenario_HalfOpenProbeRecovery(t *testing.T) {
+	t0 := svc("openai", "gpt-5.4", 0, true)
+	t1 := svc("openai", "gpt-5.5", 1, true)
+	id0, id1 := t0.ServiceID(), t1.ServiceID()
+	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-hop", 1800, t0, t1), map[string][]int{
+		id0: {500, 500, 500, 200, 200}, // 3 failures trip, 4th is the probe (succeeds), 5th is closed
+		id1: {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	const sess = "session1"
+	// 3 failures: t0 trips
+	for i := 0; i < 3; i++ {
+		tr, err := sim.Request(sess)
+		require.NoError(t, err)
+		require.Equal(t, []string{id0, id1}, tr.Attempts)
+		require.Equal(t, 200, tr.FinalStatus)
+	}
+	require.Equal(t, "open", sim.BreakerStates()[id0], "t0 breaker should be open after 3 failures")
+
+	// 4th request: t0 open → straight to t1; affinity drops the t0 pin and re-locks to t1
+	tr, err := sim.Request(sess)
+	require.NoError(t, err)
+	require.Equal(t, []string{id1}, tr.Attempts, "with t0 open, selection should go straight to t1")
+	require.Equal(t, 200, tr.FinalStatus)
+	require.Equal(t, id1, sim.Pin(sess), "session should now be pinned to t1 after the request completes")
+
+	// Advance past OpenDuration (30s + 1s)
+	sim.Advance(loadbalance.DefaultBreakerOpenDuration + time.Second)
+
+	// 5th request: half-open probe to t0 → 200 → breaker closes
+	tr, err = sim.Request(sess)
+	require.NoError(t, err)
+	require.Equal(t, []string{id0}, tr.Attempts, "after OpenDuration, half-open probe lands on t0")
+	require.Equal(t, 200, tr.FinalStatus)
+	require.Equal(t, "closed", sim.BreakerStates()[id0], "successful probe closes the breaker")
+	require.Equal(t, id0, sim.Pin(sess), "session should be re-pinned to t0 after recovery")
+
+	// 6th request: t0 closed → t0 directly
+	tr, err = sim.Request(sess)
+	require.NoError(t, err)
+	require.Equal(t, []string{id0}, tr.Attempts, "after recovery, requests land on t0")
+	require.Equal(t, 200, tr.FinalStatus)
+}
+
+// ============ All tiers tripped: degrade to T0 ============
+//
+// When every tier's breaker is open, TierTactic falls back to the highest-
+// priority bucket (T0) so the client sees a real upstream error rather than
+// "no service". This tests the degrade-to-T0 behavior.
+func TestLBScenario_AllTiersTrippedDegradesToT0(t *testing.T) {
+	t0 := svc("openai", "gpt-5.4", 0, true)
+	t1 := svc("openai", "gpt-5.5", 1, true)
+	id0, id1 := t0.ServiceID(), t1.ServiceID()
+	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-degrade", 0, t0, t1), map[string][]int{
+		id0: {500}, // always fails
+		id1: {500}, // always fails
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	// 3 failures trip t0; then 3 more trip t1; then fallback to t0
+	for i := 0; i < 6; i++ {
+		tr, err := sim.Request("")
+		require.NoError(t, err)
+		// Requests 1-3: t0 fails → t1 (t0 trips at 3)
+		// Requests 4-6: t1 fails → t0 (t1 trips at 6)
+		// Request 7: both open → fallback to t0 → 500
+		require.Contains(t, tr.Attempts, id0, "T0 must be in attempts (last resort or fallback)")
+		if i < 5 {
+			require.Equal(t, 500, tr.FinalStatus, "all requests before fallback fail")
+		}
+	}
+
+	// Final request: both breakers open → fallback to T0 → surfaces 500
+	tr, err := sim.Request("")
+	require.NoError(t, err)
+	require.Equal(t, 500, tr.FinalStatus, "client must see real 500 from t0, not 'no service'")
+	require.Contains(t, tr.Attempts, id0, "T0 must be surfaced as the last resort")
+	require.Equal(t, "open", sim.BreakerStates()[id0])
+	require.Equal(t, "open", sim.BreakerStates()[id1])
+}
+
+// ============ Inactive service excluded ============
+//
+// A service marked inactive is excluded from the candidate set by
+// GetActiveServices, so it never appears in attempts and isn't selected even
+// if all active peers fail.
+func TestLBScenario_InactiveServiceExcluded(t *testing.T) {
+	t0a := svc("openai", "gpt-5.4", 0, true)
+	t0b := svc("openai", "gpt-5.5", 0, false) // inactive
+	t1a := svc("openai", "gpt-4.1", 1, true)
+	id0a, id0b, id1a := t0a.ServiceID(), t0b.ServiceID(), t1a.ServiceID()
+
+	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-inactive", 0, t0a, t0b, t1a), map[string][]int{
+		id0a: {200},
+		id1a: {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	// All requests should land on t0a (healthy top tier); t0b never appears.
+	for i := 0; i < 5; i++ {
+		tr, err := sim.Request("")
+		require.NoError(t, err)
+		require.Equal(t, []string{id0a}, tr.Attempts, "only active t0a should be selected")
+		require.NotContains(t, tr.Attempts, id0b, "inactive t0b must never appear in attempts")
+		require.Equal(t, 200, tr.FinalStatus)
+	}
+}
+
+// ============ Within-tier load sharing ============
+//
+// In a grid shape with multiple peers in the top tier, the within-tier sub-
+// tactic (random) distributes load across them. Over N requests, both peers
+// should appear as first attempts. Random is non-deterministic; we use a
+// set-membership assertion over 20 requests to make flakiness vanishingly
+// unlikely (P(only one peer in 20 draws) ≈ 0.0004%).
+func TestLBScenario_WithinTierLoadSharing(t *testing.T) {
+	a := svc("anthropic", "claude-opus", 0, true)
+	b := svc("anthropic", "claude-sonnet", 0, true)
+	c := svc("anthropic", "claude-haiku", 1, true)
+	idA, idB := a.ServiceID(), b.ServiceID()
+
+	sim, cleanup, err := NewLBSimulator(tierTacticRuleWithin("rule-within", 0, loadbalance.TacticRandom, a, b, c), map[string][]int{
+		idA: {200},
+		idB: {200},
+		c.ServiceID(): {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	seenFirst := make(map[string]bool)
+	const N = 20
+	for i := 0; i < N; i++ {
+		tr, err := sim.Request("")
+		require.NoError(t, err)
+		require.Len(t, tr.Attempts, 1, "top tier should always be selected (c is lower priority)")
+		first := tr.Attempts[0]
+		seenFirst[first] = true
+		require.Equal(t, 200, tr.FinalStatus)
+	}
+
+	// Both top-tier peers must have appeared as first attempts at least once.
+	require.True(t, seenFirst[idA], "peer a must appear as first attempt at least once")
+	require.True(t, seenFirst[idB], "peer b must appear as first attempt at least once")
+	// c (lower tier) should never be the first attempt while top tier is healthy.
+	require.False(t, seenFirst[c.ServiceID()], "lower-tier c should never be first while top tier is healthy")
+}
+
+// ============ Multi-session independent affinity ============
+//
+// Two sessions pin independently to different peers/tiers. After an advance
+// past the TTL, both sessions re-lock with fresh LockedAt timestamps.
+func TestLBScenario_MultiSessionIndependentAffinity(t *testing.T) {
+	const ttlSecs = 60
+	a := svc("deepseek", "deepseek-pro", 0, true)
+	b := svc("deepseek", "deepseek-flash", 0, true)
+	idA, idB := a.ServiceID(), b.ServiceID()
+
+	sim, cleanup, err := NewLBSimulator(randomTacticRule("rule-multi", ttlSecs, a, b), map[string][]int{
+		idA: {200},
+		idB: {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	const sess1, sess2 = "session1", "session2"
+	// s1 pins to peer X, s2 pins to peer Y (independent)
+	tr1, err := sim.Request(sess1)
+	require.NoError(t, err)
+	require.Len(t, tr1.Attempts, 1)
+	pin1 := tr1.Attempts[0]
+
+	tr2, err := sim.Request(sess2)
+	require.NoError(t, err)
+	require.Len(t, tr2.Attempts, 1)
+	pin2 := tr2.Attempts[0]
+
+	// Both pins are independent (could be same or different peers; random).
+	_, lockedAt1_0, _, ok1 := sim.PinDetail(sess1)
+	require.True(t, ok1)
+	_, lockedAt2_0, _, ok2 := sim.PinDetail(sess2)
+	require.True(t, ok2)
+
+	// A third request on s1 confirms stickiness.
+	tr1, err = sim.Request(sess1)
+	require.NoError(t, err)
+	require.Equal(t, []string{pin1}, tr1.Attempts, "s1 should stay sticky")
+
+	// A request on s2 confirms stickiness.
+	tr2, err = sim.Request(sess2)
+	require.NoError(t, err)
+	require.Equal(t, []string{pin2}, tr2.Attempts, "s2 should stay sticky")
+
+	// Advance past TTL (60s + 1s)
+	sim.Advance(time.Duration(ttlSecs)*time.Second + time.Second)
+
+	// Both locks should have expired.
+	_, _, _, live1 := sim.PinDetail(sess1)
+	require.False(t, live1, "s1 lock should expire after TTL")
+	_, _, _, live2 := sim.PinDetail(sess2)
+	require.False(t, live2, "s2 lock should expire after TTL")
+
+	// Next requests re-lock both sessions with fresh LockedAt.
+	_, err = sim.Request(sess1)
+	require.NoError(t, err)
+	_, lockedAt1_1, _, ok1 := sim.PinDetail(sess1)
+	require.True(t, ok1)
+	require.True(t, lockedAt1_1.After(lockedAt1_0), "s1 re-lock should have fresh LockedAt")
+
+	_, err = sim.Request(sess2)
+	require.NoError(t, err)
+	_, lockedAt2_1, _, ok2 := sim.PinDetail(sess2)
+	require.True(t, ok2)
+	require.True(t, lockedAt2_1.After(lockedAt2_0), "s2 re-lock should have fresh LockedAt")
+}
+
