@@ -281,7 +281,7 @@ On a decline the pipeline falls through to the strategy, which re-selects a curr
 
 ### Verifying shapes end-to-end
 
-`internal/server/lb_scenario_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin). Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
+`internal/server/lb_scenario_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin), and the `harness lb` CLI tier shares the same engine. The CLI now self-checks via an optional `expect` block (all 13 built-in examples verify themselves), and coverage includes: half-open probe recovery, all-tiers-tripped degrade-to-T0, inactive-service exclusion, within-tier load sharing, and multi-session independent affinity. Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
 
 ## Value
 
