@@ -50,6 +50,12 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 
 			acc.Consume(evt)
 
+			// This passthrough writes raw upstream bytes via c.SSEvent, bypassing
+			// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
+			if isAnthropicContentDeltaEvent(evt.Type) {
+				protocol.MarkFirstToken(hc.GinContext)
+			}
+
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
 				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
 					return err
@@ -150,6 +156,12 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 			}
 
 			acc.ConsumeBeta(evt)
+
+			// This passthrough writes raw upstream bytes via c.SSEvent, bypassing
+			// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
+			if isAnthropicContentDeltaEvent(evt.Type) {
+				protocol.MarkFirstToken(hc.GinContext)
+			}
 
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
 				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {

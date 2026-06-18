@@ -237,6 +237,10 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			}
 
 			// Send the chunk
+			// Mark TTFT on the first content-bearing chunk; MarkFirstToken is idempotent.
+			if choice.Delta.Content != "" || choice.Delta.Refusal != "" || len(choice.Delta.ToolCalls) > 0 || choice.Delta.JSON.FunctionCall.Valid() {
+				protocol.MarkFirstToken(c)
+			}
 			OpenAISSE(c, chunkMap)
 			return nil
 		},

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -148,6 +149,67 @@ func buildAnthropicOutputOnlyDeltaJSON(t *testing.T, outputTokens int64) string 
 		},
 	}
 	data, err := json.Marshal(event)
+	require.NoError(t, err)
+	return string(data)
+}
+
+// buildAnthropicContentBlockDeltaJSON creates a content_block_delta event carrying
+// model text — the first content-bearing event that should trigger a TTFT mark.
+func buildAnthropicContentBlockDeltaJSON(t *testing.T, text string) string {
+	t.Helper()
+	event := map[string]interface{}{
+		"type":  "content_block_delta",
+		"index": 0,
+		"delta": map[string]interface{}{
+			"type": "text_delta",
+			"text": text,
+		},
+	}
+	data, err := json.Marshal(event)
+	require.NoError(t, err)
+	return string(data)
+}
+
+// buildChatContentChunkJSON builds an OpenAI Chat chunk with non-empty delta
+// content — the first content-bearing chunk that should trigger a TTFT mark.
+func buildChatContentChunkJSON(t *testing.T, content string) string {
+	t.Helper()
+	chunk := map[string]interface{}{
+		"id":      "chatcmpl-test",
+		"object":  "chat.completion.chunk",
+		"created": 1000,
+		"model":   "gpt-4o",
+		"choices": []interface{}{
+			map[string]interface{}{
+				"index":         0,
+				"delta":         map[string]interface{}{"content": content},
+				"finish_reason": nil,
+			},
+		},
+	}
+	data, err := json.Marshal(chunk)
+	require.NoError(t, err)
+	return string(data)
+}
+
+// buildChatRoleOnlyChunkJSON builds an OpenAI Chat chunk with only the leading
+// role delta ({role:"assistant"}) — a structural frame that must NOT mark TTFT.
+func buildChatRoleOnlyChunkJSON(t *testing.T) string {
+	t.Helper()
+	chunk := map[string]interface{}{
+		"id":      "chatcmpl-test",
+		"object":  "chat.completion.chunk",
+		"created": 1000,
+		"model":   "gpt-4o",
+		"choices": []interface{}{
+			map[string]interface{}{
+				"index":         0,
+				"delta":         map[string]interface{}{"role": "assistant"},
+				"finish_reason": nil,
+			},
+		},
+	}
+	data, err := json.Marshal(chunk)
 	require.NoError(t, err)
 	return string(data)
 }
@@ -405,4 +467,117 @@ func TestHandleAnthropicBeta_RealStreamFormat(t *testing.T) {
 	assert.Equal(t, 40, usage.InputTokens, "input_tokens must come from message_start")
 	assert.Equal(t, 22, usage.OutputTokens)
 	assert.Equal(t, 8, usage.CacheInputTokens)
+}
+
+// ---------------------------------------------------------------------------
+// TTFT for passthrough handlers (which write raw upstream bytes, bypassing
+// the converter content gates, so they must mark TTFT themselves).
+// ---------------------------------------------------------------------------
+
+// TestHandleAnthropic_Passthrough_MarksTTFT verifies the Anthropic passthrough
+// records TTFT on the first content_block_delta, not the message_start frame.
+func TestHandleAnthropic_Passthrough_MarksTTFT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	events := []string{
+		buildAnthropicMessageStartJSON(t, 5, 0), // structural frame — must NOT mark
+		buildAnthropicContentBlockDeltaJSON(t, "hi"),
+	}
+	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](newFakeAnthropicDecoder(events), nil)
+
+	_, err := HandleAnthropic(newTestHandleContext(c), stream)
+	require.NoError(t, err)
+
+	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
+	assert.True(t, ok, "Anthropic passthrough must mark TTFT on the content delta")
+}
+
+// TestHandleAnthropic_Passthrough_NoTTFTOnStructuralOnly verifies no TTFT is
+// recorded when the stream contains only structural events (no content).
+func TestHandleAnthropic_Passthrough_NoTTFTOnStructuralOnly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	events := []string{
+		buildAnthropicMessageStartJSON(t, 5, 0), // structural only
+	}
+	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](newFakeAnthropicDecoder(events), nil)
+
+	_, err := HandleAnthropic(newTestHandleContext(c), stream)
+	require.NoError(t, err)
+
+	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
+	assert.False(t, ok, "no content delta must not mark TTFT")
+}
+
+// TestHandleAnthropicBeta_Passthrough_MarksTTFT is the beta-passthrough variant.
+func TestHandleAnthropicBeta_Passthrough_MarksTTFT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	events := []string{
+		buildAnthropicMessageStartJSON(t, 5, 0),
+		buildAnthropicContentBlockDeltaJSON(t, "hi"),
+	}
+	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](newFakeAnthropicDecoder(events), nil)
+
+	_, err := HandleAnthropicBeta(newTestHandleContext(c), stream)
+	require.NoError(t, err)
+
+	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
+	assert.True(t, ok, "Anthropic beta passthrough must mark TTFT on the content delta")
+}
+
+// TestHandleOpenAIChatStream_Passthrough_MarksTTFT verifies the OpenAI Chat
+// passthrough records TTFT on the first content chunk, skipping the role-only delta.
+func TestHandleOpenAIChatStream_Passthrough_MarksTTFT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	dec := &fakeChatDecoder{events: []string{
+		buildChatRoleOnlyChunkJSON(t), // structural frame — must NOT mark
+		buildChatContentChunkJSON(t, "hi"),
+	}, current: -1}
+	stream := openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
+
+	hc := newTestHandleContext(c)
+	hc.DisableStreamUsage = true
+	req := &openai.ChatCompletionNewParams{}
+	_, err := HandleOpenAIChatStream(hc, stream, req)
+	require.NoError(t, err)
+
+	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
+	assert.True(t, ok, "OpenAI Chat passthrough must mark TTFT on the first content chunk")
+}
+
+// TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly verifies no TTFT is
+// recorded when the stream contains only the role-only delta.
+func TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	dec := &fakeChatDecoder{events: []string{
+		buildChatRoleOnlyChunkJSON(t),
+	}, current: -1}
+	stream := openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
+
+	hc := newTestHandleContext(c)
+	hc.DisableStreamUsage = true
+	req := &openai.ChatCompletionNewParams{}
+	_, err := HandleOpenAIChatStream(hc, stream, req)
+	require.NoError(t, err)
+
+	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
+	assert.False(t, ok, "role-only delta must not mark TTFT")
 }
