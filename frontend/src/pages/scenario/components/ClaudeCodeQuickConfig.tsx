@@ -37,6 +37,7 @@ export interface ClaudeCodePrefs {
     MCP_TOOL_TIMEOUT?: string;
     MAX_MCP_OUTPUT_TOKENS?: string;
 
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW?: string;
     CLAUDE_AUTOCOMPACT_PCT_OVERRIDE?: string;
 
     DISABLE_TELEMETRY?: string;
@@ -84,7 +85,8 @@ const FIELD_STRUCT: FieldStruct[] = [
     { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
     // Auto-compact (commonly adjusted - not advanced)
-    { envName: 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', group: 'limits', kind: 'int', unit: '%', advanced: false },
+    { envName: 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', group: 'model', kind: 'int', unit: 'tokens', advanced: false },
+    { envName: 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', group: 'model', kind: 'int', unit: '%', advanced: false },
     // Switches (advanced - usually don't need to change)
     { envName: 'DISABLE_TELEMETRY', group: 'switches', kind: 'bool', advanced: true },
     { envName: 'DISABLE_ERROR_REPORTING', group: 'switches', kind: 'bool', advanced: true },
@@ -190,11 +192,17 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
         tooltip: '官方默认 8192。超过会被截断。',
         placeholder: '8192',
     },
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
+        label: '自动压缩窗口',
+        purpose: '上下文自动压缩的目标窗口大小',
+        tooltip: 'tb 默认 200000（1M 模型自动调整为 1000000）。当触发自动压缩时，会保留最近的 N 个 token。调高可以保留更多上下文，但会占用更多配额。',
+        placeholder: '200000',
+    },
     CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: {
         label: '自动压缩阈值',
         purpose: '上下文自动压缩的触发百分比',
-        tooltip: 'tb 默认 85。当上下文使用率达到该百分比时触发自动压缩。调低则更早压缩，调高则更晚。设为 0 禁用。',
-        placeholder: '85',
+        tooltip: 'tb 默认 80。当上下文使用率达到该百分比时触发自动压缩。调低则更早压缩，调高则更晚。设为 0 禁用。',
+        placeholder: '80',
     },
     DISABLE_TELEMETRY: {
         label: '禁用遥测',
@@ -320,11 +328,17 @@ const FIELDS_TEXT_EN: FieldTextMap = {
         tooltip: 'Anthropic default is 8192. Anything larger is truncated.',
         placeholder: '8192',
     },
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
+        label: 'Auto-compact window',
+        purpose: 'Target window size for context auto-compaction',
+        tooltip: 'tb default is 200000 (auto-adjusted to 1000000 for 1M models). When auto-compaction triggers, keeps the most recent N tokens. Higher values preserve more context but consume more quota.',
+        placeholder: '200000',
+    },
     CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: {
         label: 'Auto-compact threshold',
         purpose: 'Context auto-compact trigger percentage',
-        tooltip: 'tb default is 85. Triggers auto-compaction when context usage reaches this %. Lower = earlier compaction, higher = later. Set to 0 to disable.',
-        placeholder: '85',
+        tooltip: 'tb default is 80. Triggers auto-compaction when context usage reaches this %. Lower = earlier compaction, higher = later. Set to 0 to disable.',
+        placeholder: '80',
     },
     DISABLE_TELEMETRY: {
         label: 'Disable telemetry',
@@ -498,7 +512,8 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
 
         API_TIMEOUT_MS: '3000000',
         CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
-        CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '85',
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW: context1MEnabled ? '1000000' : '200000',
+        CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '80',
 
         DISABLE_TELEMETRY: '1',
         DISABLE_ERROR_REPORTING: '1',

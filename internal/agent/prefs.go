@@ -29,6 +29,10 @@ type ClaudeCodePrefs struct {
 	McpToolTimeout            string `json:"MCP_TOOL_TIMEOUT,omitempty"`
 	MaxMcpOutputTokens        string `json:"MAX_MCP_OUTPUT_TOKENS,omitempty"`
 
+	// Auto-compact settings — control context window compaction
+	ClaudeCodeAutoCompactWindow      string `json:"CLAUDE_CODE_AUTO_COMPACT_WINDOW,omitempty"`
+	ClaudeAutocompactPctOverride     string `json:"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE,omitempty"`
+
 	// Privacy / behavior switches — "1" to enable, "" to omit.
 	DisableTelemetry                     string `json:"DISABLE_TELEMETRY,omitempty"`
 	DisableErrorReporting                string `json:"DISABLE_ERROR_REPORTING,omitempty"`
@@ -104,6 +108,8 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 	p := ClaudeCodePrefs{
 		APITimeoutMs:                         "3000000",
 		ClaudeCodeMaxOutputTokens:            "32000",
+		ClaudeCodeAutoCompactWindow:          "200000",
+		ClaudeAutocompactPctOverride:         "80",
 		DisableTelemetry:                     "1",
 		DisableErrorReporting:                "1",
 		ClaudeCodeDisableNonessentialTraffic: "1",
