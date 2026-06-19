@@ -13,16 +13,21 @@ import (
 // Codex/Responses vendor ops) run *inside* chain.Execute, so after Execute
 // returns nothing reads it again.
 //
-// On protocol-conversion paths (e.g. Anthropic client -> OpenAI/Gemini backend)
-// the outbound ctx.Request is a freshly built struct, while OriginalRequest still
-// points at the gjson-backed source request. Because the Anthropic SDK decoder
-// pins the raw request JSON onto that parsed struct (its unexported `raw` /
-// `JSON` metadata fields), keeping OriginalRequest alive holds the entire request
-// body in memory for the whole streaming lifetime. Dropping it here lets that be
-// GC'd as soon as the chain completes.
+// On protocol-conversion paths (e.g. Anthropic client -> OpenAI/Gemini backend,
+// or OpenAI client -> Anthropic backend) the outbound ctx.Request is a freshly
+// built struct, while OriginalRequest still points at the gjson-backed source
+// request. Both the Anthropic and OpenAI SDK decoders pin the raw request JSON
+// onto that parsed struct (its unexported `raw` / `JSON` metadata fields), so
+// keeping OriginalRequest alive holds the entire request body in memory for the
+// whole streaming lifetime. Dropping it here lets that be GC'd as soon as the
+// chain completes.
 //
-// On Anthropic->Anthropic passthrough Request == OriginalRequest (the chain
-// mutates in place), so this is intentionally a no-op there.
+// On same-protocol passthrough (e.g. Anthropic->Anthropic) Request ==
+// OriginalRequest (the chain mutates in place), so this is intentionally a
+// no-op there.
+//
+// Applies to every source builder: transformAnthropicBeta / transformAnthropicV1
+// / transformOpenAIChat / transformOpenAIResponses.
 func releaseOriginalRequest(ctx *transform.TransformContext) {
 	if ctx != nil && ctx.Request != ctx.OriginalRequest {
 		ctx.OriginalRequest = nil
@@ -216,6 +221,9 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 	if protocolRecorder != nil {
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
+
+	releaseOriginalRequest(finalCtx)
+
 	return finalCtx, nil
 }
 
@@ -266,5 +274,8 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 	if protocolRecorder != nil {
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
+
+	releaseOriginalRequest(finalCtx)
+
 	return finalCtx, nil
 }
