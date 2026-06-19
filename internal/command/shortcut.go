@@ -11,10 +11,11 @@ import (
 
 // PersistLaunchSource records how tingly-box was launched (best-effort) so that
 // `shortcut --target=auto` can generate a matching shortcut later. It is a no-op
-// for empty/unknown/"auto" values and only writes when the value changes.
+// for empty / unknown values (including "auto") and only writes when the value
+// changes.
 func PersistLaunchSource(appManager *AppManager, source string) {
 	source = strings.TrimSpace(source)
-	if source == "" || source == "auto" || !shortcut.IsKnownSource(source) {
+	if !shortcut.IsKnownSource(source) {
 		return
 	}
 	cfg := appManager.GetGlobalConfig()
