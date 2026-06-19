@@ -12,7 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/memory"
 )
 
 // HandleResponsesCreate handles POST /v1/responses
@@ -30,9 +29,6 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		})
 		return
 	}
-
-	// CRITICAL FIX: Copy request body through memory pool to break gjson reference chain
-	bodyBytes = memory.CopyRequestBody(bodyBytes)
 
 	// Parse request (minimal parsing for validation)
 	var req protocol.ResponseCreateRequest

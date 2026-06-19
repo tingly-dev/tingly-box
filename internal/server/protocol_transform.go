@@ -8,6 +8,27 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// releaseOriginalRequest drops the pre-transform request once the chain has
+// finished. All readers of ctx.OriginalRequest (the StagePre recorder and the
+// Codex/Responses vendor ops) run *inside* chain.Execute, so after Execute
+// returns nothing reads it again.
+//
+// On protocol-conversion paths (e.g. Anthropic client -> OpenAI/Gemini backend)
+// the outbound ctx.Request is a freshly built struct, while OriginalRequest still
+// points at the gjson-backed source request. Because the Anthropic SDK decoder
+// pins the raw request JSON onto that parsed struct (its unexported `raw` /
+// `JSON` metadata fields), keeping OriginalRequest alive holds the entire request
+// body in memory for the whole streaming lifetime. Dropping it here lets that be
+// GC'd as soon as the chain completes.
+//
+// On Anthropic->Anthropic passthrough Request == OriginalRequest (the chain
+// mutates in place), so this is intentionally a no-op there.
+func releaseOriginalRequest(ctx *transform.TransformContext) {
+	if ctx != nil && ctx.Request != ctx.OriginalRequest {
+		ctx.OriginalRequest = nil
+	}
+}
+
 func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support. The rule-driven pre-Base and
@@ -72,6 +93,8 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
 
+	releaseOriginalRequest(finalCtx)
+
 	return finalCtx, nil
 }
 
@@ -135,6 +158,9 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	if protocolRecorder != nil {
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
+
+	releaseOriginalRequest(finalCtx)
+
 	return finalCtx, nil
 }
 

@@ -23,7 +23,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/memory"
 )
 
 // HandleOpenAIChatCompletions handles OpenAI v1 chat completion requests
@@ -42,9 +41,6 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-
-	// CRITICAL FIX: Copy request body through memory pool to break gjson reference chain
-	bodyBytes = memory.CopyRequestBody(bodyBytes)
 
 	// Parse OpenAI-style request
 	var req protocol.OpenAIChatCompletionRequest
