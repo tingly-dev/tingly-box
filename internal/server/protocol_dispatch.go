@@ -436,7 +436,21 @@ func (s *Server) passthroughAnthropicBeta(
 				return
 			}
 
-			s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, responseModel, provider, recorder)
+			// The outbound request has been sent. req pins the entire raw request
+			// body (the SDK decoder stores gjson raw text on the parsed struct), and
+			// in passthrough Request == OriginalRequest, so releasing OriginalRequest
+			// alone frees nothing. The stream loop below no longer needs req — only
+			// the model string — so drop every reference to it here, letting the body
+			// be GC'd for the whole (possibly long) stream. Keep it only when response
+			// guardrails still need req.System/Messages.
+			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+			if !s.guardrailsEnabledForScenario(scenario) {
+				reqCtx.Request = nil
+				reqCtx.OriginalRequest = nil
+				req = nil
+			}
+
+			s.handleAnthropicStreamResponseV1Beta(c, actualModel, req, streamResp, responseModel, provider, recorder)
 			return
 		}
 

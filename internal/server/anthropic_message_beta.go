@@ -117,17 +117,23 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		})
 }
 
-// handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
+// handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client.
+//
+// req may be nil: once the outbound request has been forwarded it pins the entire
+// raw request body (via the SDK decoder's gjson metadata) but is no longer needed
+// for the stream itself — only actualModel is. Callers release it before the
+// (potentially long-lived) stream loop when response guardrails are not enabled,
+// so the body can be GC'd while streaming. When guardrails are enabled the caller
+// keeps req so System/Messages remain available here.
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, actualModel string, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
-	actualModel := string(req.Model)
 
 	// Add recorder hooks if recorder is available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// response guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if s.guardrailsEnabledForScenario(scenario) {
+	if req != nil && s.guardrailsEnabledForScenario(scenario) {
 		hc.EnsureGuardrails().Enabled = true
 		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
 	}

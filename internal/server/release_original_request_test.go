@@ -63,6 +63,45 @@ func TestReleaseOriginalRequest_NilSafe(t *testing.T) {
 	releaseOriginalRequest(nil) // must not panic
 }
 
+// TestPassthroughRelease_FreesRequestAfterForward locks in the dispatch-level
+// release used by the Anthropic beta streaming passthrough. In passthrough
+// Request == OriginalRequest (both the gjson-backed struct that pins the raw
+// request body), so releaseOriginalRequest alone is a no-op — Request still
+// holds it. After the request has been forwarded the stream loop no longer needs
+// it, so the dispatch drops BOTH references, which is what actually lets the body
+// be GC'd for the whole stream.
+func TestPassthroughRelease_FreesRequestAfterForward(t *testing.T) {
+	ctx := &transform.TransformContext{}
+	collected := make(chan struct{})
+	func() {
+		req := &anthropic.BetaMessageNewParams{}
+		runtime.SetFinalizer(req, func(*anthropic.BetaMessageNewParams) { close(collected) })
+		ctx.Request = req
+		ctx.OriginalRequest = req
+	}()
+
+	// releaseOriginalRequest is a no-op here: Request still references the struct.
+	releaseOriginalRequest(ctx)
+	runtime.GC()
+	select {
+	case <-collected:
+		t.Fatal("must not be collected in passthrough — Request still references the request")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Dispatch release after a successful forward (guardrails off): drop both refs.
+	ctx.Request = nil
+	ctx.OriginalRequest = nil
+	runtime.GC()
+	select {
+	case <-collected:
+		// success: the gjson-backed request (and the body it pins) is now collectable.
+	case <-time.After(2 * time.Second):
+		t.Fatal("request NOT collected after dropping Request+OriginalRequest — still retained during stream")
+	}
+	runtime.KeepAlive(ctx)
+}
+
 // TestReleaseOriginalRequest_AllowsGC deterministically proves the released
 // original becomes collectable: while reachable via ctx.OriginalRequest it is
 // not finalized; after releaseOriginalRequest it is.
