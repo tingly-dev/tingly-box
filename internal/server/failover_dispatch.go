@@ -95,6 +95,7 @@ type firstChunkGate struct {
 	hdr       http.Header
 	status    int
 	committed bool
+	onCommit  func()
 }
 
 func newFirstChunkGate(w gin.ResponseWriter) *firstChunkGate {
@@ -184,6 +185,15 @@ func (g *firstChunkGate) Committed() bool {
 	return g.committed
 }
 
+// SetOnCommit registers a callback fired exactly once, the moment the gate
+// commits (first real chunk reaches the wire). Because commit is the point past
+// which failover can no longer retry, this is the earliest safe moment to drop
+// any per-request state the retry path depends on — e.g. the parsed request held
+// by the transform context. Runs synchronously on the producing goroutine.
+func (g *firstChunkGate) SetOnCommit(fn func()) {
+	g.onCommit = fn
+}
+
 // CommitFirstChunk is the producer's "first real chunk arrived" signal.
 // It flushes captured headers + status + buffered body to the real
 // writer and switches to pass-through. Idempotent.
@@ -224,6 +234,11 @@ func (g *firstChunkGate) commit() {
 		g.buf.Reset()
 	} else {
 		g.real.WriteHeaderNow()
+	}
+	if g.onCommit != nil {
+		fn := g.onCommit
+		g.onCommit = nil // fire once
+		fn()
 	}
 }
 

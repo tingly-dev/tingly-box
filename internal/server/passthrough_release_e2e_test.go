@@ -18,25 +18,32 @@ import (
 )
 
 // TestPassthroughStream_FreesBodyWhileStreamingE2E is the end-to-end proof that
-// ReleaseRequest lets the parsed request be GC'd *while the stream is still open*
-// on the real Anthropic-beta passthrough path — not just at the isolated dispatch
-// level covered by TestPassthroughRelease_FreesRequestAfterForward.
+// the parsed request is GC'd *partway through an open stream* on the real
+// Anthropic-beta passthrough path — specifically, the moment the failover gate
+// commits its first chunk (releaseReqCtxAfterStreamCommit, wired in
+// dispatchChainResult), which is the earliest point retry can no longer happen.
 //
 // WHY THE FAILOVER PATH MATTERS (and is what we test): the parsed request reaches
-// the stream loop via reqCtx, which is captured by the failover attempt closure
-// passed to dispatchWithPriorityFailover. With a *single* active service that
-// branch calls attempt() once and returns, so the closure (and reqCtx) is dead
-// while the stream runs and Go's GC drops the parsed request on its own — the fix
-// is redundant there. With *two or more* active services the failover loop keeps
-// the attempt closure live across iterations, so reqCtx stays reachable for the
-// whole stream; without ReleaseRequest the parsed request (and the entire body
-// the SDK gjson decoder pins onto it) is retained until the stream ends. This
-// test uses two services so it exercises exactly that case.
+// the stream loop via reqCtx, captured by the failover attempt closure passed to
+// dispatchWithPriorityFailover. With a *single* active service that branch calls
+// attempt() once and returns, so the closure (and reqCtx) is dead while the
+// stream runs and Go's GC drops the parsed request on its own — the release is
+// redundant there. With *two or more* active services the failover loop keeps the
+// attempt closure live across iterations, so reqCtx stays reachable for the whole
+// stream; without the commit-time release the parsed request (and the body the
+// SDK gjson decoder pins onto it) is retained until the stream ends. This test
+// uses two services so it exercises exactly that case.
+//
+// WHY AT COMMIT, NOT BEFORE: a pre-first-chunk stream failure is retryable, and
+// the retry re-reads reqCtx.Request — so releasing earlier would break failover
+// (and could nil-panic). The gate commit is the boundary past which retry is
+// impossible, so the test lets the upstream deliver opening chunks (committing
+// the gate) and only THEN parks the stream and measures.
 //
 // Measured contrast (64 MB body, this test):
-//   - without ReleaseRequest: ~0 MB reclaimed during the stream (parsed request,
-//     ~128 MB after gjson amplification, stays live the whole time)
-//   - with ReleaseRequest:    ~128 MB reclaimed during the stream
+//   - without the commit-time release: ~0 MB reclaimed mid-stream (parsed
+//     request, ~128 MB after gjson amplification, stays live until stream end)
+//   - with it: ~128 MB reclaimed mid-stream
 //
 // One body's worth (~64 MB) always remains live during the stream regardless:
 // that is the SDK's own marshaled copy, captured by http.Request.GetBody for the
@@ -46,11 +53,10 @@ import (
 // Mechanism:
 //  1. Build a large request, parse it through the SDK (gjson pins the body).
 //  2. Drive the real AnthropicMessagesV1Beta in a goroutine with a 2-service rule.
-//  3. The fake upstream flushes response headers (so ForwardAnthropicV1BetaStream
-//     returns and the dispatch runs ReleaseRequest), then BLOCKS before sending
-//     any SSE data — parking the stream handler with reqCtx still reachable via
-//     the live failover closure.
-//  4. While the stream is blocked open, force GC and confirm the parsed request
+//  3. The fake upstream delivers the opening SSE events (so the proxy writes its
+//     first client chunk and the failover gate commits, firing the release), then
+//     BLOCKS before sending the rest — parking the stream handler mid-flight.
+//  4. While the stream is parked open, force GC and confirm the parsed request
 //     has been reclaimed from the live heap.
 func TestPassthroughStream_FreesBodyWhileStreamingE2E(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -66,16 +72,23 @@ func TestPassthroughStream_FreesBodyWhileStreamingE2E(t *testing.T) {
 		// pin it — we are measuring the proxy's retention, not the test server's.
 		_, _ = io.Copy(io.Discard, r.Body)
 
+		fl := w.(http.Flusher)
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		w.(http.Flusher).Flush() // headers out -> ForwardAnthropicV1BetaStream returns
+		fl.Flush() // headers out -> ForwardAnthropicV1BetaStream returns
+
+		// Deliver the opening events so the proxy writes its first client chunk
+		// and the failover gate commits — the point at which reqCtx is released.
+		writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_e2e","type":"message","role":"assistant","model":"worker-model","content":[],"stop_reason":null,"usage":{"input_tokens":3,"output_tokens":0}}}`)
+		fl.Flush()
+		writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+		fl.Flush()
+		writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`)
+		fl.Flush()
 
 		close(started)
-		<-release // hold the stream open so the proxy is parked in its read loop
+		<-release // gate has committed; park the stream open before finishing
 
-		writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_e2e","type":"message","role":"assistant","model":"worker-model","content":[],"stop_reason":null,"usage":{"input_tokens":3,"output_tokens":0}}}`)
-		writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
-		writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`)
 		writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":0}`)
 		writeSSEEvent(w, "message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}`)
 		writeSSEEvent(w, "message_stop", `{"type":"message_stop"}`)
@@ -154,8 +167,9 @@ func TestPassthroughStream_FreesBodyWhileStreamingE2E(t *testing.T) {
 		return (float64(m0.HeapAlloc) - float64(m.HeapAlloc)) / (1024 * 1024)
 	}
 
-	// The stream is parked open. Poll: if the fix works the dead upstream copies
-	// and the nilled dispatch references let GC reclaim the ~fillerMB body now.
+	// The stream is parked open past the gate commit. Poll: the commit-time
+	// release plus Go liveness on the dead upstream copies should let GC reclaim
+	// the ~fillerMB parsed request now, mid-stream.
 	var freed float64
 	deadline := time.After(5 * time.Second)
 poll:
@@ -168,7 +182,7 @@ poll:
 		case <-deadline:
 			close(release)
 			<-done
-			t.Fatalf("body NOT freed while stream open: reclaimed only %.1f MB, expected ~%d MB — an upstream reference still pins the parsed request during the stream", freed, fillerMB)
+			t.Fatalf("body NOT freed mid-stream: reclaimed only %.1f MB, expected ~%d MB — a reference still pins the parsed request after the gate committed", freed, fillerMB)
 		case <-time.After(25 * time.Millisecond):
 		}
 	}

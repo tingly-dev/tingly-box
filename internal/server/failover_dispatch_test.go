@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -38,6 +40,56 @@ func TestFirstChunkGate_BufferCaptureBeforeCommit(t *testing.T) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Fatalf("real recorder body should be empty before commit, got %q", rec.Body.String())
+	}
+}
+
+// TestReleaseReqCtxAfterStreamCommit_ReleasesOnlyOnCommit locks in the
+// retry-safety property: the parsed request must NOT be released before the gate
+// commits (a pre-first-chunk failure is retryable and re-reads reqCtx.Request),
+// and must be released exactly at commit (past which retry is impossible).
+func TestReleaseReqCtxAfterStreamCommit_ReleasesOnlyOnCommit(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	g := newFirstChunkGate(c.Writer)
+	c.Writer = g
+
+	reqCtx := &transform.TransformContext{}
+	reqCtx.Request = &anthropic.BetaMessageNewParams{}
+	reqCtx.OriginalRequest = reqCtx.Request
+
+	releaseReqCtxAfterStreamCommit(c, reqCtx)
+
+	// Before commit: must still be held so failover can retry.
+	if reqCtx.Request == nil || reqCtx.OriginalRequest == nil {
+		t.Fatal("request released before commit — would break pre-first-chunk failover")
+	}
+
+	// First chunk reaches the wire -> commit -> release fires.
+	if _, err := g.WriteString("event: first\n\n"); err != nil {
+		t.Fatal(err)
+	}
+	g.CommitFirstChunk()
+
+	if reqCtx.Request != nil || reqCtx.OriginalRequest != nil {
+		t.Fatal("request not released after commit")
+	}
+}
+
+// TestReleaseReqCtxAfterStreamCommit_NoGateNoop ensures the helper is a safe
+// no-op when c.Writer is not a failover gate (single-service requests).
+func TestReleaseReqCtxAfterStreamCommit_NoGateNoop(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	reqCtx := &transform.TransformContext{}
+	reqCtx.Request = &anthropic.BetaMessageNewParams{}
+	reqCtx.OriginalRequest = reqCtx.Request
+
+	releaseReqCtxAfterStreamCommit(c, reqCtx) // must not panic
+	releaseReqCtxAfterStreamCommit(c, nil)    // nil-safe
+
+	if reqCtx.Request == nil {
+		t.Fatal("no-gate path must not release the request")
 	}
 }
 

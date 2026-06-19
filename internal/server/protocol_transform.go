@@ -34,6 +34,29 @@ func releaseOriginalRequest(ctx *transform.TransformContext) {
 	}
 }
 
+// releaseReqCtxAfterStreamCommit arranges for the transform context's parsed
+// request (Request + OriginalRequest) to be released once the failover gate
+// wrapping c.Writer commits its first chunk.
+//
+// Why at commit and not before the stream: on the failover path reqCtx is
+// captured by the attempt closure and stays reachable for the whole stream, so
+// without this the gjson-pinned request body is retained until the stream ends.
+// But releasing it *before* the stream is unsafe — a pre-first-chunk failure is
+// retryable, and the retry re-reads reqCtx.Request. The gate's commit is exactly
+// the boundary past which retry is impossible, so it is the earliest safe point
+// to drop the request while still freeing the body for the bulk of a long stream.
+//
+// No-op when c.Writer is not a failover gate (single-service requests bypass the
+// gate); there the attempt closure dies immediately and GC reclaims reqCtx.
+func releaseReqCtxAfterStreamCommit(c *gin.Context, reqCtx *transform.TransformContext) {
+	if reqCtx == nil {
+		return
+	}
+	if g, ok := c.Writer.(*firstChunkGate); ok {
+		g.SetOnCommit(reqCtx.ReleaseRequest)
+	}
+}
+
 func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support. The rule-driven pre-Base and
