@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
@@ -243,8 +244,8 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 	}
 	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID.String(), &AffinityEntry{
 		Service:   result.Service,
-		LockedAt:  time.Now(),
-		ExpiresAt: time.Now().Add(ttl),
+		LockedAt:  clock.Now(),
+		ExpiresAt: clock.Now().Add(ttl),
 	})
 	logrus.Infof("[affinity] locked service %s -> %s for session %s",
 		result.Provider.Name, result.Service.Model, ctx.SessionID.String())

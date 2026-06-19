@@ -1,0 +1,22 @@
+# authflip — 401 is terminal (no failover masks it) AND marks the primary
+# immediately unhealthy via the health monitor, so it's excluded next request.
+# The first request surfaces the 401 to the client; the second request lands on
+# the healthy fallback (200).
+rule_uuid: authflip
+tactic: tier
+affinity_secs: 0
+services:
+  - { provider: deepseek, model: deepseek-pro, tier: 0 }
+  - { provider: deepseek, model: deepseek-flash, tier: 1 }
+faults:
+  deepseek/deepseek-pro: [401, 200]
+  deepseek/deepseek-flash: [200]
+expect:
+  final_status: 200
+  attempts: [deepseek/deepseek-flash]
+  health:
+    deepseek/deepseek-pro: unhealthy
+    deepseek/deepseek-flash: healthy
+program:
+  - { request: "" }   # deepseek-pro 401 → terminal (client sees 401); marked unhealthy
+  - { request: "" }   # deepseek-pro excluded → deepseek-flash

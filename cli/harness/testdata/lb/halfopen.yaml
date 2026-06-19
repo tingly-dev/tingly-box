@@ -1,0 +1,27 @@
+# halfopen — half-open recovery probe. Cascade shape; the primary trips after
+# 3 failures, stays open, then after an advance past OpenDuration (30s → 31s)
+# the breaker admits ONE half-open probe, which succeeds → breaker closed. The
+# half-open state is transient, so only final breaker states are asserted (not
+# the transient half_open, which has flipped to closed by the final snapshot).
+rule_uuid: halfopen
+tactic: tier
+affinity_secs: 1800
+services:
+  - { provider: openai, model: gpt-5.4, tier: 0 }
+  - { provider: openai, model: gpt-5.5, tier: 1 }
+faults:
+  openai/gpt-5.4: [500, 500, 500, 200, 200]
+  openai/gpt-5.5: [200]
+expect:
+  final_status: 200
+  breaker:
+    openai/gpt-5.4: closed
+    openai/gpt-5.5: closed
+program:
+  - { request: session1 }   # gpt-5.4 500 → gpt-5.5 (strike 1)
+  - { request: session1 }   # gpt-5.4 500 → gpt-5.5 (strike 2)
+  - { request: session1 }   # gpt-5.4 500 → gpt-5.5 (strike 3 → gpt-5.4 breaker OPEN)
+  - { request: session1 }   # gpt-5.4 open → straight to gpt-5.5
+  - { advance: 31s }        # past OpenDuration → gpt-5.4 half-open probe allowed
+  - { request: session1 }   # half-open probe to gpt-5.4 → 200 → breaker CLOSED
+  - { request: session1 }   # gpt-5.4 closed → gpt-5.4 directly

@@ -132,7 +132,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 
 		var sawRetry bool
 		for _, e := range hook.entries {
-			if e.Data["stage"] == "failover" && e.Data["to_provider"] != nil {
+			if e.Data["stage"] == "failover_retry" && e.Data["to_provider"] != nil {
 				sawRetry = true
 				for _, field := range []string{"attempt", "status", "from_service", "to_provider", "to_model"} {
 					if e.Data[field] == nil {
@@ -163,7 +163,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 
 		var sawGiveUp bool
 		for _, e := range hook.entries {
-			if e.Data["stage"] == "failover" && e.Data["to_provider"] == nil && e.Data["attempt"] != nil {
+			if e.Data["stage"] == "failover_exhausted" && e.Data["to_provider"] == nil && e.Data["attempt"] != nil {
 				sawGiveUp = true
 				if e.Level != logrus.WarnLevel {
 					t.Errorf("give-up log should be Warn level, got %s", e.Level)

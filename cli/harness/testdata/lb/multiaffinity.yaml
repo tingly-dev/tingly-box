@@ -1,0 +1,23 @@
+# multiaffinity — two sessions with independent affinity TTL expiry. Flat shape
+# with random tactic; both sessions pin independently, then after an advance
+# past the 60s TTL both re-lock with fresh timestamps. Exact pins are not
+# asserted (random is non-deterministic); the Go scenario test validates
+# PinDetail for independent re-locking.
+rule_uuid: multiaffinity
+tactic: random
+affinity_secs: 60
+services:
+  - { provider: deepseek, model: deepseek-pro, tier: 0 }
+  - { provider: deepseek, model: deepseek-flash, tier: 0 }
+faults:
+  deepseek/deepseek-pro: [200]
+  deepseek/deepseek-flash: [200]
+expect:
+  final_status: 200
+program:
+  - { request: session1 }   # session1 pins to peer X
+  - { request: session2 }   # session2 pins to peer Y (independent)
+  - { request: session1 }   # session1 sticky
+  - { advance: 61s }        # past 60s TTL — both locks expire
+  - { request: session1 }   # session1 re-selected, re-locked (fresh LockedAt)
+  - { request: session2 }   # session2 re-selected, re-locked

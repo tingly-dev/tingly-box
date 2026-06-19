@@ -3,6 +3,8 @@ package loadbalance
 import (
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/clock"
 )
 
 // BreakerState represents the state of a circuit breaker.
@@ -69,7 +71,7 @@ func (b *Breaker) Allow() bool {
 	case BreakerClosed:
 		return true
 	case BreakerOpen:
-		if time.Since(b.openedAt) >= b.OpenDuration {
+		if clock.Now().Sub(b.openedAt) >= b.OpenDuration {
 			b.state = BreakerHalfOpen
 			b.halfOpenInFlight = true
 			return true
@@ -102,14 +104,14 @@ func (b *Breaker) RecordFailure() {
 
 	if b.state == BreakerHalfOpen {
 		b.state = BreakerOpen
-		b.openedAt = time.Now()
+		b.openedAt = clock.Now()
 		b.halfOpenInFlight = false
 		return
 	}
 	b.consecFails++
 	if b.consecFails >= b.FailureThreshold {
 		b.state = BreakerOpen
-		b.openedAt = time.Now()
+		b.openedAt = clock.Now()
 	}
 }
 
@@ -118,7 +120,7 @@ func (b *Breaker) State() BreakerState {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	// Apply the lazy Open→HalfOpen transition for read consistency.
-	if b.state == BreakerOpen && time.Since(b.openedAt) >= b.OpenDuration {
+	if b.state == BreakerOpen && clock.Now().Sub(b.openedAt) >= b.OpenDuration {
 		return BreakerHalfOpen
 	}
 	return b.state
@@ -220,6 +222,14 @@ func (s *BreakerStore) Snapshot() map[string]BreakerState {
 		out[id] = b.State()
 	}
 	return out
+}
+
+// Reset clears all breaker entries. Useful for tests/harness to avoid state leakage
+// between scenarios when reusing the global store.
+func (s *BreakerStore) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.breakers = make(map[string]*Breaker)
 }
 
 // defaultStore is the process-wide breaker registry used by tactics and

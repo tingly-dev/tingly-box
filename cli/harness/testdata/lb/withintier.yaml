@@ -1,0 +1,41 @@
+# withintier — within-tier load sharing. Grid shape with two peers in the top
+# tier; both peers appear as first attempts across multiple requests, proving
+# the within-tier sub-tactic (random) shares load. Uses 20 requests to make
+# flakiness vanishingly unlikely (random non-determinism; P(only one peer in 20
+# draws) ≈ 0.0004%).
+rule_uuid: withintier
+tactic: tier
+within_tier_tactic: random
+affinity_secs: 0
+services:
+  - { provider: anthropic, model: claude-opus, tier: 0 }
+  - { provider: anthropic, model: claude-sonnet, tier: 0 }
+  - { provider: anthropic, model: claude-haiku, tier: 1 }
+faults:
+  anthropic/claude-opus: [200]
+  anthropic/claude-sonnet: [200]
+  anthropic/claude-haiku: [200]
+expect:
+  final_status: 200
+  distinct_first_attempts: [anthropic/claude-opus, anthropic/claude-sonnet]   # both top-tier peers appear as first attempts
+program:
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }
+  - { request: "" }

@@ -1,0 +1,24 @@
+# ratelimit — a single 429 marks the primary unhealthy via the health monitor,
+# so it's skipped on the NEXT request even though its breaker has only one
+# strike, then it recovers after the rate-limit window elapses (one advance moves
+# both the health clock and the breaker clock).
+rule_uuid: ratelimit
+tactic: tier
+affinity_secs: 0
+services:
+  - { provider: openai, model: gpt-5.4, tier: 0 }
+  - { provider: openai, model: gpt-5.5, tier: 1 }
+faults:
+  openai/gpt-5.4: [429, 200]
+  openai/gpt-5.5: [200]
+expect:
+  final_status: 200
+  attempts: [openai/gpt-5.4]   # final request after window recovers
+  health:
+    openai/gpt-5.4: healthy
+    openai/gpt-5.5: healthy
+program:
+  - { request: "" }   # gpt-5.4 429 → fail over to gpt-5.5; gpt-5.4 rate-limited
+  - { request: "" }   # gpt-5.4 health-excluded → straight to gpt-5.5
+  - { advance: 31s }  # window elapsed → back to gpt-5.4
+  - { request: "" }

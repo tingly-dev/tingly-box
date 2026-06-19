@@ -84,6 +84,7 @@ rolling-window / error-rate trigger, at which point the exact number barely matt
 
 Tuning: move `FailureThreshold` and `OpenDuration` together (aggressive threshold + long open = frequent
 mis-evictions). The right value depends on the upstream, so it's a natural per-rule config (Future work #4).
+The `harness lb` simulator keeps the health-monitor threshold aligned to this one.
 
 ### Session affinity must respect tier priority
 
@@ -118,6 +119,17 @@ Notes:
 - On a drop, the strategy re-selects and `postProcess` re-pins — the failover layer is untouched.
 - The pipeline runs **health → affinity → strategy**. `HealthFilter` only sees 429/auth, so the 500 signal comes straight from the breaker.
 - The two "drop" cases (both are `P in T* and P available? → no`): **cross-tier demote** (a higher tier recovered, so P's tier is no longer T\*) and **within-tier dead peer** (P is in T\* but its own breaker is open while a peer is up).
+
+#### Two feedback channels, and the `lb` simulator
+
+Each request outcome feeds **two channels**:
+
+- **Breaker** — binary success/failure, 3-strike trip, 30 s window. Drives tier demotion + affinity eligibility.
+- **Health monitor** (`Server.reportHealthStatus`) — status-classified: 429 → rate-limit window, 401/403 → *immediately* unhealthy, 5xx/other → 3-strike. Drives `HealthStage` filtering.
+
+So 429 and 401/403 exclude a service on the *first* hit (health channel), well before the breaker trips. The `harness lb` simulator models both faithfully (reusing `reportHealthStatus` + the breaker recorder), driving them off one shared clock so a single simulated advance recovers both.
+
+There is also a **third** time-based input: the **affinity TTL** (`AffinityEntry.ExpiresAt`). A lock expires *strictly* at `LockedAt + SessionAffinity` — an in-window request is honored but does **not** slide the expiry; once past it the pin is dropped and the session is re-selected and re-locked. The simulator puts this on the same clock seam (`loadbalance.SetClock` + `routing.SetClock`, both fed one fake clock), so a single `advance` moves breaker recovery, health recovery, *and* affinity expiry together — matching production, where all three read the wall clock. This lets the scenario suite assert the strict-TTL contract and cross-model failover (a failover hop must carry the fallback service's own model, not reuse the primary's) deterministically.
 
 ### End-to-end flow: how the tactic switch actually takes effect
 
@@ -269,7 +281,7 @@ On a decline the pipeline falls through to the strategy, which re-selects a curr
 
 ### Verifying shapes end-to-end
 
-`internal/server/lb_scenario_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin). Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
+`internal/server/lb_scenario_test.go` is the scenario harness that drives the **full** path (selection → failover dispatch) against programmable fake upstreams over a request sequence, with a deterministic breaker clock (`loadbalance.SetClockForTest`). It covers each shape above plus the original sticky-affinity regression (trip → open → drop pin → recover → re-pin), and the `harness lb` CLI tier shares the same engine. The CLI now self-checks via an optional `expect` block (all 13 built-in examples verify themselves), and coverage includes: half-open probe recovery, all-tiers-tripped degrade-to-T0, inactive-service exclusion, within-tier load sharing, and multi-session independent affinity. Prefer extending it (rather than stage-level units alone) when changing routing/affinity/breaker behavior.
 
 ## Value
 
