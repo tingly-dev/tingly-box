@@ -38,14 +38,11 @@ func npxPackageForSource(source string) string {
 	return "tingly-box@latest"
 }
 
-// launchArgs are the CLI args the shortcut runs: restart the daemon and
+// LaunchArgs are the CLI args the shortcut runs: restart the daemon and
 // (since --browser defaults to true) open the web UI.
-func launchArgs() []string {
+func LaunchArgs() []string {
 	return []string{"restart", "--daemon"}
 }
-
-// LaunchArgs is the public accessor used in tests.
-func LaunchArgs() []string { return launchArgs() }
 
 // LaunchSpec describes how the shortcut should invoke Tingly Box on each
 // platform. Argv is the POSIX-style command vector used for macOS .command and
@@ -81,7 +78,7 @@ func ResolveLaunch(exePath, target, persistedSource string) LaunchSpec {
 		}
 	}
 
-	args := launchArgs()
+	args := LaunchArgs()
 
 	if source == SourceNpx || source == SourceNpxBundle {
 		// e.g. "npx -y tingly-box@latest restart --daemon"
