@@ -30,7 +30,7 @@ type CLI struct {
 	Verbose   bool   `kong:"flag,name='verbose',short='v',help='Verbose output'"`
 
 	// Server commands
-	Start   command.StartCmdKong   `kong:"cmd,help='Start the server'"`
+	Start   command.StartCmdKong   `kong:"cmd,help='Start the server',default='1'"`
 	Stop    command.StopCmdKong    `kong:"cmd,help='Stop the server'"`
 	Status  command.StatusCmdKong  `kong:"cmd,help='Show status'"`
 	Restart command.RestartCmdKong `kong:"cmd,help='Restart the server'"`
