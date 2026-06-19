@@ -96,6 +96,10 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
 
+	// reqCtx is held through the (possibly long-lived) streaming dispatch below.
+	// transformAnthropicBeta releases ctx.OriginalRequest once the chain is built,
+	// so on protocol-conversion paths the gjson-pinned source body is not retained
+	// for the whole stream. See releaseOriginalRequest in protocol_transform.go.
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
