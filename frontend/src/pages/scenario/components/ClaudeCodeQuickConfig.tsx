@@ -195,7 +195,7 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
     CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
         label: '自动压缩窗口',
         purpose: '上下文自动压缩的目标窗口大小',
-        tooltip: 'tb 默认 200000。当触发自动压缩时，会保留最近的 N 个 token。调高可以保留更多上下文，但会占用更多配额。',
+        tooltip: 'tb 默认 200000（1M 模型自动调整为 1000000）。当触发自动压缩时，会保留最近的 N 个 token。调高可以保留更多上下文，但会占用更多配额。',
         placeholder: '200000',
     },
     CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: {
@@ -331,7 +331,7 @@ const FIELDS_TEXT_EN: FieldTextMap = {
     CLAUDE_CODE_AUTO_COMPACT_WINDOW: {
         label: 'Auto-compact window',
         purpose: 'Target window size for context auto-compaction',
-        tooltip: 'tb default is 200000. When auto-compaction triggers, keeps the most recent N tokens. Higher values preserve more context but consume more quota.',
+        tooltip: 'tb default is 200000 (auto-adjusted to 1000000 for 1M models). When auto-compaction triggers, keeps the most recent N tokens. Higher values preserve more context but consume more quota.',
         placeholder: '200000',
     },
     CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: {
@@ -512,7 +512,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
 
         API_TIMEOUT_MS: '3000000',
         CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
-        CLAUDE_CODE_AUTO_COMPACT_WINDOW: '200000',
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW: context1MEnabled ? '1000000' : '200000',
         CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '80',
 
         DISABLE_TELEMETRY: '1',
