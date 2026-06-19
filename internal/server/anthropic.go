@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/memory"
 )
 
 type (
@@ -141,6 +142,11 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			recorder.RecordError(err)
 		}
 	} else {
+		// CRITICAL FIX: Copy request body through memory pool to break gjson reference chain
+		// Without this, gjson.ParseBytes in SDK decoders holds references to bodyBytes,
+		// preventing GC and causing memory leaks (see docs/fix/20260618-gjson-memory-leak-fix.md)
+		bodyBytes = memory.CopyRequestBody(bodyBytes)
+
 		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}

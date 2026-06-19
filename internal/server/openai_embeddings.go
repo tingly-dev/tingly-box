@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/memory"
 )
 
 // HandleOpenAIEmbeddings serves OpenAI-compatible embedding requests.
@@ -56,6 +57,9 @@ func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
 		})
 		return
 	}
+
+	// CRITICAL FIX: Copy request body through memory pool to break gjson reference chain
+	bodyBytes = memory.CopyRequestBody(bodyBytes)
 
 	var req openai.EmbeddingNewParams
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
