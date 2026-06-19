@@ -445,8 +445,7 @@ func (s *Server) passthroughAnthropicBeta(
 			// guardrails still need req.System/Messages.
 			_, _, _, _, scenario, _, _ := GetTrackingContext(c)
 			if !s.guardrailsEnabledForScenario(scenario) {
-				reqCtx.Request = nil
-				reqCtx.OriginalRequest = nil
+				reqCtx.ReleaseRequest()
 				req = nil
 			}
 

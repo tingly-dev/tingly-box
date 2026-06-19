@@ -90,8 +90,7 @@ func TestPassthroughRelease_FreesRequestAfterForward(t *testing.T) {
 	}
 
 	// Dispatch release after a successful forward (guardrails off): drop both refs.
-	ctx.Request = nil
-	ctx.OriginalRequest = nil
+	ctx.ReleaseRequest()
 	runtime.GC()
 	select {
 	case <-collected:
