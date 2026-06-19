@@ -38,8 +38,8 @@ type StartCmdKong struct {
 	Daemon               bool   `kong:"flag,name='daemon',help='Run as daemon'"`
 	LogFile              string `kong:"flag,name='log-file',help='Log file path'"`
 	PromptRestart        bool   `kong:"flag,name='prompt-restart',help='Prompt to restart if running'"`
-	RecordMode string `kong:"flag,name='record-mode',help='Record mode'"`
-	RecordDir  string `kong:"flag,name='record-dir',help='Record directory'"`
+	RecordMode           string `kong:"flag,name='record-mode',help='Record mode'"`
+	RecordDir            string `kong:"flag,name='record-dir',help='Record directory'"`
 }
 
 func (s *StartCmdKong) Run(appManager *AppManager) error {
@@ -486,24 +486,14 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		appConfig.SetServerPort(port)
 	}
 
-	// Check if port is available before proceeding
-	if !network.IsPortAvailable(port) {
-		return fmt.Errorf("port %d is already in use by another process", port)
-	}
-
 	// Create file lock
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
-	// Check if server is already running using file lock
+	// Check if server is already running using file lock (BEFORE port check)
 	if fileLock.IsLocked() {
-		logrus.Printf("Server is already running on port %d\n", port)
-		printBanner(BannerConfig{
-			Port:         port,
-			Host:         opts.Host,
-			EnableUI:     opts.EnableUI,
-			GlobalConfig: appConfig.GetGlobalConfig(),
-			IsDaemon:     false,
-		})
+		fmt.Printf("Server is already running on port %d\n", port)
+		fmt.Println("Use 'tingly-box restart' to restart the server")
+		fmt.Println("Use 'tingly-box stop' to stop it")
 
 		// If prompt-restart is enabled, ask user if they want to restart
 		if opts.PromptRestart {
@@ -526,10 +516,13 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 				return nil
 			}
 		} else {
-			fmt.Println("Tip: Use 'tingly-box restart' or 'npx tingly-box restart' to restart the server")
-			fmt.Println("     Use 'tingly-box stop' or 'npx tingly-box stop' to stop it")
 			return nil
 		}
+	}
+
+	// Check if port is available (AFTER checking if our server is already running)
+	if !network.IsPortAvailable(port) {
+		return fmt.Errorf("port %d is already in use by another process", port)
 	}
 
 	// Acquire lock before starting server
