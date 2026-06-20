@@ -38,8 +38,8 @@ type StartCmdKong struct {
 	Daemon               bool   `kong:"flag,name='daemon',help='Run as daemon'"`
 	LogFile              string `kong:"flag,name='log-file',help='Log file path'"`
 	PromptRestart        bool   `kong:"flag,name='prompt-restart',help='Prompt to restart if running'"`
-	RecordMode           string `kong:"flag,name='record-mode',help='Record mode'"`
-	RecordDir            string `kong:"flag,name='record-dir',help='Record directory'"`
+	RecordMode string `kong:"flag,name='record-mode',help='Record mode'"`
+	RecordDir  string `kong:"flag,name='record-dir',help='Record directory'"`
 }
 
 func (s *StartCmdKong) Run(appManager *AppManager) error {
