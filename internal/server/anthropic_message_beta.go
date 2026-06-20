@@ -66,7 +66,11 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Get or create the recorder for dual-stage recording
 	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
-		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
+		bs, err := req.MarshalJSON()
+		if err != nil {
+			bs = []byte("{}")
+		}
+		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType), bs)
 	}
 
 	// Determine target API type for protocol transformation detection

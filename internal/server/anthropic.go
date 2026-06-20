@@ -3,9 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -122,27 +120,15 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	c.Set("server_instance", s)
 
-	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
-	var recorder *ProtocolRecorder
-	if s.GetScenarioRecordMode(scenarioType) != "" {
-		recorder = s.BeginProtocolRecording(c, scenario)
-		if recorder != nil {
-			// Store recorder in context for use in handlers
-			c.Set(recorderContextKey, recorder)
-			// Note: RecordResponse will be called by handler after stream completes
-		}
-	}
-
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		// Record error if recording is enabled
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-	} else {
-		// Store the body back for parsing
-		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+			},
+		})
+		return
 	}
 
 	// Determine provider & requestModel
@@ -158,10 +144,6 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	var messages protocol.AnthropicMessagesRequest
 	if beta {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
-			// Record error if recording is enabled
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: fmt.Sprintf("Message error: %s", string(bodyBytes)),
@@ -177,10 +159,6 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	} else {
 		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
-			// Record error if recording is enabled
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: fmt.Sprintf("Message error: %s", string(bodyBytes)),
@@ -213,10 +191,6 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
 	if err != nil {
-		// Record error if recording is enabled
-		if recorder != nil {
-			recorder.RecordError(nil)
-		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),

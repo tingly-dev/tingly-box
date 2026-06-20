@@ -521,13 +521,31 @@ tasks:
   anthropic-count-tokens:
     cmds:
       - |
-        curl "http://localhost:12580/tingly/anthropic/v1/messages/count_tokens?beta=true" \
+        curl "http://localhost:12580/tingly/claude_code/v1/messages/count_tokens?beta=true" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
         -d '{
-          "model": "tingly-claude",
+          "model": "tingly/cc",
           "messages": [
             {"role": "user", "content": "Hello, how are you today? Can you help me understand how token counting works in language models?"}
+          ]
+        }'
+      - |
+        curl -X POST -k http://localhost:12580/tingly/claude_code/v1/messages/count_tokens \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "thinking": {
+            "type": "enabled",
+            "budget_tokens": 100
+          },
+          "temperature": 0.2,
+          "model": "tingly/cc",
+          "messages": [
+            {
+              "role": "user",
+              "content": "who are you!"
+            }
           ]
         }'
   

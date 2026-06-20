@@ -40,8 +40,8 @@ func (f *fakeDecoder) Next() bool {
 }
 
 func (f *fakeDecoder) Event() ssestream.Event { return f.events[f.i-1] }
-func (f *fakeDecoder) Close() error            { return nil }
-func (f *fakeDecoder) Err() error              { return nil }
+func (f *fakeDecoder) Close() error           { return nil }
+func (f *fakeDecoder) Err() error             { return nil }
 
 func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
@@ -66,7 +66,7 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	provider := &typ.Provider{Name: "anthropic-test-prov"}
 
 	// Recorder built via the production entry point.
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-stream-model", obs.RecordModeAll)
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-stream-model", obs.RecordModeAll, nil)
 	require.NotNil(t, recorder)
 
 	// Synthetic SSE event sequence. The Stream decoder will JSON-unmarshal
