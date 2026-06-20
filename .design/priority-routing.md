@@ -244,8 +244,8 @@ There is **no independent "tier mode"** in tingly-box — every routing behavior
 ### Orthogonal modifiers (multiply onto A–D)
 
 - **Within-tier sub-tactic** (`TierParams.WithinTierTactic`) — only matters when a tier holds > 1 service.
-- **Multi-model across services** (`Service.Model` is per-service) — valid; a cross-tier failover changes the model (the already-transformed body is reused, see **G2**).
-- **Multi-API-style** (`Provider.APIStyle`) — failover is **same-API-style only** (`selectFallbackService` filters on `requireAPIStyle`).
+- **Multi-model across services** (`Service.Model` is per-service) — valid; each failover attempt carries the fallback service's own model (the request is re-transformed per attempt — see **Heterogeneous (cross-style) failover** below).
+- **Multi-API-style** (`Provider.APIStyle`) — failover **spans API styles**: each attempt re-transforms the request for the candidate's style, and `selectFallbackService` is called with no style filter. See **Heterogeneous (cross-style) failover** below.
 - **Smart routing** (`SmartEnabled` / `SmartRouting[].Services`) — selects a service *subset* by request content; each subset is itself one of shapes A–D (with its own tiers).
 - **Affinity** (`Flags.SessionAffinity`, seconds) — session stickiness, governed by `typ.IsAffinityEligible`.
 
@@ -276,7 +276,7 @@ On a decline the pipeline falls through to the strategy, which re-selects a curr
 ### Known gaps (explicit)
 
 - **G1 — horizontal tactics are breaker-blind.** Only `TierTactic` consults `DefaultBreakerStore`. `random`/`token_based`/`latency`/… select across the health-filtered set *ignoring the breaker*, so in the **Flat** shape a dead peer can still be re-selected at the selection layer (per-request failover still masks it from the client; affinity already drops the *pin* to a dead peer). *Deferred.* Surfaced as a `t.Skip` in `internal/server/lb_scenario_test.go` (`TestLBScenario_B_Flat_DeadPeerSelection_KnownGap`).
-- **G2 — heterogeneous failover.** A fallback reuses the already-transformed request body and is restricted to the same `Provider.APIStyle`; mixing API styles (and, in practice, models) across tiers within one failover is constrained.
+- **G2 — heterogeneous failover. RESOLVED.** Previously a fallback reused the already-transformed request body and was restricted to the same `Provider.APIStyle`. The transform is now re-run per attempt against a pristine request, so failover spans API styles and carries each tier's own model. See **Heterogeneous (cross-style) failover** below.
 - **G3 — affinity is global-scope.** Affinity runs before smart routing on the union of all the rule's services (`selector.go` TODO); per-smart-rule affinity scoping is not implemented.
 
 ### Verifying shapes end-to-end
@@ -305,7 +305,7 @@ A separate project (`ding113/claude-code-hub`) ships similar capability; we deli
 | Per-user-group priority overrides. | Not implemented. | Users already express user-group-specific routing by having separate rules. Adding overrides would duplicate that mechanism. |
 | Redis-shared breaker state. | In-memory, process-local. | Single-instance is the dominant deployment shape. Redis can be added later with no model changes — `BreakerStore` is an interface boundary. |
 | Active probing scheduler for half-open. | Lazy half-open on next request. | Strictly simpler. Hot rules don't need it; cold rules don't matter. |
-| Mid-stream retry across providers using deferred finalization. | Not implemented. | Pre-stream retry landed in v2 via the buffering wrapper (see "Mid-request failover" below). Mid-stream stays parked as v3. |
+| Mid-stream retry across providers using deferred finalization. | Not implemented. | Pre-stream retry landed in v2 via the buffering wrapper (see "Mid-request failover" below); heterogeneous (cross-style) pre-stream failover landed as v3. Mid-stream stays parked as v4. |
 | 32 KiB "fake 200" body sniffing. | Not implemented. | Niche; revisit if we see real cases. |
 | Dispatch simulator UI. | Not implemented. | Excellent idea, separable feature, v2. |
 
@@ -341,15 +341,32 @@ Two pieces work together to make streaming retryable without losing incremental 
 
 - **First-chunk only.** Priming catches errors before any byte leaves the process. Once the first content event has been forwarded to the client, mid-stream failures still surface as SSE error events and cannot trigger failover — that would require buffering full responses or a more invasive stream reassembly pattern.
 - **Pre-content failures are retryable on every streaming path.** Two mechanisms, applied uniformly: (1) the OpenAI Responses path uses `PrimeResponsesStream`, which forces the first `Next()` out-of-band and returns the error before the handler runs; (2) every other converter detects it in-line. Two pieces make the in-line route work: the stream loops (`StreamLoop` and `ProcessStream`) no longer flush when a step produced nothing — gin's `Flush()` calls `WriteHeaderNow()` and would otherwise lock in a 200 — and each converter emits a retryable 5xx via `SendStreamingError` when the stream errors with nothing written yet (`!c.Writer.Written()`, or `!messageStarted`). The `ProcessStream`-based passthroughs additionally had a `nextFunc` that checked `stream.Err()` *before* `Next()`, reporting a first-`Next()` error as a clean end; they now propagate the error after `Next()`. Either route lands a retryable status in the `firstChunkGate` without committing a 200 first. Once content is flowing, mid-stream failures still surface as SSE error events (no retry — see "First-chunk only").
-- **Same API style only.** `selectFallbackService` filters out candidates whose `Provider.APIStyle` differs from the original. The transformed request body in `reqCtx` was built for the original provider's protocol; switching styles mid-request would feed a mismatched payload to the next upstream. Heterogeneous fallback (e.g. OpenAI → Anthropic within one rule) would need re-running the transform chain and is deferred.
+- **~~Same API style only.~~ Lifted in v3 — see "Heterogeneous (cross-style) failover" below.** v2 originally filtered out candidates whose `Provider.APIStyle` differed from the original, because the transformed body in `reqCtx` was built once for the original provider's protocol. v3 re-runs the transform per attempt, so heterogeneous fallback (e.g. Anthropic → OpenAI within one rule) is now supported.
 - **Wired into:** `AnthropicMessagesV1Beta`, `AnthropicMessagesV1`, the OpenAI Chat handler, and the OpenAI Responses handler. Google and embeddings/images use a different code shape and can be added incrementally if real demand surfaces.
 
 **What the user sees:** if the primary service hits a 429 or 5xx on this exact request, the request quietly switches to the next tier and the client gets the successful response — no error returned, no client-side retry needed. If every tier fails, the last upstream's error reaches the client untouched so the message is honest.
 
+## Heterogeneous (cross-style) failover (v3 — landed)
+
+Status: shipped on branch `claude/inspiring-gates-40pw9v`. Diagram: `.design/failover.pencil.md`.
+
+v2's pre-stream failover was pinned to one API style because the request body was transformed **once**, before the retry loop, and reused as-is. v3 lifts the transform **into** the loop so each attempt re-shapes the request for the candidate it is about to call — enabling failover across heterogeneous providers (Anthropic ↔ OpenAI ↔ Google) and models within one rule.
+
+What changed:
+
+- **One-time prologue vs per-attempt pipeline.** Each protocol entrypoint splits into a provider-independent prologue (parse, rule, vision proxy, context-1m, initial `SelectService`, session, recorder, a pristine-request snapshot) and a provider-dependent per-attempt pipeline (resolve dual endpoint, pre-chain, guardrails, target/endpoint resolution, **transform**, dispatch). The failover loop drives the per-attempt pipeline.
+- **No style filter.** `selectFallbackService` is called with `requireAPIStyle = ""`, so the candidate pool spans all styles; tier/breaker ordering is unchanged.
+- **Pristine request per attempt.** Pre-chain, guardrails, and transform mutate the request in place, so each attempt clones a fresh request from the snapshot template (`internal/server/request_clone.go`); single-service requests reuse the original with no clone.
+- **Setup errors advance.** In-attempt setup failures (target resolution, pre-chain, transform) route through `failAttemptSetup`, which buffers a retryable 500 so the loop tries the next candidate instead of terminating on one misconfigured provider.
+
+Wired into: `AnthropicMessagesV1` / `AnthropicMessagesV1Beta`, `OpenAIChatCompletion`, `ResponsesCreate` (each split into a prologue + `run*Attempt` helper). The shared `dispatchWithPriorityFailover` loop and `firstChunkGate` are unchanged.
+
+Verified by: cross-style e2e tests in `internal/protocoltest/failover_test.go` (Anthropic→OpenAI, OpenAI→Anthropic, streaming, and setup-error-advance, each asserting the fallback received the re-transformed wire format), `internal/server/failover_crossstyle_test.go` (pool spans styles), and clone round-trip tests in `internal/server/request_clone_test.go`.
+
 ## Future work
 
-1. **Mid-stream failover (v3)** — pre-content retry is in place on every streaming path; the remaining gap is reconnecting to the next tier after content has already started flowing. Needs response reassembly or protocol-aware "rewind" semantics; out of scope until users actually hit it.
-2. **Heterogeneous fallback** — re-run the transform chain when the fallback provider has a different API style. Lifts the "same-style only" v2 constraint. (Related: the current fallback swaps provider only and reuses the original transformed body + model, so mixing different models across tiers in one rule isn't supported yet.)
+1. **Mid-stream failover (v4)** — pre-content retry is in place on every streaming path; the remaining gap is reconnecting to the next tier after content has already started flowing. Needs response reassembly or protocol-aware "rewind" semantics; out of scope until users actually hit it.
+2. ~~**Heterogeneous fallback**~~ — **Done (v3).** The transform chain re-runs per attempt, lifting the "same-style only" v2 constraint and carrying each tier's own model. See "Heterogeneous (cross-style) failover" above.
 3. **Active half-open probing** — opt-in goroutine that probes Open breakers on a cadence, useful for cold rules.
 4. **Per-rule breaker thresholds** — currently process-wide defaults. Could be surfaced as a Rule-level config block.
 5. **Failover decision log + UI** — the recorder already sees every success/failure attribution; surface "request X went to service A → fell back to B" in the system log page.

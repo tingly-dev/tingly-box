@@ -153,7 +153,8 @@ The dispatch hot path needs **zero** changes: `ProtocolRecorder` already observe
 ```
 Request arrives at handler (e.g. AnthropicMessagesV1Beta)
 │
-├─ transform request body (once, before loop)
+├─ prologue (once): parse · rule · vision-proxy · initial select · snapshot pristine req
+│       (NB v3: transform is NO LONGER done here — it runs per attempt, see below)
 │
 └─ dispatchWithPriorityFailover(rule, initialProvider, attempt)
        │
@@ -208,7 +209,7 @@ Request arrives at handler (e.g. AnthropicMessagesV1Beta)
        │                                                                   │
        ├─ isRetryableStatus(gate.Status())? ──NO──► return (terminal err) │
        │                                                                   │
-       ├─ selectFallbackService(tried, sameAPIStyle)                       │
+       ├─ selectFallbackService(tried, anyStyle(""))                       │
        │       │                                                           │
        │       ├─ no candidates → Debugf, return                          │
        │       ├─ LB error    → Warnf, return                             │
@@ -348,7 +349,8 @@ rule.GetActiveServices()
        │
        ├─ exclude tried[svc.ServiceID()]
        ├─ skip if provider lookup fails
-       ├─ skip if provider.APIStyle ≠ requireAPIStyle   ← same style only
+       ├─ (v3) NO APIStyle filter — called with requireAPIStyle = "" → pool spans all styles
+       │       (each attempt re-transforms for its own provider's style)
        │
        └─ available[] → build tempRule (no affinity carryover)
               │
@@ -363,8 +365,8 @@ rule.GetActiveServices()
 
 - The gate is **passive**: it makes no protocol or status decisions. The producer signals the first real chunk; the orchestrator decides retry. Each layer owns one concern, so a gate bug cannot pick the wrong tier and an orchestrator bug cannot corrupt bytes.
 - Single-service requests (`len(activeServices) ≤ 1`) bypass the gate entirely — the common case stays on the original `c.Writer`.
-- Transform happens once before the loop — only the provider/model pointer changes on retry; the serialized request body is reused as-is.
-- `APIStyle` is pinned to `initialProvider.APIStyle` — cross-style fallback would require re-transformation and is explicitly out of scope.
+- **(v3)** Transform happens **per attempt**: each retry clones a pristine request and re-shapes it for the candidate's API style and model; single-service requests skip the clone. (Lifted from the original transform-once design — see `.design/failover.pencil.md`.)
+- **(v3)** Failover **spans API styles**: `selectFallbackService` uses no style filter (`requireAPIStyle = ""`), so a tier can fail over from Anthropic to OpenAI to Google within one rule.
 - Once `committed`, the connection is on the wire; `Discard()` and `CommitIfBuffered()` both become no-ops.
 - `Status() == 0` (untouched writer) ⇒ non-retryable — matches a client disconnect / no-write completion.
 - Budget cap = `len(activeServices)` — worst case visits each service once.
