@@ -24,15 +24,6 @@ type LogsResponse struct {
 	Logs  []LogEntry `json:"logs"`
 }
 
-// RequestBodyResponse represents the API response for a stored request body
-type RequestBodyResponse struct {
-	ID        string `json:"id"`
-	Method    string `json:"method"`
-	Path      string `json:"path"`
-	Body      string `json:"body"`
-	Truncated bool   `json:"truncated"`
-}
-
 // convertLogrusEntry converts a logrus.Entry to LogEntry for API response
 func convertLogrusEntry(entry *logrus.Entry) LogEntry {
 	data := make(map[string]interface{})
@@ -62,10 +53,6 @@ func convertLogrusEntry(entry *logrus.Entry) LogEntry {
 	}
 	if userAgent, ok := data["user_agent"].(string); ok {
 		fields["user_agent"] = userAgent
-	}
-	// Include body_ref if present (links to request body store)
-	if bodyRef, ok := data["body_ref"].(string); ok {
-		fields["body_ref"] = bodyRef
 	}
 
 	return LogEntry{
@@ -182,94 +169,5 @@ func (s *Server) GetLogStats(c *gin.Context) {
 		"total":        len(entries),
 		"level_counts": levelCounts,
 		"capacity":     500, // maxEntries configured in NewServer
-	})
-}
-
-// GetRequestBody retrieves a stored request body by its reference ID
-// GET /api/logs/request/:id
-func (s *Server) GetRequestBody(c *gin.Context) {
-	if s.memoryLogMW == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Memory log middleware not available",
-		})
-		return
-	}
-
-	bodyID := c.Param("id")
-	if bodyID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Missing request body ID",
-		})
-		return
-	}
-
-	store := s.memoryLogMW.GetRequestBodyStore()
-	if store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Request body store not available",
-		})
-		return
-	}
-
-	entry := store.Get(bodyID)
-	if entry == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Request body not found (may have been evicted from memory)",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, RequestBodyResponse{
-		ID:        entry.ID,
-		Method:    entry.Method,
-		Path:      entry.Path,
-		Body:      entry.Body,
-		Truncated: entry.Truncated,
-	})
-}
-
-// ClearRequestBodies clears all stored request bodies from memory
-func (s *Server) ClearRequestBodies(c *gin.Context) {
-	if s.memoryLogMW == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Memory log middleware not available",
-		})
-		return
-	}
-
-	store := s.memoryLogMW.GetRequestBodyStore()
-	if store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Request body store not available",
-		})
-		return
-	}
-
-	store.Clear()
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Request bodies cleared successfully",
-	})
-}
-
-// GetRequestBodyStats returns statistics about the request body store
-func (s *Server) GetRequestBodyStats(c *gin.Context) {
-	if s.memoryLogMW == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Memory log middleware not available",
-		})
-		return
-	}
-
-	store := s.memoryLogMW.GetRequestBodyStore()
-	if store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "Request body store not available",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"total":    store.Size(),
-		"capacity": 500, // MaxRequestBodies constant
 	})
 }

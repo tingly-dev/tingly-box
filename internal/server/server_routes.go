@@ -21,11 +21,6 @@ func (s *Server) setupMiddleware() {
 		s.engine.Use(s.memoryLogMW.Middleware())
 	}
 
-	// Debug middleware for logging requests/responses (only if enabled)
-	if s.errorMW != nil {
-		s.engine.Use(s.errorMW.Middleware())
-	}
-
 	// CORS middleware
 	s.engine.Use(middleware.CORS())
 }

@@ -57,15 +57,6 @@ const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
         [],
     );
 
-    const getRequestBody = useCallback(async (bodyRef: string) => {
-        const res = await fetch(`/api/v1/log/request/${bodyRef}`, { headers: getAuthHeader() });
-        if (!res.ok) {
-            if (res.status === 404) return null;
-            throw new Error(`HTTP ${res.status}`);
-        }
-        return res.json();
-    }, []);
-
     return (
         <Stack sx={{ height: '100%', minHeight: 0 }} spacing={0}>
             <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -81,7 +72,7 @@ const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
                 />
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, display: tab === 1 ? 'flex' : 'none', flexDirection: 'column' }}>
-                <SystemLogViewer getLogs={getSystemLogs} getRequestBody={getRequestBody} />
+                <SystemLogViewer getLogs={getSystemLogs} />
             </Box>
         </Stack>
     );
