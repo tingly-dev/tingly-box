@@ -5,12 +5,16 @@ import (
 	"sync"
 )
 
-// RequestBodyStore stores request bodies in an in-memory circular buffer.
-// Each entry is indexed by a unique ID for retrieval.
+// RequestBodyStore stores, in an in-memory circular buffer, the request body
+// together with the error response it produced. Each entry is indexed by a
+// unique ID for retrieval.
 //
-// This is designed for debugging and troubleshooting: request bodies are
-// stored in memory only (no disk persistence) and automatically discarded
-// when the buffer is full.
+// This is designed for debugging and troubleshooting: bodies are stored in
+// memory only (no disk persistence) and automatically discarded when the
+// buffer is full. Keeping bodies here — referenced from the access log by a
+// single body_ref ID rather than inlined into the log entry — caps total body
+// memory at this store's capacity, independent of the much larger log ring
+// buffer that would otherwise retain a copy of every captured body.
 type RequestBodyStore struct {
 	// Circular buffer storing request bodies
 	bodies map[string]*RequestBodyEntry
@@ -22,13 +26,17 @@ type RequestBodyStore struct {
 	mu       sync.RWMutex
 }
 
-// RequestBodyEntry represents a stored request body with metadata
+// RequestBodyEntry represents a stored request together with the error
+// response it produced. Both bodies are captured only for error responses and
+// retrieved together by a single ID.
 type RequestBodyEntry struct {
-	ID        string // Unique identifier (e.g., "req_1234567890")
-	Method    string // HTTP method
-	Path      string // Request path
-	Body      string // Request body (may be truncated)
-	Truncated bool   // True if body was truncated due to size limits
+	ID                string // Unique identifier (e.g., "req_1234567890")
+	Method            string // HTTP method
+	Path              string // Request path
+	Body              string // Request body (may be truncated)
+	Truncated         bool   // True if the request body was truncated due to size limits
+	ResponseBody      string // Error response body (may be truncated)
+	ResponseTruncated bool   // True if the response body was truncated due to size limits
 }
 
 // NewRequestBodyStore creates a new request body store with the specified capacity.
@@ -42,9 +50,10 @@ func NewRequestBodyStore(maxSize int) *RequestBodyStore {
 	}
 }
 
-// Store stores a request body and returns its unique ID.
-// If the buffer is full, the oldest entry is evicted.
-func (s *RequestBodyStore) Store(method, path, body string, maxBodySize int) string {
+// Store stores a request/response body pair and returns its unique ID.
+// Each body is independently truncated to maxBodySize. If the buffer is full,
+// the oldest entry is evicted.
+func (s *RequestBodyStore) Store(method, path, body, responseBody string, maxBodySize int) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -52,19 +61,18 @@ func (s *RequestBodyStore) Store(method, path, body string, maxBodySize int) str
 	s.entrySeq++
 	id := generateRequestID(s.entrySeq)
 
-	// Truncate body if too large (keep first N chars)
-	truncated := false
-	if len(body) > maxBodySize {
-		body = body[:maxBodySize]
-		truncated = true
-	}
+	// Truncate each body if too large (keep first N chars)
+	body, truncated := truncateBody(body, maxBodySize)
+	responseBody, respTruncated := truncateBody(responseBody, maxBodySize)
 
 	entry := &RequestBodyEntry{
-		ID:        id,
-		Method:    method,
-		Path:      path,
-		Body:      body,
-		Truncated: truncated,
+		ID:                id,
+		Method:            method,
+		Path:              path,
+		Body:              body,
+		Truncated:         truncated,
+		ResponseBody:      responseBody,
+		ResponseTruncated: respTruncated,
 	}
 
 	// Calculate storage index (circular)
@@ -113,6 +121,14 @@ func (s *RequestBodyStore) Size() int {
 	defer s.mu.RUnlock()
 
 	return len(s.bodies)
+}
+
+// truncateBody clips body to maxBodySize, reporting whether it was truncated.
+func truncateBody(body string, maxBodySize int) (string, bool) {
+	if len(body) > maxBodySize {
+		return body[:maxBodySize], true
+	}
+	return body, false
 }
 
 // generateRequestID generates a unique request ID from a sequence number.

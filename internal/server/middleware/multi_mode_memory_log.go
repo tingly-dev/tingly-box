@@ -32,7 +32,9 @@ const GinRequestIDKey = "request_id"
 // Logs are written to:
 // 1. Multi-mode logger (text + JSON files for persistence)
 // 2. Memory (circular buffer for quick API access)
-// 3. Request body store (pure memory, referenced by body_ref ID)
+// 3. Request body store (pure memory: the request and its error-response body,
+//    referenced by a single body_ref ID — bodies are never inlined into the log
+//    entry, keeping the ring buffer light and total body memory bounded)
 type MultiModeMemoryLogMiddleware struct {
 	logger           *logrus.Logger
 	multiLogger      *obs.MultiLogger
@@ -156,11 +158,29 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"user_agent": c.Request.UserAgent(),
 		}
 
-		// Add body reference - ONLY for error responses (4xx/5xx) to minimize storage overhead
-		// Happy path (2xx) requests don't store body, saving memory and CPU
-		if bodyBuffer != nil && statusCode >= 400 && bodyBuffer.Len() > 0 {
-			bodyRef := m.requestBodyStore.Store(method, path, bodyBuffer.String(), MaxRequestBodySize)
-			fields["body_ref"] = bodyRef
+		// Persist the request and error-response bodies together for diagnostics,
+		// but ONLY for error responses (4xx/5xx) and behind a single body_ref ID.
+		// Happy path (2xx) requests store nothing, saving memory and CPU.
+		//
+		// Crucially the bodies live in the bounded RequestBodyStore, NOT inline in
+		// the log fields: the log entry only carries the small body_ref. Inlining
+		// a body (up to maxCapturedResponseBytes) would let the 1000-entry in-memory
+		// log ring retain a copy of every captured body — under sustained errors
+		// that is the OOM driver. Routing through the store caps total body memory
+		// at the store's capacity, independent of the ring buffer size.
+		if m.requestBodyStore != nil && statusCode >= 400 {
+			var reqBody, respBody string
+			if bodyBuffer != nil {
+				reqBody = bodyBuffer.String()
+			}
+			// w.body is lazily allocated and only populated when the status
+			// warranted capture (see responseBodyWriter).
+			if w.body != nil {
+				respBody = w.body.String()
+			}
+			if reqBody != "" || respBody != "" {
+				fields["body_ref"] = m.requestBodyStore.Store(method, path, reqBody, respBody, MaxRequestBodySize)
+			}
 		}
 
 		// Add error message field if error occurred
@@ -169,13 +189,6 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			if errorType != "" {
 				fields["error_type"] = errorType
 			}
-		}
-
-		// Add response body for error responses (4xx/5xx); w.body is lazily
-		// allocated and only populated when the status warranted capture.
-		if statusCode >= 400 && w.body != nil && w.body.Len() > 0 {
-			respBytes := w.body.Bytes()
-			fields["response_body"] = string(respBytes)
 		}
 
 		// Append routing metadata when set by AI handlers (absent for non-AI routes)

@@ -29,8 +29,9 @@
 //   - scenario        — agent scenario (e.g. "claude_code", "openai")
 //
 // Non-AI routes (system/management APIs) produce no routing fields.
-// Request bodies are stored only for 4xx/5xx responses to limit memory use;
-// they are referenced by a body_ref ID that can be retrieved via
+// The request and its error-response body are stored only for 4xx/5xx
+// responses to limit memory use; they are kept out of the log entry itself and
+// referenced by a single body_ref ID that can be retrieved via
 // GET /api/v1/log/request/:id.
 //
 // AuthMiddleware (auth.go)

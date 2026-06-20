@@ -46,7 +46,7 @@ func TestGetRequestBody_Success(t *testing.T) {
 	// Store a request body
 	store := memoryLogMW.GetRequestBodyStore()
 	testBody := `{"test": "data", "value": 123}`
-	bodyID := store.Store("POST", "/v1/chat/completions", testBody, 1024)
+	bodyID := store.Store("POST", "/v1/chat/completions", testBody, "", 1024)
 
 	// Create gin context
 	w := httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestGetRequestBody_TruncatedBody(t *testing.T) {
 	// Store a body that will be truncated
 	store := memoryLogMW.GetRequestBodyStore()
 	longBody := string(make([]byte, 2048))                 // 2KB body
-	bodyID := store.Store("POST", "/test", longBody, 1024) // Max 1KB
+	bodyID := store.Store("POST", "/test", longBody, "", 1024) // Max 1KB
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -133,8 +133,8 @@ func TestClearRequestBodies_Success(t *testing.T) {
 
 	// Store some bodies
 	store := memoryLogMW.GetRequestBodyStore()
-	store.Store("POST", "/test1", "body1", 1024)
-	store.Store("POST", "/test2", "body2", 1024)
+	store.Store("POST", "/test1", "body1", "", 1024)
+	store.Store("POST", "/test2", "body2", "", 1024)
 
 	assert.Equal(t, 2, store.Size())
 
@@ -157,9 +157,9 @@ func TestGetRequestBodyStats_Success(t *testing.T) {
 
 	// Store some bodies
 	store := memoryLogMW.GetRequestBodyStore()
-	store.Store("POST", "/test1", "body1", 1024)
-	store.Store("POST", "/test2", "body2", 1024)
-	store.Store("POST", "/test3", "body3", 1024)
+	store.Store("POST", "/test1", "body1", "", 1024)
+	store.Store("POST", "/test2", "body2", "", 1024)
+	store.Store("POST", "/test3", "body3", "", 1024)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

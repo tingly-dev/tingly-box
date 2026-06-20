@@ -38,9 +38,22 @@ export interface SystemLogsResponse {
     logs: SystemLogEntry[];
 }
 
+// RequestBodyPayload is what GET /api/v1/log/request/:id returns: the request
+// body together with the error response it produced, each independently
+// truncated. response_body is only present for error (>=400) responses.
+type RequestBodyPayload = {
+    id: string;
+    method: string;
+    path: string;
+    body: string;
+    truncated: boolean;
+    response_body?: string;
+    response_truncated?: boolean;
+};
+
 interface SystemLogViewerProps {
     getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
-    getRequestBody?: (bodyRef: string) => Promise<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>;
+    getRequestBody?: (bodyRef: string) => Promise<RequestBodyPayload | null>;
 }
 
 type SortField = 'time' | 'level' | 'status' | 'message';
@@ -64,7 +77,7 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
     // Request body dialog state
     const [bodyDialogOpen, setBodyDialogOpen] = useState(false);
     const [selectedBodyRef, setSelectedBodyRef] = useState<string | null>(null);
-    const [requestBody, setRequestBody] = useState<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>(null);
+    const [requestBody, setRequestBody] = useState<RequestBodyPayload | null>(null);
     const [loadingBody, setLoadingBody] = useState(false);
     const [bodyError, setBodyError] = useState<string | null>(null);
 
@@ -518,7 +531,7 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                 <DialogTitle>
                     <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="h6">Request Body</Typography>
+                            <Typography variant="h6">Request &amp; error response</Typography>
                             {requestBody?.truncated && (
                                 <Chip
                                     label="Truncated"
@@ -559,25 +572,64 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                                     </Typography>
                                 </Alert>
                             )}
-                            <TextField
-                                fullWidth
-                                multiline
-                                rows={15}
-                                value={formatRequestBody(requestBody.body)}
-                                InputProps={{
-                                    readOnly: true,
-                                    sx: {
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
-                                    },
-                                }}
-                                sx={{
-                                    '& .MuiInputBase-input': {
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                    },
-                                }}
-                            />
+                            {requestBody.body && (
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Request body</Typography>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        rows={requestBody.response_body ? 10 : 15}
+                                        value={formatRequestBody(requestBody.body)}
+                                        InputProps={{
+                                            readOnly: true,
+                                            sx: {
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                            },
+                                        }}
+                                        sx={{
+                                            '& .MuiInputBase-input': {
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                            },
+                                        }}
+                                    />
+                                </Box>
+                            )}
+                            {requestBody.response_body && (
+                                <Box>
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary">Error response body</Typography>
+                                        {requestBody.response_truncated && (
+                                            <Chip
+                                                label="Truncated"
+                                                size="small"
+                                                color="warning"
+                                                sx={{ fontSize: '0.7rem', height: 20 }}
+                                            />
+                                        )}
+                                    </Stack>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        rows={10}
+                                        value={formatRequestBody(requestBody.response_body)}
+                                        InputProps={{
+                                            readOnly: true,
+                                            sx: {
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                            },
+                                        }}
+                                        sx={{
+                                            '& .MuiInputBase-input': {
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                            },
+                                        }}
+                                    />
+                                </Box>
+                            )}
                         </Stack>
                     )}
                 </DialogContent>

@@ -25,12 +25,15 @@ type LogsResponse struct {
 }
 
 // RequestBodyResponse represents the API response for a stored request body
+// together with the error response it produced.
 type RequestBodyResponse struct {
-	ID        string `json:"id"`
-	Method    string `json:"method"`
-	Path      string `json:"path"`
-	Body      string `json:"body"`
-	Truncated bool   `json:"truncated"`
+	ID                string `json:"id"`
+	Method            string `json:"method"`
+	Path              string `json:"path"`
+	Body              string `json:"body"`
+	Truncated         bool   `json:"truncated"`
+	ResponseBody      string `json:"response_body,omitempty"`
+	ResponseTruncated bool   `json:"response_truncated,omitempty"`
 }
 
 // convertLogrusEntry converts a logrus.Entry to LogEntry for API response
@@ -220,11 +223,13 @@ func (s *Server) GetRequestBody(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, RequestBodyResponse{
-		ID:        entry.ID,
-		Method:    entry.Method,
-		Path:      entry.Path,
-		Body:      entry.Body,
-		Truncated: entry.Truncated,
+		ID:                entry.ID,
+		Method:            entry.Method,
+		Path:              entry.Path,
+		Body:              entry.Body,
+		Truncated:         entry.Truncated,
+		ResponseBody:      entry.ResponseBody,
+		ResponseTruncated: entry.ResponseTruncated,
 	})
 }
 

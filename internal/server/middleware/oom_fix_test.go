@@ -85,12 +85,24 @@ func TestErrorResponseStillCaptured(t *testing.T) {
 	if len(entries) == 0 {
 		t.Fatal("expected a log entry for the error response")
 	}
-	body, _ := entries[len(entries)-1].Data["response_body"].(string)
-	if len(body) == 0 {
+	// The response body is NOT inlined into the log entry; it is kept in the
+	// bounded store and referenced by body_ref.
+	if _, inlined := entries[len(entries)-1].Data["response_body"]; inlined {
+		t.Fatal("response body must not be inlined into the log entry (OOM driver)")
+	}
+	ref, _ := entries[len(entries)-1].Data["body_ref"].(string)
+	if ref == "" {
+		t.Fatal("expected body_ref for the captured error response")
+	}
+	stored := mw.GetRequestBodyStore().Get(ref)
+	if stored == nil {
+		t.Fatal("expected stored error response body")
+	}
+	if len(stored.ResponseBody) == 0 {
 		t.Fatal("error response must be captured for diagnostics")
 	}
-	if len(body) > maxCapturedResponseBytes {
-		t.Fatalf("captured error body %d B exceeds cap %d B", len(body), maxCapturedResponseBytes)
+	if len(stored.ResponseBody) > maxCapturedResponseBytes {
+		t.Fatalf("captured error body %d B exceeds cap %d B", len(stored.ResponseBody), maxCapturedResponseBytes)
 	}
 }
 
