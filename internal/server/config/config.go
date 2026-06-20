@@ -1493,6 +1493,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 
 	base := string(baseScenario)
 
+	// Constrain the name to a URL-friendly alias up front, so the profile is
+	// always addressable as "/tingly/<base>:<name>" — not just by its ID.
+	if err := typ.ValidateProfileName(name); err != nil {
+		return typ.ProfileMeta{}, err
+	}
+
 	if c.Profiles == nil {
 		c.Profiles = make(map[string][]typ.ProfileMeta)
 	}
@@ -1550,6 +1556,12 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 	base := string(baseScenario)
 	if c.Profiles == nil {
 		return fmt.Errorf("no profiles found for scenario '%s'", base)
+	}
+
+	// Same URL-friendly constraint as creation: a rename must not produce a
+	// name that can't be used in a route.
+	if err := typ.ValidateProfileName(name); err != nil {
+		return err
 	}
 
 	profiles := c.Profiles[base]

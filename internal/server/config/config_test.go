@@ -240,9 +240,13 @@ func TestResolveProfileAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateProfile failed: %v", err)
 	}
-	if _, err := cfg.CreateProfile(scenario, "my work profile", true); err != nil {
-		t.Fatalf("CreateProfile failed: %v", err)
-	}
+	// Simulate a legacy profile whose name predates the creation-time
+	// constraint (CreateProfile now rejects names with spaces). The routing
+	// path must still refuse to resolve it by name.
+	cfg.Profiles[string(scenario)] = append(cfg.Profiles[string(scenario)], typ.ProfileMeta{
+		ID:   "p99",
+		Name: "my work profile",
+	})
 
 	// Resolve by canonical ID.
 	if id, ok := cfg.ResolveProfileAlias(scenario, p1.ID); !ok || id != p1.ID {
@@ -267,5 +271,28 @@ func TestResolveProfileAlias(t *testing.T) {
 	// Empty alias.
 	if _, ok := cfg.ResolveProfileAlias(scenario, ""); ok {
 		t.Errorf("ResolveProfileAlias(\"\") = ok, want not ok")
+	}
+}
+
+func TestCreateProfile_RejectsNonURLFriendlyName(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	scenario := typ.RuleScenario("claude_code")
+
+	for _, bad := range []string{"my profile", "a:b", "a/b", "", " mine"} {
+		if _, err := cfg.CreateProfile(scenario, bad, true); err == nil {
+			t.Errorf("CreateProfile(%q) = nil error, want rejection", bad)
+		}
+	}
+
+	// A valid name still works, and a rename to a bad name is rejected.
+	p, err := cfg.CreateProfile(scenario, "mine", true)
+	if err != nil {
+		t.Fatalf("CreateProfile(\"mine\") failed: %v", err)
+	}
+	if err := cfg.UpdateProfile(scenario, p.ID, "not ok", nil); err == nil {
+		t.Errorf("UpdateProfile to \"not ok\" = nil error, want rejection")
 	}
 }

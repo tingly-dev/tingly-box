@@ -260,6 +260,21 @@ func IsSimpleProfileAlias(s string) bool {
 	return s != "" && s == strings.TrimSpace(s) && !strings.ContainsAny(s, ":/ ")
 }
 
+// ValidateProfileName enforces, at profile creation/rename time, that a name is
+// a simple alias usable directly in a route ("/tingly/<base>:<name>"). Pushing
+// the constraint to the write path is the primary defense: every stored
+// profile is then guaranteed routable by name, and IsSimpleProfileAlias on the
+// routing path only has to guard legacy data created before this check.
+func ValidateProfileName(name string) error {
+	if name == "" {
+		return fmt.Errorf("profile name must not be empty")
+	}
+	if !IsSimpleProfileAlias(name) {
+		return fmt.Errorf("profile name %q must be a single URL-friendly token (no spaces, '%s' or '/') so it can be used directly in a route like '/tingly/<scenario>:%s'", name, ProfileSeparator, name)
+	}
+	return nil
+}
+
 // getBaseScenarioDescriptor resolves the descriptor for a plain (non-profiled) scenario.
 func getBaseScenarioDescriptor(base RuleScenario) (ScenarioDescriptor, bool) {
 	scenarioRegistryMu.RLock()
