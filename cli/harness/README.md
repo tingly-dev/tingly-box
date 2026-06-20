@@ -343,7 +343,7 @@ program:
 ```
 
 The shapes map to the **"Rule config shapes" taxonomy** in
-`.design/priority-routing.md` (Single / Flat / Cascade / Grid). The
+`.design/tier-routing.md` (Single / Flat / Cascade / Grid). The
 **G1 horizontal-tactic breaker-blind gap** documented there is *not* yet modeled
 here (random/token tactics ignore the breaker at selection).
 
@@ -374,7 +374,7 @@ cli/harness/
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
   lb.go              Tier LB command — load-balancing scenario simulator
                      (engine: internal/server.LBSimulator; shapes per
-                     .design/priority-routing.md)
+                     .design/tier-routing.md)
   testdata/lb/       sample LB scenario YAML files
   config.go          init-config: generates providers.yaml from provider templates
   provider.go        Tier D placeholder (live provider API tests — not impl.)

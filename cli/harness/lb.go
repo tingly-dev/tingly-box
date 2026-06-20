@@ -37,7 +37,7 @@ var lbExampleNames = []string{
 // failover dispatch) against programmable fake upstreams over a request
 // sequence, with a deterministic breaker clock, and prints the routing trace.
 // It reuses the same simulation engine as the Go scenario tests
-// (internal/server.LBSimulator). See .design/priority-routing.md
+// (internal/server.LBSimulator). See .design/tier-routing.md
 // "Rule config shapes (taxonomy)".
 type LbCmd struct {
 	File    string `kong:"name='file',short='f',help='Scenario YAML file (see --example for the schema)'"`
@@ -526,7 +526,7 @@ func (o lbRunOutput) renderTable(w *os.File) {
 
 // renderGraph prints a pencil-graph view: per request a hop line (failover path
 // annotated with ✓/✗ + status) and a state line (each svc's breaker/health +
-// the affinity pin) — mirroring .design/priority-routing.pencil.md.
+// the affinity pin) — mirroring .design/tier-routing.pencil.md.
 func (o lbRunOutput) renderGraph(w *os.File, orderedIDs []string) {
 	tactic := o.Tactic
 	if tactic == "" {

@@ -1,6 +1,6 @@
 # Tier Routing — Pencil Graph
 
-Visual companion to `priority-routing.md`. Shows the runtime flow of tier-based service routing and its two complementary failover levels: **cross-request** (tier tactic + circuit breaker) and **in-request** (the passive `firstChunkGate` + stream priming). The in-request path is a **layered hand-off**: the producer emits chunks normally, a passive gate buffers them, and the orchestrator owns the retry decision.
+Visual companion to `tier-routing.md`. Shows the runtime flow of tier-based service routing and its two complementary failover levels: **cross-request** (tier tactic + circuit breaker) and **in-request** (the passive `firstChunkGate` + stream priming). The in-request path is a **layered hand-off**: the producer emits chunks normally, a passive gate buffers them, and the orchestrator owns the retry decision.
 
 Contents:
 

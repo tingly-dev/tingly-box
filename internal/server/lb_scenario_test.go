@@ -16,7 +16,7 @@ import (
 // programmable fake upstreams over a request sequence, with a deterministic
 // breaker clock. The simulation engine is shared with the `harness lb` CLI tier
 // (see lbsim.go). The shapes exercised here map to the "Rule config shapes"
-// taxonomy in .design/priority-routing.md.
+// taxonomy in .design/tier-routing.md.
 
 // ---- rule builders ----
 
@@ -254,7 +254,7 @@ func TestLBScenario_B_Flat_DeadPeerSelection_KnownGap(t *testing.T) {
 	t.Skip("G1: horizontal tactics are breaker-blind — LoadBalancer.SelectService " +
 		"does not exclude a breaker-open service for random/token/latency/… tactics, " +
 		"so a flat-shape dead peer can still be re-selected at the selection layer " +
-		"(per-request failover still masks it). Documented in .design/priority-routing.md; " +
+		"(per-request failover still masks it). Documented in .design/tier-routing.md; " +
 		"deferred. Affinity already drops the pin to a dead peer (see stage_affinity_test.go).")
 }
 

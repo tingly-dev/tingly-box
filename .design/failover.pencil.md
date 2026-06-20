@@ -99,4 +99,4 @@ own provider → fallback spans any style.
 | Cross-style candidate pool | `selectFallbackService(rule, tried, "")` in `failover_dispatch.go` |
 | Pristine per-attempt clone | `internal/server/request_clone.go` |
 
-See also `priority-routing.pencil.md` for tier/breaker selection that feeds this.
+See also `tier-routing.pencil.md` for tier/breaker selection that feeds this.
