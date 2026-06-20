@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -215,6 +216,16 @@ func (s *Server) profileAliasMiddleware(c *gin.Context) {
 			c.Request.URL.RawPath = newSeg + rest
 		}
 	}
+
+	// Record the mapping. After this point the original alias is gone from the
+	// path, usage records, and access logs — all of which now show the
+	// canonical ID. Logging the before→after here keeps SRE able to correlate a
+	// client that called "claude_code:mine" with records tagged
+	// "claude_code:p1".
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"profile_alias": rawScenario,
+		"scenario":      rewritten,
+	}).Infof("[profile-alias] resolved %q -> %q", rawScenario, rewritten)
 
 	c.Next()
 }
