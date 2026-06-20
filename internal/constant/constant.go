@@ -22,9 +22,6 @@ const (
 
 	LogDirName = "log"
 
-	// DebugLogFileName is the name of the debug log file
-	DebugLogFileName = "bad_requests.log"
-
 	// DefaultRequestTimeout is the default timeout for HTTP requests in seconds
 	DefaultRequestTimeout = 1800
 	// DefaultMaxTimeout in seconds

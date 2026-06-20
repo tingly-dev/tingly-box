@@ -9,7 +9,6 @@
 //	  │
 //	  ├─ gin.Recovery          — panic → 500, prevents process crash
 //	  ├─ MultiModeMemoryLog    — structured HTTP log + in-memory ring buffer
-//	  ├─ ErrorLog              — debug/error log with expr-based path filter
 //	  ├─ CORS                  — Access-Control-* headers
 //	  └─ Auth (per-route)      — UserAuth or ModelAuth, applied at route level
 //
@@ -33,14 +32,6 @@
 // Request bodies are stored only for 4xx/5xx responses to limit memory use;
 // they are referenced by a body_ref ID that can be retrieved via
 // GET /api/v1/log/request/:id.
-//
-// ErrorLogMiddleware (error_log.go)
-//
-// Writes filtered request/response detail to a rotating debug log file
-// (default: <configDir>/logs/debug.log, 10 MB / 5 files).  An Expr expression
-// controls which requests are recorded; the default captures anything under
-// /api/ or /tbe/ with a 4xx/5xx status.  The filter can be reloaded at
-// runtime without restarting the server.
 //
 // AuthMiddleware (auth.go)
 //

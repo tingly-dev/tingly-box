@@ -267,11 +267,6 @@ func (s *Server) Stop(ctx context.Context) error {
 		logrus.WithError(err).Warn("Failed to auto-undo Codex import on stop")
 	}
 
-	// Stop debug middleware
-	if s.errorMW != nil {
-		s.errorMW.Stop()
-	}
-
 	// Stop configuration watcher
 	if s.watcher != nil {
 		s.watcher.Stop()

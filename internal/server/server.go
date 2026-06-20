@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
@@ -58,8 +56,7 @@ type Server struct {
 	multiLogger *pkgobs.MultiLogger
 
 	// middleware
-	errorMW         *middleware.ErrorLogMiddleware
-	authMW          *middleware.AuthMiddleware
+	authMW *middleware.AuthMiddleware
 	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
@@ -258,27 +255,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
-	var errorMW *middleware.ErrorLogMiddleware
-	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
-	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
-
-	// Set filter expression from config
-	filterExpr := cfg.GetErrorLogFilterExpression()
-	if filterExpr != "" {
-		if err := errorMW.SetFilterExpression(filterExpr); err != nil {
-			logrus.Debugf("Warning: Failed to set error log filter expression '%s': %v, using default", filterExpr, err)
-		} else {
-			logrus.Debugf("ErrorLog middleware initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
-		}
-	} else {
-		logrus.Debugf("ErrorLog middleware initialized with default filter, logging to: %s", errorLogPath)
-	}
-
-	// Create server struct first with applied options
-	server.jwtManager = jwtManager
 	server.engine = gin.New()
-	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
-	server.errorMW = errorMW
+	server.clientPool = client.NewClientPool()
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()
@@ -583,18 +561,6 @@ func (s *Server) setupConfigWatcher() {
 		// Update JWT manager with new secret if changed
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
-
-		// Update error log filter expression if changed
-		if s.errorMW != nil {
-			newFilterExpr := newConfig.GetErrorLogFilterExpression()
-			if newFilterExpr != "" {
-				if err := s.errorMW.SetFilterExpression(newFilterExpr); err != nil {
-					logrus.Errorf("Failed to update error log filter expression: %v", err)
-				} else {
-					logrus.Debugf("Error log filter expression updated: %s", newFilterExpr)
-				}
-			}
-		}
 
 		// Re-sync guardrails based on updated config flags.
 		s.syncGuardrailsFromConfig()
