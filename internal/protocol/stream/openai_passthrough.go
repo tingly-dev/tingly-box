@@ -26,7 +26,14 @@ import (
 
 // HandleOpenAIChatStream handles OpenAI chat streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (*protocol.TokenUsage, error) {
+//
+// estimatedInputTokens is a pre-computed input-token estimate supplied by the
+// caller (see token.EstimateInputTokensApprox). It is consulted only as a
+// fallback when the upstream stream reports no usage. Passing it in up front lets
+// the caller release the (potentially very large) request before this handler
+// runs, instead of pinning the request body for the whole stream just to feed
+// this fallback.
+func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream.Stream[openai.ChatCompletionChunk], estimatedInputTokens int) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	// Set SSE headers (mimicking OpenAI response headers)
@@ -254,7 +261,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 
 	if err != nil && !errors.Is(err, context.Canceled) {
 		if !hasUsage {
-			inputTokens, _ = token.EstimateInputTokens(req)
+			inputTokens = estimatedInputTokens
 			outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 		}
 
@@ -281,7 +288,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	}
 
 	if !hasUsage {
-		inputTokens, _ = token.EstimateInputTokens(req)
+		inputTokens = estimatedInputTokens
 		outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 
 		// Use the first chunk ID, or generate one if not available

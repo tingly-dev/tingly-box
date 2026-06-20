@@ -314,6 +314,13 @@ func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, ori
 func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := originalReq
 
+	// Pre-compute the cheap input-token estimate up front so the stream handler
+	// no longer needs req: combined with the commit-time reqCtx release, this lets
+	// the (possibly very large) request body be GC'd for the rest of the stream
+	// instead of being pinned just to feed an end-of-stream fallback that only
+	// runs when the upstream omits usage. len/4 approximation is acceptable there.
+	estimatedInputTokens := token.EstimateInputTokensApprox(req)
+
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
@@ -337,7 +344,7 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 	hc := protocol.NewHandleContext(c, responseModel)
 	hc.DisableStreamUsage = disableStreamUsage
 
-	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
+	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, estimatedInputTokens)
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)

@@ -2,9 +2,11 @@ package token
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,4 +68,38 @@ func TestCountTokensWithTiktoken(t *testing.T) {
 			assert.Less(t, count, 10000, "token count seems unreasonably high")
 		})
 	}
+}
+
+// TestEstimateInputTokensApprox verifies the cheap len/4 approximation counts
+// the request's billable text without tiktoken, stays in the same ballpark as
+// the exact estimator, and scales with content size. It backs the streaming
+// passthrough fast path that releases the request instead of pinning it just to
+// feed an end-of-stream fallback.
+func TestEstimateInputTokensApprox(t *testing.T) {
+	small := &openai.ChatCompletionNewParams{
+		Model: "gpt-4o",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Hello, world!"),
+		},
+	}
+	big := &openai.ChatCompletionNewParams{
+		Model: "gpt-4o",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage(strings.Repeat("lorem ipsum dolor ", 5000)),
+		},
+	}
+
+	approxSmall := EstimateInputTokensApprox(small)
+	approxBig := EstimateInputTokensApprox(big)
+
+	assert.Greater(t, approxSmall, 0, "approx must count some tokens")
+	assert.Greater(t, approxBig, approxSmall*10, "approx must scale with content size")
+
+	// Same ballpark as the exact tiktoken estimator (within ~3x either way).
+	exactBig, err := EstimateInputTokens(big)
+	require.NoError(t, err)
+	require.Greater(t, exactBig, 0)
+	ratio := float64(approxBig) / float64(exactBig)
+	assert.Greater(t, ratio, 0.33, "approx should not be wildly below exact")
+	assert.Less(t, ratio, 3.0, "approx should not be wildly above exact")
 }

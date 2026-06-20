@@ -25,6 +25,23 @@ func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 		return c
 	}
 
+	return estimateInputTokensWith(req, countOrEstimate), nil
+}
+
+// EstimateInputTokensApprox is a cheap, allocation-light approximation of
+// EstimateInputTokens that uses the len/4 heuristic instead of running tiktoken
+// BPE over the whole request. It is used on the streaming passthrough hot path so
+// the (potentially very large) request can be released as soon as forwarding is
+// done, instead of being retained for the whole stream just to feed an
+// end-of-stream token estimate that is only consulted when the upstream omits
+// usage. Accuracy is intentionally traded for not pinning the request body.
+func EstimateInputTokensApprox(req *openai.ChatCompletionNewParams) int {
+	return estimateInputTokensWith(req, func(text string) int { return len(text) / 4 })
+}
+
+// estimateInputTokensWith walks the request's billable text once, counting each
+// piece with the supplied strategy. Shared by the exact and approximate variants.
+func estimateInputTokensWith(req *openai.ChatCompletionNewParams, countOrEstimate func(string) int) int {
 	totalTokens := 0
 
 	// Count tokens in messages
@@ -81,7 +98,7 @@ func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 	// Add some overhead for the request format
 	totalTokens += 3
 
-	return totalTokens, nil
+	return totalTokens
 }
 
 func EstimateMessagesTokens(messages []openai.ChatCompletionMessageParamUnion) int64 {
