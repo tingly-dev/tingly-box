@@ -185,11 +185,9 @@ func (g *firstChunkGate) Committed() bool {
 	return g.committed
 }
 
-// SetOnCommit registers a callback fired exactly once, the moment the gate
-// commits (first real chunk reaches the wire). Because commit is the point past
-// which failover can no longer retry, this is the earliest safe moment to drop
-// any per-request state the retry path depends on — e.g. the parsed request held
-// by the transform context. Runs synchronously on the producing goroutine.
+// SetOnCommit registers a callback fired once when the gate commits — the point
+// past which failover can no longer retry, so the earliest safe moment to drop
+// per-request state the retry path depends on. Runs on the producing goroutine.
 func (g *firstChunkGate) SetOnCommit(fn func()) {
 	g.onCommit = fn
 }

@@ -10,17 +10,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
-// These tests verify the fix for the gjson request-body retention surfaced by
-// pprof: after the transform chain finishes, releaseOriginalRequest drops the
-// pre-transform request so the gjson-pinned body can be GC'd for the whole
-// streaming lifetime. See internal/protocol/gjson_retention_test.go for the
-// reproduction of the retention itself.
-
-// TestReleaseOriginalRequest_ConversionPathFreesOriginal covers protocol
-// conversion (e.g. Anthropic client -> OpenAI/Gemini backend): the outbound
-// Request is a freshly built struct while OriginalRequest still points at the
-// gjson-backed source. releaseOriginalRequest must drop OriginalRequest and
-// keep Request intact.
+// Conversion path: outbound Request is a fresh struct, OriginalRequest is the
+// gjson-backed source — releaseOriginalRequest drops OriginalRequest, keeps Request.
 func TestReleaseOriginalRequest_ConversionPathFreesOriginal(t *testing.T) {
 	original := &anthropic.BetaMessageNewParams{}
 	outbound := &responses.ResponseNewParams{} // distinct, freshly built outbound request
@@ -40,10 +31,8 @@ func TestReleaseOriginalRequest_ConversionPathFreesOriginal(t *testing.T) {
 	}
 }
 
-// TestReleaseOriginalRequest_PassthroughIsNoop covers Anthropic->Anthropic
-// passthrough: the chain mutates in place so Request == OriginalRequest.
-// Releasing here would null out the live outbound request, so it must be a
-// no-op and the invariant Request == OriginalRequest must hold.
+// Passthrough: Request == OriginalRequest, so releaseOriginalRequest must be a
+// no-op (it would otherwise null the live outbound request).
 func TestReleaseOriginalRequest_PassthroughIsNoop(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{}
 	ctx := &transform.TransformContext{Request: req, OriginalRequest: req}
@@ -63,13 +52,8 @@ func TestReleaseOriginalRequest_NilSafe(t *testing.T) {
 	releaseOriginalRequest(nil) // must not panic
 }
 
-// TestPassthroughRelease_FreesRequestAfterForward locks in the dispatch-level
-// release used by the Anthropic beta streaming passthrough. In passthrough
-// Request == OriginalRequest (both the gjson-backed struct that pins the raw
-// request body), so releaseOriginalRequest alone is a no-op — Request still
-// holds it. After the request has been forwarded the stream loop no longer needs
-// it, so the dispatch drops BOTH references, which is what actually lets the body
-// be GC'd for the whole stream.
+// On passthrough, releaseOriginalRequest alone is a no-op (Request still holds the
+// struct); dropping BOTH refs (what the dispatch does) is what frees it.
 func TestPassthroughRelease_FreesRequestAfterForward(t *testing.T) {
 	ctx := &transform.TransformContext{}
 	collected := make(chan struct{})
@@ -101,9 +85,7 @@ func TestPassthroughRelease_FreesRequestAfterForward(t *testing.T) {
 	runtime.KeepAlive(ctx)
 }
 
-// TestReleaseOriginalRequest_AllowsGC deterministically proves the released
-// original becomes collectable: while reachable via ctx.OriginalRequest it is
-// not finalized; after releaseOriginalRequest it is.
+// Finalizer proof: the original is collectable only after releaseOriginalRequest.
 func TestReleaseOriginalRequest_AllowsGC(t *testing.T) {
 	outbound := &responses.ResponseNewParams{}
 	ctx := &transform.TransformContext{Request: outbound}

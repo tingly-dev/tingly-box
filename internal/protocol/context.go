@@ -31,6 +31,11 @@ type HandleContext struct {
 
 	// Stream configuration flags
 	DisableStreamUsage bool // Don't include usage in streaming chunks
+
+	// EstimatedInputTokens is a pre-computed input-token estimate used only as a
+	// fallback when the upstream stream reports no usage. Set by the caller so the
+	// stream handler need not retain the request to compute it.
+	EstimatedInputTokens int
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.

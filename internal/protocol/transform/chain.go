@@ -184,18 +184,10 @@ func SetRequest[T RequestUnionConstraint](ctx *TransformContext, req T) {
 	ctx.Request = req
 }
 
-// ReleaseRequest drops every reference the context holds to the parsed request
-// (both Request and OriginalRequest). Both the Anthropic and OpenAI SDK decoders
-// pin the entire raw request JSON onto the parsed struct (its unexported `raw` /
-// `JSON` gjson-metadata fields), so as long as the context references that struct
-// the whole request body stays live. On same-protocol passthrough Request ==
-// OriginalRequest, so releasing OriginalRequest alone (see releaseOriginalRequest
-// in the server package) frees nothing — both must be dropped.
-//
-// Call this only once the outbound request has been forwarded and nothing
-// downstream (e.g. response guardrails needing System/Messages) still needs it.
-// After this returns the body becomes collectable for the whole streaming
-// lifetime. Safe to call on a nil context.
+// ReleaseRequest drops both Request and OriginalRequest so the gjson-pinned
+// request body becomes collectable. On passthrough Request == OriginalRequest, so
+// both must go. Call only after the request has been forwarded and nothing
+// downstream still needs it. Nil-safe.
 func (ctx *TransformContext) ReleaseRequest() {
 	if ctx == nil {
 		return

@@ -17,47 +17,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// TestPassthroughStream_FreesBodyWhileStreamingE2E is the end-to-end proof that
-// the parsed request is GC'd *partway through an open stream* on the real
-// Anthropic-beta passthrough path — specifically, the moment the failover gate
-// commits its first chunk (releaseReqCtxAfterStreamCommit, wired in
-// dispatchChainResult), which is the earliest point retry can no longer happen.
+// TestPassthroughStream_FreesBodyWhileStreamingE2E proves the parsed request is
+// GC'd mid-stream on the real Anthropic-beta passthrough, at the failover gate's
+// first-chunk commit (releaseReqCtxAfterStreamCommit).
 //
-// WHY THE FAILOVER PATH MATTERS (and is what we test): the parsed request reaches
-// the stream loop via reqCtx, captured by the failover attempt closure passed to
-// dispatchWithPriorityFailover. With a *single* active service that branch calls
-// attempt() once and returns, so the closure (and reqCtx) is dead while the
-// stream runs and Go's GC drops the parsed request on its own — the release is
-// redundant there. With *two or more* active services the failover loop keeps the
-// attempt closure live across iterations, so reqCtx stays reachable for the whole
-// stream; without the commit-time release the parsed request (and the body the
-// SDK gjson decoder pins onto it) is retained until the stream ends. This test
-// uses two services so it exercises exactly that case.
+// Two services are required: only then does the failover closure keep reqCtx
+// reachable for the whole stream, so the release actually matters (single-service
+// lets GC drop it on its own). The upstream delivers opening chunks to commit the
+// gate, then parks the stream so we measure after the release has fired.
 //
-// WHY AT COMMIT, NOT BEFORE: a pre-first-chunk stream failure is retryable, and
-// the retry re-reads reqCtx.Request — so releasing earlier would break failover
-// (and could nil-panic). The gate commit is the boundary past which retry is
-// impossible, so the test lets the upstream deliver opening chunks (committing
-// the gate) and only THEN parks the stream and measures.
-//
-// Measured contrast (64 MB body, this test):
-//   - without the commit-time release: ~0 MB reclaimed mid-stream (parsed
-//     request, ~128 MB after gjson amplification, stays live until stream end)
-//   - with it: ~128 MB reclaimed mid-stream
-//
-// One body's worth (~64 MB) always remains live during the stream regardless:
-// that is the SDK's own marshaled copy, captured by http.Request.GetBody for the
-// connection lifetime (see requestconfig.Execute) — a separate retention that no
-// reference drop on our side can reach.
-//
-// Mechanism:
-//  1. Build a large request, parse it through the SDK (gjson pins the body).
-//  2. Drive the real AnthropicMessagesV1Beta in a goroutine with a 2-service rule.
-//  3. The fake upstream delivers the opening SSE events (so the proxy writes its
-//     first client chunk and the failover gate commits, firing the release), then
-//     BLOCKS before sending the rest — parking the stream handler mid-flight.
-//  4. While the stream is parked open, force GC and confirm the parsed request
-//     has been reclaimed from the live heap.
+// Measured (64 MB body): ~128 MB reclaimed mid-stream with the release, ~0 without.
+// One body (~64 MB) always remains — the SDK's marshaled copy held by
+// http.Request.GetBody for the connection lifetime, which no reference drop reaches.
 func TestPassthroughStream_FreesBodyWhileStreamingE2E(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -127,12 +98,8 @@ func TestPassthroughStream_FreesBodyWhileStreamingE2E(t *testing.T) {
 	runtime.ReadMemStats(&m0)
 	t.Logf("baseline (parsed body held) = %.1f MB", float64(m0.HeapAlloc)/(1024*1024))
 
-	// Two active services so dispatchWithPriorityFailover takes its failover
-	// branch, which keeps the attempt closure (capturing reqCtx) live across the
-	// whole loop — and thus reqCtx reachable for the entire stream. This is the
-	// case where reqCtx pins the parsed request during streaming, so it is the
-	// case the ReleaseRequest fix is meant to address. (With a single service the
-	// closure dies immediately and Go's GC drops reqCtx on its own.)
+	// Two services force the failover branch, which keeps reqCtx reachable for the
+	// whole stream — the case the release targets (single-service GC's it anyway).
 	rule := &typ.Rule{
 		Scenario: typ.ScenarioOpenAI,
 		Services: []*loadbalance.Service{

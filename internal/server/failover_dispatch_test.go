@@ -43,10 +43,8 @@ func TestFirstChunkGate_BufferCaptureBeforeCommit(t *testing.T) {
 	}
 }
 
-// TestReleaseReqCtxAfterStreamCommit_ReleasesOnlyOnCommit locks in the
-// retry-safety property: the parsed request must NOT be released before the gate
-// commits (a pre-first-chunk failure is retryable and re-reads reqCtx.Request),
-// and must be released exactly at commit (past which retry is impossible).
+// Retry-safety: the request must be released only at commit, never before (a
+// pre-first-chunk failure is retryable and re-reads reqCtx.Request).
 func TestReleaseReqCtxAfterStreamCommit_ReleasesOnlyOnCommit(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

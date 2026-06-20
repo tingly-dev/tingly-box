@@ -96,10 +96,6 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
 
-	// reqCtx is held through the (possibly long-lived) streaming dispatch below.
-	// transformAnthropicBeta releases ctx.OriginalRequest once the chain is built,
-	// so on protocol-conversion paths the gjson-pinned source body is not retained
-	// for the whole stream. See releaseOriginalRequest in protocol_transform.go.
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -117,14 +113,9 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		})
 }
 
-// handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client.
-//
-// req may be nil: once the outbound request has been forwarded it pins the entire
-// raw request body (via the SDK decoder's gjson metadata) but is no longer needed
-// for the stream itself — only actualModel is. Callers release it before the
-// (potentially long-lived) stream loop when response guardrails are not enabled,
-// so the body can be GC'd while streaming. When guardrails are enabled the caller
-// keeps req so System/Messages remain available here.
+// handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming
+// response. It needs only actualModel; req is used solely for response guardrails
+// (when enabled), so it is otherwise dead and the body can be GC'd mid-stream.
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, actualModel string, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
 

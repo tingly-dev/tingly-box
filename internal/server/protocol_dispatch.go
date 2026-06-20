@@ -91,14 +91,8 @@ func (s *Server) dispatchChainResult(
 		setProbeUpstreamHeaders(c, reqCtx, rule, provider)
 	}
 
-	// For streaming, drop the parsed request the moment the failover gate commits
-	// its first chunk. Until commit, failover may retry and re-read reqCtx.Request,
-	// so we must keep it; after commit no retry is possible, so releasing it here
-	// frees the gjson-pinned request body for the (potentially long) remainder of
-	// the stream. Protocol-agnostic: every passthrough/conversion stream handler
-	// below commits via RunLoop on its first chunk. No-op without a gate
-	// (single-service requests), where GC reclaims reqCtx once the attempt
-	// closure that captured it goes dead.
+	// Free the gjson-pinned request body once streaming commits its first chunk
+	// (retry-safe; covers every protocol since handlers commit via RunLoop).
 	if isStreaming {
 		releaseReqCtxAfterStreamCommit(c, reqCtx)
 	}
@@ -448,14 +442,9 @@ func (s *Server) passthroughAnthropicBeta(
 				return
 			}
 
-			// The gjson-pinned request body is released when the failover gate
-			// commits its first chunk (see releaseReqCtxAfterStreamCommit, wired in
-			// dispatchChainResult): reqCtx.Request is dropped then — past the point
-			// where failover could retry and re-read it. Because this stream loop
-			// needs only actualModel (not req) once response guardrails are off,
-			// Go's liveness then lets the body be GC'd for the rest of the stream.
-			// req is still passed so guardrails (when enabled) can read
-			// System/Messages.
+			// Stream loop needs only actualModel; req is passed for guardrails
+			// (when enabled) but is otherwise dead, so the commit-time reqCtx
+			// release lets the body be GC'd for the rest of the stream.
 			s.handleAnthropicStreamResponseV1Beta(c, actualModel, req, streamResp, responseModel, provider, recorder)
 			return
 		}

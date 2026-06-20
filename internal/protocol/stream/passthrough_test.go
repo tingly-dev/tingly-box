@@ -237,10 +237,9 @@ func TestHandleOpenAIChatStream_UsageTokens(t *testing.T) {
 	hc := newTestHandleContext(c)
 	hc.DisableStreamUsage = true
 
-	// The SDK's custom apijson unmarshaller does not populate usage from raw JSON in
-	// unit tests, so hasUsage stays false and the estimation fallback runs. We pass
-	// a pre-computed estimate (0 here) and verify the fallback path returns non-nil.
-	usage, err := HandleOpenAIChatStream(hc, stream, 0)
+	// Usage isn't populated from raw JSON here, so the estimate fallback runs
+	// (hc.EstimatedInputTokens defaults to 0); just verify it returns non-nil.
+	usage, err := HandleOpenAIChatStream(hc, stream)
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 }
@@ -259,7 +258,7 @@ func TestHandleOpenAIChatStream_ZeroReasoningTokens(t *testing.T) {
 	hc := newTestHandleContext(c)
 	hc.DisableStreamUsage = true
 
-	usage, err := HandleOpenAIChatStream(hc, stream, 0)
+	usage, err := HandleOpenAIChatStream(hc, stream)
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	// ReasoningTokens must be zero when SDK doesn't surface it
@@ -548,7 +547,7 @@ func TestHandleOpenAIChatStream_Passthrough_MarksTTFT(t *testing.T) {
 
 	hc := newTestHandleContext(c)
 	hc.DisableStreamUsage = true
-	_, err := HandleOpenAIChatStream(hc, stream, 0)
+	_, err := HandleOpenAIChatStream(hc, stream)
 	require.NoError(t, err)
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
@@ -570,7 +569,7 @@ func TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly(t *testing.T) {
 
 	hc := newTestHandleContext(c)
 	hc.DisableStreamUsage = true
-	_, err := HandleOpenAIChatStream(hc, stream, 0)
+	_, err := HandleOpenAIChatStream(hc, stream)
 	require.NoError(t, err)
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)

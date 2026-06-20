@@ -8,46 +8,23 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// releaseOriginalRequest drops the pre-transform request once the chain has
-// finished. All readers of ctx.OriginalRequest (the StagePre recorder and the
-// Codex/Responses vendor ops) run *inside* chain.Execute, so after Execute
-// returns nothing reads it again.
-//
-// On protocol-conversion paths (e.g. Anthropic client -> OpenAI/Gemini backend,
-// or OpenAI client -> Anthropic backend) the outbound ctx.Request is a freshly
-// built struct, while OriginalRequest still points at the gjson-backed source
-// request. Both the Anthropic and OpenAI SDK decoders pin the raw request JSON
-// onto that parsed struct (its unexported `raw` / `JSON` metadata fields), so
-// keeping OriginalRequest alive holds the entire request body in memory for the
-// whole streaming lifetime. Dropping it here lets that be GC'd as soon as the
-// chain completes.
-//
-// On same-protocol passthrough (e.g. Anthropic->Anthropic) Request ==
-// OriginalRequest (the chain mutates in place), so this is intentionally a
-// no-op there.
-//
-// Applies to every source builder: transformAnthropicBeta / transformAnthropicV1
-// / transformOpenAIChat / transformOpenAIResponses.
+// releaseOriginalRequest drops the pre-transform request once the chain is done.
+// On conversion paths the outbound Request is a fresh struct while OriginalRequest
+// still pins the gjson-backed source body; dropping it lets that be GC'd. On
+// same-protocol passthrough Request == OriginalRequest, so this is a no-op. Safe
+// because all OriginalRequest readers run inside chain.Execute.
 func releaseOriginalRequest(ctx *transform.TransformContext) {
 	if ctx != nil && ctx.Request != ctx.OriginalRequest {
 		ctx.OriginalRequest = nil
 	}
 }
 
-// releaseReqCtxAfterStreamCommit arranges for the transform context's parsed
-// request (Request + OriginalRequest) to be released once the failover gate
-// wrapping c.Writer commits its first chunk.
-//
-// Why at commit and not before the stream: on the failover path reqCtx is
-// captured by the attempt closure and stays reachable for the whole stream, so
-// without this the gjson-pinned request body is retained until the stream ends.
-// But releasing it *before* the stream is unsafe — a pre-first-chunk failure is
-// retryable, and the retry re-reads reqCtx.Request. The gate's commit is exactly
-// the boundary past which retry is impossible, so it is the earliest safe point
-// to drop the request while still freeing the body for the bulk of a long stream.
-//
-// No-op when c.Writer is not a failover gate (single-service requests bypass the
-// gate); there the attempt closure dies immediately and GC reclaims reqCtx.
+// releaseReqCtxAfterStreamCommit releases reqCtx's parsed request once the
+// failover gate commits its first chunk — the earliest point retry can no longer
+// re-read it. On the failover path reqCtx is held by the attempt closure for the
+// whole stream, so this is what frees the gjson-pinned body; releasing before the
+// stream would break a retryable pre-first-chunk failure. No-op without a gate
+// (single-service), where GC reclaims reqCtx on its own.
 func releaseReqCtxAfterStreamCommit(c *gin.Context, reqCtx *transform.TransformContext) {
 	if reqCtx == nil {
 		return

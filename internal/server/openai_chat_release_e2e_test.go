@@ -18,22 +18,11 @@ import (
 )
 
 // TestOpenAIChatPassthroughStream_FreesBodyMidStreamE2E is the OpenAI-chat
-// counterpart of TestPassthroughStream_FreesBodyWhileStreamingE2E. It proves the
-// extra change for this path actually works end-to-end: HandleOpenAIChatStream no
-// longer takes the request (it receives a pre-computed input-token estimate from
-// EstimateInputTokensApprox instead), so once forwarding is done nothing holds
-// the parsed request. Combined with the commit-time reqCtx release, the parsed
-// request body is reclaimed mid-stream.
-//
-// Without the estimate-up-front change, streamOpenAIChat would keep req alive for
-// the whole stream just to feed the end-of-stream token-estimate fallback, and
-// the body would stay pinned even though reqCtx was released at commit.
-//
-// As with the beta test, two services force the failover branch (so reqCtx stays
-// reachable via the live attempt closure), and the upstream delivers opening
-// chunks to commit the gate before parking the stream so we measure post-commit.
-// One body's worth (~64 MB) still remains: the SDK's marshaled copy held by
-// http.Request.GetBody for the connection lifetime.
+// counterpart of the beta test. It proves the OpenAI-specific change works:
+// HandleOpenAIChatStream takes a pre-computed estimate instead of the request, so
+// (with the commit-time reqCtx release) the body is reclaimed mid-stream. Without
+// it, streamOpenAIChat would keep req for the end-of-stream estimate fallback.
+// Two services force the failover branch; measured ~64 MB reclaimed mid-stream.
 func TestOpenAIChatPassthroughStream_FreesBodyMidStreamE2E(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
