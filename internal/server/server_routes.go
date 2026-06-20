@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/client"
@@ -190,11 +191,31 @@ func (s *Server) profileAliasMiddleware(c *gin.Context) {
 	}
 
 	rewritten := string(typ.ProfiledScenarioName(base, id))
+
+	// Rewrite the routed path param — covers every handler and the
+	// contextMiddleware that derives the request-context scenario from c.Param.
 	for i := range c.Params {
 		if c.Params[i].Key == "scenario" {
 			c.Params[i].Value = rewritten
 		}
 	}
+
+	// Also rewrite the URL path so consumers that re-derive the scenario from
+	// the raw path agree on the canonical form. The usage tracker
+	// (extractScenarioFromPath) is the one that matters: without this, requests
+	// via the alias would be recorded under "claude_code:mine" instead of
+	// "claude_code:p1", splitting analytics across the alias and the ID.
+	oldSeg := "/tingly/" + rawScenario
+	newSeg := "/tingly/" + rewritten
+	if rest, found := strings.CutPrefix(c.Request.URL.Path, oldSeg); found {
+		c.Request.URL.Path = newSeg + rest
+	}
+	if c.Request.URL.RawPath != "" {
+		if rest, found := strings.CutPrefix(c.Request.URL.RawPath, oldSeg); found {
+			c.Request.URL.RawPath = newSeg + rest
+		}
+	}
+
 	c.Next()
 }
 
