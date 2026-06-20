@@ -228,3 +228,101 @@ func TestSetServerHost_EmptyStringReturnsLocalhost(t *testing.T) {
 		t.Errorf("expected empty string to return 'localhost', got %q", host)
 	}
 }
+
+func TestResolveProfileAlias(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	scenario := typ.RuleScenario("claude_code")
+
+	p1, err := cfg.CreateProfile(scenario, "mine", true)
+	if err != nil {
+		t.Fatalf("CreateProfile failed: %v", err)
+	}
+	// Simulate a legacy profile whose name predates the creation-time
+	// constraint (CreateProfile now rejects names with spaces). The routing
+	// path must still refuse to resolve it by name.
+	cfg.Profiles[string(scenario)] = append(cfg.Profiles[string(scenario)], typ.ProfileMeta{
+		ID:   "p99",
+		Name: "my work profile",
+	})
+
+	// Resolve by canonical ID.
+	if id, ok := cfg.ResolveProfileAlias(scenario, p1.ID); !ok || id != p1.ID {
+		t.Errorf("ResolveProfileAlias(%q) = (%q, %v), want (%q, true)", p1.ID, id, ok, p1.ID)
+	}
+
+	// Resolve by simple name.
+	if id, ok := cfg.ResolveProfileAlias(scenario, "mine"); !ok || id != p1.ID {
+		t.Errorf("ResolveProfileAlias(\"mine\") = (%q, %v), want (%q, true)", id, ok, p1.ID)
+	}
+
+	// Non-simple name is not routable by name.
+	if id, ok := cfg.ResolveProfileAlias(scenario, "my work profile"); ok {
+		t.Errorf("ResolveProfileAlias(\"my work profile\") = (%q, true), want not ok", id)
+	}
+
+	// Unknown alias.
+	if _, ok := cfg.ResolveProfileAlias(scenario, "nope"); ok {
+		t.Errorf("ResolveProfileAlias(\"nope\") = ok, want not ok")
+	}
+
+	// Empty alias.
+	if _, ok := cfg.ResolveProfileAlias(scenario, ""); ok {
+		t.Errorf("ResolveProfileAlias(\"\") = ok, want not ok")
+	}
+}
+
+func TestCreateProfile_RejectsNonURLFriendlyName(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	scenario := typ.RuleScenario("claude_code")
+
+	for _, bad := range []string{"my profile", "a:b", "a/b", "", " mine", "p1", "p07"} {
+		if _, err := cfg.CreateProfile(scenario, bad, true); err == nil {
+			t.Errorf("CreateProfile(%q) = nil error, want rejection", bad)
+		}
+	}
+
+	// A valid name still works; renaming it to a new bad name is rejected.
+	p, err := cfg.CreateProfile(scenario, "mine", true)
+	if err != nil {
+		t.Fatalf("CreateProfile(\"mine\") failed: %v", err)
+	}
+	if err := cfg.UpdateProfile(scenario, p.ID, "not ok", nil); err == nil {
+		t.Errorf("UpdateProfile to \"not ok\" = nil error, want rejection")
+	}
+}
+
+func TestUpdateProfile_AllowsEditingLegacyBadName(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	scenario := typ.RuleScenario("claude_code")
+
+	// Simulate a legacy profile whose name predates the creation-time
+	// constraint (created directly, bypassing CreateProfile validation).
+	cfg.Profiles = map[string][]typ.ProfileMeta{
+		string(scenario): {{ID: "p1", Name: "my work profile"}},
+	}
+
+	// Editing the legacy profile while preserving its (bad) name must succeed —
+	// the handler replays the existing name when the caller doesn't rename.
+	if err := cfg.UpdateProfile(scenario, "p1", "my work profile", nil); err != nil {
+		t.Errorf("UpdateProfile preserving legacy name = %v, want nil", err)
+	}
+
+	// Cleaning it up to a valid name is allowed.
+	if err := cfg.UpdateProfile(scenario, "p1", "work", nil); err != nil {
+		t.Errorf("UpdateProfile to valid name = %v, want nil", err)
+	}
+
+	// But renaming to a different still-bad name is rejected.
+	if err := cfg.UpdateProfile(scenario, "p1", "still bad", nil); err == nil {
+		t.Errorf("UpdateProfile to \"still bad\" = nil error, want rejection")
+	}
+}

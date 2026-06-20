@@ -1493,6 +1493,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 
 	base := string(baseScenario)
 
+	// Constrain the name to a URL-friendly alias up front, so the profile is
+	// always addressable as "/tingly/<base>:<name>" — not just by its ID.
+	if err := typ.ValidateProfileName(name); err != nil {
+		return typ.ProfileMeta{}, err
+	}
+
 	if c.Profiles == nil {
 		c.Profiles = make(map[string][]typ.ProfileMeta)
 	}
@@ -1562,6 +1568,17 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 	}
 	if idx < 0 {
 		return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, base)
+	}
+
+	// Apply the URL-friendly constraint only when the name actually changes.
+	// Editing a legacy profile (e.g. changing nothing but the mode) replays its
+	// existing name through here; if that name predates the constraint we must
+	// not reject the edit. A genuine rename, on the other hand, is a fresh write
+	// and must not introduce a new non-routable name.
+	if name != profiles[idx].Name {
+		if err := typ.ValidateProfileName(name); err != nil {
+			return err
+		}
 	}
 
 	// Validate name uniqueness (excluding current profile)
@@ -1659,6 +1676,44 @@ func (c *Config) ResolveProfileNameOrID(baseScenario typ.RuleScenario, input str
 	}
 
 	return "", fmt.Errorf("profile '%s' not found in scenario '%s'", input, baseScenario)
+}
+
+// ResolveProfileAlias resolves a URL-friendly profile alias to its canonical
+// profile ID. The alias may be:
+//   - the profile ID itself (e.g. "p1") — returned as-is, and
+//   - a profile's human-readable name (e.g. "mine") — but only when that name
+//     is a simple identifier safe to embed in a URL path segment.
+//
+// Profiles whose names contain spaces or other characters that don't parse
+// cleanly out of a URL are intentionally not routable by name; callers must
+// address those by ID. Returns ("", false) when the alias matches neither a
+// known ID nor a simple, unique profile name.
+func (c *Config) ResolveProfileAlias(baseScenario typ.RuleScenario, alias string) (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	profiles := c.Profiles[string(baseScenario)]
+
+	// Direct ID match — already canonical, nothing to rewrite.
+	for _, p := range profiles {
+		if p.ID == alias {
+			return alias, true
+		}
+	}
+
+	// Otherwise resolve by name, but only for URL-friendly aliases (this also
+	// rejects "", which IsSimpleProfileAlias reports false for). A stored name
+	// equal to a simple alias is itself simple, so no per-name re-check needed.
+	if !typ.IsSimpleProfileAlias(alias) {
+		return "", false
+	}
+	for _, p := range profiles {
+		if p.Name == alias {
+			return p.ID, true
+		}
+	}
+
+	return "", false
 }
 func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
 	c.mu.RLock()

@@ -75,8 +75,12 @@ func (s *Server) UseAIEndpoints() {
 	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
 	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
 
-	// scenario routes with middleware to inject scenario into context
+	// scenario routes with middleware to inject scenario into context.
+	// profileAliasMiddleware runs first so it can rewrite a profile name alias
+	// (e.g. "claude_code:mine") to its canonical ID form ("claude_code:p1")
+	// before contextMiddleware validates and downstream stages consume it.
 	scenario := s.engine.Group("/tingly/:scenario")
+	scenario.Use(s.profileAliasMiddleware)
 	scenario.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenario)
 	// Claude Code v2.1+ sends HEAD <ANTHROPIC_BASE_URL> as a connectivity
@@ -86,6 +90,7 @@ func (s *Server) UseAIEndpoints() {
 
 	// scenario v1 routes with middleware
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
+	scenarioV1.Use(s.profileAliasMiddleware)
 	scenarioV1.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenarioV1)
 	scenarioV1.HEAD("", func(c *gin.Context) { c.Status(http.StatusOK) })
