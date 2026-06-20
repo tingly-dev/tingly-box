@@ -251,26 +251,56 @@ func ProfiledScenarioName(base RuleScenario, profileID string) RuleScenario {
 // the profile-alias middleware is allowed to resolve to a profile ID.
 //
 // A profile is addressed as the "<alias>" half of "/tingly/<base>:<alias>", so
-// the only thing that disqualifies a name is a character that doesn't survive
-// that round-trip: the profile separator ':' (would re-split), the path
-// separator '/' (would start a new path segment), or surrounding whitespace.
-// Anything else parses cleanly as a single segment. Names that fail this check
-// are not routable by name — callers must address those profiles by ID.
+// the alias has to be a clean URL path token. We whitelist the RFC 3986
+// unreserved slug subset — ASCII letters, digits, '-' and '_' — which needs no
+// escaping and contains no path/profile separators. Names that fail this check
+// are not routable by name; callers must address those profiles by ID.
 func IsSimpleProfileAlias(s string) bool {
-	return s != "" && s == strings.TrimSpace(s) && !strings.ContainsAny(s, ":/ ")
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case ch >= 'a' && ch <= 'z', ch >= 'A' && ch <= 'Z', ch >= '0' && ch <= '9', ch == '_', ch == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// looksLikeProfileID reports whether name has the reserved auto-generated ID
+// shape "p"<digits> (e.g. "p1", "p07"). Allowing such a name would let it
+// shadow ID-based routing, since ResolveProfileAlias matches IDs first.
+func looksLikeProfileID(name string) bool {
+	if len(name) < 2 || name[0] != 'p' {
+		return false
+	}
+	for i := 1; i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateProfileName enforces, at profile creation/rename time, that a name is
 // a simple alias usable directly in a route ("/tingly/<base>:<name>"). Pushing
 // the constraint to the write path is the primary defense: every stored
 // profile is then guaranteed routable by name, and IsSimpleProfileAlias on the
-// routing path only has to guard legacy data created before this check.
+// routing path only has to guard legacy data created before this check. The
+// "p"<digits> shape is additionally reserved here so a name can never collide
+// with the auto-generated ID namespace.
 func ValidateProfileName(name string) error {
 	if name == "" {
 		return fmt.Errorf("profile name must not be empty")
 	}
 	if !IsSimpleProfileAlias(name) {
-		return fmt.Errorf("profile name %q must be a single URL-friendly token (no spaces, '%s' or '/') so it can be used directly in a route like '/tingly/<scenario>:%s'", name, ProfileSeparator, name)
+		return fmt.Errorf("profile name %q must contain only letters, digits, '-' and '_' so it can be used directly in a route like '/tingly/<scenario>:%s'", name, name)
+	}
+	if looksLikeProfileID(name) {
+		return fmt.Errorf("profile name %q is reserved: it has the shape of an auto-generated profile ID — choose a different name", name)
 	}
 	return nil
 }

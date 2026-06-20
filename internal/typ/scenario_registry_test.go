@@ -186,15 +186,39 @@ func TestIsSimpleProfileAlias(t *testing.T) {
 		{"my_profile", true},
 		{"work2", true},
 		{"", false},
-		{"my profile", false},  // interior space
-		{" mine", false},       // leading space
-		{"mine ", false},       // trailing space
+		{"my profile", false},     // interior space
+		{" mine", false},          // leading space
+		{"mine ", false},          // trailing space
 		{"claude_code:p1", false}, // contains separator
-		{"a/b", false},         // path separator
+		{"a/b", false},            // path separator
 	}
 	for _, tc := range cases {
 		if got := IsSimpleProfileAlias(tc.in); got != tc.want {
 			t.Errorf("IsSimpleProfileAlias(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestValidateProfileName(t *testing.T) {
+	valid := []string{"cc", "mine", "profile-1", "team2", "my_cc", "p1x", "px"}
+	for _, name := range valid {
+		if err := ValidateProfileName(name); err != nil {
+			t.Errorf("ValidateProfileName(%q) = %v, want nil", name, err)
+		}
+	}
+
+	invalid := []string{
+		"",           // empty
+		"my profile", // space
+		"a:b",        // separator
+		"a/b",        // path separator
+		"café",       // non-ASCII
+		"p1",         // reserved ID shape
+		"p07",        // reserved ID shape
+	}
+	for _, name := range invalid {
+		if err := ValidateProfileName(name); err == nil {
+			t.Errorf("ValidateProfileName(%q) = nil, want error", name)
 		}
 	}
 }
