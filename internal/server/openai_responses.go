@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -161,15 +162,54 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
 
+// ResponsesCreate runs the provider-independent prologue once, then drives the
+// failover loop whose per-attempt callback re-runs the provider-dependent
+// pipeline (target resolution → transform → dispatch) so failover can rotate
+// across heterogeneous API styles.
 func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
-	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex
+	// ── One-time prologue (provider-independent) ──
+
+	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
 	detectAndApplyContext1MFromIncomingRequest(c, rule)
 
+	isStreaming := req.Stream
+	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
+	actualModel := string(req.Model)
+
+	// Snapshot a pristine template only when failover is possible. The template
+	// is the typed ResponseNewParams (post-vision-proxy) — cloned per attempt so
+	// PreprocessInputData (already applied) is not re-run.
+	multi := len(rule.GetActiveServices()) > 1
+
+	// ── Per-attempt pipeline (provider-dependent) ──
+	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+		func(p *typ.Provider, retryModel string) {
+			areq := req
+			if multi {
+				clonedParams, err := cloneResponsesParams(req.ResponseNewParams)
+				if err != nil {
+					s.failAttemptSetup(c, err)
+					return
+				}
+				areq.ResponseNewParams = clonedParams
+			}
+			s.runOpenAIResponsesAttempt(c, areq, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
+		})
+}
+
+// runOpenAIResponsesAttempt executes the provider-dependent half of an OpenAI
+// Responses request for one failover attempt. Setup failures route through
+// failAttemptSetup so the orchestrator can advance to the next candidate.
+func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)
+	if provider.Timeout <= 0 {
+		provider.Timeout = constant.DefaultRequestTimeout
+	}
 
-	isStreaming := req.Stream
+	req.Model = responses.ResponsesModel(actualModel)
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// Determine target API type based on provider API style
 	target := protocol.TypeOpenAIResponses
@@ -177,49 +217,26 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	case protocol.APIStyleAnthropic:
 		target = protocol.TypeAnthropicBeta
 	case protocol.APIStyleGoogle:
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name),
-				Type:    "invalid_request_error",
-				Code:    "unsupported_provider_style",
-			},
-		})
+		s.failAttemptSetup(c, fmt.Errorf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name))
 		return
 	case protocol.APIStyleOpenAI:
 		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: routeErr.Error(),
-					Type:    "invalid_request_error",
-					Code:    "unsupported_endpoint",
-				},
-			})
+			s.failAttemptSetup(c, routeErr)
 			return
 		}
 		target = resolvedTarget
 	default:
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("Unsupported provider API style: %s", provider.APIStyle),
-				Type:    "invalid_request_error",
-			},
-		})
+		s.failAttemptSetup(c, fmt.Errorf("Unsupported provider API style: %s", provider.APIStyle))
 		return
 	}
 
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
-	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
 	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
 	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Transform failed: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
 	// Carry the response-shaping hints for downstream dispatch, matching the
@@ -227,12 +244,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
-	// Use unified dispatch with mid-request failover (non-streaming only).
-	s.dispatchWithPriorityFailover(c, rule, provider, string(req.Model),
-		func(p *typ.Provider, retryModel string) {
-			reqCtx.RequestModel = retryModel
-			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
-		})
+	reqCtx.RequestModel = actualModel
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

@@ -51,6 +51,23 @@ func (s *Server) handlePreStreamFailure(c *gin.Context, err error, recorder preS
 	}
 }
 
+// failAttemptSetup reports an in-attempt setup failure — target/endpoint
+// resolution, the pre-transform chain, or the transform itself — that happens
+// before any upstream call. It always writes a 500-class status, which the
+// failover gate buffers and treats as retryable, so the orchestrator advances
+// to the next candidate (possibly a different API style) instead of terminating
+// the whole request on one misconfigured provider. Genuine client errors are
+// rejected in the prologue, before the gate is installed, so they remain
+// non-retryable and reach the client unchanged.
+func (s *Server) failAttemptSetup(c *gin.Context, err error) {
+	c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error: ErrorDetail{
+			Message: err.Error(),
+			Type:    "api_error",
+		},
+	})
+}
+
 // retryableUpstreamStatuses are the HTTP status codes treated as
 // "upstream transiently sick, try the next priority tier".
 //
@@ -240,9 +257,10 @@ func (g *firstChunkGate) Discard() {
 }
 
 // selectFallbackService picks the next priority tier excluding services
-// already tried in this request. requireAPIStyle keeps candidates
-// compatible with the already-transformed request body — heterogeneous
-// fallback would need re-transformation, out of scope here.
+// already tried in this request. requireAPIStyle, when non-empty, restricts
+// candidates to one API style; callers that re-transform the request per
+// attempt pass "" so the pool can span heterogeneous styles
+// (Anthropic/OpenAI/Google) and failover can rotate freely across providers.
 //
 // Returns (nil, nil, nil) when no compatible candidate remains.
 func (s *Server) selectFallbackService(
@@ -390,7 +408,10 @@ func (s *Server) dispatchWithPriorityFailover(
 			return
 		}
 
-		nextProvider, nextService, err := s.selectFallbackService(rule, tried, initialProvider.APIStyle)
+		// Pass "" so the candidate pool spans all API styles: each attempt
+		// re-transforms the request for the selected provider's style, so
+		// heterogeneous failover (e.g. Anthropic → OpenAI) is supported.
+		nextProvider, nextService, err := s.selectFallbackService(rule, tried, "")
 		if err != nil {
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 				"stage":          "failover_error",
