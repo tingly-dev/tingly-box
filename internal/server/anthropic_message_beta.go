@@ -8,7 +8,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
-	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -114,19 +114,17 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming
-// response. It needs only actualModel; req is used solely for response guardrails
-// (when enabled), so it is otherwise dead and the body can be GC'd mid-stream.
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, actualModel string, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
+// response. It holds no request: guardrailMsgs (nil unless guardrails are
+// enabled) is pre-adapted by the caller, so the gjson-pinned request body is
+// released at the failover commit and GC'd mid-stream.
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, actualModel string, guardrailMsgs []guardrailscore.Message, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
 
-	// Add recorder hooks if recorder is available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
-	// response guardrails
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if req != nil && s.guardrailsEnabledForScenario(scenario) {
+	if guardrailMsgs != nil {
 		hc.EnsureGuardrails().Enabled = true
-		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
+		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailMsgs)
 	}
 
 	usageStat, err := stream.HandleAnthropicBeta(hc, streamResp)

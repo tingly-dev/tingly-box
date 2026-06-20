@@ -8,23 +8,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// releaseOriginalRequest drops the pre-transform request once the chain is done.
-// On conversion paths the outbound Request is a fresh struct while OriginalRequest
-// still pins the gjson-backed source body; dropping it lets that be GC'd. On
-// same-protocol passthrough Request == OriginalRequest, so this is a no-op. Safe
-// because all OriginalRequest readers run inside chain.Execute.
-func releaseOriginalRequest(ctx *transform.TransformContext) {
-	if ctx != nil && ctx.Request != ctx.OriginalRequest {
-		ctx.OriginalRequest = nil
-	}
-}
-
-// releaseReqCtxAfterStreamCommit releases reqCtx's parsed request once the
-// failover gate commits its first chunk — the earliest point retry can no longer
-// re-read it. On the failover path reqCtx is held by the attempt closure for the
-// whole stream, so this is what frees the gjson-pinned body; releasing before the
-// stream would break a retryable pre-first-chunk failure. No-op without a gate
-// (single-service), where GC reclaims reqCtx on its own.
+// releaseReqCtxAfterStreamCommit releases reqCtx's request (both Request and
+// OriginalRequest) once the failover gate commits its first chunk — the earliest
+// point retry can no longer re-read it. On the failover path reqCtx is held by
+// the attempt closure for the whole stream, so this is what frees the
+// gjson-pinned body; releasing before the stream would break a retryable
+// pre-first-chunk failure. No-op without a gate (single-service), where GC
+// reclaims reqCtx on its own.
 func releaseReqCtxAfterStreamCommit(c *gin.Context, reqCtx *transform.TransformContext) {
 	if reqCtx == nil {
 		return
@@ -98,8 +88,6 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
 
-	releaseOriginalRequest(finalCtx)
-
 	return finalCtx, nil
 }
 
@@ -164,8 +152,6 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
 
-	releaseOriginalRequest(finalCtx)
-
 	return finalCtx, nil
 }
 
@@ -222,8 +208,6 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
 
-	releaseOriginalRequest(finalCtx)
-
 	return finalCtx, nil
 }
 
@@ -274,8 +258,6 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 	if protocolRecorder != nil {
 		protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
 	}
-
-	releaseOriginalRequest(finalCtx)
 
 	return finalCtx, nil
 }

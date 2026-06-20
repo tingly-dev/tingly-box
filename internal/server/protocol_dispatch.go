@@ -16,6 +16,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -442,10 +444,14 @@ func (s *Server) passthroughAnthropicBeta(
 				return
 			}
 
-			// Stream loop needs only actualModel; req is passed for guardrails
-			// (when enabled) but is otherwise dead, so the commit-time reqCtx
-			// release lets the body be GC'd for the rest of the stream.
-			s.handleAnthropicStreamResponseV1Beta(c, actualModel, req, streamResp, responseModel, provider, recorder)
+			// Pre-adapt guardrail messages so the handler holds no request: the
+			// gjson-pinned body is then released at the failover commit and GC'd
+			// for the rest of the stream.
+			var guardrailMsgs []guardrailscore.Message
+			if _, _, _, _, scenario, _, _ := GetTrackingContext(c); s.guardrailsEnabledForScenario(scenario) {
+				guardrailMsgs = guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
+			}
+			s.handleAnthropicStreamResponseV1Beta(c, actualModel, guardrailMsgs, streamResp, responseModel, provider, recorder)
 			return
 		}
 
