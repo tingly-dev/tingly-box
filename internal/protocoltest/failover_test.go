@@ -159,6 +159,92 @@ func TestFailover_CrossStyle_AnthropicToOpenAI_RetriesAndSucceeds(t *testing.T) 
 	assert.Contains(t, body, "messages", "upstream body must be OpenAI Chat shape (messages[]), not Anthropic")
 }
 
+// TestFailover_CrossStyle_OpenAIToAnthropic_RetriesAndSucceeds is the reverse
+// direction: an OpenAI Chat client, an OpenAI-style primary that 500s, and an
+// Anthropic-style fallback. Proves the request is re-transformed into Anthropic
+// Messages wire format on the failover attempt.
+func TestFailover_CrossStyle_OpenAIToAnthropic_RetriesAndSucceeds(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupCrossStyleFailoverRoute(
+		t,
+		protocol.TypeOpenAIChat,  // client speaks OpenAI Chat
+		protocol.APIStyleOpenAI,  // primary tier is OpenAI-style (returns 500)
+		protocol.TypeAnthropicV1, // fallback tier is Anthropic-style (succeeds)
+		pt.TextScenario(),
+		pt.FailMockPreContent500,
+	)
+
+	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "Anthropic fallback must serve a success after OpenAI primary 500")
+	assert.Equal(t, int64(1), route.PrimaryCallCount.Load(), "OpenAI primary hit exactly once")
+	assert.NotEmpty(t, result.Content, "client must receive OpenAI-shaped content from the Anthropic fallback")
+
+	require.Greater(t, env.UpstreamEndpointHits(pt.EndpointAnthropic), 0,
+		"fallback must have been reached on the Anthropic Messages endpoint (re-transform happened)")
+	body := env.UpstreamLastRequest(pt.EndpointAnthropic).JSON()
+	assert.Contains(t, body, "messages", "upstream body must be Anthropic Messages shape")
+	assert.Contains(t, body, "max_tokens", "Anthropic wire format requires max_tokens")
+}
+
+// TestFailover_CrossStyle_Stream_AnthropicToOpenAI_RetriesAndSucceeds is the
+// streaming counterpart: the primary 500s pre-content (gate stays buffered), the
+// orchestrator re-transforms into OpenAI Chat and fails over, and the fallback's
+// SSE stream commits the gate. The client receives an Anthropic SSE stream
+// assembled from the OpenAI fallback.
+func TestFailover_CrossStyle_Stream_AnthropicToOpenAI_RetriesAndSucceeds(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupCrossStyleFailoverRoute(
+		t,
+		protocol.TypeAnthropicV1,
+		protocol.APIStyleAnthropic,
+		protocol.TypeOpenAIChat,
+		pt.StreamingTextScenario(),
+		pt.FailMockPreContent500,
+	)
+
+	result := env.SendWithModel(t, protocol.TypeAnthropicV1, route.ModelName, true)
+
+	require.Equal(t, 200, result.HTTPStatus)
+	assert.Equal(t, int64(1), route.PrimaryCallCount.Load(), "Anthropic primary hit exactly once")
+	assert.NotEmpty(t, result.StreamEvents, "client must receive an Anthropic SSE stream from the OpenAI fallback")
+	require.Greater(t, env.UpstreamEndpointHits(pt.EndpointChat), 0,
+		"streaming fallback must have been reached on the OpenAI Chat endpoint")
+}
+
+// TestFailover_CrossStyle_SetupError_AdvancesToFallback proves the
+// "retryable, advance" decision for in-attempt setup failures. The primary is a
+// Google-style provider on the Responses path; ResponsesCreate rejects Google
+// during target resolution, which now routes through failAttemptSetup as a
+// retryable 500 instead of terminating the request. The loop must advance to the
+// OpenAI fallback. The Google primary is never actually called — the error
+// precedes any upstream request.
+func TestFailover_CrossStyle_SetupError_AdvancesToFallback(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupCrossStyleFailoverRoute(
+		t,
+		protocol.TypeOpenAIResponses,
+		protocol.APIStyleGoogle, // primary: unsupported for Responses → in-attempt setup error
+		protocol.TypeOpenAIChat, // fallback: OpenAI Chat (succeeds)
+		pt.TextScenario(),
+		"setup-error-primary",
+	)
+
+	result := env.SendWithModel(t, protocol.TypeOpenAIResponses, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "loop must advance past the setup-error primary to the fallback")
+	assert.Equal(t, int64(0), route.PrimaryCallCount.Load(),
+		"Google primary must NOT be called — the setup error precedes any upstream request")
+	assert.NotEmpty(t, result.Content)
+	require.Greater(t, env.UpstreamEndpointHits(pt.EndpointChat), 0, "fallback OpenAI Chat must have served the request")
+}
+
 // TestFailover_SingleService_Bypass — single-service rules bypass the gate
 // entirely (orchestrator's len(activeServices) <= 1 short-circuit). The
 // existing SetupRoute path exercises this — assertion is just that the
