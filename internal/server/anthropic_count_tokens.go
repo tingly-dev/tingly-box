@@ -17,7 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/memory"
 )
 
 type anthropicCountTokensVersion int
@@ -39,9 +38,6 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	if err != nil {
 		logrus.Debugf("Failed to read request body: %v", err)
 	} else {
-		// CRITICAL FIX: Copy request body through memory pool to break gjson reference chain
-		bodyBytes = memory.CopyRequestBody(bodyBytes)
-
 		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}

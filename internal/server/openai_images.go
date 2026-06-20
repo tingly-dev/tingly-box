@@ -12,7 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/memory"
 )
 
 // HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
@@ -58,9 +57,6 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 		})
 		return
 	}
-
-	// CRITICAL FIX: Copy request body through memory pool to break gjson reference chain
-	bodyBytes = memory.CopyRequestBody(bodyBytes)
 
 	var req openai.ImageGenerateParams
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
