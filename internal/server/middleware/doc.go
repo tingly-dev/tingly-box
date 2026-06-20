@@ -29,10 +29,13 @@
 //   - scenario        — agent scenario (e.g. "claude_code", "openai")
 //
 // Non-AI routes (system/management APIs) produce no routing fields.
-// The request and its error-response body are stored only for 4xx/5xx
-// responses to limit memory use; they are kept out of the log entry itself and
-// referenced by a single body_ref ID that can be retrieved via
-// GET /api/v1/log/request/:id.
+//
+// The access log deliberately records no request/response bodies. Mirroring
+// bodies here (wrapping c.Request.Body / c.Writer) is unstable — it interferes
+// with streaming, Flush/Hijack, and large or Expect-100-continue uploads — for
+// little gain. Bodies that matter for diagnosis are recorded where they are
+// understood: the handler, and the model_request client stage (correlated to
+// this entry by request_id).
 //
 // AuthMiddleware (auth.go)
 //

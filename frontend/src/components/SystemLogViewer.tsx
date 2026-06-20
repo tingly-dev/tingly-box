@@ -12,19 +12,12 @@ import {
     Typography,
     IconButton,
     Collapse,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Alert,
     TableSortLabel,
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
 import { KeyboardArrowDown as KeyboardArrowDownIcon } from '@/components/icons';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
-import { Close as CloseIcon } from '@/components/icons';
 
 export interface SystemLogEntry {
     time: string;
@@ -38,22 +31,8 @@ export interface SystemLogsResponse {
     logs: SystemLogEntry[];
 }
 
-// RequestBodyPayload is what GET /api/v1/log/request/:id returns: the request
-// body together with the error response it produced, each independently
-// truncated. response_body is only present for error (>=400) responses.
-type RequestBodyPayload = {
-    id: string;
-    method: string;
-    path: string;
-    request_body: string;
-    request_truncated: boolean;
-    response_body?: string;
-    response_truncated?: boolean;
-};
-
 interface SystemLogViewerProps {
     getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
-    getRequestBody?: (bodyRef: string) => Promise<RequestBodyPayload | null>;
 }
 
 type SortField = 'time' | 'level' | 'status' | 'message';
@@ -61,7 +40,7 @@ type SortOrder = 'asc' | 'desc';
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
-const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
+const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -73,13 +52,6 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
     // Sorting state
     const [sortField, setSortField] = useState<SortField>('time');
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-
-    // Request body dialog state
-    const [bodyDialogOpen, setBodyDialogOpen] = useState(false);
-    const [selectedBodyRef, setSelectedBodyRef] = useState<string | null>(null);
-    const [requestBody, setRequestBody] = useState<RequestBodyPayload | null>(null);
-    const [loadingBody, setLoadingBody] = useState(false);
-    const [bodyError, setBodyError] = useState<string | null>(null);
 
     const loadLogs = async () => {
         setLoading(true);
@@ -123,40 +95,6 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
             newExpanded.add(index);
         }
         setExpandedRows(newExpanded);
-    };
-
-    const openRequestBodyDialog = async (bodyRef: string) => {
-        setSelectedBodyRef(bodyRef);
-        setBodyDialogOpen(true);
-        setRequestBody(null);
-        setBodyError(null);
-        setLoadingBody(true);
-
-        if (!getRequestBody) {
-            setBodyError('Request body viewing not available');
-            setLoadingBody(false);
-            return;
-        }
-
-        try {
-            const result = await getRequestBody(bodyRef);
-            if (result) {
-                setRequestBody(result);
-            } else {
-                setBodyError('Request body not found (may have been evicted from memory)');
-            }
-        } catch (error: any) {
-            setBodyError(error instanceof Error ? error.message : 'Failed to load request body');
-        } finally {
-            setLoadingBody(false);
-        }
-    };
-
-    const closeRequestBodyDialog = () => {
-        setBodyDialogOpen(false);
-        setSelectedBodyRef(null);
-        setRequestBody(null);
-        setBodyError(null);
     };
 
     const toggleLevel = (level: string) => {
@@ -234,15 +172,6 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
             // New field, default to desc for time, asc for others
             setSortField(field);
             setSortOrder(field === 'time' ? 'desc' : 'asc');
-        }
-    };
-
-    const formatRequestBody = (body: string): string => {
-        try {
-            const parsed = JSON.parse(body);
-            return JSON.stringify(parsed, null, 2);
-        } catch {
-            return body;
         }
     };
 
@@ -479,28 +408,9 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                                                                 .filter(([key]) => key !== 'error' && key !== 'error_type')
                                                                 .map(([key, value]) => (
                                                                     <Box key={key}>
-                                                                        {key === 'body_ref' ? (
-                                                                            <Stack direction="row" spacing={1} alignItems="center">
-                                                                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                                                                                    <strong>body_ref:</strong> {String(value)}
-                                                                                </Typography>
-                                                                                <Button
-                                                                                    size="small"
-                                                                                    variant="outlined"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        openRequestBodyDialog(String(value));
-                                                                                    }}
-                                                                                    sx={{ fontSize: '0.7rem', py: 0.25, px: 1 }}
-                                                                                >
-                                                                                    View Request Body
-                                                                                </Button>
-                                                                            </Stack>
-                                                                        ) : (
-                                                                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                                                                                <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
-                                                                            </Typography>
-                                                                        )}
+                                                                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                                                                            <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
+                                                                        </Typography>
                                                                     </Box>
                                                                 ))}
                                                         </Stack>
@@ -520,123 +430,6 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                 </Table>
                 </TableContainer>
             </Box>
-
-            {/* Request Body Dialog */}
-            <Dialog
-                open={bodyDialogOpen}
-                onClose={closeRequestBodyDialog}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="h6">Request &amp; error response</Typography>
-                            {requestBody?.request_truncated && (
-                                <Chip
-                                    label="Truncated"
-                                    size="small"
-                                    color="warning"
-                                    sx={{ fontSize: '0.7rem', height: 20 }}
-                                />
-                            )}
-                        </Stack>
-                        <IconButton onClick={closeRequestBodyDialog} size="small">
-                            <CloseIcon />
-                        </IconButton>
-                    </Stack>
-                </DialogTitle>
-                <DialogContent>
-                    {loadingBody && (
-                        <Typography color="text.secondary">Loading...</Typography>
-                    )}
-                    {bodyError && (
-                        <Typography color="error">{bodyError}</Typography>
-                    )}
-                    {requestBody && (
-                        <Stack spacing={2}>
-                            <Stack direction="row" spacing={2}>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Method</Typography>
-                                    <Typography variant="body2">{requestBody.method}</Typography>
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Path</Typography>
-                                    <Typography variant="body2">{requestBody.path}</Typography>
-                                </Box>
-                            </Stack>
-                            {requestBody.request_truncated && (
-                                <Alert severity="warning" sx={{ py: 0.5 }}>
-                                    <Typography variant="caption">
-                                        Request body was truncated to 1MB. Original size was larger.
-                                    </Typography>
-                                </Alert>
-                            )}
-                            {requestBody.request_body && (
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Request body</Typography>
-                                    <TextField
-                                        fullWidth
-                                        multiline
-                                        rows={requestBody.response_body ? 10 : 15}
-                                        value={formatRequestBody(requestBody.request_body)}
-                                        InputProps={{
-                                            readOnly: true,
-                                            sx: {
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.75rem',
-                                            },
-                                        }}
-                                        sx={{
-                                            '& .MuiInputBase-input': {
-                                                whiteSpace: 'pre-wrap',
-                                                wordBreak: 'break-word',
-                                            },
-                                        }}
-                                    />
-                                </Box>
-                            )}
-                            {requestBody.response_body && (
-                                <Box>
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                                        <Typography variant="caption" color="text.secondary">Error response body</Typography>
-                                        {requestBody.response_truncated && (
-                                            <Chip
-                                                label="Truncated"
-                                                size="small"
-                                                color="warning"
-                                                sx={{ fontSize: '0.7rem', height: 20 }}
-                                            />
-                                        )}
-                                    </Stack>
-                                    <TextField
-                                        fullWidth
-                                        multiline
-                                        rows={10}
-                                        value={formatRequestBody(requestBody.response_body)}
-                                        InputProps={{
-                                            readOnly: true,
-                                            sx: {
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.75rem',
-                                            },
-                                        }}
-                                        sx={{
-                                            '& .MuiInputBase-input': {
-                                                whiteSpace: 'pre-wrap',
-                                                wordBreak: 'break-word',
-                                            },
-                                        }}
-                                    />
-                                </Box>
-                            )}
-                        </Stack>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={closeRequestBodyDialog}>Close</Button>
-                </DialogActions>
-            </Dialog>
         </Stack>
     );
 };

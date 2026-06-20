@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,33 +14,28 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-// Request body storage configuration
-const (
-	// MaxRequestBodySize is the maximum size of request body to store (1MB)
-	MaxRequestBodySize = 1024 * 1024
-	// MaxRequestBodies is the maximum number of request bodies to keep in memory
-	MaxRequestBodies = 50
-)
-
 // GinRequestIDKey is the gin context key under which the per-request
 // correlation id is stored. Handlers and later stages read it via
 // c.GetString(GinRequestIDKey) to tie their logs to the request.
 const GinRequestIDKey = "request_id"
 
-// MultiModeMemoryLogMiddleware provides Gin middleware with both persistent and memory log storage
-// Logs are written to:
-// 1. Multi-mode logger (text + JSON files for persistence)
-// 2. Memory (circular buffer for quick API access)
-// 3. Request body store (pure memory: the request and its error-response body,
-//    referenced by a single body_ref ID — bodies are never inlined into the log
-//    entry, keeping the ring buffer light and total body memory bounded)
+// MultiModeMemoryLogMiddleware is the HTTP access log for the whole request
+// chain. It records one structured entry per request — method, path, status,
+// latency, error, and (for AI routes) routing metadata — correlated across
+// stages by a request_id. Entries go to the multi-mode logger (text + JSON
+// files) and an in-memory ring buffer for the logs API.
+//
+// It deliberately does NOT capture request/response bodies. Opportunistically
+// mirroring bodies here (wrapping c.Request.Body / c.Writer) is unstable —
+// it interferes with streaming, Flush/Hijack, and large/Expect-100-continue
+// uploads — for little gain: the bodies that matter for diagnosis are recorded
+// where they are understood (the handler and the model_request client stage).
 type MultiModeMemoryLogMiddleware struct {
-	logger           *logrus.Logger
-	multiLogger      *obs.MultiLogger
-	requestBodyStore *obs.RequestBodyStore
+	logger      *logrus.Logger
+	multiLogger *obs.MultiLogger
 }
 
-// NewMultiModeMemoryLogMiddleware creates a new middleware with both persistent and memory logging
+// NewMultiModeMemoryLogMiddleware creates the HTTP access log middleware.
 func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMemoryLogMiddleware {
 	if multiLogger == nil {
 		// Fallback for test environments where no multi-logger is configured.
@@ -50,18 +44,16 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 			l.SetOutput(io.Discard)
 		}
 		return &MultiModeMemoryLogMiddleware{
-			logger:           l,
-			multiLogger:      nil,
-			requestBodyStore: nil,
+			logger:      l,
+			multiLogger: nil,
 		}
 	}
 	// Get a logger scoped to HTTP source
 	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
 
 	return &MultiModeMemoryLogMiddleware{
-		logger:           httpLogger,
-		multiLogger:      multiLogger,
-		requestBodyStore: obs.NewRequestBodyStore(MaxRequestBodies),
+		logger:      httpLogger,
+		multiLogger: multiLogger,
 	}
 }
 
@@ -87,28 +79,6 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		// conversion, upstream client calls) can log via logrus.WithContext(ctx);
 		// the MultiLogger hook routes those entries to the model_request source.
 		c.Request = c.Request.WithContext(obs.ContextWithRequestID(c.Request.Context(), requestID))
-
-		// Capture request body using TeeReader for logging.
-		// We ALWAYS read (to support error debugging), but only STORE on errors (4xx/5xx).
-		// This minimizes storage overhead while keeping logging capability.
-		var bodyBuffer *bytes.Buffer
-		if m.requestBodyStore != nil && c.Request.Body != nil && c.Request.Method != "GET" && c.Request.Method != "HEAD" {
-			// Mirror the request body for diagnostics, but cap the in-memory mirror
-			// so a large (e.g. base64 vision) upload can't buffer unbounded. The
-			// handler still reads the full body. The cap is MaxRequestBodySize+1 so
-			// the store's existing truncation check (len > MaxRequestBodySize) still
-			// fires for oversized bodies while memory stays bounded at ~1MB.
-			bodyBuffer = &bytes.Buffer{}
-			teeReader := io.TeeReader(c.Request.Body, &limitedBufferWriter{buf: bodyBuffer, limit: MaxRequestBodySize + 1})
-			c.Request.Body = io.NopCloser(teeReader)
-		}
-
-		// Wrap response writer to capture body for error responses (lazily;
-		// only buffered for status >= 400 — see responseBodyWriter).
-		w := &responseBodyWriter{
-			ResponseWriter: c.Writer,
-		}
-		c.Writer = w
 
 		// Process request
 		c.Next()
@@ -156,42 +126,6 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"path":       path,
 			"body_size":  bodySize,
 			"user_agent": c.Request.UserAgent(),
-		}
-
-		// Persist the request and error-response bodies together for diagnostics,
-		// but ONLY for error responses (4xx/5xx) and behind a single body_ref ID.
-		// Happy path (2xx) requests store nothing, saving memory and CPU.
-		//
-		// Crucially the bodies live in the bounded RequestBodyStore, NOT inline in
-		// the log fields: the log entry only carries the small body_ref. Inlining
-		// a body (up to maxCapturedResponseBytes) would let the 1000-entry in-memory
-		// log ring retain a copy of every captured body — under sustained errors
-		// that is the OOM driver. Routing through the store caps total body memory
-		// at the store's capacity, independent of the ring buffer size.
-		if m.requestBodyStore != nil && statusCode >= 400 {
-			// If the error was produced before anything read the request body
-			// (e.g. auth or contextMiddleware aborted the request prior to the
-			// handler, which is exactly how many 4xx arise), the TeeReader
-			// mirrored nothing. Drain the still-unread body now — bounded to the
-			// mirror cap so a large rejected upload can't force an unbounded read
-			// — so the bad request stays diagnosable. The bytes flow through the
-			// same TeeReader, so they land in bodyBuffer.
-			if bodyBuffer != nil && bodyBuffer.Len() == 0 && c.Request.Body != nil {
-				_, _ = io.CopyN(io.Discard, c.Request.Body, MaxRequestBodySize+1)
-			}
-
-			var reqBody, respBody string
-			if bodyBuffer != nil {
-				reqBody = bodyBuffer.String()
-			}
-			// w.body is lazily allocated and only populated when the status
-			// warranted capture (see responseBodyWriter).
-			if w.body != nil {
-				respBody = w.body.String()
-			}
-			if reqBody != "" || respBody != "" {
-				fields["body_ref"] = m.requestBodyStore.Store(method, path, reqBody, respBody, MaxRequestBodySize)
-			}
 		}
 
 		// Add error message field if error occurred
@@ -303,9 +237,4 @@ func (m *MultiModeMemoryLogMiddleware) Size() int {
 		return 0
 	}
 	return memorySink.Size()
-}
-
-// GetRequestBodyStore returns the request body store for retrieving stored request bodies
-func (m *MultiModeMemoryLogMiddleware) GetRequestBodyStore() *obs.RequestBodyStore {
-	return m.requestBodyStore
 }
