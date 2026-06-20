@@ -3,9 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -140,9 +138,12 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
-	} else {
-		// Store the body back for parsing
-		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+			},
+		})
+		return
 	}
 
 	// Determine provider & requestModel

@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -30,13 +28,13 @@ const recorderContextKey = "protocol_recorder"
 // by RecordMode (set at construction).
 //
 // Lifecycle:
-//   1. EnsureProtocolRecorder at handler entry — captures client request,
-//      session, mode.
-//   2. Optional: transform pipeline writes SetOriginalRequest /
-//      SetTransformedRequest via TransformRecorder.
-//   3. For streaming, hooks call EnableStreaming + RecordStreamChunk +
-//      SetAssembledResponse.
-//   4. RecordResponse (success) or RecordError (failure) emits one *obs.Record.
+//  1. EnsureProtocolRecorder at handler entry — captures client request,
+//     session, mode.
+//  2. Optional: transform pipeline writes SetOriginalRequest /
+//     SetTransformedRequest via TransformRecorder.
+//  3. For streaming, hooks call EnableStreaming + RecordStreamChunk +
+//     SetAssembledResponse.
+//  4. RecordResponse (success) or RecordError (failure) emits one *obs.Record.
 type ProtocolRecorder struct {
 	sink         *obs.Sink
 	scenario     string
@@ -127,11 +125,10 @@ func (s *Server) BeginProtocolRecording(c *gin.Context, scenario string) *Protoc
 }
 
 func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode) (*ProtocolRecorder, error) {
-	bodyBytes, err := io.ReadAll(c.Request.Body)
+	bodyBytes, err := c.GetRawData()
 	if err != nil {
 		return nil, err
 	}
-	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	var bodyJSON map[string]interface{}
 	if len(bodyBytes) > 0 {
