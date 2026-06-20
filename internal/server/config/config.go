@@ -1660,6 +1660,40 @@ func (c *Config) ResolveProfileNameOrID(baseScenario typ.RuleScenario, input str
 
 	return "", fmt.Errorf("profile '%s' not found in scenario '%s'", input, baseScenario)
 }
+
+// ResolveProfileAlias resolves a URL-friendly profile alias to its canonical
+// profile ID. The alias may be:
+//   - the profile ID itself (e.g. "p1") — returned as-is, and
+//   - a profile's human-readable name (e.g. "mine") — but only when that name
+//     is a simple identifier safe to embed in a URL path segment.
+//
+// Profiles whose names contain spaces or other characters that don't parse
+// cleanly out of a URL are intentionally not routable by name; callers must
+// address those by ID. Returns ("", false) when the alias matches neither a
+// known ID nor a simple, unique profile name.
+func (c *Config) ResolveProfileAlias(baseScenario typ.RuleScenario, alias string) (string, bool) {
+	if alias == "" {
+		return "", false
+	}
+
+	// Direct ID match — already canonical, nothing to rewrite.
+	if _, ok := c.GetProfile(baseScenario, alias); ok {
+		return alias, true
+	}
+
+	// Only attempt name resolution for URL-friendly aliases.
+	if !typ.IsSimpleProfileAlias(alias) {
+		return "", false
+	}
+
+	for _, p := range c.GetProfiles(baseScenario) {
+		if p.Name == alias && typ.IsSimpleProfileAlias(p.Name) {
+			return p.ID, true
+		}
+	}
+
+	return "", false
+}
 func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

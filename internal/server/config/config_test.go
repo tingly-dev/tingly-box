@@ -228,3 +228,44 @@ func TestSetServerHost_EmptyStringReturnsLocalhost(t *testing.T) {
 		t.Errorf("expected empty string to return 'localhost', got %q", host)
 	}
 }
+
+func TestResolveProfileAlias(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	scenario := typ.RuleScenario("claude_code")
+
+	p1, err := cfg.CreateProfile(scenario, "mine", true)
+	if err != nil {
+		t.Fatalf("CreateProfile failed: %v", err)
+	}
+	if _, err := cfg.CreateProfile(scenario, "my work profile", true); err != nil {
+		t.Fatalf("CreateProfile failed: %v", err)
+	}
+
+	// Resolve by canonical ID.
+	if id, ok := cfg.ResolveProfileAlias(scenario, p1.ID); !ok || id != p1.ID {
+		t.Errorf("ResolveProfileAlias(%q) = (%q, %v), want (%q, true)", p1.ID, id, ok, p1.ID)
+	}
+
+	// Resolve by simple name.
+	if id, ok := cfg.ResolveProfileAlias(scenario, "mine"); !ok || id != p1.ID {
+		t.Errorf("ResolveProfileAlias(\"mine\") = (%q, %v), want (%q, true)", id, ok, p1.ID)
+	}
+
+	// Non-simple name is not routable by name.
+	if id, ok := cfg.ResolveProfileAlias(scenario, "my work profile"); ok {
+		t.Errorf("ResolveProfileAlias(\"my work profile\") = (%q, true), want not ok", id)
+	}
+
+	// Unknown alias.
+	if _, ok := cfg.ResolveProfileAlias(scenario, "nope"); ok {
+		t.Errorf("ResolveProfileAlias(\"nope\") = ok, want not ok")
+	}
+
+	// Empty alias.
+	if _, ok := cfg.ResolveProfileAlias(scenario, ""); ok {
+		t.Errorf("ResolveProfileAlias(\"\") = ok, want not ok")
+	}
+}

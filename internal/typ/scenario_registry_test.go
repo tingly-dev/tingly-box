@@ -173,3 +173,28 @@ func TestRegisterScenario_RejectsConflictingDescriptor(t *testing.T) {
 		t.Fatalf("expected conflicting descriptor registration to fail")
 	}
 }
+
+func TestIsSimpleProfileAlias(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"cc", true},
+		{"mine", true},
+		{"p1", true},
+		{"my-profile", true},
+		{"my_profile", true},
+		{"work2", true},
+		{"", false},
+		{"my profile", false},  // interior space
+		{" mine", false},       // leading space
+		{"mine ", false},       // trailing space
+		{"claude_code:p1", false}, // contains separator
+		{"a/b", false},         // path separator
+	}
+	for _, tc := range cases {
+		if got := IsSimpleProfileAlias(tc.in); got != tc.want {
+			t.Errorf("IsSimpleProfileAlias(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

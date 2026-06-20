@@ -75,8 +75,12 @@ func (s *Server) UseAIEndpoints() {
 	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
 	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
 
-	// scenario routes with middleware to inject scenario into context
+	// scenario routes with middleware to inject scenario into context.
+	// profileAliasMiddleware runs first so it can rewrite a profile name alias
+	// (e.g. "claude_code:mine") to its canonical ID form ("claude_code:p1")
+	// before contextMiddleware validates and downstream stages consume it.
 	scenario := s.engine.Group("/tingly/:scenario")
+	scenario.Use(s.profileAliasMiddleware)
 	scenario.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenario)
 	// Claude Code v2.1+ sends HEAD <ANTHROPIC_BASE_URL> as a connectivity
@@ -86,6 +90,7 @@ func (s *Server) UseAIEndpoints() {
 
 	// scenario v1 routes with middleware
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
+	scenarioV1.Use(s.profileAliasMiddleware)
 	scenarioV1.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenarioV1)
 	scenarioV1.HEAD("", func(c *gin.Context) { c.Status(http.StatusOK) })
@@ -147,6 +152,50 @@ func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 	group.GET("/responses/*path", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
 	// Models endpoint returns tingly-box's model list (not passthrough)
 	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
+}
+
+// profileAliasMiddleware rewrites a profile alias in the ":scenario" path
+// segment to its canonical "base:pN" form before contextMiddleware runs.
+//
+// Profile endpoints are addressed as "/tingly/claude_code:p1", but the "p1"
+// suffix has low recognizability. This middleware lets callers use the
+// profile's name instead — "/tingly/claude_code:mine" — by resolving the
+// suffix against the configured profiles and rewriting the path param to the
+// profile ID in place. Everything downstream (contextMiddleware, auth,
+// routing, usage records) only ever sees the canonical "base:pN", so no other
+// stage needs to learn about aliases.
+//
+// Resolution is best-effort and non-fatal: if the suffix is already a valid
+// ID, or cannot be resolved to a simple/URL-friendly profile name, the path is
+// left untouched and contextMiddleware performs validation (and error
+// reporting) exactly as before.
+func (s *Server) profileAliasMiddleware(c *gin.Context) {
+	rawScenario := c.Param("scenario")
+	if !typ.IsProfiledScenario(typ.RuleScenario(rawScenario)) {
+		c.Next()
+		return
+	}
+
+	base, suffix := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
+	if base == "" || suffix == "" || s.config == nil {
+		c.Next()
+		return
+	}
+
+	id, ok := s.config.ResolveProfileAlias(base, suffix)
+	if !ok || id == suffix {
+		// Unknown alias, non-simple name, or already canonical — leave as-is.
+		c.Next()
+		return
+	}
+
+	rewritten := string(typ.ProfiledScenarioName(base, id))
+	for i := range c.Params {
+		if c.Params[i].Key == "scenario" {
+			c.Params[i].Value = rewritten
+		}
+	}
+	c.Next()
 }
 
 // contextMiddleware is a middleware that extracts the scenario parameter from the URL path

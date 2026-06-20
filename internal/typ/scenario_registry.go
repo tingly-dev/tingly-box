@@ -247,6 +247,19 @@ func ProfiledScenarioName(base RuleScenario, profileID string) RuleScenario {
 	return RuleScenario(string(base) + ProfileSeparator + profileID)
 }
 
+// IsSimpleProfileAlias reports whether s is a URL-friendly profile alias that
+// the profile-alias middleware is allowed to resolve to a profile ID.
+//
+// A profile is addressed as the "<alias>" half of "/tingly/<base>:<alias>", so
+// the only thing that disqualifies a name is a character that doesn't survive
+// that round-trip: the profile separator ':' (would re-split), the path
+// separator '/' (would start a new path segment), or surrounding whitespace.
+// Anything else parses cleanly as a single segment. Names that fail this check
+// are not routable by name — callers must address those profiles by ID.
+func IsSimpleProfileAlias(s string) bool {
+	return s != "" && s == strings.TrimSpace(s) && !strings.ContainsAny(s, ":/ ")
+}
+
 // getBaseScenarioDescriptor resolves the descriptor for a plain (non-profiled) scenario.
 func getBaseScenarioDescriptor(base RuleScenario) (ScenarioDescriptor, bool) {
 	scenarioRegistryMu.RLock()
