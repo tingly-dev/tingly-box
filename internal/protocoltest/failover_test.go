@@ -120,6 +120,45 @@ func TestFailover_MidStream_NoRetry_GateCommitted(t *testing.T) {
 	assert.Contains(t, result.Content, "hello world", "client must see primary's truncated content, not fallback's")
 }
 
+// TestFailover_CrossStyle_AnthropicToOpenAI_RetriesAndSucceeds is the e2e proof
+// of the lifted failover: the client sends an Anthropic request; the primary tier
+// is an Anthropic-style provider that returns 500; the orchestrator re-transforms
+// the request into OpenAI Chat wire format and fails over to an OpenAI-style
+// fallback, which succeeds. The client gets a 200 assembled back into Anthropic
+// shape. We additionally assert the fallback actually received an OpenAI-shaped
+// body (captured by env.virtual) — proving the per-attempt re-transform, not just
+// a model/provider swap.
+func TestFailover_CrossStyle_AnthropicToOpenAI_RetriesAndSucceeds(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupCrossStyleFailoverRoute(
+		t,
+		protocol.TypeAnthropicV1,   // client speaks Anthropic
+		protocol.APIStyleAnthropic, // primary tier is Anthropic-style (returns 500)
+		protocol.TypeOpenAIChat,    // fallback tier is OpenAI Chat-style (succeeds)
+		pt.TextScenario(),
+		pt.FailMockPreContent500,
+	)
+
+	result := env.SendWithModel(t, protocol.TypeAnthropicV1, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "fallback (OpenAI) must serve a success after Anthropic primary 500")
+	assert.Equal(t, int64(1), route.PrimaryCallCount.Load(), "Anthropic primary hit exactly once")
+	assert.NotEmpty(t, result.Content, "client must receive Anthropic-shaped content from the OpenAI fallback")
+
+	// The fallback is OpenAI Chat: env.virtual must have received the request on
+	// the /chat/completions endpoint, proving the request was re-transformed from
+	// Anthropic into OpenAI wire format on the failover attempt.
+	require.Greater(t, env.UpstreamEndpointHits(pt.EndpointChat), 0,
+		"fallback must have been reached on the OpenAI Chat endpoint (re-transform happened)")
+	up := env.UpstreamLastRequest(pt.EndpointChat)
+	require.NotNil(t, up, "fallback request body must have been captured")
+	body := up.JSON()
+	assert.Equal(t, "virtual-model-text-chat", body["model"], "upstream model must be the fallback's backend model")
+	assert.Contains(t, body, "messages", "upstream body must be OpenAI Chat shape (messages[]), not Anthropic")
+}
+
 // TestFailover_SingleService_Bypass — single-service rules bypass the gate
 // entirely (orchestrator's len(activeServices) <= 1 short-circuit). The
 // existing SetupRoute path exercises this — assertion is just that the

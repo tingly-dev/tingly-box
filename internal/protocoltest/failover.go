@@ -117,6 +117,96 @@ func (env *TestEnv) SetupFailoverRoute(
 	}
 }
 
+// UpstreamEndpointHits exposes env.virtual's endpoint-hit counter to
+// out-of-package (_test) callers — e.g. to assert a cross-style failover reached
+// the fallback on the expected provider-native endpoint.
+func (env *TestEnv) UpstreamEndpointHits(kind EndpointKind) int {
+	return env.virtual.EndpointHits(kind)
+}
+
+// UpstreamLastRequest exposes the last request env.virtual captured on an
+// endpoint, so tests can assert the re-transformed upstream wire shape.
+func (env *TestEnv) UpstreamLastRequest(kind EndpointKind) *CapturedRequest {
+	return env.virtual.LastRequest(kind)
+}
+
+// SetupCrossStyleFailoverRoute wires a two-tier rule whose tiers use DIFFERENT
+// API styles: the primary (primaryStyle, a vmodel error server) trips a
+// pre-content failure, and the fallback (fallbackTarget's style, served by
+// env.virtual) succeeds. The gateway receives one `source` request; the
+// orchestrator must re-transform it into primaryStyle's wire format for the
+// first attempt and, after failover, into the fallback's wire format for the
+// second — the core guarantee of the lifted failover. env.virtual captures the
+// fallback's request so the test can assert the re-transformed wire shape.
+func (env *TestEnv) SetupCrossStyleFailoverRoute(
+	t *testing.T,
+	source protocol.APIType,
+	primaryStyle protocol.APIStyle,
+	fallbackTarget protocol.APIType,
+	successScenario Scenario,
+	primaryFailModel string,
+) FailoverRoute {
+	t.Helper()
+
+	env.virtual.RegisterScenario(successScenario)
+
+	modelSuffix := successScenario.Name
+	switch fallbackTarget {
+	case protocol.TypeOpenAIResponses:
+		modelSuffix = successScenario.Name + "-codex"
+	case protocol.TypeOpenAIChat:
+		modelSuffix = successScenario.Name + "-chat"
+	}
+	fallbackProviderModel := fmt.Sprintf("virtual-model-%s", modelSuffix)
+	requestModel := fmt.Sprintf("foxs-%s-%s-to-%s-%s", source, primaryStyle, fallbackTarget, primaryFailModel)
+
+	fallbackStyle := targetToAPIStyle(fallbackTarget)
+	primaryServer, primaryCount := startFailingProvider(t)
+
+	primaryAPIBase := primaryServer.URL
+	if primaryStyle == protocol.APIStyleOpenAI {
+		primaryAPIBase = primaryServer.URL + "/v1"
+	}
+	fallbackAPIBase := env.virtual.URL()
+	if fallbackStyle == protocol.APIStyleOpenAI {
+		fallbackAPIBase = env.virtual.URL() + "/v1"
+	}
+
+	primaryUUID := fmt.Sprintf("virtual-xs-primary-%s-%s", successScenario.Name, primaryFailModel)
+	fallbackUUID := fmt.Sprintf("virtual-xs-fallback-%s-%s", successScenario.Name, primaryFailModel)
+
+	_ = env.appConfig.AddProvider(&typ.Provider{
+		UUID: primaryUUID, Name: primaryUUID, APIBase: primaryAPIBase, APIStyle: primaryStyle,
+		Token: "primary-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+	})
+	_ = env.appConfig.AddProvider(&typ.Provider{
+		UUID: fallbackUUID, Name: fallbackUUID, APIBase: fallbackAPIBase, APIStyle: fallbackStyle,
+		OpenAIEndpointMode: targetToOpenAIEndpointMode(fallbackTarget),
+		Token:              "fallback-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+	})
+
+	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(typ.Rule{
+		UUID:          requestModel,
+		Scenario:      sourceToRuleScenario(source),
+		RequestModel:  requestModel,
+		ResponseModel: fallbackProviderModel,
+		Services: []*loadbalance.Service{
+			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
+			{Provider: fallbackUUID, Model: fallbackProviderModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
+		},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
+		},
+		Active: true,
+	})
+
+	return FailoverRoute{
+		ModelName:        requestModel,
+		PrimaryCallCount: primaryCount,
+	}
+}
+
 // SetupBothFailingRoute wires a two-tier rule where BOTH tiers trip the same
 // pre-content injection. Used for the all-tiers-fail test: client must see a
 // non-200 once the orchestrator exhausts its budget.
