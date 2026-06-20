@@ -30,8 +30,8 @@ type RequestBodyResponse struct {
 	ID                string `json:"id"`
 	Method            string `json:"method"`
 	Path              string `json:"path"`
-	Body              string `json:"body"`
-	Truncated         bool   `json:"truncated"`
+	RequestBody       string `json:"request_body"`
+	RequestTruncated  bool   `json:"request_truncated"`
 	ResponseBody      string `json:"response_body,omitempty"`
 	ResponseTruncated bool   `json:"response_truncated,omitempty"`
 }
@@ -226,8 +226,8 @@ func (s *Server) GetRequestBody(c *gin.Context) {
 		ID:                entry.ID,
 		Method:            entry.Method,
 		Path:              entry.Path,
-		Body:              entry.Body,
-		Truncated:         entry.Truncated,
+		RequestBody:       entry.RequestBody,
+		RequestTruncated:  entry.RequestTruncated,
 		ResponseBody:      entry.ResponseBody,
 		ResponseTruncated: entry.ResponseTruncated,
 	})

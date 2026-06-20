@@ -386,8 +386,46 @@ func TestMiddleware_RequestBodyStorage(t *testing.T) {
 	assert.NotNil(t, storedBody, "Expected to find stored body by ref")
 	assert.Equal(t, "POST", storedBody.Method)
 	assert.Equal(t, "/test", storedBody.Path)
-	assert.Equal(t, testBody, storedBody.Body)
-	assert.False(t, storedBody.Truncated, "Expected body not to be truncated")
+	assert.Equal(t, testBody, storedBody.RequestBody)
+	assert.False(t, storedBody.RequestTruncated, "Expected body not to be truncated")
+}
+
+// TestMiddleware_AbortedBeforeHandlerStillCapturesBody guards the case where an
+// error response is produced by a pre-handler middleware (auth, contextMiddleware)
+// that aborts BEFORE the handler reads the request body. The TeeReader mirrors
+// nothing in that path, so the middleware must drain the still-unread body itself
+// — otherwise these 4xx land in the log with no request body to diagnose.
+func TestMiddleware_AbortedBeforeHandlerStillCapturesBody(t *testing.T) {
+	middleware, _ := setupTestMiddleware()
+
+	engine := gin.New()
+	engine.Use(middleware.Middleware())
+	// A gate that rejects the request before the handler — and crucially without
+	// ever reading c.Request.Body, just like auth/contextMiddleware do.
+	engine.Use(func(c *gin.Context) {
+		c.String(http.StatusBadRequest, "rejected")
+		c.Abort()
+	})
+	engine.POST("/test", func(c *gin.Context) {
+		t.Fatal("handler must not run; the gate aborts first")
+	})
+
+	testBody := `{"test": "data", "value": 123}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/test", nil)
+	req.Body = io.NopCloser(bytes.NewBufferString(testBody))
+	engine.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	entries := middleware.GetEntries()
+	assert.NotEmpty(t, entries)
+	bodyRef, exists := entries[len(entries)-1].Data["body_ref"]
+	assert.True(t, exists, "Expected body_ref even though the handler never read the body")
+
+	storedBody := middleware.GetRequestBodyStore().Get(bodyRef.(string))
+	assert.NotNil(t, storedBody, "Expected the drained request body to be stored")
+	assert.Equal(t, testBody, storedBody.RequestBody, "Expected the full request body to be captured")
 }
 
 func TestMiddleware_RequestBodyTruncation(t *testing.T) {
@@ -417,8 +455,8 @@ func TestMiddleware_RequestBodyTruncation(t *testing.T) {
 	storedBody := store.Get(bodyRef.(string))
 
 	assert.NotNil(t, storedBody)
-	assert.True(t, storedBody.Truncated, "Expected body to be truncated")
-	assert.LessOrEqual(t, len(storedBody.Body), MaxRequestBodySize, "Expected stored body to be at most MaxRequestBodySize")
+	assert.True(t, storedBody.RequestTruncated, "Expected body to be truncated")
+	assert.LessOrEqual(t, len(storedBody.RequestBody), MaxRequestBodySize, "Expected stored body to be at most MaxRequestBodySize")
 }
 
 func TestMiddleware_RequestBodyNotStoredForGET(t *testing.T) {

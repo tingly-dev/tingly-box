@@ -141,8 +141,8 @@ func TestRequestBodyMirrorBounded(t *testing.T) {
 	if stored == nil {
 		t.Fatal("expected stored request body")
 	}
-	if len(stored.Body) > MaxRequestBodySize {
-		t.Fatalf("mirrored request body %d B exceeds cap %d B", len(stored.Body), MaxRequestBodySize)
+	if len(stored.RequestBody) > MaxRequestBodySize {
+		t.Fatalf("mirrored request body %d B exceeds cap %d B", len(stored.RequestBody), MaxRequestBodySize)
 	}
 }
 

@@ -169,6 +169,17 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		// that is the OOM driver. Routing through the store caps total body memory
 		// at the store's capacity, independent of the ring buffer size.
 		if m.requestBodyStore != nil && statusCode >= 400 {
+			// If the error was produced before anything read the request body
+			// (e.g. auth or contextMiddleware aborted the request prior to the
+			// handler, which is exactly how many 4xx arise), the TeeReader
+			// mirrored nothing. Drain the still-unread body now — bounded to the
+			// mirror cap so a large rejected upload can't force an unbounded read
+			// — so the bad request stays diagnosable. The bytes flow through the
+			// same TeeReader, so they land in bodyBuffer.
+			if bodyBuffer != nil && bodyBuffer.Len() == 0 && c.Request.Body != nil {
+				_, _ = io.CopyN(io.Discard, c.Request.Body, MaxRequestBodySize+1)
+			}
+
 			var reqBody, respBody string
 			if bodyBuffer != nil {
 				reqBody = bodyBuffer.String()

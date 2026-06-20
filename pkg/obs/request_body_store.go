@@ -33,8 +33,8 @@ type RequestBodyEntry struct {
 	ID                string // Unique identifier (e.g., "req_1234567890")
 	Method            string // HTTP method
 	Path              string // Request path
-	Body              string // Request body (may be truncated)
-	Truncated         bool   // True if the request body was truncated due to size limits
+	RequestBody       string // Request body (may be truncated)
+	RequestTruncated  bool   // True if the request body was truncated due to size limits
 	ResponseBody      string // Error response body (may be truncated)
 	ResponseTruncated bool   // True if the response body was truncated due to size limits
 }
@@ -53,7 +53,7 @@ func NewRequestBodyStore(maxSize int) *RequestBodyStore {
 // Store stores a request/response body pair and returns its unique ID.
 // Each body is independently truncated to maxBodySize. If the buffer is full,
 // the oldest entry is evicted.
-func (s *RequestBodyStore) Store(method, path, body, responseBody string, maxBodySize int) string {
+func (s *RequestBodyStore) Store(method, path, requestBody, responseBody string, maxBodySize int) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -62,15 +62,15 @@ func (s *RequestBodyStore) Store(method, path, body, responseBody string, maxBod
 	id := generateRequestID(s.entrySeq)
 
 	// Truncate each body if too large (keep first N chars)
-	body, truncated := truncateBody(body, maxBodySize)
+	requestBody, reqTruncated := truncateBody(requestBody, maxBodySize)
 	responseBody, respTruncated := truncateBody(responseBody, maxBodySize)
 
 	entry := &RequestBodyEntry{
 		ID:                id,
 		Method:            method,
 		Path:              path,
-		Body:              body,
-		Truncated:         truncated,
+		RequestBody:       requestBody,
+		RequestTruncated:  reqTruncated,
 		ResponseBody:      responseBody,
 		ResponseTruncated: respTruncated,
 	}

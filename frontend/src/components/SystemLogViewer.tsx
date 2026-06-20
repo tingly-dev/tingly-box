@@ -45,8 +45,8 @@ type RequestBodyPayload = {
     id: string;
     method: string;
     path: string;
-    body: string;
-    truncated: boolean;
+    request_body: string;
+    request_truncated: boolean;
     response_body?: string;
     response_truncated?: boolean;
 };
@@ -532,7 +532,7 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                     <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Typography variant="h6">Request &amp; error response</Typography>
-                            {requestBody?.truncated && (
+                            {requestBody?.request_truncated && (
                                 <Chip
                                     label="Truncated"
                                     size="small"
@@ -565,21 +565,21 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                                     <Typography variant="body2">{requestBody.path}</Typography>
                                 </Box>
                             </Stack>
-                            {requestBody.truncated && (
+                            {requestBody.request_truncated && (
                                 <Alert severity="warning" sx={{ py: 0.5 }}>
                                     <Typography variant="caption">
                                         Request body was truncated to 1MB. Original size was larger.
                                     </Typography>
                                 </Alert>
                             )}
-                            {requestBody.body && (
+                            {requestBody.request_body && (
                                 <Box>
                                     <Typography variant="caption" color="text.secondary">Request body</Typography>
                                     <TextField
                                         fullWidth
                                         multiline
                                         rows={requestBody.response_body ? 10 : 15}
-                                        value={formatRequestBody(requestBody.body)}
+                                        value={formatRequestBody(requestBody.request_body)}
                                         InputProps={{
                                             readOnly: true,
                                             sx: {

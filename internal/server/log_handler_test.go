@@ -66,8 +66,8 @@ func TestGetRequestBody_Success(t *testing.T) {
 	assert.Equal(t, bodyID, resp.ID)
 	assert.Equal(t, "POST", resp.Method)
 	assert.Equal(t, "/v1/chat/completions", resp.Path)
-	assert.Equal(t, testBody, resp.Body)
-	assert.False(t, resp.Truncated)
+	assert.Equal(t, testBody, resp.RequestBody)
+	assert.False(t, resp.RequestTruncated)
 }
 
 func TestGetRequestBody_NotFound(t *testing.T) {
@@ -124,8 +124,8 @@ func TestGetRequestBody_TruncatedBody(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 
-	assert.True(t, resp.Truncated)
-	assert.LessOrEqual(t, len(resp.Body), 1024)
+	assert.True(t, resp.RequestTruncated)
+	assert.LessOrEqual(t, len(resp.RequestBody), 1024)
 }
 
 func TestClearRequestBodies_Success(t *testing.T) {
@@ -284,7 +284,7 @@ func TestGetLogs_IntegrationWithRequestBody(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "POST", bodyResp.Method)
 		assert.Equal(t, "/test", bodyResp.Path)
-		assert.Equal(t, testBody, bodyResp.Body)
+		assert.Equal(t, testBody, bodyResp.RequestBody)
 	}
 }
 
