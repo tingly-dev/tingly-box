@@ -3,6 +3,7 @@ package typ
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -272,17 +273,16 @@ func IsSimpleProfileAlias(s string) bool {
 
 // looksLikeProfileID reports whether name has the reserved auto-generated ID
 // shape "p"<digits> (e.g. "p1", "p07"). Allowing such a name would let it
-// shadow ID-based routing, since ResolveProfileAlias matches IDs first.
+// shadow ID-based routing, since ResolveProfileAlias matches IDs first. IDs are
+// minted as fmt.Sprintf("p%d", n), so a trailing unsigned integer is exactly
+// the shape to reserve.
 func looksLikeProfileID(name string) bool {
-	if len(name) < 2 || name[0] != 'p' {
+	rest, ok := strings.CutPrefix(name, "p")
+	if !ok {
 		return false
 	}
-	for i := 1; i < len(name); i++ {
-		if name[i] < '0' || name[i] > '9' {
-			return false
-		}
-	}
-	return true
+	_, err := strconv.ParseUint(rest, 10, 64)
+	return err == nil
 }
 
 // ValidateProfileName enforces, at profile creation/rename time, that a name is
