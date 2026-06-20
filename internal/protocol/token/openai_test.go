@@ -88,8 +88,8 @@ func TestEstimateInputTokensApprox(t *testing.T) {
 		},
 	}
 
-	approxSmall := EstimateInputTokensApprox(small)
-	approxBig := EstimateInputTokensApprox(big)
+	approxSmall := EstimateInputTokensSimple(small)
+	approxBig := EstimateInputTokensSimple(big)
 
 	assert.Greater(t, approxSmall, 0, "approx must count some tokens")
 	assert.Greater(t, approxBig, approxSmall*10, "approx must scale with content size")

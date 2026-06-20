@@ -28,10 +28,10 @@ func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 	return estimateInputTokensWith(req, countOrEstimate), nil
 }
 
-// EstimateInputTokensApprox is a cheap len/4 approximation of EstimateInputTokens
+// EstimateInputTokensSimple is a cheap len/4 approximation of EstimateInputTokens
 // (no tiktoken), for the streaming hot path where the caller pre-computes the
 // fallback estimate up front instead of calling the exact estimator per stream.
-func EstimateInputTokensApprox(req *openai.ChatCompletionNewParams) int {
+func EstimateInputTokensSimple(req *openai.ChatCompletionNewParams) int {
 	return estimateInputTokensWith(req, func(text string) int { return len(text) / 4 })
 }
 

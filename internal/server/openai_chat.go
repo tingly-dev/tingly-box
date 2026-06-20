@@ -340,7 +340,7 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 
 	// Estimate input tokens up front and hand the scalar to the stream handler,
 	// so it depends on the estimate rather than the request for the usage fallback.
-	estimatedInputTokens := token.EstimateInputTokensApprox(req)
+	estimatedInputTokens := token.EstimateInputTokensSimple(req)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
