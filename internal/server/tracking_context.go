@@ -84,6 +84,13 @@ func GetTrackingContext(c *gin.Context) (rule *typ.Rule, provider *typ.Provider,
 	return
 }
 
+func GetTrackingContextScenario(c *gin.Context) (scenario string) {
+	if s, exists := c.Get(ContextKeyScenario); exists {
+		scenario = s.(string)
+	}
+	return
+}
+
 // calculateLatencyFromStart calculates the elapsed time in milliseconds since the start time.
 func calculateLatencyFromStart(startTime time.Time) int {
 	if startTime.IsZero() {

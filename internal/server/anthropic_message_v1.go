@@ -16,7 +16,7 @@ import (
 )
 
 // AnthropicMessagesV1 implements standard v1 messages API
-func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
+func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, requestModel string, responseModel string, rule *typ.Rule, provider *typ.Provider) {
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex
 	detectAndApplyContext1MFromIncomingRequest(c, rule)
 
@@ -29,20 +29,20 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Check if streaming is requested
 	isStreaming := req.Stream
 
-	req.Model = anthropic.Model(actualModel)
+	req.Model = anthropic.Model(requestModel)
 
 	// Inject session ID into request context so all downstream code can access it
 	sessionID := resolveSessionID(c, &req.MessageNewParams)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
-	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
+	SetTrackingContext(c, rule, provider, requestModel, responseModel, isStreaming)
 
 	// Get scenario config for flags
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
 
 	// Build and run server-side pre-transform chain (scenario-driven flags)
-	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, requestModel)
 	if err := executeAnthropicV1PreChain(
 		&req.MessageNewParams, scenarioConfig,
 		s.config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
@@ -53,10 +53,11 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
-	c.Set("model", actualModel)
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	c.Set("model", requestModel)
+
+	scenario := GetTrackingContextScenario(c)
 	if s.guardrailsEnabledForScenario(scenario) {
-		s.applyGuardrailsToAnthropicV1Request(c, &req.MessageNewParams, actualModel, provider)
+		s.applyGuardrailsToAnthropicV1Request(c, &req.MessageNewParams, requestModel, provider)
 	}
 
 	// Get or create the recorder for dual-stage recording
@@ -66,7 +67,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		if err != nil {
 			bs = []byte("{}")
 		}
-		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType), bs)
+		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, s.GetScenarioRecordMode(scenarioType), bs)
 	}
 
 	// Determine target API type for protocol transformation detection
@@ -102,10 +103,10 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		return
 	}
 
-	reqCtx.RequestModel = actualModel
-	reqCtx.ResponseModel = proxyModel
+	reqCtx.RequestModel = requestModel
+	reqCtx.ResponseModel = responseModel
 
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+	s.dispatchWithPriorityFailover(c, rule, provider, requestModel,
 		func(p *typ.Provider, retryModel string) {
 			reqCtx.RequestModel = retryModel
 			retryProvider := s.resolveProviderForClient(p, protocol.APIStyleAnthropic)

@@ -64,11 +64,13 @@ func ResolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
 		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
-			return typ.SessionID{Source: typ.SessionSourceUser, Value: r.Metadata.UserID.Value, IPBackup: clientIP}
+			v := r.Metadata.UserID.Value
+			return typ.SessionID{Source: typ.SessionSourceUser, Value: v, IPBackup: clientIP}
 		}
 	case *anthropic.BetaMessageNewParams:
 		if r.Metadata.UserID.Valid() && r.Metadata.UserID.Value != "" {
-			return typ.SessionID{Source: typ.SessionSourceUser, Value: r.Metadata.UserID.Value, IPBackup: clientIP}
+			v := r.Metadata.UserID.Value
+			return typ.SessionID{Source: typ.SessionSourceUser, Value: v, IPBackup: clientIP}
 		}
 	}
 

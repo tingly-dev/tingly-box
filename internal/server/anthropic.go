@@ -176,7 +176,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	// Check if this is the request requestModel name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
-	if err != nil {
+	if rule == nil || err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -206,9 +206,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	}
 
 	// Set the rule and provider in context
-	if rule != nil {
-		c.Set("rule", rule)
-	}
+	c.Set("rule", rule)
 
 	// sessionID is automatically stored by SelectService
 
@@ -216,9 +214,9 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		s.AnthropicMessagesV1Beta(c, betaMessages, requestModel, provider, actualModel, rule)
+		s.AnthropicMessagesV1Beta(c, betaMessages, actualModel, requestModel, rule, provider)
 
 	} else {
-		s.AnthropicMessagesV1(c, messages, requestModel, provider, actualModel, rule)
+		s.AnthropicMessagesV1(c, messages, actualModel, requestModel, rule, provider)
 	}
 }

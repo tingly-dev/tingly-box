@@ -32,8 +32,15 @@ tasks:
     aliases:
       - cli:build
     cmds:
+      - task: cleanup
       - task: web:dist
       - task: go:build
+  
+  cleanup:
+    cmds:
+      - |
+        rm -rf internal/web/dist/assets
+        rm -rf internal/web_wails/dist/assets
   
   dev:
     aliases:
