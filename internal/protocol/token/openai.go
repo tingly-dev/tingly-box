@@ -25,6 +25,19 @@ func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 		return c
 	}
 
+	return estimateInputTokensWith(req, countOrEstimate), nil
+}
+
+// EstimateInputTokensApprox is a cheap len/4 approximation of EstimateInputTokens
+// (no tiktoken), for the streaming hot path where the caller pre-computes the
+// fallback estimate up front instead of calling the exact estimator per stream.
+func EstimateInputTokensApprox(req *openai.ChatCompletionNewParams) int {
+	return estimateInputTokensWith(req, func(text string) int { return len(text) / 4 })
+}
+
+// estimateInputTokensWith walks the request's billable text once, counting each
+// piece with the supplied strategy. Shared by the exact and approximate variants.
+func estimateInputTokensWith(req *openai.ChatCompletionNewParams, countOrEstimate func(string) int) int {
 	totalTokens := 0
 
 	// Count tokens in messages
@@ -81,7 +94,7 @@ func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 	// Add some overhead for the request format
 	totalTokens += 3
 
-	return totalTokens, nil
+	return totalTokens
 }
 
 func EstimateMessagesTokens(messages []openai.ChatCompletionMessageParamUnion) int64 {

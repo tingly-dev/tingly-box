@@ -25,8 +25,9 @@ import (
 // ===================================================================
 
 // HandleOpenAIChatStream handles OpenAI chat streaming response.
-// Returns (UsageStat, error)
-func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (*protocol.TokenUsage, error) {
+// The input-token fallback (used only when the upstream reports no usage) comes
+// from hc.EstimatedInputTokens, so the handler no longer takes the request.
+func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream.Stream[openai.ChatCompletionChunk]) (*protocol.TokenUsage, error) {
 	defer streamResp.Close()
 
 	// Set SSE headers (mimicking OpenAI response headers)
@@ -254,7 +255,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 
 	if err != nil && !errors.Is(err, context.Canceled) {
 		if !hasUsage {
-			inputTokens, _ = token.EstimateInputTokens(req)
+			inputTokens = hc.EstimatedInputTokens
 			outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 		}
 
@@ -281,7 +282,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	}
 
 	if !hasUsage {
-		inputTokens, _ = token.EstimateInputTokens(req)
+		inputTokens = hc.EstimatedInputTokens
 		outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 
 		// Use the first chunk ID, or generate one if not available

@@ -338,6 +338,10 @@ func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, ori
 func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := originalReq
 
+	// Estimate input tokens up front and hand the scalar to the stream handler,
+	// so it depends on the estimate rather than the request for the usage fallback.
+	estimatedInputTokens := token.EstimateInputTokensApprox(req)
+
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
@@ -360,8 +364,9 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 	// Create handle context and handle stream
 	hc := protocol.NewHandleContext(c, responseModel)
 	hc.DisableStreamUsage = disableStreamUsage
+	hc.EstimatedInputTokens = estimatedInputTokens
 
-	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
+	usage, err := stream.HandleOpenAIChatStream(hc, streamResp)
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
