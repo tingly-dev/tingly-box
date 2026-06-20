@@ -287,12 +287,42 @@ func TestCreateProfile_RejectsNonURLFriendlyName(t *testing.T) {
 		}
 	}
 
-	// A valid name still works, and a rename to a bad name is rejected.
+	// A valid name still works; renaming it to a new bad name is rejected.
 	p, err := cfg.CreateProfile(scenario, "mine", true)
 	if err != nil {
 		t.Fatalf("CreateProfile(\"mine\") failed: %v", err)
 	}
 	if err := cfg.UpdateProfile(scenario, p.ID, "not ok", nil); err == nil {
 		t.Errorf("UpdateProfile to \"not ok\" = nil error, want rejection")
+	}
+}
+
+func TestUpdateProfile_AllowsEditingLegacyBadName(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	scenario := typ.RuleScenario("claude_code")
+
+	// Simulate a legacy profile whose name predates the creation-time
+	// constraint (created directly, bypassing CreateProfile validation).
+	cfg.Profiles = map[string][]typ.ProfileMeta{
+		string(scenario): {{ID: "p1", Name: "my work profile"}},
+	}
+
+	// Editing the legacy profile while preserving its (bad) name must succeed —
+	// the handler replays the existing name when the caller doesn't rename.
+	if err := cfg.UpdateProfile(scenario, "p1", "my work profile", nil); err != nil {
+		t.Errorf("UpdateProfile preserving legacy name = %v, want nil", err)
+	}
+
+	// Cleaning it up to a valid name is allowed.
+	if err := cfg.UpdateProfile(scenario, "p1", "work", nil); err != nil {
+		t.Errorf("UpdateProfile to valid name = %v, want nil", err)
+	}
+
+	// But renaming to a different still-bad name is rejected.
+	if err := cfg.UpdateProfile(scenario, "p1", "still bad", nil); err == nil {
+		t.Errorf("UpdateProfile to \"still bad\" = nil error, want rejection")
 	}
 }

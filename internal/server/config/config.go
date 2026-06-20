@@ -1558,12 +1558,6 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 		return fmt.Errorf("no profiles found for scenario '%s'", base)
 	}
 
-	// Same URL-friendly constraint as creation: a rename must not produce a
-	// name that can't be used in a route.
-	if err := typ.ValidateProfileName(name); err != nil {
-		return err
-	}
-
 	profiles := c.Profiles[base]
 	idx := -1
 	for i, p := range profiles {
@@ -1574,6 +1568,17 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 	}
 	if idx < 0 {
 		return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, base)
+	}
+
+	// Apply the URL-friendly constraint only when the name actually changes.
+	// Editing a legacy profile (e.g. changing nothing but the mode) replays its
+	// existing name through here; if that name predates the constraint we must
+	// not reject the edit. A genuine rename, on the other hand, is a fresh write
+	// and must not introduce a new non-routable name.
+	if name != profiles[idx].Name {
+		if err := typ.ValidateProfileName(name); err != nil {
+			return err
+		}
 	}
 
 	// Validate name uniqueness (excluding current profile)
