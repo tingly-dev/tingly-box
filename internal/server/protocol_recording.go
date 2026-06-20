@@ -83,7 +83,7 @@ func (sr *ProtocolRecorder) breakerServiceID() string {
 // EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,
 // reusing any recorder already stored in the gin context. Returns nil when
 // recording is disabled (no sink) or the request body cannot be read.
-func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode) *ProtocolRecorder {
+func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *ProtocolRecorder {
 	if rec, ok := getRecorderFromContext(c); ok {
 		rec.bindProvider(provider, model, mode)
 		return rec
@@ -95,7 +95,7 @@ func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provide
 		return nil
 	}
 
-	rec, err := newProtocolRecorder(c, sink, scenario, mode)
+	rec, err := newProtocolRecorder(c, sink, scenario, mode, bs)
 	if err != nil {
 		logrus.Debugf("obs: failed to build ProtocolRecorder: %v", err)
 		return nil
@@ -105,36 +105,11 @@ func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provide
 	return rec
 }
 
-// BeginProtocolRecording is the entry-time constructor used before provider
-// routing has resolved. Provider/model are filled in later via
-// EnsureProtocolRecorder.
-func (s *Server) BeginProtocolRecording(c *gin.Context, scenario string) *ProtocolRecorder {
-	scenarioType := typ.RuleScenario(scenario)
-	sink := s.GetOrCreateScenarioSink(scenarioType)
-	if sink == nil {
-		return nil
-	}
-
-	mode := s.GetScenarioRecordMode(scenarioType)
-	rec, err := newProtocolRecorder(c, sink, scenario, mode)
-	if err != nil {
-		logrus.Debugf("obs: failed to build ProtocolRecorder: %v", err)
-		return nil
-	}
-	return rec
-}
-
-func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode) (*ProtocolRecorder, error) {
-	bodyBytes, err := c.GetRawData()
-	if err != nil {
-		return nil, err
-	}
+func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode, body []byte) (*ProtocolRecorder, error) {
 
 	var bodyJSON map[string]interface{}
-	if len(bodyBytes) > 0 {
-		if err := json.Unmarshal(bodyBytes, &bodyJSON); err != nil {
-			bodyJSON = map[string]interface{}{"raw": string(bodyBytes)}
-		}
+	if err := json.Unmarshal(body, &bodyJSON); err != nil {
+		bodyJSON = map[string]interface{}{"raw": string(body)}
 	}
 
 	req := &obs.RecordRequest{

@@ -112,7 +112,7 @@ func TestAttachRecorderHooks_HappyPath_V1Beta(t *testing.T) {
 	c, _ := newRecordingTestContext(t, []byte(`{"model":"client-model"}`))
 
 	provider := &typ.Provider{Name: "anthropic-prov"}
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-model", obs.RecordModeAll)
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-model", obs.RecordModeAll, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "proxy-model")
@@ -156,7 +156,7 @@ func TestAttachRecorderHooks_StreamChunksRecorded(t *testing.T) {
 	c, _ := newRecordingTestContext(t, []byte(`{}`))
 
 	provider := &typ.Provider{Name: "p"}
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeAll)
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeAll, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "rm")
@@ -188,7 +188,7 @@ func TestAttachRecorderHooks_ModelOverride(t *testing.T) {
 	c, _ := newRecordingTestContext(t, []byte(`{}`))
 
 	provider := &typ.Provider{Name: "p"}
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-X", obs.RecordModeAll)
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-X", obs.RecordModeAll, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "proxy-Y")
@@ -217,7 +217,7 @@ func TestAttachRecorderHooks_ErrorPath(t *testing.T) {
 	c, _ := newRecordingTestContext(t, []byte(`{}`))
 
 	provider := &typ.Provider{Name: "p"}
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeAll)
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeAll, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "rm")
