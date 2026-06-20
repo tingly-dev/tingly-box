@@ -1689,22 +1689,26 @@ func (c *Config) ResolveProfileNameOrID(baseScenario typ.RuleScenario, input str
 // address those by ID. Returns ("", false) when the alias matches neither a
 // known ID nor a simple, unique profile name.
 func (c *Config) ResolveProfileAlias(baseScenario typ.RuleScenario, alias string) (string, bool) {
-	if alias == "" {
-		return "", false
-	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	profiles := c.Profiles[string(baseScenario)]
 
 	// Direct ID match — already canonical, nothing to rewrite.
-	if _, ok := c.GetProfile(baseScenario, alias); ok {
-		return alias, true
+	for _, p := range profiles {
+		if p.ID == alias {
+			return alias, true
+		}
 	}
 
-	// Only attempt name resolution for URL-friendly aliases.
+	// Otherwise resolve by name, but only for URL-friendly aliases (this also
+	// rejects "", which IsSimpleProfileAlias reports false for). A stored name
+	// equal to a simple alias is itself simple, so no per-name re-check needed.
 	if !typ.IsSimpleProfileAlias(alias) {
 		return "", false
 	}
-
-	for _, p := range c.GetProfiles(baseScenario) {
-		if p.Name == alias && typ.IsSimpleProfileAlias(p.Name) {
+	for _, p := range profiles {
+		if p.Name == alias {
 			return p.ID, true
 		}
 	}
