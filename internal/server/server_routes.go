@@ -206,6 +206,7 @@ func (s *Server) profileAliasMiddleware(c *gin.Context) {
 	// (extractScenarioFromPath) is the one that matters: without this, requests
 	// via the alias would be recorded under "claude_code:mine" instead of
 	// "claude_code:p1", splitting analytics across the alias and the ID.
+	originalPath := c.Request.URL.Path
 	oldSeg := "/tingly/" + rawScenario
 	newSeg := "/tingly/" + rewritten
 	if rest, found := strings.CutPrefix(c.Request.URL.Path, oldSeg); found {
@@ -219,13 +220,15 @@ func (s *Server) profileAliasMiddleware(c *gin.Context) {
 
 	// Record the mapping. After this point the original alias is gone from the
 	// path, usage records, and access logs — all of which now show the
-	// canonical ID. Logging the before→after here keeps SRE able to correlate a
-	// client that called "claude_code:mine" with records tagged
-	// "claude_code:p1".
+	// canonical ID. Logging both the scenario token and the full path
+	// before→after keeps SRE able to correlate a client that called
+	// "/tingly/claude_code:mine/..." with records tagged "claude_code:p1".
 	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-		"profile_alias": rawScenario,
-		"scenario":      rewritten,
-	}).Infof("[profile-alias] resolved %q -> %q", rawScenario, rewritten)
+		"profile_alias":  rawScenario,
+		"scenario":       rewritten,
+		"original_path":  originalPath,
+		"rewritten_path": c.Request.URL.Path,
+	}).Infof("[profile-alias] resolved %q -> %q (path %q -> %q)", rawScenario, rewritten, originalPath, c.Request.URL.Path)
 
 	c.Next()
 }
