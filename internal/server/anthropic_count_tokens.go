@@ -38,7 +38,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	if err != nil {
 		logrus.Debugf("Failed to read request body: %v", err)
 	} else {
-		// Store the body back so downstream (recording / passthrough) can re-read it.
+		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 

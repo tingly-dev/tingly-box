@@ -28,10 +28,12 @@ import (
 //	6. The parsed request lives for the whole (possibly long) streaming response,
 //	   so memory scales with: concurrent streams × full request-body size.
 //
-// THE FIX IS RELEASE, NOT COPY: drop the parsed struct (or, on protocol
-// conversion paths, ctx.OriginalRequest) once it is no longer needed so the
-// pinned body becomes collectable. The release of ctx.OriginalRequest is
-// verified deterministically in internal/server/release_original_request_test.go.
+// WHY THE COPY "FIX" (#1237) DID NOTHING: copying bodyBytes before parsing
+// cannot break this chain — gjson copies the bytes again internally at step 3,
+// so the parsed struct pins gjson's own copy no matter who owns the original.
+// The copy only added a second full-size allocation per request. The real fix is
+// to RELEASE the parsed struct sooner (done separately in #1240).
+// TestCopyingBodyDoesNotReduceRetention below measures this directly.
 
 // buildAnthropicBetaBody returns a valid beta request body whose user message
 // carries `fillerBytes` of payload, so the retained raw text is easy to measure.
@@ -99,10 +101,19 @@ func TestParsedRequestRetainedUntilReleased(t *testing.T) {
 	}
 }
 
-// TestGjsonAccumulation reproduces the steady-state cost: retaining parsed
-// requests (as the streaming path effectively does for its lifetime) grows the
-// heap proportionally to body size, while releasing them keeps it flat.
-func TestGjsonAccumulation(t *testing.T) {
+// TestCopyingBodyDoesNotReduceRetention is the direct proof that #1237's
+// CopyRequestBody was a no-op. It parses the same body three ways and measures
+// the live heap retained after GC:
+//
+//   - parse original   : parse the original bytes, keep the parsed structs
+//   - copy-then-parse   : copy the bytes first (exactly what CopyRequestBody did),
+//     parse the copy, drop the copy, keep the parsed structs
+//   - release           : parse and drop the structs
+//
+// Copying retains essentially the same as not copying — the parsed struct pins
+// gjson's own internal copy either way — while only releasing the struct frees
+// the body. The logged numbers feed the summary table in the PR description.
+func TestCopyingBodyDoesNotReduceRetention(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping heap-measurement reproduction in short mode")
 	}
@@ -113,7 +124,7 @@ func TestGjsonAccumulation(t *testing.T) {
 	)
 	body := buildAnthropicBetaBody(fillerBytes)
 
-	measure := func(retain bool) int64 {
+	measure := func(copyFirst, retain bool) float64 {
 		runtime.GC()
 		var before runtime.MemStats
 		runtime.ReadMemStats(&before)
@@ -123,8 +134,16 @@ func TestGjsonAccumulation(t *testing.T) {
 			sink = make([]*AnthropicBetaMessagesRequest, 0, iterations)
 		}
 		for i := 0; i < iterations; i++ {
+			src := body
+			if copyFirst {
+				// Exactly what memory.CopyRequestBody did: parse a fresh copy of
+				// the body, then let that copy go out of scope.
+				cp := make([]byte, len(body))
+				copy(cp, body)
+				src = cp
+			}
 			req := &AnthropicBetaMessagesRequest{}
-			if err := json.Unmarshal(body, req); err != nil {
+			if err := json.Unmarshal(src, req); err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
 			if retain {
@@ -137,27 +156,31 @@ func TestGjsonAccumulation(t *testing.T) {
 		runtime.ReadMemStats(&after)
 		runtime.KeepAlive(sink)
 
-		// Signed delta clamped at 0: when nothing is retained the post-GC heap can
+		// Signed delta clamped at 0: with nothing retained the post-GC heap can
 		// dip below the baseline, which would underflow unsigned subtraction.
 		growth := int64(after.HeapAlloc) - int64(before.HeapAlloc)
 		if growth < 0 {
 			growth = 0
 		}
-		return growth
+		return float64(growth) / 1024 / 1024
 	}
 
-	retained := measure(true)
-	released := measure(false)
+	noCopy := measure(false, true)
+	copyFirst := measure(true, true)
+	released := measure(false, false)
 
-	t.Logf("retained parsed requests: %.2f MB live after GC", float64(retained)/1024/1024)
-	t.Logf("released parsed requests: %.2f MB live after GC", float64(released)/1024/1024)
+	t.Logf("retained, parse original         : %.1f MB", noCopy)
+	t.Logf("retained, copy-then-parse (#1237) : %.1f MB", copyFirst)
+	t.Logf("released                          : %.1f MB", released)
 
-	// Retaining the parsed structs must hold on to dramatically more memory than
-	// releasing them — that delta IS the retained request bodies. Use a generous
-	// margin so GC timing cannot make this flaky.
-	const marginBytes = 5 * 1024 * 1024
-	if retained <= released+marginBytes {
-		t.Fatalf("expected retained heap to exceed released heap by >5MB; retained=%d released=%d", retained, released)
+	const marginMB = 5.0
+	// Copying did not meaningfully reduce what the parsed structs retain.
+	if copyFirst < noCopy-marginMB {
+		t.Fatalf("copy-first unexpectedly reduced retention: original=%.1fMB copy=%.1fMB", noCopy, copyFirst)
+	}
+	// Copying still retains the body, just like no-copy — far above released.
+	if copyFirst-released < marginMB {
+		t.Fatalf("copy-first should still retain the body like no-copy: copy=%.1fMB released=%.1fMB", copyFirst, released)
 	}
 }
 

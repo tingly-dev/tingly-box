@@ -133,16 +133,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		}
 	}
 
-	// Read the raw request body first for debugging purposes.
-	//
-	// NOTE: do NOT "copy bodyBytes through a pool to break the gjson reference
-	// chain" here — that was tried and removed. gjson.ParseBytes already does
-	// string(json) internally, so copying the body breaks no reference. The real
-	// retention is that the parsed SDK request struct pins the entire raw request
-	// JSON (via the apijson decoder's raw/JSON metadata) for as long as the struct
-	// is reachable — and it stays reachable for the whole streaming response. The
-	// fix is to RELEASE the parsed request early, not to copy the body; see
-	// releaseOriginalRequest in protocol_transform.go.
+	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
 		// Record error if recording is enabled
@@ -150,7 +141,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			recorder.RecordError(err)
 		}
 	} else {
-		// Store the body back so downstream (recording / passthrough) can re-read it.
+		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
