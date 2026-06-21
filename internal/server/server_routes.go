@@ -121,7 +121,7 @@ func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
-	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.HandleOpenAIListModels)
 
 	// Responses API endpoints (OpenAI compatible)
 	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
@@ -134,7 +134,7 @@ func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
 	// Count tokens endpoint (Anthropic compatible)
 	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
 	// Models endpoint (Anthropic compatible)
-	group.GET("/models", s.getModelAuthMiddleware(), s.AnthropicListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.HandleAnthropicListModels)
 }
 
 // SetupPassthroughOpenAIEndpoints sets up pass-through endpoints for OpenAI-style requests
@@ -146,7 +146,7 @@ func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 	// GET responses/:id also uses passthrough
 	group.GET("/responses/*path", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
 	// Models endpoint returns tingly-box's model list (not passthrough)
-	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.HandleOpenAIListModels)
 }
 
 // contextMiddleware is a middleware that extracts the scenario parameter from the URL path
@@ -202,7 +202,7 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 	group.POST("/messages", s.getModelAuthMiddleware(), s.PassthroughAnthropic)
 	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.PassthroughAnthropic)
 	// Models endpoint returns tingly-box's model list (not passthrough)
-	group.GET("/models", s.getModelAuthMiddleware(), s.AnthropicListModels)
+	group.GET("/models", s.getModelAuthMiddleware(), s.HandleAnthropicListModels)
 }
 
 // UseVirtualModelEndpoints sets up the direct virtual-model entrypoints,
