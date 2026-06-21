@@ -23,7 +23,9 @@ import (
 //
 // Clients are automatically cleaned up via finalizers when garbage collected.
 type ClientPool struct {
-	recordSink *obs.Sink
+	recordSink             *obs.Sink
+	virtualOpenAIClient    OpenAIClientInterface
+	virtualAnthropicClient AnthropicClientInterface
 }
 
 // ClientPoolBuilder builds a ClientPool with specified configuration.
@@ -59,6 +61,10 @@ func NewClientPool() *ClientPool {
 // For Kimi Code OAuth providers, returns a KimiClient with special handling.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
 func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) OpenAIClientInterface {
+	if provider.IsVirtual() && p.virtualOpenAIClient != nil {
+		return p.virtualOpenAIClient
+	}
+
 	sessionID := typ.GetSessionID(ctx)
 	logrus.WithContext(ctx).Debugf("Creating OpenAI client for provider: %s, session: %s", provider.Name, sessionID.Value)
 
@@ -116,6 +122,10 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 // For Claude Code OAuth providers, returns a ClaudeClient with special handling.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
 func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provider, model string) AnthropicClientInterface {
+	if provider.IsVirtual() && p.virtualAnthropicClient != nil {
+		return p.virtualAnthropicClient
+	}
+
 	sessionID := typ.GetSessionID(ctx)
 	logrus.WithContext(ctx).Debugf("Creating Anthropic client for provider: %s, session: %s", provider.Name, sessionID.Value)
 
@@ -203,6 +213,14 @@ func newGoogleClientForProvider(provider *typ.Provider, model string, sessionID 
 		}
 	}
 	return NewGoogleClient(provider, model, sessionID)
+}
+
+// SetVirtualClients registers in-process vmodel clients that are returned
+// whenever GetOpenAIClient / GetAnthropicClient are called for a virtual
+// provider. Call this once during server initialization.
+func (p *ClientPool) SetVirtualClients(openAI OpenAIClientInterface, anthropic AnthropicClientInterface) {
+	p.virtualOpenAIClient = openAI
+	p.virtualAnthropicClient = anthropic
 }
 
 // SetRecordSink sets the record sink for the client pool.
