@@ -45,31 +45,6 @@ func (s *Server) setupRoutes(ctx context.Context) {
 }
 
 func (s *Server) UseAIEndpoints() {
-	// DEPRECATED: now we only use path with scenario for openai and anthropic
-	//// OpenAI v1 API group
-	//openaiV1 := s.engine.Group("/openai/v1")
-	//s.SetupOpenAIEndpoints(openaiV1)
-	//
-	//// OpenAI API alias (without version)
-	//openai := s.engine.Group("/openai")
-	//s.SetupOpenAIEndpoints(openai)
-	//
-	//// Anthropic v1 API group
-	//anthropicV1 := s.engine.Group("/anthropic/v1")
-	//s.SetupAnthropicEndpoints(anthropicV1)
-
-	// Passthrough endpoints (no request/response transformation, just model replacement)
-	// Non-versioned passthrough routes
-	passthroughOpenai := s.engine.Group("/passthrough/openai")
-	s.SetupPassthroughOpenAIEndpoints(passthroughOpenai)
-
-	passthroughAnthropic := s.engine.Group("/passthrough/anthropic")
-	s.SetupPassthroughAnthropicEndpoints(passthroughAnthropic)
-
-	// Versioned passthrough routes
-	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
-	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
-
 	// scenario routes with middleware to inject scenario into context.
 	// profileAliasMiddleware runs first so it can rewrite a profile name alias
 	// (e.g. "claude_code:mine") to its canonical ID form ("claude_code:p1")
@@ -137,18 +112,6 @@ func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
 	group.GET("/models", s.getModelAuthMiddleware(), s.HandleAnthropicListModels)
 }
 
-// SetupPassthroughOpenAIEndpoints sets up pass-through endpoints for OpenAI-style requests
-// These endpoints bypass request/response transformations and only replace the model name
-func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
-	// POST endpoints that use passthrough (proxy with model replacement)
-	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
-	group.POST("/responses", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
-	// GET responses/:id also uses passthrough
-	group.GET("/responses/*path", s.getModelAuthMiddleware(), s.PassthroughOpenAI)
-	// Models endpoint returns tingly-box's model list (not passthrough)
-	group.GET("/models", s.getModelAuthMiddleware(), s.HandleOpenAIListModels)
-}
-
 // contextMiddleware is a middleware that extracts the scenario parameter from the URL path
 // and injects it into the request context for use by downstream components (e.g., RecordRoundTripper).
 // It also validates profile suffixes (e.g., "claude_code:p1") if present.
@@ -193,16 +156,6 @@ func (s *Server) contextMiddleware(c *gin.Context) {
 	}
 
 	c.Next()
-}
-
-// SetupPassthroughAnthropicEndpoints sets up pass-through endpoints for Anthropic-style requests
-// These endpoints bypass request/response transformations and only replace the model name
-func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
-	// POST endpoints that use passthrough (proxy with model replacement)
-	group.POST("/messages", s.getModelAuthMiddleware(), s.PassthroughAnthropic)
-	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.PassthroughAnthropic)
-	// Models endpoint returns tingly-box's model list (not passthrough)
-	group.GET("/models", s.getModelAuthMiddleware(), s.HandleAnthropicListModels)
 }
 
 // UseVirtualModelEndpoints sets up the direct virtual-model entrypoints,
