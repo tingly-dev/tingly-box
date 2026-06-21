@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -22,7 +23,7 @@ func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 		pre = append(pre, transform.NewOpenAICursorCompatTransform())
 	}
 	if flags.CleanHeader {
-		pre = append(pre, NewCleanHeaderTransform())
+		pre = append(pre, servertransform.NewCleanHeaderTransform())
 	}
 	if names := parseBlockTools(flags.BlockTools); len(names) > 0 {
 		pre = append(pre, transform.NewToolBlockTransform(names))
