@@ -222,20 +222,7 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 		})
 	}
 
-	// If no items were created, create an empty assistant message
-	if len(items) == 0 {
-		messageItem := responses.EasyInputMessageParam{
-			Type: responses.EasyInputMessageTypeMessage,
-			Role: responses.EasyInputMessageRole("assistant"),
-			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: param.NewOpt(""),
-			},
-		}
-		items = append(items, responses.ResponseInputItemUnionParam{
-			OfMessage: &messageItem,
-		})
-	}
-
+	// An assistant message with no text and no tool_use blocks is empty — skip it.
 	return items
 }
 

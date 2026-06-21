@@ -81,7 +81,7 @@ func ConvertChatMessagesToResponsesInput(messages []openai.ChatCompletionMessage
 	for _, msg := range messages {
 		switch {
 		case !param.IsOmitted(msg.OfUser):
-			result = append(result, convertChatUserMessageToResponses(msg.OfUser))
+			result = append(result, convertChatUserMessageToResponses(msg.OfUser)...)
 
 		case !param.IsOmitted(msg.OfAssistant):
 			assistantMsg := msg.OfAssistant
@@ -101,8 +101,7 @@ func ConvertChatMessagesToResponsesInput(messages []openai.ChatCompletionMessage
 					}
 				}
 			} else {
-				// Regular assistant message
-				result = append(result, convertChatAssistantMessageToResponses(assistantMsg))
+				result = append(result, convertChatAssistantMessageToResponses(assistantMsg)...)
 			}
 
 		case !param.IsOmitted(msg.OfTool):
@@ -114,9 +113,10 @@ func ConvertChatMessagesToResponsesInput(messages []openai.ChatCompletionMessage
 }
 
 // convertChatUserMessageToResponses converts a Chat user message to Responses format.
-func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessageParam) responses.ResponseInputItemUnionParam {
-	if userMsg.Content.OfString.Valid() {
-		return responses.ResponseInputItemUnionParam{
+// Returns nil if the message has no usable content.
+func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessageParam) []responses.ResponseInputItemUnionParam {
+	if userMsg.Content.OfString.Valid() && userMsg.Content.OfString.Value != "" {
+		return []responses.ResponseInputItemUnionParam{{
 			OfMessage: &responses.EasyInputMessageParam{
 				Type: responses.EasyInputMessageTypeMessage,
 				Role: responses.EasyInputMessageRole("user"),
@@ -124,7 +124,7 @@ func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessage
 					OfString: param.NewOpt(userMsg.Content.OfString.Value),
 				},
 			},
-		}
+		}}
 	}
 
 	// Multipart content: forward text + image_url parts as input_text + input_image.
@@ -149,7 +149,7 @@ func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessage
 			}
 		}
 		if len(contentList) > 0 {
-			return responses.ResponseInputItemUnionParam{
+			return []responses.ResponseInputItemUnionParam{{
 				OfMessage: &responses.EasyInputMessageParam{
 					Type: responses.EasyInputMessageTypeMessage,
 					Role: responses.EasyInputMessageRole("user"),
@@ -157,38 +157,30 @@ func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessage
 						OfInputItemContentList: contentList,
 					},
 				},
-			}
+			}}
 		}
 	}
 
-	// Fall back to an empty user message to preserve prior behavior.
-	return responses.ResponseInputItemUnionParam{
-		OfMessage: &responses.EasyInputMessageParam{
-			Type: responses.EasyInputMessageTypeMessage,
-			Role: responses.EasyInputMessageRole("user"),
-			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: param.NewOpt(""),
-			},
-		},
-	}
+	// No usable content — skip rather than emit an empty message.
+	return nil
 }
 
 // convertChatAssistantMessageToResponses converts a Chat assistant message to Responses format.
-func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionAssistantMessageParam) responses.ResponseInputItemUnionParam {
-	content := ""
-	if !param.IsOmitted(assistantMsg.Content.OfString) && assistantMsg.Content.OfString.Value != "" {
-		content = assistantMsg.Content.OfString.Value
+// Returns nil if the message has no usable text content.
+func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionAssistantMessageParam) []responses.ResponseInputItemUnionParam {
+	if param.IsOmitted(assistantMsg.Content.OfString) || assistantMsg.Content.OfString.Value == "" {
+		return nil
 	}
 
-	return responses.ResponseInputItemUnionParam{
+	return []responses.ResponseInputItemUnionParam{{
 		OfMessage: &responses.EasyInputMessageParam{
 			Type: responses.EasyInputMessageTypeMessage,
 			Role: responses.EasyInputMessageRole("assistant"),
 			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: param.NewOpt(content),
+				OfString: param.NewOpt(assistantMsg.Content.OfString.Value),
 			},
 		},
-	}
+	}}
 }
 
 // convertChatToolMessageToResponses converts a Chat tool message to Responses function_call_output format.
