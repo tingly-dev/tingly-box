@@ -30,25 +30,25 @@ const TabPanel = styled(Box)<{ value: number; index: number }>(
 
 export const ImportModal = ({ open, onClose, onImport, loading = false }: ImportModalProps) => {
     const [tabValue, setTabValue] = useState(0);
-    const [jsonlData, setJsonlData] = useState('');
     const [base64Data, setBase64Data] = useState('');
+    const [jsonlData, setJsonlData] = useState('');
     const [fileName, setFileName] = useState<string>('');
 
     const handleClose = () => {
-        setJsonlData('');
         setBase64Data('');
+        setJsonlData('');
         setFileName('');
         setTabValue(0);
         onClose();
     };
 
-    const handleJsonlImport = () => {
-        const trimmed = jsonlData.trim();
+    const handleBase64Import = () => {
+        const trimmed = base64Data.trim();
         if (trimmed) onImport(trimmed);
     };
 
-    const handleBase64Import = () => {
-        const trimmed = base64Data.trim();
+    const handleJsonlImport = () => {
+        const trimmed = jsonlData.trim();
         if (trimmed) onImport(trimmed);
     };
 
@@ -80,28 +80,12 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                     onChange={(_, newValue) => setTabValue(newValue)}
                     sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
                 >
-                    <Tab label="JSONL" icon={<CodeIcon />} disabled={loading} />
                     <Tab label="Base64" icon={<PasteIcon />} disabled={loading} />
+                    <Tab label="JSONL" icon={<CodeIcon />} disabled={loading} />
                     <Tab label="Upload File" icon={<UploadIcon />} disabled={loading} />
                 </Tabs>
 
                 <TabPanel value={tabValue} index={0}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Paste exported data in JSONL format below.
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        multiline
-                        rows={8}
-                        placeholder='{"type":"metadata","version":"1.0",...}\n{"type":"rule",...}'
-                        value={jsonlData}
-                        onChange={(e) => setJsonlData(e.target.value)}
-                        disabled={loading}
-                        sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
-                    />
-                </TabPanel>
-
-                <TabPanel value={tabValue} index={1}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         Paste exported data in Base64 format below.
                     </Typography>
@@ -112,6 +96,22 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                         placeholder="TGB64:1.0:..."
                         value={base64Data}
                         onChange={(e) => setBase64Data(e.target.value)}
+                        disabled={loading}
+                        sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                    />
+                </TabPanel>
+
+                <TabPanel value={tabValue} index={1}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Paste exported data in JSONL format below.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={8}
+                        placeholder='{"type":"metadata","version":"1.0",...}\n{"type":"rule",...}'
+                        value={jsonlData}
+                        onChange={(e) => setJsonlData(e.target.value)}
                         disabled={loading}
                         sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
                     />
@@ -149,18 +149,18 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                 </Button>
                 {tabValue === 0 && (
                     <Button
-                        onClick={handleJsonlImport}
+                        onClick={handleBase64Import}
                         variant="contained"
-                        disabled={!jsonlData.trim() || loading}
+                        disabled={!base64Data.trim() || loading}
                     >
                         {loading ? 'Importing...' : 'Import'}
                     </Button>
                 )}
                 {tabValue === 1 && (
                     <Button
-                        onClick={handleBase64Import}
+                        onClick={handleJsonlImport}
                         variant="contained"
-                        disabled={!base64Data.trim() || loading}
+                        disabled={!jsonlData.trim() || loading}
                     >
                         {loading ? 'Importing...' : 'Import'}
                     </Button>

@@ -98,7 +98,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     });
 
     // Export functionality
-    const { handleExport, handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard } = useRuleExport({ rule, showNotification });
+    const { handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard } = useRuleExport({ rule, showNotification });
 
     // Smart routing handlers
     const { dialogState: smartDialogState, handlers: smartHandlers } = useSmartRoutingHandlers({
@@ -287,7 +287,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             active={configRecord.active}
             allowToggleRule={allowToggleRule}
             saving={saving}
-            onExport={handleExport}
             onExportAsJsonlToClipboard={handleExportAsJsonlToClipboard}
             onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
             onDelete={handleDeleteButtonClick}

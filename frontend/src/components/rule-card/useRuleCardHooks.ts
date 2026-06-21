@@ -6,11 +6,9 @@ import {
     isConfigRecordReadyForSave,
     cloneSmartRouting,
     createEmptySmartRouting,
-    exportRuleWithProviders,
     exportRuleAsJsonlToClipboard,
     exportRuleAsBase64ToClipboard,
     pickLbTactic,
-    type ExportFormat,
 } from './utils';
 import { buildRuleUpdatePayload } from './ruleUpdatePayload';
 
@@ -195,10 +193,6 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
  * Handles rule export functionality with providers
  */
 export function useRuleExport({ rule, showNotification }: UseRuleExportProps) {
-    const handleExport = useCallback(async (format: ExportFormat = 'jsonl') => {
-        await exportRuleWithProviders(rule, format, showNotification);
-    }, [rule, showNotification]);
-
     const handleExportAsJsonlToClipboard = useCallback(async () => {
         await exportRuleAsJsonlToClipboard(rule, showNotification);
     }, [rule, showNotification]);
@@ -207,7 +201,7 @@ export function useRuleExport({ rule, showNotification }: UseRuleExportProps) {
         await exportRuleAsBase64ToClipboard(rule, showNotification);
     }, [rule, showNotification]);
 
-    return { handleExport, handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard };
+    return { handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard };
 }
 
 /**

@@ -3,8 +3,6 @@ import {
     CheckCircle as ActiveIcon,
     ContentCopy as CopyIcon,
     Delete as DeleteIcon,
-    Download as ExportIcon,
-    Download as DownloadIcon,
     Edit as EditIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
@@ -15,7 +13,6 @@ import {
 } from '@/components/icons';
 import { IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
-import type { ExportFormat } from '@/components/rule-card/utils';
 import { ProbeMenu } from './probe';
 
 export interface GraphSettingsMenuProps {
@@ -23,7 +20,6 @@ export interface GraphSettingsMenuProps {
     active: boolean;
     allowToggleRule: boolean;
     saving: boolean;
-    onExport: (format: ExportFormat) => void;
     onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
@@ -41,7 +37,6 @@ export const GraphSettingsMenu = ({
     active,
     allowToggleRule,
     saving,
-    onExport,
     onExportAsJsonlToClipboard,
     onExportAsBase64ToClipboard,
     onDelete,
@@ -92,7 +87,7 @@ export const GraphSettingsMenu = ({
                 </MenuItem>
 
                 <MenuItem onClick={(e) => { setExportMenuAnchorEl(e.currentTarget); closeMenu(); }}>
-                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />Export
+                    <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy
                     <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
                 </MenuItem>
 
@@ -132,20 +127,14 @@ export const GraphSettingsMenu = ({
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
             >
-                <MenuItem onClick={() => { closeAllMenus(); onExport('jsonl'); }}>
-                    <DownloadIcon fontSize="small" sx={{ mr: 1 }} />Download as JSONL
-                </MenuItem>
-                <MenuItem onClick={() => { closeAllMenus(); onExport('base64'); }}>
-                    <DownloadIcon fontSize="small" sx={{ mr: 1 }} />Download as Base64
-                </MenuItem>
-                {onExportAsJsonlToClipboard && (
-                    <MenuItem onClick={() => { closeAllMenus(); onExportAsJsonlToClipboard(); }}>
-                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy JSONL to Clipboard
-                    </MenuItem>
-                )}
                 {onExportAsBase64ToClipboard && (
                     <MenuItem onClick={() => { closeAllMenus(); onExportAsBase64ToClipboard(); }}>
-                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64 to Clipboard
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64
+                    </MenuItem>
+                )}
+                {onExportAsJsonlToClipboard && (
+                    <MenuItem onClick={() => { closeAllMenus(); onExportAsJsonlToClipboard(); }}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy JSONL
                     </MenuItem>
                 )}
             </Menu>
