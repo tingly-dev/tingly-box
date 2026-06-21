@@ -103,6 +103,55 @@ func TestSanitizeCodexInputIDsJSON_HighIndex(t *testing.T) {
 	assert.False(t, input[186].Get("id").Exists())
 }
 
+func TestSanitizeCodexEmptyContentJSON_DropsEmptyStringContent(t *testing.T) {
+	body := `{
+		"input": [
+			{"type": "message", "role": "user", "content": "hello"},
+			{"type": "message", "role": "assistant", "content": ""},
+			{"type": "message", "role": "user", "content": ""},
+			{"type": "function_call_output", "call_id": "c1", "output": ""}
+		]
+	}`
+
+	out := sanitizeCodexEmptyContentJSON(body)
+
+	input := gjson.Get(out, "input").Array()
+	assert.Len(t, input, 2, "message items with empty string content must be dropped")
+	assert.Equal(t, "hello", input[0].Get("content").String())
+	assert.Equal(t, "function_call_output", input[1].Get("type").String(), "non-message items with empty content must be kept")
+}
+
+func TestSanitizeCodexEmptyContentJSON_KeepsNonEmptyContent(t *testing.T) {
+	body := `{"input":[{"type":"message","role":"user","content":"hi"},{"type":"message","role":"assistant","content":"hello"}]}`
+
+	out := sanitizeCodexEmptyContentJSON(body)
+
+	assert.Equal(t, body, out, "non-empty content must not be modified")
+}
+
+func TestSanitizeCodexEmptyContentJSON_NoInputArray(t *testing.T) {
+	body := `{"model":"gpt-5-codex","input":"hello"}`
+
+	out := sanitizeCodexEmptyContentJSON(body)
+
+	assert.Equal(t, body, out)
+}
+
+func TestSanitizeCodexEmptyContentJSON_HighIndex(t *testing.T) {
+	// Mirrors the production failure: input[1012].content == ""
+	var items []string
+	for i := 0; i < 1012; i++ {
+		items = append(items, `{"type":"message","role":"user","content":"x"}`)
+	}
+	items = append(items, `{"type":"message","role":"assistant","content":""}`)
+	body := `{"input":[` + strings.Join(items, ",") + `]}`
+
+	out := sanitizeCodexEmptyContentJSON(body)
+
+	input := gjson.Get(out, "input").Array()
+	assert.Len(t, input, 1012, "empty-content message at high index must be dropped")
+}
+
 func TestCodexInputItemIDRequired(t *testing.T) {
 	required := []string{
 		"reasoning", "code_interpreter_call", "computer_call", "file_search_call",

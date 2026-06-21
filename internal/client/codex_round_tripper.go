@@ -112,6 +112,10 @@ func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
 	// scrub the marshaled JSON to catch every variant the SDK may emit.
 	bodyStr = sanitizeCodexInputIDsJSON(bodyStr)
 
+	// Drop message items whose content serialized as "" — Codex treats empty
+	// string content as a missing required parameter.
+	bodyStr = sanitizeCodexEmptyContentJSON(bodyStr)
+
 	return []byte(bodyStr), nil
 }
 
@@ -150,6 +154,31 @@ func sanitizeCodexInputIDsJSON(bodyStr string) string {
 			if updated, err := sjson.Delete(bodyStr, path+".id"); err == nil {
 				bodyStr = updated
 			}
+		}
+	}
+	return bodyStr
+}
+
+// sanitizeCodexEmptyContentJSON drops input items of type "message" whose content
+// field is an empty string. Codex treats "content": "" as a missing required
+// parameter, which results in an invalid_request_error.
+func sanitizeCodexEmptyContentJSON(bodyStr string) string {
+	input := gjson.Get(bodyStr, "input")
+	if !input.IsArray() {
+		return bodyStr
+	}
+
+	items := input.Array()
+	for i := len(items) - 1; i >= 0; i-- {
+		item := items[i]
+		content := item.Get("content")
+		if !content.Exists() || content.Type != gjson.String || content.String() != "" {
+			continue
+		}
+		logrus.Warnf("[Codex] Dropping input[%d] (type=%q) with empty string content", i, item.Get("type").String())
+		path := fmt.Sprintf("input.%d", i)
+		if updated, err := sjson.Delete(bodyStr, path); err == nil {
+			bodyStr = updated
 		}
 	}
 	return bodyStr

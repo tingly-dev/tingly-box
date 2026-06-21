@@ -301,6 +301,18 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 		logrus.Debugf("[Codex] Dropping item_reference input item with invalid id: %q", item.OfItemReference.ID)
 		return false
 	}
+
+	// Drop message items with empty string content.
+	// Codex rejects "content": "" as a missing required parameter.
+	if item.OfMessage != nil {
+		msg := item.OfMessage
+		if msg.Content.OfString.Valid() && msg.Content.OfString.Value == "" &&
+			len(msg.Content.OfInputItemContentList) == 0 {
+			logrus.Warnf("[Codex] Dropping message item (role=%s) with empty string content", msg.Role)
+			return false
+		}
+	}
+
 	return true
 }
 
