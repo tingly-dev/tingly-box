@@ -41,6 +41,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
+	vmodelclient "github.com/tingly-dev/tingly-box/vmodel/client"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -454,6 +455,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 			logrus.Debugf("Builtin virtual-model providers seeded")
 		}
 	}
+
+	// Wire in-process vmodel clients into the pool so virtual providers
+	// traverse the exact same dispatch path as real providers.
+	vmodelProvider := &typ.Provider{Name: "vmodel-internal", AuthType: typ.AuthTypeVirtual}
+	server.clientPool.SetVirtualClients(
+		vmodelclient.NewOpenAIClient(server.virtualModelService.GetOpenAIRegistry(), vmodelProvider),
+		vmodelclient.NewAnthropicClient(server.virtualModelService.GetAnthropicRegistry(), vmodelProvider),
+	)
 
 	// Initialize provider quota manager
 	if err := server.initQuotaManager(cfg); err != nil {
