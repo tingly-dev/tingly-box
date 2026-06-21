@@ -207,6 +207,64 @@ func (env *TestEnv) SetupCrossStyleFailoverRoute(
 	}
 }
 
+// SetupVModelFailoverRoute wires a two-tier rule where BOTH tiers are in-process
+// virtual-model providers (AuthType = vmodel, #1249), so failover traverses the
+// vmodel ClientPool path rather than httptest upstreams. The primary trips the
+// named failing model (e.g. FailMockPreContent500) in primaryStyle; the fallback
+// serves fallbackModel (e.g. "echo-model") in fallbackStyle. Set primaryStyle ≠
+// fallbackStyle to exercise cross-style failover through the vmodel clients.
+//
+// PrimaryCallCount is nil (in-process providers have no httptest counter);
+// assert on the client result instead.
+func (env *TestEnv) SetupVModelFailoverRoute(
+	t *testing.T,
+	source protocol.APIType,
+	primaryStyle, fallbackStyle protocol.APIStyle,
+	primaryFailModel, fallbackModel string,
+) FailoverRoute {
+	t.Helper()
+
+	requestModel := fmt.Sprintf("vmfo-%s-%s-%s-to-%s-%s", source, primaryStyle, primaryFailModel, fallbackStyle, fallbackModel)
+	primaryUUID := fmt.Sprintf("vm-primary-%s-%s", primaryStyle, primaryFailModel)
+	fallbackUUID := fmt.Sprintf("vm-fallback-%s-%s", fallbackStyle, fallbackModel)
+
+	// Virtual providers mirror the builtin vmodel seed shape: a non-empty
+	// sentinel APIBase (AddProvider rejects empty), AuthType=vmodel (routes to
+	// the in-process client), and a VModelDetail advertising the served model.
+	if err := env.appConfig.AddProvider(&typ.Provider{
+		UUID: primaryUUID, Name: primaryUUID, APIBase: "vmodel://local", APIStyle: primaryStyle,
+		AuthType: typ.AuthTypeVirtual, Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+		VModelDetail: &typ.VModelDetail{Models: []string{primaryFailModel}},
+	}); err != nil {
+		t.Fatalf("add primary vmodel provider: %v", err)
+	}
+	if err := env.appConfig.AddProvider(&typ.Provider{
+		UUID: fallbackUUID, Name: fallbackUUID, APIBase: "vmodel://local", APIStyle: fallbackStyle,
+		AuthType: typ.AuthTypeVirtual, Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+		VModelDetail: &typ.VModelDetail{Models: []string{fallbackModel}},
+	}); err != nil {
+		t.Fatalf("add fallback vmodel provider: %v", err)
+	}
+
+	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(typ.Rule{
+		UUID:          requestModel,
+		Scenario:      sourceToRuleScenario(source),
+		RequestModel:  requestModel,
+		ResponseModel: fallbackModel,
+		Services: []*loadbalance.Service{
+			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
+			{Provider: fallbackUUID, Model: fallbackModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
+		},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
+		},
+		Active: true,
+	})
+
+	return FailoverRoute{ModelName: requestModel}
+}
+
 // SetupBothFailingRoute wires a two-tier rule where BOTH tiers trip the same
 // pre-content injection. Used for the all-tiers-fail test: client must see a
 // non-200 once the orchestrator exhausts its budget.

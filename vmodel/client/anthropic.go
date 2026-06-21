@@ -50,6 +50,9 @@ func (c *AnthropicClient) BetaMessagesNew(_ context.Context, req *anthropic.Beta
 	if vm == nil {
 		return nil, fmt.Errorf("vmodel not found: %s", req.Model)
 	}
+	if err := injectedPreContentError(vm); err != nil {
+		return nil, err
+	}
 
 	vmReq := &protocol.AnthropicBetaMessagesRequest{
 		BetaMessageNewParams: *req,
@@ -98,6 +101,10 @@ func (c *AnthropicClient) BetaMessagesNewStreaming(_ context.Context, req *anthr
 	if vm == nil {
 		return anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
 			anthropicErrDecoder{fmt.Errorf("vmodel not found: %s", req.Model)}, nil)
+	}
+	if err := injectedPreContentError(vm); err != nil {
+		return anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
+			anthropicErrDecoder{err}, nil)
 	}
 
 	vmReq := &protocol.AnthropicBetaMessagesRequest{

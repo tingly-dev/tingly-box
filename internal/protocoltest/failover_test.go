@@ -245,6 +245,47 @@ func TestFailover_CrossStyle_SetupError_AdvancesToFallback(t *testing.T) {
 	require.Greater(t, env.UpstreamEndpointHits(pt.EndpointChat), 0, "fallback OpenAI Chat must have served the request")
 }
 
+// TestFailover_VModel_CrossStyle_AnthropicFailToOpenAIEcho is the reported setup,
+// served entirely by the in-process vmodel clients (#1249): T0 is an Anthropic
+// vmodel that returns the injected 500, T1 is an OpenAI vmodel that echoes. The
+// Anthropic client now honors error injection (BetaMessagesNew), so the primary
+// genuinely fails and failover re-transforms to OpenAI. Because the primary can
+// only error, a 200 carrying the echo content proves the fallback served.
+func TestFailover_VModel_CrossStyle_AnthropicFailToOpenAIEcho(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupVModelFailoverRoute(t,
+		protocol.TypeAnthropicBeta,
+		protocol.APIStyleAnthropic, protocol.APIStyleOpenAI,
+		pt.FailMockPreContent500, "echo-model",
+	)
+
+	result := env.SendWithModel(t, protocol.TypeAnthropicBeta, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "OpenAI echo vmodel must serve after the Anthropic vmodel 500")
+	assert.Contains(t, result.Content, "Echo:", "content must come from the echo fallback, not the failing primary")
+}
+
+// TestFailover_VModel_CrossStyle_OpenAIFailToAnthropicEcho is the reverse
+// direction, covering the OpenAI vmodel client's error injection: T0 is an
+// OpenAI vmodel that 500s, T1 is an Anthropic vmodel that echoes.
+func TestFailover_VModel_CrossStyle_OpenAIFailToAnthropicEcho(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupVModelFailoverRoute(t,
+		protocol.TypeOpenAIChat,
+		protocol.APIStyleOpenAI, protocol.APIStyleAnthropic,
+		pt.FailMockPreContent500, "echo-model",
+	)
+
+	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "Anthropic echo vmodel must serve after the OpenAI vmodel 500")
+	assert.Contains(t, result.Content, "Echo:", "content must come from the echo fallback, not the failing primary")
+}
+
 // TestFailover_SingleService_Bypass — single-service rules bypass the gate
 // entirely (orchestrator's len(activeServices) <= 1 short-circuit). The
 // existing SetupRoute path exercises this — assertion is just that the

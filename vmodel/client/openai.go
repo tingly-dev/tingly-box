@@ -55,6 +55,9 @@ func (c *OpenAIClient) ChatCompletionsNew(_ context.Context, req openai.ChatComp
 	if vm == nil {
 		return nil, fmt.Errorf("vmodel not found: %s", req.Model)
 	}
+	if err := injectedPreContentError(vm); err != nil {
+		return nil, err
+	}
 
 	vmReq := &protocol.OpenAIChatCompletionRequest{
 		ChatCompletionNewParams: req,
@@ -126,6 +129,9 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(_ context.Context, req openai
 	vm := c.reg.Get(req.Model)
 	if vm == nil {
 		return openaistream.NewStream[openai.ChatCompletionChunk](errDecoder{fmt.Errorf("vmodel not found: %s", req.Model)}, nil)
+	}
+	if err := injectedPreContentError(vm); err != nil {
+		return openaistream.NewStream[openai.ChatCompletionChunk](errDecoder{err}, nil)
 	}
 
 	vmReq := &protocol.OpenAIChatCompletionRequest{
