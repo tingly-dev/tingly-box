@@ -33,16 +33,9 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 		}
 	}
 
-	// Set input - use list format if we have multiple items or complex content
-	if len(inputItems) > 0 {
-		params.Input = responses.ResponseNewParamsInputUnion{
-			OfInputItemList: inputItems,
-		}
-	} else {
-		// Fallback to simple string input
-		params.Input = responses.ResponseNewParamsInputUnion{
-			OfString: ParamOpt(""),
-		}
+	// Set input - always use list format so the field is well-typed.
+	params.Input = responses.ResponseNewParamsInputUnion{
+		OfInputItemList: inputItems,
 	}
 
 	// Convert MaxTokens to MaxOutputTokens
@@ -108,7 +101,7 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 				items = append(items, responses.ResponseInputItemUnionParam{
 					OfFunctionCallOutput: &outputItem,
 				})
-			} else if block.OfText != nil {
+			} else if block.OfText != nil && block.OfText.Text != "" {
 				// Text content alongside tool results
 				messageItem := responses.EasyInputMessageParam{
 					Type: responses.EasyInputMessageTypeMessage,
@@ -219,20 +212,7 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 		})
 	}
 
-	// If no items were created, create an empty assistant message
-	if len(items) == 0 {
-		messageItem := responses.EasyInputMessageParam{
-			Type: responses.EasyInputMessageTypeMessage,
-			Role: responses.EasyInputMessageRole("assistant"),
-			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: ParamOpt(""),
-			},
-		}
-		items = append(items, responses.ResponseInputItemUnionParam{
-			OfMessage: &messageItem,
-		})
-	}
-
+	// An assistant message with no text and no tool_use blocks is empty — skip it.
 	return items
 }
 
