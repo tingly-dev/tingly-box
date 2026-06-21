@@ -87,7 +87,7 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	// Direct call into the inner streaming handler — the function under
 	// test. If AttachRecorderHooks were dropped, the assertion below
 	// (assembled body in FinalResponse) would fail.
-	s.streamAnthropicV1Beta(c, req, streamResp, string(req.Model), "proxy-stream-model", provider, recorder)
+	s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, string(req.Model), "proxy-stream-model", provider, recorder)
 
 	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
 

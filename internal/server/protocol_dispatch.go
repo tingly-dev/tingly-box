@@ -418,7 +418,7 @@ func (s *Server) passthroughAnthropicBeta(
 				return
 			}
 
-			s.streamAnthropicV1Beta(c, req, streamResp, actualModel, responseModel, provider, recorder)
+			s.handleAnthropicStreamResponseV1Beta(c, req, streamResp, actualModel, responseModel, provider, recorder)
 			return
 		}
 
@@ -1096,4 +1096,3 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 
 	s.trackUsageWithTokenUsage(c, usage, nil)
 }
-
