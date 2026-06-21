@@ -144,11 +144,11 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req protocol.AnthropicB
 	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, recorder)
 }
 
-// handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming
+// streamAnthropicV1Beta processes the Anthropic beta streaming
 // response. The resolved model is passed in as actualModel rather than read from
 // the request, so the handler no longer depends on req.Model.
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, actualModel string, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
-	hc := protocol.NewHandleContext(c, respModel)
+func (s *Server) streamAnthropicV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
+	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if recorder is available
 	AttachRecorderHooks(hc, recorder, actualModel, provider)

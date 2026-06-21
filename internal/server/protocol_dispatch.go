@@ -418,7 +418,7 @@ func (s *Server) passthroughAnthropicBeta(
 				return
 			}
 
-			s.handleAnthropicStreamResponseV1Beta(c, actualModel, req, streamResp, responseModel, provider, recorder)
+			s.streamAnthropicV1Beta(c, req, streamResp, actualModel, responseModel, provider, recorder)
 			return
 		}
 
