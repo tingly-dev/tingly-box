@@ -2,7 +2,6 @@ import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
 import type {ExportFormat} from "@/components/rule-card/utils";
 import {
-    exportProvider,
     exportProviderAsBase64ToClipboard,
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
@@ -12,7 +11,6 @@ import {
     ContentCopy,
     DataUsage,
     Delete,
-    Download,
     Edit,
     ListAlt,
     MoreVert,
@@ -203,15 +201,6 @@ const ApiKeyTable = ({
     const handleCloseModelListDialog = () => {
         setModelListDialog({open: false, provider: null});
     };
-
-    const handleExportProvider = useCallback(
-        async (provider: Provider, format: ExportFormat) => {
-            await exportProvider(provider, format, (message, severity) => {
-                onNotification?.(message, severity);
-            });
-        },
-        [onNotification],
-    );
 
     const handleCopyProviderBase64 = useCallback(
         async (provider: Provider) => {
@@ -497,22 +486,13 @@ const ApiKeyTable = ({
                             </MenuItem>
                         ),
                         <MenuItem
-                            key="export-jsonl"
+                            key="copy-base64"
                             onClick={() => {
                                 handleMoreClose();
-                                handleExportProvider(p, "jsonl");
+                                handleCopyProviderBase64(p);
                             }}
                         >
-                            <Download fontSize="small" sx={{mr: 1}}/> Download JSONL
-                        </MenuItem>,
-                        <MenuItem
-                            key="export-base64"
-                            onClick={() => {
-                                handleMoreClose();
-                                handleExportProvider(p, "base64");
-                            }}
-                        >
-                            <Download fontSize="small" sx={{mr: 1}}/> Download Base64
+                            <ContentCopy fontSize="small" sx={{mr: 1}}/> Copy Base64
                         </MenuItem>,
                         <MenuItem
                             key="copy-jsonl"
@@ -522,15 +502,6 @@ const ApiKeyTable = ({
                             }}
                         >
                             <ContentCopy fontSize="small" sx={{mr: 1}}/> Copy JSONL
-                        </MenuItem>,
-                        <MenuItem
-                            key="copy-base64"
-                            onClick={() => {
-                                handleMoreClose();
-                                handleCopyProviderBase64(p);
-                            }}
-                        >
-                            <ContentCopy fontSize="small" sx={{mr: 1}}/> Copy Base64
                         </MenuItem>,
                         onDelete && <Divider key="divider"/>,
                         onDelete && (
