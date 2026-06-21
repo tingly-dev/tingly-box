@@ -202,6 +202,7 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 
 		var explicitUsage *anthropicUsageCapture
 		var stopReason string
+		var accumulatedText string
 
 		streamErr := vm.HandleAnthropicStream(req, func(ev any) {
 			switch e := ev.(type) {
@@ -209,6 +210,7 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 				// message_start was already emitted above; skip duplicate.
 
 			case anthropicvm.TextDeltaEvent:
+				accumulatedText += e.Text
 				startBlock(e.Index, map[string]interface{}{"type": "text", "text": ""})
 				emit("content_block_delta", map[string]interface{}{
 					"type":  "content_block_delta",
@@ -265,7 +267,7 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 					}
 				} else {
 					usageMap["input_tokens"] = token.EstimateBetaAnthropicTokens(req.Messages)
-					usageMap["output_tokens"] = int64(0)
+					usageMap["output_tokens"] = token.EstimateTokensString(accumulatedText)
 				}
 
 				emit("message_delta", map[string]interface{}{
