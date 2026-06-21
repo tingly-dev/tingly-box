@@ -567,6 +567,16 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 	}
 }
 
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
 func buildOpenAIContinuationSegment(
 	calls []stream.OpenAIToAnthropicToolCall,
 	virtualResults []mcp.ToolExecutionResult,
