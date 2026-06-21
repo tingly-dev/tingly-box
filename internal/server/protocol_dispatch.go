@@ -458,7 +458,7 @@ func (s *Server) passthroughAnthropicBeta(
 		s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 		anthropicResp.Model = anthropic.Model(responseModel)
 
-		_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+		scenario := GetTrackingContextScenario(c)
 		if s.guardrailsEnabledForScenario(scenario) {
 			s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
 		}

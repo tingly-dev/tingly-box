@@ -154,7 +154,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, actualModel
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// response guardrails
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	scenario := GetTrackingContextScenario(c)
 	if s.guardrailsEnabledForScenario(scenario) {
 		hc.EnsureGuardrails().Enabled = true
 		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))

@@ -326,7 +326,7 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	}
 
 	// Response guardrails
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	scenario := GetTrackingContextScenario(c)
 	if anthropicMsg != nil && s.guardrailsEnabledForScenario(scenario) {
 		s.applyGuardrailsToAnthropicV1NonStreamResponse(c, req, actualModel, provider, anthropicMsg)
 	}
@@ -379,7 +379,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Response guardrails
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	scenario := GetTrackingContextScenario(c)
 	guardrailsEnabled := s.guardrailsEnabledForScenario(scenario)
 	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
 	if guardrailsEnabled {
@@ -524,7 +524,7 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 	s.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Response guardrails
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	scenario := GetTrackingContextScenario(c)
 	if s.guardrailsEnabledForScenario(scenario) {
 		s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, response)
 	}
@@ -571,7 +571,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Response guardrails
-	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	scenario := GetTrackingContextScenario(c)
 	guardrailsEnabled := s.guardrailsEnabledForScenario(scenario)
 	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
 	if guardrailsEnabled {
