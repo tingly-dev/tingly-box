@@ -280,8 +280,8 @@ func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) 
 	return params, nil
 }
 
-// ResponsesGet handles GET /v1/responses/{id}
-func (s *Server) ResponsesGet(c *gin.Context) {
+// HandleResponsesGet handles GET /v1/responses/{id}
+func (s *Server) HandleResponsesGet(c *gin.Context) {
 	responseID := c.Param("id")
 
 	if responseID == "" {

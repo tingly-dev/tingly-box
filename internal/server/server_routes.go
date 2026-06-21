@@ -97,7 +97,7 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 
 	// Responses API endpoints (OpenAI compatible)
 	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
-	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.ResponsesGet)
+	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.HandleResponsesGet)
 
 	// Chat completions endpoint (Anthropic compatible)
 	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
@@ -125,7 +125,7 @@ func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 
 	// Responses API endpoints (OpenAI compatible)
 	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
-	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.ResponsesGet)
+	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.HandleResponsesGet)
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
