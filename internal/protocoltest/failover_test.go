@@ -286,6 +286,49 @@ func TestFailover_VModel_CrossStyle_OpenAIFailToAnthropicEcho(t *testing.T) {
 	assert.Contains(t, result.Content, "Echo:", "content must come from the echo fallback, not the failing primary")
 }
 
+// TestFailover_VModel_CrossStyle_AnthropicV1FailToOpenAIEcho is the v1-endpoint
+// counterpart of the beta test above. The client sends a v1 (non-beta) Anthropic
+// request; the primary is an Anthropic vmodel that injects a 500 (exercising the
+// new MessagesNew error-injection path); the fallback is an OpenAI vmodel that
+// echoes. A 200 with echo content proves MessagesNew surfaces the error AND the
+// cross-style failover re-transformed the request to OpenAI.
+func TestFailover_VModel_CrossStyle_AnthropicV1FailToOpenAIEcho(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupVModelFailoverRoute(t,
+		protocol.TypeAnthropicV1,
+		protocol.APIStyleAnthropic, protocol.APIStyleOpenAI,
+		pt.FailMockPreContent500, "echo-model",
+	)
+
+	result := env.SendWithModel(t, protocol.TypeAnthropicV1, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "OpenAI echo vmodel must serve after the Anthropic v1 vmodel 500")
+	assert.Contains(t, result.Content, "Echo:", "content must come from the echo fallback, not the failing primary")
+}
+
+// TestFailover_VModel_CrossStyle_OpenAIFailToAnthropicV1Echo is the reverse: an
+// OpenAI Chat client, an OpenAI primary that 500s, and an Anthropic v1 vmodel
+// fallback that echoes. This covers the MessagesNew path on the fallback side:
+// when the gateway re-transforms to an Anthropic-style provider from the v1
+// handler, it calls MessagesNew (not BetaMessagesNew).
+func TestFailover_VModel_CrossStyle_OpenAIFailToAnthropicV1Echo(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupVModelFailoverRoute(t,
+		protocol.TypeOpenAIChat,
+		protocol.APIStyleOpenAI, protocol.APIStyleAnthropic,
+		pt.FailMockPreContent500, "echo-model",
+	)
+
+	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
+
+	require.Equal(t, 200, result.HTTPStatus, "Anthropic v1 echo vmodel must serve after the OpenAI vmodel 500")
+	assert.Contains(t, result.Content, "Echo:", "content must come from the echo fallback, not the failing primary")
+}
+
 // TestFailover_SingleService_Bypass — single-service rules bypass the gate
 // entirely (orchestrator's len(activeServices) <= 1 short-circuit). The
 // existing SetupRoute path exercises this — assertion is just that the

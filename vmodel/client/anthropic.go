@@ -115,15 +115,102 @@ func (c *AnthropicClient) BetaMessagesNewStreaming(_ context.Context, req *anthr
 	return anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](dec, nil)
 }
 
-// Unsupported — vmodel handles only beta format.
+// MessagesNew handles v1 (non-beta) Anthropic messages by converting the params
+// to BetaMessageNewParams via JSON round-trip and delegating to the beta handler.
+// The BetaMessage result is downcast to Message via JSON (both share the same wire
+// shape for the fields vmodel produces: id, type, role, content, model, stop_reason,
+// stop_sequence, usage).
+func (c *AnthropicClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
+	betaReq, err := v1ToBetaParams(req)
+	if err != nil {
+		return nil, fmt.Errorf("vmodel v1→beta lift: %w", err)
+	}
+	vm := c.reg.Get(string(betaReq.Model))
+	if vm == nil {
+		return nil, fmt.Errorf("vmodel not found: %s", betaReq.Model)
+	}
+	if err := injectedPreContentError(vm); err != nil {
+		return nil, err
+	}
 
-func (c *AnthropicClient) MessagesNew(_ context.Context, _ *anthropic.MessageNewParams) (*anthropic.Message, error) {
-	return nil, fmt.Errorf("v1 messages not supported by vmodel; use BetaMessagesNew")
+	vmReq := &protocol.AnthropicBetaMessagesRequest{
+		BetaMessageNewParams: *betaReq,
+	}
+	resp, err := vm.HandleAnthropic(vmReq)
+	if err != nil {
+		return nil, err
+	}
+
+	contentBlocks := betaContentToJSON(resp)
+	textContent := betaTextContent(resp)
+
+	inputTokens := token.EstimateAnthropicTokens(req.Messages)
+	outputTokens := token.EstimateTokensString(textContent)
+
+	payload := map[string]interface{}{
+		"id":            fmt.Sprintf("msg_virtual_%d", time.Now().UnixNano()),
+		"type":          "message",
+		"role":          "assistant",
+		"model":         string(req.Model),
+		"content":       contentBlocks,
+		"stop_reason":   string(resp.StopReason),
+		"stop_sequence": nil,
+		"usage": map[string]interface{}{
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
+		},
+	}
+
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("vmodel marshal: %w", err)
+	}
+	var out anthropic.Message
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("vmodel unmarshal: %w", err)
+	}
+	return &out, nil
 }
 
-func (c *AnthropicClient) MessagesNewStreaming(_ context.Context, _ *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](
-		anthropicErrDecoder{fmt.Errorf("v1 messages not supported by vmodel")}, nil)
+// MessagesNewStreaming handles v1 streaming by converting params to beta and
+// reusing the beta decoder. MessageStreamEventUnion and BetaRawMessageStreamEventUnion
+// share the same SSE wire format, so the same decoder drives both stream types.
+func (c *AnthropicClient) MessagesNewStreaming(_ context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
+	betaReq, err := v1ToBetaParams(req)
+	if err != nil {
+		return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](
+			anthropicErrDecoder{fmt.Errorf("vmodel v1→beta lift: %w", err)}, nil)
+	}
+	vm := c.reg.Get(string(betaReq.Model))
+	if vm == nil {
+		return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](
+			anthropicErrDecoder{fmt.Errorf("vmodel not found: %s", betaReq.Model)}, nil)
+	}
+	if err := injectedPreContentError(vm); err != nil {
+		return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](
+			anthropicErrDecoder{err}, nil)
+	}
+
+	vmReq := &protocol.AnthropicBetaMessagesRequest{
+		BetaMessageNewParams: *betaReq,
+	}
+	dec := newAnthropicVModelDecoder(vm, vmReq)
+	return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](dec, nil)
+}
+
+// v1ToBetaParams converts MessageNewParams → BetaMessageNewParams via JSON
+// round-trip. Both share the same wire structure; beta adds optional betas[] which
+// is absent from v1 but harmless to omit.
+func v1ToBetaParams(req *anthropic.MessageNewParams) (*anthropic.BetaMessageNewParams, error) {
+	raw, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	var out anthropic.BetaMessageNewParams
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (c *AnthropicClient) MessagesCountTokens(_ context.Context, _ *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
