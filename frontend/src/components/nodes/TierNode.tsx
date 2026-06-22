@@ -43,7 +43,7 @@ export const TierNode: React.FC<TierNodeProps> = ({
             {learnMoreLink && (
                 <Box
                     component="span"
-                    onClick={(e) => { e.stopPropagation(); onShowGuide(); }}
+                    onClick={(e) => { e.stopPropagation(); onShowGuide && onShowGuide(); }}
                     sx={{
                         display: 'block',
                         mt: 1,
@@ -62,6 +62,7 @@ export const TierNode: React.FC<TierNodeProps> = ({
     return (
         <NodeTooltip title={tooltipContent} placement="left" enterDelay={400}>
             <Box
+                className={`tier-node-${priority}`}
                 sx={(theme) => ({
                     width: TIER_NODE_WIDTH,
                     height: PROVIDER_NODE_STYLES.height,
