@@ -457,23 +457,23 @@ export default {
     "tier": {
       "invalidInput": "Please enter a valid number.",
       "tooltipSet": "Tier {{tier}} (lower = tried first). Click to change.",
-      "tooltipUnset": "No tier set (load balanced with other T0 services). Click to assign.",
+      "tooltipUnset": "No tier set (load balanced with other T0 models). Click to assign.",
       "ariaLabel": "Tier {{tier}}",
       "ariaUnset": "No tier",
       "editTitle": "Set Tier",
       "adjustTier": "Adjust tier",
-      "helpHigher": "Lower number = higher priority (T0 is tried first). Services in the same tier are load balanced.",
+      "helpHigher": "Lower number = higher priority (T0 is tried first). Models in the same tier are load balanced.",
       "helpZero": "Set to 0 for T0 — the first tier.",
       "tierLabel": "T{{index}}",
       "tierBalanced": "Balanced",
-      "dividerHelp": "Lower-numbered tiers are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced.",
-      "tooltip": "T0 is tried first, T1 is the fallback, and so on. Services within the same tier are load-balanced.",
+      "dividerHelp": "Lower-numbered tiers are always tried first. Only when all models in a tier fail (circuit open) does traffic fall through to the next tier. Models within the same tier are load-balanced.",
+      "tooltip": "T0 is tried first, T1 is the fallback, and so on. Models within the same tier are load-balanced.",
       "addTierTooltip": "Add a new fallback tier",
       "nodeTooltipPrimaryTitle": "T0 — Highest priority",
-      "nodeTooltipPrimaryBody": "Tried first on every request. Services here are load-balanced.",
+      "nodeTooltipPrimaryBody": "Tried first on every request. Models here are load-balanced.",
       "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
-      "nodeTooltipFallbackBody": "Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.",
-      "nodeMoveHint": "↑ / ↓  on a service card to move it to a different tier",
+      "nodeTooltipFallbackBody": "Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Models here are load-balanced.",
+      "nodeMoveHint": "↑ / ↓  on a model card to move it to a different tier",
       "nodeTooltipLearnMore": "View tier guide →",
       "guideButtonAriaLabel": "View tier guide",
       "guide": {
@@ -489,34 +489,34 @@ export default {
         "steps": {
           "1": {
             "title": "What is a Tier?",
-            "content": "Tiers organize your services by priority. T0 (tier zero) is the highest priority tier — services here are tried first on every request. Lower tier numbers mean higher priority.",
+            "content": "Tiers organize your models by priority. T0 (tier zero) is the highest priority tier — models here are tried first on every request. Lower tier numbers mean higher priority.",
             "annotation": {
               "tier": "T0 — Highest priority tier",
-              "service": "Your service card with model and provider info"
+              "service": "Your model card with model and provider info"
             }
           },
           "2": {
-            "title": "Multiple Services in One Tier",
-            "content": "When you have multiple services in the same tier (like T0), they share the incoming traffic. This is called load balancing — requests are distributed across all services in the tier.",
+            "title": "Multiple Models in One Tier",
+            "content": "When you have multiple models in the same tier (like T0), they share the incoming traffic. This is called load balancing — requests are distributed across all models in the tier.",
             "annotation": {
               "loadBalance": "Same tier = load balanced",
-              "multiple": "Multiple services share traffic"
+              "multiple": "Multiple models share traffic"
             }
           },
           "3": {
             "title": "Setting Up Primary and Fallback",
-            "content": "Use the ↑/↓ buttons on service cards to move them between tiers. Services in T0 are your primary choice. Services in T1, T2, etc. act as fallbacks — they only run when all higher-priority tiers fail.",
+            "content": "Use the ↑/↓ buttons on model cards to move them between tiers. Models in T0 are your primary choice. Models in T1, T2, etc. act as fallbacks — they only run when all higher-priority tiers fail.",
             "annotation": {
-              "primary": "T0 — Primary services (tried first)",
-              "fallback": "T1 — Fallback services (used when T0 fails)",
-              "actionButtons": "↑/↓ buttons move services between tiers"
+              "primary": "T0 — Primary models (tried first)",
+              "fallback": "T1 — Fallback models (used when T0 fails)",
+              "actionButtons": "↑/↓ buttons move models between tiers"
             }
           },
           "4": {
             "title": "Automatic Failover",
-            "content": "When all services in a tier fail (circuit breaker opens), traffic automatically falls back to the next tier. Once the tier recovers (circuit breaker closes), traffic returns to it automatically. You don't need to do anything — it just works.",
+            "content": "When all models in a tier fail (circuit breaker opens), traffic automatically falls back to the next tier. Once the tier recovers (circuit breaker closes), traffic returns to it automatically. You don't need to do anything — it just works.",
             "annotation": {
-              "circuitBreaker": "Circuit breaker monitors service health",
+              "circuitBreaker": "Circuit breaker monitors model health",
               "automaticFailover": "Automatic failover to next tier"
             }
           },
@@ -561,7 +561,7 @@ export default {
           },
           "addModel": {
             "title": "2. Add your first model",
-            "content": "Each rule maps a request model to one or more services. In an empty rule, click ＋ Add model to pick a connected provider and a model. Need a separate rule for a different request model? Use New Rule in the toolbar.",
+            "content": "Each rule maps a request model to one or more models. In an empty rule, click ＋ Add model to pick a connected provider and a model. Need a separate rule for a different request model? Use New Rule in the toolbar.",
             "annotation": {
               "addModel": "＋ Add model — pick provider + model",
               "newRule": "New Rule adds another request-model mapping"
@@ -569,7 +569,7 @@ export default {
           },
           "editModel": {
             "title": "3. Change or remove a model",
-            "content": "Click any service card to edit it — swap to a different model, switch the provider, or move it to another tier. Hover the card to reveal its actions; the trash icon removes it from the rule.",
+            "content": "Click any model card to edit it — swap to a different model, switch the provider, or move it to another tier. Hover the card to reveal its actions; the trash icon removes it from the rule.",
             "annotation": {
               "click": "Click a card to edit / swap the model",
               "remove": "Hover → trash icon to remove"
@@ -577,15 +577,15 @@ export default {
           },
           "loadBalance": {
             "title": "4. Load balancing within a tier",
-            "content": "When several services share the same tier (T0), incoming traffic is spread evenly across them. This balances load and prevents any single service from being overwhelmed.",
+            "content": "When several models share the same tier (T0), incoming traffic is spread evenly across them. This balances load and prevents any single model from being overwhelmed.",
             "annotation": {
               "sameTier": "Same tier = load balanced",
-              "services": "Multiple services share traffic"
+              "services": "Multiple models share traffic"
             }
           },
           "tierFallback": {
             "title": "5. Tier-based fallback chain",
-            "content": "Lower tiers are tried first: T0 is primary, and if every T0 service fails, traffic cascades to T1, then T2, and so on. Use the up/down actions on a card to move it between tiers and build a failover chain.",
+            "content": "Lower tiers are tried first: T0 is primary, and if every T0 model fails, traffic cascades to T1, then T2, and so on. Use the up/down actions on a card to move it between tiers and build a failover chain.",
             "annotation": {
               "primary": "T0 — primary (tried first)",
               "fallback": "T1 — fallback (used when T0 fails)"
@@ -593,7 +593,7 @@ export default {
           },
           "smartIntro": {
             "title": "What is Smart Routing?",
-            "content": "Smart routing lets you define custom conditions to control which service handles each request. Route by model name, token count, user group, or any request parameter — fine-grained control without juggling tier configurations.",
+            "content": "Smart routing lets you define custom conditions to control which model handles each request. Route by model name, token count, user group, or any request parameter — fine-grained control without juggling tier configurations.",
             "annotation": {
               "smartButton": "Switch to Smart with the entry toggle",
               "conditional": "Conditional routing based on rules"
@@ -630,8 +630,8 @@ export default {
       "addProviderSecond": "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)",
       "addProviderMore": "Add another provider (requests will be load balanced across all providers)",
       "addFirstProvider": "Add your first provider",
-      "addServiceFirst": "Add a service to enable request forwarding",
-      "addServiceSecond": "Add another service (load balancing will be enabled)"
+      "addServiceFirst": "Add a model to enable request forwarding",
+      "addServiceSecond": "Add another model (load balancing will be enabled)"
     },
     "notifications": {
       "loadFailed": "Failed to load data",
