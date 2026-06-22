@@ -257,6 +257,19 @@ type RuleFlags struct {
 	// anthropic-beta header. The model name sent to Anthropic is unchanged —
 	// only the beta header changes behavior.
 	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
+
+	// MaxAllowedTokens overrides the maximum allowed tokens for Anthropic requests.
+	// Zero means use the provider-specific limit from template manager.
+	// This allows rule-level control when the default limit is too restrictive
+	// or too permissive for a specific use case.
+	MaxAllowedTokens int64 `json:"max_allowed_tokens,omitempty" yaml:"max_allowed_tokens,omitempty"`
+
+	// DefaultMaxTokens is the internal flag for default max tokens value.
+	// This is auto-populated from global config and is NOT exposed to users.
+	// It exists solely to pass the default value through the flag resolution pipeline
+	// consistently with other transform parameters.
+	// OMIT from JSON/YAML tags - this is internal only.
+	DefaultMaxTokens int64 `json:"-" yaml:"-"`
 }
 
 // VisionProxyService identifies the upstream used to describe images for the

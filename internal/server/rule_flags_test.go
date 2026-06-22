@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -132,8 +133,31 @@ func TestShouldStripUsage_NonBoolValueIgnored(t *testing.T) {
 
 func TestRulePreBaseTransforms_NoFlags(t *testing.T) {
 	got := rulePreBaseTransforms(typ.RuleFlags{})
+	// No MaxTokens flags set, so no transforms should be injected
 	if got != nil {
 		t.Errorf("expected nil for zero-value flags, got %d transforms", len(got))
+	}
+}
+
+func TestRulePreBaseTransforms_InternalDefaultMaxTokens(t *testing.T) {
+	// Internal DefaultMaxTokens flag is set (simulating auto-population from global config)
+	got := rulePreBaseTransforms(typ.RuleFlags{DefaultMaxTokens: 4096, MaxAllowedTokens: 8192})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 transform, got %d", len(got))
+	}
+	if _, ok := got[0].(*servertransform.MaxTokensTransform); !ok {
+		t.Errorf("expected *servertransform.MaxTokensTransform, got %T", got[0])
+	}
+}
+
+func TestRulePreBaseTransforms_MaxAllowedTokensOverride(t *testing.T) {
+	// User sets explicit MaxAllowedTokens override
+	got := rulePreBaseTransforms(typ.RuleFlags{MaxAllowedTokens: 16384})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 transform, got %d", len(got))
+	}
+	if _, ok := got[0].(*servertransform.MaxTokensTransform); !ok {
+		t.Errorf("expected *servertransform.MaxTokensTransform, got %T", got[0])
 	}
 }
 
@@ -282,9 +306,9 @@ func TestAutoSetCleanHeaderFlag(t *testing.T) {
 	tests := []struct {
 		name            string
 		flags           typ.RuleFlags
-		sourceAPI      protocol.APIType
-		targetAPI      protocol.APIType
-		scenario       typ.RuleScenario
+		sourceAPI       protocol.APIType
+		targetAPI       protocol.APIType
+		scenario        typ.RuleScenario
 		wantCleanHeader bool
 	}{
 		{
@@ -334,23 +358,23 @@ func TestAutoSetCleanHeaderFlag(t *testing.T) {
 // TestRulePreBaseTransformsWithCleanHeader verifies the transform building
 func TestRulePreBaseTransformsWithCleanHeader(t *testing.T) {
 	tests := []struct {
-		name            string
-		flags           typ.RuleFlags
+		name           string
+		flags          typ.RuleFlags
 		wantCleanCount int
 	}{
 		{
-			name:            "CleanHeader flag adds transform",
-			flags:           typ.RuleFlags{CleanHeader: true},
+			name:           "CleanHeader flag adds transform",
+			flags:          typ.RuleFlags{CleanHeader: true},
 			wantCleanCount: 1,
 		},
 		{
-			name:            "No CleanHeader flag, no transform",
-			flags:           typ.RuleFlags{CleanHeader: false},
+			name:           "No CleanHeader flag, no transform",
+			flags:          typ.RuleFlags{CleanHeader: false},
 			wantCleanCount: 0,
 		},
 		{
-			name:            "CursorCompat + CleanHeader both added",
-			flags:           typ.RuleFlags{CursorCompat: true, CleanHeader: true},
+			name:           "CursorCompat + CleanHeader both added",
+			flags:          typ.RuleFlags{CursorCompat: true, CleanHeader: true},
 			wantCleanCount: 1,
 		},
 	}
@@ -377,40 +401,40 @@ func TestRulePreBaseTransformsWithCleanHeader(t *testing.T) {
 // merging logic ensures rule-level flags take priority over scenario defaults.
 func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 	tests := []struct {
-		name                 string
-		ruleFlags           typ.RuleFlags
-		scenarioFlags       typ.ScenarioFlags
-		wantThinkingEffort  typ.ThinkingEffortLevel
+		name               string
+		ruleFlags          typ.RuleFlags
+		scenarioFlags      typ.ScenarioFlags
+		wantThinkingEffort typ.ThinkingEffortLevel
 	}{
 		{
-			name: "Rule explicit setting preserved over scenario default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortOff},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
-			wantThinkingEffort:  typ.ThinkingEffortOff,
+			name:               "Rule explicit setting preserved over scenario default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortOff},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
+			wantThinkingEffort: typ.ThinkingEffortOff,
 		},
 		{
-			name: "Rule explicit level preserved over scenario different level",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortLow},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortMedium},
-			wantThinkingEffort:  typ.ThinkingEffortLow,
+			name:               "Rule explicit level preserved over scenario different level",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortLow},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortMedium},
+			wantThinkingEffort: typ.ThinkingEffortLow,
 		},
 		{
-			name: "Scenario default injected when rule is default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
-			wantThinkingEffort:  typ.ThinkingEffortHigh,
+			name:               "Scenario default injected when rule is default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
+			wantThinkingEffort: typ.ThinkingEffortHigh,
 		},
 		{
-			name: "Both default remains default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			wantThinkingEffort:  typ.ThinkingEffortDefault,
+			name:               "Both default remains default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			wantThinkingEffort: typ.ThinkingEffortDefault,
 		},
 		{
-			name: "Rule explicit level preserved when scenario is default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortMedium},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			wantThinkingEffort:  typ.ThinkingEffortMedium,
+			name:               "Rule explicit level preserved when scenario is default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortMedium},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			wantThinkingEffort: typ.ThinkingEffortMedium,
 		},
 	}
 
@@ -428,6 +452,8 @@ func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 				protocol.TypeAnthropicV1,
 				protocol.TypeOpenAIChat,
 				nil,
+				4096, 8192, // defaultMaxTokens, templateMaxAllowed
+
 			)
 
 			if result.ThinkingEffort != tt.wantThinkingEffort {
@@ -484,6 +510,8 @@ func TestResolveRuleFlagsWithScenario_CustomUserAgent(t *testing.T) {
 				protocol.TypeAnthropicV1,
 				protocol.TypeOpenAIChat,
 				nil,
+				4096, 8192, // defaultMaxTokens, templateMaxAllowed
+
 			)
 
 			if result.CustomUserAgent != tt.wantUA {
@@ -506,21 +534,21 @@ func TestResolveRuleFlagsWithScenario_CleanHeaderSuppressedForClaudeOAuth(t *tes
 
 	// CleanHeader should be suppressed for Claude OAuth provider.
 	got := resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider, 4096, 8192)
 	if got.CleanHeader {
 		t.Error("CleanHeader should be suppressed for Claude OAuth provider")
 	}
 
 	// CleanHeader should be preserved for any other provider type.
 	got = resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, otherProvider)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, otherProvider, 4096, 8192)
 	if !got.CleanHeader {
 		t.Error("CleanHeader should be preserved for non-OAuth provider")
 	}
 
 	// nil provider: no suppression.
 	got = resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
-		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil, 4096, 8192)
 	if !got.CleanHeader {
 		t.Error("CleanHeader should be preserved when provider is nil")
 	}

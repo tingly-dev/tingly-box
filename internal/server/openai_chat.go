@@ -84,11 +84,6 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req protocol.OpenAIChatCom
 
 	transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
 
-	// === Cap max_tokens at model's maximum ===
-	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
-		req.MaxTokens.Value = int64(maxAllowed)
-	}
-
 	// === Determine target API type ===
 	apiStyle := provider.APIStyle
 	target := protocol.TypeOpenAIChat
@@ -114,7 +109,7 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req protocol.OpenAIChatCom
 	// === Resolve flags with scenario injection ===
 	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
 	// request context, so no separate call is needed here.)
-	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
+	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider, 0, maxAllowed)
 
 	// === Transform via pipeline ===
 	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))

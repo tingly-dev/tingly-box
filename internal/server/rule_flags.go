@@ -19,6 +19,19 @@ import (
 // pass the result straight to BuildTransformChain's preBase parameter.
 func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 	var pre []transform.Transform
+
+	// MaxTokens validation for all protocols
+	// Reads from internal flags set by resolveRuleFlagsWithScenario:
+	// - DefaultMaxTokens: internal flag from global config (Anthropic) or 0 (OpenAI)
+	// - MaxAllowedTokens: from template or rule override
+	// Applies to: Anthropic (V1/Beta), OpenAI (Chat/Responses)
+	if flags.DefaultMaxTokens > 0 || flags.MaxAllowedTokens > 0 {
+		pre = append(pre, servertransform.NewMaxTokensTransform(
+			flags.DefaultMaxTokens,
+			flags.MaxAllowedTokens,
+		))
+	}
+
 	if flags.CursorCompat {
 		pre = append(pre, transform.NewOpenAICursorCompatTransform())
 	}
@@ -104,7 +117,8 @@ func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 //  1. Rule-level flags (from the rule definition)
 //  2. Scenario flags (from the scenario configuration)
 //  3. Auto-applied flags (like CleanHeader for protocol transformation)
-//  4. Provider-driven suppressions (CleanHeader is cleared for Claude OAuth providers;
+//  4. Internal flags (DefaultMaxTokens from global config, MaxAllowedTokens from template)
+//  5. Provider-driven suppressions (CleanHeader is cleared for Claude OAuth providers;
 //     the billing header must reach Anthropic's billing backend unchanged).
 //
 // Side effect: it also attaches the resolved CustomUserAgent to the request
@@ -119,6 +133,7 @@ func resolveRuleFlagsWithScenario(
 	scenarioConfig *typ.ScenarioConfig,
 	sourceAPI, targetAPI protocol.APIType,
 	provider *typ.Provider,
+	defaultMaxTokens, templateMaxAllowed int,
 ) typ.RuleFlags {
 	flags := resolveRuleFlags(c, rule)
 
@@ -158,6 +173,23 @@ func resolveRuleFlagsWithScenario(
 		flags.CleanHeader = false
 	}
 
+	// Set internal flags for MaxTokensTransform
+	// DefaultMaxTokens: from global config (Anthropic) or 0 (OpenAI)
+	// MaxAllowedTokens: from template unless rule explicitly overrides
+	// Applies to all protocols: Anthropic (V1/Beta), OpenAI (Chat/Responses)
+	if isAnthropicAPI(sourceAPI) {
+		// Set internal DefaultMaxTokens flag (not exposed to users)
+		flags.DefaultMaxTokens = int64(defaultMaxTokens)
+	} else {
+		// For OpenAI, DefaultMaxTokens is 0 (no global default)
+		flags.DefaultMaxTokens = 0
+	}
+
+	// Set MaxAllowedTokens from template unless rule has explicit override
+	if flags.MaxAllowedTokens == 0 {
+		flags.MaxAllowedTokens = int64(templateMaxAllowed)
+	}
+
 	// Attach the resolved User-Agent override to the request context here, at the
 	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
 	applyCustomUserAgent(c, flags)
@@ -168,6 +200,11 @@ func resolveRuleFlagsWithScenario(
 	applyContext1M(c, flags)
 
 	return flags
+}
+
+// isAnthropicAPI returns true if the source API is an Anthropic format
+func isAnthropicAPI(sourceAPI protocol.APIType) bool {
+	return sourceAPI == protocol.TypeAnthropicV1 || sourceAPI == protocol.TypeAnthropicBeta
 }
 
 // applyContext1M attaches the 1M-context hint to the request context so the
@@ -184,7 +221,7 @@ func applyContext1M(c *gin.Context, flags typ.RuleFlags) {
 // applyCustomUserAgent attaches the effective custom User-Agent (already merged
 // across rule + scenario) to the request context, so the outbound transport
 // (customUserAgentTransport) can read it at RoundTrip time. This is the Type-2
-// (context-passed hint) injection point: the dispatch path forwards
+// (context-passed hint) injection point: the dispatch layer forwards
 // c.Request.Context() down to the SDK call, where the transport applies the
 // override. No-op when no override is configured, so the vendor/provider
 // User-Agent is left untouched.

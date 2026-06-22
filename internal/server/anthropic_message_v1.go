@@ -102,15 +102,9 @@ func (s *Server) runAnthropicV1Attempt(c *gin.Context, req protocol.AnthropicMes
 	c.Set("provider", provider.UUID)
 	c.Set("model", requestModel)
 
-	// Build and run server-side pre-transform chain (scenario-driven flags)
+	// Get max tokens configuration for Anthropic requests (template defaults)
+	defaultMaxTokens := s.config.GetDefaultMaxTokens()
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, requestModel)
-	if err := executeAnthropicV1PreChain(
-		&req.MessageNewParams, scenarioConfig,
-		s.config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
-	); err != nil {
-		s.failAttemptSetup(c, err)
-		return
-	}
 
 	scenario := GetTrackingContextScenario(c)
 	if s.guardrailsEnabledForScenario(scenario) {
@@ -135,7 +129,7 @@ func (s *Server) runAnthropicV1Attempt(c *gin.Context, req protocol.AnthropicMes
 
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
 	// (This also applies the custom User-Agent to the request context.)
-	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider)
+	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target, provider, defaultMaxTokens, maxAllowed)
 
 	reqCtx, err := s.transformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {

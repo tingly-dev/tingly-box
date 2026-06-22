@@ -39,6 +39,7 @@ func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string
 
 // TestBuildTransformChain_BaseOrder pins the canonical base order with no rule
 // transforms: protocol convert → normalize → vendor finalize.
+// MaxTokensTransform is only injected when MaxTokensConfig is set in rule flags.
 func TestBuildTransformChain_BaseOrder(t *testing.T) {
 	names := chainNames(t, nil, nil)
 	assert.Equal(t, []string{"base_convert", "consistency_normalize", "vendor_adjust"}, names)
@@ -75,6 +76,7 @@ func TestBuildTransformChain_PreVendorBeforeVendor(t *testing.T) {
 
 // TestBuildTransformChain_PreBaseBeforeBase verifies the inbound slot: pre-Base
 // rule transforms run before protocol conversion so they see the client shape.
+// pre-Base transforms are injected by rule flags when configured.
 func TestBuildTransformChain_PreBaseBeforeBase(t *testing.T) {
 	preBase := []transform.Transform{transform.NewOpenAICursorCompatTransform()}
 	names := chainNames(t, preBase, nil)
