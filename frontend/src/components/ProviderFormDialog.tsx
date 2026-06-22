@@ -23,17 +23,17 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
-import ApiKeyField from './providerFormDialog/ApiKeyField';
-import CustomEndpointField from './providerFormDialog/CustomEndpointField';
-import DualToggle from './providerFormDialog/DualToggle';
-import DualUrlFields from './providerFormDialog/DualUrlFields';
-import KeyNameField from './providerFormDialog/KeyNameField';
-import ProtocolSelector from './providerFormDialog/ProtocolSelector';
-import ProviderAutocomplete from './providerFormDialog/ProviderAutocomplete';
-import ProxyUrlField from './providerFormDialog/ProxyUrlField';
-import VerificationResultPanel from './providerFormDialog/VerificationResultPanel';
-import {detectOpenAICapabilities} from './providerFormDialog/helpers';
-import {type VerificationResult, runProviderProbe} from './providerFormDialog/probe';
+import ApiKeyField from '@/components/provider-form-dialog/ApiKeyField';
+import CustomEndpointField from '@/components/provider-form-dialog/CustomEndpointField';
+import DualToggle from '@/components/provider-form-dialog/DualToggle';
+import DualUrlFields from '@/components/provider-form-dialog/DualUrlFields';
+import KeyNameField from '@/components/provider-form-dialog/KeyNameField';
+import ProtocolSelector from '@/components/provider-form-dialog/ProtocolSelector';
+import ProviderAutocomplete from '@/components/provider-form-dialog/ProviderAutocomplete';
+import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
+import VerificationResultPanel from '@/components/provider-form-dialog/VerificationResultPanel';
+import {detectOpenAICapabilities} from '@/components/provider-form-dialog/helpers';
+import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
