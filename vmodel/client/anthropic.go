@@ -28,11 +28,11 @@ func NewAnthropicClient(reg *anthropicvm.Registry, provider *typ.Provider) *Anth
 	return &AnthropicClient{reg: reg, provider: provider}
 }
 
-func (c *AnthropicClient) GetProvider() *typ.Provider        { return c.provider }
-func (c *AnthropicClient) APIStyle() protocol.APIStyle       { return protocol.APIStyleAnthropic }
-func (c *AnthropicClient) SetRecordSink(_ *obs.Sink)         {}
-func (c *AnthropicClient) Client() *anthropic.Client         { return nil }
-func (c *AnthropicClient) Close() error                      { return nil }
+func (c *AnthropicClient) GetProvider() *typ.Provider  { return c.provider }
+func (c *AnthropicClient) APIStyle() protocol.APIStyle { return protocol.APIStyleAnthropic }
+func (c *AnthropicClient) SetRecordSink(_ *obs.Sink)   {}
+func (c *AnthropicClient) Client() *anthropic.Client   { return nil }
+func (c *AnthropicClient) Close() error                { return nil }
 
 func (c *AnthropicClient) ListModels(_ context.Context) ([]string, error) {
 	models := c.reg.ListModels()
@@ -55,7 +55,7 @@ func (c *AnthropicClient) BetaMessagesNew(_ context.Context, req *anthropic.Beta
 	}
 
 	vmReq := &protocol.AnthropicBetaMessagesRequest{
-		BetaMessageNewParams: *req,
+		BetaMessageNewParams: req,
 	}
 
 	resp, err := vm.HandleAnthropic(vmReq)
@@ -147,7 +147,7 @@ func (c *AnthropicClient) betaStreamDecoder(req *anthropic.BetaMessageNewParams)
 	if err := injectedPreContentError(vm); err != nil {
 		return nil, err
 	}
-	return newAnthropicVModelDecoder(vm, &protocol.AnthropicBetaMessagesRequest{BetaMessageNewParams: *req}), nil
+	return newAnthropicVModelDecoder(vm, &protocol.AnthropicBetaMessagesRequest{BetaMessageNewParams: req}), nil
 }
 
 // v1ToBetaParams converts MessageNewParams → BetaMessageNewParams via JSON
@@ -369,10 +369,10 @@ func (d *anthropicVModelDecoder) Err() error   { return d.err }
 // anthropicErrDecoder is a no-op decoder that immediately returns an error.
 type anthropicErrDecoder struct{ err error }
 
-func (e anthropicErrDecoder) Next() bool                    { return false }
-func (e anthropicErrDecoder) Event() anthropicstream.Event  { return anthropicstream.Event{} }
-func (e anthropicErrDecoder) Close() error                  { return nil }
-func (e anthropicErrDecoder) Err() error                    { return e.err }
+func (e anthropicErrDecoder) Next() bool                   { return false }
+func (e anthropicErrDecoder) Event() anthropicstream.Event { return anthropicstream.Event{} }
+func (e anthropicErrDecoder) Close() error                 { return nil }
+func (e anthropicErrDecoder) Err() error                   { return e.err }
 
 // ── content conversion helpers ────────────────────────────────────────────────
 

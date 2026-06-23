@@ -33,11 +33,11 @@ func NewOpenAIClient(reg *openaivm.Registry, provider *typ.Provider) *OpenAIClie
 	return &OpenAIClient{reg: reg, provider: provider}
 }
 
-func (c *OpenAIClient) GetProvider() *typ.Provider          { return c.provider }
-func (c *OpenAIClient) APIStyle() protocol.APIStyle         { return protocol.APIStyleOpenAI }
-func (c *OpenAIClient) SetRecordSink(_ *obs.Sink)           {}
-func (c *OpenAIClient) Client() *openai.Client              { return nil }
-func (c *OpenAIClient) Close() error                        { return nil }
+func (c *OpenAIClient) GetProvider() *typ.Provider  { return c.provider }
+func (c *OpenAIClient) APIStyle() protocol.APIStyle { return protocol.APIStyleOpenAI }
+func (c *OpenAIClient) SetRecordSink(_ *obs.Sink)   {}
+func (c *OpenAIClient) Client() *openai.Client      { return nil }
+func (c *OpenAIClient) Close() error                { return nil }
 
 func (c *OpenAIClient) ListModels(_ context.Context) ([]string, error) {
 	models := c.reg.ListModels()
@@ -60,7 +60,7 @@ func (c *OpenAIClient) ChatCompletionsNew(_ context.Context, req openai.ChatComp
 	}
 
 	vmReq := &protocol.OpenAIChatCompletionRequest{
-		ChatCompletionNewParams: req,
+		ChatCompletionNewParams: &req,
 	}
 
 	resp, err := vm.HandleOpenAIChat(vmReq)
@@ -75,8 +75,8 @@ func (c *OpenAIClient) ChatCompletionsNew(_ context.Context, req openai.ChatComp
 	var toolCalls []map[string]interface{}
 	for i, tc := range resp.ToolCalls {
 		toolCalls = append(toolCalls, map[string]interface{}{
-			"id":   tc.ID,
-			"type": "function",
+			"id":    tc.ID,
+			"type":  "function",
 			"index": i,
 			"function": map[string]interface{}{
 				"name":      tc.Name,
@@ -135,7 +135,7 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(_ context.Context, req openai
 	}
 
 	vmReq := &protocol.OpenAIChatCompletionRequest{
-		ChatCompletionNewParams: req,
+		ChatCompletionNewParams: &req,
 	}
 
 	dec := newOpenAIVModelDecoder(vm, vmReq)
@@ -328,7 +328,7 @@ func (d *openAIVModelDecoder) Err() error   { return d.err }
 // errDecoder is a no-op decoder that immediately returns an error from Err().
 type errDecoder struct{ err error }
 
-func (e errDecoder) Next() bool               { return false }
+func (e errDecoder) Next() bool                { return false }
 func (e errDecoder) Event() openaistream.Event { return openaistream.Event{} }
-func (e errDecoder) Close() error             { return nil }
-func (e errDecoder) Err() error               { return e.err }
+func (e errDecoder) Close() error              { return nil }
+func (e errDecoder) Err() error                { return e.err }

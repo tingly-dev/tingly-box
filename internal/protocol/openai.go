@@ -15,7 +15,7 @@ import (
 
 // OpenAIChatCompletionRequest is a type alias for OpenAI chat completion request with extra fields.
 type OpenAIChatCompletionRequest struct {
-	openai.ChatCompletionNewParams
+	*openai.ChatCompletionNewParams
 	Stream bool `json:"stream"`
 }
 
@@ -36,14 +36,14 @@ func (r OpenAIChatCompletionRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
-	var inner openai.ChatCompletionNewParams
+	var inner = &openai.ChatCompletionNewParams{}
 	aux := &struct {
 		Stream bool `json:"stream"`
 	}{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, &inner); err != nil {
+	if err := json.Unmarshal(data, inner); err != nil {
 		return err
 	}
 	r.Stream = aux.Stream
@@ -69,7 +69,7 @@ type ResponseCreateRequest struct {
 	Stream bool `json:"stream"`
 
 	// Embed the native SDK type for all other fields
-	responses.ResponseNewParams
+	*responses.ResponseNewParams
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for ResponseCreateRequest
@@ -91,8 +91,8 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	// Then, unmarshal into the embedded ResponseNewParams
-	var inner responses.ResponseNewParams
-	if err := json.Unmarshal(processedData, &inner); err != nil {
+	var inner = &responses.ResponseNewParams{}
+	if err := json.Unmarshal(processedData, inner); err != nil {
 		return err
 	}
 

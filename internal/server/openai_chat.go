@@ -82,7 +82,7 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req protocol.OpenAIChatCom
 	req.Model = actualModel
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
-	transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
+	transform.AlignToolMessagesForOpenAI(req.ChatCompletionNewParams)
 
 	// === Cap max_tokens at model's maximum ===
 	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
@@ -122,6 +122,8 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req protocol.OpenAIChatCom
 		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
+	defer reqCtx.Release()
+
 	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 

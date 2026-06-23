@@ -49,12 +49,12 @@ func cloneOpenAIChatRequest(template []byte) (protocol.OpenAIChatCompletionReque
 // and unmarshals the SDK struct directly — NOT through ResponseCreateRequest,
 // whose UnmarshalJSON re-runs PreprocessInputData (input-item type injection)
 // that has already been applied to the template.
-func cloneResponsesParams(template responses.ResponseNewParams) (responses.ResponseNewParams, error) {
+func cloneResponsesParams(template *responses.ResponseNewParams) (*responses.ResponseNewParams, error) {
 	b, err := json.Marshal(template)
 	if err != nil {
-		return responses.ResponseNewParams{}, err
+		return nil, err
 	}
 	var out responses.ResponseNewParams
 	err = json.Unmarshal(b, &out)
-	return out, err
+	return &out, err
 }

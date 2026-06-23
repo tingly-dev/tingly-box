@@ -272,7 +272,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, fmt.Errorf("provider returned status %d (len=%d)", resp.StatusCode, len(bodyBytes))
 	}
 
 	// Parse response body

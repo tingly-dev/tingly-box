@@ -126,13 +126,13 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 		JSONMaxBackups: 3,
 		JSONMaxAge:     7,
 
-		// Default memory sink sizes
+		// Default memory sink sizes - reduced to limit memory usage
 		MemorySinkConfig: map[LogSource]MemorySinkConfig{
-			LogSourceHTTP:         {MaxEntries: 1000}, // HTTP requests: high volume
-			LogSourceSystem:       {MaxEntries: 500},  // System logs: medium volume
-			LogSourceAction:       {MaxEntries: 100},  // User actions: low volume, important
-			LogSourceSmartRouting: {MaxEntries: 500},  // Smart routing evaluations: per-request
-			LogSourceModelRequest: {MaxEntries: 1000}, // Model request stages: aligned with HTTP envelope
+			LogSourceHTTP:         {MaxEntries: 50}, // HTTP requests: high volume, reduced from 1000
+			LogSourceSystem:       {MaxEntries: 50}, // System logs: medium volume, reduced from 500
+			LogSourceAction:       {MaxEntries: 50}, // User actions: low volume, reduced from 100
+			LogSourceSmartRouting: {MaxEntries: 50}, // Smart routing evaluations: per-request, reduced from 500
+			LogSourceModelRequest: {MaxEntries: 50}, // Model request stages: reduced from 1000
 		},
 	}
 }

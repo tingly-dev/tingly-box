@@ -88,7 +88,7 @@ func (s *Server) GetSystemLogStats(c *gin.Context) {
 	logPath := s.multiLogger.GetJSONLogPath()
 
 	// Read all logs to calculate stats (with a reasonable limit, system source only)
-	entries, err := s.multiLogger.ReadJSONLogs(10000)
+	entries, err := s.multiLogger.ReadJSONLogs(500)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs for stats: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

@@ -50,7 +50,7 @@ func (m *TransformModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessag
 
 // HandleAnthropic applies Chain then Transformer to req in-place and returns the response.
 func (m *TransformModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequest) (VModelResponse, error) {
-	ctx := transform.NewTransformContext(&req.BetaMessageNewParams)
+	ctx := transform.NewTransformContext(req.BetaMessageNewParams)
 
 	if m.cfg.Chain != nil {
 		if _, err := m.cfg.Chain.Execute(ctx); err != nil {

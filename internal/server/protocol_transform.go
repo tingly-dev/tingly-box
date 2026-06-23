@@ -50,7 +50,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	}
 
 	transformCtx := transform.NewTransformContext(
-		&req.BetaMessageNewParams,
+		req.BetaMessageNewParams,
 		opts...,
 	)
 	transformCtx.HasNativeAdvisor = hasNativeAdvisorBeta(req)
@@ -60,10 +60,6 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
 	if err != nil {
-		if protocolRecorder != nil {
-			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
-		}
 		return nil, err
 	}
 
@@ -115,7 +111,7 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	}
 
 	transformCtx := transform.NewTransformContext(
-		&req.MessageNewParams,
+		req.MessageNewParams,
 		opts...,
 	)
 	transformCtx.SourceAPI = protocol.TypeAnthropicV1
@@ -170,7 +166,7 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 	}
 
 	transformCtx := transform.NewTransformContext(
-		&req.ChatCompletionNewParams,
+		req.ChatCompletionNewParams,
 		opts...,
 	)
 	transformCtx.SourceAPI = protocol.TypeOpenAIChat
@@ -220,7 +216,7 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 	}
 
 	transformCtx := transform.NewTransformContext(
-		&req.ResponseNewParams,
+		req.ResponseNewParams,
 		opts...,
 	)
 	transformCtx.SourceAPI = protocol.TypeOpenAIResponses

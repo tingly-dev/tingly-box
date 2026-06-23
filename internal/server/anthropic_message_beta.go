@@ -35,7 +35,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
 
 	// Inject session ID into request context so all downstream code can access it
-	sessionID := resolveSessionID(c, &req.BetaMessageNewParams)
+	sessionID := resolveSessionID(c, req.BetaMessageNewParams)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
 
 	// Set tracking context with all metadata. Provider/model are refreshed per
@@ -99,7 +99,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req protocol.AnthropicB
 	// Build and run server-side pre-transform chain (scenario-driven flags)
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, requestModel)
 	if err := executeAnthropicBetaPreChain(
-		&req.BetaMessageNewParams, scenarioConfig,
+		req.BetaMessageNewParams, scenarioConfig,
 		s.config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
 	); err != nil {
 		s.failAttemptSetup(c, err)
@@ -109,7 +109,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req protocol.AnthropicB
 	// request guardrails
 	scenario := GetTrackingContextScenario(c)
 	if s.guardrailsEnabledForScenario(scenario) {
-		s.applyGuardrailsToAnthropicV1BetaRequest(c, &req.BetaMessageNewParams, requestModel, provider)
+		s.applyGuardrailsToAnthropicV1BetaRequest(c, req.BetaMessageNewParams, requestModel, provider)
 	}
 
 	// Determine target API type for protocol transformation detection
@@ -137,6 +137,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req protocol.AnthropicB
 		s.failAttemptSetup(c, err)
 		return
 	}
+	defer reqCtx.Release()
 
 	reqCtx.RequestModel = requestModel
 	reqCtx.ResponseModel = responseModel

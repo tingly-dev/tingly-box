@@ -81,6 +81,10 @@ func (s *Server) dispatchChainResult(
 	rule *typ.Rule, provider *typ.Provider,
 	isStreaming bool, recorder *ProtocolRecorder,
 ) {
+	defer func() {
+		reqCtx.Release()
+	}()
+
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 
 	// Bubble up the execution-level routing decision for probes. This is the

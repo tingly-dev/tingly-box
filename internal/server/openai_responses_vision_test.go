@@ -66,11 +66,11 @@ func TestHandleResponsesCreate_VisionProxyAppliesBeforeChatConversion(t *testing
 	req.ResponseNewParams = params
 	req.Model = "downstream-text-only-model"
 	// Vision proxy MUST run after the assignment above — that is the fix.
-	s.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, &req.ResponseNewParams)
+	s.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, req.ResponseNewParams)
 
 	// The conversion step is what DeepSeek receives; assert no image_url
 	// or input_image survives on the wire-level shape.
-	chatParams := request.ConvertOpenAIResponsesToChat(&req.ResponseNewParams, 4096)
+	chatParams := request.ConvertOpenAIResponsesToChat(req.ResponseNewParams, 4096)
 	chatJSON, err := json.Marshal(chatParams)
 	if err != nil {
 		t.Fatalf("marshal chat: %v", err)
@@ -116,7 +116,7 @@ func TestHandleResponsesCreate_VisionProxyBeforeReparseIsIneffective(t *testing.
 		t.Fatalf("unmarshal: %v", err)
 	}
 	// Wrong order: apply BEFORE the re-parse.
-	s.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, &req.ResponseNewParams)
+	s.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, req.ResponseNewParams)
 	params, err := s.convertToResponsesParams(bodyBytes, "downstream-text-only-model")
 	if err != nil {
 		t.Fatalf("convertToResponsesParams: %v", err)
@@ -125,7 +125,7 @@ func TestHandleResponsesCreate_VisionProxyBeforeReparseIsIneffective(t *testing.
 	req.Model = "downstream-text-only-model"
 	// (no second applyVisionProxy — this is what the bug looked like)
 
-	chatParams := request.ConvertOpenAIResponsesToChat(&req.ResponseNewParams, 4096)
+	chatParams := request.ConvertOpenAIResponsesToChat(req.ResponseNewParams, 4096)
 	chatJSON, err := json.Marshal(chatParams)
 	if err != nil {
 		t.Fatalf("marshal chat: %v", err)
