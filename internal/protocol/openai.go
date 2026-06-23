@@ -36,18 +36,19 @@ func (r OpenAIChatCompletionRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
-	var inner = &openai.ChatCompletionNewParams{}
 	aux := &struct {
 		Stream bool `json:"stream"`
 	}{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, inner); err != nil {
+
+	r.ChatCompletionNewParams = new(openai.ChatCompletionNewParams)
+	r.Stream = aux.Stream
+
+	if err := json.Unmarshal(data, r.ChatCompletionNewParams); err != nil {
 		return err
 	}
-	r.Stream = aux.Stream
-	r.ChatCompletionNewParams = inner
 	return nil
 }
 
@@ -91,13 +92,12 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	// Then, unmarshal into the embedded ResponseNewParams
-	var inner = &responses.ResponseNewParams{}
-	if err := json.Unmarshal(processedData, inner); err != nil {
+	r.ResponseNewParams = new(responses.ResponseNewParams)
+	r.Stream = aux.Stream
+
+	if err := json.Unmarshal(processedData, r.ResponseNewParams); err != nil {
 		return err
 	}
-
-	r.Stream = aux.Stream
-	r.ResponseNewParams = inner
 	return nil
 }
 

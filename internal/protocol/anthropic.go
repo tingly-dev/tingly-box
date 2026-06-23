@@ -8,7 +8,6 @@ import (
 
 // Use official Anthropic SDK types directly
 type (
-	// Request types
 	AnthropicMessagesRequest struct {
 		Stream bool `json:"stream"`
 		*anthropic.MessageNewParams
@@ -20,65 +19,77 @@ type (
 )
 
 func (r AnthropicMessagesRequest) MarshalJSON() ([]byte, error) {
-	inner, err := json.Marshal(r.MessageNewParams)
-	if err != nil {
-		return nil, err
+	var m map[string]any
+
+	if r.MessageNewParams != nil {
+		b, err := json.Marshal(r.MessageNewParams)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil, err
+		}
+	} else {
+		m = make(map[string]any)
 	}
-	if !r.Stream {
-		return inner, nil
-	}
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(inner, &raw); err != nil {
-		return nil, err
-	}
-	raw["stream"] = json.RawMessage("true")
-	return json.Marshal(raw)
+
+	m["stream"] = r.Stream
+
+	return json.Marshal(m)
 }
 
 func (r AnthropicBetaMessagesRequest) MarshalJSON() ([]byte, error) {
-	inner, err := json.Marshal(r.BetaMessageNewParams)
-	if err != nil {
-		return nil, err
+	var m map[string]any
+
+	if r.BetaMessageNewParams != nil {
+		b, err := json.Marshal(r.BetaMessageNewParams)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil, err
+		}
+	} else {
+		m = make(map[string]any)
 	}
-	if !r.Stream {
-		return inner, nil
-	}
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(inner, &raw); err != nil {
-		return nil, err
-	}
-	raw["stream"] = json.RawMessage("true")
-	return json.Marshal(raw)
+
+	m["stream"] = r.Stream
+
+	return json.Marshal(m)
 }
 
 func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
-	var inner = &anthropic.BetaMessageNewParams{}
 	aux := &struct {
 		Stream bool `json:"stream"`
 	}{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, inner); err != nil {
+
+	r.BetaMessageNewParams = new(anthropic.BetaMessageNewParams)
+	r.Stream = aux.Stream
+
+	if err := json.Unmarshal(data, r.BetaMessageNewParams); err != nil {
 		return err
 	}
-	r.Stream = aux.Stream
-	r.BetaMessageNewParams = inner
 	return nil
 }
 
 func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
-	var inner = &anthropic.MessageNewParams{}
 	aux := &struct {
 		Stream bool `json:"stream"`
 	}{}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, inner); err != nil {
+
+	r.MessageNewParams = new(anthropic.MessageNewParams)
+	r.Stream = aux.Stream
+
+	if err := json.Unmarshal(data, r.MessageNewParams); err != nil {
 		return err
 	}
-	r.Stream = aux.Stream
-	r.MessageNewParams = inner
 	return nil
 }

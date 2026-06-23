@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ func Test_AnthropicUnMarshal(t *testing.T) {
 	for _, d := range testdata {
 		r := AnthropicBetaMessagesRequest{}
 
-		err := r.UnmarshalJSON([]byte(d))
+		err := json.Unmarshal([]byte(d), &r)
 		if err != nil {
 			t.Error(err)
 		}
@@ -22,9 +23,11 @@ func Test_AnthropicUnMarshal(t *testing.T) {
 				content = tb.OfText.Text
 			}
 		}
-		bs, err := r.MarshalJSON()
+
+		bs, err := json.MarshalIndent(r, "  ", "  ")
 		t.Log(string(bs))
 		assert.True(t, strings.Contains(content, "上海"))
+		assert.True(t, strings.Contains(string(bs), "stream\": true"))
 	}
 }
 
@@ -35,6 +38,7 @@ func init() {
 {
   "model": "claude-sonnet-4-20250514",
   "max_tokens": 1024,
+  "stream": true,
   "tools": [
     {
       "name": "get_weather",
@@ -101,6 +105,7 @@ func init() {
 {
   "model": "claude-sonnet-4-20250514",
   "max_tokens": 1024,
+  "stream": true,
   "tools": [
     {
       "name": "get_weather",
