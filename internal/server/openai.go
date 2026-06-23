@@ -123,6 +123,8 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 	actualModel := selectedService.Model
 	req.Model = actualModel
 
+	s.applyVisionProxy(c, scenarioType, rule, req.ChatCompletionNewParams)
+
 	s.OpenAIChatCompletion(c, req, responseModel, provider, scenarioType, rule)
 }
 
