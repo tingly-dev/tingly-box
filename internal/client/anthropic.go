@@ -104,6 +104,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	httpClient := &http.Client{
 		Transport: transport,
 	}
+	httpClient.Transport = wrapWithStreamRequestRelease(httpClient.Transport)
 	options = append(options, anthropicOption.WithHTTPClient(httpClient))
 
 	// MENTION: extra will be applied at last to confirm override
