@@ -142,6 +142,7 @@ func (s *Server) runAnthropicV1Attempt(c *gin.Context, req protocol.AnthropicMes
 		s.failAttemptSetup(c, err)
 		return
 	}
+	defer reqCtx.Release()
 
 	reqCtx.RequestModel = requestModel
 	reqCtx.ResponseModel = responseModel

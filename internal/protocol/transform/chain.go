@@ -201,6 +201,11 @@ func (ctx *TransformContext) configExtraForMetadata() map[string]any {
 	return extra
 }
 
+func (ctx *TransformContext) Release() {
+	ctx.Request = nil
+	ctx.OriginalRequest = nil
+}
+
 // TransformChain manages an ordered sequence of transforms
 type TransformChain struct {
 	// transforms are the ordered transformation steps

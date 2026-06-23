@@ -239,6 +239,8 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req protocol.Response
 		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
+	defer reqCtx.Release()
+
 	// Carry the response-shaping hints for downstream dispatch, matching the
 	// chat handler (consumed by shouldStripUsage on the conversion sub-paths).
 	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat

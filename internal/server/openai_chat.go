@@ -122,6 +122,8 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req protocol.OpenAIChatCom
 		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
+	defer reqCtx.Release()
+
 	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 

@@ -60,10 +60,6 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	// Execute transform chain
 	finalCtx, err := chain.Execute(transformCtx)
 	if err != nil {
-		if protocolRecorder != nil {
-			protocolRecorder.SetTransformSteps(finalCtx.TransformSteps)
-			protocolRecorder.RecordError(err)
-		}
 		return nil, err
 	}
 

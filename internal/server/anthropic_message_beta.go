@@ -137,6 +137,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req protocol.AnthropicB
 		s.failAttemptSetup(c, err)
 		return
 	}
+	defer reqCtx.Release()
 
 	reqCtx.RequestModel = requestModel
 	reqCtx.ResponseModel = responseModel
