@@ -23,7 +23,9 @@ import (
 // Like AnthropicMessagesV1, the provider-independent prologue runs once and the
 // per-attempt callback re-runs the provider-dependent pipeline so failover can
 // rotate across heterogeneous API styles.
-func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, requestModel string, responseModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, requestModel string, responseModel string, rule *typ.Rule, provider *typ.Provider) {
+	defer protocol.ReleaseAnthropicBetaMessagesRequest(req)
+
 	// ── One-time prologue (provider-independent) ──
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
@@ -74,7 +76,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 					s.failAttemptSetup(c, err)
 					return
 				}
-				areq = cloned
+				areq = &cloned
 			}
 			s.runAnthropicBetaAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, recorder)
 		})
@@ -82,7 +84,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 // runAnthropicBetaAttempt executes the provider-dependent half of an Anthropic
 // beta request for one failover attempt. See runAnthropicV1Attempt.
-func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *ProtocolRecorder) {
+func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *ProtocolRecorder) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = s.resolveProviderForClient(provider, protocol.APIStyleAnthropic)
@@ -158,11 +160,27 @@ func (s *Server) streamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageN
 	scenario := GetTrackingContextScenario(c)
 	if s.guardrailsEnabledForScenario(scenario) {
 		hc.EnsureGuardrails().Enabled = true
-		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
+		// Build the compact guardrail view before releasing the SDK request. The
+		// SDK request carries apijson/gjson raw metadata that pins the full request
+		// body; keeping it throughout a long stream is the pprof-visible leak
+		// catalyst on Anthropic beta passthrough traffic.
+		guardrailMessages := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
+		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailMessages)
 	}
+
+	releaseAnthropicBetaRequest(req)
 
 	usageStat, err := stream.HandleAnthropicBeta(hc, streamResp)
 	s.trackUsageWithTokenUsage(c, usageStat, err)
+}
+
+// releaseAnthropicBetaRequest drops the parsed SDK request immediately after
+// the upstream streaming request has been created and all local hooks have copied
+// the small data they still need. Anthropic SDK params retain gjson.Raw metadata
+// for the whole decoded JSON body; if the params remain reachable for the whole
+// stream, concurrent long streams accumulate body-sized live heap.
+func releaseAnthropicBetaRequest(req *anthropic.BetaMessageNewParams) {
+	protocol.ReleaseAnthropicBetaMessageParams(req)
 }
 
 // nonstreamResponsesToAnthropicBeta handles non-streaming Responses API request

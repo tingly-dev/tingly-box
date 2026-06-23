@@ -259,3 +259,18 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		Usage:        *usage,
 	}
 }
+
+// Reset releases accumulated stream response state held by the assembler.
+func (a *AnthropicStreamAssembler) Reset() {
+	if a == nil {
+		return
+	}
+	a.msgID = ""
+	a.msgType = ""
+	a.msgRole = ""
+	a.stopReason = ""
+	a.stopSeq = ""
+	a.usageData = nil
+	a.blocks = nil
+	a.toolInputBuf = nil
+}
