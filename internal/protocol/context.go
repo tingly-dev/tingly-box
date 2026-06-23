@@ -134,6 +134,8 @@ func (hc *HandleContext) SetupSSEHeaders() {
 // or (false, err, nil) on error.
 // handleFunc is called for each event after OnStreamEventHooks are invoked.
 func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}), handleFunc func(interface{}) error) error {
+	defer hc.ReleaseStreamState()
+
 	c := hc.GinContext
 
 	if _, ok := c.Writer.(http.Flusher); !ok {
@@ -198,6 +200,23 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 }
 
 // DispatchStreamError calls all OnStreamError hooks.
+
+// ReleaseStreamState drops per-stream hooks and guardrail buffers after a stream
+// has completed or errored. Hook closures often capture assemblers/recorders that
+// aggregate response chunks; clearing them prevents protocol stream response
+// state from staying reachable through a HandleContext after request completion.
+func (hc *HandleContext) ReleaseStreamState() {
+	if hc == nil {
+		return
+	}
+	hc.OnStreamEventHooks = nil
+	hc.OnStreamCompleteHooks = nil
+	hc.OnStreamErrorHooks = nil
+	if hc.Guardrails != nil {
+		hc.Guardrails.Stream = nil
+	}
+}
+
 func (hc *HandleContext) DispatchStreamError(err error) {
 	for _, hook := range hc.OnStreamErrorHooks {
 		hook(err)

@@ -210,3 +210,63 @@ func TestLargeRequestRetention(t *testing.T) {
 	t.Logf("single 512KB request retains %.2f MB while the parsed struct is held",
 		float64(after.HeapAlloc-before.HeapAlloc)/1024/1024)
 }
+
+// TestReleaseAnthropicBetaMessagesRequestReducesRetention is the regression
+// proof for request-end cleanup. It intentionally keeps the outer request
+// wrappers reachable after the simulated request has ended:
+//
+//   - unreleased wrappers retain the SDK params and therefore the gjson/apijson
+//     raw JSON metadata for each parsed request body;
+//   - released wrappers remain reachable, but their embedded SDK params are
+//     cleared, so the body-sized raw metadata can be collected.
+func TestReleaseAnthropicBetaMessagesRequestReducesRetention(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping heap-measurement regression in short mode")
+	}
+
+	const (
+		iterations  = 500
+		fillerBytes = 32 * 1024
+	)
+	body := buildAnthropicBetaBody(fillerBytes)
+
+	measure := func(release bool) float64 {
+		runtime.GC()
+		var before runtime.MemStats
+		runtime.ReadMemStats(&before)
+
+		sink := make([]*AnthropicBetaMessagesRequest, 0, iterations)
+		for i := 0; i < iterations; i++ {
+			req := &AnthropicBetaMessagesRequest{}
+			if err := json.Unmarshal(body, req); err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			if release {
+				ReleaseAnthropicBetaMessagesRequest(req)
+			}
+			sink = append(sink, req)
+		}
+
+		runtime.GC()
+		var after runtime.MemStats
+		runtime.ReadMemStats(&after)
+		runtime.KeepAlive(sink)
+
+		growth := int64(after.HeapAlloc) - int64(before.HeapAlloc)
+		if growth < 0 {
+			growth = 0
+		}
+		return float64(growth) / 1024 / 1024
+	}
+
+	unreleased := measure(false)
+	released := measure(true)
+
+	t.Logf("retained after request end, unreleased wrappers: %.1f MB", unreleased)
+	t.Logf("retained after request end, released wrappers  : %.1f MB", released)
+
+	const minDropMB = 8.0
+	if unreleased-released < minDropMB {
+		t.Fatalf("release did not reduce retained heap enough: unreleased=%.1fMB released=%.1fMB", unreleased, released)
+	}
+}

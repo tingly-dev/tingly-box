@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -271,4 +272,36 @@ func ctxWithTimeout(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+func TestAttachRecorderHooks_ReleasesResponseSideStateAfterEmit(t *testing.T) {
+	const scenario = typ.RuleScenario("test")
+	s, mem := newRecordingTestServer(t, scenario, obs.RecordModeAll)
+	c, _ := newRecordingTestContext(t, []byte(`{}`))
+
+	provider := &typ.Provider{Name: "p"}
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeAll, nil)
+	require.NotNil(t, recorder)
+
+	hc := protocol.NewHandleContext(c, "rm")
+	AttachRecorderHooks(hc, recorder, "m", provider)
+
+	largeDelta := strings.Repeat("x", 64*1024)
+	events := []*anthropic.BetaRawMessageStreamEventUnion{
+		{Type: "message_start", Message: anthropic.BetaMessage{ID: "msg_release"}},
+		{Type: "content_block_start", Index: 0, ContentBlock: anthropic.BetaRawContentBlockStartEventContentBlockUnion{Type: "text"}},
+		{Type: "content_block_delta", Index: 0, Delta: anthropic.BetaRawMessageStreamEventUnionDelta{Type: "text_delta", Text: largeDelta}},
+		{Type: "content_block_stop", Index: 0},
+		{Type: "message_stop"},
+	}
+	require.NoError(t, driveBetaStream(hc, events))
+
+	require.NoError(t, s.scenarioRecordSinks[scenario].ForceFlush(ctxWithTimeout(t)))
+	require.Len(t, mem.snapshot(), 1)
+
+	assert.Nil(t, recorder.streamChunks, "emitted recorder must not retain raw stream chunks")
+	assert.Nil(t, recorder.finalResponse, "emitted recorder must not retain assembled response")
+	assert.Nil(t, recorder.originalRequest, "emitted recorder must not retain request body")
+	assert.Nil(t, recorder.transformedRequest, "emitted recorder must not retain transformed request")
+	assert.Nil(t, recorder.c, "emitted recorder must not retain gin context")
 }

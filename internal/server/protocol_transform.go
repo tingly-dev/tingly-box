@@ -8,7 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
+func (s *Server) transformAnthropicBeta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
@@ -53,7 +53,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		req.BetaMessageNewParams,
 		opts...,
 	)
-	transformCtx.HasNativeAdvisor = hasNativeAdvisorBeta(req)
+	transformCtx.HasNativeAdvisor = hasNativeAdvisorBeta(*req)
 	transformCtx.SourceAPI = protocol.TypeAnthropicBeta
 	transformCtx.TargetAPI = target
 

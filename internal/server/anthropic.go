@@ -208,7 +208,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		s.AnthropicMessagesV1Beta(c, betaMessages, actualModel, requestModel, rule, provider)
+		s.AnthropicMessagesV1Beta(c, &betaMessages, actualModel, requestModel, rule, provider)
 
 	} else {
 		s.AnthropicMessagesV1(c, messages, actualModel, requestModel, rule, provider)

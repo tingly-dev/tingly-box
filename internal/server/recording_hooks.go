@@ -172,6 +172,7 @@ func AttachRecorderHooks(hc *protocol.HandleContext, recorder *ProtocolRecorder,
 		return nil
 	})
 	hc.WithOnStreamComplete(func() {
+		defer asm.Reset()
 		if msg := asm.Finish(model, 0, 0); msg != nil {
 			recorder.SetAssembledResponse(msg)
 		}
