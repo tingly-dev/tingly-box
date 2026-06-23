@@ -106,11 +106,6 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	// NOTE: applyVisionProxy is deferred until after convertToResponsesParams
-	// below. Calling it here would mutate the partially-parsed copy embedded
-	// in req, only to have those mutations overwritten when params replaces
-	// req.ResponseNewParams. See the call site after `req.Model = actualModel`.
-
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)
 	if err != nil {
@@ -127,7 +122,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// Inject session ID into request context so all downstream code can access it
-	sessionID := resolveSessionID(c, &req.ResponseNewParams)
+	sessionID := resolveSessionID(c, req.ResponseNewParams)
 	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
@@ -149,15 +144,9 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
 
-	// Apply vision proxy AFTER convertToResponsesParams replaces
-	// req.ResponseNewParams: calling it earlier would mutate the
-	// minimally-parsed copy, only to have those mutations discarded when
-	// params (a fresh parse of the original bodyBytes) overwrites
-	// req.ResponseNewParams above. This is the only point where mutations
-	// land on the structure that both the vmodel chat conversion (below)
-	// and the protocol transform chain (called from dispatchChainResult)
-	// actually read.
-	s.applyVisionProxy(c, scenarioType, rule, &req.ResponseNewParams)
+	// Apply vision proxy BEFORE failover loop so it runs exactly once.
+	// Vision descriptions must be consistent across all failover attempts.
+	s.applyVisionProxy(c, scenarioType, rule, req.ResponseNewParams)
 
 	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
@@ -177,8 +166,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	actualModel := string(req.Model)
 
 	// Snapshot a pristine template only when failover is possible. The template
-	// is the typed ResponseNewParams (post-vision-proxy) — cloned per attempt so
-	// PreprocessInputData (already applied) is not re-run.
+	// is the typed ResponseNewParams (post-vision-proxy — cloned per attempt so
+	// PreprocessInputData and vision proxy are not re-run).
 	multi := len(rule.GetActiveServices()) > 1
 
 	// ── Per-attempt pipeline (provider-dependent) ──
