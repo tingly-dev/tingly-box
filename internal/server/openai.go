@@ -32,8 +32,8 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 	}
 
 	// Parse OpenAI-style request
-	var req protocol.OpenAIChatCompletionRequest
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+	var req = &protocol.OpenAIChatCompletionRequest{}
+	if err := json.Unmarshal(bodyBytes, req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),

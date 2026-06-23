@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewHandleContext(t *testing.T) {
@@ -136,8 +137,8 @@ func TestHandleContext_Chaining(t *testing.T) {
 
 func TestSetupSSEHeaders(t *testing.T) {
 	tests := []struct {
-		name          string
-		checkHeader   func(*testing.T, http.Header)
+		name        string
+		checkHeader func(*testing.T, http.Header)
 	}{
 		{
 			name: "sets correct SSE headers",
@@ -279,25 +280,24 @@ func TestIsContextCanceled(t *testing.T) {
 	})
 }
 
-
 func TestErrorResponse(t *testing.T) {
 	tests := []struct {
-		name     string
-		message  string
+		name      string
+		message   string
 		errorType string
-		code     string
+		code      string
 	}{
 		{
-			name:     "basic error response",
-			message:  "Something went wrong",
+			name:      "basic error response",
+			message:   "Something went wrong",
 			errorType: "api_error",
-			code:     "invalid_request",
+			code:      "invalid_request",
 		},
 		{
-			name:     "error without code",
-			message:  "Another error",
+			name:      "error without code",
+			message:   "Another error",
 			errorType: "validation_error",
-			code:     "",
+			code:      "",
 		},
 	}
 
@@ -317,4 +317,20 @@ func TestErrorResponse(t *testing.T) {
 			assert.Equal(t, tt.code, resp.Error.Code)
 		})
 	}
+}
+
+func TestHandleContext_ReleaseStreamStateDropsResponseHooks(t *testing.T) {
+	hc := NewHandleContext(nil, "model")
+	hc.WithOnStreamEvent(func(event interface{}) error { return nil })
+	hc.WithOnStreamComplete(func() {})
+	hc.WithOnStreamError(func(err error) {})
+	hc.EnsureGuardrailsStream().AnthropicToolEvents[0] = []GuardrailsBufferedEvent{{EventType: "content_block_delta"}}
+
+	hc.ReleaseStreamState()
+
+	assert.Nil(t, hc.OnStreamEventHooks)
+	assert.Nil(t, hc.OnStreamCompleteHooks)
+	assert.Nil(t, hc.OnStreamErrorHooks)
+	require.NotNil(t, hc.Guardrails)
+	assert.Nil(t, hc.Guardrails.Stream)
 }

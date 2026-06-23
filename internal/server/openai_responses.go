@@ -32,7 +32,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	// Parse request (minimal parsing for validation)
-	var req protocol.ResponseCreateRequest
+	var req = &protocol.ResponseCreateRequest{}
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -155,7 +155,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 // failover loop whose per-attempt callback re-runs the provider-dependent
 // pipeline (target resolution → transform → dispatch) so failover can rotate
 // across heterogeneous API styles.
-func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
+func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req *protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
 	// ── One-time prologue (provider-independent) ──
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
@@ -189,7 +189,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 // runOpenAIResponsesAttempt executes the provider-dependent half of an OpenAI
 // Responses request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
-func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
+func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)

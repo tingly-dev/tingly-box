@@ -23,24 +23,24 @@ import (
 
 // cloneAnthropicV1Request rebuilds an Anthropic v1 request from a marshalled
 // template (produced by AnthropicMessagesRequest.MarshalJSON).
-func cloneAnthropicV1Request(template []byte) (protocol.AnthropicMessagesRequest, error) {
-	var r protocol.AnthropicMessagesRequest
+func cloneAnthropicV1Request(template []byte) (*protocol.AnthropicMessagesRequest, error) {
+	var r = &protocol.AnthropicMessagesRequest{}
 	err := json.Unmarshal(template, &r)
 	return r, err
 }
 
 // cloneAnthropicBetaRequest rebuilds an Anthropic beta request from a marshalled
 // template (produced by AnthropicBetaMessagesRequest.MarshalJSON).
-func cloneAnthropicBetaRequest(template []byte) (protocol.AnthropicBetaMessagesRequest, error) {
-	var r protocol.AnthropicBetaMessagesRequest
+func cloneAnthropicBetaRequest(template []byte) (*protocol.AnthropicBetaMessagesRequest, error) {
+	var r = &protocol.AnthropicBetaMessagesRequest{}
 	err := json.Unmarshal(template, &r)
 	return r, err
 }
 
 // cloneOpenAIChatRequest rebuilds an OpenAI chat request from a marshalled
 // template (produced by OpenAIChatCompletionRequest.MarshalJSON).
-func cloneOpenAIChatRequest(template []byte) (protocol.OpenAIChatCompletionRequest, error) {
-	var r protocol.OpenAIChatCompletionRequest
+func cloneOpenAIChatRequest(template []byte) (*protocol.OpenAIChatCompletionRequest, error) {
+	var r = &protocol.OpenAIChatCompletionRequest{}
 	err := json.Unmarshal(template, &r)
 	return r, err
 }

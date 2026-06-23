@@ -139,10 +139,10 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	var requestModel string
 	var reqParams interface{} // For smart routing context extraction
 
-	var betaMessages protocol.AnthropicBetaMessagesRequest
-	var messages protocol.AnthropicMessagesRequest
+	var betaMessages = &protocol.AnthropicBetaMessagesRequest{}
+	var messages = &protocol.AnthropicMessagesRequest{}
 	if beta {
-		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
+		if err := json.Unmarshal(bodyBytes, betaMessages); err != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
@@ -157,7 +157,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		reqParams = betaMessages.BetaMessageNewParams
 
 	} else {
-		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
+		if err := json.Unmarshal(bodyBytes, messages); err != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
