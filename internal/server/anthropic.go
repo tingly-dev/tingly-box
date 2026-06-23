@@ -119,8 +119,6 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	//	return
 	//}
 
-	c.Set("server_instance", s)
-
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
@@ -205,11 +203,6 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}
-
-	// Set the rule and provider in context
-	c.Set("rule", rule)
-
-	// sessionID is automatically stored by SelectService
 
 	actualModel := selectedService.Model
 
