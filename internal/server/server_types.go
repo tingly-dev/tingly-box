@@ -314,20 +314,29 @@ type FetchProviderModelsResponse struct {
 	Data    interface{} `json:"data"`
 }
 
-// OpenAIModel represents a model in OpenAI's models API format
-type OpenAIModel struct {
-	ID          string `json:"id"`
-	Object      string `json:"object"`
-	Created     int64  `json:"created"`
-	OwnedBy     string `json:"owned_by"`
-	Description string `json:"description,omitempty"` // Model description
-	Context     int    `json:"context,omitempty"`     // Max context window
-	MaxOutput   int    `json:"max_output,omitempty"`  // Max output tokens
+// ModelDetail contains tingly-box model metadata that is shared across
+// protocol-specific model list formats. Keep protocol-native model fields on
+// the protocol struct and put reusable extensions here.
+type ModelDetail struct {
+	Description         string   `json:"description,omitempty"`
+	Context             int      `json:"context,omitempty"`
+	MaxTokens           int      `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty"`
+	InputModalities     []string `json:"input_modalities,omitempty"`
+	OutputModalities    []string `json:"output_modalities,omitempty"`
 	// AuthType reflects the primary backing provider's auth type. It is
-	// non-standard (OpenAI's models API has no such field) and consumed by
-	// the tingly-box frontend to order model picker entries:
+	// consumed by the tingly-box frontend to order model picker entries:
 	// oauth -> api_key -> vmodel.
 	AuthType string `json:"auth_type,omitempty"`
+}
+
+// OpenAIModel represents a model in OpenAI's models API format
+type OpenAIModel struct {
+	ID      string       `json:"id"`
+	Object  string       `json:"object"`
+	Created int64        `json:"created"`
+	OwnedBy string       `json:"owned_by"`
+	Detail  *ModelDetail `json:"detail,omitempty"`
 }
 
 // OpenAIModelsResponse represents OpenAI's models API response format

@@ -15,70 +15,17 @@ import (
 )
 
 type (
-	// CapabilitySupport indicates whether a capability is supported.
-	CapabilitySupport struct {
-		Supported bool `json:"supported"`
-	}
-
-	// ContextManagementCapability describes context management support.
-	ContextManagementCapability struct {
-		Supported             bool              `json:"supported"`
-		ClearThinking20251015 CapabilitySupport `json:"clear_thinking_20251015,omitempty"`
-		ClearToolUses20250919 CapabilitySupport `json:"clear_tool_uses_20250919,omitempty"`
-		Compact20260112       CapabilitySupport `json:"compact_20260112,omitempty"`
-	}
-
-	// EffortCapability describes reasoning_effort support and levels.
-	EffortCapability struct {
-		Supported bool              `json:"supported"`
-		Low       CapabilitySupport `json:"low,omitempty"`
-		Medium    CapabilitySupport `json:"medium,omitempty"`
-		High      CapabilitySupport `json:"high,omitempty"`
-		XHigh     CapabilitySupport `json:"xhigh,omitempty"`
-		Max       CapabilitySupport `json:"max,omitempty"`
-	}
-
-	// ThinkingTypes describes supported thinking type configurations.
-	ThinkingTypes struct {
-		Adaptive CapabilitySupport `json:"adaptive,omitempty"`
-		Enabled  CapabilitySupport `json:"enabled,omitempty"`
-	}
-
-	// ThinkingCapability describes thinking support.
-	ThinkingCapability struct {
-		Supported bool           `json:"supported"`
-		Types     *ThinkingTypes `json:"types,omitempty"`
-	}
-
-	// ModelCapabilities maps to Anthropic's ModelCapabilities in /v1/models.
-	ModelCapabilities struct {
-		Batch             CapabilitySupport            `json:"batch"`
-		Citations         CapabilitySupport            `json:"citations"`
-		CodeExecution     CapabilitySupport            `json:"code_execution"`
-		ContextManagement *ContextManagementCapability `json:"context_management,omitempty"`
-		Effort            *EffortCapability            `json:"effort,omitempty"`
-		ImageInput        CapabilitySupport            `json:"image_input"`
-		PDFInput          CapabilitySupport            `json:"pdf_input"`
-		StructuredOutputs CapabilitySupport            `json:"structured_outputs"`
-		Thinking          *ThinkingCapability          `json:"thinking,omitempty"`
-	}
-
 	// AnthropicModel maps to Anthropic's native /v1/models response format.
 	AnthropicModel struct {
-		ID             string             `json:"id"`
-		CreatedAt      string             `json:"created_at"`
-		DisplayName    string             `json:"display_name"`
-		Type           string             `json:"type"`
-		Capabilities   *ModelCapabilities `json:"capabilities,omitempty"`
-		MaxInputTokens int                `json:"max_input_tokens,omitempty"`
-		MaxTokens      int                `json:"max_tokens,omitempty"`
-		// Description is a tingly-box extension (not in Anthropic's wire format)
-		// consumed by the frontend to show model description in the model picker.
-		Description string `json:"description,omitempty"`
-		// AuthType is a tingly-box extension (not in Anthropic's wire format)
-		// consumed by the frontend to order model picker entries:
-		// oauth -> api_key -> vmodel.
-		AuthType string `json:"auth_type,omitempty"`
+		ID          string `json:"id"`
+		CreatedAt   string `json:"created_at"`
+		DisplayName string `json:"display_name"`
+		Type        string `json:"type"`
+		// Anthropic native fields.
+		MaxInputTokens int `json:"max_input_tokens,omitempty"`
+		MaxTokens      int `json:"max_tokens,omitempty"`
+		// Detail contains tingly-box extensions shared with other model list formats.
+		Detail *ModelDetail `json:"detail,omitempty"`
 	}
 	AnthropicModelsResponse struct {
 		Data    []AnthropicModel `json:"data"`
@@ -285,72 +232,35 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 					if modelInfo.ID == rule.RequestModel {
 						description = modelInfo.Description
 						maxInputTokens = modelInfo.Context
-						maxTokens = modelInfo.MaxOutput
+						maxTokens = modelInfo.MaxTokens
 						break
 					}
 				}
 			}
 		}
 
-		// Build capabilities from Anthropic API provider data
-		var caps *ModelCapabilities
-		if primaryProvider != nil && templateManager != nil {
-			if tmpl, err := templateManager.GetTemplate(primaryProvider.Name); err == nil && tmpl != nil {
-				// Only populate capabilities for known Anthropic providers
-				if tmpl.VendorFamily == "anthropic" {
-					yes := CapabilitySupport{Supported: true}
-					no := CapabilitySupport{Supported: false}
-					caps = &ModelCapabilities{
-						Batch:             no,
-						Citations:         yes,
-						CodeExecution:     yes,
-						ImageInput:        yes,
-						PDFInput:          yes,
-						StructuredOutputs: yes,
-						ContextManagement: &ContextManagementCapability{
-							Supported:             true,
-							ClearThinking20251015: yes,
-							ClearToolUses20250919: yes,
-							Compact20260112:       yes,
-						},
-						Effort: &EffortCapability{
-							Supported: true,
-							Low:       yes,
-							Medium:    yes,
-							High:      yes,
-							XHigh:     yes,
-							Max:       yes,
-						},
-						Thinking: &ThinkingCapability{
-							Supported: true,
-							Types: &ThinkingTypes{
-								Adaptive: yes,
-								Enabled:  yes,
-							},
-						},
-					}
-				}
-			}
-		}
-
-		logrus.Warnf("We do not set capabilities, even set: %v", caps)
-
 		models = append(models, AnthropicModel{
-			ID:          rule.RequestModel,
-			CreatedAt:   "2024-01-01T00:00:00Z",
-			DisplayName: displayName,
-			Type:        "model",
-			// Capabilities:   caps,
+			ID:             rule.RequestModel,
+			CreatedAt:      "2024-01-01T00:00:00Z",
+			DisplayName:    displayName,
+			Type:           "model",
 			MaxInputTokens: maxInputTokens,
 			MaxTokens:      maxTokens,
-			Description:    description,
-			AuthType:       string(primaryAuthTypeForRule(cfg, rule)),
+			Detail: &ModelDetail{
+				Description:         description,
+				Context:             maxInputTokens,
+				MaxTokens:           maxTokens,
+				MaxCompletionTokens: maxTokens,
+				InputModalities:     []string{"text"},
+				OutputModalities:    []string{"text"},
+				AuthType:            string(primaryAuthTypeForRule(cfg, rule)),
+			},
 		})
 	}
 
 	sort.SliceStable(models, func(i, j int) bool {
-		return authTypeSortWeight(typ.AuthType(models[i].AuthType)) <
-			authTypeSortWeight(typ.AuthType(models[j].AuthType))
+		return authTypeSortWeight(modelDetailAuthType(models[i].Detail)) <
+			authTypeSortWeight(modelDetailAuthType(models[j].Detail))
 	})
 
 	firstID := ""
