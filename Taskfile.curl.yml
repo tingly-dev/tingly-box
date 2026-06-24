@@ -19,6 +19,13 @@ tasks:
     cmds:
       - echo "{{.GREETING}}"
     silent: true
+    
+  model-list:
+    cmds:
+      - |
+        curl -s -X GET "http://localhost:12580/tingly/openai/v1/models" \
+          -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+          -H "Content-Type: application/json"
   
   codex-image-gen:
     cmds:
