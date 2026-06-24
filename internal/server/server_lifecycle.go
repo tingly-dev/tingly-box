@@ -64,13 +64,18 @@ func (s *Server) Start(port int) error {
 
 	resolvedHost := network.ResolveHost(s.host)
 
-	// Store the resolved server host in config for TBClient to use
+	// Store the resolved server host and port in config for TBClient to use
 	// This ensures 0.0.0.0 resolves to actual local IP for client connections
+	// and the actual listening port is persisted for profile creation
 	if resolvedHost != "" {
 		if err := s.config.SetServerHost(resolvedHost); err != nil {
 			logrus.WithError(err).Warn("Failed to store server host in config")
 		}
 	}
+	// MENTION: we do not save port into config to avoid unpredict result
+	//if err := s.config.SetServerPort(port); err != nil {
+	//	logrus.WithError(err).Warn("Failed to store server port in config")
+	//}
 
 	scheme := "http"
 

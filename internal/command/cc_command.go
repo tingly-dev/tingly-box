@@ -16,57 +16,24 @@ import (
 
 // ============== Kong Command Structures ==============
 
-// CCmdKong launches Claude Code with passthrough mode
-// Kong's passthrough mode requires at least one positional arg
+// CCmdKong launches Claude Code with tingly-box-specific flags
+// Accepts --profile, --port/--tingly-port, and --help flags.
+// All other arguments are passed to Claude Code.
 type CCmdKong struct {
-	Args []string `kong:"arg,optional,passthrough"`
+	Profile string   `kong:"flag,name='profile',help='Claude Code profile to use'"`
+	Port    int      `kong:"flag,name='port',help='Tingly-Box server port (default: from config or 12580)'"`
+	Args    []string `kong:"arg,optional"`
 }
 
 func (c *CCmdKong) Run(appManager *AppManager) error {
-	profile, port, claudeArgs, err := parseCCFlags(c.Args)
-	if err != nil {
-		return err
-	}
-	return runCC(appManager, profile, port, claudeArgs)
+	// Check if user wants help in Claude args (e.g., "cc -- --help")
+	// This is handled by passing --help to Claude, not by showing tingly-box help
+	// Use --port if provided, otherwise 0 (will fallback to config)
+	port := c.Port
+	return runCC(appManager, c.Profile, port, c.Args)
 }
 
 // ============== Business Logic Functions ==============
-
-// parseCCFlags consumes tingly-box-specific flags from the beginning of args
-// and returns the remaining args verbatim for claude.
-//
-// Recognized flags: -p/--profile, --tingly-port. Scanning stops at the first
-// token that is not a recognized tingly-box flag, so everything from that
-// point on is passed to claude unchanged — no "--" separator required.
-func parseCCFlags(args []string) (profile string, port int, claudeArgs []string, err error) {
-	i := 0
-	for i < len(args) {
-		switch {
-		case args[i] == "--profile" || args[i] == "-p":
-			if i+1 >= len(args) {
-				return "", 0, nil, fmt.Errorf("flag %s requires a value", args[i])
-			}
-			profile = args[i+1]
-			i += 2
-
-		case args[i] == "--tingly-port":
-			if i+1 >= len(args) {
-				return "", 0, nil, fmt.Errorf("flag %s requires a value", args[i])
-			}
-			p, parseErr := strconv.Atoi(args[i+1])
-			if parseErr != nil || p <= 0 || p > 65535 {
-				return "", 0, nil, fmt.Errorf("flag --tingly-port requires a valid port number, got %q", args[i+1])
-			}
-			port = p
-			i += 2
-
-		default:
-			// First unrecognized token — everything from here is claude's
-			return profile, port, args[i:], nil
-		}
-	}
-	return profile, port, nil, nil
-}
 
 // runCC orchestrates: ensure server → resolve profile → write settings → exec claude.
 // If portOverride > 0, it takes precedence over the server's configured port.

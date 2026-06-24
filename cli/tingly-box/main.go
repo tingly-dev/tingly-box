@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	_ "net/http/pprof"
 	_ "time/tzdata" // Embed timezone data for static builds
@@ -52,7 +53,7 @@ type CLI struct {
 	Token command.TokenCmdKong `kong:"cmd,name='token',help='View or refresh tingly-box auth/model tokens'"`
 
 	// Claude Code
-	CC      command.CCmdKong       `kong:"cmd,help='Launch Claude Code',passthrough"`
+	CC      command.CCmdKong       `kong:"cmd,help='Launch Claude Code'"`
 	Profile command.ProfileCmdKong `kong:"cmd,help='Manage and use Claude Code profiles'"`
 
 	// Other commands
@@ -86,7 +87,7 @@ func main() {
 	// `tingly-box --help` lists `config` (not `config provider add` etc.),
 	// and `tingly-box config --help` lists `provider` / `rule` rather than
 	// every finer-grained operation.
-	ctx := kong.Parse(&cli,
+	parser, err := kong.New(&cli,
 		kong.Vars{
 			"version":   version,
 			"gitCommit": gitCommit,
@@ -95,7 +96,32 @@ func main() {
 			"platform":  platform,
 		},
 		kong.ConfigureHelp(kong.HelpOptions{NoExpandSubcommands: true}),
+		kong.Help(func(options kong.HelpOptions, ctx *kong.Context) error {
+			// Print default Kong help
+			if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
+				return err
+			}
+			// Append passthrough help for cc and profile commands
+			c := ctx.Command()
+			switch {
+			case strings.HasPrefix(c, "cc"):
+				command.PrintCCPassthroughHelp("cc")
+			case strings.HasPrefix(c, "profile"):
+				command.PrintCCPassthroughHelp("profile")
+			}
+			return nil
+		}),
 	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to initialize parser: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, parseErr := parser.Parse(os.Args[1:])
+	if parseErr != nil {
+		parser.Errorf("%v", parseErr)
+		os.Exit(1)
+	}
 
 	if cli.PProf {
 		go func() {
@@ -108,9 +134,7 @@ func main() {
 		logrus.SetLevel(logrus.TraceLevel)
 	}
 
-	// Initialize config
 	var appConfig *config.AppConfig
-	var err error
 
 	configDir := cli.ConfigDir
 	if configDir != "" {

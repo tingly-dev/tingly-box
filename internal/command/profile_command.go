@@ -12,16 +12,27 @@ import (
 
 // ProfileCmdKong is the Kong command for managing and using Claude Code profiles.
 //
-//	tingly-box profile              → list profiles (interactive on TTY, select to launch)
-//	tingly-box profile p1           → launch Claude Code with profile p1
-//	tingly-box profile p1 --port 12580 → launch Claude Code with profile p1 on a remote tingly-box
-//	tingly-box profile --list       → list all profiles (non-interactive)
-//	tingly-box profile --show p1    → show profile details
+// Management mode:
+//
+//	tingly-box profile --list             → list all profiles (non-interactive)
+//	tingly-box profile --show p1          → show profile details
+//
+// Launch mode:
+//
+//	tingly-box profile                    → list profiles (interactive on TTY, select to launch)
+//	tingly-box profile p1                 → launch Claude Code with profile p1
+//	tingly-box profile p1 --port 12580    → launch Claude Code with profile p1 on port 12580
+//	tingly-box profile p1 -- --model opus → launch with profile p1, passing --model opus to Claude
+//	tingly-box profile p1 -- -p hi        → launch with profile p1, using Claude's print mode
+//
+// Note: Use '--' to separate tingly-box options from Claude arguments, especially
+// when passing flags that might conflict (e.g., -p for Claude's print mode).
 type ProfileCmdKong struct {
-	ProfileID string `kong:"arg,optional,help='Profile name or ID to launch Claude Code with'"`
-	List      bool   `kong:"flag,name='list',help='List all profiles'"`
-	Show      bool   `kong:"flag,name='show',help='Show profile details instead of launching'"`
-	Port      int    `kong:"flag,name='port',help='Connect to tingly-box on the specified port (default: from config)'"`
+	List      bool     `kong:"flag,name='list',help='List all profiles (non-interactive)'"`
+	Show      bool     `kong:"flag,name='show',help='Show profile details instead of launching'"`
+	Port      int      `kong:"flag,name='port',help='Connect to tingly-box on the specified port (default: from config)'"`
+	ProfileID string   `kong:"arg,optional,help='Profile name or ID to launch Claude Code with'"`
+	Args      []string `kong:"arg,optional,help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
 
 func (p *ProfileCmdKong) Run(appManager *AppManager) error {
@@ -44,10 +55,14 @@ func (p *ProfileCmdKong) Run(appManager *AppManager) error {
 
 	// No flags: either launch with the provided profile, or show interactive list
 	if p.ProfileID != "" {
-		return profileUse(appManager, p.ProfileID, p.Port)
+		return profileUse(appManager, p.ProfileID, p.Port, p.Args)
 	}
 
 	// No positional arg: interactive mode (lists profiles + prompt)
+	// Note: In interactive mode, we don't support additional Claude args
+	if len(p.Args) > 0 {
+		return fmt.Errorf("additional arguments are only supported when a profile is specified")
+	}
 	return profileLaunchInteractive(appManager, p.Port)
 }
 
@@ -176,7 +191,8 @@ func profileShowInteractive(appManager *AppManager) error {
 // profileUse launches Claude Code with the specified profile.
 // Equivalent to `tingly-box cc --profile <name>` but without passthrough args.
 // If port > 0, it overrides the configured server port.
-func profileUse(appManager *AppManager, nameOrID string, port int) error {
+// Additional args are passed to Claude Code.
+func profileUse(appManager *AppManager, nameOrID string, port int, extraArgs []string) error {
 	globalConfig := appManager.GetGlobalConfig()
 
 	// Resolve profile name → ID (handles both name and ID lookup).
@@ -198,8 +214,8 @@ func profileUse(appManager *AppManager, nameOrID string, port int) error {
 		resolvedID = selected
 	}
 
-	// Delegate to runCC with the resolved profile ID and no passthrough args.
-	return runCC(appManager, resolvedID, port, nil)
+	// Delegate to runCC with the resolved profile ID and additional args.
+	return runCC(appManager, resolvedID, port, extraArgs)
 }
 
 // profileLaunchInteractive lists profiles and prompts the user to pick one to launch.
