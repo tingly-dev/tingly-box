@@ -197,9 +197,13 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		}
 
 		// Build owned_by field
-		ownedBy := "tingly-box"
+
+		var ownedBy string
+
 		if len(providerDesc) > 0 {
 			ownedBy = fmt.Sprintf("%v", providerDesc)
+		} else {
+			ownedBy = "tingly-box"
 		}
 
 		// Get model description from template if available

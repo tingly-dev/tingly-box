@@ -317,6 +317,13 @@ type FetchProviderModelsResponse struct {
 // ModelDetail contains tingly-box model metadata that is shared across
 // protocol-specific model list formats. Keep protocol-native model fields on
 // the protocol struct and put reusable extensions here.
+//
+// BREAKING CHANGE: Previously, model metadata fields (description, context,
+// max_output, auth_type) were flat on the model object. They are now nested
+// under the "detail" field. Clients must be updated to read from the detail
+// object:
+//   - Before: model.description, model.context, model.max_output, model.auth_type
+//   - After:  model.detail.description, model.detail.context, model.detail.max_tokens, model.detail.auth_type
 type ModelDetail struct {
 	Description         string   `json:"description,omitempty"`
 	Context             int      `json:"context,omitempty"`
