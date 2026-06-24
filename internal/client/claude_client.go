@@ -50,10 +50,8 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors
 	}
 
-	// Check if this is an OAuth token
-	isOAuthToken := IsClaudeOAuthToken(provider.GetAccessToken())
-
 	// Apply Claude Code specific headers
+	isOAuthToken := IsClaudeOAuthToken(provider.GetAccessToken())
 	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken)
 
 	// Add beta query parameter
@@ -66,10 +64,8 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 	}
 	options = append(options, anthropicOption.WithRequestTimeout(timeout))
 
-	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)
 
-	// Wrap in AnthropicClient base
 	base := &AnthropicClient{
 		client:   anthropicClient,
 		provider: provider,
