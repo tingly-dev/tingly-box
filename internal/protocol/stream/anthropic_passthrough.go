@@ -36,8 +36,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 				return false, streamResp.Err(), nil
 			}
 			// Current() returns a value, but we need a pointer for modification
-			evt := streamResp.Current()
-			return true, nil, &evt
+			return true, nil, new(streamResp.Current())
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
@@ -143,8 +142,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 				return false, streamResp.Err(), nil
 			}
 			// Current() returns a value, but we need a pointer for modification
-			evt := streamResp.Current()
-			return true, nil, &evt
+			return true, nil, new(streamResp.Current())
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)

@@ -67,8 +67,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				// retryable status instead of a clean finish.
 				return false, streamResp.Err(), nil
 			}
-			chunk := streamResp.Current()
-			return true, nil, &chunk
+			return true, nil, new(streamResp.Current())
 		},
 		func(event interface{}) error {
 			chunk := event.(*openai.ChatCompletionChunk)
