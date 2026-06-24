@@ -54,3 +54,10 @@ func authTypeSortWeight(a typ.AuthType) int {
 		return 1
 	}
 }
+
+func modelDetailAuthType(detail *ModelDetail) typ.AuthType {
+	if detail == nil {
+		return typ.AuthTypeAPIKey
+	}
+	return typ.AuthType(detail.AuthType)
+}

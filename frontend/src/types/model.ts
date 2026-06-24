@@ -3,15 +3,22 @@
  */
 
 // OpenAI format models
+export interface ModelDetail {
+  description?: string;
+  context?: number;
+  max_tokens?: number;
+  max_completion_tokens?: number;
+  input_modalities?: string[];
+  output_modalities?: string[];
+  auth_type?: string;
+}
+
 export interface OpenAIModel {
   id: string;
   object: string;
   created: number;
   owned_by: string;
-  description?: string;
-  context?: number;
-  max_output?: number;
-  auth_type?: string;
+  detail?: ModelDetail;
 }
 
 export interface OpenAIModelsResponse {
@@ -25,53 +32,9 @@ export interface AnthropicModel {
   created_at: string;
   display_name: string;
   type: string;
-  capabilities?: ModelCapabilities;
   max_input_tokens?: number;
   max_tokens?: number;
-  description?: string;
-  auth_type?: string;
-}
-
-export interface ModelCapabilities {
-  batch: CapabilitySupport;
-  citations: CapabilitySupport;
-  code_execution: CapabilitySupport;
-  context_management?: ContextManagementCapability;
-  effort?: EffortCapability;
-  image_input: CapabilitySupport;
-  pdf_input: CapabilitySupport;
-  structured_outputs: CapabilitySupport;
-  thinking?: ThinkingCapability;
-}
-
-export interface CapabilitySupport {
-  supported: boolean;
-}
-
-export interface ContextManagementCapability {
-  supported: boolean;
-  clear_thinking_20251015?: CapabilitySupport;
-  clear_tool_uses_20250919?: CapabilitySupport;
-  compact_20260112?: CapabilitySupport;
-}
-
-export interface EffortCapability {
-  supported: boolean;
-  low?: CapabilitySupport;
-  medium?: CapabilitySupport;
-  high?: CapabilitySupport;
-  xhigh?: CapabilitySupport;
-  max?: CapabilitySupport;
-}
-
-export interface ThinkingCapability {
-  supported: boolean;
-  types?: ThinkingTypes;
-}
-
-export interface ThinkingTypes {
-  adaptive: CapabilitySupport;
-  enabled: CapabilitySupport;
+  detail?: ModelDetail;
 }
 
 export interface AnthropicModelsResponse {

@@ -197,22 +197,26 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		}
 
 		// Build owned_by field
-		ownedBy := "tingly-box"
+
+		var ownedBy string
+
 		if len(providerDesc) > 0 {
-			ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
+			ownedBy = fmt.Sprintf("%v", providerDesc)
+		} else {
+			ownedBy = "tingly-box"
 		}
 
 		// Get model description from template if available
 		var description string
 		var context int
-		var maxOutput int
+		var maxTokens int
 		if templateManager != nil && primaryProvider != nil {
 			if tmpl, err := templateManager.GetTemplate(primaryProvider.Name); err == nil && tmpl != nil {
 				for _, modelInfo := range tmpl.Models {
 					if modelInfo.ID == rule.RequestModel {
 						description = modelInfo.Description
 						context = modelInfo.Context
-						maxOutput = modelInfo.MaxOutput
+						maxTokens = modelInfo.MaxTokens
 						break
 					}
 				}
@@ -220,20 +224,25 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		}
 
 		models = append(models, OpenAIModel{
-			ID:          rule.RequestModel,
-			Object:      "model",
-			Created:     created,
-			OwnedBy:     ownedBy,
-			Description: description,
-			Context:     context,
-			MaxOutput:   maxOutput,
-			AuthType:    string(primaryAuthTypeForRule(cfg, rule)),
+			ID:      rule.RequestModel,
+			Object:  "model",
+			Created: created,
+			OwnedBy: ownedBy,
+			Detail: &ModelDetail{
+				Description:         description,
+				Context:             context,
+				MaxTokens:           maxTokens,
+				MaxCompletionTokens: maxTokens,
+				InputModalities:     []string{"text"},
+				OutputModalities:    []string{"text"},
+				AuthType:            string(primaryAuthTypeForRule(cfg, rule)),
+			},
 		})
 	}
 
 	sort.SliceStable(models, func(i, j int) bool {
-		return authTypeSortWeight(typ.AuthType(models[i].AuthType)) <
-			authTypeSortWeight(typ.AuthType(models[j].AuthType))
+		return authTypeSortWeight(modelDetailAuthType(models[i].Detail)) <
+			authTypeSortWeight(modelDetailAuthType(models[j].Detail))
 	})
 
 	c.JSON(http.StatusOK, OpenAIModelsResponse{

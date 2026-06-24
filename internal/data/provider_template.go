@@ -34,7 +34,7 @@ type ModelInfo struct {
 	ID          string `json:"id"`
 	Description string `json:"description,omitempty"`
 	Context     int    `json:"context,omitempty"`
-	MaxOutput   int    `json:"max_output,omitempty"`
+	MaxTokens   int    `json:"max_tokens,omitempty"`
 }
 
 // NamingRules defines the naming conventions for provider IDs
@@ -734,7 +734,7 @@ func (tm *TemplateManager) findEmbeddedTemplateByProvider(provider *typ.Provider
 // using the provider templates. If templates are not available, falls back to
 // the global default.
 // It checks in order:
-// 1. Exact match in Models array (ModelInfo.MaxOutput)
+// 1. Exact match in Models array (ModelInfo.MaxTokens)
 // 2. ModelCapacities override (for capacity-based limits)
 // 3. Global default
 func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
@@ -744,8 +744,8 @@ func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
 		if tmpl != nil {
 			// NEW: Check Models array for MaxOutput
 			for _, m := range tmpl.Models {
-				if m.ID == model && m.MaxOutput > 0 {
-					return m.MaxOutput
+				if m.ID == model && m.MaxTokens > 0 {
+					return m.MaxTokens
 				}
 			}
 			// Fallback to ModelCapacities (for capacity-based limits)
@@ -774,8 +774,8 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 	if tmpl != nil {
 		// NEW: Check Models array for MaxOutput
 		for _, m := range tmpl.Models {
-			if m.ID == model && m.MaxOutput > 0 {
-				return m.MaxOutput
+			if m.ID == model && m.MaxTokens > 0 {
+				return m.MaxTokens
 			}
 		}
 		// Fallback to ModelCapacities (for capacity-based limits)
