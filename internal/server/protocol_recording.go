@@ -318,15 +318,15 @@ func (sr *ProtocolRecorder) emit(err error) {
 	}
 
 	sr.sink.Emit(r)
-	sr.releaseAfterEmit()
+	sr.release()
 }
 
-// releaseAfterEmit drops per-request recorder state once the obs.Record has
+// release drops per-request recorder state once the obs.Record has
 // been handed to the sink. This prevents completed protocol stream responses
 // from remaining reachable through gin.Context keys or recorder references; the
 // emitted record owns whatever payload the selected record mode intentionally
 // preserves.
-func (sr *ProtocolRecorder) releaseAfterEmit() {
+func (sr *ProtocolRecorder) release() {
 	if sr == nil {
 		return
 	}
