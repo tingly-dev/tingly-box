@@ -18,7 +18,7 @@ type (
 	}
 )
 
-func (r AnthropicMessagesRequest) MarshalJSON() ([]byte, error) {
+func (r *AnthropicMessagesRequest) MarshalJSON() ([]byte, error) {
 	var m map[string]any
 
 	if r.MessageNewParams != nil {
@@ -39,7 +39,7 @@ func (r AnthropicMessagesRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-func (r AnthropicBetaMessagesRequest) MarshalJSON() ([]byte, error) {
+func (r *AnthropicBetaMessagesRequest) MarshalJSON() ([]byte, error) {
 	var m map[string]any
 
 	if r.BetaMessageNewParams != nil {

@@ -19,7 +19,7 @@ type OpenAIChatCompletionRequest struct {
 	Stream bool `json:"stream"`
 }
 
-func (r OpenAIChatCompletionRequest) MarshalJSON() ([]byte, error) {
+func (r *OpenAIChatCompletionRequest) MarshalJSON() ([]byte, error) {
 	inner, err := json.Marshal(r.ChatCompletionNewParams)
 	if err != nil {
 		return nil, err
