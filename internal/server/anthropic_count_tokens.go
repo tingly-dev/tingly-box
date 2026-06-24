@@ -132,8 +132,8 @@ func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, mo
 	}
 }
 
-func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context, wrapper interface{}, req anthropic.BetaMessageCountTokensParams) {
-	message, err := wrapper.(*client.AnthropicClient).BetaMessagesCountTokens(ctx, &req)
+func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context, wrapper client.AnthropicClientInterface, req anthropic.BetaMessageCountTokensParams) {
+	message, err := wrapper.BetaMessagesCountTokens(ctx, &req)
 	if err != nil {
 		stream.SendInvalidRequestBodyError(c, err)
 		return
