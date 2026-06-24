@@ -205,14 +205,14 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		// Get model description from template if available
 		var description string
 		var context int
-		var maxOutput int
+		var maxTokens int
 		if templateManager != nil && primaryProvider != nil {
 			if tmpl, err := templateManager.GetTemplate(primaryProvider.Name); err == nil && tmpl != nil {
 				for _, modelInfo := range tmpl.Models {
 					if modelInfo.ID == rule.RequestModel {
 						description = modelInfo.Description
 						context = modelInfo.Context
-						maxOutput = modelInfo.MaxOutput
+						maxTokens = modelInfo.MaxTokens
 						break
 					}
 				}

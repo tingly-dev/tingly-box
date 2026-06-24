@@ -12,7 +12,7 @@
       "region": "cn | intl | global",
       "plan": "standard | coding | oauth"
     },
-    "models_schema": "每条模型 { id, context?, max_output? }，仅填写已验证的数值，不确定的省略字段或整个数组留空"
+    "models_schema": "每条模型 { id, context?, max_tokens? }，仅填写已验证的数值，不确定的省略字段或整个数组留空"
   },
   "version": "2.0.1",
   "last_updated": "2026-06-09T00:00:00Z",
@@ -38,47 +38,47 @@
         {
           "id": "gpt-3.5-turbo",
           "context": 16385,
-          "max_output": 4096
+          "max_tokens": 4096
         },
         {
           "id": "gpt-4",
           "context": 8192,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "gpt-4-turbo",
           "context": 128000,
-          "max_output": 4096
+          "max_tokens": 4096
         },
         {
           "id": "gpt-4o",
           "context": 128000,
-          "max_output": 16384
+          "max_tokens": 16384
         },
         {
           "id": "gpt-4o-mini",
           "context": 128000,
-          "max_output": 16384
+          "max_tokens": 16384
         },
         {
           "id": "o1",
           "context": 200000,
-          "max_output": 100000
+          "max_tokens": 100000
         },
         {
           "id": "o1-mini",
           "context": 128000,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "o3",
           "context": 200000,
-          "max_output": 100000
+          "max_tokens": 100000
         },
         {
           "id": "o3-mini",
           "context": 200000,
-          "max_output": 100000
+          "max_tokens": 100000
         }
       ],
       "supports_models_endpoint": true,
@@ -106,83 +106,83 @@
         {
           "id": "claude-3-haiku-20240307",
           "context": 200000,
-          "max_output": 4096
+          "max_tokens": 4096
         },
         {
           "id": "claude-3-sonnet-20240229",
           "context": 200000,
-          "max_output": 4096
+          "max_tokens": 4096
         },
         {
           "id": "claude-3-opus-20240229",
           "context": 200000,
-          "max_output": 4096
+          "max_tokens": 4096
         },
         {
           "id": "claude-3-5-haiku-20241022",
           "context": 200000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "claude-3-5-sonnet-20241022",
           "context": 200000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "claude-3-7-sonnet-20250219",
           "context": 200000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-20250514",
           "context": 200000,
-          "max_output": 32000
+          "max_tokens": 32000
         },
         {
           "id": "claude-sonnet-4-20250514",
           "context": 200000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-1-20250805",
           "context": 200000,
-          "max_output": 32000
+          "max_tokens": 32000
         },
         {
           "id": "claude-sonnet-4-5-20250929",
           "context": 1000000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-haiku-4-5-20251001",
           "context": 200000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-5-20251101",
           "context": 1000000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-6",
           "context": 1000000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "claude-sonnet-4-6",
           "context": 1000000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-7",
           "context": 1000000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "claude-fable-5",
           "descritpion": "Limited time available",
           "context": 1000000,
-          "max_output": 128000
+          "max_tokens": 128000
         }
       ],
       "supports_models_endpoint": true,
@@ -210,52 +210,52 @@
         {
           "id": "claude-sonnet-4-20250514",
           "context": 200000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-20250514",
           "context": 200000,
-          "max_output": 32000
+          "max_tokens": 32000
         },
         {
           "id": "claude-opus-4-1-20250805",
           "context": 200000,
-          "max_output": 32000
+          "max_tokens": 32000
         },
         {
           "id": "claude-sonnet-4-5-20250929",
           "context": 1000000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-haiku-4-5-20251001",
           "context": 200000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-5-20251101",
           "context": 1000000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-6",
           "context": 1000000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "claude-sonnet-4-6",
           "context": 1000000,
-          "max_output": 64000
+          "max_tokens": 64000
         },
         {
           "id": "claude-opus-4-7",
           "context": 1000000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "claude-opus-4-8",
           "context": 1000000,
-          "max_output": 128000
+          "max_tokens": 128000
         }
       ],
       "supports_models_endpoint": true,
@@ -338,17 +338,17 @@
         {
           "id": "gemini-1.5-flash",
           "context": 1000000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "gemini-1.5-pro",
           "context": 2000000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "gemini-2.0-flash",
           "context": 1000000,
-          "max_output": 8192
+          "max_tokens": 8192
         }
       ],
       "supports_models_endpoint": true,
@@ -375,27 +375,27 @@
         {
           "id": "gemini-2.5-pro",
           "context": 1048576,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "gemini-2.5-flash",
           "context": 1048576,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "gemini-2.5-flash-lite",
           "context": 1048576,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "gemini-3.1-pro-preview",
           "context": 1000000,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "gemini-3.5-flash",
           "context": 1000000,
-          "max_output": 65536
+          "max_tokens": 65536
         }
       ],
       "supports_models_endpoint": true,
@@ -480,22 +480,22 @@
         {
           "id": "grok-4-fast-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_tokens": 30000
         },
         {
           "id": "grok-4-fast-non-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_tokens": 30000
         },
         {
           "id": "grok-4-1-fast-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_tokens": 30000
         },
         {
           "id": "grok-4-1-fast-non-reasoning",
           "context": 2000000,
-          "max_output": 30000
+          "max_tokens": 30000
         }
       ],
       "supports_models_endpoint": true,
@@ -522,22 +522,22 @@
         {
           "id": "deepseek-chat",
           "context": 128000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "deepseek-reasoner",
           "context": 128000,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "deepseek-v4-flash",
           "context": 1000000,
-          "max_output": 384000
+          "max_tokens": 384000
         },
         {
           "id": "deepseek-v4-pro",
           "context": 1000000,
-          "max_output": 384000
+          "max_tokens": 384000
         }
       ],
       "supports_models_endpoint": true,
@@ -603,17 +603,17 @@
         {
           "id": "qwen-max",
           "context": 32768,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "qwen-plus",
           "context": 131072,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "qwen-turbo",
           "context": 1000000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "qwen-long",
@@ -644,17 +644,17 @@
         {
           "id": "qwen-max",
           "context": 32768,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "qwen-plus",
           "context": 131072,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "qwen-turbo",
           "context": 1000000,
-          "max_output": 8192
+          "max_tokens": 8192
         },
         {
           "id": "qwen-long",
@@ -686,42 +686,42 @@
         {
           "id": "qwen3-coder-plus",
           "context": 1048576,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3.5-plus",
           "context": 1000000,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3-max",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3-coder-next",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "glm-5",
           "context": 202752,
-          "max_output": 16384
+          "max_tokens": 16384
         },
         {
           "id": "glm-4.7",
           "context": 202752,
-          "max_output": 16384
+          "max_tokens": 16384
         },
         {
           "id": "minimax-m2.5",
           "context": 1048576,
-          "max_output": 32768
+          "max_tokens": 32768
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 32768
+          "max_tokens": 32768
         }
       ],
       "supports_models_endpoint": false,
@@ -748,42 +748,42 @@
         {
           "id": "qwen3-coder-plus",
           "context": 1048576,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3.5-plus",
           "context": 1000000,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3-max",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3-coder-next",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "glm-5",
           "context": 202752,
-          "max_output": 16384
+          "max_tokens": 16384
         },
         {
           "id": "glm-4.7",
           "context": 202752,
-          "max_output": 16384
+          "max_tokens": 16384
         },
         {
           "id": "minimax-m2.5",
           "context": 1048576,
-          "max_output": 32768
+          "max_tokens": 32768
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 32768
+          "max_tokens": 32768
         }
       ],
       "supports_models_endpoint": false,
@@ -810,7 +810,7 @@
         {
           "id": "qwen3-coder-plus",
           "context": 1000000,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "qwen3-coder-flash"
@@ -841,17 +841,17 @@
         {
           "id": "kimi-for-coding",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "kimi-k2.6",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         }
       ],
       "supports_models_endpoint": false,
@@ -902,22 +902,22 @@
         {
           "id": "MiniMax-M2",
           "context": 204800,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "MiniMax-M2.1",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "MiniMax-M2.1-lightning",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "MiniMax-M2.5",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         }
       ],
       "supports_models_endpoint": false,
@@ -944,22 +944,22 @@
         {
           "id": "MiniMax-M2",
           "context": 204800,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "MiniMax-M2.1",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "MiniMax-M2.1-lightning",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "MiniMax-M2.5",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         }
       ],
       "supports_models_endpoint": false,
@@ -986,22 +986,22 @@
         {
           "id": "glm-4.5",
           "context": 128000,
-          "max_output": 96000
+          "max_tokens": 96000
         },
         {
           "id": "glm-4.5-air",
           "context": 128000,
-          "max_output": 96000
+          "max_tokens": 96000
         },
         {
           "id": "glm-4.6",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         }
       ],
       "supports_models_endpoint": true,
@@ -1029,32 +1029,32 @@
         {
           "id": "glm-5.1",
           "context": 204800,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "glm-5-turbo",
           "context": 202752,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "glm-5",
           "context": 202752,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "glm-4.6",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "glm-4.5-air",
           "context": 128000,
-          "max_output": 96000
+          "max_tokens": 96000
         }
       ],
       "supports_models_endpoint": true,
@@ -1083,23 +1083,23 @@
         {
           "id": "glm-4.5",
           "context": 128000,
-          "max_output": 96000
+          "max_tokens": 96000
         },
         {
           "id": "glm-4.5-air",
           "context": 128000,
-          "max_output": 96000
+          "max_tokens": 96000
         },
         {
           "id": "glm-4.6",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "glm-4.7",
           "description": "hi",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         }
       ],
       "supports_models_endpoint": true,
@@ -1128,32 +1128,32 @@
         {
           "id": "glm-5.1",
           "context": 204800,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "glm-5-turbo",
           "context": 202752,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "glm-5",
           "context": 202752,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "glm-4.6",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "glm-4.5-air",
           "context": 128000,
-          "max_output": 96000
+          "max_tokens": 96000
         }
       ],
       "supports_models_endpoint": true,
@@ -1193,7 +1193,7 @@
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_tokens": 65535
         }
       ],
       "supports_models_endpoint": true,
@@ -1232,7 +1232,7 @@
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_tokens": 65535
         }
       ],
       "supports_models_endpoint": true,
@@ -1259,7 +1259,7 @@
         {
           "id": "kimi-for-coding",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         }
       ],
       "supports_models_endpoint": false,
@@ -1325,7 +1325,7 @@
         {
           "id": "glm-4.7",
           "context": 200000,
-          "max_output": 128000
+          "max_tokens": 128000
         },
         {
           "id": "deepseek-v3.2"
@@ -1339,12 +1339,12 @@
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_tokens": 65535
         },
         {
           "id": "minimax-m2.5",
           "context": 204800,
-          "max_output": 65536
+          "max_tokens": 65536
         }
       ],
       "supports_models_endpoint": false,
@@ -1615,27 +1615,27 @@
         {
           "id": "mimo-v2-flash",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "mimo-v2-omni",
           "context": 262144,
-          "max_output": 65536
+          "max_tokens": 65536
         },
         {
           "id": "mimo-v2-pro",
           "context": 1048576,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "mimo-v2.5",
           "context": 1048576,
-          "max_output": 131072
+          "max_tokens": 131072
         },
         {
           "id": "mimo-v2.5-pro",
           "context": 1048576,
-          "max_output": 16384
+          "max_tokens": 16384
         }
       ],
       "supports_models_endpoint": true,
