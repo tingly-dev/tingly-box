@@ -28,32 +28,23 @@ type ClientPool struct {
 	virtualAnthropicClient AnthropicClientInterface
 }
 
-// ClientPoolBuilder builds a ClientPool with specified configuration.
-type ClientPoolBuilder struct {
-	recordSink *obs.Sink
-}
+// ClientPoolOption configures a ClientPool at construction time.
+type ClientPoolOption func(*ClientPool)
 
-// NewClientPoolBuilder creates a new builder with default settings.
-func NewClientPoolBuilder() *ClientPoolBuilder {
-	return &ClientPoolBuilder{}
-}
-
-// WithRecordSink sets the record sink for all clients.
-func (b *ClientPoolBuilder) WithRecordSink(sink *obs.Sink) *ClientPoolBuilder {
-	b.recordSink = sink
-	return b
-}
-
-// Build creates the ClientPool with configured settings.
-func (b *ClientPoolBuilder) Build() *ClientPool {
-	return &ClientPool{
-		recordSink: b.recordSink,
+// WithRecordSink sets the record sink for newly created clients.
+func WithRecordSink(sink *obs.Sink) ClientPoolOption {
+	return func(p *ClientPool) {
+		p.recordSink = sink
 	}
 }
 
 // NewClientPool creates a new ClientPool with default settings.
-func NewClientPool() *ClientPool {
-	return &ClientPool{}
+func NewClientPool(opts ...ClientPoolOption) *ClientPool {
+	pool := &ClientPool{}
+	for _, opt := range opts {
+		opt(pool)
+	}
+	return pool
 }
 
 // GetOpenAIClient returns an OpenAI client wrapper for the specified provider.

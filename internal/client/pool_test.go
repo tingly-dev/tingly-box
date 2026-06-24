@@ -129,7 +129,7 @@ func TestClientPool_ClientConstruction(t *testing.T) {
 
 	t.Run("with-record-sink", func(t *testing.T) {
 		sink := &obs.Sink{}
-		pool := NewClientPoolBuilder().WithRecordSink(sink).Build()
+		pool := NewClientPool(WithRecordSink(sink))
 		if client := pool.GetOpenAIClient(context.Background(), openaiProvider, "gpt-4"); client == nil {
 			t.Fatal("Expected non-nil client")
 		}
