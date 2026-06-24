@@ -17,6 +17,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// guard
+var _ AnthropicClientInterface = (*ClaudeClient)(nil)
+
 // ClaudeClient wraps AnthropicClient with Claude Code OAuth-specific behaviors.
 // It creates an Anthropic SDK client directly with Claude Code headers and middleware,
 // then embeds it for delegation.

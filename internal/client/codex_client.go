@@ -19,6 +19,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// guard
+var _ OpenAIClientInterface = (*CodexClient)(nil)
+
 // CodexClient wraps OpenAIClient with Codex-specific behaviors.
 // It embeds OpenAIClient to inherit standard OpenAI API functionality,
 // while overriding methods that require special handling for ChatGPT backend API.

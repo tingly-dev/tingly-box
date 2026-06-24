@@ -19,6 +19,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// guard
+var _ OpenAIClientInterface = (*KimiClient)(nil)
+
 // KimiClient wraps OpenAIClient with Kimi-specific behaviors.
 // It embeds OpenAIClient to inherit standard OpenAI API functionality,
 // while applying Kimi-specific normalization before requests.
