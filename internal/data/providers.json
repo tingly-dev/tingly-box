@@ -180,7 +180,7 @@
         },
         {
           "id": "claude-fable-5",
-          "descritpion": "Limited time available",
+          "description": "Limited time available",
           "context": 1000000,
           "max_tokens": 128000
         }
