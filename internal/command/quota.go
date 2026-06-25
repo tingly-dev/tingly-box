@@ -209,111 +209,169 @@ func displayQuotaForProviders(providers []*typ.Provider, usages []*quota.Provide
 	return nil
 }
 
-// printQuotaDetails prints detailed quota information (always in full detail mode)
+// printQuotaDetails prints detailed quota information (minimal style)
 func printQuotaDetails(usage *quota.ProviderUsage) {
-	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Printf("📊 %s Quota Details\n", strings.ToUpper(usage.ProviderName))
-	fmt.Println(strings.Repeat("=", 70))
+	// Provider header
+	providerName := usage.ProviderName
+	if len(providerName) > 40 {
+		// Truncate long provider names
+		providerName = providerName[:37] + "..."
+	}
+
+	fmt.Println("─────────────────────────────────────────────────────────────")
+	fmt.Printf("📊 %s (%s)\n", providerName, usage.ProviderType)
+
+	// Account tier on separate line
+	if usage.Account != nil && usage.Account.Tier != "" {
+		fmt.Printf("Tier: %s\n", usage.Account.Tier)
+	} else if usage.Account != nil && usage.Account.Name != "" {
+		fmt.Printf("Account: %s\n", usage.Account.Name)
+	}
+
+	// Fetched time on separate line
+	fmt.Printf("Fetched: %s\n", usage.FetchedAt.Format("2006-01-02 15:04:05"))
 
 	// Status
-	status := "✅ OK"
 	if usage.LastError != "" {
-		status = fmt.Sprintf("❌ Error: %s", usage.LastError)
-	}
-	fmt.Printf("Status:     %s\n", status)
-	fmt.Printf("Provider:   %s (%s)\n", usage.ProviderName, usage.ProviderType)
-	fmt.Printf("Fetched:    %s\n", usage.FetchedAt.Format("2006-01-02 15:04:05"))
-
-	// Account info
-	if usage.Account != nil {
-		fmt.Println("\n👤 Account:")
-		if usage.Account.Name != "" {
-			fmt.Printf("  Name: %s\n", usage.Account.Name)
-		}
-		if usage.Account.Email != "" {
-			fmt.Printf("  Email: %s\n", usage.Account.Email)
-		}
-		if usage.Account.Tier != "" {
-			fmt.Printf("  Tier: %s\n", usage.Account.Tier)
-		}
+		fmt.Printf("Status: Error: %s\n", usage.LastError)
 	}
 
-	// Display all quota groups (breakdowns + aggregate)
-	fmt.Println("\n📊 Quota:")
+	fmt.Println()
 
-	// First, display breakdowns if available
-	if len(usage.Breakdowns) > 0 {
-		// Group breakdowns by their Group field
-		grouped := make(map[string][]*quota.UsageBreakdown)
-		for _, bd := range usage.Breakdowns {
-			grouped[bd.Group] = append(grouped[bd.Group], bd)
-		}
+	// Display quota windows with progress bars
+	displayWindowsWithProgress(usage)
 
-		// Display each group with appropriate header
-		for group, bds := range grouped {
-			var groupHeader string
-			switch group {
-			case "model":
-				groupHeader = "By Model"
-			case "type":
-				groupHeader = "By Type"
-			case "region":
-				groupHeader = "By Region"
-			case "tier":
-				groupHeader = "By Tier"
-			default:
-				groupHeader = "By " + strings.ToUpper(group[:1]) + group[1:]
-			}
-
-			fmt.Printf("\n  📦 %s:\n", groupHeader)
-			for _, bd := range bds {
-				fmt.Printf("    • %s:\n", bd.Label)
-				for _, w := range bd.Windows {
-					printUsageWindowInline(w, 4)
-				}
-			}
-		}
-		fmt.Println() // separator before aggregate
+	// Footer status
+	if usage.LastError == "" {
+		fmt.Printf("\n✅ Status: OK\n")
 	}
 
-	// Then display aggregate (primary/secondary/tertiary as "Total" group)
-	aggregateLabel := "Total"
-	if usage.Primary != nil || usage.Secondary != nil || usage.Tertiary != nil {
-		fmt.Printf("  📊 %s:\n", aggregateLabel)
-	}
+	fmt.Println("─────────────────────────────────────────────────────────────")
+}
+
+// displayWindowsWithProgress displays quota windows with visual progress bars
+func displayWindowsWithProgress(usage *quota.ProviderUsage) {
+	windows := make([]*quota.UsageWindow, 0)
+
+	// Collect main windows in priority order
 	if usage.Primary != nil {
-		printUsageWindowInline(usage.Primary, 3)
+		windows = append(windows, usage.Primary)
 	}
 	if usage.Secondary != nil {
-		printUsageWindowInline(usage.Secondary, 3)
+		windows = append(windows, usage.Secondary)
 	}
 	if usage.Tertiary != nil {
-		printUsageWindowInline(usage.Tertiary, 3)
+		windows = append(windows, usage.Tertiary)
+	}
+	// Add extra windows
+	windows = append(windows, usage.ExtraWindows...)
+
+	if len(windows) == 0 {
+		fmt.Println("No quota data available")
+		return
 	}
 
-	// Extra windows
-	if len(usage.ExtraWindows) > 0 {
-		fmt.Printf("\n  ➕ Additional Windows:\n")
-		for _, w := range usage.ExtraWindows {
-			printUsageWindowInline(w, 3)
-		}
+	for _, window := range windows {
+		printWindowWithProgress(window)
+	}
+}
+
+// printWindowWithProgress prints a single usage window with progress bar
+func printWindowWithProgress(window *quota.UsageWindow) {
+	// Status icon based on usage percentage
+	statusIcon := getStatusIcon(window.UsedPercent)
+
+	// Format usage values
+	var usageStr string
+	if window.Used == 0 && window.Limit == 0 && window.Unit == quota.UsageUnitPercent {
+		// Percentage-only quota
+		usageStr = fmt.Sprintf("%.1f%%", window.UsedPercent)
+	} else {
+		usedStr := formatUsageValue(window.Used, window.Unit)
+		limitStr := formatUsageValue(window.Limit, window.Unit)
+		usageStr = fmt.Sprintf("%s / %s (%.1f%%)", usedStr, limitStr, window.UsedPercent)
 	}
 
-	// Cost
-	if usage.Cost != nil {
-		fmt.Println("\n💰 Cost:")
-		fmt.Printf("  Used:    $%.2f %s\n", usage.Cost.Used, usage.Cost.CurrencyCode)
-		if usage.Cost.Limit > 0 {
-			fmt.Printf("  Limit:   $%.2f %s\n", usage.Cost.Limit, usage.Cost.CurrencyCode)
-			percent := (usage.Cost.Used / usage.Cost.Limit) * 100
-			fmt.Printf("  Percent: %.1f%%\n", percent)
-		}
-		if usage.Cost.ResetsAt != nil {
-			fmt.Printf("  Resets:  %s\n", usage.Cost.ResetsAt.Format("2006-01-02"))
-		}
+	// Progress bar
+	progressBar := renderProgressBar(window.UsedPercent, 20)
+
+	// Reset time
+	resetInfo := ""
+	if window.ResetsAt != nil {
+		resetInfo = fmt.Sprintf(" — %s", formatResetTime(*window.ResetsAt))
 	}
 
-	fmt.Println(strings.Repeat("=", 70))
+	// Print line: [icon] Label: usage [progress_bar] reset_info
+	fmt.Printf("%s %s: %s [%s]%s\n", statusIcon, window.Label, usageStr, progressBar, resetInfo)
+}
+
+// renderProgressBar creates a visual progress bar
+func renderProgressBar(percent float64, width int) string {
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+
+	filled := int(percent / 100 * float64(width))
+	if filled > width {
+		filled = width
+	}
+
+	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+}
+
+// getStatusIcon returns an icon based on usage percentage
+func getStatusIcon(percent float64) string {
+	switch {
+	case percent >= 90:
+		return "🔴" // Critical
+	case percent >= 70:
+		return "🟠" // Warning
+	case percent >= 40:
+		return "🟡" // Moderate
+	default:
+		return "🟢" // Good
+	}
+}
+
+// formatResetTime formats reset time in compact form
+func formatResetTime(resetsAt time.Time) string {
+	duration := time.Until(resetsAt)
+
+	// Already expired
+	if duration <= 0 {
+		return fmt.Sprintf("expired %s", resetsAt.Format("Jan 2 15:04"))
+	}
+
+	// Less than 1 hour
+	if duration < time.Hour {
+		return fmt.Sprintf("resets in %dm", int(duration.Minutes()))
+	}
+
+	// Less than 24 hours
+	if duration < 24*time.Hour {
+		hours := int(duration.Hours())
+		mins := int(duration.Minutes()) % 60
+		if mins > 0 {
+			return fmt.Sprintf("resets in %dh %dm", hours, mins)
+		}
+		return fmt.Sprintf("resets in %dh", hours)
+	}
+
+	// Less than 7 days
+	if duration < 7*24*time.Hour {
+		days := int(duration.Hours() / 24)
+		hours := int(duration.Hours()) % 24
+		if hours > 0 {
+			return fmt.Sprintf("resets in %dd %dh", days, hours)
+		}
+		return fmt.Sprintf("resets in %dd", days)
+	}
+
+	// More than a week - show date
+	return fmt.Sprintf("resets %s", resetsAt.Format("Jan 2 15:04"))
 }
 
 // printUsageWindow prints a usage window
