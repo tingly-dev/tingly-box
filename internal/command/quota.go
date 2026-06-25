@@ -15,63 +15,139 @@ import (
 
 // ============== Kong Command Structures ==============
 
-// QuotaCmdKong is the Kong version of quota command with streamlined behavior.
-// The default behavior (no subcommand) is to list all quotas.
+// QuotaCmdKong is the streamlined quota command.
+// Default behavior: interactive mode to select provider.
 type QuotaCmdKong struct {
-	// List quotas (default behavior) - this is the default command
-	List    QuotaListCmdKong    `kong:"cmd,name='list',default='1',hidden,help='List all provider quotas (default)'"`
-	Get     QuotaGetCmdKong     `kong:"cmd,help='Get provider quota details'"`
-	Refresh QuotaRefreshCmdKong `kong:"cmd,help='Refresh quota data'"`
-	Summary QuotaSummaryCmdKong `kong:"cmd,help='Show quota summary'"`
+	NoRefresh    bool   `kong:"flag,name='no-refresh',help='Skip refresh and show cached data only'"`
+	AllProviders bool   `kong:"flag,name='all',short='a',help='Show all providers instead of interactive mode'"`
+	Provider     string `kong:"arg,optional,help='Provider name or UUID (interactive mode if omitted)'"`
 }
 
-// QuotaListCmdKong lists all provider quotas with optional refresh
-type QuotaListCmdKong struct {
-	Refresh bool `kong:"flag,name='refresh',short='r',help='Refresh before listing'"`
-}
-
-func (q *QuotaListCmdKong) Run(appManager *AppManager) error {
-	if q.Refresh {
-		return runQuotaRefresh(appManager)
+func (q *QuotaCmdKong) Run(appManager *AppManager) error {
+	// If provider specified, show only that provider
+	if q.Provider != "" {
+		return runQuotaShowProvider(appManager, q.Provider, !q.NoRefresh)
 	}
-	return runQuotaList(appManager)
-}
-
-// QuotaRefreshCmdKong refreshes quota data
-// Supports optional provider argument to refresh specific provider
-type QuotaRefreshCmdKong struct {
-	Provider string `kong:"arg,optional,help='Provider name or UUID to refresh (refreshes all if omitted)'"`
-}
-
-func (q *QuotaRefreshCmdKong) Run(appManager *AppManager) error {
-	if q.Provider == "" {
-		return runQuotaRefresh(appManager)
+	// No provider specified - check if user wants all providers or interactive
+	if q.AllProviders {
+		return runQuotaShowAll(appManager, !q.NoRefresh)
 	}
-	return runQuotaRefreshProvider(appManager, q.Provider)
-}
-
-// QuotaSummaryCmdKong shows quota summary
-type QuotaSummaryCmdKong struct{}
-
-func (q *QuotaSummaryCmdKong) Run(appManager *AppManager) error {
-	return runQuotaSummary(appManager)
-}
-
-// QuotaGetCmdKong shows details for a specific provider
-// This was merged into the list command, but we keep a separate command for explicit "get" usage
-type QuotaGetCmdKong struct {
-	Provider string `kong:"arg,optional,help='Provider name or UUID'"`
-	Refresh  bool   `kong:"flag,name='refresh',short='r',help='Refresh before displaying'"`
-}
-
-func (q *QuotaGetCmdKong) Run(appManager *AppManager) error {
-	if q.Provider == "" {
-		return runQuotaGetInteractive(appManager)
-	}
-	return runQuotaGet(appManager, q.Provider, q.Refresh)
+	// Default: interactive mode
+	return runQuotaInteractive(appManager, !q.NoRefresh)
 }
 
 // ============== Business Logic Functions ==============
+
+// runQuotaShowAll shows all providers with optional refresh
+func runQuotaShowAll(appManager *AppManager, refresh bool) error {
+	ctx := context.Background()
+
+	qm, err := createQuotaManager(appManager)
+	if err != nil {
+		return err
+	}
+
+	// Refresh if requested (default behavior)
+	if refresh {
+		fmt.Println("🔄 Refreshing quota data...")
+		_, err := qm.Refresh(ctx)
+		if err != nil {
+			fmt.Printf("⚠️  Refresh failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Refresh complete\n")
+		}
+	}
+
+	usages, err := qm.ListQuota(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get quota data: %w", err)
+	}
+
+	providers := appManager.ListProviders()
+	if len(providers) == 0 {
+		fmt.Println("No providers configured.")
+		return nil
+	}
+
+	return displayQuotaForProviders(providers, usages)
+}
+
+// runQuotaShowProvider shows a specific provider with optional refresh
+func runQuotaShowProvider(appManager *AppManager, providerName string, refresh bool) error {
+	ctx := context.Background()
+
+	// Find provider by name or UUID
+	provider, err := findProvider(appManager, providerName)
+	if err != nil {
+		return err
+	}
+
+	qm, err := createQuotaManager(appManager)
+	if err != nil {
+		return err
+	}
+
+	// Refresh if requested (default behavior)
+	if refresh {
+		fmt.Printf("🔄 Refreshing quota data for %s...\n", providerName)
+		_, err := qm.RefreshProvider(ctx, provider.UUID)
+		if err != nil {
+			fmt.Printf("⚠️  Refresh failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Refresh complete\n")
+		}
+	}
+
+	usage, err := qm.GetQuota(ctx, provider.UUID)
+	if err != nil {
+		return fmt.Errorf("failed to get quota: %w", err)
+	}
+
+	printQuotaDetails(usage)
+	return nil
+}
+
+// runQuotaInteractive runs interactive mode for provider selection
+func runQuotaInteractive(appManager *AppManager, refresh bool) error {
+	providers := appManager.ListProviders()
+
+	if len(providers) == 0 {
+		fmt.Println("❌ No providers configured.")
+		return nil
+	}
+
+	if len(providers) == 1 {
+		// Only one provider, auto-select it
+		return runQuotaShowProvider(appManager, providers[0].Name, refresh)
+	}
+
+	fmt.Println("\n📊 View Provider Quota")
+	fmt.Println("\nSelect a provider:")
+
+	for i, provider := range providers {
+		status := "✅"
+		if !provider.Enabled {
+			status = "❌"
+		}
+		fmt.Printf("%d. %s %s (%s)\n", i+1, status, provider.Name, provider.UUID[:8])
+	}
+
+	fmt.Print("\nEnter provider number, name, or UUID: ")
+	var input string
+	fmt.Scanln(&input)
+	input = strings.TrimSpace(input)
+
+	var name string
+	var num int
+	if _, err := fmt.Sscanf(input, "%d", &num); err == nil && num > 0 && num <= len(providers) {
+		name = providers[num-1].Name
+	} else {
+		// Try as name or UUID directly
+		name = input
+	}
+
+	return runQuotaShowProvider(appManager, name, refresh)
+}
 
 // findProvider finds a provider by name or UUID (exact match).
 func findProvider(appManager *AppManager, nameOrUUID string) (*typ.Provider, error) {
@@ -103,67 +179,8 @@ func createQuotaManager(appManager *AppManager) (*quota.Manager, error) {
 	return qm, nil
 }
 
-// runQuotaList lists all provider quotas
-func runQuotaList(appManager *AppManager) error {
-	ctx := context.Background()
-
-	qm, err := createQuotaManager(appManager)
-	if err != nil {
-		return err
-	}
-
-	usages, err := qm.ListQuota(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get quota data: %w", err)
-	}
-
-	providers := appManager.ListProviders()
-	if len(providers) == 0 {
-		fmt.Println("No providers configured.")
-		return nil
-	}
-
-	return displayQuotaForProviders(providers, usages, qm, ctx, true)
-}
-
-// runQuotaGet displays detailed quota for a specific provider
-func runQuotaGet(appManager *AppManager, providerName string, refresh bool) error {
-	ctx := context.Background()
-
-	// Find provider by name or UUID
-	provider, err := findProvider(appManager, providerName)
-	if err != nil {
-		return err
-	}
-
-	qm, err := createQuotaManager(appManager)
-	if err != nil {
-		return err
-	}
-
-	// Refresh if requested
-	if refresh {
-		fmt.Printf("🔄 Refreshing quota data for %s...\n", providerName)
-		_, err := qm.RefreshProvider(ctx, provider.UUID)
-		if err != nil {
-			fmt.Printf("⚠️  Refresh failed: %v\n", err)
-		} else {
-			fmt.Println("✅ Refresh complete")
-		}
-	}
-
-	// Get quota data
-	usage, err := qm.GetQuota(ctx, provider.UUID)
-	if err != nil {
-		return fmt.Errorf("failed to get quota: %w", err)
-	}
-
-	printQuotaDetails(usage)
-	return nil
-}
-
 // displayQuotaForProviders displays quota info for given providers
-func displayQuotaForProviders(providers []*typ.Provider, usages []*quota.ProviderUsage, qm *quota.Manager, ctx context.Context, showSeparator bool) error {
+func displayQuotaForProviders(providers []*typ.Provider, usages []*quota.ProviderUsage) error {
 	// Build a lookup from store data
 	usageMap := make(map[string]*quota.ProviderUsage, len(usages))
 	for _, u := range usages {
@@ -179,12 +196,12 @@ func displayQuotaForProviders(providers []*typ.Provider, usages []*quota.Provide
 				ProviderUUID: p.UUID,
 				ProviderName: p.Name,
 				ProviderType: quota.ProviderType(p.APIStyle),
-				LastError:    "no data — run 'quota refresh' to fetch",
+				LastError:    "no data — run 'quota' to fetch",
 			})
 		}
 
 		// Empty line between providers (except after last one)
-		if showSeparator && i < len(providers)-1 {
+		if i < len(providers)-1 {
 			fmt.Println()
 		}
 	}
@@ -192,148 +209,7 @@ func displayQuotaForProviders(providers []*typ.Provider, usages []*quota.Provide
 	return nil
 }
 
-// runQuotaGetInteractive runs interactive mode for get
-func runQuotaGetInteractive(appManager *AppManager) error {
-	providers := appManager.ListProviders()
-
-	if len(providers) == 0 {
-		fmt.Println("❌ No providers configured.")
-		return nil
-	}
-
-	fmt.Println("\n📊 View Provider Quota")
-	fmt.Println("\nSelect a provider:")
-
-	for i, provider := range providers {
-		status := "✅"
-		if !provider.Enabled {
-			status = "❌"
-		}
-		fmt.Printf("%d. %s %s (%s)\n", i+1, status, provider.Name, provider.UUID[:8])
-	}
-
-	fmt.Print("\nEnter provider number, name, or UUID: ")
-	var input string
-	fmt.Scanln(&input)
-	input = strings.TrimSpace(input)
-
-	var name string
-	var num int
-	if _, err := fmt.Sscanf(input, "%d", &num); err == nil && num > 0 && num <= len(providers) {
-		name = providers[num-1].Name
-	} else {
-		// Try as name or UUID directly
-		name = input
-	}
-
-	return runQuotaGet(appManager, name, false)
-}
-
-// runQuotaRefresh refreshes all provider quotas
-func runQuotaRefresh(appManager *AppManager) error {
-	ctx := context.Background()
-
-	qm, err := createQuotaManager(appManager)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("🔄 Refreshing quota data for all providers...")
-
-	usages, err := qm.Refresh(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to refresh quota: %w", err)
-	}
-
-	fmt.Printf("✅ Refreshed %d provider(s)\n\n", len(usages))
-
-	providers := appManager.ListProviders()
-	return displayQuotaForProviders(providers, usages, qm, ctx, true)
-}
-
-// runQuotaRefreshProvider refreshes a specific provider
-func runQuotaRefreshProvider(appManager *AppManager, providerName string) error {
-	ctx := context.Background()
-
-	// Find provider by name or UUID
-	provider, err := findProvider(appManager, providerName)
-	if err != nil {
-		return err
-	}
-
-	qm, err := createQuotaManager(appManager)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("🔄 Refreshing quota data for %s...\n", providerName)
-
-	usage, err := qm.RefreshProvider(ctx, provider.UUID)
-	if err != nil {
-		return fmt.Errorf("failed to refresh quota: %w", err)
-	}
-
-	fmt.Println("✅ Refresh complete")
-	printQuotaDetails(usage)
-
-	return nil
-}
-
-// runQuotaSummary displays quota summary
-func runQuotaSummary(appManager *AppManager) error {
-	ctx := context.Background()
-
-	qm, err := createQuotaManager(appManager)
-	if err != nil {
-		return err
-	}
-
-	summary, err := qm.Summary(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get summary: %w", err)
-	}
-
-	fmt.Println("\n📊 Quota Summary")
-	fmt.Println(strings.Repeat("=", 50))
-	fmt.Printf("Total Providers:   %d\n", summary.TotalProviders)
-	fmt.Printf("✅ OK:              %d\n", summary.OKProviders)
-	fmt.Printf("❌ Error:           %d\n", summary.ErrorProviders)
-	fmt.Printf("⚠️  Warning (>80%%):  %d\n", summary.WarningProviders)
-	fmt.Println(strings.Repeat("=", 50))
-
-	if len(summary.ByType) > 0 {
-		fmt.Println("\nBy Provider Type:")
-		for pt, count := range summary.ByType {
-			fmt.Printf("  %s: %d\n", pt, count)
-		}
-	}
-
-	return nil
-}
-
-// printQuotaOverview prints a one-line overview of provider quota
-func printQuotaOverview(usage *quota.ProviderUsage) {
-	// Get primary window info
-	primaryInfo := ""
-	if usage.Primary != nil {
-		primaryInfo = fmt.Sprintf(" | %s: %.1f%%", usage.Primary.Label, usage.Primary.UsedPercent)
-	}
-
-	// Add secondary indicator if exists
-	secondaryIndicator := ""
-	if usage.Secondary != nil {
-		secondaryIndicator = " +"
-	}
-
-	if usage.LastError != "" {
-		fmt.Printf("  %-20s%s%s\n", usage.ProviderName, primaryInfo, secondaryIndicator)
-		fmt.Printf("  %-20s%s\n", "", "  error: "+usage.LastError)
-	} else {
-		fmt.Printf("  %-20s%s%s\n", usage.ProviderName, primaryInfo, secondaryIndicator)
-	}
-}
-
-// printQuotaDetails prints detailed quota information
+// printQuotaDetails prints detailed quota information (always in full detail mode)
 func printQuotaDetails(usage *quota.ProviderUsage) {
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	fmt.Printf("📊 %s Quota Details\n", strings.ToUpper(usage.ProviderName))
@@ -413,6 +289,14 @@ func printQuotaDetails(usage *quota.ProviderUsage) {
 	}
 	if usage.Tertiary != nil {
 		printUsageWindowInline(usage.Tertiary, 3)
+	}
+
+	// Extra windows
+	if len(usage.ExtraWindows) > 0 {
+		fmt.Printf("\n  ➕ Additional Windows:\n")
+		for _, w := range usage.ExtraWindows {
+			printUsageWindowInline(w, 3)
+		}
 	}
 
 	// Cost
