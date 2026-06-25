@@ -2,7 +2,7 @@ import { Box, Tooltip } from '@mui/material';
 import { QuotaTooltipContent } from './QuotaTooltip';
 import type { QuotaTooltipData, QuotaWindowDisplay } from './QuotaTooltip';
 import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
-import type { ProviderQuota } from '../../types/quota';
+import type { ProviderQuota, TieredUsageWindow } from '../../types/quota';
 
 interface UsageWindow {
   type: string;
@@ -24,16 +24,15 @@ interface UsageCost {
 
 interface QuotaBarProps {
   quota: ProviderQuota;
-  windowIndex?: 0 | 1 | 2;  // 0=primary, 1=secondary, 2=tertiary
+  window?: TieredUsageWindow;
+  windowIndex?: 0 | 1 | 2;  // Legacy fallback only
 }
 
-export function QuotaBar({ quota, windowIndex = 0 }: QuotaBarProps) {
-  // Get the window based on index
+export function QuotaBar({ quota, window: explicitWindow, windowIndex = 0 }: QuotaBarProps) {
+  // Get the canonical window when a direct window is not provided.
   const getWindow = (): UsageWindow | null => {
-    if (windowIndex === 0) return quota.primary || null;
-    if (windowIndex === 1) return quota.secondary || null;
-    if (windowIndex === 2) return quota.tertiary || null;
-    return quota.primary || null;
+    if (explicitWindow) return explicitWindow;
+    return quota.windows?.[windowIndex] || null;
   };
 
   const window = getWindow();
@@ -49,6 +48,7 @@ export function QuotaBar({ quota, windowIndex = 0 }: QuotaBarProps) {
         breakdownDisplays.push({
           label: bd.label,
           window: targetWindow,
+          group: bd.group,
           color: QUOTA_COLORS.secondary,
         });
       }

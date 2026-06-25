@@ -36,15 +36,18 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
 
   // Format detailed info for tooltip
   const formatDetailedInfo = () => {
-    if (window.used === 0 && window.limit === 0 && window.unit === 'percent') {
-      return `${window.used_percent.toFixed(0)}%`;
-    }
-
     const formatNumber = (num: number) => {
       if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
       if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
       return num.toString();
     };
+
+    if (window.unit === 'percent') {
+      if (window.used === 0 && window.limit === 0) {
+        return `${window.used_percent.toFixed(0)}%`;
+      }
+      return `${formatNumber(window.used)}% / ${formatNumber(window.limit)}%`;
+    }
 
     return `${formatNumber(window.used)} / ${formatNumber(window.limit)} ${window.unit}`;
   };

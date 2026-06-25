@@ -15,6 +15,7 @@ export interface QuotaTooltipData {
 export interface QuotaWindowDisplay {
   label: string;
   window: UsageWindow;
+  group?: string;
   color?: string;
 }
 
@@ -33,9 +34,11 @@ export interface QuotaTooltipProps {
 export function QuotaTooltipContent({ title, primary, secondary, cost, breakdowns }: QuotaTooltipProps) {
   // Helper function to format usage display
   const formatUsageDisplay = (data: QuotaTooltipData) => {
-    // For percentage-only quotas (used=0, limit=0, unit=percent)
-    if (data.used === 0 && data.limit === 0 && data.unit === 'percent') {
-      return `${data.percent.toFixed(0)}%`;
+    if (data.unit === 'percent') {
+      if (data.used === 0 && data.limit === 0) {
+        return `${data.percent.toFixed(0)}%`;
+      }
+      return `${formatNumber(data.used)}% / ${formatNumber(data.limit)}%`;
     }
     return `${formatNumber(data.used)} / ${formatNumber(data.limit)} ${data.unit}`;
   };
@@ -120,7 +123,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
           }}
         >
           <Typography sx={{ ...tooltipTextStyles.caption, fontWeight: 500, mb: 1 }}>
-            By {breakdowns[0]?.window?.type === 'daily' ? 'Model' : 'Type'}:
+            By {breakdowns[0]?.group || 'Item'}:
           </Typography>
           {breakdowns.map((bd, idx) => (
             <Box
@@ -141,9 +144,11 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
                 }}
               />
               <Typography sx={{ ...tooltipTextStyles.caption, fontSize: '11px' }}>
-                {bd.label}: {bd.window.used === 0 && bd.window.limit === 0 && bd.window.unit === 'percent'
-                  ? `${bd.window.used_percent.toFixed(0)}%`
-                  : `${formatNumber(bd.window.used)} / ${formatNumber(bd.window.limit)} (${bd.window.used_percent.toFixed(0)}%)`
+                {bd.label}: {bd.window.unit === 'percent'
+                  ? bd.window.used === 0 && bd.window.limit === 0
+                    ? `${bd.window.used_percent.toFixed(0)}%`
+                    : `${formatNumber(bd.window.used)}% / ${formatNumber(bd.window.limit)}% (${bd.window.used_percent.toFixed(0)}%)`
+                  : `${formatNumber(bd.window.used)} / ${formatNumber(bd.window.limit)} ${bd.window.unit} (${bd.window.used_percent.toFixed(0)}%)`
                 }
               </Typography>
             </Box>

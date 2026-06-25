@@ -4,6 +4,7 @@ import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
 import type { ProviderQuota } from '@/types/quota';
+import { quotaToWindows } from '@/types/quota';
 
 interface QuotaInlineDisplayProps {
   quota: ProviderQuota | undefined;
@@ -28,18 +29,7 @@ export function QuotaInlineDisplay({
   onRefresh,
   maxInlineItems = 3,
 }: QuotaInlineDisplayProps) {
-  // Collect all available windows
-  const windows: Array<{ key: string; window: any; label: string }> = [];
-
-  if (quota?.primary) {
-    windows.push({ key: 'primary', window: quota.primary, label: quota.primary.label });
-  }
-  if (quota?.secondary) {
-    windows.push({ key: 'secondary', window: quota.secondary, label: quota.secondary.label });
-  }
-  if (quota?.tertiary) {
-    windows.push({ key: 'tertiary', window: quota.tertiary, label: quota.tertiary.label });
-  }
+  const windows = quotaToWindows(quota);
 
   const hasQuota = windows.length > 0;
   const hasHiddenItems = windows.length > maxInlineItems;
@@ -72,8 +62,10 @@ export function QuotaInlineDisplay({
             {label}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {window.used === 0 && window.limit === 0 && window.unit === 'percent'
-              ? `${window.used_percent.toFixed(0)}%`
+            {window.unit === 'percent'
+              ? window.used === 0 && window.limit === 0
+                ? `${window.used_percent.toFixed(0)}%`
+                : `${window.used}% / ${window.limit}% (${window.used_percent.toFixed(0)}%)`
               : `${window.used} / ${window.limit} ${window.unit} (${window.used_percent.toFixed(0)}%)`
             }
           </Typography>

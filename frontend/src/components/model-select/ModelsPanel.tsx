@@ -18,7 +18,8 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
-import type { ProviderQuota, UsageWindow } from '@/types/quota';
+import type { ProviderQuota } from '@/types/quota';
+import { quotaToWindows } from '@/types/quota';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
 import { useProviderModels } from '@/hooks/useProviderModels';
@@ -57,27 +58,20 @@ async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> 
 
 // Convert ProviderModelData.quota to ProviderQuota type
 function convertToProviderQuota(
-    quota: { primary?: any; cost?: any } | undefined,
+    quota: Partial<ProviderQuota> | undefined,
     provider: Provider,
     lastUpdated?: string
 ): ProviderQuota | undefined {
     if (!quota) return undefined;
 
     return {
-        provider_uuid: provider.uuid,
-        provider_name: provider.name,
-        provider_type: provider.api_style,
-        fetched_at: lastUpdated || new Date().toISOString(),
-        expires_at: '',
-        primary: quota.primary as UsageWindow | undefined,
-        secondary: undefined,
-        tertiary: undefined,
-        cost: quota.cost,
-        account: undefined,
-        breakdowns: undefined,
-        last_error: undefined,
-        last_error_at: undefined,
-    };
+        ...quota,
+        provider_uuid: quota.provider_uuid ?? provider.uuid,
+        provider_name: quota.provider_name ?? provider.name,
+        provider_type: quota.provider_type ?? provider.api_style,
+        fetched_at: quota.fetched_at ?? lastUpdated ?? new Date().toISOString(),
+        expires_at: quota.expires_at ?? '',
+    } as ProviderQuota;
 }
 
 export interface ModelsPanelProps {
@@ -128,6 +122,8 @@ export function ModelsPanel({
     const quotaProp = useMemo(() => {
         return providerQuota;  // Pass full quota object, QuotaBar will handle breakdowns
     }, [providerQuota]);
+
+    const quotaWindows = useMemo(() => quotaToWindows(quotaProp), [quotaProp]);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -437,7 +433,7 @@ export function ModelsPanel({
             </Box>
 
             {/* Provider Quota Bars - fixed at the bottom */}
-            {quotaProp && quotaProp.primary && (
+            {quotaWindows.length > 0 && (
                 <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
@@ -471,33 +467,14 @@ export function ModelsPanel({
                         </IconButton>
                     </Stack>
                     <Stack spacing={1.5}>
-                        {/* Primary quota */}
-                        <Box>
-                            <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
-                                {quotaProp.primary.label}
-                            </Typography>
-                            <QuotaBar quota={quotaProp} windowIndex={0} />
-                        </Box>
-
-                        {/* Secondary quota */}
-                        {quotaProp.secondary && (
-                            <Box>
+                        {quotaWindows.map(({ key, label, window }) => (
+                            <Box key={key}>
                                 <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
-                                    {quotaProp.secondary.label}
+                                    {label}
                                 </Typography>
-                                <QuotaBar quota={quotaProp} windowIndex={1} />
+                                <QuotaBar quota={quotaProp!} window={window} />
                             </Box>
-                        )}
-
-                        {/* Tertiary quota */}
-                        {quotaProp.tertiary && (
-                            <Box>
-                                <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
-                                    {quotaProp.tertiary.label}
-                                </Typography>
-                                <QuotaBar quota={quotaProp} windowIndex={2} />
-                            </Box>
-                        )}
+                        ))}
                     </Stack>
                 </Box>
             )}
