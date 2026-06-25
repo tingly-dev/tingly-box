@@ -10,7 +10,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -66,40 +65,15 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
 
-	// Create HTTP client with session-bound transport
+	// Use the transport pool instead of http.DefaultTransport so that env
+	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
+	// proxy is explicitly configured for the provider.
 	var transport http.RoundTripper
-	if provider.AuthType == typ.AuthTypeOAuth {
-		if provider.OAuthDetail != nil && provider.OAuthDetail.Issuer == ai.IssuerClaudeCode {
-			// context1m sits inside claudeRoundTripper so the 1M beta flag is
-			// appended after the fingerprint-managed header merge (context-1m
-			// is on the fingerprint-safe allowlist, so this is equivalent).
-			transport = &claudeRoundTripper{
-				RoundTripper: &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)},
-			}
-			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s",
-				provider.OAuthDetail.GetIssuer(), sessionID.Value)
-		} else {
-			// OAuth provider with an issuer other than ClaudeCode (or missing OAuthDetail).
-			// Use a session-bound transport so proxy_url is respected and env proxy is
-			// not inherited — same guarantee as the non-OAuth path below.
-			transport = &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)}
-		}
-	} else {
-		// Generic non-OAuth Anthropic provider. Apply the same User-Agent
-		// layering as the generic OpenAI client (rule > provider): rule-UA
-		// wraps innermost so it overwrites the header last, provider-UA sits
-		// outside. OAuth issuers above keep their dedicated transport chain
-		// unchanged because vendor-specific round-trippers manage UA themselves.
-		//
-		// Use the transport pool instead of http.DefaultTransport so that env
-		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
-		// proxy is explicitly configured for the provider.
-		base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-		transport = &context1mBetaTransport{base: base}
-		transport = &customUserAgentTransport{base: transport}
-		transport = wrapWithUserAgent(transport, provider)
-		transport = wrapWithLogging(transport, provider)
-	}
+	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+	transport = &context1mBetaTransport{base: base}
+	transport = &customUserAgentTransport{base: transport}
+	transport = wrapWithUserAgent(transport, provider)
+	transport = wrapWithLogging(transport, provider)
 
 	httpClient := &http.Client{
 		Transport: transport,

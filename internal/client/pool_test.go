@@ -51,6 +51,9 @@ func TestClientPool_ClientConstruction(t *testing.T) {
 		Token:    "sk-ant-oa-test",
 		APIBase:  "https://api.anthropic.com/v1",
 		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			Issuer: ai.IssuerClaudeCode,
+		},
 	}
 	codexOAuth := &typ.Provider{
 		UUID:     "codex-uuid",
@@ -75,7 +78,7 @@ func TestClientPool_ClientConstruction(t *testing.T) {
 		{"openai-second-provider", context.Background(), openaiProvider2, "openai"},
 		{"anthropic", context.Background(), anthropicProvider, "anthropic"},
 		{"google", context.Background(), googleProvider, "google"},
-		{"oauth-claude-code", sessionCtx, claudeCodeOAuth, "openai"},
+		{"oauth-claude-code", sessionCtx, claudeCodeOAuth, "anthropic"},
 		{"oauth-codex", sessionCtx, codexOAuth, "openai"},
 	}
 
@@ -90,6 +93,11 @@ func TestClientPool_ClientConstruction(t *testing.T) {
 					client = pool.GetOpenAIClient(tc.ctx, tc.provider, "gpt-4")
 				case "anthropic":
 					client = pool.GetAnthropicClient(tc.ctx, tc.provider, "claude-3")
+					if tc.provider.OAuthDetail != nil && tc.provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
+						if _, ok := client.(*ClaudeClient); !ok {
+							t.Fatalf("Expected ClaudeClient for Claude Code OAuth provider, got %T", client)
+						}
+					}
 				case "google":
 					client = pool.GetGoogleClient(tc.ctx, tc.provider, "gemini-pro")
 				}
