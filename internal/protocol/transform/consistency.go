@@ -173,7 +173,7 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 						if toolCallID, ok := toolMsg["tool_call_id"].(string); ok {
 							// Truncate tool_call_id if needed
 							if len(toolCallID) > maxToolCallIDLength {
-								truncatedID := toolCallID[:maxToolCallIDLength-3] + "..."
+								truncatedID := toolCallID[:maxToolCallIDLength]
 								toolMsg["tool_call_id"] = truncatedID
 
 								// Re-marshal and unmarshal to update message
@@ -198,7 +198,7 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 					if err := json.Unmarshal(msgBytes, &toolMsg); err == nil {
 						if toolCallID, ok := toolMsg["tool_call_id"].(string); ok {
 							if len(toolCallID) > maxToolCallIDLength {
-								truncatedID := toolCallID[:maxToolCallIDLength-3] + "..."
+								truncatedID := toolCallID[:maxToolCallIDLength]
 								toolMsg["tool_call_id"] = truncatedID
 
 								if newBytes, err := json.Marshal(toolMsg); err == nil {

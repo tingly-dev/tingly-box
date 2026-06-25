@@ -218,7 +218,7 @@ func truncateToolCallID(id string) string {
 		return id
 	}
 	// Truncate to max length and add a suffix to indicate truncation
-	return id[:maxToolCallIDLength-3] + "..."
+	return id[:maxToolCallIDLength]
 }
 
 // rewriteToolCallIDForAnthropic converts an OpenAI-style tool call ID (call_...) to an
