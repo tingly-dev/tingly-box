@@ -131,9 +131,9 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 
 	usage.Breakdowns = breakdowns
 
-	// Primary: overall average usage across all models
+	// Overall average usage across all models
 	avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
-	usage.Primary = &quota.UsageWindow{
+	overall := usage.AddWindow("average", 0, &quota.UsageWindow{
 		Type:        quota.WindowTypeDaily,
 		Used:        avgUsedPercent, // Normalize to 0-100 scale
 		Limit:       100,            // Normalize to 0-100 scale
@@ -141,14 +141,14 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		Unit:        quota.UsageUnitPercent,
 		Label:       "Average Usage",
 		Description: fmt.Sprintf("%.0f%% across %d models", avgUsedPercent, len(quotaResp.Buckets)),
-	}
+	})
 
 	// Set reset time from first bucket
 	if len(quotaResp.Buckets) > 0 && quotaResp.Buckets[0].ResetTime != "" {
 		if t, err := time.Parse(time.RFC3339, quotaResp.Buckets[0].ResetTime); err == nil {
-			usage.Primary.ResetsAt = &t
+			overall.ResetsAt = &t
 		} else if t, err := time.Parse("2006-01-02T15:04:05.999Z", quotaResp.Buckets[0].ResetTime); err == nil {
-			usage.Primary.ResetsAt = &t
+			overall.ResetsAt = &t
 		}
 	}
 

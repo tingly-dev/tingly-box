@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -61,13 +62,8 @@ type ProviderUsage struct {
 	FetchedAt    time.Time    `json:"fetched_at"`    // 获取时间
 	ExpiresAt    time.Time    `json:"expires_at"`    // 数据过期时间
 
-	// 配额窗口（最多支持 3 个级别：primary, secondary, tertiary）
-	Primary   *UsageWindow `json:"primary,omitempty"`
-	Secondary *UsageWindow `json:"secondary,omitempty"`
-	Tertiary  *UsageWindow `json:"tertiary,omitempty"`
-
-	// 额外配额窗口（用于模型特定配额、代码审查配额等）
-	ExtraWindows []*UsageWindow `json:"extra_windows,omitempty"`
+	// 前端展示用的规范化配额窗口。Tier 越低越重要，展示越靠前。
+	Windows []*UsageWindow `json:"windows,omitempty"`
 
 	// 费用信息（如月度费用）
 	Cost *UsageCost `json:"cost,omitempty"`
@@ -102,6 +98,10 @@ type UsageBreakdown struct {
 
 // UsageWindow 表示一个配额窗口
 type UsageWindow struct {
+	// 展示标识与层级。Tier 越低越重要，展示越靠前。
+	Key  string `json:"key,omitempty"`
+	Tier int    `json:"tier,omitempty"`
+
 	// 窗口类型标识
 	Type WindowType `json:"type"` // session, weekly, monthly, daily, custom, balance
 
@@ -156,6 +156,48 @@ func (w *UsageWindow) CalculateUsedPercent() float64 {
 		return 100
 	}
 	return (w.Used / w.Limit) * 100
+}
+
+// NormalizeWindows ensures Windows contains all aggregate quota windows in display order.
+// Lower tier means more important and is rendered first.
+func (p *ProviderUsage) NormalizeWindows() {
+	if p == nil {
+		return
+	}
+
+	for i, window := range p.Windows {
+		applyWindowDefaults(window, fmt.Sprintf("window_%d", i))
+	}
+
+	sort.SliceStable(p.Windows, func(i, j int) bool {
+		return p.Windows[i].Tier < p.Windows[j].Tier
+	})
+}
+
+func applyWindowDefaults(window *UsageWindow, key string) {
+	if window == nil {
+		return
+	}
+	if window.Key == "" {
+		window.Key = key
+	}
+	if window.UsedPercent == 0 {
+		window.UsedPercent = window.CalculateUsedPercent()
+	}
+}
+
+// AddWindow adds a quota window with canonical display metadata.
+func (p *ProviderUsage) AddWindow(key string, tier int, window *UsageWindow) *UsageWindow {
+	if p == nil || window == nil {
+		return nil
+	}
+	window.Key = key
+	window.Tier = tier
+	if window.UsedPercent == 0 {
+		window.UsedPercent = window.CalculateUsedPercent()
+	}
+	p.Windows = append(p.Windows, window)
+	return window
 }
 
 // IsExpired 检查配额数据是否过期

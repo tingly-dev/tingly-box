@@ -110,11 +110,11 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		Tier: tier,
 	}
 
-	// Primary: usage vs limit (if limit is set)
+	// Usage vs limit (if limit is set)
 	if data.Limit != nil && *data.Limit > 0 {
 		used := data.Usage
 		limit := *data.Limit
-		usage.Primary = &quota.UsageWindow{
+		usage.AddWindow("key_limit", 0, &quota.UsageWindow{
 			Type:        quota.WindowTypeBalance,
 			Used:        used,
 			Limit:       limit,
@@ -122,10 +122,10 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 			Unit:        quota.UsageUnitCurrency,
 			Label:       "Key Limit",
 			Description: fmt.Sprintf("Balance: $%.2f / $%.2f", limit-used, limit),
-		}
+		})
 	} else {
-		// No limit set — show monthly usage as primary
-		usage.Primary = &quota.UsageWindow{
+		// No limit set — show monthly usage first
+		usage.AddWindow("monthly_usage", 0, &quota.UsageWindow{
 			Type:        quota.WindowTypeMonthly,
 			Used:        data.UsageMonthly,
 			Limit:       0,
@@ -133,11 +133,11 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 			Unit:        quota.UsageUnitCurrency,
 			Label:       "Monthly Usage",
 			Description: fmt.Sprintf("This month: $%.4f (no limit set)", data.UsageMonthly),
-		}
+		})
 	}
 
-	// Secondary: monthly usage breakdown
-	usage.Secondary = &quota.UsageWindow{
+	// Monthly usage breakdown
+	usage.AddWindow("monthly", 1, &quota.UsageWindow{
 		Type:        quota.WindowTypeMonthly,
 		Used:        data.UsageMonthly,
 		Limit:       0,
@@ -146,7 +146,7 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		Label:       "Monthly",
 		Description: fmt.Sprintf("Daily: $%.4f | Weekly: $%.4f | Monthly: $%.4f | Total: $%.4f",
 			data.UsageDaily, data.UsageWeekly, data.UsageMonthly, data.Usage),
-	}
+	})
 
 	// Cost
 	usage.Cost = &quota.UsageCost{

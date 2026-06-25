@@ -63,32 +63,31 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 		t.Errorf("ProviderType = %q, want openrouter", usage.ProviderType)
 	}
 
-	// Primary window (key limit)
-	if usage.Primary == nil {
-		t.Fatal("Primary is nil")
+	// Key limit window
+	if len(usage.Windows) < 2 {
+		t.Fatalf("expected at least 2 windows, got %d", len(usage.Windows))
 	}
-	if usage.Primary.Type != quota.WindowTypeBalance {
-		t.Errorf("Primary.Type = %q, want balance", usage.Primary.Type)
+	keyLimit := usage.Windows[0]
+	if keyLimit.Type != quota.WindowTypeBalance {
+		t.Errorf("KeyLimit.Type = %q, want balance", keyLimit.Type)
 	}
-	if usage.Primary.Used != 35.50 {
-		t.Errorf("Primary.Used = %f, want 35.50", usage.Primary.Used)
+	if keyLimit.Used != 35.50 {
+		t.Errorf("KeyLimit.Used = %f, want 35.50", keyLimit.Used)
 	}
-	if usage.Primary.Limit != 100.0 {
-		t.Errorf("Primary.Limit = %f, want 100.0", usage.Primary.Limit)
+	if keyLimit.Limit != 100.0 {
+		t.Errorf("KeyLimit.Limit = %f, want 100.0", keyLimit.Limit)
 	}
-	if usage.Primary.Unit != quota.UsageUnitCurrency {
-		t.Errorf("Primary.Unit = %q, want currency", usage.Primary.Unit)
+	if keyLimit.Unit != quota.UsageUnitCurrency {
+		t.Errorf("KeyLimit.Unit = %q, want currency", keyLimit.Unit)
 	}
 
-	// Secondary window (monthly)
-	if usage.Secondary == nil {
-		t.Fatal("Secondary is nil")
+	// Monthly window
+	monthly := usage.Windows[1]
+	if monthly.Type != quota.WindowTypeMonthly {
+		t.Errorf("Monthly.Type = %q, want monthly", monthly.Type)
 	}
-	if usage.Secondary.Type != quota.WindowTypeMonthly {
-		t.Errorf("Secondary.Type = %q, want monthly", usage.Secondary.Type)
-	}
-	if usage.Secondary.Used != 30.00 {
-		t.Errorf("Secondary.Used = %f, want 30.00", usage.Secondary.Used)
+	if monthly.Used != 30.00 {
+		t.Errorf("Monthly.Used = %f, want 30.00", monthly.Used)
 	}
 
 	// Cost
@@ -148,9 +147,12 @@ func TestOpenRouterFetcher_FreeTier(t *testing.T) {
 		t.Fatalf("Fetch() error: %v", err)
 	}
 
-	// No limit → primary shows monthly usage
-	if usage.Primary.Type != quota.WindowTypeMonthly {
-		t.Errorf("Primary.Type = %q, want monthly (no limit)", usage.Primary.Type)
+	// No limit → first window shows monthly usage
+	if len(usage.Windows) == 0 {
+		t.Fatal("expected quota windows")
+	}
+	if usage.Windows[0].Type != quota.WindowTypeMonthly {
+		t.Errorf("First window Type = %q, want monthly (no limit)", usage.Windows[0].Type)
 	}
 	if usage.Account.Tier != "free" {
 		t.Errorf("Account.Tier = %q, want free", usage.Account.Tier)

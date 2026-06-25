@@ -92,16 +92,16 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		ProviderType: quota.ProviderTypeKimiK2,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		Primary: &quota.UsageWindow{
-			Type:        quota.WindowTypeBalance,
-			Used:        consumed,
-			Limit:       total,
-			UsedPercent: usedPercent,
-			Unit:        quota.UsageUnitCredits,
-			Label:       "Credits",
-			Description: fmt.Sprintf("%.0f consumed, %.0f remaining", consumed, remaining),
-		},
 	}
+	usage.AddWindow("credits", 0, &quota.UsageWindow{
+		Type:        quota.WindowTypeBalance,
+		Used:        consumed,
+		Limit:       total,
+		UsedPercent: usedPercent,
+		Unit:        quota.UsageUnitCredits,
+		Label:       "Credits",
+		Description: fmt.Sprintf("%.0f consumed, %.0f remaining", consumed, remaining),
+	})
 
 	return usage, nil
 }

@@ -101,29 +101,28 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 		t.Errorf("Account.Tier = %q, want pro", usage.Account.Tier)
 	}
 
-	// Verify primary window (5h session)
-	if usage.Primary == nil {
-		t.Fatal("Primary is nil")
+	// Verify current window (5h session)
+	if len(usage.Windows) < 2 {
+		t.Fatalf("expected at least 2 windows, got %d", len(usage.Windows))
 	}
-	if usage.Primary.UsedPercent != 25 {
-		t.Errorf("Primary.UsedPercent = %f, want 25", usage.Primary.UsedPercent)
+	current := usage.Windows[0]
+	if current.UsedPercent != 25 {
+		t.Errorf("Current.UsedPercent = %f, want 25", current.UsedPercent)
 	}
-	if usage.Primary.WindowMinutes != 300 { // 18000s / 60
-		t.Errorf("Primary.WindowMinutes = %d, want 300", usage.Primary.WindowMinutes)
+	if current.WindowMinutes != 300 { // 18000s / 60
+		t.Errorf("Current.WindowMinutes = %d, want 300", current.WindowMinutes)
 	}
-	if usage.Primary.Label != "Current Window" {
-		t.Errorf("Primary.Label = %q, want 'Current Window'", usage.Primary.Label)
+	if current.Label != "Current Window" {
+		t.Errorf("Current.Label = %q, want 'Current Window'", current.Label)
 	}
 
-	// Verify secondary window (weekly)
-	if usage.Secondary == nil {
-		t.Fatal("Secondary is nil")
+	// Verify weekly window
+	weekly := usage.Windows[1]
+	if weekly.UsedPercent != 10 {
+		t.Errorf("Weekly.UsedPercent = %f, want 10", weekly.UsedPercent)
 	}
-	if usage.Secondary.UsedPercent != 10 {
-		t.Errorf("Secondary.UsedPercent = %f, want 10", usage.Secondary.UsedPercent)
-	}
-	if usage.Secondary.WindowMinutes != 10080 { // 604800s / 60
-		t.Errorf("Secondary.WindowMinutes = %d, want 10080", usage.Secondary.WindowMinutes)
+	if weekly.WindowMinutes != 10080 { // 604800s / 60
+		t.Errorf("Weekly.WindowMinutes = %d, want 10080", weekly.WindowMinutes)
 	}
 
 	// Verify credits
@@ -299,12 +298,12 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 		t.Fatalf("Fetch() error: %v", err)
 	}
 
-	// Verify extra windows
-	if len(usage.ExtraWindows) != 1 {
-		t.Fatalf("Expected 1 extra window, got %d", len(usage.ExtraWindows))
+	// Verify model window
+	if len(usage.Windows) != 3 {
+		t.Fatalf("Expected 3 windows, got %d", len(usage.Windows))
 	}
 
-	extra := usage.ExtraWindows[0]
+	extra := usage.Windows[2]
 	if extra.Label != "GPT-5.3-Codex-Spark" {
 		t.Errorf("Extra window label = %q, want 'GPT-5.3-Codex-Spark'", extra.Label)
 	}
@@ -378,12 +377,12 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 		t.Fatalf("Fetch() error: %v", err)
 	}
 
-	// Verify extra windows includes code review
-	if len(usage.ExtraWindows) != 1 {
-		t.Fatalf("Expected 1 extra window (code review), got %d", len(usage.ExtraWindows))
+	// Verify windows include code review
+	if len(usage.Windows) != 2 {
+		t.Fatalf("Expected 2 windows, got %d", len(usage.Windows))
 	}
 
-	codeReview := usage.ExtraWindows[0]
+	codeReview := usage.Windows[1]
 	if codeReview.Label != "Code Review" {
 		t.Errorf("Code review window label = %q, want 'Code Review'", codeReview.Label)
 	}

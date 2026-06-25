@@ -185,7 +185,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	if apiResp.RateLimit != nil {
 		if w := apiResp.RateLimit.PrimaryWindow; w != nil {
 			resetsAt := time.Unix(w.ResetAt, 0)
-			usage.Primary = &quota.UsageWindow{
+			usage.AddWindow("current", 0, &quota.UsageWindow{
 				Type:          quota.WindowTypeSession,
 				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
 				Limit:         100,                    // Normalize to 0-100 scale
@@ -195,11 +195,11 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 				WindowMinutes: w.LimitWindowSeconds / 60,
 				Label:         "Current Window",
 				Description:   fmt.Sprintf("%dh window, %.0f%% used", w.LimitWindowSeconds/3600, float64(w.UsedPercent)),
-			}
+			})
 		}
 		if w := apiResp.RateLimit.SecondaryWindow; w != nil {
 			resetsAt := time.Unix(w.ResetAt, 0)
-			usage.Secondary = &quota.UsageWindow{
+			usage.AddWindow("weekly", 1, &quota.UsageWindow{
 				Type:          quota.WindowTypeWeekly,
 				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
 				Limit:         100,                    // Normalize to 0-100 scale
@@ -209,12 +209,11 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 				WindowMinutes: w.LimitWindowSeconds / 60,
 				Label:         "Weekly",
 				Description:   fmt.Sprintf("%dd window, %.0f%% used", w.LimitWindowSeconds/86400, float64(w.UsedPercent)),
-			}
+			})
 		}
 	}
 
 	// Handle additional_rate_limits (model-specific quotas like GPT-5.3-Codex-Spark)
-	var extraWindows []*quota.UsageWindow
 	for _, arl := range apiResp.AdditionalRateLimits {
 		if arl.RateLimit.PrimaryWindow != nil {
 			w := arl.RateLimit.PrimaryWindow
@@ -223,7 +222,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 			if label == "" {
 				label = arl.MeteredFeature
 			}
-			extraWindows = append(extraWindows, &quota.UsageWindow{
+			usage.AddWindow(fmt.Sprintf("model_%d", len(usage.Windows)), len(usage.Windows), &quota.UsageWindow{
 				Type:          quota.WindowTypeModel,
 				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
 				Limit:         100,                    // Normalize to 0-100 scale
@@ -243,7 +242,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	if apiResp.CodeReviewRateLimit != nil && apiResp.CodeReviewRateLimit.PrimaryWindow != nil {
 		w := apiResp.CodeReviewRateLimit.PrimaryWindow
 		resetsAt := time.Unix(w.ResetAt, 0)
-		codeReviewWindow := &quota.UsageWindow{
+		usage.AddWindow("code_review", len(usage.Windows), &quota.UsageWindow{
 			Type:          quota.WindowTypeCodeReview,
 			Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
 			Limit:         100,                    // Normalize to 0-100 scale
@@ -255,13 +254,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 			Description:   fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)),
 			Allowed:       &apiResp.CodeReviewRateLimit.Allowed,
 			LimitReached:  &apiResp.CodeReviewRateLimit.LimitReached,
-		}
-		// Add to extra windows
-		extraWindows = append(extraWindows, codeReviewWindow)
-	}
-
-	if len(extraWindows) > 0 {
-		usage.ExtraWindows = extraWindows
+		})
 	}
 
 	// Handle credits (balance is now a pointer)

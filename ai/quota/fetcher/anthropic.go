@@ -126,46 +126,46 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
 		RawResponse:  rawResponse, // 存储原始响应
-
-		// Primary: 5-hour session quota (API returns utilization percentage only)
-		// Used/Limit normalized to 0-100 scale for unified frontend rendering
-		Primary: &quota.UsageWindow{
-			Type:          quota.WindowTypeSession,
-			Used:          apiResp.FiveHour.Utilization,
-			Limit:         100,
-			UsedPercent:   apiResp.FiveHour.Utilization,
-			Unit:          quota.UsageUnitPercent,
-			WindowMinutes: 300, // 5 hours
-			Label:         "5-Hour Window",
-			Description:   fmt.Sprintf("%.0f%% utilization", apiResp.FiveHour.Utilization),
-		},
-
-		// Secondary: 7-day weekly quota (API returns utilization percentage only)
-		// Used/Limit normalized to 0-100 scale for unified frontend rendering
-		Secondary: &quota.UsageWindow{
-			Type:        quota.WindowTypeWeekly,
-			Used:        apiResp.SevenDay.Utilization,
-			Limit:       100,
-			UsedPercent: apiResp.SevenDay.Utilization,
-			Unit:        quota.UsageUnitPercent,
-			Label:       "7-Day Window",
-			Description: fmt.Sprintf("%.0f%% utilization", apiResp.SevenDay.Utilization),
-		},
 	}
+
+	// 5-hour session quota (API returns utilization percentage only)
+	// Used/Limit normalized to 0-100 scale for unified frontend rendering
+	fiveHour := usage.AddWindow("five_hour", 0, &quota.UsageWindow{
+		Type:          quota.WindowTypeSession,
+		Used:          apiResp.FiveHour.Utilization,
+		Limit:         100,
+		UsedPercent:   apiResp.FiveHour.Utilization,
+		Unit:          quota.UsageUnitPercent,
+		WindowMinutes: 300, // 5 hours
+		Label:         "5-Hour Window",
+		Description:   fmt.Sprintf("%.0f%% utilization", apiResp.FiveHour.Utilization),
+	})
+
+	// 7-day weekly quota (API returns utilization percentage only)
+	// Used/Limit normalized to 0-100 scale for unified frontend rendering
+	sevenDay := usage.AddWindow("seven_day", 1, &quota.UsageWindow{
+		Type:        quota.WindowTypeWeekly,
+		Used:        apiResp.SevenDay.Utilization,
+		Limit:       100,
+		UsedPercent: apiResp.SevenDay.Utilization,
+		Unit:        quota.UsageUnitPercent,
+		Label:       "7-Day Window",
+		Description: fmt.Sprintf("%.0f%% utilization", apiResp.SevenDay.Utilization),
+	})
 
 	// 解析 resets_at 时间（API 返回带微秒的 ISO 8601，需用 RFC3339Nano）
 	if apiResp.FiveHour.ResetsAt != nil {
 		if t, err := time.Parse(time.RFC3339Nano, *apiResp.FiveHour.ResetsAt); err == nil {
-			usage.Primary.ResetsAt = &t
+			fiveHour.ResetsAt = &t
 		}
 	}
 	if apiResp.SevenDay.ResetsAt != nil {
 		if t, err := time.Parse(time.RFC3339Nano, *apiResp.SevenDay.ResetsAt); err == nil {
-			usage.Secondary.ResetsAt = &t
+			sevenDay.ResetsAt = &t
 		}
 	}
 
-	// Tertiary: Extra usage (Max plan add-on), only if enabled
+	// Extra usage (Max plan add-on), only if enabled
 	// API returns utilization percentage (nullable) and credit amounts
 	if apiResp.ExtraUsage.IsEnabled {
 		var utilPct float64
@@ -181,7 +181,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 			limit = 100
 			desc = "utilization unavailable"
 		}
-		usage.Tertiary = &quota.UsageWindow{
+		usage.AddWindow("extra_usage", 2, &quota.UsageWindow{
 			Type:        quota.WindowTypeMonthly,
 			Used:        used,
 			Limit:       limit,
@@ -189,7 +189,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 			Unit:        quota.UsageUnitPercent,
 			Label:       "Extra Usage",
 			Description: desc,
-		}
+		})
 
 		usage.Cost = &quota.UsageCost{
 			Used:         apiResp.ExtraUsage.UsedCredits / 100,  // cents → dollars

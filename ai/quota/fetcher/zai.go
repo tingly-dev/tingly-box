@@ -2,10 +2,7 @@ package fetcher
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -28,13 +25,7 @@ func (f *ZaiFetcher) ProviderType() quota.ProviderType { return quota.ProviderTy
 func (f *ZaiFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
 func (f *ZaiFetcher) Validate(provider *ai.Provider) error {
-	if provider == nil {
-		return fmt.Errorf("provider is nil")
-	}
-	if provider.GetAccessToken() == "" {
-		return fmt.Errorf("no API key available")
-	}
-	return nil
+	return validateAPIKeyProvider(provider)
 }
 
 // ── API response types ──────────────────────────────────
@@ -59,36 +50,10 @@ type zaiLimit struct {
 // ── Fetch ──────────────────────────────────────────────
 
 func (f *ZaiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
-	token := provider.GetAccessToken()
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.z.ai/api/monitor/usage/quota/limit", nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	// Read raw response
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	rawResponse := string(bodyBytes)
-
 	var apiResp zaiQuotaLimitResponse
-	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	rawResponse, err := fetchBearerJSON(ctx, provider, "https://api.z.ai/api/monitor/usage/quota/limit", &apiResp)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
@@ -156,10 +121,10 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 
 	usage.Breakdowns = breakdowns
 
-	// Primary: TOKENS_LIMIT if available, otherwise first limit
+	// TOKENS_LIMIT first, if available
 	for _, lim := range apiResp.Data.Limits {
 		if lim.Type == "TOKENS_LIMIT" {
-			usage.Primary = &quota.UsageWindow{
+			addTieredWindow(usage, "tokens", 0, &quota.UsageWindow{
 				Type:        quota.WindowTypeDaily,
 				Used:        lim.Used,
 				Limit:       lim.Total,
@@ -167,19 +132,15 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 				Unit:        quota.UsageUnitTokens,
 				Label:       "Token Limit",
 				Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
-			}
-			if lim.NextResetMs > 0 {
-				t := time.UnixMilli(lim.NextResetMs)
-				usage.Primary.ResetsAt = &t
-			}
+			}, lim.NextResetMs)
 			break
 		}
 	}
 
-	// Secondary: TIME_LIMIT if available
+	// TIME_LIMIT second, if available
 	for _, lim := range apiResp.Data.Limits {
 		if lim.Type == "TIME_LIMIT" {
-			usage.Secondary = &quota.UsageWindow{
+			addTieredWindow(usage, "time", 1, &quota.UsageWindow{
 				Type:        quota.WindowTypeCustom,
 				Used:        lim.Used,
 				Limit:       lim.Total,
@@ -187,19 +148,15 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 				Unit:        quota.UsageUnitRequests,
 				Label:       "Time Limit",
 				Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
-			}
-			if lim.NextResetMs > 0 {
-				t := time.UnixMilli(lim.NextResetMs)
-				usage.Secondary.ResetsAt = &t
-			}
+			}, lim.NextResetMs)
 			break
 		}
 	}
 
-	// Fallback: use first limit as primary if primary not set
-	if usage.Primary == nil && len(apiResp.Data.Limits) > 0 {
+	// Fallback: use first limit when no aggregate window was selected
+	if len(usage.Windows) == 0 && len(apiResp.Data.Limits) > 0 {
 		lim := apiResp.Data.Limits[0]
-		usage.Primary = &quota.UsageWindow{
+		addTieredWindow(usage, "limit", 0, &quota.UsageWindow{
 			Type:        quota.WindowTypeCustom,
 			Used:        lim.Used,
 			Limit:       lim.Total,
@@ -207,11 +164,7 @@ func (f *ZaiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 			Unit:        quota.UsageUnitRequests,
 			Label:       lim.Type,
 			Description: fmt.Sprintf("%.0f / %.0f", lim.Used, lim.Total),
-		}
-		if lim.NextResetMs > 0 {
-			t := time.UnixMilli(lim.NextResetMs)
-			usage.Primary.ResetsAt = &t
-		}
+		}, lim.NextResetMs)
 	}
 
 	return usage, nil

@@ -50,13 +50,9 @@ func TestCodexE2E(t *testing.T) {
 	if usage.Account != nil {
 		fmt.Printf("Account: tier=%s\n", usage.Account.Tier)
 	}
-	if usage.Primary != nil {
-		fmt.Printf("Primary: %s — %.1f%% (resets at %v)\n",
-			usage.Primary.Label, usage.Primary.UsedPercent, usage.Primary.ResetsAt)
-	}
-	if usage.Secondary != nil {
-		fmt.Printf("Secondary: %s — %.1f%% (resets at %v)\n",
-			usage.Secondary.Label, usage.Secondary.UsedPercent, usage.Secondary.ResetsAt)
+	for _, window := range usage.Windows {
+		fmt.Printf("Window[%s]: %s — %.1f%% (resets at %v)\n",
+			window.Key, window.Label, window.UsedPercent, window.ResetsAt)
 	}
 	if usage.Cost != nil {
 		fmt.Printf("Credits: balance=$%.2f currency=%s\n",
