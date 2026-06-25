@@ -9,13 +9,7 @@ tasks:
   anthropic:
     cmds:
       - |
-        curl https://api.anthropic.com/api/oauth/usage \
-        -H "Authorization: Bearer {{.ANTHROPIC_TOKEN}}" \
-        -H "Accept: application/json" \
-        -H "Content-Type: application/json" \
-        -H "anthropic-beta: oauth-2025-04-20" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
             "five_hour": {
@@ -42,28 +36,31 @@ tasks:
             }
         }
         EOF
+      - |
+        curl https://api.anthropic.com/api/oauth/usage \
+        -H "Authorization: Bearer {{.ANTHROPIC_TOKEN}}" \
+        -H "Accept: application/json" \
+        -H "Content-Type: application/json" \
+        -H "anthropic-beta: oauth-2025-04-20" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   openai:
     cmds:
       - |
-        curl https://api.openai.com/v1/usage \
-        -H "Authorization: Bearer {{.OPENAI_KEY}}" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         NOTE: OpenAI usage API often returns 404.
         Check https://platform.openai.com/usage for usage details.
         EOF
+      - |
+        curl https://api.openai.com/v1/usage \
+        -H "Authorization: Bearer {{.OPENAI_KEY}}" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   gemini:
     cmds:
       - |
-        curl -X POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota \
-        -H "Authorization: Bearer {{.GEMINI_TOKEN}}" \
-        -H "Content-Type: application/json" \
-        -d '{}' \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "buckets": [
@@ -80,17 +77,19 @@ tasks:
           ]
         }
         EOF
+      - |
+        curl -X POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota \
+        -H "Authorization: Bearer {{.GEMINI_TOKEN}}" \
+        -H "Content-Type: application/json" \
+        -d '{}' \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   openrouter:
     aliases:
       - cli:dev
     cmds:
       - |
-        curl https://openrouter.ai/api/v1/key \
-        -H "Authorization: Bearer {{.OPENROUTER_KEY}}" \
-        -H "Accept: application/json" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "data": {
@@ -120,17 +119,16 @@ tasks:
           }
         }
         EOF
+      - |
+        curl https://openrouter.ai/api/v1/key \
+        -H "Authorization: Bearer {{.OPENROUTER_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   codex:
     cmds:
       - |
-        curl https://chatgpt.com/backend-api/wham/usage \
-        -H "Authorization: Bearer {{.CODEX_KEY}}" \
-        -H "Accept: application/json" \
-        -H "User-Agent: codex-cli" \
-        {{ if .CODEX_ACCOUNT_ID }}-H "ChatGPT-Account-Id: {{.CODEX_ACCOUNT_ID}}"{{ end }} \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "user_id": "user-j5z",
@@ -199,6 +197,7 @@ tasks:
         }
         EOF
       - |
+        echo "example"
         cat << EOF
         {
           "user_id": "user-I9Ki---jrzi2",
@@ -241,30 +240,34 @@ tasks:
           "promo": null
         }
         EOF
+      - |
+        curl https://chatgpt.com/backend-api/wham/usage \
+        -H "Authorization: Bearer {{.CODEX_KEY}}" \
+        -H "Accept: application/json" \
+        -H "User-Agent: codex-cli" \
+        {{ if .CODEX_ACCOUNT_ID }}-H "ChatGPT-Account-Id: {{.CODEX_ACCOUNT_ID}}"{{ end }} \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   kimi-k2:
     cmds:
       - |
-        curl https://kimi-k2.ai/api/user/credits \
-        -H "Authorization: Bearer {{.KIMI_KEY}}" \
-        -H "Accept: application/json" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "consumed": 150,
           "remaining": 350
         }
         EOF
+      - |
+        curl https://kimi-k2.ai/api/user/credits \
+        -H "Authorization: Bearer {{.KIMI_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   minimax:
     cmds:
       - |
-        curl https://api.minimax.io/v1/api/openplatform/coding_plan/remains \
-        -H "Authorization: Bearer {{.MINIMAX_KEY}}" \
-        -H "Accept: application/json" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "model_remains": [
@@ -301,15 +304,16 @@ tasks:
           }
         }
         EOF
-        
+      - |
+        curl https://api.minimax.io/v1/api/openplatform/coding_plan/remains \
+        -H "Authorization: Bearer {{.MINIMAX_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
+
   minimax-cn:
     cmds:
       - |
-        curl https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains \
-        -H "Authorization: Bearer {{.MINIMAX_KEY}}" \
-        -H "Accept: application/json" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "model_remains": [
@@ -398,15 +402,16 @@ tasks:
           }
         }
         EOF
+      - |
+        curl https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains \
+        -H "Authorization: Bearer {{.MINIMAX_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   zai:
     cmds:
       - |
-        curl https://api.z.ai/api/monitor/usage/quota/limit \
-        -H "Authorization: Bearer {{.ZAI_KEY}}" \
-        -H "Accept: application/json" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
         {
           "code": 0,
@@ -431,6 +436,11 @@ tasks:
           }
         }
         EOF
+      - |
+        curl https://api.z.ai/api/monitor/usage/quota/limit \
+        -H "Authorization: Bearer {{.ZAI_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   glm:
     cmds:
@@ -490,7 +500,7 @@ tasks:
         -H "Authorization: Bearer {{.GLM_KEY}}" \
         -H "Accept: application/json" \
         {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
-      
+
 
   # copilot, cursor, vertex_ai: no public quota API
   copilot:
