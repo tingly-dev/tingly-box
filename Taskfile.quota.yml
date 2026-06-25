@@ -435,47 +435,49 @@ tasks:
   glm:
     cmds:
       - |
-        curl https://open.bigmodel.cn/api/monitor/usage/quota/limit \
-        -H "Authorization: Bearer {{.GLM_KEY}}" \
-        -H "Accept: application/json" \
-        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }}
-      - |
+        echo "example"
         cat << EOF
-        {
+         {
           "code": 200,
           "msg": "操作成功",
           "data": {
             "limits": [
               {
+                "type": "TOKENS_LIMIT",
+                "unit": 3,
+                "number": 5,
+                "percentage": 0
+              },
+              {
+                "type": "TOKENS_LIMIT",
+                "unit": 6,
+                "number": 1,
+                "percentage": 100,
+                "nextResetTime": 1782717116981
+              },
+              {
                 "type": "TIME_LIMIT",
                 "unit": 5,
                 "number": 1,
                 "usage": 4000,
-                "currentValue": 557,
-                "remaining": 3443,
-                "percentage": 13,
-                "nextResetTime": 1775309163998,
+                "currentValue": 63,
+                "remaining": 3937,
+                "percentage": 1,
+                "nextResetTime": 1784704316998,
                 "usageDetails": [
                   {
                     "modelCode": "search-prime",
-                    "usage": 426
+                    "usage": 71
                   },
                   {
                     "modelCode": "web-reader",
-                    "usage": 131
+                    "usage": 5
                   },
                   {
                     "modelCode": "zread",
                     "usage": 0
                   }
                 ]
-              },
-              {
-                "type": "TOKENS_LIMIT",
-                "unit": 3,
-                "number": 5,
-                "percentage": 2,
-                "nextResetTime": 1775126846418
               }
             ],
             "level": "max"
@@ -483,6 +485,12 @@ tasks:
           "success": true
         }
         EOF
+      - |
+        curl https://open.bigmodel.cn/api/monitor/usage/quota/limit \
+        -H "Authorization: Bearer {{.GLM_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
+      
 
   # copilot, cursor, vertex_ai: no public quota API
   copilot:
