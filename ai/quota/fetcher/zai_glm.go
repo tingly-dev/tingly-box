@@ -37,6 +37,22 @@ func (f *GLMFetcher) Validate(provider *ai.Provider) error {
 	return nil
 }
 
+// ── Unit mapping constants ─────────────────────────────────────
+
+// unitScopeMap maps GLM API unit values to their time scope
+var unitScopeMap = map[int]string{
+	3: "hour",  // unit 3 = hours
+	5: "month", // unit 5 = months
+	6: "week",  // unit 6 = weeks
+}
+
+// unitToWindowType maps GLM API unit values to quota window types
+var unitToWindowType = map[int]quota.WindowType{
+	3: quota.WindowTypeSession, // hours
+	5: quota.WindowTypeMonthly, // months
+	6: quota.WindowTypeWeekly,  // weeks
+}
+
 // ── API response types ──────────────────────────────────
 
 // glmQuotaLimitResponse from GET /api/monitor/usage/quota/limit
@@ -137,29 +153,57 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 		used := lim.CurrentValue
 		hasAbsoluteValues := total > 0 || used > 0
 
+		// Use percentage from API
+		usedPercent := lim.Percentage
+
 		var windowType quota.WindowType
 		var label string
 		var unit quota.UsageUnit
+		var priority int // 0=primary, 1=secondary, 2=tertiary, -1=no assignment
 
 		switch lim.Type {
 		case "TOKENS_LIMIT":
-			// TOKENS_LIMIT is a percentage-only quota (5-hour utilization)
-			windowType = quota.WindowTypeSession
-			label = "5-Hour Tokens"
-			unit = quota.UsageUnitPercent
+			// TOKENS_LIMIT uses unit to define time scope
+			// unit: 3 (hours), 6 (weeks), 5 (months)
+			if scope, ok := unitScopeMap[lim.Unit]; ok {
+				label = fmt.Sprintf("%d-%s Tokens", lim.Number, scope)
+				unit = quota.UsageUnitTokens
+				windowType = unitToWindowType[lim.Unit]
+				// Priority: hourly=primary, weekly=secondary, monthly=tertiary
+				switch lim.Unit {
+				case 3:
+					priority = 0 // primary (5-hour tokens)
+				case 6:
+					priority = 1 // secondary (weekly tokens)
+				case 5:
+					priority = 3 // extra (monthly tokens, not commonly used)
+				}
+			} else {
+				// Fallback for unknown TOKENS_LIMIT units
+				windowType = quota.WindowTypeCustom
+				label = fmt.Sprintf("Token Limit (unit:%d, num:%d)", lim.Unit, lim.Number)
+				unit = quota.UsageUnitTokens
+			}
 		case "TIME_LIMIT":
-			// TIME_LIMIT is actually MCP (Model Context Protocol) quota
-			windowType = quota.WindowTypeCustom
-			label = "MCP Quota"
-			unit = quota.UsageUnitRequests
+			// TIME_LIMIT is MCP (Model Context Protocol) quota
+			// MCP always gets tertiary priority (level 2)
+			if scope, ok := unitScopeMap[lim.Unit]; ok {
+				label = fmt.Sprintf("%d-%s MCP", lim.Number, scope)
+				unit = quota.UsageUnitRequests
+				windowType = unitToWindowType[lim.Unit]
+				priority = 2 // MCP always tertiary
+			} else {
+				// Fallback for unknown TIME_LIMIT units
+				windowType = quota.WindowTypeCustom
+				label = fmt.Sprintf("MCP Limit (unit:%d, num:%d)", lim.Unit, lim.Number)
+				unit = quota.UsageUnitRequests
+				priority = 2 // MCP always tertiary
+			}
 		default:
 			windowType = quota.WindowTypeCustom
 			label = lim.Type
 			unit = quota.UsageUnitRequests
 		}
-
-		// Use percentage from API
-		usedPercent := lim.Percentage
 
 		var window *quota.UsageWindow
 
@@ -175,7 +219,7 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 				Description: fmt.Sprintf("%.0f / %.0f", used, total),
 			}
 		} else {
-			// Percentage-only (e.g., TOKENS_LIMIT)
+			// Percentage-only (e.g., some TOKENS_LIMIT)
 			window = &quota.UsageWindow{
 				Type:        windowType,
 				Used:        usedPercent, // No absolute values available
@@ -192,12 +236,26 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 			window.ResetsAt = &t
 		}
 
-		// Set primary/secondary based on type
-		switch lim.Type {
-		case "TOKENS_LIMIT":
-			usage.Primary = window
-		case "TIME_LIMIT":
-			usage.Secondary = window
+		// Assign to primary/secondary/tertiary/extra based on priority
+		switch priority {
+		case 0: // primary
+			if usage.Primary == nil {
+				usage.Primary = window
+			}
+		case 1: // secondary
+			if usage.Secondary == nil {
+				usage.Secondary = window
+			}
+		case 2: // tertiary
+			if usage.Tertiary == nil {
+				usage.Tertiary = window
+			}
+		case 3: // extra windows
+			usage.ExtraWindows = append(usage.ExtraWindows, window)
+		default: // no priority assigned, use as fallback
+			if usage.Primary == nil {
+				usage.Primary = window
+			}
 		}
 
 		// Create breakdowns for usageDetails (per-model breakdown)
@@ -264,14 +322,25 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 
 		switch lim.Type {
 		case "TOKENS_LIMIT":
-			label = "5-Hour Tokens"
-			unit = quota.UsageUnitPercent
-			windowType = quota.WindowTypeSession
+			if scope, ok := unitScopeMap[lim.Unit]; ok {
+				label = fmt.Sprintf("%d-%s Tokens", lim.Number, scope)
+				unit = quota.UsageUnitTokens
+				windowType = unitToWindowType[lim.Unit]
+			} else {
+				label = fmt.Sprintf("Token Limit (unit:%d, num:%d)", lim.Unit, lim.Number)
+				unit = quota.UsageUnitTokens
+				windowType = quota.WindowTypeCustom
+			}
 		case "TIME_LIMIT":
-			// TIME_LIMIT is actually MCP (Model Context Protocol) quota
-			label = "MCP Quota"
-			unit = quota.UsageUnitRequests
-			windowType = quota.WindowTypeCustom
+			if scope, ok := unitScopeMap[lim.Unit]; ok {
+				label = fmt.Sprintf("%d-%s MCP", lim.Number, scope)
+				unit = quota.UsageUnitRequests
+				windowType = unitToWindowType[lim.Unit]
+			} else {
+				label = fmt.Sprintf("MCP Limit (unit:%d, num:%d)", lim.Unit, lim.Number)
+				unit = quota.UsageUnitRequests
+				windowType = quota.WindowTypeCustom
+			}
 		default:
 			label = lim.Type
 			unit = quota.UsageUnitRequests
