@@ -175,8 +175,8 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quo
 
 	usage.Breakdowns = breakdowns
 
-	// Primary: aggregated daily quota
-	usage.Primary = &quota.UsageWindow{
+	// Aggregated daily quota
+	daily := usage.AddWindow("daily", 0, &quota.UsageWindow{
 		Type:        quota.WindowTypeDaily,
 		Used:        float64(totalUsed),
 		Limit:       float64(totalLimit),
@@ -184,17 +184,17 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quo
 		Unit:        quota.UsageUnitRequests,
 		Label:       "Daily Quota",
 		Description: fmt.Sprintf("%d / %d requests", totalUsed, totalLimit),
-	}
+	})
 
 	// Reset time from first model
 	if len(apiResp.ModelRemains) > 0 && apiResp.ModelRemains[0].EndTime > 0 {
 		t := time.UnixMilli(apiResp.ModelRemains[0].EndTime)
-		usage.Primary.ResetsAt = &t
+		daily.ResetsAt = &t
 	}
 
-	// Secondary: aggregated weekly quota
+	// Aggregated weekly quota
 	if weeklyLimit > 0 {
-		usage.Secondary = &quota.UsageWindow{
+		usage.AddWindow("weekly", 1, &quota.UsageWindow{
 			Type:        quota.WindowTypeWeekly,
 			Used:        float64(weeklyUsed),
 			Limit:       float64(weeklyLimit),
@@ -202,7 +202,7 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quo
 			Unit:        quota.UsageUnitRequests,
 			Label:       "Weekly Quota",
 			Description: fmt.Sprintf("%d / %d requests", weeklyUsed, weeklyLimit),
-		}
+		})
 	}
 
 	return usage, nil

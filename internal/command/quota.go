@@ -251,20 +251,8 @@ func printQuotaDetails(usage *quota.ProviderUsage) {
 
 // displayWindowsWithProgress displays quota windows with visual progress bars
 func displayWindowsWithProgress(usage *quota.ProviderUsage) {
-	windows := make([]*quota.UsageWindow, 0)
-
-	// Collect main windows in priority order
-	if usage.Primary != nil {
-		windows = append(windows, usage.Primary)
-	}
-	if usage.Secondary != nil {
-		windows = append(windows, usage.Secondary)
-	}
-	if usage.Tertiary != nil {
-		windows = append(windows, usage.Tertiary)
-	}
-	// Add extra windows
-	windows = append(windows, usage.ExtraWindows...)
+	usage.NormalizeWindows()
+	windows := usage.Windows
 
 	if len(windows) == 0 {
 		fmt.Println("No quota data available")

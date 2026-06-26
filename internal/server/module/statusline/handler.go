@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -246,54 +247,20 @@ func (h *Handler) populateQuotaData(resp *CombinedStatusData, providerUUID strin
 	}
 }
 
-// selectBestQuotaWindow selects the most relevant quota window
-// Priority: session > daily > weekly > monthly > balance
-// Falls back to Primary if no matching type found
+// selectBestQuotaWindow selects the most relevant quota window.
+// Lower tier means more important, so the first meaningful window wins.
 func (h *Handler) selectBestQuotaWindow(usage *quota.ProviderUsage) *quota.UsageWindow {
 	if usage == nil {
 		return nil
 	}
 
-	priorityOrder := []quota.WindowType{
-		quota.WindowTypeSession,
-		quota.WindowTypeDaily,
-		quota.WindowTypeWeekly,
-		quota.WindowTypeMonthly,
-		quota.WindowTypeBalance,
-	}
-
-	// Check in priority order - look for windows with actual limit data
-	for _, windowType := range priorityOrder {
-		if w := getWindowByType(usage, windowType); w != nil {
-			// Accept if it has a meaningful limit OR if it has percentage data
-			if w.Limit > 0 || (w.Limit > 0 && w.UsedPercent > 0) {
-				return w
-			}
+	usage.NormalizeWindows()
+	for _, w := range usage.Windows {
+		if w != nil && (w.Limit > 0 || w.UsedPercent > 0) {
+			return w
 		}
 	}
 
-	// Fallback: try Primary window even if limit is 0 (might be percentage-based)
-	if usage.Primary != nil {
-		// For percentage-based quotas (like Gemini), Limit=100 means 100%
-		if usage.Primary.Limit > 0 || usage.Primary.UsedPercent > 0 {
-			return usage.Primary
-		}
-	}
-
-	return nil
-}
-
-// getWindowByType gets a window by type from ProviderUsage
-func getWindowByType(usage *quota.ProviderUsage, windowType quota.WindowType) *quota.UsageWindow {
-	if usage.Primary != nil && usage.Primary.Type == windowType {
-		return usage.Primary
-	}
-	if usage.Secondary != nil && usage.Secondary.Type == windowType {
-		return usage.Secondary
-	}
-	if usage.Tertiary != nil && usage.Tertiary.Type == windowType {
-		return usage.Tertiary
-	}
 	return nil
 }
 
@@ -314,15 +281,12 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 	}
 
 	// Collect all windows with meaningful data
-	var windows []*quota.UsageWindow
-	if usage.Primary != nil && usage.Primary.Limit > 0 {
-		windows = append(windows, usage.Primary)
-	}
-	if usage.Secondary != nil && usage.Secondary.Limit > 0 {
-		windows = append(windows, usage.Secondary)
-	}
-	if usage.Tertiary != nil && usage.Tertiary.Limit > 0 {
-		windows = append(windows, usage.Tertiary)
+	usage.NormalizeWindows()
+	windows := make([]*quota.UsageWindow, 0, len(usage.Windows))
+	for _, window := range usage.Windows {
+		if window != nil && window.Limit > 0 {
+			windows = append(windows, window)
+		}
 	}
 
 	if len(windows) == 0 {
@@ -343,11 +307,7 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 	}
 
 	// Join all quota parts
-	result := " | Quota:"
-	for _, p := range parts {
-		result += " " + p
-	}
-	return result
+	return " | Quota: " + strings.Join(parts, " ")
 }
 
 // formatQuotaWindow formats a single quota window

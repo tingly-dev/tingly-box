@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -71,6 +72,10 @@ type ProviderUsageRecord struct {
 	AccountTier  *string `gorm:"column:account_tier"`
 	AccountOrgID *string `gorm:"column:account_org_id"`
 
+	// Variable quota data
+	WindowsJSON    *string `gorm:"column:windows;type:text"`
+	BreakdownsJSON *string `gorm:"column:breakdowns;type:text"`
+
 	// Metadata
 	FetchedAt   time.Time  `gorm:"column:fetched_at;index:idx_provider_usage_fetched"`
 	ExpiresAt   time.Time  `gorm:"column:expires_at"`
@@ -101,51 +106,6 @@ func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
 		usage.LastErrorAt = r.LastErrorAt
 	}
 
-	// Primary window
-	if r.PrimaryType != nil {
-		usage.Primary = &UsageWindow{
-			Type:          WindowType(*r.PrimaryType),
-			Used:          getFloat64(r.PrimaryUsed),
-			Limit:         getFloat64(r.PrimaryLimit),
-			Unit:          UsageUnit(getString(r.PrimaryUnit)),
-			ResetsAt:      r.PrimaryResetsAt,
-			WindowMinutes: getInt(r.PrimaryWindowMins),
-			Label:         getString(r.PrimaryLabel),
-			Description:   getString(r.PrimaryDesc),
-		}
-		usage.Primary.UsedPercent = usage.Primary.CalculateUsedPercent()
-	}
-
-	// Secondary window
-	if r.SecondaryType != nil {
-		usage.Secondary = &UsageWindow{
-			Type:          WindowType(*r.SecondaryType),
-			Used:          getFloat64(r.SecondaryUsed),
-			Limit:         getFloat64(r.SecondaryLimit),
-			Unit:          UsageUnit(getString(r.SecondaryUnit)),
-			ResetsAt:      r.SecondaryResetsAt,
-			WindowMinutes: getInt(r.SecondaryWindowMins),
-			Label:         getString(r.SecondaryLabel),
-			Description:   getString(r.SecondaryDesc),
-		}
-		usage.Secondary.UsedPercent = usage.Secondary.CalculateUsedPercent()
-	}
-
-	// Tertiary window
-	if r.TertiaryType != nil {
-		usage.Tertiary = &UsageWindow{
-			Type:          WindowType(*r.TertiaryType),
-			Used:          getFloat64(r.TertiaryUsed),
-			Limit:         getFloat64(r.TertiaryLimit),
-			Unit:          UsageUnit(getString(r.TertiaryUnit)),
-			ResetsAt:      r.TertiaryResetsAt,
-			WindowMinutes: getInt(r.TertiaryWindowMins),
-			Label:         getString(r.TertiaryLabel),
-			Description:   getString(r.TertiaryDesc),
-		}
-		usage.Tertiary.UsedPercent = usage.Tertiary.CalculateUsedPercent()
-	}
-
 	// Cost
 	if r.CostUsed != nil || r.CostLimit != nil {
 		usage.Cost = &UsageCost{
@@ -168,6 +128,11 @@ func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
 		}
 	}
 
+	// Variable quota data
+	usage.Windows = decodeJSONField[[]*UsageWindow](r.WindowsJSON)
+	usage.Breakdowns = decodeJSONField[[]*UsageBreakdown](r.BreakdownsJSON)
+	usage.NormalizeWindows()
+
 	return usage
 }
 
@@ -189,54 +154,6 @@ func toRecord(usage *ProviderUsage) *ProviderUsageRecord {
 	}
 	if usage.RawResponse != "" {
 		record.RawResponse = &usage.RawResponse
-	}
-
-	// Primary window
-	if usage.Primary != nil {
-		record.PrimaryUsed = &usage.Primary.Used
-		record.PrimaryLimit = &usage.Primary.Limit
-		ptype := string(usage.Primary.Type)
-		record.PrimaryType = &ptype
-		unit := string(usage.Primary.Unit)
-		record.PrimaryUnit = &unit
-		record.PrimaryResetsAt = usage.Primary.ResetsAt
-		record.PrimaryWindowMins = &usage.Primary.WindowMinutes
-		record.PrimaryLabel = &usage.Primary.Label
-		if usage.Primary.Description != "" {
-			record.PrimaryDesc = &usage.Primary.Description
-		}
-	}
-
-	// Secondary window
-	if usage.Secondary != nil {
-		record.SecondaryUsed = &usage.Secondary.Used
-		record.SecondaryLimit = &usage.Secondary.Limit
-		stype := string(usage.Secondary.Type)
-		record.SecondaryType = &stype
-		unit := string(usage.Secondary.Unit)
-		record.SecondaryUnit = &unit
-		record.SecondaryResetsAt = usage.Secondary.ResetsAt
-		record.SecondaryWindowMins = &usage.Secondary.WindowMinutes
-		record.SecondaryLabel = &usage.Secondary.Label
-		if usage.Secondary.Description != "" {
-			record.SecondaryDesc = &usage.Secondary.Description
-		}
-	}
-
-	// Tertiary window
-	if usage.Tertiary != nil {
-		record.TertiaryUsed = &usage.Tertiary.Used
-		record.TertiaryLimit = &usage.Tertiary.Limit
-		ttype := string(usage.Tertiary.Type)
-		record.TertiaryType = &ttype
-		unit := string(usage.Tertiary.Unit)
-		record.TertiaryUnit = &unit
-		record.TertiaryResetsAt = usage.Tertiary.ResetsAt
-		record.TertiaryWindowMins = &usage.Tertiary.WindowMinutes
-		record.TertiaryLabel = &usage.Tertiary.Label
-		if usage.Tertiary.Description != "" {
-			record.TertiaryDesc = &usage.Tertiary.Description
-		}
 	}
 
 	// Cost
@@ -263,10 +180,35 @@ func toRecord(usage *ProviderUsage) *ProviderUsageRecord {
 		}
 	}
 
+	// Variable quota data
+	usage.NormalizeWindows()
+	record.WindowsJSON = encodeJSONField(usage.Windows)
+	record.BreakdownsJSON = encodeJSONField(usage.Breakdowns)
+
 	return record
 }
 
 // Helper functions
+func decodeJSONField[T any](value *string) T {
+	var zero T
+	if value == nil || *value == "" {
+		return zero
+	}
+	if err := json.Unmarshal([]byte(*value), &zero); err != nil {
+		return *new(T)
+	}
+	return zero
+}
+
+func encodeJSONField[T any](value T) *string {
+	data, err := json.Marshal(value)
+	if err != nil || string(data) == "null" || string(data) == "[]" {
+		return nil
+	}
+	encoded := string(data)
+	return &encoded
+}
+
 func getFloat64(f *float64) float64 {
 	if f == nil {
 		return 0

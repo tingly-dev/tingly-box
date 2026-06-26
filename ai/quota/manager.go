@@ -184,8 +184,12 @@ func (m *Manager) Summary(ctx context.Context) (*Summary, error) {
 		summary.ByType[usage.ProviderType]++
 
 		// 警告统计
-		if usage.Primary != nil && usage.Primary.UsedPercent >= 80 {
-			summary.WarningProviders++
+		usage.NormalizeWindows()
+		for _, window := range usage.Windows {
+			if window != nil && window.UsedPercent >= 80 {
+				summary.WarningProviders++
+				break
+			}
 		}
 	}
 

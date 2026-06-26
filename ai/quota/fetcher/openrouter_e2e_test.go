@@ -43,9 +43,9 @@ func TestOpenRouterE2E(t *testing.T) {
 	}
 
 	fmt.Printf("Provider: %s (%s)\n", usage.ProviderName, usage.ProviderType)
-	if usage.Primary != nil {
-		fmt.Printf("Primary: %s — used=%.2f limit=%.2f (%.1f%%)\n",
-			usage.Primary.Label, usage.Primary.Used, usage.Primary.Limit, usage.Primary.UsedPercent)
+	for _, window := range usage.Windows {
+		fmt.Printf("Window[%s]: %s — used=%.2f limit=%.2f (%.1f%%)\n",
+			window.Key, window.Label, window.Used, window.Limit, window.UsedPercent)
 	}
 	if usage.Cost != nil {
 		fmt.Printf("Cost: used=$%.2f limit=$%.2f currency=%s\n",
