@@ -4,7 +4,7 @@ import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
 import type { ProviderQuota } from '@/types/quota';
-import { quotaToWindows } from '@/types/quota';
+import { formatQuotaUsage, quotaToWindows } from '@/types/quota';
 
 interface QuotaInlineDisplayProps {
   quota: ProviderQuota | undefined;
@@ -62,12 +62,7 @@ export function QuotaInlineDisplay({
             {label}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {window.unit === 'percent'
-              ? window.used === 0 && window.limit === 0
-                ? `${window.used_percent.toFixed(0)}%`
-                : `${window.used}% / ${window.limit}% (${window.used_percent.toFixed(0)}%)`
-              : `${window.used} / ${window.limit} ${window.unit} (${window.used_percent.toFixed(0)}%)`
-            }
+            {formatQuotaUsage(window, { includePercent: true })}
           </Typography>
           {window.resets_at && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>

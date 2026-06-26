@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -306,11 +307,7 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 	}
 
 	// Join all quota parts
-	result := " | Quota:"
-	for _, p := range parts {
-		result += " " + p
-	}
-	return result
+	return " | Quota: " + strings.Join(parts, " ")
 }
 
 // formatQuotaWindow formats a single quota window

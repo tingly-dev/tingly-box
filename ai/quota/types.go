@@ -170,7 +170,17 @@ func (p *ProviderUsage) NormalizeWindows() {
 	}
 
 	sort.SliceStable(p.Windows, func(i, j int) bool {
-		return p.Windows[i].Tier < p.Windows[j].Tier
+		left, right := p.Windows[i], p.Windows[j]
+		if left == nil && right == nil {
+			return false
+		}
+		if left == nil {
+			return false
+		}
+		if right == nil {
+			return true
+		}
+		return left.Tier < right.Tier
 	})
 }
 

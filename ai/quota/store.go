@@ -129,18 +129,8 @@ func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
 	}
 
 	// Variable quota data
-	if r.WindowsJSON != nil && *r.WindowsJSON != "" {
-		var windows []*UsageWindow
-		if err := json.Unmarshal([]byte(*r.WindowsJSON), &windows); err == nil {
-			usage.Windows = windows
-		}
-	}
-	if r.BreakdownsJSON != nil && *r.BreakdownsJSON != "" {
-		var breakdowns []*UsageBreakdown
-		if err := json.Unmarshal([]byte(*r.BreakdownsJSON), &breakdowns); err == nil {
-			usage.Breakdowns = breakdowns
-		}
-	}
+	usage.Windows = decodeJSONField[[]*UsageWindow](r.WindowsJSON)
+	usage.Breakdowns = decodeJSONField[[]*UsageBreakdown](r.BreakdownsJSON)
 	usage.NormalizeWindows()
 
 	return usage
@@ -192,23 +182,33 @@ func toRecord(usage *ProviderUsage) *ProviderUsageRecord {
 
 	// Variable quota data
 	usage.NormalizeWindows()
-	if len(usage.Windows) > 0 {
-		if data, err := json.Marshal(usage.Windows); err == nil {
-			windowsJSON := string(data)
-			record.WindowsJSON = &windowsJSON
-		}
-	}
-	if len(usage.Breakdowns) > 0 {
-		if data, err := json.Marshal(usage.Breakdowns); err == nil {
-			breakdownsJSON := string(data)
-			record.BreakdownsJSON = &breakdownsJSON
-		}
-	}
+	record.WindowsJSON = encodeJSONField(usage.Windows)
+	record.BreakdownsJSON = encodeJSONField(usage.Breakdowns)
 
 	return record
 }
 
 // Helper functions
+func decodeJSONField[T any](value *string) T {
+	var zero T
+	if value == nil || *value == "" {
+		return zero
+	}
+	if err := json.Unmarshal([]byte(*value), &zero); err != nil {
+		return *new(T)
+	}
+	return zero
+}
+
+func encodeJSONField[T any](value T) *string {
+	data, err := json.Marshal(value)
+	if err != nil || string(data) == "null" || string(data) == "[]" {
+		return nil
+	}
+	encoded := string(data)
+	return &encoded
+}
+
 func getFloat64(f *float64) float64 {
 	if f == nil {
 		return 0

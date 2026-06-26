@@ -18,7 +18,7 @@ export type ProviderQuota = ProviderUsage & {
 };
 
 // Re-export for consumers
-export type { UsageWindow, UsageCost, UsageAccount, UsageBreakdown, ProviderUsage as ProviderUsage };
+export type { UsageWindow, UsageCost, UsageAccount, UsageBreakdown, ProviderUsage };
 
 // Quota types for provider usage/limit information
 // Note: Most types are now from codegen, see ../client/index.ts
@@ -95,4 +95,31 @@ export function quotaToDisplayItems(quota: ProviderQuota): QuotaDisplayItem[] {
     });
 
     return items;
+}
+
+interface FormatQuotaUsageOptions {
+    includePercent?: boolean;
+    formatNumber?: (value: number) => string;
+}
+
+type QuotaUsageValues = Pick<UsageWindow, 'used' | 'limit' | 'used_percent' | 'unit'>;
+
+export function formatQuotaPercent(window: QuotaUsageValues): string {
+    return `${window.used_percent.toFixed(0)}%`;
+}
+
+export function formatQuotaUsage(
+    window: QuotaUsageValues,
+    { includePercent = false, formatNumber = String }: FormatQuotaUsageOptions = {}
+): string {
+    if (window.unit === 'percent') {
+        if (window.used === 0 && window.limit === 0) {
+            return formatQuotaPercent(window);
+        }
+        const usage = `${formatNumber(window.used)}% / ${formatNumber(window.limit)}%`;
+        return includePercent ? `${usage} (${formatQuotaPercent(window)})` : usage;
+    }
+
+    const usage = `${formatNumber(window.used)} / ${formatNumber(window.limit)} ${window.unit}`;
+    return includePercent ? `${usage} (${formatQuotaPercent(window)})` : usage;
 }

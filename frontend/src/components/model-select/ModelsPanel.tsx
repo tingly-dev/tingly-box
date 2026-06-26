@@ -118,12 +118,7 @@ export function ModelsPanel({
         );
     }, [providerModels, provider.uuid, provider.name, provider.api_style]);
 
-    // Prepare quota prop for ModelCard
-    const quotaProp = useMemo(() => {
-        return providerQuota;  // Pass full quota object, QuotaBar will handle breakdowns
-    }, [providerQuota]);
-
-    const quotaWindows = useMemo(() => quotaToWindows(quotaProp), [quotaProp]);
+    const quotaWindows = useMemo(() => quotaToWindows(providerQuota), [providerQuota]);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -472,7 +467,7 @@ export function ModelsPanel({
                                 <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
                                     {label}
                                 </Typography>
-                                <QuotaBar quota={quotaProp!} window={window} />
+                                <QuotaBar quota={providerQuota!} window={window} />
                             </Box>
                         ))}
                     </Stack>

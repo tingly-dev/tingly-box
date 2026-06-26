@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material';
 import { tooltipStyle, tooltipTextStyles, formatNumber } from '../dashboard/chartStyles';
+import { formatQuotaUsage } from '../../types/quota';
 import type { UsageWindow } from '../../types/quota';
 
 export interface QuotaTooltipData {
@@ -33,15 +34,15 @@ export interface QuotaTooltipProps {
 
 export function QuotaTooltipContent({ title, primary, secondary, cost, breakdowns }: QuotaTooltipProps) {
   // Helper function to format usage display
-  const formatUsageDisplay = (data: QuotaTooltipData) => {
-    if (data.unit === 'percent') {
-      if (data.used === 0 && data.limit === 0) {
-        return `${data.percent.toFixed(0)}%`;
-      }
-      return `${formatNumber(data.used)}% / ${formatNumber(data.limit)}%`;
-    }
-    return `${formatNumber(data.used)} / ${formatNumber(data.limit)} ${data.unit}`;
-  };
+  const formatUsageDisplay = (data: QuotaTooltipData) => formatQuotaUsage(
+    {
+      used: data.used,
+      limit: data.limit,
+      used_percent: data.percent,
+      unit: data.unit,
+    },
+    { formatNumber }
+  );
 
   return (
     <Box sx={tooltipStyle}>
@@ -144,12 +145,7 @@ export function QuotaTooltipContent({ title, primary, secondary, cost, breakdown
                 }}
               />
               <Typography sx={{ ...tooltipTextStyles.caption, fontSize: '11px' }}>
-                {bd.label}: {bd.window.unit === 'percent'
-                  ? bd.window.used === 0 && bd.window.limit === 0
-                    ? `${bd.window.used_percent.toFixed(0)}%`
-                    : `${formatNumber(bd.window.used)}% / ${formatNumber(bd.window.limit)}% (${bd.window.used_percent.toFixed(0)}%)`
-                  : `${formatNumber(bd.window.used)} / ${formatNumber(bd.window.limit)} ${bd.window.unit} (${bd.window.used_percent.toFixed(0)}%)`
-                }
+                {bd.label}: {formatQuotaUsage(bd.window, { includePercent: true, formatNumber })}
               </Typography>
             </Box>
           ))}

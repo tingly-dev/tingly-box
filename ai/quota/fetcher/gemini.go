@@ -113,13 +113,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 			Description: fmt.Sprintf("%.0f%% used", usedPercent),
 		}
 
-		if bucket.ResetTime != "" {
-			if t, err := time.Parse(time.RFC3339, bucket.ResetTime); err == nil {
-				window.ResetsAt = &t
-			} else if t, err := time.Parse("2006-01-02T15:04:05.999Z", bucket.ResetTime); err == nil {
-				window.ResetsAt = &t
-			}
-		}
+		window.ResetsAt = parseGeminiResetTime(bucket.ResetTime)
 
 		breakdowns = append(breakdowns, &quota.UsageBreakdown{
 			Key:     bucket.ModelID,
@@ -144,15 +138,23 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	})
 
 	// Set reset time from first bucket
-	if len(quotaResp.Buckets) > 0 && quotaResp.Buckets[0].ResetTime != "" {
-		if t, err := time.Parse(time.RFC3339, quotaResp.Buckets[0].ResetTime); err == nil {
-			overall.ResetsAt = &t
-		} else if t, err := time.Parse("2006-01-02T15:04:05.999Z", quotaResp.Buckets[0].ResetTime); err == nil {
-			overall.ResetsAt = &t
-		}
+	if len(quotaResp.Buckets) > 0 {
+		overall.ResetsAt = parseGeminiResetTime(quotaResp.Buckets[0].ResetTime)
 	}
 
 	return usage, nil
+}
+
+func parseGeminiResetTime(value string) *time.Time {
+	if value == "" {
+		return nil
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05.999Z"} {
+		if t, err := time.Parse(layout, value); err == nil {
+			return &t
+		}
+	}
+	return nil
 }
 
 func (f *GeminiFetcher) fetchQuota(ctx context.Context, client *http.Client, token, projectID string) (*geminiQuotaResponse, string, error) {
