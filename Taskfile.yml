@@ -7,11 +7,11 @@ includes:
     taskfile: ./Taskfile.wails.yml
     flatten: true
   windows-cli:
-    taskfile: ./Taskfile.windows.yml
+    taskfile: ./build/Taskfile.windows.yml
   linux-cli:
-    taskfile: ./Taskfile.linux.yml
+    taskfile: ./build/Taskfile.linux.yml
   docker:
-    taskfile: ./Taskfile.docker.yml
+    taskfile: ./build/Taskfile.docker.yml
 
 vars:
   VERSION: ""
