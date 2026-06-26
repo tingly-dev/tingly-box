@@ -17,8 +17,8 @@ import (
 // userAgentRoundTripper forces the outbound User-Agent header to a fixed
 // value. It is layered as the INNERMOST wrapper (closer to the network) so it
 // takes precedence over any provider-specific UA set by outer round trippers
-// (claudeRoundTripper, antigravityRoundTripper, codexRoundTripper, etc.) that
-// rewrite headers before delegating downstream.
+// (antigravityRoundTripper, codexRoundTripper, etc.) that rewrite headers
+// before delegating downstream.
 type userAgentRoundTripper struct {
 	http.RoundTripper
 	userAgent string

@@ -76,16 +76,9 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.
 func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, sessionID string, isOAuthToken bool) []anthropicOption.RequestOption {
-	// Build beta header with all required flags
-	baseBetas := anthropicBeta
-
-	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
-	// Note: Currently commented out as per original claude.go
-	// if model != "" && supportsContext1M(model) {
-	// 	baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
-	// }
-
-	baseBetas = strings.TrimRight(baseBetas, ",")
+	// Build beta header with all required Claude Code flags.
+	requiredBeta := claudeCodeRequiredBetasOrdered
+	baseBetas := mergeBetaFlags(nil, requiredBeta...)
 
 	// Ensure oauth is always present at the end
 	if !strings.Contains(baseBetas, "oauth") {

@@ -16,15 +16,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// TestE2E_ClaudeRoundTripper tests the Anthropic API with Claude Code OAuth support.
+// TestE2E_ClaudeClient tests the Anthropic API with Claude Code OAuth support.
 //
 // Prerequisites:
 // 1. Set environment variables:
 //   - CLAUDE_ACCESS_TOKEN: Anthropic API key or Claude Code OAuth access token
 //   - CLAUDE_MODEL (optional): Model name, defaults to "claude-sonnet-4-20250514"
 //
-// Run with: go test -v ./internal/client -run TestE2E_ClaudeRoundTripper
-func TestE2E_ClaudeRoundTripper(t *testing.T) {
+// Run with: go test -v ./internal/client -run TestE2E_ClaudeClient
+func TestE2E_ClaudeClient(t *testing.T) {
 	// Skip if no credentials provided
 	accessToken := os.Getenv("CLAUDE_ACCESS_TOKEN")
 	if accessToken == "" {
@@ -347,14 +347,14 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 	})
 }
 
-// TestE2E_ClaudeOAuthRoundTripper specifically tests Claude Code OAuth token behavior.
+// TestE2E_ClaudeOAuthClient specifically tests Claude Code OAuth token behavior.
 //
 // Prerequisites:
 // 1. Set environment variables:
 //   - CLAUDE_OAUTH_TOKEN: Claude Code OAuth access token (sk-ant-oat prefix)
 //
-// Run with: go test -v ./internal/client -run TestE2E_ClaudeOAuthRoundTripper
-func TestE2E_ClaudeOAuthRoundTripper(t *testing.T) {
+// Run with: go test -v ./internal/client -run TestE2E_ClaudeOAuthClient
+func TestE2E_ClaudeOAuthClient(t *testing.T) {
 	oauthToken := os.Getenv("CLAUDE_OAUTH_TOKEN")
 	if oauthToken == "" {
 		t.Skip("CLAUDE_OAUTH_TOKEN not set, skipping OAuth-specific e2e test")
