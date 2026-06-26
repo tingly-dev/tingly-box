@@ -310,6 +310,10 @@
         {
           "id": "gpt-5.5",
           "context": 272000
+        },
+        {
+          "id": "gpt-5.3-codex-spark",
+          "context": 128000
         }
       ],
       "supports_models_endpoint": false,
