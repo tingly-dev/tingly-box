@@ -14,7 +14,7 @@ inputs:
   dockerfile:
     description: 'Path to Dockerfile'
     required: false
-    default: './docker.npx.Dockerfile'
+    default: './build/docker/docker.npx.Dockerfile'
   build_args:
     description: 'Additional build arguments (key=value pairs, one per line)'
     required: false

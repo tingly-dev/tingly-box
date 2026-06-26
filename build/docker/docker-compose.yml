@@ -3,7 +3,7 @@ services:
   tingly-box:
     build:
       context: .
-      dockerfile: docker.npx.Dockerfile
+      dockerfile: build/docker/docker.npx.Dockerfile
     container_name: tingly-box
     ports:
       - "12581:12580"
@@ -30,7 +30,7 @@ services:
   tingly-box-dev:
     build:
       context: .
-      dockerfile: docker.npx.Dockerfile
+      dockerfile: build/docker/docker.npx.Dockerfile
     container_name: tingly-box-dev
     ports:
       - "12581:12580"

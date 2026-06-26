@@ -4,17 +4,17 @@ version: '3'
 
 tasks:
   # Docker build and test tasks for ARM64
-  build:arm64:
-    summary: Build Docker image for Linux ARM64
+  build:amd64:
+    summary: Build Docker image
     cmds:
       - |
-        docker build --platform linux/arm64 -t tingly-box:arm64 -f build/linux/Dockerfile.arm64 .
+        docker build --platform linux/amd64 -t tingly-box:amd64 -f build/docker/docker.npx.Dockerfile .
 
-  test:arm64:
-    summary: Run tests in Linux ARM64 Docker container
+  test:amd64:
+    summary: Run tests in Linux AMD64 Docker container
     deps:
-      - task: docker:build:arm64
+      - task: docker:build:amd64
     cmds:
       - |
-        docker run --rm --platform linux/arm64 tingly-box:arm64 \
+        docker run --rm --platform linux/amd64 tingly-box:amd64 \
         sh -c "cd /app && go test ./internal/... -v"
