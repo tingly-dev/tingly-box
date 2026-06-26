@@ -62,17 +62,19 @@ func cloneServices(src []*loadbalance.Service) []*loadbalance.Service {
 	return dst
 }
 
-// referenceServicesFor returns a copy of the services of the first rule whose
-// scenario matches one of the given scenarios and that has a non-empty service
-// list, or nil when none exists. Used to seed a new built-in rule with the same
-// upstream services the user already configured for a sibling scenario.
+// referenceServicesFor returns a copy of the services of the first requested
+// scenario that has any matching rule with a non-empty service list, or nil when
+// none exists. Scenario argument order is the precedence order; within a given
+// scenario, the first matching rule in config order wins. Used to seed a new
+// built-in rule with the same upstream services the user already configured for
+// a sibling scenario.
 func (c *Config) referenceServicesFor(scenarios ...typ.RuleScenario) []*loadbalance.Service {
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		if len(rule.Services) == 0 {
-			continue
-		}
-		for _, s := range scenarios {
+	for _, s := range scenarios {
+		for i := range c.Rules {
+			rule := &c.Rules[i]
+			if len(rule.Services) == 0 {
+				continue
+			}
 			if rule.Scenario.Is(s) {
 				return cloneServices(rule.Services)
 			}

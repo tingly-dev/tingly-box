@@ -64,10 +64,10 @@ func TestMigrationHelpers(t *testing.T) {
 
 	t.Run("referenceServicesFor matches in arg order", func(t *testing.T) {
 		// Both rule b (claude_code) and rule c (codex) have services; the first
-		// rule in c.Rules matching any requested scenario wins.
+		// requested scenario wins, then the first matching rule in config order.
 		got := c.referenceServicesFor(typ.ScenarioCodex, typ.ScenarioClaudeCode)
-		if len(got) != 1 || got[0].Provider != "p1" {
-			t.Fatalf("referenceServicesFor = %v, want services from rule b (p1)", got)
+		if len(got) != 1 || got[0].Provider != "p2" {
+			t.Fatalf("referenceServicesFor = %v, want services from rule c (p2)", got)
 		}
 		if c.referenceServicesFor(typ.ScenarioAnthropic) != nil {
 			t.Error("expected nil when no rule matches")
