@@ -11,121 +11,16 @@ import (
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Built-in rule UUID constants
-const (
-	// Very old / pre-scenario-split legacy UUIDs. Still present in configs
-	// written before the scenario model was introduced.
-	RuleUUIDTingly     = "tingly"
-	RuleUUIDClaudeCode = "claude-code"
-
-	// Legacy built-in UUIDs (hyphenated "built-in-*" form). Live configs are
-	// renamed to the modern RuleUUID* values by migrate20260612; these
-	// constants remain so older migrations and compatibility fallbacks can
-	// still address pre-rename configs.
-	RuleUUIDBuiltinOpenAI    = "built-in-openai"
-	RuleUUIDBuiltinAnthropic = "built-in-anthropic"
-	RuleUUIDBuiltinCodex     = "built-in-codex"
-	RuleUUIDBuiltinOpenCode  = "built-in-opencode"
-	RuleUUIDBuiltinAgent     = "built-in-agent"
-	RuleUUIDBuiltinAgentClaw = "built-in-agent-claw"
-	RuleUUIDBuiltinTeam      = "built-in-team"
-
-	// Legacy Claude Code built-in UUIDs. Live configs are renamed to the
-	// modern RuleUUIDCC* values by migrate20260611; these constants remain so
-	// older migrations (which run before the rename) and compatibility
-	// fallbacks can still address pre-rename configs.
-	RuleUUIDBuiltinCC         = "built-in-cc"
-	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
-	RuleUUIDBuiltinCCSonnet   = "built-in-cc-sonnet"
-	RuleUUIDBuiltinCCOpus     = "built-in-cc-opus"
-	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
-	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
-
-	// Modern built-in rules — "builtin:<scenario>:<tier>" form.
-	// These are the target UUIDs after migrate20260612 renames the legacy ones.
-	RuleUUIDOpenAI    = "builtin:openai:default"
-	RuleUIDAnthropic  = "builtin:anthropic:default"
-	RuleUUIDCodex     = "builtin:codex:default"
-	RuleUUIDOpenCode  = "builtin:opencode:default"
-	RuleUUIDAgent     = "builtin:agent:default"
-	RuleUUIDAgentClaw = "builtin:agent:claw"
-
-	// Claude Code built-in rules (modern "builtin:<scenario>:<tier>" form)
-	RuleUUIDCC         = "builtin:claude_code:cc"
-	RuleUUIDCCDefault  = "builtin:claude_code:default"
-	RuleUUIDCCHaiku    = "builtin:claude_code:haiku"
-	RuleUUIDCCSonnet   = "builtin:claude_code:sonnet"
-	RuleUUIDCCOpus     = "builtin:claude_code:opus"
-	RuleUUIDCCSubagent = "builtin:claude_code:subagent"
-
-	// Claude Desktop built-in rules (locked, using builtin: prefix)
-	RuleUUIDBuiltinClaudeDesktopSonnet46 = "builtin:claude_desktop:claude-sonnet-4-6"
-	RuleUUIDBuiltinClaudeDesktopOpus46   = "builtin:claude_desktop:claude-opus-4-6"
-	RuleUUIDBuiltinClaudeDesktopOpus47   = "builtin:claude_desktop:claude-opus-4-7"
-	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
-)
-
-// legacyCCRuleUUIDs maps the legacy Claude Code built-in UUIDs to their modern
-// counterparts. Used by migrate20260611 to rename live configs and by
-// defaultRuleByUUID to keep older migrations (written against the legacy
-// names) able to pull templates from the modern DefaultRules.
-var legacyCCRuleUUIDs = map[string]string{
-	RuleUUIDBuiltinCC:         RuleUUIDCC,
-	RuleUUIDBuiltinCCDefault:  RuleUUIDCCDefault,
-	RuleUUIDBuiltinCCHaiku:    RuleUUIDCCHaiku,
-	RuleUUIDBuiltinCCSonnet:   RuleUUIDCCSonnet,
-	RuleUUIDBuiltinCCOpus:     RuleUUIDCCOpus,
-	RuleUUIDBuiltinCCSubagent: RuleUUIDCCSubagent,
-}
-
-// legacySimpleRuleUUIDs maps the remaining legacy built-in UUIDs (all
-// non-CC single-rule scenarios) to their modern "builtin:<scenario>:<model>"
-// counterparts. Used by migrate20260612 and defaultRuleByUUID.
-var legacySimpleRuleUUIDs = map[string]string{
-	RuleUUIDTingly:           RuleUUIDOpenAI, // very old "tingly" rule preceded the openai scenario
-	RuleUUIDBuiltinOpenAI:    RuleUUIDOpenAI,
-	RuleUUIDBuiltinAnthropic: RuleUIDAnthropic,
-	RuleUUIDBuiltinCodex:     RuleUUIDCodex,
-	RuleUUIDBuiltinOpenCode:  RuleUUIDOpenCode,
-	RuleUUIDBuiltinAgent:     RuleUUIDAgent,
-	RuleUUIDBuiltinAgentClaw: RuleUUIDAgentClaw,
-}
-
-// BuiltinRuleUUID builds a built-in rule UUID in the modern
-// "builtin:<scenario>:<model>" form — the target convention all built-in rules
-// will eventually converge on (the legacy "built-in-*" constants above predate
-// it). Works for profiled scenarios too, since the scenario name carries the
-// profile suffix: BuiltinRuleUUID("claude_code:p1", "haiku") =
-// "builtin:claude_code:p1:haiku".
-func BuiltinRuleUUID(scenario typ.RuleScenario, model string) string {
-	return "builtin:" + string(scenario) + ":" + model
-}
-
-// ccProfileTiers is the set of request models a system-seeded Claude Code
-// profile rule routes on (unified "cc", or the five separate-mode tiers).
-// Profile rules with any other request model are user-customized and keep
-// whatever UUID they have.
-var ccProfileTiers = map[string]bool{
-	"cc":       true,
-	"default":  true,
-	"haiku":    true,
-	"sonnet":   true,
-	"opus":     true,
-	"subagent": true,
-}
-
 // --- Shared migration helpers -------------------------------------------------
 //
-// Several migrations seed or repair built-in rules with the same moves: look a
-// rule up by UUID, pull a template from DefaultRules, and copy a reference
-// rule's upstream services onto a freshly added rule. These helpers centralize
-// those moves so each migration reads as intent, not bookkeeping.
+// Migrations are organized by the invariants they protect rather than by every
+// historical patch date. The current supported baseline is the scenario/provider
+// config model; very old config shapes are repaired through normalizeLegacyConfigBaseline.
 
 // findRuleByUUID returns a pointer to the rule with the given UUID, or nil.
 // Legacy simple-rule UUIDs (openai, anthropic, codex, …) are resolved to
-// their modern "builtin:<scenario>:<model>" aliases so that older migrations
-// which guard on the legacy UUID (e.g. migrate20260306) keep finding the
-// rule after migrate20260612 has renamed it.
+// their modern "builtin:<scenario>:<model>" aliases so older callers keep
+// finding the rule after normalizeBuiltinRuleIdentity has renamed it.
 func (c *Config) findRuleByUUID(uuid string) *typ.Rule {
 	if modern, ok := legacySimpleRuleUUIDs[uuid]; ok {
 		uuid = modern
@@ -167,17 +62,19 @@ func cloneServices(src []*loadbalance.Service) []*loadbalance.Service {
 	return dst
 }
 
-// referenceServicesFor returns a copy of the services of the first rule whose
-// scenario matches one of the given scenarios and that has a non-empty service
-// list, or nil when none exists. Used to seed a new built-in rule with the same
-// upstream services the user already configured for a sibling scenario.
+// referenceServicesFor returns a copy of the services of the first requested
+// scenario that has any matching rule with a non-empty service list, or nil when
+// none exists. Scenario argument order is the precedence order; within a given
+// scenario, the first matching rule in config order wins. Used to seed a new
+// built-in rule with the same upstream services the user already configured for
+// a sibling scenario.
 func (c *Config) referenceServicesFor(scenarios ...typ.RuleScenario) []*loadbalance.Service {
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		if len(rule.Services) == 0 {
-			continue
-		}
-		for _, s := range scenarios {
+	for _, s := range scenarios {
+		for i := range c.Rules {
+			rule := &c.Rules[i]
+			if len(rule.Services) == 0 {
+				continue
+			}
 			if rule.Scenario.Is(s) {
 				return cloneServices(rule.Services)
 			}
@@ -186,92 +83,95 @@ func (c *Config) referenceServicesFor(scenarios ...typ.RuleScenario) []*loadbala
 	return nil
 }
 
+func (c *Config) seedBuiltinRuleIfMissing(uuid string, services []*loadbalance.Service) (typ.Rule, bool) {
+	if c.findRuleByUUID(uuid) != nil {
+		return typ.Rule{}, false
+	}
+	newRule, ok := defaultRuleByUUID(uuid)
+	if !ok {
+		return typ.Rule{}, false
+	}
+	if cloned := cloneServices(services); cloned != nil {
+		newRule.Services = cloned
+	}
+	c.Rules = append(c.Rules, newRule)
+	return newRule, true
+}
+
+func (c *Config) saveMigration() {
+	if err := c.Save(); err != nil {
+		logrus.WithError(err).Warn("Failed to save config during migration")
+	}
+}
+
+func (c *Config) rekeyRuleUUIDState(migrationID string, renames map[string]string) {
+	for oldUUID, newUUID := range renames {
+		if c.ruleStateStore != nil {
+			if err := c.ruleStateStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
+				logrus.WithError(err).Warnf("Migration %s: failed to rename rule state %s -> %s", migrationID, oldUUID, newUUID)
+			}
+		}
+		if c.usageStore != nil {
+			if err := c.usageStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
+				logrus.WithError(err).Warnf("Migration %s: failed to rename usage records %s -> %s", migrationID, oldUUID, newUUID)
+			}
+		}
+	}
+}
+
 func Migrate(c *Config) error {
-	migrate20251220(c)
-	migrate20251221(c)
-	migrate20251225(c)
-	migrate20260103(c)
-	migrate20260110(c)
-	migrate20260114(c)
-	migrate20260210(c)
-	migrate20260306(c)
+	normalizeLegacyConfigBaseline(c)
+	normalizeBuiltinRuleIdentity(c)
+	ensureCurrentBuiltinRules(c)
 	migrate20260416(c) // Enable multi-tenant by default
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
-	migrate20260513(c) // Add Claude Desktop built-in rules
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
-	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
-	migrate20260606(c) // Default SkipUsage on for the Xcode scenario
-	migrate20260610(c) // Seed default rule flags (claude_code_compat / clean_header / session_affinity) for CC / Desktop / Codex rules
-	migrate20260611(c) // Normalize Claude Code profile rule UUIDs to "<builtin-uuid>:<profileID>"
-	migrate20260612(c) // Rename remaining legacy built-in UUIDs to "builtin:<scenario>:<model>" form
+	normalizeRuleDefaultsOnce(c)
 	return nil
 }
 
-// migrate20251220 ensures all rules have proper UUID and LBTactic set
-func migrate20251220(c *Config) {
+// normalizeLegacyConfigBaseline folds the pre-2026-04 config repair migrations
+// into one baseline normalizer. It keeps very old configs usable without keeping
+// every historical date migration as a permanent startup phase.
+func normalizeLegacyConfigBaseline(c *Config) {
 	needsSave := false
-	for i := range c.Rules {
-		// Ensure UUID exists
-		if c.Rules[i].UUID == "" {
-			uid, err := uuid.NewUUID()
-			if err != nil {
-				continue
-			}
-			c.Rules[i].UUID = uid.String()
-			needsSave = true
-		}
 
-		// Ensure LBTactic is properly initialized
-		// Check if params are nil or have invalid zero values
-		if !IsTacticValid(&c.Rules[i].LBTactic) {
-			// Set default tactic if params are invalid
-			c.Rules[i].LBTactic = typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			}
-			needsSave = true
-		}
+	if normalizeLegacyProviders(c) {
+		needsSave = true
+	}
+	if normalizeRuleBasics(c) {
+		needsSave = true
 	}
 
-	// Save if any rules were updated
 	if needsSave {
-		_ = c.Save()
+		c.saveMigration()
+		logrus.Info("Migration baseline normalization completed: repaired legacy provider/rule config")
 	}
 }
 
-// migrate20251221 migrates provider configurations from v1 to v2 format
-func migrate20251221(c *Config) {
+func normalizeLegacyProviders(c *Config) bool {
 	needsSave := false
 
-	// Ensure all providers have a valid timeout (set to default if zero)
 	for _, p := range c.Providers {
 		if p.Timeout == 0 {
 			p.Timeout = int64(constant.DefaultRequestTimeout)
 			needsSave = true
 		}
-	}
-
-	// Skip migration if Providers is already populated
-	if len(c.Providers) > 0 {
-		if needsSave {
-			_ = c.Save()
+		if p.Timeout > int64(constant.DefaultMaxTimeout) {
+			p.Timeout = int64(constant.DefaultMaxTimeout)
+			needsSave = true
 		}
-		return
 	}
 
-	// Check if there are v1 providers to migrate
-	if len(c.ProvidersV1) == 0 {
-		return
+	if len(c.Providers) > 0 || len(c.ProvidersV1) == 0 {
+		return needsSave
 	}
 
-	// Initialize Providers slice
-	c.Providers = make([]*typ.Provider, 0, len(c.Providers))
-
-	// Migrate each v1 provider to v2
+	c.Providers = make([]*typ.Provider, 0, len(c.ProvidersV1))
 	for _, pv1 := range c.ProvidersV1 {
-		providerV2 := &typ.Provider{
+		provider := &typ.Provider{
 			UUID:        pv1.UUID,
 			Name:        pv1.Name,
 			APIBase:     pv1.APIBase,
@@ -279,23 +179,15 @@ func migrate20251221(c *Config) {
 			Token:       pv1.Token,
 			Enabled:     pv1.Enabled,
 			ProxyURL:    pv1.ProxyURL,
-			Timeout:     int64(constant.DefaultRequestTimeout), // Default timeout from constants
-			Tags:        []string{},                            // Empty tags
-			Models:      []string{},                            // Empty models initially
+			Timeout:     int64(constant.DefaultRequestTimeout),
+			Tags:        []string{},
+			Models:      []string{},
 			LastUpdated: time.Now().Format(time.RFC3339),
 		}
-
-		// Generate UUID if not present in v1
-		if providerV2.UUID == "" {
-			providerV2.UUID = GenerateUUID()
+		if provider.UUID == "" {
+			provider.UUID = GenerateUUID()
 		}
-
-		c.Providers = append(c.Providers, providerV2)
-	}
-
-	// Only mark for save if migration actually occurred
-	if len(c.Providers) > 0 {
-		needsSave = true
+		c.Providers = append(c.Providers, provider)
 	}
 
 	for i, rule := range c.Rules {
@@ -308,34 +200,49 @@ func migrate20251221(c *Config) {
 		}
 		c.Rules[i] = rule
 	}
-
-	// Save if migration occurred
-	if needsSave {
-		_ = c.Save()
-	}
+	return true
 }
 
-// migrate20251225 clamps any legacy JSON-config provider timeout above the max
-// to the cap. Runs before migrateProvidersToDB, so it only affects the one-time
-// JSON→DB import; once providers live in SQLite the JSON list is empty and this
-// is a no-op.
-func migrate20251225(c *Config) {
+func normalizeRuleBasics(c *Config) bool {
 	needsSave := false
-	for _, p := range c.Providers {
-		if p.Timeout > int64(constant.DefaultMaxTimeout) {
-			p.Timeout = int64(constant.DefaultMaxTimeout)
+	valid := make([]typ.Rule, 0, len(c.Rules))
+	for i := range c.Rules {
+		rule := c.Rules[i]
+
+		if rule.Scenario == "" {
+			if scenario, ok := legacyRuleScenario(rule.UUID); ok {
+				rule.Scenario = scenario
+				needsSave = true
+			} else {
+				needsSave = true
+				continue
+			}
+		}
+
+		if rule.UUID == "" {
+			uid, err := uuid.NewUUID()
+			if err == nil {
+				rule.UUID = uid.String()
+				needsSave = true
+			}
+		}
+		if !IsTacticValid(&rule.LBTactic) {
+			rule.LBTactic = typ.Tactic{
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
+			}
 			needsSave = true
 		}
+		valid = append(valid, rule)
 	}
-	if needsSave {
-		_ = c.Save()
+	if len(valid) != len(c.Rules) {
+		needsSave = true
 	}
+	c.Rules = valid
+	return needsSave
 }
 
-func migrate20260103(c *Config) {
-	needsSave := false
-
-	// Map of default rule UUIDs to their scenarios
+func legacyRuleScenario(uuid string) (typ.RuleScenario, bool) {
 	scenarioMap := map[string]typ.RuleScenario{
 		RuleUUIDTingly:            typ.ScenarioOpenAI,
 		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
@@ -349,152 +256,100 @@ func migrate20260103(c *Config) {
 		RuleUUIDBuiltinCCDefault:  typ.ScenarioClaudeCode,
 		RuleUUIDBuiltinCCSubagent: typ.ScenarioClaudeCode,
 	}
+	scenario, ok := scenarioMap[uuid]
+	return scenario, ok
+}
 
+// normalizeBuiltinRuleIdentity keeps built-in rule UUIDs on the canonical
+// "builtin:<scenario>:<tier/model>" form. It is intentionally not marker-gated:
+// the pass is idempotent and self-healing for configs written by older builds.
+func normalizeBuiltinRuleIdentity(c *Config) {
+	renames := map[string]string{}
 	for i := range c.Rules {
 		rule := &c.Rules[i]
-
-		// If scenario is already set, skip
-		if rule.Scenario != "" {
+		canonical, ok := canonicalRuleUUID(rule)
+		if !ok || rule.UUID == canonical {
 			continue
 		}
-
-		// Check if this is a default rule and set its scenario
-		if scenario, ok := scenarioMap[rule.UUID]; ok {
-			rule.Scenario = scenario
-			needsSave = true
+		if c.findRuleByUUID(canonical) != nil {
+			logrus.WithFields(logrus.Fields{
+				"rule_uuid":     rule.UUID,
+				"canonical":     canonical,
+				"request_model": rule.RequestModel,
+			}).Warn("Migration builtin-rule-identity: canonical rule UUID already taken, skipping rename")
+			continue
 		}
+		renames[rule.UUID] = canonical
+		rule.UUID = canonical
 	}
 
-	if needsSave {
-		_ = c.Save()
+	if len(renames) == 0 {
+		return
 	}
+	c.rekeyRuleUUIDState("builtin-rule-identity", renames)
+	c.saveMigration()
+	logrus.Infof("Migration builtin-rule-identity completed: normalized %d built-in rule UUID(s)", len(renames))
 }
 
-// migrate20260110 copies services from built-in-cc to built-in-cc-* rules if they are empty.
-// This migration runs only once; subsequent restarts skip it so that a user who intentionally
-// clears a rule's services does not have them silently refilled.
-func migrate20260110(c *Config) {
-	if c.hasMigrationCompleted("20260110") {
-		return
+func canonicalRuleUUID(rule *typ.Rule) (string, bool) {
+	if canonical, ok := legacySimpleRuleUUIDs[rule.UUID]; ok {
+		return canonical, true
 	}
-
-	// Source rule (built-in-cc). If it's missing or has no services there's
-	// nothing to copy — still mark completed so we don't retry every restart.
-	fallbackRule := c.findRuleByUUID(RuleUUIDBuiltinCC)
-	if fallbackRule == nil || len(fallbackRule.Services) == 0 {
-		c.markMigrationCompleted("20260110")
-		return
+	base, profileID := typ.ParseScenarioProfile(rule.Scenario)
+	if base != typ.ScenarioClaudeCode {
+		return "", false
 	}
-
-	// built-in-cc-* rule UUIDs that should inherit from built-in-cc
-	targetUUIDs := []string{
-		RuleUUIDBuiltinCCHaiku,
-		RuleUUIDBuiltinCCSonnet,
-		RuleUUIDBuiltinCCOpus,
-		RuleUUIDBuiltinCCDefault,
-		RuleUUIDBuiltinCCSubagent,
+	if profileID == "" {
+		canonical, ok := legacyCCRuleUUIDs[rule.UUID]
+		return canonical, ok
 	}
+	tier := TrimContext1M(rule.RequestModel)
+	if !ccProfileTiers[tier] {
+		return "", false
+	}
+	return BuiltinRuleUUID(rule.Scenario, tier), true
+}
 
+func ensureCurrentBuiltinRules(c *Config) {
 	needsSave := false
-	for _, targetUUID := range targetUUIDs {
-		defaultRule, ok := defaultRuleByUUID(targetUUID)
+
+	if _, ok := c.seedBuiltinRuleIfMissing(RuleUUIDBuiltinCodex, nil); ok {
+		needsSave = true
+	}
+
+	desktopRefServices := c.referenceServicesFor(typ.ScenarioClaudeCode, typ.ScenarioCodex)
+	for _, uuid := range []string{
+		RuleUUIDBuiltinClaudeDesktopSonnet46,
+		RuleUUIDBuiltinClaudeDesktopOpus46,
+		RuleUUIDBuiltinClaudeDesktopOpus47,
+	} {
+		newRule, ok := c.seedBuiltinRuleIfMissing(uuid, desktopRefServices)
 		if !ok {
 			continue
 		}
-		target := c.findRuleByUUID(targetUUID)
-		if target == nil {
-			continue
-		}
-		target.Description = defaultRule.Description
-
-		// Only fill services when the target has none of its own.
-		if len(target.Services) > 0 {
-			continue
-		}
-		target.Services = cloneServices(fallbackRule.Services)
 		needsSave = true
+		logrus.WithFields(logrus.Fields{
+			"rule_uuid":      newRule.UUID,
+			"request_model":  newRule.RequestModel,
+			"response_model": newRule.ResponseModel,
+		}).Info("Added Claude Desktop built-in rule")
 	}
 
-	c.markMigrationCompleted("20260110")
+	if _, ok := c.seedBuiltinRuleIfMissing(RuleUUIDBuiltinClaudeDesktopHaiku45, c.referenceServicesFor(typ.ScenarioClaudeDesktop)); ok {
+		needsSave = true
+		logrus.Info("Added Claude Desktop haiku-4-5 built-in rule")
+	}
+
 	if needsSave {
-		_ = c.Save()
+		c.saveMigration()
+		logrus.Info("Migration current-builtin-rules completed: ensured current built-in rules")
 	}
 }
 
-// migrate20260114 for bugfix - bug which cause scenario empty
-func migrate20260114(c *Config) {
-	var valid []typ.Rule
-	for _, r := range c.Rules {
-		if r.Scenario == "" {
-			continue
-		}
-		valid = append(valid, r)
-	}
-
-	if len(valid) != len(c.Rules) {
-		c.Rules = valid
-		c.Save()
-	}
-}
-
-// migrate20260210 ensures the subagent rule exists and mirrors the haiku model.
-// This migration runs only once so that a user who intentionally clears the subagent
-// rule's services does not have them silently restored on the next restart.
-func migrate20260210(c *Config) {
-	if c.hasMigrationCompleted("20260210") {
-		return
-	}
-
-	// Without a haiku model, there's nothing to mirror.
-	// Mark as completed so we don't retry every restart.
-	haikuRule := c.findRuleByUUID(RuleUUIDBuiltinCCHaiku)
-	if haikuRule == nil {
-		c.markMigrationCompleted("20260210")
-		return
-	}
-
-	needsSave := false
-
-	// Ensure subagent rule exists (add the default template if missing).
-	subagentRule := c.findRuleByUUID(RuleUUIDBuiltinCCSubagent)
-	if subagentRule == nil {
-		defaultRule, ok := defaultRuleByUUID(RuleUUIDBuiltinCCSubagent)
-		if !ok {
-			c.markMigrationCompleted("20260210")
-			return
-		}
-		c.Rules = append(c.Rules, defaultRule)
-		subagentRule = &c.Rules[len(c.Rules)-1]
-		needsSave = true
-	}
-
-	// Keep subagent request model as-is; mirror haiku's services if it has none.
-	if len(subagentRule.Services) == 0 && len(haikuRule.Services) > 0 {
-		subagentRule.Services = cloneServices(haikuRule.Services)
-		needsSave = true
-	}
-
-	c.markMigrationCompleted("20260210")
-	if needsSave {
-		_ = c.Save()
-	}
-}
-
-// migrate20260306 adds the built-in Codex rule if it's missing.
-func migrate20260306(c *Config) {
-	if c.findRuleByUUID(RuleUUIDBuiltinCodex) != nil {
-		return
-	}
-	if defaultRule, ok := defaultRuleByUUID(RuleUUIDBuiltinCodex); ok {
-		c.Rules = append(c.Rules, defaultRule)
-		_ = c.Save()
-	}
-}
-
-// migrate20260416 enables multi-tenant by default for existing configurations
+// migrate20260416 enables multi-tenant by default for existing configurations.
 func migrate20260416(c *Config) {
-	// Skip migration if multi-tenant config has any values set
-	// This means the user has explicitly configured multi-tenant settings
+	// Skip migration if multi-tenant config has any values set.
+	// This means the user has explicitly configured multi-tenant settings.
 	if c.MultiTenantConfig.APITokenSecret != "" ||
 		c.MultiTenantConfig.APITokenAlgorithm != "" ||
 		c.MultiTenantConfig.APITokenIssuer != "" {
@@ -508,12 +363,12 @@ func migrate20260416(c *Config) {
 	c.MultiTenantConfig.APITokenIssuer = "tingly-box"
 	c.MultiTenantConfig.Enabled = true
 
-	_ = c.Save()
+	c.saveMigration()
 }
 
-// migrate20260421 migrates profile unified model name from "*" to "cc"
+// migrate20260421 migrates profile unified model name from "*" to "cc".
 // This ensures consistency with the new naming convention where profile
-// rules use simplified names: "cc" (unified), "default", "haiku", etc. (separate)
+// rules use simplified names: "cc" (unified), "default", "haiku", etc. (separate).
 // Only applies to claude-code scenario profiles.
 func migrate20260421(c *Config) {
 	needsSave := false
@@ -521,18 +376,18 @@ func migrate20260421(c *Config) {
 	for i := range c.Rules {
 		rule := &c.Rules[i]
 
-		// Only migrate claude-code profile rules
-		// Profile rules have scenario like "claude-code:profileID"
+		// Only migrate claude-code profile rules.
+		// Profile rules have scenario like "claude-code:profileID".
 		if !typ.IsProfiledScenario(rule.Scenario) {
 			continue
 		}
-		// Check if base scenario is claude-code
+		// Check if base scenario is claude-code.
 		baseScenario, _ := typ.ParseScenarioProfile(rule.Scenario)
 		if baseScenario != typ.ScenarioClaudeCode {
 			continue
 		}
 
-		// Migrate "*" to "cc" for unified mode
+		// Migrate "*" to "cc" for unified mode.
 		if rule.RequestModel == "*" {
 			rule.RequestModel = "cc"
 			needsSave = true
@@ -540,20 +395,20 @@ func migrate20260421(c *Config) {
 	}
 
 	if needsSave {
-		_ = c.Save()
+		c.saveMigration()
 	}
 }
 
-// migrate20260502 removes wildcard (*) rules for smart_guide scenario
+// migrate20260502 removes wildcard (*) rules for smart_guide scenario.
 // This cleans up legacy wildcard rules that are no longer needed
-// as SmartGuide now uses bot-specific rules with UUID pattern: _internal_smart_guide_{botUUID}
+// as SmartGuide now uses bot-specific rules with UUID pattern: _internal_smart_guide_{botUUID}.
 func migrate20260502(c *Config) {
 	needsSave := false
 
-	// Filter out smart_guide rules with wildcard RequestModel
+	// Filter out smart_guide rules with wildcard RequestModel.
 	var filteredRules []typ.Rule
 	for _, rule := range c.Rules {
-		// Skip smart_guide rules with wildcard RequestModel
+		// Skip smart_guide rules with wildcard RequestModel.
 		if rule.Scenario == typ.ScenarioSmartGuide && rule.RequestModel == "*" {
 			logrus.WithFields(logrus.Fields{
 				"rule_uuid":      rule.UUID,
@@ -568,98 +423,28 @@ func migrate20260502(c *Config) {
 
 	if needsSave {
 		c.Rules = filteredRules
-		_ = c.Save()
+		c.saveMigration()
 		logrus.Info("Migration 2026-05-02 completed: removed smart_guide wildcard rules")
 	}
 }
 
-// migrate20260513 adds Claude Desktop built-in rules
-// Claude Desktop has 3 locked rules with builtin: UUID format:
-// - builtin:claude_desktop:claude-sonnet-4-6
-// - builtin:claude_desktop:claude-opus-4-6
-// - builtin:claude_desktop:claude-opus-4-7
-func migrate20260513(c *Config) {
-	desktopUUIDs := []string{
-		RuleUUIDBuiltinClaudeDesktopSonnet46,
-		RuleUUIDBuiltinClaudeDesktopOpus46,
-		RuleUUIDBuiltinClaudeDesktopOpus47,
-	}
-
-	// Seed new desktop rules with the services the user already uses for a
-	// sibling agent scenario (prefer claude_code, then codex).
-	refServices := c.referenceServicesFor(typ.ScenarioClaudeCode, typ.ScenarioCodex)
-
-	needsSave := false
-	for _, uuid := range desktopUUIDs {
-		if c.findRuleByUUID(uuid) != nil {
-			continue // Rule already exists, skip
-		}
-		newRule, ok := defaultRuleByUUID(uuid)
-		if !ok {
-			continue
-		}
-		if services := cloneServices(refServices); services != nil {
-			newRule.Services = services
-		}
-
-		c.Rules = append(c.Rules, newRule)
-		needsSave = true
-
-		logrus.WithFields(logrus.Fields{
-			"rule_uuid":      newRule.UUID,
-			"request_model":  newRule.RequestModel,
-			"response_model": newRule.ResponseModel,
-		}).Info("Added Claude Desktop built-in rule")
-	}
-
-	if needsSave {
-		_ = c.Save()
-		logrus.Info("Migration 2026-05-13 completed: added Claude Desktop built-in rules")
-	}
+func normalizeRuleDefaultsOnce(c *Config) {
+	defaultXcodeSkipUsageOnce(c)
+	defaultBuiltinRuleFlagsOnce(c)
 }
 
-// migrate20260521 adds the claude-haiku-4-5 built-in rule for Claude Desktop.
-func migrate20260521(c *Config) {
-	if c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45) != nil {
-		return
-	}
-
-	// Use the init.go template so this rule's flags/tactic stay in sync with the
-	// other built-in Claude Desktop rules instead of drifting from a local copy.
-	newRule, ok := defaultRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45)
-	if !ok {
-		return
-	}
-	if services := c.referenceServicesFor(typ.ScenarioClaudeDesktop); services != nil {
-		newRule.Services = services
-	}
-
-	c.Rules = append(c.Rules, newRule)
-	_ = c.Save()
-	logrus.Info("Migration 2026-05-21 completed: added Claude Desktop haiku-4-5 rule")
-}
-
-// migrate20260606 ensures the Xcode scenario defaults SkipUsage on (the Xcode
-// client cannot handle usage in streaming chunks).
-//
-// This migration originally also seeded scenario-level session_affinity for the
-// IDE/Agent scenarios. session_affinity has since been downgraded to a rule-only
-// flag (seeded on the built-in Claude Code / Desktop / Codex rules via init +
-// migrate20260610), so the affinity seeding has been removed; only the Xcode
-// SkipUsage default remains.
-func migrate20260606(c *Config) {
+// defaultXcodeSkipUsageOnce ensures the Xcode scenario defaults SkipUsage on
+// (the Xcode client cannot handle usage in streaming chunks). The marker is
+// retained so a user who later turns it off keeps that choice across restarts.
+func defaultXcodeSkipUsageOnce(c *Config) {
 	if c.hasMigrationCompleted("20260606") {
 		return
 	}
 
 	needsSave := false
-
-	// Add or update the xcode scenario config with SkipUsage on.
 	found := false
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == typ.ScenarioXcode {
-			// Set SkipUsage if user hasn't explicitly set it.
-			// Note: false means "not set" due to omitempty, true means explicitly enabled.
 			if !c.Scenarios[i].Flags.SkipUsage {
 				c.Scenarios[i].Flags.SkipUsage = true
 				needsSave = true
@@ -678,34 +463,14 @@ func migrate20260606(c *Config) {
 
 	c.markMigrationCompleted("20260606")
 	if needsSave {
-		_ = c.Save()
+		c.saveMigration()
 		logrus.Info("Migration 2026-06-06 completed: defaulted SkipUsage on for the Xcode scenario")
 	}
 }
 
-// migrate20260610 seeds the default rule-level flags for the built-in agent
-// scenarios in a single pass, consolidating the earlier per-flag/per-scenario
-// migrations (claude_code_compat, clean_header, session_affinity) that were
-// fragmented across 20260608*/20260609*. For each existing rule it mirrors what
-// init.go seeds on the built-in rules:
-//
-//   - Claude Code / Claude Desktop rules (base scenario, profile-aware):
-//     claude_code_compat on, clean_header on, session_affinity = 1800s
-//   - Codex rules: session_affinity = 1800s
-//
-// Rationale per flag:
-//   - claude_code_compat: CC / Desktop emit mid-conversation system-role
-//     messages that third-party Anthropic-compatible providers reject.
-//   - clean_header: CC / Desktop inject x-anthropic-billing-header blocks that
-//     must never leak to external providers.
-//   - session_affinity: 30-min session pinning improves cache hit rate.
-//
-// Each default is applied only when the rule hasn't set it yet (false / 0 = not
-// set), and the whole pass is gated by one marker so a user who later turns any
-// flag off (or affinity to 0) keeps it off across restarts. New installs get
-// these straight from init.go (ccRule / cdRule / built-in-codex); this migration
-// covers configs persisted before the defaults existed.
-func migrate20260610(c *Config) {
+// defaultBuiltinRuleFlagsOnce seeds rule-level defaults for built-in agent
+// scenarios. The marker is retained so user-disabled defaults stay disabled.
+func defaultBuiltinRuleFlagsOnce(c *Config) {
 	if c.hasMigrationCompleted("20260610") {
 		return
 	}
@@ -737,142 +502,7 @@ func migrate20260610(c *Config) {
 
 	c.markMigrationCompleted("20260610")
 	if needsSave {
-		_ = c.Save()
+		c.saveMigration()
 		logrus.Info("Migration 20260610 completed: seeded default rule flags (claude_code_compat / clean_header / session_affinity) for Claude Code, Claude Desktop, and Codex rules")
 	}
-}
-
-// migrate20260611 normalizes Claude Code rule UUIDs to the canonical
-// "builtin:<scenario>:<tier>" form:
-//
-//   - main-scenario built-ins: legacy "built-in-cc-haiku" → "builtin:claude_code:haiku"
-//     (renamed by exact legacy-UUID match, so user-renamed request models don't matter);
-//   - profile rules: random v4 UUIDs → "builtin:claude_code:p1:haiku"
-//     (matched by request_model tier, since their old UUIDs carry no identity).
-//
-// The pass is intentionally not marker-gated: it is idempotent (rules already
-// canonical are skipped) and self-healing, so a config written by an older
-// build gets normalized on the next start. Rules whose request model has no
-// built-in counterpart (user-customized) are left untouched, and a rename is
-// skipped if the canonical UUID is already taken (e.g. duplicate tier rules).
-// SQLite state keyed by rule UUID — the load balancer's rule_service_index and
-// historical usage records — is re-keyed alongside the rule so per-rule state
-// survives the rename.
-func migrate20260611(c *Config) {
-	renames := map[string]string{}
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		base, profileID := typ.ParseScenarioProfile(rule.Scenario)
-		if base != typ.ScenarioClaudeCode {
-			continue
-		}
-
-		var canonical string
-		if profileID == "" {
-			// Main scenario: only the known legacy built-ins are renamed.
-			var ok bool
-			if canonical, ok = legacyCCRuleUUIDs[rule.UUID]; !ok {
-				continue
-			}
-		} else {
-			// Profile: identify the tier by request model. Strip the [1m]
-			// context-window suffix first so a tier rule renamed for 1M
-			// support (e.g. "haiku[1m]") still normalizes to its tier UUID.
-			tier := TrimContext1M(rule.RequestModel)
-			if !ccProfileTiers[tier] {
-				continue
-			}
-			canonical = BuiltinRuleUUID(rule.Scenario, tier)
-		}
-		if rule.UUID == canonical {
-			continue
-		}
-		if c.findRuleByUUID(canonical) != nil {
-			logrus.WithFields(logrus.Fields{
-				"rule_uuid":     rule.UUID,
-				"canonical":     canonical,
-				"request_model": rule.RequestModel,
-			}).Warn("Migration 20260611: canonical profile rule UUID already taken, skipping rename")
-			continue
-		}
-		renames[rule.UUID] = canonical
-		rule.UUID = canonical
-	}
-
-	if len(renames) == 0 {
-		return
-	}
-
-	// Carry SQLite state keyed by rule UUID over to the new identity.
-	// Best-effort: a failure here only loses the load-balancer position or
-	// per-rule usage attribution, never routing correctness.
-	for oldUUID, newUUID := range renames {
-		if c.ruleStateStore != nil {
-			if err := c.ruleStateStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
-				logrus.WithError(err).Warnf("Migration 20260611: failed to rename rule state %s -> %s", oldUUID, newUUID)
-			}
-		}
-		if c.usageStore != nil {
-			if err := c.usageStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
-				logrus.WithError(err).Warnf("Migration 20260611: failed to rename usage records %s -> %s", oldUUID, newUUID)
-			}
-		}
-	}
-
-	_ = c.Save()
-	logrus.Infof("Migration 20260611 completed: normalized %d Claude Code rule UUID(s)", len(renames))
-}
-
-// migrate20260612 renames the remaining legacy built-in rule UUIDs
-// (openai / anthropic / codex / opencode / agent / team / tingly) to the
-// modern "builtin:<scenario>:<request_model>" form established by
-// migrate20260611 for Claude Code.
-//
-// The pass is idempotent and not marker-gated: rules already carrying a
-// modern UUID are skipped, so a config written by a newer build is left
-// intact on every restart. A rename is skipped (with a warning) if the
-// canonical UUID is already taken, preventing accidental UUID collisions.
-// SQLite state keyed by rule UUID is re-keyed alongside each rule so
-// load-balancer position and usage history survive the rename.
-func migrate20260612(c *Config) {
-	renames := map[string]string{}
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		canonical, ok := legacySimpleRuleUUIDs[rule.UUID]
-		if !ok {
-			continue
-		}
-		if rule.UUID == canonical {
-			continue
-		}
-		if c.findRuleByUUID(canonical) != nil {
-			logrus.WithFields(logrus.Fields{
-				"rule_uuid": rule.UUID,
-				"canonical": canonical,
-			}).Warn("Migration 20260612: canonical rule UUID already taken, skipping rename")
-			continue
-		}
-		renames[rule.UUID] = canonical
-		rule.UUID = canonical
-	}
-
-	if len(renames) == 0 {
-		return
-	}
-
-	for oldUUID, newUUID := range renames {
-		if c.ruleStateStore != nil {
-			if err := c.ruleStateStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
-				logrus.WithError(err).Warnf("Migration 20260612: failed to rename rule state %s -> %s", oldUUID, newUUID)
-			}
-		}
-		if c.usageStore != nil {
-			if err := c.usageStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
-				logrus.WithError(err).Warnf("Migration 20260612: failed to rename usage records %s -> %s", oldUUID, newUUID)
-			}
-		}
-	}
-
-	_ = c.Save()
-	logrus.Infof("Migration 20260612 completed: renamed %d built-in rule UUID(s) to modern form", len(renames))
 }

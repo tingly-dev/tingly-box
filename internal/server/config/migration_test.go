@@ -9,31 +9,38 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func TestMigrate20260110_CopiesCCServices(t *testing.T) {
+func TestNormalizeLegacyConfigBaseline_RuleBasics(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
-			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("cc")}},
-			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode},                                                // empty → should inherit
-			{UUID: RuleUUIDBuiltinCCSonnet, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("own")}}, // own → kept
+			{UUID: RuleUUIDBuiltinOpenAI},             // known legacy UUID → scenario repaired
+			{UUID: "drop-me"},                         // unknown empty scenario → dropped
+			{Scenario: typ.ScenarioClaudeCode},        // missing UUID + tactic repaired
+			{UUID: "ok", Scenario: typ.ScenarioCodex}, // invalid zero tactic repaired
 		},
 	}
 
-	migrate20260110(c)
+	normalizeLegacyConfigBaseline(c)
 
-	if !c.hasMigrationCompleted("20260110") {
-		t.Error("migration should be marked completed")
+	if len(c.Rules) != 3 {
+		t.Fatalf("rule count after baseline normalization = %d, want 3: %+v", len(c.Rules), c.Rules)
 	}
-	haiku := c.findRuleByUUID(RuleUUIDBuiltinCCHaiku)
-	if haiku == nil || len(haiku.Services) != 1 || haiku.Services[0].Provider != "cc" {
-		t.Errorf("haiku should inherit built-in-cc services, got %+v", haiku)
+	if c.Rules[0].Scenario != typ.ScenarioOpenAI {
+		t.Errorf("legacy OpenAI rule scenario = %q, want %q", c.Rules[0].Scenario, typ.ScenarioOpenAI)
 	}
-	sonnet := c.findRuleByUUID(RuleUUIDBuiltinCCSonnet)
-	if sonnet == nil || len(sonnet.Services) != 1 || sonnet.Services[0].Provider != "own" {
-		t.Errorf("sonnet's own services must be preserved, got %+v", sonnet)
+	if c.Rules[1].UUID == "" {
+		t.Error("missing rule UUID should be generated")
+	}
+	for _, r := range c.Rules {
+		if r.LBTactic.Type != loadbalance.TacticAdaptive {
+			t.Errorf("rule %q tactic type = %q, want %q", r.UUID, r.LBTactic.Type, loadbalance.TacticAdaptive)
+		}
+		if _, ok := typ.AsAdaptiveParams(r.LBTactic.Params); !ok {
+			t.Errorf("rule %q tactic params should be adaptive: %+v", r.UUID, r.LBTactic.Params)
+		}
 	}
 }
 
-func TestMigrate20260513_SeedsDesktopRules(t *testing.T) {
+func TestEnsureCurrentBuiltinRules_SeedsDesktopRules(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("p1")}},
@@ -42,7 +49,7 @@ func TestMigrate20260513_SeedsDesktopRules(t *testing.T) {
 		},
 	}
 
-	migrate20260513(c)
+	ensureCurrentBuiltinRules(c)
 
 	for _, uuid := range []string{
 		RuleUUIDBuiltinClaudeDesktopSonnet46,
@@ -62,14 +69,14 @@ func TestMigrate20260513_SeedsDesktopRules(t *testing.T) {
 	}
 }
 
-func TestMigrate20260521_AddsHaikuFromTemplate(t *testing.T) {
+func TestEnsureCurrentBuiltinRules_AddsHaikuFromTemplate(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: RuleUUIDBuiltinClaudeDesktopSonnet46, Scenario: typ.ScenarioClaudeDesktop, Services: []*loadbalance.Service{svc("pd")}},
 		},
 	}
 
-	migrate20260521(c)
+	ensureCurrentBuiltinRules(c)
 
 	haiku := c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45)
 	if haiku == nil {
@@ -85,7 +92,7 @@ func TestMigrate20260521_AddsHaikuFromTemplate(t *testing.T) {
 	}
 
 	// Idempotent: running again does not duplicate it.
-	migrate20260521(c)
+	ensureCurrentBuiltinRules(c)
 	if n := countRules(c, RuleUUIDBuiltinClaudeDesktopHaiku45); n != 1 {
 		t.Errorf("haiku rule duplicated: count = %d", n)
 	}
@@ -144,7 +151,7 @@ func TestMigrate20260606_PreservesUserOverride(t *testing.T) {
 	}
 }
 
-func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
+func TestDefaultBuiltinRuleFlagsOnce_SeedsRuleFlags(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
@@ -157,7 +164,7 @@ func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
 		},
 	}
 
-	migrate20260610(c)
+	defaultBuiltinRuleFlagsOnce(c)
 
 	if !c.hasMigrationCompleted("20260610") {
 		t.Fatal("migration should be marked completed")
@@ -192,7 +199,7 @@ func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
 	}
 }
 
-func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
+func TestNormalizeBuiltinRuleIdentity_NormalizesProfileRuleUUIDs(t *testing.T) {
 	p1 := typ.RuleScenario("claude_code:p1")
 	p2 := typ.RuleScenario("claude_code:p2")
 	c := &Config{
@@ -218,7 +225,7 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 		},
 	}
 
-	migrate20260611(c)
+	normalizeBuiltinRuleIdentity(c)
 
 	wants := map[int]string{
 		0: "builtin:claude_code:p1:haiku",
@@ -238,7 +245,7 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 	}
 
 	// Idempotent: a second pass changes nothing.
-	migrate20260611(c)
+	normalizeBuiltinRuleIdentity(c)
 	for i, want := range wants {
 		if got := c.Rules[i].UUID; got != want {
 			t.Errorf("second pass: rule %d UUID = %q, want %q", i, got, want)
@@ -246,11 +253,11 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 	}
 }
 
-// TestMigrate20260611_UpgradeFromLegacyConfig exercises the real startup path:
+// TestNormalizeBuiltinRuleIdentity_UpgradeFromLegacyConfig exercises the real startup path:
 // a config.json persisted by an older build (legacy main-scenario UUIDs,
-// random-UUID profile rules) is loaded via NewConfig, which runs the full
-// migration chain plus InsertDefaultRule.
-func TestMigrate20260611_UpgradeFromLegacyConfig(t *testing.T) {
+// random-UUID profile rules) is loaded via NewConfig, which runs baseline
+// normalization plus InsertDefaultRule.
+func TestNormalizeBuiltinRuleIdentity_UpgradeFromLegacyConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	legacy := `{
 		"rules": [
@@ -320,7 +327,7 @@ func TestMigrate20260611_UpgradeFromLegacyConfig(t *testing.T) {
 	}
 }
 
-func TestMigrate20260611_SkipsOnCanonicalCollision(t *testing.T) {
+func TestNormalizeBuiltinRuleIdentity_SkipsOnCanonicalCollision(t *testing.T) {
 	p1 := typ.RuleScenario("claude_code:p1")
 	c := &Config{
 		Rules: []typ.Rule{
@@ -331,13 +338,66 @@ func TestMigrate20260611_SkipsOnCanonicalCollision(t *testing.T) {
 		},
 	}
 
-	migrate20260611(c)
+	normalizeBuiltinRuleIdentity(c)
 
 	if c.Rules[0].UUID != "builtin:claude_code:p1:haiku" {
 		t.Errorf("canonical rule UUID changed: %q", c.Rules[0].UUID)
 	}
 	if c.Rules[1].UUID != "5f1c2a9e-0000-0000-0000-00000000000a" {
 		t.Errorf("duplicate tier rule should keep its UUID on collision, got %q", c.Rules[1].UUID)
+	}
+}
+
+func TestNormalizeBuiltinRuleIdentity_RenamesSimpleLegacyUUIDs(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDTingly, Scenario: typ.ScenarioOpenAI, RequestModel: "legacy-openai"},
+			{UUID: RuleUUIDBuiltinAnthropic, Scenario: typ.ScenarioAnthropic, RequestModel: "claude"},
+			{UUID: RuleUUIDBuiltinCodex, Scenario: typ.ScenarioCodex, RequestModel: "codex"},
+			{UUID: "custom-rule", Scenario: typ.ScenarioOpenAI, RequestModel: "custom"},
+		},
+	}
+
+	normalizeBuiltinRuleIdentity(c)
+
+	wants := []string{
+		RuleUUIDOpenAI,
+		RuleUIDAnthropic,
+		RuleUUIDCodex,
+		"custom-rule",
+	}
+	for i, want := range wants {
+		if got := c.Rules[i].UUID; got != want {
+			t.Errorf("rule %d UUID = %q, want %q", i, got, want)
+		}
+	}
+	if c.Rules[0].RequestModel != "legacy-openai" || c.Rules[1].Scenario != typ.ScenarioAnthropic {
+		t.Errorf("migration should preserve rule fields, got %+v", c.Rules[:2])
+	}
+
+	normalizeBuiltinRuleIdentity(c)
+	for i, want := range wants {
+		if got := c.Rules[i].UUID; got != want {
+			t.Errorf("second pass: rule %d UUID = %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestNormalizeBuiltinRuleIdentity_SkipsSimpleUUIDCollision(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDOpenAI, Scenario: typ.ScenarioOpenAI, RequestModel: "modern"},
+			{UUID: RuleUUIDBuiltinOpenAI, Scenario: typ.ScenarioOpenAI, RequestModel: "legacy"},
+		},
+	}
+
+	normalizeBuiltinRuleIdentity(c)
+
+	if c.Rules[0].UUID != RuleUUIDOpenAI {
+		t.Errorf("canonical rule UUID changed: %q", c.Rules[0].UUID)
+	}
+	if c.Rules[1].UUID != RuleUUIDBuiltinOpenAI {
+		t.Errorf("legacy rule should keep UUID on collision, got %q", c.Rules[1].UUID)
 	}
 }
 
@@ -365,7 +425,7 @@ func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
 	}
 }
 
-func TestMigrate20260610_OneTime_PreservesUserOff(t *testing.T) {
+func TestDefaultBuiltinRuleFlagsOnce_PreservesUserOff(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
@@ -373,7 +433,7 @@ func TestMigrate20260610_OneTime_PreservesUserOff(t *testing.T) {
 		},
 	}
 
-	migrate20260610(c)
+	defaultBuiltinRuleFlagsOnce(c)
 	if !c.Rules[0].Flags.ClaudeCodeCompat || !c.Rules[0].Flags.CleanHeader ||
 		c.Rules[0].Flags.SessionAffinity != defaultSessionAffinitySeconds {
 		t.Fatal("first run should seed the default flags on the CC rule")
@@ -387,7 +447,7 @@ func TestMigrate20260610_OneTime_PreservesUserOff(t *testing.T) {
 	c.Rules[0].Flags.CleanHeader = false
 	c.Rules[0].Flags.SessionAffinity = 0
 	c.Rules[1].Flags.SessionAffinity = 0
-	migrate20260610(c)
+	defaultBuiltinRuleFlagsOnce(c)
 	if c.Rules[0].Flags.ClaudeCodeCompat || c.Rules[0].Flags.CleanHeader ||
 		c.Rules[0].Flags.SessionAffinity != 0 || c.Rules[1].Flags.SessionAffinity != 0 {
 		t.Error("migration re-enabled user-disabled flags; one-time gate is broken")

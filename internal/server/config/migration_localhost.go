@@ -41,7 +41,7 @@ func migrate20260517(c *Config) {
 	if err != nil || homeDir == "" {
 		logrus.WithError(err).Warn("Migration 2026-05-17: skipped, cannot resolve home directory")
 		c.markMigrationCompleted("20260517")
-		_ = c.Save()
+		c.saveMigration()
 		return
 	}
 
@@ -63,7 +63,7 @@ func migrate20260517(c *Config) {
 	}
 
 	c.markMigrationCompleted("20260517")
-	_ = c.Save()
+	c.saveMigration()
 }
 
 // rewriteTinglyLoopback returns the rewritten URL and true if `rawURL` is an

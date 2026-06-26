@@ -64,13 +64,54 @@ func TestMigrationHelpers(t *testing.T) {
 
 	t.Run("referenceServicesFor matches in arg order", func(t *testing.T) {
 		// Both rule b (claude_code) and rule c (codex) have services; the first
-		// rule in c.Rules matching any requested scenario wins.
+		// requested scenario wins, then the first matching rule in config order.
 		got := c.referenceServicesFor(typ.ScenarioCodex, typ.ScenarioClaudeCode)
-		if len(got) != 1 || got[0].Provider != "p1" {
-			t.Fatalf("referenceServicesFor = %v, want services from rule b (p1)", got)
+		if len(got) != 1 || got[0].Provider != "p2" {
+			t.Fatalf("referenceServicesFor = %v, want services from rule c (p2)", got)
 		}
 		if c.referenceServicesFor(typ.ScenarioAnthropic) != nil {
 			t.Error("expected nil when no rule matches")
 		}
 	})
+}
+
+func TestSeedBuiltinRuleIfMissing(t *testing.T) {
+	c := &Config{}
+
+	newRule, ok := c.seedBuiltinRuleIfMissing(RuleUUIDBuiltinCodex, []*loadbalance.Service{svc("p1")})
+	if !ok {
+		t.Fatal("expected missing Codex rule to be seeded")
+	}
+	if newRule.UUID != RuleUUIDCodex {
+		t.Fatalf("seeded rule UUID = %q, want %q", newRule.UUID, RuleUUIDCodex)
+	}
+	if len(c.Rules) != 1 || c.Rules[0].UUID != RuleUUIDCodex {
+		t.Fatalf("config rules after seed = %+v", c.Rules)
+	}
+	if len(c.Rules[0].Services) != 1 || c.Rules[0].Services[0].Provider != "p1" {
+		t.Fatalf("seeded services = %+v", c.Rules[0].Services)
+	}
+
+	// The seeded rule must not alias the caller's slice header.
+	services := []*loadbalance.Service{svc("p2")}
+	newRule, ok = c.seedBuiltinRuleIfMissing(RuleUUIDBuiltinClaudeDesktopHaiku45, services)
+	if !ok {
+		t.Fatal("expected missing desktop haiku rule to be seeded")
+	}
+	services[0] = svc("changed")
+	seeded := c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45)
+	if seeded == nil || len(seeded.Services) != 1 || seeded.Services[0].Provider != "p2" {
+		t.Fatalf("seeded services should be cloned, got %+v (returned %+v)", seeded, newRule)
+	}
+
+	if _, ok := c.seedBuiltinRuleIfMissing(RuleUUIDBuiltinCodex, nil); ok {
+		t.Fatal("existing Codex rule should not be seeded twice")
+	}
+	if len(c.Rules) != 2 {
+		t.Fatalf("rule count after duplicate seed = %d, want 2", len(c.Rules))
+	}
+
+	if _, ok := c.seedBuiltinRuleIfMissing("unknown-template", nil); ok {
+		t.Fatal("unknown template should be a no-op")
+	}
 }
