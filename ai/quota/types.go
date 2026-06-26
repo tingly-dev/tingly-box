@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// ProviderType 供应商类型枚举
+// ProviderType provider type enumeration
 type ProviderType string
 
 const (
@@ -28,126 +28,126 @@ const (
 	ProviderTypeCodex      ProviderType = "codex"
 )
 
-// WindowType 窗口类型枚举
+// WindowType window type enumeration
 type WindowType string
 
 const (
-	WindowTypeSession    WindowType = "session"     // 会话配额（小时级）
-	WindowTypeDaily      WindowType = "daily"       // 日配额
-	WindowTypeWeekly     WindowType = "weekly"      // 周配额
-	WindowTypeMonthly    WindowType = "monthly"     // 月配额
-	WindowTypeCustom     WindowType = "custom"      // 自定义窗口
-	WindowTypeBalance    WindowType = "balance"     // 余额/积分
-	WindowTypeModel      WindowType = "model"       // 模型特定配额
-	WindowTypeCodeReview WindowType = "code_review" // 代码审查配额
+	WindowTypeSession    WindowType = "session"     // session quota (hourly)
+	WindowTypeDaily      WindowType = "daily"       // daily quota
+	WindowTypeWeekly     WindowType = "weekly"      // weekly quota
+	WindowTypeMonthly    WindowType = "monthly"     // monthly quota
+	WindowTypeCustom     WindowType = "custom"      // custom window
+	WindowTypeBalance    WindowType = "balance"     // balance/credits
+	WindowTypeModel      WindowType = "model"       // model-specific quota
+	WindowTypeCodeReview WindowType = "code_review" // code review quota
 )
 
-// UsageUnit 用量单位枚举
+// UsageUnit usage unit enumeration
 type UsageUnit string
 
 const (
-	UsageUnitTokens   UsageUnit = "tokens"   // Token 数量
-	UsageUnitRequests UsageUnit = "requests" // 请求次数
-	UsageUnitCredits  UsageUnit = "credits"  // 积分
-	UsageUnitCurrency UsageUnit = "currency" // 货币
-	UsageUnitPercent  UsageUnit = "percent"  // 百分比 (0-100)
+	UsageUnitTokens   UsageUnit = "tokens"   // token count
+	UsageUnitRequests UsageUnit = "requests" // request count
+	UsageUnitCredits  UsageUnit = "credits"  // credits
+	UsageUnitCurrency UsageUnit = "currency" // currency
+	UsageUnitPercent  UsageUnit = "percent"  // percentage (0-100)
 )
 
-// ProviderUsage 表示供应商配额快照
+// ProviderUsage represents a provider quota snapshot
 type ProviderUsage struct {
-	// 基础信息
-	ProviderUUID string       `json:"provider_uuid"` // 关联的 Provider UUID
-	ProviderName string       `json:"provider_name"` // 供应商名称
-	ProviderType ProviderType `json:"provider_type"` // 供应商类型
-	FetchedAt    time.Time    `json:"fetched_at"`    // 获取时间
-	ExpiresAt    time.Time    `json:"expires_at"`    // 数据过期时间
+	// Basic information
+	ProviderUUID string       `json:"provider_uuid"` // associated provider UUID
+	ProviderName string       `json:"provider_name"` // provider name
+	ProviderType ProviderType `json:"provider_type"` // provider type
+	FetchedAt    time.Time    `json:"fetched_at"`    // fetch time
+	ExpiresAt    time.Time    `json:"expires_at"`    // data expiration time
 
-	// 前端展示用的规范化配额窗口。Tier 越低越重要，展示越靠前。
+	// Normalized quota windows for frontend display. Lower tier values are more important and displayed first.
 	Windows []*UsageWindow `json:"windows,omitempty"`
 
-	// 费用信息（如月度费用）
+	// Cost information (e.g., monthly costs)
 	Cost *UsageCost `json:"cost,omitempty"`
 
-	// 账户信息（可选，用于显示用户身份）
+	// Account information (optional, for displaying user identity)
 	Account *UsageAccount `json:"account,omitempty"`
 
-	// 分组明细（如按模型、按区域等）
+	// Group breakdowns (e.g., by model, by region)
 	Breakdowns []*UsageBreakdown `json:"breakdowns,omitempty"`
 
-	// 错误信息（如果获取失败）
+	// Error information (if fetch failed)
 	LastError   string     `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 
-	// 原始响应数据（用于调试和复查）
+	// Raw response data (for debugging and review)
 	RawResponse string `json:"raw_response,omitempty"`
 }
 
-// UsageBreakdown 表示配额的分组明细（如按模型、按区域）
+// UsageBreakdown represents grouped quota breakdowns (e.g., by model, by region)
 type UsageBreakdown struct {
-	// 分组标识
-	Key   string `json:"key"`   // 分组键，如模型名称 "gpt-4"、区域 "us-east-1"
-	Label string `json:"label"` // 显示标签
-	Group string `json:"group"` // 分组类型，如 "model", "region", "tier"
+	// Group identifiers
+	Key   string `json:"key"`   // group key, e.g., model name "gpt-4", region "us-east-1"
+	Label string `json:"label"` // display label
+	Group string `json:"group"` // group type, e.g., "model", "region", "tier"
 
-	// 配额数据
-	Windows []*UsageWindow `json:"windows"` // 该分组的多维度配额窗口
+	// Quota data
+	Windows []*UsageWindow `json:"windows"` // multi-dimensional quota windows for this group
 
-	// 可选的元数据
+	// Optional metadata
 	Description string `json:"description,omitempty"`
 }
 
-// UsageWindow 表示一个配额窗口
+// UsageWindow represents a single quota window
 type UsageWindow struct {
-	// 展示标识与层级。Tier 越低越重要，展示越靠前。
+	// Display key and priority tier. Lower tier values are more important and displayed first.
 	Key  string `json:"key,omitempty"`
 	Tier int    `json:"tier,omitempty"`
 
-	// 窗口类型标识
+	// Window type identifier
 	Type WindowType `json:"type"` // session, weekly, monthly, daily, custom, balance
 
-	// 配额数据
-	Used        float64 `json:"used"`         // 已使用量
-	Limit       float64 `json:"limit"`        // 配额限制（0 表示无限制）
-	UsedPercent float64 `json:"used_percent"` // 使用百分比 (0-100)
+	// Quota data
+	Used        float64 `json:"used"`         // used amount
+	Limit       float64 `json:"limit"`        // quota limit (0 means unlimited)
+	UsedPercent float64 `json:"used_percent"` // usage percentage (0-100)
 
-	// 时间窗口
-	ResetsAt      *time.Time `json:"resets_at,omitempty"`      // 重置时间（如果已知）
-	WindowMinutes int        `json:"window_minutes,omitempty"` // 时间窗口大小（分钟）
+	// Time window
+	ResetsAt      *time.Time `json:"resets_at,omitempty"`      // reset time (if known)
+	WindowMinutes int        `json:"window_minutes,omitempty"` // time window size (minutes)
 
-	// 单位信息
+	// Unit information
 	Unit UsageUnit `json:"unit"` // tokens, requests, credits, usd
 
-	// 元数据
-	Label       string `json:"label"`       // 显示标签，如 "Session Quota"
-	Description string `json:"description"` // 描述信息
+	// Metadata
+	Label       string `json:"label"`       // display label, e.g., "Session Quota"
+	Description string `json:"description"` // description
 
-	// 限制状态（可选）
-	Allowed      *bool `json:"allowed,omitempty"`       // 是否允许请求
-	LimitReached *bool `json:"limit_reached,omitempty"` // 是否达到限制
+	// Limit status (optional)
+	Allowed      *bool `json:"allowed,omitempty"`       // whether requests are allowed
+	LimitReached *bool `json:"limit_reached,omitempty"` // whether limit is reached
 }
 
-// UsageCost 表示费用信息
+// UsageCost represents cost information
 type UsageCost struct {
-	Used         float64    `json:"used"`          // 已使用金额
-	Limit        float64    `json:"limit"`         // 预算限制（0 表示无限制）
-	CurrencyCode string     `json:"currency_code"` // 货币代码，如 USD
+	Used         float64    `json:"used"`          // amount used
+	Limit        float64    `json:"limit"`         // budget limit (0 means unlimited)
+	CurrencyCode string     `json:"currency_code"` // currency code, e.g., USD
 	ResetsAt     *time.Time `json:"resets_at,omitempty"`
-	Label        string     `json:"label"` // 显示标签
+	Label        string     `json:"label"` // display label
 }
 
-// UsageAccount 表示账户信息
+// UsageAccount represents account information
 type UsageAccount struct {
-	ID             string `json:"id"`              // 账户 ID
-	Name           string `json:"name"`            // 账户名称
-	Email          string `json:"email,omitempty"` // 账户邮箱
-	Tier           string `json:"tier,omitempty"`  // 账户层级
+	ID             string `json:"id"`              // account ID
+	Name           string `json:"name"`            // account name
+	Email          string `json:"email,omitempty"` // account email
+	Tier           string `json:"tier,omitempty"`  // account tier
 	OrganizationID string `json:"organization_id,omitempty"`
 
-	// 费用控制状态（可选）
-	SpendControlReached bool `json:"spend_control_reached,omitempty"` // 是否达到费用控制限制
+	// Spend control status (optional)
+	SpendControlReached bool `json:"spend_control_reached,omitempty"` // whether spend control limit is reached
 }
 
-// CalculateUsedPercent 计算使用百分比
+// CalculateUsedPercent calculates usage percentage
 func (w *UsageWindow) CalculateUsedPercent() float64 {
 	if w.Limit <= 0 {
 		return 0
@@ -210,12 +210,12 @@ func (p *ProviderUsage) AddWindow(key string, tier int, window *UsageWindow) *Us
 	return window
 }
 
-// IsExpired 检查配额数据是否过期
+// IsExpired checks if quota data is expired
 func (p *ProviderUsage) IsExpired() bool {
 	return time.Now().After(p.ExpiresAt)
 }
 
-// GetErrorStatus 获取错误状态
+// GetErrorStatus gets error status
 func (p *ProviderUsage) GetErrorStatus() ErrorStatus {
 	if p.LastError == "" {
 		return ErrorStatusOK
@@ -223,7 +223,7 @@ func (p *ProviderUsage) GetErrorStatus() ErrorStatus {
 	return ErrorStatusError
 }
 
-// ErrorStatus 错误状态
+// ErrorStatus error status
 type ErrorStatus string
 
 const (
@@ -231,26 +231,26 @@ const (
 	ErrorStatusError ErrorStatus = "error"
 )
 
-// ProviderUsageConfig 单个供应商的配额配置
+// ProviderUsageConfig single provider quota configuration
 type ProviderUsageConfig struct {
-	Enabled        bool   `json:"enabled"`         // 是否启用此供应商
-	Priority       int    `json:"priority"`        // 优先级（用于排序）
-	CustomEndpoint string `json:"custom_endpoint"` // 自定义 API 端点
-	FetcherType    string `json:"fetcher_type"`    // Fetcher 类型
+	Enabled        bool   `json:"enabled"`         // whether this provider is enabled
+	Priority       int    `json:"priority"`        // priority (for sorting)
+	CustomEndpoint string `json:"custom_endpoint"` // custom API endpoint
+	FetcherType    string `json:"fetcher_type"`    // Fetcher type
 }
 
-// Config 配额获取配置
+// Config quota fetch configuration
 type Config struct {
-	// 全局设置
-	Enabled         bool                           `json:"enabled"`          // 是否启用配额追踪
-	RefreshInterval time.Duration                  `json:"refresh_interval"` // 刷新间隔（默认 5 分钟）
-	CacheTTL        time.Duration                  `json:"cache_ttl"`        // 缓存有效期（默认 10 分钟）
-	RetryOnFailure  bool                           `json:"retry_on_failure"` // 失败时是否重试
-	MaxRetries      int                            `json:"max_retries"`      // 最大重试次数
-	Providers       map[string]ProviderUsageConfig `json:"providers"`        // 供应商特定配置
+	// Global settings
+	Enabled         bool                           `json:"enabled"`          // whether quota tracking is enabled
+	RefreshInterval time.Duration                  `json:"refresh_interval"` // refresh interval (default 5 minutes)
+	CacheTTL        time.Duration                  `json:"cache_ttl"`        // cache validity period (default 10 minutes)
+	RetryOnFailure  bool                           `json:"retry_on_failure"` // whether to retry on failure
+	MaxRetries      int                            `json:"max_retries"`      // maximum retry attempts
+	Providers       map[string]ProviderUsageConfig `json:"providers"`        // provider-specific configuration
 }
 
-// DefaultConfig 返回默认配置
+// DefaultConfig returns default configuration
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled:         true,
@@ -262,7 +262,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// NullableFloat64 用于 GORM 处理可为空的 float64
+// NullableFloat64 for GORM to handle nullable float64
 type NullableFloat64 struct {
 	Float64 float64
 	Valid   bool
@@ -320,7 +320,7 @@ func (n *NullableFloat64) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// NullableTime 用于 GORM 处理可为空的 time.Time
+// NullableTime for GORM to handle nullable time.Time
 type NullableTime struct {
 	Time  time.Time
 	Valid bool
