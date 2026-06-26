@@ -21,8 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -r tingly && \
     useradd -r -g tingly tingly
 
-# Update npm to latest version (as root)
-RUN npm install -g npm@latest
+# update modules, spec version to confirm security
+RUN npm install -g npm@10.8.2
+RUN npm install -g pm2@7.0.1
 
 # Install tingly-box globally during build (as root)
 RUN npm install -g tingly-box@${TINGLY_VERSION}
@@ -50,12 +51,14 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Default command: run tingly-box
 CMD ["sh", "-c", "echo '======================================' && \
-     echo '  Tingly Box is starting up...' && \
-     echo '  Installing version:' ${TINGLY_VERSION} && \
-     echo '  Web UI will be available at:' && \
-     echo '  http://localhost:'${TINGLY_PORT}'/dashboard?user_auth_token=tingly-box-user-token' && \
-     echo '======================================' && \
-     exec tingly-box start --host ${TINGLY_HOST} --port ${TINGLY_PORT} ${TINGLY_DEBUG:+--verbose --debug}"]
+    echo '  Tingly Box is starting up...' && \
+    echo '  Installing version:' ${TINGLY_VERSION} && \
+    echo '  Web UI will be available at:' && \
+    echo '  http://localhost:'${TINGLY_PORT}'/dashboard?user_auth_token=tingly-box-user-token' && \
+    echo '======================================' && \
+    pm2 start \"tingly-box restart --host ${TINGLY_HOST} --port ${TINGLY_PORT} ${TINGLY_DEBUG:+--verbose --debug}\" --name tingly-box && \
+    exec pm2 logs --raw"]
+
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]
