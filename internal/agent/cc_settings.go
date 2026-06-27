@@ -32,6 +32,10 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		"TINGLY_API_URL":                           baseURL,
 	}
 
+	// Track whether any resolved rule has the 1M context flag so we can
+	// mirror the frontend quick-config's auto-compact window adjustment.
+	context1M := false
+
 	ruleModel := func(fallback string, uuids ...string) string {
 		if cfg != nil {
 			for _, uuid := range uuids {
@@ -40,8 +44,11 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 						// Mirror the frontend quick-config: a rule with the 1M context
 						// flag advertises itself to Claude Code via the [1m] suffix (the
 						// client strips it back and sends the context-1m beta header).
-						if r.Flags.Context1M && !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
-							m += serverconfig.Context1MSuffix
+						if r.Flags.Context1M {
+							context1M = true
+							if !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
+								m += serverconfig.Context1MSuffix
+							}
 						}
 						return m
 					}
@@ -75,6 +82,13 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
 		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
 		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
+	}
+
+	// Mirror the frontend quick-config: when any resolved model rule has the
+	// 1M context flag, adjust the auto-compact window to match so Claude Code
+	// doesn't compact prematurely.
+	if context1M {
+		env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "1000000"
 	}
 
 	return env

@@ -80,6 +80,36 @@ func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 	}
 }
 
+func TestGenerateCCEnv_Profile_Context1MAutoCompactWindow(t *testing.T) {
+	// When any rule in the profile has Context1M=true, the auto-compact
+	// window must be adjusted to 1M so Claude Code doesn't compact prematurely.
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
+			Flags: typ.RuleFlags{Context1M: true}, Active: true},
+	}}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", false, true)
+
+	if got := env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"]; got != "1000000" {
+		t.Errorf("CLAUDE_CODE_AUTO_COMPACT_WINDOW = %q, want %q", got, "1000000")
+	}
+}
+
+func TestGenerateCCEnv_Profile_No1M_NoAutoCompactWindow(t *testing.T) {
+	// Without the 1M flag, the env should NOT include the auto-compact
+	// window override — let Claude Code use its own default.
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
+			Flags: typ.RuleFlags{Context1M: false}, Active: true},
+	}}
+
+	env := GenerateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", false, true)
+
+	if _, ok := env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"]; ok {
+		t.Errorf("CLAUDE_CODE_AUTO_COMPACT_WINDOW should not be set without Context1M, got %q", env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"])
+	}
+}
+
 func TestGenerateCCEnv_MainScenario_ResolvesModernBuiltins(t *testing.T) {
 	cfg := &serverconfig.Config{Rules: []typ.Rule{
 		{UUID: serverconfig.RuleUUIDCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true},
