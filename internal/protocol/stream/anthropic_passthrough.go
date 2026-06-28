@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -79,10 +80,10 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 					modified, _ := json.Marshal(eventMap)
 					hc.GinContext.SSEvent(evt.Type, string(modified))
 				} else {
-					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+					hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
 				}
 			} else {
-				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
 			}
 			hc.GinContext.Writer.Flush()
 			return nil
@@ -185,10 +186,10 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 					modified, _ := json.Marshal(eventMap)
 					hc.GinContext.SSEvent(evt.Type, string(modified))
 				} else {
-					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+					hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
 				}
 			} else {
-				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
 			}
 			hc.GinContext.Writer.Flush()
 			return nil

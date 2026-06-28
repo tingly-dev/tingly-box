@@ -357,8 +357,9 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 
 		evt := stream.Current()
 
-		// Marshal event using RawJSON() to avoid serializing empty union fields
-		eventRaw := evt.RawJSON()
+		// Marshal event using RawJSON() to avoid serializing empty union fields.
+		// strings.Clone breaks the gjson backing reference to the SSE buffer.
+		eventRaw := strings.Clone(evt.RawJSON())
 		eventType := evt.Type
 
 		// Accumulate usage from the raw JSON (SDK struct fields may be zero for
