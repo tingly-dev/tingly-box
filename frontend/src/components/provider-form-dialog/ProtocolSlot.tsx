@@ -15,7 +15,6 @@ interface ProtocolSlotProps {
     onUrlChange: (url: string) => void;
     onUrlBlur: () => void;
     onToggle: () => void;
-    toggleLocked?: boolean;
     helperText?: string;
     urlError?: boolean;
 }
@@ -24,7 +23,6 @@ interface BrandDef {
     icon: React.ReactNode;
     labelKey: string;
     defaultLabel: string;
-    placeholder: string;
 }
 
 const BRAND: Record<ProtocolKind, BrandDef> = {
@@ -32,13 +30,11 @@ const BRAND: Record<ProtocolKind, BrandDef> = {
         icon: <OpenAI size={18}/>,
         labelKey: 'providerDialog.protocol.openAILabel',
         defaultLabel: 'OpenAI Compatible',
-        placeholder: 'https://api.openai.com/v1',
     },
     anthropic: {
         icon: <Anthropic size={18}/>,
         labelKey: 'providerDialog.protocol.anthropicLabel',
         defaultLabel: 'Anthropic Compatible',
-        placeholder: 'https://api.anthropic.com',
     },
 };
 
@@ -47,17 +43,12 @@ const DEFAULT_HELPERS: Record<ProtocolKind, string> = {
     anthropic: 'For Anthropic-compatible AI providers, commonly used with Claude Code',
 };
 
-/**
- * A protocol slot card — brand icon, label, helper text, checkbox, and
- * an inline URL input when enabled. The entire card is one cohesive unit.
- */
 const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
     kind,
     slot,
     onUrlChange,
     onUrlBlur,
     onToggle,
-    toggleLocked,
     helperText,
     urlError,
 }) => {
@@ -72,18 +63,13 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
                 borderRadius: 1,
                 px: 1.5,
                 py: 1,
-                cursor: toggleLocked ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 transition: 'all 0.15s',
                 bgcolor: enabled ? 'action.selected' : 'transparent',
-                '&:hover': {
-                    bgcolor: toggleLocked
-                        ? (enabled ? 'action.selected' : 'transparent')
-                        : (enabled ? 'action.selected' : 'action.hover'),
-                },
+                '&:hover': { bgcolor: enabled ? 'action.selected' : 'action.hover' },
             }}
-            onClick={() => { if (!toggleLocked) onToggle(); }}
+            onClick={onToggle}
         >
-            {/* Header: icon + label + checkbox */}
             <Box sx={{display: 'flex', alignItems: 'flex-start', gap: 1}}>
                 <Box sx={{mt: 0.2, flexShrink: 0}}>{brand.icon}</Box>
                 <Box sx={{flex: 1, minWidth: 0}}>
@@ -101,19 +87,17 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
                 <Checkbox
                     size="small"
                     checked={enabled}
-                    disabled={toggleLocked}
                     sx={{p: 0, mt: -0.5, flexShrink: 0}}
                     onClick={(e) => e.stopPropagation()}
                     onChange={onToggle}
                 />
             </Box>
 
-            {/* Inline URL input — only when enabled */}
             {enabled && (
                 <InputBase
                     fullWidth
                     size="small"
-                    placeholder={brand.placeholder}
+                    placeholder={t('providerDialog.provider.placeholder', {defaultValue: 'Base URL'})}
                     value={slot.url}
                     onChange={(e) => onUrlChange(e.target.value)}
                     onBlur={onUrlBlur}

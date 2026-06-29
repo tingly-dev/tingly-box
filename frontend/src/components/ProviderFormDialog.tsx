@@ -1,4 +1,4 @@
-import {ArrowBack, Close, ExpandMore, InfoOutlined} from '@/components/icons';
+import {ArrowBack, Close, ExpandMore} from '@/components/icons';
 import {
     Accordion,
     AccordionDetails,
@@ -18,22 +18,18 @@ import {
     Switch,
     TextField,
     Typography,
-    Link,
-    alpha,
 } from '@mui/material';
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
 import ApiKeyField from '@/components/provider-form-dialog/ApiKeyField';
 import KeyNameField from '@/components/provider-form-dialog/KeyNameField';
 import ProtocolSlot, {type ProtocolSlotData, type ProtocolKind} from '@/components/provider-form-dialog/ProtocolSlot';
-import ProviderAutocomplete from '@/components/provider-form-dialog/ProviderAutocomplete';
 import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
 import VerificationResultPanel from '@/components/provider-form-dialog/VerificationResultPanel';
 import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
 import ProviderIcon from '@/components/ProviderIcon';
-import RegionBadge from '@/components/RegionBadge';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -104,7 +100,6 @@ const ProviderFormDialog = ({
     const [selectedProvider, setSelectedProvider] = useState<UniqueProvider | null>(null);
     const [nameIsAutoFilled, setNameIsAutoFilled] = useState(true);
     const [showNameField, setShowNameField] = useState(mode === 'edit');
-    const [providerInputValue, setProviderInputValue] = useState('');
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
     const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -114,32 +109,11 @@ const ProviderFormDialog = ({
     const [slotOpenAI, setSlotOpenAI] = useState<ProtocolSlotData>({url: '', enabled: true});
     const [slotAnthropic, setSlotAnthropic] = useState<ProtocolSlotData>({url: '', enabled: false});
 
-    // Track which slots were enabled when the dialog opened (edit mode)
-    const initialSlotsRef = useRef<{openAI: ProtocolSlotData; anthropic: ProtocolSlotData}>({
-        openAI: {url: '', enabled: true},
-        anthropic: {url: '', enabled: false},
-    });
-
     const allProviders = useProviderTemplates();
 
     // Stable onChange ref so effects/handlers don't depend on it.
     const onChangeRef = useRef(onChange);
     useEffect(() => { onChangeRef.current = onChange; });
-
-    // ── URL candidate matching (hostname only — no auto-select) ──
-    const urlCandidates = useMemo(() => {
-        const activeUrl = slotOpenAI.url || data.apiBase || providerInputValue;
-        if (!activeUrl) return [];
-        let hostname: string;
-        try { hostname = new URL(activeUrl).hostname; } catch { return []; }
-        if (!hostname) return [];
-        return allProviders.filter(p => {
-            const ou = (p.baseUrlOpenAI || '').toLowerCase();
-            const au = (p.baseUrlAnthropic || '').toLowerCase();
-            try { return new URL(ou).hostname === hostname || new URL(au).hostname === hostname; } catch { return false; }
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [slotOpenAI.url, data.apiBase, providerInputValue, allProviders]);
 
     // ── Fetch global proxy on mount ───────────────────────────────
     useEffect(() => {
@@ -170,7 +144,6 @@ const ProviderFormDialog = ({
         };
         setSlotOpenAI(initOpenAI);
         setSlotAnthropic(initAnthropic);
-        initialSlotsRef.current = {openAI: {...initOpenAI}, anthropic: {...initAnthropic}};
 
         if (mode === 'edit') {
             // Edit mode: prefer exact match by ID, fall back to URL match.
@@ -182,7 +155,6 @@ const ProviderFormDialog = ({
                          (!hasDualOpenAI && !hasDualAnthropic && (p.baseUrlOpenAI === data.apiBase || p.baseUrlAnthropic === data.apiBase))
                 ) || null;
             setSelectedProvider(matchingProvider);
-            setProviderInputValue(matchingProvider ? matchingProvider.alias || matchingProvider.name : data.apiBase || '');
         } else {
             // Add mode: prefer exact match by ID, fall back to URL match.
             const matchingProvider =
@@ -194,7 +166,6 @@ const ProviderFormDialog = ({
                 ) || null;
             setSelectedProvider(matchingProvider);
             if (matchingProvider) {
-                setProviderInputValue(matchingProvider.alias || matchingProvider.name);
                 // Fill slots from template
                 if (matchingProvider.baseUrlOpenAI) {
                     setSlotOpenAI({url: matchingProvider.baseUrlOpenAI, enabled: true});
@@ -202,8 +173,6 @@ const ProviderFormDialog = ({
                 if (matchingProvider.baseUrlAnthropic) {
                     setSlotAnthropic({url: matchingProvider.baseUrlAnthropic, enabled: true});
                 }
-            } else if (data.apiBase) {
-                setProviderInputValue(data.apiBase);
             }
         }
 
@@ -261,10 +230,6 @@ const ProviderFormDialog = ({
     const commitAnthropic = () => commitProtocolState(slotOpenAI, slotAnthropic);
 
     const toggleSlot = (kind: ProtocolKind) => {
-        // Guard: at least one protocol must remain enabled
-        if (kind === 'openai' && slotOpenAI.enabled && !slotAnthropic.enabled) return;
-        if (kind === 'anthropic' && slotAnthropic.enabled && !slotOpenAI.enabled) return;
-
         if (kind === 'anthropic') {
             const next = {...slotAnthropic, enabled: !slotAnthropic.enabled};
             if (!next.enabled) next.url = '';
@@ -279,77 +244,21 @@ const ProviderFormDialog = ({
         setVerificationResult(null);
     };
 
-    // ── Provider selection (explicit click only) ──────────────────
-    const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
-        setVerificationResult(null);
-        setBaseUrlError(false);
-
-        if (typeof newValue === 'string') {
-            // Free-typed value — not a selection
-            setSelectedProvider(null);
-            setProviderInputValue(newValue);
-            return;
-        }
-
-        if (newValue) {
-            setSelectedProvider(newValue);
-            const displayName = newValue.alias || newValue.name;
-            setProviderInputValue(displayName);
-
-            // Fill protocol slots from template
-            const nextOpenAI: ProtocolSlotData = {
-                url: newValue.baseUrlOpenAI || '',
-                enabled: !!newValue.baseUrlOpenAI,
-            };
-            const nextAnthropic: ProtocolSlotData = {
-                url: newValue.baseUrlAnthropic || '',
-                enabled: !!newValue.baseUrlAnthropic,
-            };
-            setSlotOpenAI(nextOpenAI);
-            setSlotAnthropic(nextAnthropic);
-            commitProtocolState(nextOpenAI, nextAnthropic);
-
-            onChangeRef.current('providerBaseUrls', {
-                openai: newValue.baseUrlOpenAI,
-                anthropic: newValue.baseUrlAnthropic,
-            });
-
-            if (nameIsAutoFilled || !data.name) {
-                onChangeRef.current('name', displayName);
-                setNameIsAutoFilled(true);
-            }
-            return;
-        }
-
-        // Cleared
+    const clearProvider = () => {
         setSelectedProvider(null);
-        setProviderInputValue('');
-    };
-
-    const handleProviderInputChange = (_event: React.SyntheticEvent, newValue: string) => {
-        setProviderInputValue(newValue);
-        if (newValue.trim()) setBaseUrlError(false);
-        if (selectedProvider && newValue !== (selectedProvider.alias || selectedProvider.name)) {
-            setSelectedProvider(null);
-        }
-    };
-
-    const handleProviderInputBlur = () => {
-        if (!selectedProvider && data.apiBase !== providerInputValue) {
-            onChangeRef.current('apiBase', providerInputValue);
-        }
+        setVerificationResult(null);
     };
 
     // ── Name helpers ──────────────────────────────────────────────
     const computeAutoName = useCallback((): string => {
         if (selectedProvider) return selectedProvider.alias || selectedProvider.name;
-        const raw = slotOpenAI.url || slotAnthropic.url || providerInputValue || '';
+        const raw = slotOpenAI.url || slotAnthropic.url || '';
         try {
             const host = new URL(raw).hostname;
             if (host) return host;
         } catch { /* not a URL */ }
         return t('providerDialog.keyName.fallback', {defaultValue: 'Custom Provider'});
-    }, [selectedProvider, slotOpenAI.url, slotAnthropic.url, providerInputValue, t]);
+    }, [selectedProvider, slotOpenAI.url, slotAnthropic.url, t]);
 
     const ensureName = (): string => {
         if (data.name && data.name.trim()) return data.name;
@@ -479,12 +388,6 @@ const ProviderFormDialog = ({
     // ── Derived ───────────────────────────────────────────────────
     const hasAnyProtocol = (slotOpenAI.enabled && slotOpenAI.url.trim()) ||
                            (slotAnthropic.enabled && slotAnthropic.url.trim());
-    const isDual = slotOpenAI.enabled && slotAnthropic.enabled;
-    const wasDual = initialSlotsRef.current.openAI.enabled && initialSlotsRef.current.anthropic.enabled;
-
-    // ── URL candidate hint ────────────────────────────────────────
-    const showUrlCandidates = !selectedProvider && urlCandidates.length > 0 &&
-        (slotOpenAI.url.trim() || slotAnthropic.url.trim() || providerInputValue.trim());
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
@@ -509,69 +412,14 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        {/* ── Provider / URL input ──────────────── */}
-                        <ProviderAutocomplete
-                            options={allProviders}
-                            value={selectedProvider}
-                            inputValue={providerInputValue}
-                            onChange={handleProviderSelect}
-                            onInputChange={handleProviderInputChange}
-                            onBlur={handleProviderInputBlur}
-                            required
-                            error={baseUrlError && !hasAnyProtocol}
-                            helperText={baseUrlError && !hasAnyProtocol
-                                ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'})
-                                : undefined}
-                        />
-
-                        {/* ── URL candidate disambiguation ─────── */}
-                        {showUrlCandidates && (
-                            <Box
-                                sx={{
-                                    px: 1.5, py: 1,
-                                    borderRadius: 1,
-                                    bgcolor: (theme) => alpha(theme.palette.info.main, 0.06),
-                                    border: 1, borderColor: 'divider',
-                                }}
-                            >
-                                <Stack direction="row" spacing={1} alignItems="flex-start">
-                                    <InfoOutlined sx={{fontSize: 16, mt: 0.2, color: 'info.main'}}/>
-                                    <Box sx={{flex: 1}}>
-                                        <Typography variant="caption" fontWeight={600} sx={{display: 'block', mb: 0.75}}>
-                                            {t('providerDialog.candidates.title', {
-                                                defaultValue: 'Matching providers — click to fill URLs',
-                                            })}
-                                        </Typography>
-                                        <Stack spacing={0.5}>
-                                            {urlCandidates.slice(0, 5).map((p) => (
-                                                <Link
-                                                    key={p.id}
-                                                    component="button"
-                                                    type="button"
-                                                    variant="caption"
-                                                    underline="hover"
-                                                    sx={{textAlign: 'left', display: 'flex', alignItems: 'center', gap: 1}}
-                                                    onClick={() => handleProviderSelect(p)}
-                                                >
-                                                    <ProviderIcon identifier={p.icon || p.id} size={16}/>
-                                                    {p.alias || p.name}
-                                                    <RegionBadge region={p.region || 'global'} size="small"/>
-                                                </Link>
-                                            ))}
-                                        </Stack>
-                                    </Box>
-                                </Stack>
-                            </Box>
-                        )}
-
-                        {/* ── Selected provider confirmation ───── */}
+                        {/* ── Selected provider (from picker) ──────── */}
                         {selectedProvider && (
                             <Chip
                                 icon={<ProviderIcon identifier={selectedProvider.icon || selectedProvider.id} size={16}/>}
                                 label={selectedProvider.alias || selectedProvider.name}
                                 size="small"
                                 variant="outlined"
-                                onDelete={() => handleProviderSelect(null)}
+                                onDelete={clearProvider}
                             />
                         )}
 
@@ -585,7 +433,6 @@ const ProviderFormDialog = ({
                                     kind="openai"
                                     slot={slotOpenAI}
                                     onToggle={() => toggleSlot('openai')}
-                                    toggleLocked={slotOpenAI.enabled && !slotAnthropic.enabled}
                                     onUrlChange={updateOpenAIUrl}
                                     onUrlBlur={commitOpenAI}
                                     urlError={baseUrlError && !slotOpenAI.url.trim() && !slotAnthropic.url.trim()}
@@ -599,7 +446,6 @@ const ProviderFormDialog = ({
                                     kind="anthropic"
                                     slot={slotAnthropic}
                                     onToggle={() => toggleSlot('anthropic')}
-                                    toggleLocked={slotAnthropic.enabled && !slotOpenAI.enabled}
                                     onUrlChange={updateAnthropicUrl}
                                     onUrlBlur={commitAnthropic}
                                     urlError={baseUrlError && !slotAnthropic.url.trim() && !slotOpenAI.url.trim()}
