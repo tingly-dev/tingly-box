@@ -104,3 +104,21 @@ var ccProfileTiers = map[string]bool{
 	"opus":     true,
 	"subagent": true,
 }
+
+var claudeCodeUnifiedRuleUUIDs = map[string]bool{
+	RuleUUIDCC:        true,
+	RuleUUIDBuiltinCC: true,
+}
+
+var claudeCodeSeparateRuleUUIDs = map[string]bool{
+	RuleUUIDCCDefault:         true,
+	RuleUUIDCCHaiku:           true,
+	RuleUUIDCCSonnet:          true,
+	RuleUUIDCCOpus:            true,
+	RuleUUIDCCSubagent:        true,
+	RuleUUIDBuiltinCCDefault:  true,
+	RuleUUIDBuiltinCCHaiku:    true,
+	RuleUUIDBuiltinCCSonnet:   true,
+	RuleUUIDBuiltinCCOpus:     true,
+	RuleUUIDBuiltinCCSubagent: true,
+}

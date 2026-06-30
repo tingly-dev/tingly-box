@@ -82,12 +82,12 @@ func init() {
 			Flags:  typ.RuleFlags{SessionAffinity: defaultSessionAffinitySeconds},
 			Active: true,
 		},
-		ccRule(RuleUUIDCC, "tingly/cc", "Default proxy rule for Claude Code"),
-		ccRule(RuleUUIDCCHaiku, "tingly/cc-haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality"),
-		ccRule(RuleUUIDCCSonnet, "tingly/cc-sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active."),
-		ccRule(RuleUUIDCCOpus, "tingly/cc-opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active."),
-		ccRule(RuleUUIDCCDefault, "tingly/cc-default", "Claude Code - Default model - for general task"),
-		ccRule(RuleUUIDCCSubagent, "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents"),
+		ccRule(RuleUUIDCC, "tingly/cc", "Default proxy rule for Claude Code", true),
+		ccRule(RuleUUIDCCHaiku, "tingly/cc-haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality", false),
+		ccRule(RuleUUIDCCSonnet, "tingly/cc-sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.", false),
+		ccRule(RuleUUIDCCOpus, "tingly/cc-opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.", false),
+		ccRule(RuleUUIDCCDefault, "tingly/cc-default", "Claude Code - Default model - for general task", false),
+		ccRule(RuleUUIDCCSubagent, "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents", false),
 		{
 			UUID:          RuleUUIDOpenCode,
 			Scenario:      typ.ScenarioOpenCode,
@@ -132,14 +132,14 @@ func cdRule(uuid, requestModel, description string) typ.Rule {
 }
 
 // ccRule builds a built-in Claude Code rule with the shared defaults: an empty
-// service list, the default adaptive load-balancing tactic, Active, and the
+// service list, the default adaptive load-balancing tactic, and the
 // claude_code_compat + clean_header + session_affinity flags on. Claude Code
 // emits mid-conversation system-role messages that third-party
 // Anthropic-compatible providers reject (ClaudeCodeCompat), and injects
 // x-anthropic-billing-header blocks into system messages that should never leak
 // to external providers (CleanHeader); the 30-min SessionAffinity improves
 // cache hit rate across a coding session.
-func ccRule(uuid, requestModel, description string) typ.Rule {
+func ccRule(uuid, requestModel, description string, active bool) typ.Rule {
 	return typ.Rule{
 		UUID:         uuid,
 		Scenario:     typ.ScenarioClaudeCode,
@@ -151,6 +151,6 @@ func ccRule(uuid, requestModel, description string) typ.Rule {
 			Params: typ.DefaultAdaptiveParams(),
 		},
 		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
-		Active: true,
+		Active: active,
 	}
 }

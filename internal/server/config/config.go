@@ -1380,13 +1380,46 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
 			c.Scenarios[i] = config
+			c.syncClaudeCodeRuleModeLocked(config)
 			return c.Save()
 		}
 	}
 
 	// Add new scenario config
 	c.Scenarios = append(c.Scenarios, config)
+	c.syncClaudeCodeRuleModeLocked(config)
 	return c.Save()
+}
+
+func (c *Config) syncClaudeCodeRuleModeLocked(config typ.ScenarioConfig) {
+	if config.Scenario != typ.ScenarioClaudeCode {
+		return
+	}
+
+	flags := config.GetDefaultFlags()
+	if flags.Separate {
+		c.setClaudeCodeModeRulesActiveLocked(false, true)
+		return
+	}
+	if flags.Unified {
+		c.setClaudeCodeModeRulesActiveLocked(true, false)
+	}
+}
+
+func (c *Config) setClaudeCodeModeRulesActiveLocked(unifiedActive, separateActive bool) {
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if !rule.GetScenario().Is(typ.ScenarioClaudeCode) {
+			continue
+		}
+		if claudeCodeUnifiedRuleUUIDs[rule.UUID] {
+			rule.Active = unifiedActive
+			continue
+		}
+		if claudeCodeSeparateRuleUUIDs[rule.UUID] {
+			rule.Active = separateActive
+		}
+	}
 }
 
 // --- Profile CRUD ---
@@ -1750,8 +1783,18 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	switch flagName {
 	case FlagUnified:
 		config.Flags.Unified = value
+		if scenario == typ.ScenarioClaudeCode && value {
+			config.Flags.Separate = false
+			config.Flags.Smart = false
+			c.setClaudeCodeModeRulesActiveLocked(true, false)
+		}
 	case FlagSeparate:
 		config.Flags.Separate = value
+		if scenario == typ.ScenarioClaudeCode && value {
+			config.Flags.Unified = false
+			config.Flags.Smart = false
+			c.setClaudeCodeModeRulesActiveLocked(false, true)
+		}
 	case FlagSmart:
 		config.Flags.Smart = value
 	case FlagSmartCompact:
