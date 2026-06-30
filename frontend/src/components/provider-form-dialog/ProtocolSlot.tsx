@@ -1,5 +1,5 @@
 import {OpenAI, Anthropic} from '../BrandIcons';
-import {Box, Checkbox, InputBase, Typography} from '@mui/material';
+import {Box, Checkbox, InputBase, Link, Stack, Tooltip, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 
 export interface ProtocolSlotData {
@@ -17,6 +17,8 @@ interface ProtocolSlotProps {
     onToggle: () => void;
     helperText?: string;
     urlError?: boolean;
+    /** Persistent /v1 suffix hint — shown above the URL field when true. */
+    v1Hint?: { show: boolean; onApply: () => void };
 }
 
 interface BrandDef {
@@ -51,6 +53,7 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
     onToggle,
     helperText,
     urlError,
+    v1Hint,
 }) => {
     const {t} = useTranslation();
     const brand = BRAND[kind];
@@ -94,33 +97,84 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
             </Box>
 
             {enabled && (
-                <InputBase
-                    fullWidth
-                    size="small"
-                    placeholder={t('providerDialog.provider.placeholder', {defaultValue: 'Base URL'})}
-                    value={slot.url}
-                    onChange={(e) => onUrlChange(e.target.value)}
-                    onBlur={onUrlBlur}
-                    error={urlError}
-                    onClick={(e) => e.stopPropagation()}
-                    sx={{
-                        mt: 1.25,
-                        px: 1.5,
-                        py: 0.75,
-                        fontSize: '0.8rem',
-                        fontFamily: 'monospace',
-                        color: 'primary.main',
-                        bgcolor: 'background.default',
-                        borderRadius: 0.75,
-                        border: urlError ? 1 : '1px solid transparent',
-                        borderColor: urlError ? 'error.main' : 'divider',
-                        '&:hover': {borderColor: 'text.disabled'},
-                        '&:focus-within': {
-                            borderColor: 'primary.main',
-                            boxShadow: '0 0 0 1px rgba(25,118,210,0.12)',
+                <Tooltip
+                    open={v1Hint?.show ?? false}
+                    title={
+                        <Stack spacing={1} sx={{maxWidth: 160}}>
+                            <Typography variant="caption" color="text.secondary" sx={{lineHeight: 1.4}}>
+                                {t('providerDialog.v1Hint.message', {
+                                    defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
+                                })}
+                            </Typography>
+                            <Link
+                                component="button"
+                                type="button"
+                                variant="caption"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    v1Hint?.onApply();
+                                }}
+                                underline="always"
+                                sx={{fontWeight: 600, whiteSpace: 'nowrap', alignSelf: 'flex-start'}}
+                            >
+                                {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
+                            </Link>
+                        </Stack>
+                    }
+                    placement="left"
+                    arrow
+                    disableFocusListener
+                    disableHoverListener
+                    disableTouchListener
+                    slotProps={{
+                        tooltip: {
+                            sx: {
+                                bgcolor: 'background.paper',
+                                color: 'text.primary',
+                                border: 1,
+                                borderColor: 'divider',
+                                boxShadow: 2,
+                                px: 1.5,
+                                py: 1,
+                            },
+                        },
+                        arrow: {
+                            sx: {
+                                fontSize: 16,
+                                color: 'background.paper',
+                                '&::before': {border: 1, borderColor: 'divider'},
+                            },
                         },
                     }}
-                />
+                >
+                    <InputBase
+                        fullWidth
+                        size="small"
+                        placeholder={t('providerDialog.provider.placeholder', {defaultValue: 'Base URL'})}
+                        value={slot.url}
+                        onChange={(e) => onUrlChange(e.target.value)}
+                        onBlur={onUrlBlur}
+                        error={urlError}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                            mt: 1.25,
+                            px: 1.5,
+                            py: 0.75,
+                            fontSize: '0.8rem',
+                            fontFamily: 'monospace',
+                            color: 'primary.main',
+                            bgcolor: 'background.default',
+                            borderRadius: 0.75,
+                            border: urlError ? 1 : '1px solid transparent',
+                            borderColor: urlError ? 'error.main' : 'divider',
+                            '&:hover': {borderColor: 'text.disabled'},
+                            '&:focus-within': {
+                                borderColor: 'primary.main',
+                                boxShadow: '0 0 0 1px rgba(25,118,210,0.12)',
+                            },
+                        }}
+                    />
+                </Tooltip>
             )}
         </Box>
     );

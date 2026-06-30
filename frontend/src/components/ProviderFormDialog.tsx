@@ -19,7 +19,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
@@ -30,6 +30,7 @@ import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
 import VerificationResultPanel from '@/components/provider-form-dialog/VerificationResultPanel';
 import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
 import ProviderIcon from '@/components/ProviderIcon';
+import RegionBadge from '@/components/RegionBadge';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -122,6 +123,53 @@ const ProviderFormDialog = ({
         });
     }, []);
 
+    // ── URL → provider suggestions ──────────────────────────────────
+    const urlCandidates = useMemo(() => {
+        if (selectedProvider) return []; // already selected, no need to suggest
+        const activeUrl = slotOpenAI.url.trim() || slotAnthropic.url.trim();
+        if (!activeUrl) return [];
+        let hostname: string;
+        try { hostname = new URL(activeUrl).hostname; } catch { return []; }
+        if (!hostname) return [];
+        const deduped = new Map<string, UniqueProvider>();
+        allProviders.forEach(p => {
+            if (deduped.has(p.id)) return;
+            const ou = (p.baseUrlOpenAI || '').toLowerCase();
+            const au = (p.baseUrlAnthropic || '').toLowerCase();
+            try {
+                if (new URL(ou).hostname === hostname || new URL(au).hostname === hostname) {
+                    deduped.set(p.id, p);
+                }
+            } catch { /* skip malformed URLs */ }
+        });
+        return Array.from(deduped.values()).slice(0, 5);
+    }, [slotOpenAI.url, slotAnthropic.url, selectedProvider, allProviders]);
+
+    const handleSelectProvider = (provider: UniqueProvider) => {
+        setSelectedProvider(provider);
+        const nextOpenAI: ProtocolSlotData = {
+            url: provider.baseUrlOpenAI || '',
+            enabled: !!provider.baseUrlOpenAI,
+        };
+        const nextAnthropic: ProtocolSlotData = {
+            url: provider.baseUrlAnthropic || '',
+            enabled: !!provider.baseUrlAnthropic,
+        };
+        setSlotOpenAI(nextOpenAI);
+        setSlotAnthropic(nextAnthropic);
+        commitProtocolState(nextOpenAI, nextAnthropic);
+        onChangeRef.current('providerBaseUrls', {
+            openai: provider.baseUrlOpenAI,
+            anthropic: provider.baseUrlAnthropic,
+        });
+        onChangeRef.current('selectedProviderId', provider.id);
+        if (nameIsAutoFilled || !data.name) {
+            onChangeRef.current('name', provider.alias || provider.name);
+            setNameIsAutoFilled(true);
+        }
+        setVerificationResult(null);
+    };
+
     // ── Init/reset on open ────────────────────────────────────────
     useEffect(() => {
         if (!open) return;
@@ -146,15 +194,28 @@ const ProviderFormDialog = ({
         setSlotAnthropic(initAnthropic);
 
         if (mode === 'edit') {
-            // Edit mode: prefer exact match by ID, fall back to URL match.
-            const matchingProvider =
-                (data.selectedProviderId && allProviders.find(p => p.id === data.selectedProviderId)) ||
-                allProviders.find(
-                    p => (hasDualOpenAI && p.baseUrlOpenAI === data.apiBaseOpenAI) ||
-                         (hasDualAnthropic && p.baseUrlAnthropic === data.apiBaseAnthropic) ||
-                         (!hasDualOpenAI && !hasDualAnthropic && (p.baseUrlOpenAI === data.apiBase || p.baseUrlAnthropic === data.apiBase))
-                ) || null;
-            setSelectedProvider(matchingProvider);
+            // Find ALL presets matching the configured URL(s). Only auto-select
+            // when exactly one matches — multiple matches require the user to
+            // choose, preventing misconfiguration.
+            const urlMatches = allProviders.filter(
+                p => (hasDualOpenAI && p.baseUrlOpenAI === data.apiBaseOpenAI) ||
+                     (hasDualAnthropic && p.baseUrlAnthropic === data.apiBaseAnthropic) ||
+                     (!hasDualOpenAI && !hasDualAnthropic && (p.baseUrlOpenAI === data.apiBase || p.baseUrlAnthropic === data.apiBase))
+            );
+            // When there's a selectedProviderId and it's among the urlMatches,
+            // treat it as unique (the user previously picked this exact preset).
+            const idMatch = data.selectedProviderId
+                ? urlMatches.find(p => p.id === data.selectedProviderId)
+                : null;
+            if (idMatch) {
+                setSelectedProvider(idMatch);
+            } else if (urlMatches.length === 1) {
+                setSelectedProvider(urlMatches[0]);
+            } else {
+                // Multiple matches (or none) — don't auto-select.
+                // urlCandidates shows them as clickable chips above the slots.
+                setSelectedProvider(null);
+            }
         } else {
             // Add mode: prefer exact match by ID, fall back to URL match.
             const matchingProvider =
@@ -241,11 +302,6 @@ const ProviderFormDialog = ({
             setSlotOpenAI(next);
             commitProtocolState(next, slotAnthropic);
         }
-        setVerificationResult(null);
-    };
-
-    const clearProvider = () => {
-        setSelectedProvider(null);
         setVerificationResult(null);
     };
 
@@ -389,6 +445,21 @@ const ProviderFormDialog = ({
     const hasAnyProtocol = (slotOpenAI.enabled && slotOpenAI.url.trim()) ||
                            (slotAnthropic.enabled && slotAnthropic.url.trim());
 
+    // Persistent /v1 suffix hint: shown on the OpenAI slot when the user is
+    // typing a free-form URL (no provider template) that doesn't already end
+    // with /v1. Mirrors the old CustomEndpointField's floating tooltip.
+    const persistentV1Hint =
+        !selectedProvider &&
+        slotOpenAI.enabled &&
+        slotOpenAI.url.trim().length > 0 &&
+        !(/\/v1\/?$/.test(slotOpenAI.url));
+    const handleApplyV1Suffix = () => {
+        const base = slotOpenAI.url.replace(/\/+$/, '');
+        const newUrl = `${base}/v1`;
+        updateOpenAIUrl(newUrl);
+        commitProtocolState({...slotOpenAI, url: newUrl}, slotAnthropic);
+    };
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
             PaperProps={{sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column'}}}>
@@ -412,15 +483,42 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        {/* ── Selected provider (from picker) ──────── */}
-                        {selectedProvider && (
-                            <Chip
-                                icon={<ProviderIcon identifier={selectedProvider.icon || selectedProvider.id} size={16}/>}
-                                label={selectedProvider.alias || selectedProvider.name}
-                                size="small"
-                                variant="outlined"
-                                onDelete={clearProvider}
-                            />
+                        {/* ── Provider bar: selected + URL-matched suggestions ── */}
+                        {(selectedProvider || urlCandidates.length > 0) && (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.75,
+                                    px: 1.5,
+                                    py: 1,
+                                    borderRadius: 1,
+                                    bgcolor: 'action.hover',
+                                    flexWrap: 'wrap',
+                                }}
+                            >
+                                {selectedProvider && (
+                                    <Chip
+                                        icon={<ProviderIcon identifier={selectedProvider.icon || selectedProvider.id} size={16}/>}
+                                        label={selectedProvider.alias || selectedProvider.name}
+                                        size="small"
+                                        variant="outlined"
+                                    />
+                                )}
+                                {urlCandidates
+                                    .filter(p => p.id !== selectedProvider?.id)
+                                    .map(p => (
+                                        <Chip
+                                            key={p.id}
+                                            icon={<ProviderIcon identifier={p.icon || p.id} size={14}/>}
+                                            label={p.alias || p.name}
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => handleSelectProvider(p)}
+                                            sx={{cursor: 'pointer'}}
+                                        />
+                                    ))}
+                            </Box>
                         )}
 
                         {/* ── Protocol Slots ────────────────────── */}
@@ -436,6 +534,7 @@ const ProviderFormDialog = ({
                                     onUrlChange={updateOpenAIUrl}
                                     onUrlBlur={commitOpenAI}
                                     urlError={baseUrlError && !slotOpenAI.url.trim() && !slotAnthropic.url.trim()}
+                                    v1Hint={{show: persistentV1Hint, onApply: handleApplyV1Suffix}}
                                     helperText={selectedProvider
                                         ? (slotOpenAI.enabled
                                             ? t('providerDialog.protocol.helperOpenAI', {defaultValue: 'Supports models from OpenAI, Google and many other OpenAI-compatible providers'})
