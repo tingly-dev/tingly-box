@@ -397,82 +397,77 @@ func (s *Server) passthroughAnthropicBeta(
 
 	ctx := c.Request.Context()
 
-	switch reqCtx.SourceAPI {
-	case protocol.TypeOpenAIChat:
-		s.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
-	default:
-		if isStreaming {
-			if declaredMCP && s.mcpEnabled() {
-				s.dispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
-				return
-			}
-
-			wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
-			fc := forwarding.NewForwardContext(ctx, provider)
-			streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				stream.SendStreamingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				return
-			}
-
-			s.streamAnthropicBeta(c, req, streamResp, actualModel, responseModel, provider, recorder)
+	if isStreaming {
+		if declaredMCP && s.mcpEnabled() {
+			s.dispatchGenericAnthropicBetaStream(c, reqCtx, rule, provider, recorder)
 			return
 		}
 
-		var anthropicResp *anthropic.BetaMessage
-		var err error
-		if declaredMCP && s.mcpEnabled() {
-			var usage *mcp.TokenUsage
-			anthropicResp, usage, err = s.runGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
-			if err != nil {
-				recordMCPForwardingError(s, c, err, recorder)
-				return
+		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
+		fc := forwarding.NewForwardContext(ctx, provider)
+		streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
+		if cancel != nil {
+			defer cancel()
+		}
+		if err != nil {
+			s.trackUsageFromContext(c, 0, 0, err)
+			stream.SendStreamingError(c, err)
+			if recorder != nil {
+				recorder.RecordError(err)
 			}
-			if usage != nil {
-				tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
-				s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-			}
-		} else {
-			wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
-			fc := forwarding.NewForwardContext(ctx, provider)
-			var cancel context.CancelFunc
-			anthropicResp, cancel, err = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
-			if cancel != nil {
-				defer cancel()
-			}
-			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, err)
-				stream.SendForwardingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
-				return
-			}
-
-			s.trackUsageWithTokenUsage(c, usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage), nil)
+			return
 		}
 
-		s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
-		anthropicResp.Model = anthropic.Model(responseModel)
-
-		scenario := GetTrackingContextScenario(c)
-		if s.guardrailsEnabledForScenario(scenario) {
-			s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
-		}
-
-		if recorder != nil {
-			recorder.SetAssembledResponse(anthropicResp)
-			recorder.RecordResponse(provider, reqCtx.RequestModel)
-		}
-		nonstream.WriteAnthropicMessage(c, anthropicResp)
+		s.streamAnthropicBeta(c, req, streamResp, actualModel, responseModel, provider, recorder)
+		return
 	}
+
+	var anthropicResp *anthropic.BetaMessage
+	var err error
+	if declaredMCP && s.mcpEnabled() {
+		var usage *mcp.TokenUsage
+		anthropicResp, usage, err = s.runGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
+		if err != nil {
+			recordMCPForwardingError(s, c, err, recorder)
+			return
+		}
+		if usage != nil {
+			tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
+			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+		}
+	} else {
+		wrapper := s.clientPool.GetAnthropicClient(ctx, provider, actualModel)
+		fc := forwarding.NewForwardContext(ctx, provider)
+		var cancel context.CancelFunc
+		anthropicResp, cancel, err = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
+		if cancel != nil {
+			defer cancel()
+		}
+		if err != nil {
+			s.trackUsageFromContext(c, 0, 0, err)
+			stream.SendForwardingError(c, err)
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
+			return
+		}
+
+		s.trackUsageWithTokenUsage(c, usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage), nil)
+	}
+
+	s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+	anthropicResp.Model = anthropic.Model(responseModel)
+
+	scenario := GetTrackingContextScenario(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, anthropicResp)
+	}
+
+	if recorder != nil {
+		recorder.SetAssembledResponse(anthropicResp)
+		recorder.RecordResponse(provider, reqCtx.RequestModel)
+	}
+	nonstream.WriteAnthropicMessage(c, anthropicResp)
 }
 
 func hasDeclaredMCPAnthropicV1Tools(req *anthropic.MessageNewParams) bool {
