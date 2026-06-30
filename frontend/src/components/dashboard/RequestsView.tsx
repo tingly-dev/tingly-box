@@ -279,7 +279,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
     const theme = useTheme();
 
     return (
-        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none' }}>
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
             {/* Header */}
             <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
                 <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
@@ -300,13 +300,13 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
             </Box>
 
             {/* Table */}
-            <TableContainer sx={{ maxHeight: 420, position: 'relative' }}>
+            <TableContainer sx={{ maxHeight: 420, maxWidth: '100%', overflow: 'auto', position: 'relative' }}>
                 {loading && (
                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.6)' }}>
                         <CircularProgress size={28} />
                     </Box>
                 )}
-                <Table stickyHeader size="small" sx={{ minWidth: 980 }}>
+                <Table stickyHeader size="small" sx={{ tableLayout: 'auto' }}>
                     <TableHead>
                         <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', py: 1, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', whiteSpace: 'nowrap' } }}>
                             <TableCell>Time</TableCell>
