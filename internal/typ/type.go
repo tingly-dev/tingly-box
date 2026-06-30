@@ -149,7 +149,6 @@ func IsValidRecordingMode(mode string) bool {
 type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
 	Separate bool `json:"separate" yaml:"separate"` // Separate configuration for each model
-	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
 
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
@@ -288,7 +287,7 @@ type ScenarioConfig struct {
 // defaults to true so callers that depend on exactly one mode being active
 // always see a consistent value. All other flags are returned as stored.
 func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
-	if sc.Flags.Unified || sc.Flags.Separate || sc.Flags.Smart {
+	if sc.Flags.Unified || sc.Flags.Separate {
 		return sc.Flags
 	}
 	result := sc.Flags
