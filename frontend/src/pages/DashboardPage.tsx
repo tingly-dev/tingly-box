@@ -33,6 +33,10 @@ interface Provider {
     auth_type?: string;
 }
 
+interface APIToken {
+    user_id?: string;
+}
+
 type TimeRange = 'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
 
 const TIME_RANGE_CONFIG: Record<TimeRange, { label: string; days: number; interval: string }> = {
@@ -109,8 +113,10 @@ export default function DashboardPage() {
     const [stats, setStats] = useState<AggregatedStat[]>([]);
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
+    const [sharingUsers, setSharingUsers] = useState<string[]>([]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
     const [selectedModel, setSelectedModel] = useState<string>('all');
+    const [selectedUser, setSelectedUser] = useState<string>('all');
     const [modelsPage, setModelsPage] = useState(0);
     const [modelsPerPage] = useState(10);
 
@@ -120,7 +126,7 @@ export default function DashboardPage() {
     const [recordsLoading, setRecordsLoading] = useState(false);
     const [recordsTimeParams, setRecordsTimeParams] = useState<{ start_time: string; end_time: string } | null>(null);
 
-    const buildTimeParams = useCallback((provider: string, model: string, range: TimeRange) => {
+    const buildTimeParams = useCallback((provider: string, model: string, user: string, range: TimeRange) => {
         const now = new Date();
         const config = TIME_RANGE_CONFIG[range];
         const todayStart = getLocalMidnight(now);
@@ -148,18 +154,22 @@ export default function DashboardPage() {
         if (model && model !== 'all') {
             params.model = model;
         }
+        if (user && user !== 'all') {
+            params.user_id = user;
+        }
         return params;
     }, []);
 
-    const loadData = useCallback(async (provider: string, model: string, range: TimeRange) => {
+    const loadData = useCallback(async (provider: string, model: string, user: string, range: TimeRange) => {
         try {
             const config = TIME_RANGE_CONFIG[range];
-            const params = buildTimeParams(provider, model, range);
+            const params = buildTimeParams(provider, model, user, range);
 
-            const [statsResult, timeSeriesResult, providersResult] = await Promise.all([
+            const [statsResult, timeSeriesResult, providersResult, tokensResult] = await Promise.all([
                 api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
                 api.getUsageTimeSeries({ ...params, interval: config.interval }),
                 api.getProviders(),
+                api.listAPITokens({ limit: 500 }),
             ]);
 
             if (statsResult?.data) {
@@ -170,6 +180,15 @@ export default function DashboardPage() {
             }
             if (providersResult?.success && providersResult?.data) {
                 setProviders(providersResult.data);
+            }
+            if (tokensResult?.success && tokensResult?.data) {
+                const tokens: APIToken[] = Array.isArray(tokensResult.data) ? tokensResult.data : tokensResult.data.tokens || [];
+                const users = Array.from(new Set<string>(
+                    tokens
+                        .map((token) => token.user_id)
+                        .filter((userId): userId is string => Boolean(userId))
+                )).sort((a, b) => a.localeCompare(b));
+                setSharingUsers(users);
             }
 
             // Store time params for records loading
@@ -186,6 +205,7 @@ export default function DashboardPage() {
         timeParams: { start_time: string; end_time: string } | null,
         provider: string,
         model: string,
+        user: string,
     ) => {
         if (!timeParams) return;
         setRecordsLoading(true);
@@ -201,6 +221,9 @@ export default function DashboardPage() {
             if (model !== 'all') {
                 filters.model = model;
             }
+            if (user !== 'all') {
+                filters.user_id = user;
+            }
             const result = await api.getUsageRecords(filters);
             if (result?.data) {
                 setRecords(result.data);
@@ -213,8 +236,8 @@ export default function DashboardPage() {
     }, []);
 
     useEffect(() => {
-        loadData(selectedProvider, selectedModel, timeRange);
-    }, [loadData, selectedProvider, selectedModel, timeRange]);
+        loadData(selectedProvider, selectedModel, selectedUser, timeRange);
+    }, [loadData, selectedProvider, selectedModel, selectedUser, timeRange]);
 
     // Reset view mode when switching away from hourly ranges
     useEffect(() => {
@@ -226,14 +249,14 @@ export default function DashboardPage() {
     // Load records when entering requests view or time/provider/model changes
     useEffect(() => {
         if (viewMode === 'requests') {
-            loadRecords(recordsTimeParams, selectedProvider, selectedModel);
+            loadRecords(recordsTimeParams, selectedProvider, selectedModel, selectedUser);
         }
-    }, [viewMode, recordsTimeParams, selectedProvider, selectedModel, loadRecords]);
+    }, [viewMode, recordsTimeParams, selectedProvider, selectedModel, selectedUser, loadRecords]);
 
     // Reset model pagination when filters or data change
     useEffect(() => {
         setModelsPage(0);
-    }, [stats, selectedProvider, selectedModel]);
+    }, [stats, selectedProvider, selectedModel, selectedUser]);
 
     // Reset filters if selected provider/model no longer exists in current data
     useEffect(() => {
@@ -249,23 +272,26 @@ export default function DashboardPage() {
                 setSelectedModel('all');
             }
         }
-    }, [stats, selectedProvider, selectedModel]);
+        if (selectedUser !== 'all' && !sharingUsers.includes(selectedUser)) {
+            setSelectedUser('all');
+        }
+    }, [stats, sharingUsers, selectedProvider, selectedModel, selectedUser]);
 
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
-                loadData(selectedProvider, selectedModel, timeRange);
+                loadData(selectedProvider, selectedModel, selectedUser, timeRange);
                 if (viewMode === 'requests') {
-                    loadRecords(recordsTimeParams, selectedProvider, selectedModel);
+                    loadRecords(recordsTimeParams, selectedProvider, selectedModel, selectedUser);
                 }
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider, selectedModel, timeRange, viewMode, loadRecords, recordsTimeParams]);
+    }, [autoRefresh, loadData, selectedProvider, selectedModel, selectedUser, timeRange, viewMode, loadRecords, recordsTimeParams]);
 
     const handleRefresh = () => {
         setRefreshing(true);
-        loadData(selectedProvider, selectedModel, timeRange);
+        loadData(selectedProvider, selectedModel, selectedUser, timeRange);
     };
 
     // Calculate totals from stats
@@ -392,11 +418,12 @@ export default function DashboardPage() {
             .map((m) => m.model);
     }, [stats]);
 
-    const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all';
+    const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all' || selectedUser !== 'all';
 
     const handleClearFilters = () => {
         setSelectedProvider('all');
         setSelectedModel('all');
+        setSelectedUser('all');
     };
 
     if (loading) {
@@ -460,6 +487,27 @@ export default function DashboardPage() {
                     {modelOptions.map((model) => (
                         <MenuItem key={model} value={model}>
                             {model}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 180 } }}>
+                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>User</InputLabel>
+                <Select
+                    value={selectedUser}
+                    label="User"
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    disabled={!sharingUsers.length}
+                    sx={{
+                        borderRadius: 2,
+                        '& .MuiOutlinedInput-input': { py: 1 },
+                    }}
+                >
+                    <MenuItem value="all">All Users</MenuItem>
+                    {sharingUsers.map((userId) => (
+                        <MenuItem key={userId} value={userId}>
+                            {userId}
                         </MenuItem>
                     ))}
                 </Select>

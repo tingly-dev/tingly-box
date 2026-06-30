@@ -1,11 +1,10 @@
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
-import { Key as IconKey, Add as IconPlus, Delete as IconTrash, ContentCopy as IconCopy, Check as IconCheck, AccessTime as IconClock, Person as IconUser, Shield as IconShield, Visibility as IconEye, VisibilityOff as IconEyeOff } from '@/components/icons';
+import { Key as IconKey, Add as IconPlus, Delete as IconTrash, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff } from '@/components/icons';
 import {
     Box,
     Button,
-    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -22,6 +21,7 @@ import {
     Typography,
     IconButton,
     Tooltip,
+    Switch,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -139,14 +139,8 @@ const APITokensPage = () => {
     };
 
     const formatDate = (dateStr?: string) => {
+        if (!dateStr) return '-';
         return new Date(dateStr).toLocaleString();
-    };
-
-    const getStatusChip = (token: APIToken) => {
-        if (!token.enabled) {
-            return <Chip label="Disabled" color="default" size="small" />;
-        }
-        return <Chip label="Active" color="success" size="small" icon={<IconCheck sx={{ fontSize: 14 }} />} />;
     };
 
     return (
@@ -186,8 +180,8 @@ const APITokensPage = () => {
                                         },
                                     }}
                                 >
-                                    <TableCell>Name</TableCell>
                                     <TableCell>UUID</TableCell>
+                                    <TableCell>Name</TableCell>
                                     <TableCell>Token</TableCell>
                                     <TableCell>Status</TableCell>
                                     <TableCell>Created</TableCell>
@@ -235,6 +229,19 @@ const APITokensPage = () => {
                                             }}
                                         >
                                             <TableCell>
+                                                <Tooltip title={token.user_id} placement="top">
+                                                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ width: 'fit-content', cursor: 'default' }}>
+                                                        <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
+                                                        >
+                                                            {token.user_id.slice(0, 8)}…
+                                                        </Typography>
+                                                    </Stack>
+                                                </Tooltip>
+                                            </TableCell>
+                                            <TableCell>
                                                 <Stack direction="row" spacing={1} alignItems="center">
                                                     <Box
                                                         sx={{
@@ -249,19 +256,6 @@ const APITokensPage = () => {
                                                         {token.display_name}
                                                     </Typography>
                                                 </Stack>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Tooltip title={token.user_id} placement="top">
-                                                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ width: 'fit-content', cursor: 'default' }}>
-                                                        <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
-                                                        <Typography
-                                                            variant="caption"
-                                                            sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
-                                                        >
-                                                            {token.user_id.slice(0, 8)}…
-                                                        </Typography>
-                                                    </Stack>
-                                                </Tooltip>
                                             </TableCell>
                                             <TableCell sx={{ maxWidth: 260 }}>
                                                 <Box
@@ -316,7 +310,17 @@ const APITokensPage = () => {
                                                     </Box>
                                                 </Box>
                                             </TableCell>
-                                            <TableCell>{getStatusChip(token)}</TableCell>
+                                            <TableCell>
+                                                <Tooltip title={token.enabled ? 'Active' : 'Disabled'} placement="top">
+                                                    <Switch
+                                                        size="small"
+                                                        checked={token.enabled}
+                                                        onChange={() => handleToggleTokenEnabled(token)}
+                                                        color="success"
+                                                        inputProps={{ 'aria-label': `${token.enabled ? 'Disable' : 'Enable'} ${token.display_name}` }}
+                                                    />
+                                                </Tooltip>
+                                            </TableCell>
                                             <TableCell>
                                                 <Stack direction="row" spacing={0.5} alignItems="center">
                                                     <IconClock sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
@@ -331,31 +335,19 @@ const APITokensPage = () => {
                                                 </Typography>
                                             </TableCell>
                                             <TableCell align="right">
-                                                <Stack direction="row" spacing={0.25} justifyContent="flex-end">
-                                                    <Tooltip title={token.enabled ? 'Disable token' : 'Enable token'}>
-                                                        <IconButton
-                                                            size="small"
-                                                            color={token.enabled ? 'warning' : 'success'}
-                                                            onClick={() => handleToggleTokenEnabled(token)}
-                                                            sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
-                                                        >
-                                                            {token.enabled ? <IconShield sx={{ fontSize: 15 }} /> : <IconCheck sx={{ fontSize: 15 }} />}
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Delete token">
-                                                        <IconButton
-                                                            size="small"
-                                                            color="error"
-                                                            onClick={() => {
-                                                                setTokenToDelete(token);
-                                                                setDeleteDialogOpen(true);
-                                                            }}
-                                                            sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
-                                                        >
-                                                            <IconTrash sx={{ fontSize: 15 }} />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                </Stack>
+                                                <Tooltip title="Delete token">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={() => {
+                                                            setTokenToDelete(token);
+                                                            setDeleteDialogOpen(true);
+                                                        }}
+                                                        sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
+                                                    >
+                                                        <IconDeleteOutline sx={{ fontSize: 16 }} />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </TableCell>
                                         </TableRow>
                                     ))

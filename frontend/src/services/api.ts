@@ -873,6 +873,7 @@ export const api = {
         provider?: string;
         model?: string;
         scenario?: string;
+        user_id?: string;
         limit?: number;
     } = {}): Promise<any> => {
         try {
@@ -888,6 +889,7 @@ export const api = {
                         provider: params.provider,
                         model: params.model,
                         scenario: params.scenario,
+                        user_id: params.user_id,
                         limit: params.limit,
                     }
                 }
@@ -905,6 +907,7 @@ export const api = {
         provider?: string;
         model?: string;
         scenario?: string;
+        user_id?: string;
     } = {}): Promise<any> => {
         try {
             const client = await getClient();
@@ -919,7 +922,8 @@ export const api = {
                         provider: params.provider,
                         model: params.model,
                         scenario: params.scenario,
-                    }
+                        user_id: params.user_id,
+                    } as any
                 }
             });
             return response.data;
@@ -934,6 +938,7 @@ export const api = {
         provider?: string;
         model?: string;
         scenario?: string;
+        user_id?: string;
         status?: string;
         limit?: number;
         offset?: number;
@@ -950,10 +955,11 @@ export const api = {
                         provider: params.provider,
                         model: params.model,
                         scenario: params.scenario,
+                        user_id: params.user_id,
                         status: params.status as any,
                         limit: params.limit,
                         offset: params.offset,
-                    }
+                    } as any
                 }
             });
             return response.data;
