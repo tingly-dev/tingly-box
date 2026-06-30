@@ -300,11 +300,13 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 		hc := protocol.NewHandleContext(c, responseModel)
 		tokenUsage, err := stream.AnthropicToOpenAIStream(hc, req, streamResp, responseModel, disableStreamUsage)
 		if err != nil {
-			if tokenUsage.InputTokens > 0 || tokenUsage.OutputTokens > 0 {
-				s.trackUsageWithTokenUsage(c, tokenUsage, err)
-			} else {
-				// Track error even when no tokens were received (e.g., early 1302 rate limit)
-				s.trackUsageFromContext(c, 0, 0, err)
+			if tokenUsage != nil {
+				if tokenUsage.InputTokens > 0 || tokenUsage.OutputTokens > 0 {
+					s.trackUsageWithTokenUsage(c, tokenUsage, err)
+				} else {
+					// Track error even when no tokens were received (e.g., early 1302 rate limit)
+					s.trackUsageFromContext(c, 0, 0, err)
+				}
 			}
 			SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {
