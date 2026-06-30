@@ -661,7 +661,7 @@ func (s *Server) dispatchGoogle(
 		s.trackUsageWithTokenUsage(c, usage, nil)
 	} else {
 		wrapper := s.clientPool.GetGoogleClient(c.Request.Context(), provider, model)
-		fc := forwarding.NewForwardContext(nil, provider)
+		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 		resp, _, err := forwarding.ForwardGoogle(fc, wrapper, model, req, cfg)
 		if err != nil {
 			stream.SendForwardingError(c, err)
@@ -789,7 +789,7 @@ func (s *Server) dispatchOpenAIChat(
 			}
 		} else {
 			wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-			fc := forwarding.NewForwardContext(nil, provider)
+			fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 			resp, _, err = forwarding.ForwardOpenAIChat(fc, wrapper, req)
 			if err != nil {
 				stream.SendForwardingError(c, err)
@@ -896,7 +896,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
-	fc := forwarding.NewForwardContext(nil, provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	response, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, *params)
 	if cancel != nil {
 		defer cancel()
@@ -956,7 +956,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transfor
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
-	fc := forwarding.NewForwardContext(nil, provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
@@ -1005,7 +1005,7 @@ func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *tra
 
 	ctx := c.Request.Context()
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := forwarding.NewForwardContext(nil, provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1Beta(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()

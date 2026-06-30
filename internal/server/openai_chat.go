@@ -139,7 +139,7 @@ func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, ori
 
 	// Forward request to provider
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := forwarding.NewForwardContext(nil, provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
