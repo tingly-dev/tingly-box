@@ -27,6 +27,7 @@ import {ProviderListContent, type ConnectSelection} from '@/components/ConnectPr
 import OAuthDialog from '@/components/OAuthDialog';
 import PasteAndDetect from '@/components/onboarding/PasteAndDetect';
 import {api} from '@/services/api';
+import {buildProviderFormData} from '@/hooks/useProviderDialog';
 
 type OnboardingTab = 'browse' | 'paste';
 
@@ -86,61 +87,20 @@ const Onboarding: React.FC = () => {
             setOAuthDialogOpen(true);
             return;
         }
+        if (selection.kind === 'import') return;
 
-        if (selection.kind === 'import') {
-            return;
-        }
+        const built = buildProviderFormData(selection)!;
 
         if (selection.kind === 'custom') {
             setIsCustomMode(true);
-            openDialogWith(emptyForm());
+            setIsLocalProvider(false);
+            openDialogWith(built.formData);
             return;
         }
 
-        if (selection.kind === 'dual') {
-            // Dual endpoint: two URLs (OpenAI + Anthropic) under one key, always
-            // saved as a single record. No protocol selector / topology toggle.
-            setIsCustomMode(false);
-            setIsDualMode(true);
-            openDialogWith({
-                ...emptyForm(),
-                apiStyle: 'openai' as any,
-                apiBaseOpenAI: '',
-                apiBaseAnthropic: '',
-                createDualProvider: true,
-                protocols: ['openai', 'anthropic'],
-            });
-            return;
-        }
-
-        if (selection.kind === 'local') {
-            const lp = selection.provider as any; // Cast to access url/defaultApiKey
-            setIsLocalProvider(true);
-            openDialogWith({
-                name: lp.alias || lp.name,
-                apiBase: lp.url || lp.baseUrlOpenAI || lp.baseUrlAnthropic || '',
-                apiStyle: 'openai' as any,
-                token: lp.defaultApiKey ?? '',
-                enabled: true,
-                noKeyRequired: !lp.defaultApiKey,
-                selectedProviderId: lp.id,
-            });
-            return;
-        }
-
-        const p = selection.provider;
-        openDialogWith({
-            name: p.alias || p.name,
-            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
-            apiStyle: undefined as any,
-            token: '',
-            enabled: true,
-            providerBaseUrls: {
-                openai: p.baseUrlOpenAI,
-                anthropic: p.baseUrlAnthropic,
-            },
-            selectedProviderId: p.id,
-        });
+        setIsCustomMode(false);
+        setIsLocalProvider(selection.kind === 'local');
+        openDialogWith(built.formData);
     };
 
     const handleFieldChange = (field: keyof ProviderFormData, value: any) => {

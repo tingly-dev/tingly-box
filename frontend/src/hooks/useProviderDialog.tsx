@@ -9,6 +9,62 @@ interface UseProviderDialogOptions {
     onImport?: () => void;
 }
 
+// ── Shared: ConnectSelection → form data ────────────────────────────
+// Single source of truth for all entry points. Every page that opens the
+// provider form from the "Connect AI" picker must go through this function.
+
+export interface ConnectFormResult {
+    /** Ready-to-use form data for the ProviderFormDialog. */
+    formData: EnhancedProviderFormData;
+    /** Self-hosted / local providers: token is optional but editable. */
+    optionalEditableToken: boolean;
+}
+
+const emptyForm = (apiStyle?: 'openai' | 'anthropic'): EnhancedProviderFormData => ({
+    name: '',
+    apiBase: '',
+    apiStyle: apiStyle || undefined,
+    token: '',
+    enabled: true,
+    noKeyRequired: false,
+    proxyUrl: '',
+});
+
+/**
+ * Convert a picker selection into provider form data.
+ * Returns null when the picker result doesn't open the form (oauth / import).
+ */
+export function buildProviderFormData(selection: ConnectSelection): ConnectFormResult | null {
+    if (selection.kind === 'oauth' || selection.kind === 'import') {
+        return null;
+    }
+
+    if (selection.kind === 'custom') {
+        return { formData: emptyForm(), optionalEditableToken: false };
+    }
+
+    const p = selection.provider;
+    const isLocal = selection.kind === 'local';
+
+    return {
+        formData: {
+            name: p.alias || p.name,
+            apiBase: isLocal
+                ? (p as any).url || p.baseUrlOpenAI || p.baseUrlAnthropic || ''
+                : p.baseUrlOpenAI || p.baseUrlAnthropic || '',
+            apiStyle: isLocal ? 'openai' : undefined,
+            token: isLocal ? ((p as any).defaultApiKey ?? '') : '',
+            enabled: true,
+            noKeyRequired: isLocal ? !((p as any).defaultApiKey) : false,
+            proxyUrl: '',
+            userAgent: '',
+            providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
+            selectedProviderId: p.id,
+        },
+        optionalEditableToken: isLocal,
+    };
+}
+
 interface UseProviderDialogReturn {
     providerDialogOpen: boolean;
     providerFormData: EnhancedProviderFormData;
@@ -26,16 +82,6 @@ interface UseProviderDialogReturn {
     dualMode: boolean;
     fromConnectPicker: boolean;
 }
-
-const emptyForm = (apiStyle?: 'openai' | 'anthropic'): EnhancedProviderFormData => ({
-    name: '',
-    apiBase: '',
-    apiStyle: apiStyle || undefined,
-    token: '',
-    enabled: true,
-    noKeyRequired: false,
-    proxyUrl: '',
-});
 
 export const useProviderDialog = (
     showNotification: (message: string, severity: 'success' | 'error') => void,
@@ -69,72 +115,18 @@ export const useProviderDialog = (
     const handleConnectSelect = useCallback((selection: ConnectSelection) => {
         setConnectDialogOpen(false);
         setFromConnectPicker(true);
-        setDualMode(false);
 
-        if (selection.kind === 'oauth') {
+        const built = buildProviderFormData(selection);
+        if (!built) {
+            // oauth / import — handled by caller via other dialogs
+            if (selection.kind === 'import') onImport?.();
             return;
         }
 
-        if (selection.kind === 'import') {
-            onImport?.();
-            return;
-        }
-
-        if (selection.kind === 'custom') {
-            setCustomMode(true);
-            setProviderFormData(emptyForm(defaultApiStyle));
-            setProviderDialogOpen(true);
-            return;
-        }
-
-        if (selection.kind === 'dual') {
-            // Dual endpoint: two URLs (OpenAI + Anthropic) under one key, always
-            // saved as a single fused record. No protocol selector / topology toggle.
-            setCustomMode(false);
-            setDualMode(true);
-            setProviderFormData({
-                ...emptyForm('openai'),
-                apiBaseOpenAI: '',
-                apiBaseAnthropic: '',
-                createDualProvider: true,
-                protocols: ['openai', 'anthropic'],
-            });
-            setProviderDialogOpen(true);
-            return;
-        }
-
-        if (selection.kind === 'local') {
-            const lp = selection.provider as any;
-            setProviderFormData({
-                name: lp.alias || lp.name,
-                apiBase: lp.url || lp.baseUrlOpenAI || lp.baseUrlAnthropic || '',
-                apiStyle: 'openai',
-                token: lp.defaultApiKey ?? '',
-                enabled: true,
-                noKeyRequired: !lp.defaultApiKey,
-                selectedProviderId: lp.id,
-            });
-            setProviderDialogOpen(true);
-            return;
-        }
-
-        const p = selection.provider;
-        setCustomMode(false);
-        setProviderFormData({
-            name: p.alias || p.name,
-            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
-            apiStyle: undefined,
-            token: '',
-            enabled: true,
-            noKeyRequired: false,
-            proxyUrl: '',
-            userAgent: '',
-            createDualProvider: false,
-            providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
-            selectedProviderId: p.id,
-        });
+        setCustomMode(selection.kind === 'custom');
+        setProviderFormData(built.formData);
         setProviderDialogOpen(true);
-    }, [defaultApiStyle]);
+    }, [defaultApiStyle, onImport]);
 
     const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();

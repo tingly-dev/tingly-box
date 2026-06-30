@@ -10,6 +10,7 @@ import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
+import { buildProviderFormData } from '@/hooks/useProviderDialog';
 import { Add, ListAlt, Upload, VpnKey } from '@/components/icons';
 import {
     Alert,
@@ -117,6 +118,7 @@ const CredentialPage = () => {
 
     const handleConnectSelect = (selection: ConnectSelection) => {
         setConnectOpen(false);
+
         if (selection.kind === 'oauth') {
             setOAuthAutoStartId(selection.providerId);
             setOAuthDialogOpen(true);
@@ -126,40 +128,12 @@ const CredentialPage = () => {
             setShowImportModal(true);
             return;
         }
-        if (selection.kind === 'custom') {
-            setFromConnectPicker(true);
-            setIsLocalProvider(false);
-            handleAddApiKey();
-            return;
-        }
-        if (selection.kind === 'local') {
-            const lp = selection.provider;
-            setIsLocalProvider(true);
-            setFromConnectPicker(true);
-            setApiKeyDialogMode('add');
-            setProviderFormData({
-                uuid: undefined, name: lp.name,
-                apiBase: lp.baseUrlOpenAI || lp.baseUrlAnthropic || '',
-                apiStyle: 'openai' as any,
-                token: lp.defaultApiKey ?? '', enabled: true, noKeyRequired: !lp.defaultApiKey,
-                providerBaseUrls: { openai: lp.baseUrlOpenAI, anthropic: lp.baseUrlAnthropic },
-                selectedProviderId: lp.id,
-            } as any);
-            setApiKeyDialogOpen(true);
-            return;
-        }
-        const p = selection.provider;
-        setIsLocalProvider(false);
+
+        const built = buildProviderFormData(selection)!;
+        setIsLocalProvider(selection.kind === 'local');
         setFromConnectPicker(true);
         setApiKeyDialogMode('add');
-        setProviderFormData({
-            uuid: undefined, name: p.alias || p.name,
-            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
-            apiStyle: undefined, token: '', enabled: true, noKeyRequired: false,
-            proxyUrl: '', userAgent: '',
-            providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
-            selectedProviderId: p.id,
-        } as any);
+        setProviderFormData(built.formData);
         setApiKeyDialogOpen(true);
     };
 

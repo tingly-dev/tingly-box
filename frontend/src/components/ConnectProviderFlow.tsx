@@ -1,6 +1,7 @@
 import ConnectProviderDialog, { type ConnectSelection } from '@/components/ConnectProviderDialog';
 import OAuthDialog from '@/components/OAuthDialog';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog';
+import { buildProviderFormData } from '@/hooks/useProviderDialog';
 import { useState, useCallback } from 'react';
 import { api } from '@/services/api';
 
@@ -28,54 +29,22 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
 
     const handleConnectSelect = useCallback((selection: ConnectSelection) => {
         onClose();
+
+        // oauth / import are handled separately
         if (selection.kind === 'oauth') {
             setOAuthAutoStartId(selection.providerId);
             setOAuthDialogOpen(true);
             return;
         }
-        if (selection.kind === 'import') {
-            return;
-        }
-        if (selection.kind === 'custom') {
-            // Free-form custom endpoint — one empty OpenAI slot, Anthropic hidden
-            setOptionalEditableToken(false);
-            setProviderFormData({
-                name: '', apiBase: '', apiStyle: undefined, token: '', enabled: true, noKeyRequired: false, proxyUrl: '',
-            });
-            setApiKeyDialogOpen(true);
-            return;
-        }
-        if (selection.kind === 'local') {
-            // Self-hosted — pre-filled URL, token optional
-            const lp = selection.provider;
-            setOptionalEditableToken(true);
-            setProviderFormData({
-                name: lp.name, apiBase: lp.baseUrlOpenAI || lp.baseUrlAnthropic || '', apiStyle: 'openai', token: '',
-                enabled: true, noKeyRequired: true,
-                providerBaseUrls: { openai: lp.baseUrlOpenAI, anthropic: lp.baseUrlAnthropic },
-                selectedProviderId: lp.id,
-            } as any);
-            setApiKeyDialogOpen(true);
-            return;
-        }
-        // Known provider from the picker — template fills protocol slots
-        const p = selection.provider;
-        console.log('[ConnectProviderFlow] screen1 → screen2 known provider:', {
-            id: p.id,
-            name: p.name,
-            alias: p.alias,
-            baseUrlOpenAI: p.baseUrlOpenAI,
-            baseUrlAnthropic: p.baseUrlAnthropic,
+        if (selection.kind === 'import') return;
+
+        const built = buildProviderFormData(selection)!;
+        console.log('[ConnectProviderFlow] screen1 → screen2:', {
+            kind: selection.kind,
+            selectedProviderId: built.formData.selectedProviderId,
         });
-        setOptionalEditableToken(false);
-        setProviderFormData({
-            uuid: undefined, name: p.alias || p.name,
-            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
-            apiStyle: undefined, token: '', enabled: true, noKeyRequired: false,
-            proxyUrl: '', userAgent: '',
-            providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
-            selectedProviderId: p.id,
-        } as any);
+        setOptionalEditableToken(built.optionalEditableToken);
+        setProviderFormData(built.formData);
         setApiKeyDialogOpen(true);
     }, [onClose]);
 
