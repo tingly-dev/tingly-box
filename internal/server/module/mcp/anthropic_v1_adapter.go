@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -416,7 +417,7 @@ func (a *AnthropicV1Adapter) RewriteEventIndex(event any, offset int) ([]byte, e
 		return nil, fmt.Errorf("expected *MessageStreamEventUnion, got %T", event)
 	}
 
-	rawJSON := e.RawJSON() // This returns string
+	rawJSON := strings.Clone(e.RawJSON()) // This returns string
 	// Parse and rewrite index
 	var parsed map[string]interface{}
 	if err := json.Unmarshal([]byte(rawJSON), &parsed); err != nil {

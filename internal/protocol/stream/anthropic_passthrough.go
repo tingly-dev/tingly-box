@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -16,95 +18,121 @@ import (
 // HandleAnthropic handles Anthropic v1 streaming response.
 // Returns (UsageStat, error)
 func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (*protocol.TokenUsage, error) {
-	defer streamResp.Close()
+	streamClosed := false
+	defer func() {
+		if !streamClosed {
+			streamResp.Close()
+		}
+	}()
+	defer hc.ReleaseStreamState()
 
 	hc.SetupSSEHeaders()
 
 	acc := usage.NewAnthropicAccumulator()
 	var sawMessageStart, sawMessageStop bool
+	var processErr error
 
-	err := hc.ProcessStream(
-		func() (bool, error, interface{}) {
-			if streamResp.Err() != nil {
-				return false, streamResp.Err(), nil
-			}
-			if !streamResp.Next() {
-				// Surface an error that the SDK only set during this Next()
-				// (e.g. an in-band SSE error event or a pre-content upstream
-				// failure) so the handler can emit a retryable status instead
-				// of a clean finish.
-				return false, streamResp.Err(), nil
-			}
-			// Current() returns a value, but we need a pointer for modification
-			return true, nil, new(streamResp.Current())
-		},
-		func(event interface{}) error {
-			evt := event.(*anthropic.MessageStreamEventUnion)
-			switch evt.Type {
-			case "message_start":
-				sawMessageStart = true
-			case "message_stop":
-				sawMessageStop = true
-			}
+	protocol.RunLoop(hc.GinContext, func(_ io.Writer) bool {
+		select {
+		case <-hc.GinContext.Request.Context().Done():
+			return false
+		default:
+		}
 
-			acc.Consume(evt)
+		// Pre-check: surface an error the SDK set before the current call
+		// (e.g. from a previous Close or an in-band SSE error event).
+		if streamResp.Err() != nil {
+			processErr = streamResp.Err()
+			return false
+		}
 
-			// This passthrough writes raw upstream bytes via c.SSEvent, bypassing
-			// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
-			if isAnthropicContentDeltaEvent(evt.Type) {
-				protocol.MarkFirstToken(hc.GinContext)
+		if !streamResp.Next() {
+			// Explicit close on stream end matches the original nextFunc
+			// behavior: Close() before returning to surface transport errors.
+			streamClosed = true
+			if err := streamResp.Close(); err != nil {
+				processErr = err
+			} else if streamResp.Err() != nil {
+				processErr = streamResp.Err()
 			}
+			return false
+		}
 
-			if hc.Guardrails != nil && hc.Guardrails.Enabled {
-				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
-					return err
-				} else if handled {
-					for _, rewrittenEvent := range rewritten {
-						sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
-					}
-					return nil
+		event := streamResp.Current()
+		evt := &event
+
+		// Call stream event hooks (recorder, guardrails)
+		for _, hook := range hc.OnStreamEventHooks {
+			if hookErr := hook(evt); hookErr != nil {
+				processErr = hookErr
+				return false
+			}
+		}
+
+		switch evt.Type {
+		case "message_start":
+			sawMessageStart = true
+		case "message_stop":
+			sawMessageStop = true
+		}
+
+		acc.Consume(evt)
+
+		// This passthrough writes raw upstream bytes via c.SSEvent, bypassing
+		// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
+		if isAnthropicContentDeltaEvent(evt.Type) {
+			protocol.MarkFirstToken(hc.GinContext)
+		}
+
+		if hc.Guardrails != nil && hc.Guardrails.Enabled {
+			if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
+				processErr = err
+				return false
+			} else if handled {
+				for _, rewrittenEvent := range rewritten {
+					sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
 				}
+				hc.GinContext.Writer.Flush()
+				return true
 			}
+		}
 
-			// For message_start events, modify the model in the raw JSON
-			// to preserve the original API response structure
-			if evt.Type == "message_start" {
-				var eventMap map[string]json.RawMessage
-				if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
-					var msgMap map[string]json.RawMessage
-					if err := json.Unmarshal(eventMap["message"], &msgMap); err == nil {
-						msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
-						eventMap["message"], _ = json.Marshal(msgMap)
-					}
-					modified, _ := json.Marshal(eventMap)
-					hc.GinContext.SSEvent(evt.Type, string(modified))
-				} else {
-					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+		// For message_start events, modify the model in the raw JSON
+		// to preserve the original API response structure
+		if evt.Type == "message_start" {
+			var eventMap map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
+				var msgMap map[string]json.RawMessage
+				if err := json.Unmarshal(eventMap["message"], &msgMap); err == nil {
+					msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
+					eventMap["message"], _ = json.Marshal(msgMap)
 				}
+				modified, _ := json.Marshal(eventMap)
+				hc.GinContext.SSEvent(evt.Type, string(modified))
 			} else {
-				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
 			}
-			hc.GinContext.Writer.Flush()
-			return nil
-		},
-	)
+		} else {
+			hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
+		}
+		hc.GinContext.Writer.Flush()
+		return true
+	})
 
-	// Handle errors
-	if err != nil {
-		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
+	if processErr != nil {
+		for _, hook := range hc.OnStreamErrorHooks {
+			hook(processErr)
+		}
+		if errors.Is(processErr, context.Canceled) || protocol.IsContextCanceled(processErr) {
 			logrus.WithContext(hc.GinContext.Request.Context()).Debug("Anthropic v1 stream canceled by client")
 			return acc.Result(), nil
 		}
-
-		// Stream failed before any content reached the client: surface a
-		// retryable 5xx so mid-request failover can try the next tier,
-		// instead of a 200 SSE error event.
 		if !hc.GinContext.Writer.Written() {
-			SendStreamingError(hc.GinContext, err)
-			return acc.Result(), err
+			SendStreamingError(hc.GinContext, processErr)
+			return acc.Result(), processErr
 		}
-		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return acc.Result(), err
+		MarshalAndSendErrorEvent(hc.GinContext, processErr.Error(), "stream_error", "stream_failed")
+		return acc.Result(), processErr
 	}
 
 	// Upstream cut mid-stream (content started but never terminated): surface
@@ -116,107 +144,142 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		MarshalAndSendErrorEvent(hc.GinContext, "upstream stream ended before completion", "stream_error", "incomplete_stream")
 	}
 
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook()
+	}
+
 	return acc.Result(), nil
 }
 
 // HandleAnthropicBeta handles Anthropic v1 beta streaming response.
 // Returns (UsageStat, error)
 func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (*protocol.TokenUsage, error) {
-	defer streamResp.Close()
+	streamClosed := false
+	defer func() {
+		if !streamClosed {
+			streamResp.Close()
+		}
+	}()
+	defer hc.ReleaseStreamState()
 
 	hc.SetupSSEHeaders()
 
 	acc := usage.NewAnthropicAccumulator()
 	var sawMessageStart, sawMessageStop bool
 
-	err := hc.ProcessStream(
-		func() (bool, error, interface{}) {
-			if streamResp.Err() != nil {
-				return false, streamResp.Err(), nil
-			}
-			if !streamResp.Next() {
-				// Surface an error that the SDK only set during this Next()
-				// (e.g. an in-band SSE error event or a pre-content upstream
-				// failure) so the handler can emit a retryable status instead
-				// of a clean finish.
-				return false, streamResp.Err(), nil
-			}
-			// Current() returns a value, but we need a pointer for modification
-			return true, nil, new(streamResp.Current())
-		},
-		func(event interface{}) error {
-			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
-			switch evt.Type {
-			case "message_start":
-				sawMessageStart = true
-			case "message_stop":
-				sawMessageStop = true
-			}
+	var processErr error
 
-			acc.ConsumeBeta(evt)
+	protocol.RunLoop(hc.GinContext, func(_ io.Writer) bool {
+		select {
+		case <-hc.GinContext.Request.Context().Done():
+			return false
+		default:
+		}
 
-			// This passthrough writes raw upstream bytes via c.SSEvent, bypassing
-			// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
-			if isAnthropicContentDeltaEvent(evt.Type) {
-				protocol.MarkFirstToken(hc.GinContext)
+		// Pre-check: surface an error the SDK set before the current call
+		// (e.g. from a previous Close or an in-band SSE error event).
+		if streamResp.Err() != nil {
+			processErr = streamResp.Err()
+			return false
+		}
+
+		if !streamResp.Next() {
+			// Explicit close on stream end matches the original nextFunc
+			// behavior: Close() before returning to surface transport errors.
+			streamClosed = true
+			if err := streamResp.Close(); err != nil {
+				processErr = err
+			} else if streamResp.Err() != nil {
+				processErr = streamResp.Err()
 			}
+			return false
+		}
 
-			if hc.Guardrails != nil && hc.Guardrails.Enabled {
-				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
-					return err
-				} else if handled {
-					for _, rewrittenEvent := range rewritten {
-						sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
-					}
-					return nil
+		event := streamResp.Current()
+		evt := &event
+
+		// Call stream event hooks (recorder, guardrails)
+		for _, hook := range hc.OnStreamEventHooks {
+			if hookErr := hook(evt); hookErr != nil {
+				processErr = hookErr
+				return false
+			}
+		}
+
+		switch evt.Type {
+		case "message_start":
+			sawMessageStart = true
+		case "message_stop":
+			sawMessageStop = true
+		}
+
+		acc.ConsumeBeta(evt)
+
+		// This passthrough writes raw upstream bytes via c.SSEvent, bypassing
+		// sendAnthropicStreamEvent, so mark TTFT here on the first content delta.
+		if isAnthropicContentDeltaEvent(evt.Type) {
+			protocol.MarkFirstToken(hc.GinContext)
+		}
+
+		if hc.Guardrails != nil && hc.Guardrails.Enabled {
+			if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
+				processErr = err
+				return false
+			} else if handled {
+				for _, rewrittenEvent := range rewritten {
+					sendAnthropicStreamEvent(hc.GinContext, rewrittenEvent.EventType, rewrittenEvent.Payload, hc.GinContext.Writer)
 				}
+				hc.GinContext.Writer.Flush()
+				return true
 			}
+		}
 
-			// For message_start events, modify the model in the raw JSON
-			// to preserve the original API response structure
-			if evt.Type == "message_start" {
-				var eventMap map[string]json.RawMessage
-				if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
-					var msgMap map[string]json.RawMessage
-					if err := json.Unmarshal(eventMap["message"], &msgMap); err == nil {
-						msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
-						eventMap["message"], _ = json.Marshal(msgMap)
-					}
-					modified, _ := json.Marshal(eventMap)
-					hc.GinContext.SSEvent(evt.Type, string(modified))
-				} else {
-					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+		// For message_start events, modify the model in the raw JSON
+		// to preserve the original API response structure
+		if evt.Type == "message_start" {
+			var eventMap map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
+				var msgMap map[string]json.RawMessage
+				if err := json.Unmarshal(eventMap["message"], &msgMap); err == nil {
+					msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
+					eventMap["message"], _ = json.Marshal(msgMap)
 				}
+				modified, _ := json.Marshal(eventMap)
+				hc.GinContext.SSEvent(evt.Type, string(modified))
 			} else {
-				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
 			}
-			hc.GinContext.Writer.Flush()
-			return nil
-		},
-	)
+		} else {
+			hc.GinContext.SSEvent(evt.Type, strings.Clone(evt.RawJSON()))
+		}
+		hc.GinContext.Writer.Flush()
+		return true
+	})
 
-	// Handle errors
-	if err != nil {
-		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
+	if processErr != nil {
+		for _, hook := range hc.OnStreamErrorHooks {
+			hook(processErr)
+		}
+		if errors.Is(processErr, context.Canceled) || protocol.IsContextCanceled(processErr) {
 			logrus.WithContext(hc.GinContext.Request.Context()).Debug("Anthropic v1 beta stream canceled by client")
 			return acc.Result(), nil
 		}
-
-		// Stream failed before any content reached the client: surface a
-		// retryable 5xx so mid-request failover can try the next tier,
-		// instead of a 200 SSE error event.
 		if !hc.GinContext.Writer.Written() {
-			SendStreamingError(hc.GinContext, err)
-			return acc.Result(), err
+			SendStreamingError(hc.GinContext, processErr)
+			return acc.Result(), processErr
 		}
-		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return acc.Result(), err
+		MarshalAndSendErrorEvent(hc.GinContext, processErr.Error(), "stream_error", "stream_failed")
+		return acc.Result(), processErr
 	}
 
 	// See HandleAnthropic: surface an honest error event when the upstream was
 	// cut after content started.
 	if sawMessageStart && !sawMessageStop {
 		MarshalAndSendErrorEvent(hc.GinContext, "upstream stream ended before completion", "stream_error", "incomplete_stream")
+	}
+
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook()
 	}
 
 	return acc.Result(), nil

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/tidwall/gjson"
 )
 
 // Use official Anthropic SDK types directly
@@ -61,35 +62,15 @@ func (r *AnthropicBetaMessagesRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-
 	r.BetaMessageNewParams = new(anthropic.BetaMessageNewParams)
-	r.Stream = aux.Stream
+	r.Stream = gjson.GetBytes(data, "stream").Bool()
 
-	if err := json.Unmarshal(data, r.BetaMessageNewParams); err != nil {
-		return err
-	}
-	return nil
+	return json.Unmarshal(data, r.BetaMessageNewParams)
 }
 
 func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-
 	r.MessageNewParams = new(anthropic.MessageNewParams)
-	r.Stream = aux.Stream
+	r.Stream = gjson.GetBytes(data, "stream").Bool()
 
-	if err := json.Unmarshal(data, r.MessageNewParams); err != nil {
-		return err
-	}
-	return nil
+	return json.Unmarshal(data, r.MessageNewParams)
 }

@@ -30,9 +30,6 @@ type ForwardContext struct {
 //   - Use context.Background() for non-streaming requests
 //   - Use c.Request.Context() for streaming requests to support client cancellation
 func NewForwardContext(baseCtx context.Context, provider *typ.Provider) *ForwardContext {
-	if baseCtx == nil {
-		baseCtx = context.Background()
-	}
 	timeout := time.Duration(provider.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
@@ -80,9 +77,6 @@ func (fc *ForwardContext) WithAfterRequest(hook func(context.Context, interface{
 // 2. Add timeout
 func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, context.CancelFunc) {
 	ctx := fc.BaseCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	// Apply BeforeRequest hooks in order
 	for _, hook := range fc.BeforeRequestHooks {

@@ -2,6 +2,7 @@ package mutate
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
@@ -64,7 +65,7 @@ func RewriteAnthropicToolUseEvent(
 		eventType = evt.Type
 		index = int(evt.Index)
 		block = evt.ContentBlock
-		rawJSON = evt.RawJSON()
+		rawJSON = strings.Clone(evt.RawJSON())
 	case *anthropic.BetaRawMessageStreamEventUnion:
 		if evt == nil {
 			return false, nil, nil
@@ -72,7 +73,7 @@ func RewriteAnthropicToolUseEvent(
 		eventType = evt.Type
 		index = int(evt.Index)
 		block = evt.ContentBlock
-		rawJSON = evt.RawJSON()
+		rawJSON = strings.Clone(evt.RawJSON())
 	default:
 		return false, nil, nil
 	}

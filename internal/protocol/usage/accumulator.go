@@ -1,6 +1,8 @@
 package usage
 
 import (
+	"strings"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/tidwall/gjson"
 
@@ -31,7 +33,7 @@ func NewAnthropicAccumulator() *AnthropicAccumulator {
 // It is safe to call on every event in the stream; only usage-carrying
 // events (message_start, message_delta) have any effect.
 func (a *AnthropicAccumulator) Consume(evt *anthropic.MessageStreamEventUnion) {
-	raw := evt.RawJSON()
+	raw := strings.Clone(evt.RawJSON())
 	a.consumeRaw(
 		evt.Message.Usage.InputTokens,
 		gjson.Get(raw, "message.usage.input_tokens").Int(),

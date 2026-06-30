@@ -185,7 +185,7 @@ func (s *Server) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel st
 
 	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := forwarding.NewForwardContext(nil, provider)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
 	response, cancel, err = forwarding.ForwardOpenAIResponses(fc, wrapper, responsesReq)
 	if cancel != nil {

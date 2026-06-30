@@ -1,6 +1,8 @@
 package streamemit
 
 import (
+	"strings"
+
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
@@ -18,7 +20,7 @@ func (e *StreamEmitter) FeedV1Beta(evt *anthropic.BetaRawMessageStreamEventUnion
 
 	e.msg.RecordV1BetaEvent(evt)
 
-	payload, err := payloadFromRaw(evt.RawJSON(), evt.Type)
+	payload, err := payloadFromRaw(strings.Clone(evt.RawJSON()), evt.Type)
 	if err != nil {
 		return nil, err
 	}

@@ -100,7 +100,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	// Validate scenario
 	if !isValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
 				Type:    "invalid_request_error",
@@ -122,7 +122,7 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 			},
@@ -143,14 +143,13 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	var messages = &protocol.AnthropicMessagesRequest{}
 	if beta {
 		if err := json.Unmarshal(bodyBytes, betaMessages); err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
+			logrus.WithError(err).Errorf("Anthropic beta decode error")
+			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
 					Type:    "invalid_request_error",
 				},
 			})
-			logrus.WithError(err).Errorf("Anthropic beta decode error")
-			c.Abort()
 			return
 		}
 		requestModel = string(betaMessages.Model)
@@ -158,14 +157,13 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	} else {
 		if err := json.Unmarshal(bodyBytes, messages); err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
+			logrus.WithError(err).Errorf("Anthropic decode error")
+			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
 					Type:    "invalid_request_error",
 				},
 			})
-			logrus.WithError(err).Errorf("Anthropic decode error")
-			c.Abort()
 			return
 		}
 
@@ -175,10 +173,19 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	// Check if this is the request requestModel name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
-	if rule == nil || err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	if rule == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "no such rule",
 				Type:    "invalid_request_error",
 			},
 		})
@@ -190,13 +197,13 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		logrus.WithError(err).Errorf("Select service error")
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
 			},
 		})
-		logrus.WithError(err).Errorf("Select service error")
 		return
 	}
 
@@ -228,7 +235,7 @@ func (s *Server) AnthropicListModelsForScenario(c *gin.Context, scenario typ.Rul
 func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
 	cfg := s.config
 	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Config not available",
 				Type:    "internal_error",

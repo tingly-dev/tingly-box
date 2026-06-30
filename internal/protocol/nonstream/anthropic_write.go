@@ -2,6 +2,7 @@ package nonstream
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +21,7 @@ import (
 // be stale. They marshal the struct directly so the wire reflects the mutation.
 func WriteAnthropicMessage(c *gin.Context, msg any) {
 	if r, ok := msg.(interface{ RawJSON() string }); ok {
-		if raw := r.RawJSON(); raw != "" {
+		if raw := strings.Clone(r.RawJSON()); raw != "" {
 			c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(raw))
 			return
 		}
