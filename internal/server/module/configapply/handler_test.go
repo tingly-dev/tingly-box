@@ -57,10 +57,9 @@ func TestApplyClaudeConfig_NilConfig(t *testing.T) {
 	assert.Contains(t, body, "Global config not available")
 }
 
-// A request body with valid preferences must reach the rule-lookup stage.
-// With no rules configured, the response is a NoActiveRules error — but
-// that's downstream of binding, which is what this test exercises.
-func TestApplyClaudeConfig_AcceptsPreferencesPayload(t *testing.T) {
+// A request body with valid preferences now succeeds even without routing
+// rules — config files can be written before models are configured.
+func TestApplyClaudeConfig_SucceedsWithoutRules(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg, err := config.NewConfig(config.WithConfigDir(tmpDir))
 	require.NoError(t, err)
@@ -82,16 +81,12 @@ func TestApplyClaudeConfig_AcceptsPreferencesPayload(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d (NoActiveRules), got %d. body: %s",
-			http.StatusBadRequest, w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 (apply without rules), got %d. body: %s",
+			w.Code, w.Body.String())
 	}
 	resp := w.Body.String()
-	assert.Contains(t, resp, `"success":false`)
-	assert.True(t,
-		strings.Contains(resp, "No active Claude Code rules found") ||
-			strings.Contains(resp, "No services configured"),
-		"expected NoActiveRules-style error after binding succeeded")
+	assert.Contains(t, resp, `"success":true`)
 }
 
 // preferences is required: missing it (or sending nil) is a client error,
@@ -198,8 +193,7 @@ func TestApplyOpenCodeConfig_NilConfig(t *testing.T) {
 	assert.Contains(t, body, "Global config not available")
 }
 
-func TestApplyOpenCodeConfig_NoActiveRules(t *testing.T) {
-	// Create a config with a temp directory (no built-in rules)
+func TestApplyOpenCodeConfig_SucceedsWithoutRules(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg, err := config.NewConfig(config.WithConfigDir(tmpDir))
 	require.NoError(t, err)
@@ -213,19 +207,13 @@ func TestApplyOpenCodeConfig_NoActiveRules(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return an error (either no rules or no services)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	// Now succeeds even without rules — config files can be written independently.
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. body: %s", w.Code, w.Body.String())
 	}
 
 	body := w.Body.String()
-	assert.Contains(t, body, `"success":false`)
-	// Error message depends on whether built-in rules are loaded
-	// Can be "No active OpenCode rules found" or "No services configured in OpenCode rule"
-	assert.True(t,
-		strings.Contains(body, "No active OpenCode rules found") ||
-			strings.Contains(body, "No services configured"),
-		"Expected error about no rules or no services")
+	assert.Contains(t, body, `"success":true`)
 }
 
 func TestGetOpenCodeConfigPreview_NilConfig(t *testing.T) {
@@ -248,8 +236,7 @@ func TestGetOpenCodeConfigPreview_NilConfig(t *testing.T) {
 	assert.Contains(t, body, "Global config not available")
 }
 
-func TestGetOpenCodeConfigPreview_NoActiveRules(t *testing.T) {
-	// Create a config with a temp directory (no built-in rules)
+func TestGetOpenCodeConfigPreview_SucceedsWithoutRules(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg, err := config.NewConfig(config.WithConfigDir(tmpDir))
 	require.NoError(t, err)
@@ -263,19 +250,13 @@ func TestGetOpenCodeConfigPreview_NoActiveRules(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return an error (either no rules or no services)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	// Now succeeds even without rules — preview is independent of routing setup.
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. body: %s", w.Code, w.Body.String())
 	}
 
 	body := w.Body.String()
-	assert.Contains(t, body, `"success":false`)
-	// Error message depends on whether built-in rules are loaded
-	// Can be "No active OpenCode rules found" or "No services configured in OpenCode rule"
-	assert.True(t,
-		strings.Contains(body, "No active OpenCode rules found") ||
-			strings.Contains(body, "No services configured"),
-		"Expected error about no rules or no services")
+	assert.Contains(t, body, `"success":true`)
 }
 
 func TestApplyConfigResponseStructure(t *testing.T) {

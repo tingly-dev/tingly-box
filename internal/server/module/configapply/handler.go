@@ -142,44 +142,6 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		return
 	}
 
-	// Get rules for claude_code scenario
-	rules := cfg.GetRequestConfigs()
-	var claudeRules []typ.Rule
-	for _, rule := range rules {
-		if rule.GetScenario().Is(typ.ScenarioClaudeCode) && rule.Active {
-			claudeRules = append(claudeRules, rule)
-		}
-	}
-
-	if len(claudeRules) == 0 {
-		c.JSON(http.StatusBadRequest, config.ApplyResult{
-			Success: false,
-			Message: "No active Claude Code rules found",
-		})
-		return
-	}
-
-	// Get the first active rule's provider
-	firstRule := claudeRules[0]
-	services := firstRule.GetServices()
-	if len(services) == 0 {
-		c.JSON(http.StatusBadRequest, config.ApplyResult{
-			Success: false,
-			Message: "No services configured in Claude Code rule",
-		})
-		return
-	}
-
-	firstService := services[0]
-	provider, err := cfg.GetProviderByUUID(firstService.Provider)
-	if err != nil || provider == nil {
-		c.JSON(http.StatusBadRequest, config.ApplyResult{
-			Success: false,
-			Message: "Provider not found for Claude Code rule",
-		})
-		return
-	}
-
 	// Get base URL from the user's request (respects reverse proxy headers)
 	port := h.config.ServerPort
 	if port == 0 {
@@ -205,6 +167,8 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	env["TINGLY_API_URL"] = baseURL
 
 	// Install status line script if requested (before applying settings)
+	var err error
+
 	var statusLineInstalled bool
 	var statusLinePath string
 
@@ -311,44 +275,6 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 		return
 	}
 
-	// Get rules for opencode scenario
-	rules := cfg.GetRequestConfigs()
-	var opencodeRules []typ.Rule
-	for _, rule := range rules {
-		if rule.GetScenario() == typ.ScenarioOpenCode && rule.Active {
-			opencodeRules = append(opencodeRules, rule)
-		}
-	}
-
-	if len(opencodeRules) == 0 {
-		c.JSON(http.StatusBadRequest, config.ApplyResult{
-			Success: false,
-			Message: "No active OpenCode rules found",
-		})
-		return
-	}
-
-	// Get the first active rule's provider
-	firstRule := opencodeRules[0]
-	services := firstRule.GetServices()
-	if len(services) == 0 {
-		c.JSON(http.StatusBadRequest, config.ApplyResult{
-			Success: false,
-			Message: "No services configured in OpenCode rule",
-		})
-		return
-	}
-
-	firstService := services[0]
-	provider, err := cfg.GetProviderByUUID(firstService.Provider)
-	if err != nil || provider == nil {
-		c.JSON(http.StatusBadRequest, config.ApplyResult{
-			Success: false,
-			Message: "Provider not found for OpenCode rule",
-		})
-		return
-	}
-
 	// Get base URL from the user's request (respects reverse proxy headers)
 	port := h.config.ServerPort
 	if port == 0 {
@@ -360,19 +286,11 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
-	// Collect all models from all active OpenCode rules
+	// Models are collected from active rules when available; an empty map
+	// is fine — BuildOpenCodeConfig fills in a sensible default.
 	models := make(map[string]interface{})
-	for _, rule := range opencodeRules {
-		requestModel := rule.RequestModel
-		if requestModel == "" {
-			requestModel = "tingly/cc-default"
-		}
-		models[requestModel] = map[string]interface{}{
-			"name": requestModel,
-		}
-	}
 
-	// Generate OpenCode config with all models
+	// Generate OpenCode config with collected models
 	payload := agent.BuildOpenCodeConfig(configBaseURL, apiKey, models)
 
 	result, err := config.ApplyOpenCodeConfig(payload)
@@ -463,44 +381,6 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 		return
 	}
 
-	// Get rules for opencode scenario
-	rules := cfg.GetRequestConfigs()
-	var opencodeRules []typ.Rule
-	for _, rule := range rules {
-		if rule.GetScenario() == typ.ScenarioOpenCode && rule.Active {
-			opencodeRules = append(opencodeRules, rule)
-		}
-	}
-
-	if len(opencodeRules) == 0 {
-		c.JSON(http.StatusBadRequest, OpenCodeConfigPreviewResponse{
-			Success: false,
-			Message: "No active OpenCode rules found",
-		})
-		return
-	}
-
-	// Get the first active rule's provider
-	firstRule := opencodeRules[0]
-	services := firstRule.GetServices()
-	if len(services) == 0 {
-		c.JSON(http.StatusBadRequest, OpenCodeConfigPreviewResponse{
-			Success: false,
-			Message: "No services configured in OpenCode rule",
-		})
-		return
-	}
-
-	firstService := services[0]
-	provider, err := cfg.GetProviderByUUID(firstService.Provider)
-	if err != nil || provider == nil {
-		c.JSON(http.StatusBadRequest, OpenCodeConfigPreviewResponse{
-			Success: false,
-			Message: "Provider not found for OpenCode rule",
-		})
-		return
-	}
-
 	// Get base URL from the user's request (respects reverse proxy headers)
 	port := h.config.ServerPort
 	if port == 0 {
@@ -512,17 +392,9 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
-	// Collect all models from all active OpenCode rules
+	// Models are collected from active rules when available; an empty map
+	// is fine — BuildOpenCodeConfig fills in a sensible default.
 	models := make(map[string]interface{})
-	for _, rule := range opencodeRules {
-		requestModel := rule.RequestModel
-		if requestModel == "" {
-			requestModel = "tingly/cc-default"
-		}
-		models[requestModel] = map[string]interface{}{
-			"name": requestModel,
-		}
-	}
 
 	// Generate OpenCode config JSON
 	configPayload := agent.BuildOpenCodeConfig(configBaseURL, apiKey, models)
