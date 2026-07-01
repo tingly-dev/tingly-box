@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/module/info"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
@@ -61,15 +62,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(gin.H{}),
 	)
 
-	// Health check endpoint (no auth required) - for health checks before login
-	apiAuth.GET("/info/health", s.GetHealthInfo,
-		swagger.WithTags("info"),
-		swagger.WithResponseModel(HealthInfoResponse{}),
-	)
-
 	// Create authenticated API group
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.getUserAuthMiddleware())
+
+	// Info endpoints: health (unauthenticated) + config/version (authenticated)
+	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir)
+	info.RegisterRoutes(apiAuth, apiV1, infoHandler)
+
 	apiV1.GET("/auth/token", s.GetUserToken,
 		swagger.WithDescription("Get current user token (masked)"),
 		swagger.WithTags("auth"),
@@ -89,24 +89,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
-
-	apiV1.GET("/info/config", s.GetInfoConfig,
-		swagger.WithTags("info"),
-		swagger.WithDescription("Get config info about this application"),
-		swagger.WithResponseModel(ConfigInfoResponse{}),
-	)
-
-	apiV1.GET("/info/version", s.GetInfoVersion,
-		swagger.WithTags("info"),
-		swagger.WithDescription("Get version info about this application"),
-		swagger.WithResponseModel(VersionInfoResponse{}),
-	)
-
-	apiV1.GET("/info/version/check", s.GetLatestVersion,
-		swagger.WithTags("info"),
-		swagger.WithDescription("Check if a newer version is available on GitHub"),
-		swagger.WithResponseModel(LatestVersionResponse{}),
-	)
 
 	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.GetLogs,
