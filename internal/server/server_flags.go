@@ -13,6 +13,23 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func (s *Server) guardrailsEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionGuardrails) ||
+		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionGuardrails)
+}
+
+// mcpEnabled checks if MCP feature is enabled via scenario flag
+func (s *Server) mcpEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionMCP) ||
+		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
+}
+
 func (s *Server) initGuardrailsRuntime() {
 	runtime := s.currentGuardrailsRuntime()
 	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {
@@ -78,23 +95,6 @@ func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
 
 	logrus.Infof("Created default guardrails config: %s", path)
 	return path, nil
-}
-
-func (s *Server) guardrailsEnabled() bool {
-	if s.config == nil {
-		return false
-	}
-	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionGuardrails) ||
-		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionGuardrails)
-}
-
-// mcpEnabled checks if MCP feature is enabled via scenario flag
-func (s *Server) mcpEnabled() bool {
-	if s.config == nil {
-		return false
-	}
-	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionMCP) ||
-		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
 }
 
 // mcpStripDisabledToolsEnabled returns whether dangerous disabled MCP strip is enabled.

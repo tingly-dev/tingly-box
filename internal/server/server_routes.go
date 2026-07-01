@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -195,12 +196,21 @@ func (s *Server) UseLoadBalanceEndpoints() {
 	s.loadBalancerAPI.RegisterRoutes(api)
 }
 
-// UseTokenManagementEndpoints registers the token management API endpoints
+// UseTokenManagementEndpoints registers the token management API endpoints.
 func (s *Server) UseTokenManagementEndpoints() {
-	// API routes for token management
-	api := s.engine.Group("/api/v1")
-	api.Use(s.getUserAuthMiddleware()) // Require user authentication for management APIs
+	if s.config == nil {
+		return
+	}
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return
+	}
+	store := sm.APIToken()
+	if store == nil {
+		return
+	}
 
-	// Token management API routes
-	s.registerTokenManagementAPI(api)
+	api := s.engine.Group("/api/v1")
+	api.Use(s.getUserAuthMiddleware())
+	sharing.RegisterRoutes(api, sharing.NewHandler(store))
 }

@@ -295,6 +295,10 @@ func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
 	return result
 }
 
+func (sc *ScenarioConfig) IsRecordingEnable() bool {
+	return sc.Flags.RecordingV2 != RecordingModeDisabled
+}
+
 // AuthType represents the authentication type for a provider
 // Type alias for backward compatibility with common/provider
 type AuthType = ai.AuthType

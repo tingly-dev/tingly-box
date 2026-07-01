@@ -13,6 +13,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai/quota"
+	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -57,7 +59,7 @@ type Server struct {
 	multiLogger *pkgobs.MultiLogger
 
 	// middleware
-	authMW *middleware.AuthMiddleware
+	authMW          *middleware.AuthMiddleware
 	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
@@ -175,23 +177,6 @@ type Server struct {
 	version string
 }
 
-// UsageStore returns the server's usage store instance for internal integrations.
-func (s *Server) UsageStore() *db.UsageStore {
-	if s == nil || s.config == nil {
-		return nil
-	}
-	sm := s.config.StoreManager()
-	if sm == nil {
-		return nil
-	}
-	return sm.Usage()
-}
-
-// GetRoutingSelector returns the server's routing selector for service selection.
-func (s *Server) GetRoutingSelector() *routing.SimpleSelector {
-	return s.routingSelector
-}
-
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -270,21 +255,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsRuntime()
 	server.refreshGuardrailsCredentialCacheOrWarn("server init")
-
-	// Initialize record sink if recording is enabled
-	switch server.recordMode {
-	case "":
-		// Recording disabled
-	case obs.RecordModeAll:
-		recordSink := obs.NewSink(server.recordDir, server.recordMode, server.sinkOpts()...)
-		server.clientPool.SetRecordSink(recordSink)
-		logrus.Debugf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
-	case obs.RecordModeScenario, obs.RecordModeRequestOnly, obs.RecordModeRequestResponse, obs.RecordModeStagedRequestResponse:
-		// Scenario recording is now on-demand, created when scenario flag is enabled
-		logrus.Debugf("Scenario recording mode enabled, sinks will be created on-demand per scenario")
-	default:
-		log.Panicf("Unknown recording mode %s", server.recordMode)
-	}
 
 	// Log recording flag if enabled
 	if server.enableRecording {
@@ -465,8 +435,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	)
 
 	// Initialize provider quota manager
-	if err := server.initQuotaManager(cfg); err != nil {
+	quotaMgr, err := initQuotaManager(cfg)
+	if err != nil {
 		logrus.WithError(err).Warn("Failed to initialize provider quota manager")
+	} else {
+		server.quotaManager = quotaMgr
 	}
 
 	// Setup middleware
@@ -507,6 +480,23 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	return server
+}
+
+// UsageStore returns the server's usage store instance for internal integrations.
+func (s *Server) UsageStore() *db.UsageStore {
+	if s == nil || s.config == nil {
+		return nil
+	}
+	sm := s.config.StoreManager()
+	if sm == nil {
+		return nil
+	}
+	return sm.Usage()
+}
+
+// GetRoutingSelector returns the server's routing selector for service selection.
+func (s *Server) GetRoutingSelector() *routing.SimpleSelector {
+	return s.routingSelector
 }
 
 func (s *Server) Context() context.Context {
@@ -579,3 +569,21 @@ func (s *Server) setupConfigWatcher() {
 	})
 }
 
+// initQuotaManager initializes the provider quota manager
+func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
+	// Create quota store
+	store, err := quota.NewGormStore(cfg.ConfigDir, logrus.StandardLogger())
+	if err != nil {
+		return nil, err
+	}
+
+	// Create quota manager with default config
+	qConfig := quota.DefaultConfig()
+	quotaMgr := quota.NewManager(qConfig, store, cfg, logrus.StandardLogger())
+
+	// Register all built-in fetchers
+	fetcher.RegisterAll(quotaMgr, logrus.StandardLogger())
+
+	logrus.Info("Provider quota manager initialized")
+	return quotaMgr, nil
+}

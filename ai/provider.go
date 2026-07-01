@@ -262,6 +262,31 @@ func (p *Provider) IsBuiltin() bool {
 	return p != nil && p.Source == ProviderSourceBuiltin
 }
 
+// ResolveStyle returns a provider with APIBase and APIStyle set to the best-fit
+// endpoint for the given clientStyle. Returns p unchanged if no remapping is
+// needed, otherwise returns a shallow clone so callers never mutate the
+// original.
+//
+// Dual-mode providers (api_key auth with both APIBaseOpenAI and
+// APIBaseAnthropic set) expose two base URLs for the same credentials.
+// When clientStyle matches one of those URLs, it is selected and no
+// protocol translation is required. When neither matches, the primary
+// APIBase/APIStyle is kept, preserving backward-compatible behaviour for
+// single-protocol providers.
+func (p *Provider) ResolveStyle(clientStyle APIStyle) *Provider {
+	if p == nil {
+		return nil
+	}
+	baseURL, style := p.ResolveEndpoint(clientStyle)
+	if baseURL == p.APIBase && style == p.APIStyle {
+		return p
+	}
+	clone := *p
+	clone.APIBase = baseURL
+	clone.APIStyle = style
+	return &clone
+}
+
 // HasDualURL reports whether the provider has a dual URL configured for
 // the given inbound client style.
 func (p *Provider) HasDualURL(clientStyle APIStyle) bool {

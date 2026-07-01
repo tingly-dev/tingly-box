@@ -3,10 +3,17 @@ package server
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module/info"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
+	providermodule "github.com/tingly-dev/tingly-box/internal/server/module/provider"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
@@ -61,15 +68,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(gin.H{}),
 	)
 
-	// Health check endpoint (no auth required) - for health checks before login
-	apiAuth.GET("/info/health", s.GetHealthInfo,
-		swagger.WithTags("info"),
-		swagger.WithResponseModel(HealthInfoResponse{}),
-	)
-
 	// Create authenticated API group
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.getUserAuthMiddleware())
+
+	// Info endpoints: health (unauthenticated) + config/version (authenticated)
+	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir)
+	info.RegisterRoutes(apiAuth, apiV1, infoHandler)
+
 	apiV1.GET("/auth/token", s.GetUserToken,
 		swagger.WithDescription("Get current user token (masked)"),
 		swagger.WithTags("auth"),
@@ -89,24 +95,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
-
-	apiV1.GET("/info/config", s.GetInfoConfig,
-		swagger.WithTags("info"),
-		swagger.WithDescription("Get config info about this application"),
-		swagger.WithResponseModel(ConfigInfoResponse{}),
-	)
-
-	apiV1.GET("/info/version", s.GetInfoVersion,
-		swagger.WithTags("info"),
-		swagger.WithDescription("Get version info about this application"),
-		swagger.WithResponseModel(VersionInfoResponse{}),
-	)
-
-	apiV1.GET("/info/version/check", s.GetLatestVersion,
-		swagger.WithTags("info"),
-		swagger.WithDescription("Check if a newer version is available on GitHub"),
-		swagger.WithResponseModel(LatestVersionResponse{}),
-	)
 
 	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.GetLogs,
@@ -197,8 +185,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	//	swagger.WithTags("providers"),
 	//	swagger.WithResponseModel(ToggleProviderResponse{}),
 	//)
-
-	useV2Provider(s, apiV2)
 
 	// Create skill handler with skill manager
 	// Initialize skill manager for skill locations
@@ -339,19 +325,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(HistoryResponse{}),
 	)
 
-	// Provider Models Management
-	apiV1.GET("/provider-models/:uuid", s.GetProviderModelsByUUID,
-		swagger.WithDescription("Get all provider models"),
-		swagger.WithTags("models"),
-		swagger.WithResponseModel(ProviderModelsResponse{}),
-	)
-
-	apiV1.POST("/provider-models/:uuid", s.UpdateProviderModelsByUUID,
-		swagger.WithDescription("Fetch models for a specific provider"),
-		swagger.WithTags("models"),
-		swagger.WithResponseModel(ProviderModelsResponse{}),
-	)
-
 	// Onboarding: extract URLs and possible API tokens from arbitrary pasted
 	// text. Vendor-agnostic — the user picks which URL/token to use.
 	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
@@ -378,50 +351,155 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	// - /swagger.json (Swagger 2.0)
 	// - /openapi.json (OpenAPI 3.0)
 	manager.SetupOpenAPIEndpoints()
+
+	// Provider CRUD + model management
+	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
+	providermodule.RegisterRoutes(apiV2, providerHandler)
+
+	// Provider template endpoints
+	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
+	providertemplate.RegisterRoutes(apiV2, providerTemplateHandler)
 }
 
-func useV2Provider(s *Server, api *swagger.RouteGroup) {
+// ValidateAuthToken validates an authentication token without requiring auth
+// This is used during login flow to verify a token before establishing session
+func (s *Server) ValidateAuthToken(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"valid":   false,
+		})
+		return
+	}
 
-	api.GET("/providers", s.GetProviders,
-		swagger.WithDescription("Get all configured providers with masked tokens"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ProvidersResponse{}),
-	)
+	// Extract token from "Bearer <token>" format
+	tokenParts := strings.Split(authHeader, " ")
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"valid":   false,
+		})
+		return
+	}
 
-	api.GET("/providers/:uuid", s.GetProvider,
-		swagger.WithDescription("Get specific provider details with masked token"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ProviderResponse{}),
-	)
+	token := tokenParts[1]
 
-	api.POST("/providers", s.CreateProvider,
-		swagger.WithDescription("Create a new provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithQuery("force", "bool", "Force to add without checking"),
-		swagger.WithRequestModel(CreateProviderRequest{}),
-		swagger.WithResponseModel(CreateProviderResponse{}),
-	)
+	// Check against global config user token
+	cfg := s.config
+	if cfg != nil && cfg.HasUserToken() {
+		configToken := cfg.GetUserToken()
 
-	api.PUT("/providers/:uuid", s.UpdateProvider,
-		swagger.WithDescription("Update existing provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithRequestModel(UpdateProviderRequest{}),
-		swagger.WithResponseModel(UpdateProviderResponse{}),
-	)
+		// Direct token comparison
+		if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"valid":   true,
+			})
+			return
+		}
+	}
 
-	api.POST("/providers/:uuid/toggle", s.ToggleProvider,
-		swagger.WithDescription("Toggle provider enabled/disabled status"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ToggleProviderResponse{}),
-	)
+	// Token is invalid
+	c.JSON(http.StatusUnauthorized, gin.H{
+		"success": false,
+		"valid":   false,
+	})
+}
 
-	api.DELETE("/providers/:uuid", s.DeleteProvider,
-		swagger.WithDescription("Delete a provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(DeleteProviderResponse{}),
-	)
+// GetUserToken returns the current user token (masked)
+// Requires authentication
+func (s *Server) GetUserToken(c *gin.Context) {
+	token := s.config.GetUserToken()
+	isDefault := token == constant.DefaultUserToken
 
-	// Provider template endpoints - register from providertemplate module
-	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
-	providertemplate.RegisterRoutes(api, providerTemplateHandler)
+	// Return full token - frontend will handle masking
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"token":      token,
+			"is_default": isDefault,
+		},
+	})
+}
+
+// ResetUserToken generates a new secure random token and updates the configuration
+// Requires authentication
+func (s *Server) ResetUserToken(c *gin.Context) {
+	newToken, err := config.GenerateUserToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+		return
+	}
+
+	if err := s.config.SetUserToken(newToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save token",
+		})
+		return
+	}
+
+	logrus.Info("User token has been reset via web UI")
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"token": newToken,
+		},
+	})
+}
+
+// ResetModelToken generates a new secure random model token and updates the configuration
+// Requires authentication
+func (s *Server) ResetModelToken(c *gin.Context) {
+	newToken, err := config.GenerateModelToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to generate token",
+		})
+		return
+	}
+
+	if err := s.config.SetModelToken(newToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save token",
+		})
+		return
+	}
+
+	logrus.Info("Model token has been reset via web UI")
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"token": newToken,
+		},
+	})
+}
+
+// Helper function to mask tokens for display
+func maskToken(token string) string {
+	if token == "" {
+		return ""
+	}
+
+	// If already masked, return as is
+	if strings.Contains(token, "...") {
+		return token
+	}
+
+	// For very short tokens, mask all characters
+	if len(token) <= 8 {
+		return strings.Repeat("*", len(token))
+	}
+
+	// For longer tokens, show first 12 and last 4 characters
+	// This works for both short and long tokens
+	return token[:12] + "..." + token[len(token)-4:]
 }

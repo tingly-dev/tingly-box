@@ -142,7 +142,7 @@ func TestLBScenario_C_CascadeFailoverAndRecovery(t *testing.T) {
 // Session already pinned to the lower tier (t2) while the primary (t1) is
 // healthy → the request must return to t1 and the pin be rewritten to t1.
 func TestLBScenario_RegressionStalePinReturnsToPrimary(t *testing.T) {
-	t1 := svc("anthropic", "claude-opus", 0, true) // primary
+	t1 := svc("anthropic", "claude-opus", 0, true)   // primary
 	t2 := svc("anthropic", "claude-sonnet", 1, true) // fallback
 	id1 := t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-reg", 1800, t1, t2),
@@ -301,7 +301,7 @@ func TestLBScenario_D_GridWholeTopTierTrips(t *testing.T) {
 // attempted serviceID ("provider/model") per hop, so a wrong model is visible
 // directly in the attempt trace.
 func TestLBScenario_CrossModelFailover(t *testing.T) {
-	t0 := svc("openai", "gpt-5.4", 0, true) // primary, model-a
+	t0 := svc("openai", "gpt-5.4", 0, true)        // primary, model-a
 	t1 := svc("anthropic", "claude-opus", 1, true) // fallback, model-b
 	id0, id1 := t0.ServiceID(), t1.ServiceID()
 	sim, cleanup, err := NewLBSimulator(tierTacticRule("rule-xm", 0, t0, t1), map[string][]int{
@@ -501,8 +501,8 @@ func TestLBScenario_WithinTierLoadSharing(t *testing.T) {
 	idA, idB := a.ServiceID(), b.ServiceID()
 
 	sim, cleanup, err := NewLBSimulator(tierTacticRuleWithin("rule-within", 0, loadbalance.TacticRandom, a, b, c), map[string][]int{
-		idA: {200},
-		idB: {200},
+		idA:           {200},
+		idB:           {200},
 		c.ServiceID(): {200},
 	})
 	require.NoError(t, err)
@@ -593,4 +593,3 @@ func TestLBScenario_MultiSessionIndependentAffinity(t *testing.T) {
 	require.True(t, ok2)
 	require.True(t, lockedAt2_1.After(lockedAt2_0), "s2 re-lock should have fresh LockedAt")
 }
-
