@@ -23,7 +23,7 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{
-		BetaMessageNewParams: sdk.BetaMessageNewParams{
+		BetaMessageNewParams: &sdk.BetaMessageNewParams{
 			Messages: originalMessages,
 			Tools: []sdk.BetaToolUnionParam{
 				{OfTool: &sdk.BetaToolParam{Name: "read_file"}},
@@ -86,7 +86,7 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{
-		BetaMessageNewParams: sdk.BetaMessageNewParams{
+		BetaMessageNewParams: &sdk.BetaMessageNewParams{
 			Messages: originalMessages,
 			Tools: []sdk.BetaToolUnionParam{
 				{OfTool: &sdk.BetaToolParam{Name: "read_file"}},
@@ -130,7 +130,7 @@ func TestClaudeCodeCompact_NoCompressionWithoutTools(t *testing.T) {
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{
-		BetaMessageNewParams: sdk.BetaMessageNewParams{
+		BetaMessageNewParams: &sdk.BetaMessageNewParams{
 			Messages: originalMessages,
 		},
 	}

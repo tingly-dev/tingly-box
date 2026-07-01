@@ -61,6 +61,7 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 // It logs all HTTP requests to both the multi-mode logger and memory
 func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
@@ -87,6 +88,7 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 
 		c.Next()
 
+		latency := time.Since(start)
 		clientIP := c.ClientIP()
 		method := c.Request.Method
 		statusCode := c.Writer.Status()
@@ -122,6 +124,7 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			"type":       "http_request",
 			"request_id": requestID,
 			"status":     statusCode,
+			"latency":    latency,
 			"client_ip":  clientIP,
 			"method":     method,
 			"path":       path,
@@ -162,10 +165,11 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		// Log with structured fields including error details
-		m.logger.WithFields(fields).Log(getLogLevel(statusCode), fmt.Sprintf("%s %s %d %s %d",
+		m.logger.WithFields(fields).Log(getLogLevel(statusCode), fmt.Sprintf("%s %s %d %v %s %d",
 			method,
 			path,
 			statusCode,
+			latency,
 			clientIP,
 			bodySize,
 		))

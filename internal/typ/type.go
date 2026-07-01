@@ -296,6 +296,9 @@ func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
 }
 
 func (sc *ScenarioConfig) IsRecordingEnable() bool {
+	if sc == nil {
+		return false
+	}
 	return sc.Flags.RecordingV2 != RecordingModeDisabled
 }
 

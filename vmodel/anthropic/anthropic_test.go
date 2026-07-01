@@ -26,7 +26,7 @@ func makeReq(texts ...string) *protocol.AnthropicBetaMessagesRequest {
 		})
 	}
 	return &protocol.AnthropicBetaMessagesRequest{
-		BetaMessageNewParams: sdk.BetaMessageNewParams{Messages: msgs},
+		BetaMessageNewParams: &sdk.BetaMessageNewParams{Messages: msgs},
 	}
 }
 

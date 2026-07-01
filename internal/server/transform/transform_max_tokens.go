@@ -2,6 +2,9 @@ package transform
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -32,6 +35,10 @@ func (t *MaxTokensTransform) Apply(ctx *protocoltransform.TransformContext) erro
 		t.applyAnthropicV1(req)
 	case *anthropic.BetaMessageNewParams:
 		t.applyAnthropicBeta(req)
+	case *openai.ChatCompletionNewParams:
+		t.applyOpenAIChat(req)
+	case *responses.ResponseNewParams:
+		t.applyOpenAIResponses(req)
 	}
 	return nil
 }
@@ -40,18 +47,20 @@ func (t *MaxTokensTransform) applyAnthropicV1(req *anthropic.MessageNewParams) {
 	if req.MaxTokens == 0 {
 		req.MaxTokens = int64(t.DefaultMaxTokens)
 	}
-	maxAllowed := int64(t.MaxAllowed)
-	if req.MaxTokens > maxAllowed {
-		req.MaxTokens = maxAllowed
-	}
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-		if *thinkBudget > maxAllowed {
-			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+	if t.MaxAllowed > 0 {
+		maxAllowed := int64(t.MaxAllowed)
+		if req.MaxTokens > maxAllowed {
+			req.MaxTokens = maxAllowed
 		}
-		// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
-		// operator limit — cap the budget rather than raising the limit.
-		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
-			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
+		if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+			if *thinkBudget > maxAllowed {
+				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+			}
+			// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
+			// operator limit — cap the budget rather than raising the limit.
+			if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
+				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
+			}
 		}
 	}
 }
@@ -60,18 +69,54 @@ func (t *MaxTokensTransform) applyAnthropicBeta(req *anthropic.BetaMessageNewPar
 	if req.MaxTokens == 0 {
 		req.MaxTokens = int64(t.DefaultMaxTokens)
 	}
-	maxAllowed := int64(t.MaxAllowed)
-	if req.MaxTokens > maxAllowed {
-		req.MaxTokens = maxAllowed
+	if t.MaxAllowed > 0 {
+		maxAllowed := int64(t.MaxAllowed)
+		if req.MaxTokens > maxAllowed {
+			req.MaxTokens = maxAllowed
+		}
+		if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+			if *thinkBudget > maxAllowed {
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+			}
+			// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
+			// operator limit — cap the budget rather than raising the limit.
+			if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
+			}
+		}
 	}
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-		if *thinkBudget > maxAllowed {
-			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+}
+
+// applyOpenAIChat mirrors the Anthropic rules for Chat Completions' two
+// competing fields: max_completion_tokens is the modern replacement for the
+// deprecated max_tokens, so when the caller already set max_completion_tokens
+// we cap it and leave max_tokens alone rather than also auto-filling it.
+func (t *MaxTokensTransform) applyOpenAIChat(req *openai.ChatCompletionNewParams) {
+	if req.MaxCompletionTokens.Valid() {
+		if t.MaxAllowed > 0 && req.MaxCompletionTokens.Value > int64(t.MaxAllowed) {
+			req.MaxCompletionTokens = param.NewOpt(int64(t.MaxAllowed))
 		}
-		// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
-		// operator limit — cap the budget rather than raising the limit.
-		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
-			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
+		return
+	}
+	if !req.MaxTokens.Valid() {
+		if t.DefaultMaxTokens > 0 {
+			req.MaxTokens = param.NewOpt(int64(t.DefaultMaxTokens))
 		}
+		return
+	}
+	if t.MaxAllowed > 0 && req.MaxTokens.Value > int64(t.MaxAllowed) {
+		req.MaxTokens = param.NewOpt(int64(t.MaxAllowed))
+	}
+}
+
+func (t *MaxTokensTransform) applyOpenAIResponses(req *responses.ResponseNewParams) {
+	if !req.MaxOutputTokens.Valid() {
+		if t.DefaultMaxTokens > 0 {
+			req.MaxOutputTokens = param.NewOpt(int64(t.DefaultMaxTokens))
+		}
+		return
+	}
+	if t.MaxAllowed > 0 && req.MaxOutputTokens.Value > int64(t.MaxAllowed) {
+		req.MaxOutputTokens = param.NewOpt(int64(t.MaxAllowed))
 	}
 }

@@ -268,40 +268,36 @@ func TestParentCommandDefaultsParse(t *testing.T) {
 	}
 }
 
-// TestQuotaListIsDefault ensures quota with no args defaults to list.
-func TestQuotaListIsDefault(t *testing.T) {
+// TestQuotaAllProvidersFlag ensures quota --all parses and shows all providers.
+func TestQuotaAllProvidersFlag(t *testing.T) {
 	cli, parser := newTestParser(t)
-	// quota list supports --refresh flag
-	if _, err := parser.Parse([]string{"quota", "list", "--refresh"}); err != nil {
-		t.Fatalf("quota list --refresh should parse: %v", err)
+	if _, err := parser.Parse([]string{"quota", "--all"}); err != nil {
+		t.Fatalf("quota --all should parse: %v", err)
 	}
-	if !cli.Quota.List.Refresh {
-		t.Error("Quota.List.Refresh should be true")
+	if !cli.Quota.AllProviders {
+		t.Error("Quota.AllProviders should be true")
 	}
 }
 
-// TestQuotaGetWithProvider ensures quota get accepts provider argument.
-func TestQuotaGetWithProvider(t *testing.T) {
+// TestQuotaWithProvider ensures quota accepts an optional provider argument.
+func TestQuotaWithProvider(t *testing.T) {
 	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"quota", "get", "my-provider", "--refresh"}); err != nil {
-		t.Fatalf("quota get with provider should parse: %v", err)
+	if _, err := parser.Parse([]string{"quota", "my-provider"}); err != nil {
+		t.Fatalf("quota with provider should parse: %v", err)
 	}
-	if cli.Quota.Get.Provider != "my-provider" {
-		t.Errorf("Provider: %q", cli.Quota.Get.Provider)
-	}
-	if !cli.Quota.Get.Refresh {
-		t.Error("Get.Refresh should be true")
+	if cli.Quota.Provider != "my-provider" {
+		t.Errorf("Provider: %q", cli.Quota.Provider)
 	}
 }
 
-// TestQuotaRefreshWithProvider ensures quota refresh accepts optional provider.
-func TestQuotaRefreshWithProvider(t *testing.T) {
+// TestQuotaNoRefreshFlag ensures quota --no-refresh parses.
+func TestQuotaNoRefreshFlag(t *testing.T) {
 	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"quota", "refresh", "my-provider"}); err != nil {
-		t.Fatalf("quota refresh with provider should parse: %v", err)
+	if _, err := parser.Parse([]string{"quota", "my-provider", "--no-refresh"}); err != nil {
+		t.Fatalf("quota --no-refresh should parse: %v", err)
 	}
-	if cli.Quota.Refresh.Provider != "my-provider" {
-		t.Errorf("Provider: %q", cli.Quota.Refresh.Provider)
+	if !cli.Quota.NoRefresh {
+		t.Error("Quota.NoRefresh should be true")
 	}
 }
 

@@ -428,7 +428,8 @@ func (r *Router) evaluateServiceTTFTOp(ctx *RequestContext, op *SmartOp) OpEvalR
 		return res
 	}
 	var values []float64
-	for _, s := range ctx.ServiceStats {
+	for i := range ctx.ServiceStats {
+		s := &ctx.ServiceStats[i]
 		switch op.Operation {
 		case OpServiceTTFTAvgLe, OpServiceTTFTAvgGe:
 			if s.AvgTTFTMs > 0 {

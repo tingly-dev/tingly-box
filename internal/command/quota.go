@@ -54,7 +54,7 @@ func runQuotaShowAll(appManager *AppManager, refresh bool) error {
 		if err != nil {
 			fmt.Printf("⚠️  Refresh failed: %v\n", err)
 		} else {
-			fmt.Println("✅ Refresh complete\n")
+			fmt.Println("✅ Refresh complete")
 		}
 	}
 
@@ -94,7 +94,7 @@ func runQuotaShowProvider(appManager *AppManager, providerName string, refresh b
 		if err != nil {
 			fmt.Printf("⚠️  Refresh failed: %v\n", err)
 		} else {
-			fmt.Println("✅ Refresh complete\n")
+			fmt.Println("✅ Refresh complete")
 		}
 	}
 

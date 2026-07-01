@@ -48,13 +48,13 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 
 	// Wire an in-memory exporter so we can inspect what was recorded.
 	mem := &memExporter{}
-	sink := obs.NewSink("", obs.RecordModeAll, obs.WithExporters(mem))
+	sink := obs.NewSink("", obs.RecordModeStagedRequestResponse, obs.WithExporters(mem))
 	require.NotNil(t, sink)
 	t.Cleanup(func() { sink.Close() })
 
 	s := &Server{
 		scenarioRecordSinks: map[typ.RuleScenario]*obs.Sink{scenario: sink},
-		recordMode:          obs.RecordModeAll,
+		recordMode:          obs.RecordModeStagedRequestResponse,
 	}
 
 	// Gin context with CloseNotify-capable writer (gin.Context.Stream needs it).
@@ -66,7 +66,7 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	provider := &typ.Provider{Name: "anthropic-test-prov"}
 
 	// Recorder built via the production entry point.
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-stream-model", obs.RecordModeAll, nil)
+	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-stream-model", obs.RecordModeStagedRequestResponse, nil)
 	require.NotNil(t, recorder)
 
 	// Synthetic SSE event sequence. The Stream decoder will JSON-unmarshal

@@ -377,7 +377,7 @@ func TestSinkDefaultsToGzip(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	s := NewSink(dir, RecordModeAll)
+	s := NewSink(dir, RecordModeStagedRequestResponse)
 	if s == nil {
 		t.Fatal("expected sink")
 	}
@@ -404,7 +404,7 @@ func TestSinkWithCASExporter(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	s := NewSink(dir, RecordModeAll, WithCASExporter())
+	s := NewSink(dir, RecordModeStagedRequestResponse, WithCASExporter())
 	if s == nil {
 		t.Fatal("expected sink")
 	}
