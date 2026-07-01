@@ -72,7 +72,18 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		if requestID == "" {
 			requestID = uuid.NewString()
 		}
+		// Store on gin context so Gin middleware/handlers that hold *gin.Context
+		// can read it via c.GetString(GinRequestIDKey) — e.g. the access log
+		// fields below and stage_smart_routing's emitTrace.
 		c.Set(GinRequestIDKey, requestID)
+
+		// Also carry the id on the Go request context so code that only has
+		// context.Context (protocol converters, upstream client calls) can log
+		// via logrus.WithContext(ctx). The MultiLogger hook reads it back with
+		// RequestIDFromContext and routes those entries to LogSourceModelRequest,
+		// stamping them with the id for correlation. This is NOT a body copy —
+		// WithContext only swaps the context pointer.
+		c.Request = c.Request.WithContext(obs.ContextWithRequestID(c.Request.Context(), requestID))
 
 		c.Next()
 
