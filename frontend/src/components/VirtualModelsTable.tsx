@@ -16,6 +16,10 @@ import {
 } from '@mui/material';
 import type { Provider } from '../types/provider';
 
+// Cap visible model chips per row so wrapping doesn't produce uneven row
+// heights across providers with different model counts.
+const MAX_VISIBLE_MODELS = 4;
+
 interface VirtualModelsTableProps {
     providers: Provider[];
     onToggle?: (providerUuid: string) => void;
@@ -65,16 +69,26 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                                             none registered
                                         </Typography>
                                     ) : (
-                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                            {models.map((m) => (
+                                        <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
+                                            {models.slice(0, MAX_VISIBLE_MODELS).map((m: string) => (
                                                 <Chip
                                                     key={m}
                                                     label={m}
                                                     size="small"
                                                     variant="outlined"
-                                                    sx={{ height: 20 }}
+                                                    sx={{ height: 20, flexShrink: 0 }}
                                                 />
                                             ))}
+                                            {models.length > MAX_VISIBLE_MODELS && (
+                                                <Tooltip title={models.slice(MAX_VISIBLE_MODELS).join(', ')}>
+                                                    <Chip
+                                                        label={`+${models.length - MAX_VISIBLE_MODELS}`}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        sx={{ height: 20, flexShrink: 0, color: 'text.secondary' }}
+                                                    />
+                                                </Tooltip>
+                                            )}
                                         </Box>
                                     )}
                                 </TableCell>
