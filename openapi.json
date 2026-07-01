@@ -1859,83 +1859,6 @@
         }
       }
     },
-    "/api/v1/log/request": {
-      "delete": {
-        "tags": [
-          "logs"
-        ],
-        "summary": "Clear all stored request bodies",
-        "description": "Clear all stored request bodies",
-        "operationId": "apiV1LogRequestDelete",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/log/request/stats": {
-      "get": {
-        "tags": [
-          "logs"
-        ],
-        "summary": "Get request body store statistics",
-        "description": "Get request body store statistics",
-        "operationId": "apiV1LogRequestStatsGet",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/log/request/{id}": {
-      "get": {
-        "tags": [
-          "logs"
-        ],
-        "summary": "Get a stored request body by its reference ID",
-        "description": "Get a stored request body by its reference ID",
-        "operationId": "apiV1LogRequestIdGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequestBodyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/log/stats": {
       "get": {
         "tags": [
@@ -5337,6 +5260,14 @@
             "type": "string",
             "description": "Field BASH_MAX_TIMEOUT_MS"
           },
+          "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": {
+            "type": "string",
+            "description": "Field CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
+          },
+          "CLAUDE_CODE_AUTO_COMPACT_WINDOW": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+          },
           "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": {
             "type": "string",
             "description": "Field CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
@@ -5344,14 +5275,6 @@
           "CLAUDE_CODE_MAX_OUTPUT_TOKENS": {
             "type": "string",
             "description": "Field CLAUDE_CODE_MAX_OUTPUT_TOKENS"
-          },
-          "CLAUDE_CODE_AUTO_COMPACT_WINDOW": {
-            "type": "string",
-            "description": "Field CLAUDE_CODE_AUTO_COMPACT_WINDOW"
-          },
-          "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": {
-            "type": "string",
-            "description": "Field CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
           },
           "CLAUDE_CODE_SUBAGENT_MODEL": {
             "type": "string",
@@ -7163,6 +7086,10 @@
             "format": "int64",
             "description": "Field context"
           },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -8457,13 +8384,6 @@
             "format": "date-time",
             "description": "Field expires_at"
           },
-          "extra_windows": {
-            "type": "array",
-            "description": "Field extra_windows",
-            "items": {
-              "$ref": "#/components/schemas/UsageWindow"
-            }
-          },
           "fetched_at": {
             "type": "string",
             "format": "date-time",
@@ -8477,9 +8397,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Field last_error_at"
-          },
-          "primary": {
-            "$ref": "#/components/schemas/UsageWindow"
           },
           "provider_name": {
             "type": "string",
@@ -8497,11 +8414,12 @@
             "type": "string",
             "description": "Field raw_response"
           },
-          "secondary": {
-            "$ref": "#/components/schemas/UsageWindow"
-          },
-          "tertiary": {
-            "$ref": "#/components/schemas/UsageWindow"
+          "windows": {
+            "type": "array",
+            "description": "Field windows",
+            "items": {
+              "$ref": "#/components/schemas/UsageWindow"
+            }
           }
         },
         "required": [
@@ -8676,38 +8594,6 @@
           "message"
         ]
       },
-      "RequestBodyResponse": {
-        "type": "object",
-        "properties": {
-          "body": {
-            "type": "string",
-            "description": "Field body"
-          },
-          "id": {
-            "type": "string",
-            "description": "Field id"
-          },
-          "method": {
-            "type": "string",
-            "description": "Field method"
-          },
-          "path": {
-            "type": "string",
-            "description": "Field path"
-          },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
-          }
-        },
-        "required": [
-          "id",
-          "method",
-          "path",
-          "body",
-          "truncated"
-        ]
-      },
       "RestoreConfigResponse": {
         "type": "object",
         "properties": {
@@ -8840,6 +8726,10 @@
           "clean_header": {
             "type": "boolean",
             "description": "Field clean_header"
+          },
+          "context_1m": {
+            "type": "boolean",
+            "description": "Field context_1m"
           },
           "cursor_compat": {
             "type": "boolean",
@@ -9093,10 +8983,6 @@
             "type": "boolean",
             "description": "Field claude_code_compat"
           },
-          "clean_header": {
-            "type": "boolean",
-            "description": "Field clean_header"
-          },
           "custom_user_agent": {
             "type": "string",
             "description": "Field custom_user_agent"
@@ -9109,18 +8995,9 @@
             "type": "boolean",
             "description": "Field separate"
           },
-          "session_affinity": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field session_affinity"
-          },
           "skip_usage": {
             "type": "boolean",
             "description": "Field skip_usage"
-          },
-          "smart": {
-            "type": "boolean",
-            "description": "Field smart"
           },
           "smart_compact": {
             "type": "boolean",
@@ -9137,8 +9014,7 @@
         },
         "required": [
           "unified",
-          "separate",
-          "smart"
+          "separate"
         ]
       },
       "ScenarioIntFlagUpdateRequest": {
@@ -10819,6 +10695,10 @@
             "type": "string",
             "description": "Field description"
           },
+          "key": {
+            "type": "string",
+            "description": "Field key"
+          },
           "label": {
             "type": "string",
             "description": "Field label"
@@ -10836,6 +10716,11 @@
             "type": "string",
             "format": "date-time",
             "description": "Field resets_at"
+          },
+          "tier": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field tier"
           },
           "type": {
             "type": "string",
@@ -10974,6 +10859,50 @@
   },
   "tags": [
     {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
       "name": "feishu",
       "description": "Operations related to feishu"
     },
@@ -10982,52 +10911,20 @@
       "description": "Operations related to config"
     },
     {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
       "name": "codex",
       "description": "Operations related to codex"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
-    },
-    {
-      "name": "requests",
-      "description": "Operations related to requests"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
     },
     {
       "name": "models",
       "description": "Operations related to models"
     },
     {
-      "name": "skills",
-      "description": "Operations related to skills"
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
     },
     {
       "name": "logs",
@@ -11038,12 +10935,20 @@
       "description": "Operations related to actions"
     },
     {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "requests",
+      "description": "Operations related to requests"
     },
     {
       "name": "imbot-settings",
@@ -11058,28 +10963,8 @@
       "description": "Operations related to weixin"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
-    },
-    {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
     }
   ]
 }
