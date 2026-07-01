@@ -301,7 +301,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
 
     const handleCWDChange = useCallback(async (botUuid: string, cwd: string) => {
         try {
-            const result = await api.updateImbotSetting(botUuid, { default_cwd: cwd });
+            const result = await api.updateImBotSetting(botUuid, { default_cwd: cwd });
             if (result?.success) {
                 // No notification needed for CWD change - it's a minor change
                 await loadBotSettings();
@@ -315,7 +315,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
 
     // SmartGuide dialog using the same pattern as RuleCard
     const handleBotModelUpdate = useCallback(async (uuid: string, provider: string, model: string) => {
-        const response = await api.updateImbotSetting(uuid, {
+        const response = await api.updateImBotSetting(uuid, {
             smartguide_provider: provider,
             smartguide_model: model,
         });
