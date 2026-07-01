@@ -36,8 +36,8 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ width: '30%' }}>Name</TableCell>
-                        <TableCell sx={{ width: '15%' }}>Protocol</TableCell>
+                        <TableCell sx={{ width: '18%' }}>Name</TableCell>
+                        <TableCell sx={{ width: '10%' }}>API Style</TableCell>
                         <TableCell>Models</TableCell>
                         <TableCell sx={{ width: '12%' }} align="center">Enabled</TableCell>
                     </TableRow>
