@@ -18,6 +18,7 @@ import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 import { formatModelNameWithContext1M } from '@/components/rule-card/modelNameUtils';
+import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 
 // Module-level cache so we only fetch the flag catalog once per session.
 // `undefined` = never fetched; `[]` = fetched but empty (don't re-fetch).
@@ -108,6 +109,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         ruleUuid: rule.uuid,
         onModelSelectOpen,
         showNotification,
+    });
+
+    const { editProvider, providerEditDialogs } = useProviderEditDialog({
+        showNotification,
+        onUpdated: (providerUuid) => onRefreshProvider?.(providerUuid),
     });
 
     // Delete confirmation state
@@ -314,6 +320,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 extensionsCard={extensionsCard}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
+                onEditProvider={editProvider}
                 onTierChange={handleProviderTierChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
                 onAddService={handleAddServiceButtonClick}
@@ -361,6 +368,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onClose={smartHandlers.handleCancelSmartRuleEdit}
                 onSave={smartHandlers.handleSaveSmartRule}
             />
+
+            {providerEditDialogs}
         </>
     );
 };

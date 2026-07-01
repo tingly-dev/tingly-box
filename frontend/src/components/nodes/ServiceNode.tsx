@@ -18,7 +18,6 @@ import {
 } from '@mui/material';
 import { styled, useTheme } from '@mui/material/styles';
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
@@ -82,6 +81,7 @@ export interface ServiceNodeProps {
     showTier?: boolean;
     onMoveTierUp?: () => void;
     onMoveTierDown?: () => void;
+    onEditProvider?: (providerUuid: string) => void;
     forceShowActions?: boolean;
 }
 
@@ -195,10 +195,10 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     showTier = true,
     onMoveTierUp,
     onMoveTierDown,
+    onEditProvider,
     forceShowActions = false,
 }) => {
     const { t } = useTranslation();
-    const navigate = useNavigate();
     const theme = useTheme();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -228,10 +228,10 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const handleMenuClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setMenuAnchorEl(e.currentTarget); };
     const handleMenuClose = () => setMenuAnchorEl(null);
     const handleDelete = () => { handleMenuClose(); onDelete(); };
-    const handleEditProvider = provider.provider && providerInfo.exists
+    const handleEditProvider = provider.provider && providerInfo.exists && onEditProvider
         ? () => {
             handleMenuClose();
-            navigate(`/credentials?editProvider=${encodeURIComponent(provider.provider)}`);
+            onEditProvider(provider.provider);
         }
         : undefined;
     const handleProbeClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setProbeAnchorEl(e.currentTarget); };
@@ -246,7 +246,6 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                 menuOpen={menuOpen}
                 onMenuClose={handleMenuClose}
                 onDelete={handleDelete}
-                onEditProvider={handleEditProvider}
             />
 
             {provider.provider && providerInfo.exists && (

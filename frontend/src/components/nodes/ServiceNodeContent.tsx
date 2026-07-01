@@ -8,7 +8,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
     Delete as DeleteIcon,
-    Edit as EditIcon,
 } from '@/components/icons';
 
 interface ServiceNodeContentProps {
@@ -16,7 +15,6 @@ interface ServiceNodeContentProps {
     menuOpen: boolean;
     onMenuClose: () => void;
     onDelete: () => void;
-    onEditProvider?: () => void;
 }
 
 const ServiceNodeContent: React.FC<ServiceNodeContentProps> = ({
@@ -24,7 +22,6 @@ const ServiceNodeContent: React.FC<ServiceNodeContentProps> = ({
     menuOpen,
     onMenuClose,
     onDelete,
-    onEditProvider,
 }) => {
     const { t } = useTranslation();
 
@@ -37,14 +34,6 @@ const ServiceNodeContent: React.FC<ServiceNodeContentProps> = ({
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
-            {onEditProvider && (
-                <MenuItem onClick={onEditProvider}>
-                    <ListItemIcon>
-                        <EditIcon />
-                    </ListItemIcon>
-                    <ListItemText>{t('rule.service.editProvider')}</ListItemText>
-                </MenuItem>
-            )}
             <MenuItem onClick={onDelete}>
                 <ListItemIcon>
                     <DeleteIcon />
