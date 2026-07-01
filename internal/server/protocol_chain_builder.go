@@ -10,11 +10,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ShouldRecording determines if recording should be used
-func (s *Server) ShouldRecording(recorder *ProtocolRecorder) bool {
-	return recorder != nil
-}
-
 // BuildTransformChain assembles the canonical transform chain in a single place,
 // slotting the rule-driven transforms into the two named positions — preBase and
 // preVendor — that bracket the protocol conversion and the vendor finalize:
@@ -35,13 +30,11 @@ func (s *Server) ShouldRecording(recorder *ProtocolRecorder) bool {
 func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioType typ.RuleScenario, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
 
 	recordMode := s.GetScenarioRecordMode(scenarioType)
-	shouldRecord := s.ShouldRecording(recorder)
+	shouldRecord := recorder != nil
 
 	var transforms []transform.Transform
 
-	requestRecordingEnabled := recordMode == obs.RecordModeAll ||
-		recordMode == obs.RecordModeScenario ||
-		recordMode == obs.RecordModeRequestOnly ||
+	requestRecordingEnabled := recordMode == obs.RecordModeRequestOnly ||
 		recordMode == obs.RecordModeRequestResponse ||
 		recordMode == obs.RecordModeStagedRequestResponse
 

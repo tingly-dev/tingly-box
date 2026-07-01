@@ -13,10 +13,6 @@ import (
 type RecordMode string
 
 const (
-	RecordModeAll      RecordMode = "all"      // requests + responses
-	RecordModeScenario RecordMode = "scenario" // same as all, scenario-partitioned
-	RecordModeSlim     RecordMode = "slim"     // reserved
-
 	RecordModeRequestOnly           RecordMode = "request"                 // Record transformed request only
 	RecordModeRequestResponse       RecordMode = "request_response"        // Record transformed request + final response
 	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // Record original request + transformed request + final response
@@ -89,11 +85,7 @@ func NewSink(baseDir string, mode RecordMode, opts ...SinkOption) *Sink {
 	switch mode {
 	case "":
 		return nil
-	case RecordModeSlim:
-		logrus.Warnf("obs: record mode 'slim' is handled automatically, use 'all' or 'scenario'")
-		return nil
-	case RecordModeAll, RecordModeScenario,
-		RecordModeRequestOnly, RecordModeRequestResponse, RecordModeStagedRequestResponse:
+	case RecordModeRequestOnly, RecordModeRequestResponse, RecordModeStagedRequestResponse:
 		cfg := sinkConfig{}
 		for _, opt := range opts {
 			opt(&cfg)
