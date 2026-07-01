@@ -87,6 +87,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                         <ModelSelectDialog
                             providers={provider ? [provider] : []}
                             selectedProvider={provider?.uuid}
+                            activeTab={provider?.uuid}
                             selectedModel={selectedModel}
                             onSelected={(option) => setSelectedModel(option.model || '')}
                             onSelectionClear={() => setSelectedModel('')}

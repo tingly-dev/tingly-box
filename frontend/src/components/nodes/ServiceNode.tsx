@@ -2,6 +2,7 @@ import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
     PlayArrow as PlayIcon,
+    Edit as EditIcon,
     KeyboardArrowUp,
     KeyboardArrowDown,
 } from '@/components/icons';
@@ -17,6 +18,7 @@ import {
 } from '@mui/material';
 import { styled, useTheme } from '@mui/material/styles';
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
@@ -196,6 +198,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     forceShowActions = false,
 }) => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const theme = useTheme();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -225,6 +228,12 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const handleMenuClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setMenuAnchorEl(e.currentTarget); };
     const handleMenuClose = () => setMenuAnchorEl(null);
     const handleDelete = () => { handleMenuClose(); onDelete(); };
+    const handleEditProvider = provider.provider && providerInfo.exists
+        ? () => {
+            handleMenuClose();
+            navigate(`/credentials?editProvider=${encodeURIComponent(provider.provider)}`);
+        }
+        : undefined;
     const handleProbeClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setProbeAnchorEl(e.currentTarget); };
     const handleProbeClose = () => setProbeAnchorEl(null);
 
@@ -237,6 +246,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                 menuOpen={menuOpen}
                 onMenuClose={handleMenuClose}
                 onDelete={handleDelete}
+                onEditProvider={handleEditProvider}
             />
 
             {provider.provider && providerInfo.exists && (
@@ -350,6 +360,17 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ p: 0.5 }}
                             >
                                 <PlayIcon sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
+                    {handleEditProvider && (
+                        <NodeTooltip title={t('rule.service.editProvider')} placement="bottom">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); handleEditProvider(); }}
+                                sx={{ p: 0.5 }}
+                            >
+                                <EditIcon sx={{ fontSize: '1rem' }} />
                             </IconButton>
                         </NodeTooltip>
                     )}

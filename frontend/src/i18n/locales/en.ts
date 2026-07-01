@@ -416,6 +416,7 @@ export default {
       "selectProvider": "Select Provider",
       "selectModel": "Select Model",
       "testService": "Test Service",
+      "editProvider": "Edit Provider",
       "deleteService": "Delete Service"
     },
     "tier": {

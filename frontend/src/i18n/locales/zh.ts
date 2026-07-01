@@ -417,6 +417,7 @@ export default {
       "selectProvider": "选择提供商",
       "selectModel": "选择模型",
       "testService": "测试服务",
+      "editProvider": "编辑提供商",
       "deleteService": "删除服务"
     },
     "tier": {
