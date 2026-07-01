@@ -33,7 +33,7 @@ type ProviderFormData = EnhancedProviderFormData;
 interface OAuthEditFormData {
     name: string;
     apiBase: string;
-    apiStyle: 'openai' | 'anthropic';
+    apiStyle: string;
     enabled: boolean;
     proxyUrl?: string;
 }
@@ -73,26 +73,6 @@ const CredentialPage = () => {
     // Import Dialog state
     const [showImportModal, setShowImportModal] = useState(false);
     const [importing, setImporting] = useState(false);
-
-    // URL param handling for auto-opening dialogs
-    useEffect(() => {
-        const dialog = searchParams.get('dialog');
-        const style = searchParams.get('style') as 'openai' | 'anthropic' | null;
-        if (dialog === 'add') {
-            setSearchParams({});
-            if (style === 'oauth') {
-                setOAuthDialogOpen(true);
-            } else {
-                const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
-                setApiKeyDialogMode('add');
-                setProviderFormData({
-                    uuid: undefined, name: '', apiBase: '', apiStyle: apiStyle, token: '',
-                    enabled: true, noKeyRequired: false, proxyUrl: '', userAgent: '',
-                } as any);
-                setApiKeyDialogOpen(true);
-            }
-        }
-    }, [searchParams, setSearchParams]);
 
     useEffect(() => { loadProviders(); }, []);
 
@@ -268,6 +248,38 @@ const CredentialPage = () => {
             showNotification(`Failed to load provider details: ${result.error}`, 'error');
         }
     };
+
+    // URL param handling for auto-opening dialogs
+    useEffect(() => {
+        const editProvider = searchParams.get('editProvider');
+        if (editProvider) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('editProvider');
+            setSearchParams(nextParams, { replace: true });
+            handleEditProvider(editProvider);
+            return;
+        }
+
+        const dialog = searchParams.get('dialog');
+        const style = searchParams.get('style') as 'openai' | 'anthropic' | 'oauth' | null;
+        if (dialog === 'add') {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('dialog');
+            nextParams.delete('style');
+            setSearchParams(nextParams, { replace: true });
+            if (style === 'oauth') {
+                setOAuthDialogOpen(true);
+            } else {
+                const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
+                setApiKeyDialogMode('add');
+                setProviderFormData({
+                    uuid: undefined, name: '', apiBase: '', apiStyle: apiStyle, token: '',
+                    enabled: true, noKeyRequired: false, proxyUrl: '', userAgent: '',
+                } as any);
+                setApiKeyDialogOpen(true);
+            }
+        }
+    }, [searchParams, setSearchParams]);
 
     // OAuth handlers
     const handleOAuthSuccess = () => {
