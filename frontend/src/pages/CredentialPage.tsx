@@ -2,7 +2,6 @@ import ApiKeyTable from '@/components/ApiKeyTable.tsx';
 import ConnectProviderDialog, { type ConnectSelection } from '@/components/ConnectProviderDialog';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import ImportModal from '@/components/ImportModal';
-import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
 import PageHeader from '@/components/PageHeader';
@@ -10,6 +9,7 @@ import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
+import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { buildProviderFormData } from '@/hooks/useProviderDialog';
 import { Add, ListAlt, Upload, VpnKey } from '@/components/icons';
 import {
@@ -29,14 +29,6 @@ import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
 
 type ProviderFormData = EnhancedProviderFormData;
-
-interface OAuthEditFormData {
-    name: string;
-    apiBase: string;
-    apiStyle: 'openai' | 'anthropic';
-    enabled: boolean;
-    proxyUrl?: string;
-}
 
 const CredentialPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -67,32 +59,10 @@ const CredentialPage = () => {
         providerName: string;
         reason: string;
     }>({ open: false, providerUuid: '', providerName: '', reason: '' });
-    const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
-    const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
 
     // Import Dialog state
     const [showImportModal, setShowImportModal] = useState(false);
     const [importing, setImporting] = useState(false);
-
-    // URL param handling for auto-opening dialogs
-    useEffect(() => {
-        const dialog = searchParams.get('dialog');
-        const style = searchParams.get('style') as 'openai' | 'anthropic' | null;
-        if (dialog === 'add') {
-            setSearchParams({});
-            if (style === 'oauth') {
-                setOAuthDialogOpen(true);
-            } else {
-                const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
-                setApiKeyDialogMode('add');
-                setProviderFormData({
-                    uuid: undefined, name: '', apiBase: '', apiStyle: apiStyle, token: '',
-                    enabled: true, noKeyRequired: false, proxyUrl: '', userAgent: '',
-                } as any);
-                setApiKeyDialogOpen(true);
-            }
-        }
-    }, [searchParams, setSearchParams]);
 
     useEffect(() => { loadProviders(); }, []);
 
@@ -144,6 +114,11 @@ const CredentialPage = () => {
         else { showNotification(`Failed to load providers: ${result.error}`, 'error'); }
         setLoading(false);
     };
+
+    const { editProvider: handleEditProvider, providerEditDialogs } = useProviderEditDialog({
+        showNotification,
+        onUpdated: loadProviders,
+    });
 
     // Build the body for an add request. Always produces exactly 1 provider record.
     const buildAddProviderPayload = (override?: Partial<ProviderFormData>): any => {
@@ -238,36 +213,38 @@ const CredentialPage = () => {
         else { showNotification(`Failed to toggle provider: ${result.error}`, 'error'); }
     };
 
-    const handleEditProvider = async (uuid: string) => {
-        const result = await api.getProvider(uuid);
-        if (result.success) {
-            const provider = result.data;
-            if (provider.auth_type === 'oauth') {
-                setOAuthDetailProvider(result.data);
-                setOAuthDetailDialogOpen(true);
+
+    // URL param handling for auto-opening dialogs
+    useEffect(() => {
+        const editProvider = searchParams.get('editProvider');
+        if (editProvider) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('editProvider');
+            setSearchParams(nextParams, { replace: true });
+            handleEditProvider(editProvider);
+            return;
+        }
+
+        const dialog = searchParams.get('dialog');
+        const style = searchParams.get('style') as 'openai' | 'anthropic' | 'oauth' | null;
+        if (dialog === 'add') {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('dialog');
+            nextParams.delete('style');
+            setSearchParams(nextParams, { replace: true });
+            if (style === 'oauth') {
+                setOAuthDialogOpen(true);
             } else {
-                setIsLocalProvider(false);
-                setApiKeyDialogMode('edit');
+                const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
+                setApiKeyDialogMode('add');
                 setProviderFormData({
-                    uuid: provider.uuid,
-                    name: provider.name,
-                    apiBase: provider.api_base,
-                    apiStyle: provider.api_style || 'openai',
-                    apiBaseOpenAI: provider.api_base_openai || '',
-                    apiBaseAnthropic: provider.api_base_anthropic || '',
-                    token: provider.token || '',
-                    enabled: provider.enabled,
-                    noKeyRequired: provider.no_key_required || false,
-                    proxyUrl: provider.proxy_url || '',
-                    userAgent: (provider as any).user_agent || '',
-                    authType: provider.auth_type || 'api_key',
+                    uuid: undefined, name: '', apiBase: '', apiStyle: apiStyle, token: '',
+                    enabled: true, noKeyRequired: false, proxyUrl: '', userAgent: '',
                 } as any);
                 setApiKeyDialogOpen(true);
             }
-        } else {
-            showNotification(`Failed to load provider details: ${result.error}`, 'error');
         }
-    };
+    }, [searchParams, setSearchParams]);
 
     // OAuth handlers
     const handleOAuthSuccess = () => {
@@ -412,14 +389,7 @@ const CredentialPage = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* OAuth Detail/Edit Dialog */}
-            <OAuthDetailDialog open={oauthDetailDialogOpen} provider={oauthDetailProvider} onClose={() => setOAuthDetailDialogOpen(false)} onSubmit={async (data: OAuthEditFormData) => {
-                if (!oauthDetailProvider?.uuid) return;
-                const result = await api.updateProvider(oauthDetailProvider.uuid, { name: data.name, api_base: data.apiBase, api_style: data.apiStyle, enabled: data.enabled, proxy_url: data.proxyUrl ?? '' });
-                if (!result.success) throw new Error(result.error || 'Failed to update provider');
-                showNotification('Provider updated successfully!', 'success');
-                loadProviders();
-            }}/>
+            {providerEditDialogs}
 
             {/* Import Modal */}
             <ImportModal open={showImportModal} onClose={() => setShowImportModal(false)} onImport={handleImportData} loading={importing}/>

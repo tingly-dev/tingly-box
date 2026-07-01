@@ -78,8 +78,6 @@ interface UseProviderDialogReturn {
     handleConnectAIClick: () => void;
     handleConnectSelect: (selection: ConnectSelection) => void;
     handleCloseConnect: () => void;
-    customMode: boolean;
-    dualMode: boolean;
     fromConnectPicker: boolean;
 }
 
@@ -91,15 +89,11 @@ export const useProviderDialog = (
 
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
     const [connectDialogOpen, setConnectDialogOpen] = useState(false);
-    const [customMode, setCustomMode] = useState(false);
-    const [dualMode, setDualMode] = useState(false);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
     const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>(emptyForm(defaultApiStyle));
 
     const handleAddProviderClick = () => {
         setProviderFormData(emptyForm(defaultApiStyle));
-        setCustomMode(false);
-        setDualMode(false);
         setFromConnectPicker(false);
         setProviderDialogOpen(true);
     };
@@ -123,7 +117,6 @@ export const useProviderDialog = (
             return;
         }
 
-        setCustomMode(selection.kind === 'custom');
         setProviderFormData(built.formData);
         setProviderDialogOpen(true);
     }, [defaultApiStyle, onImport]);
@@ -183,8 +176,6 @@ export const useProviderDialog = (
 
     const handleCloseDialog = () => {
         setProviderDialogOpen(false);
-        setCustomMode(false);
-        setDualMode(false);
         setFromConnectPicker(false);
     };
 
@@ -204,8 +195,6 @@ export const useProviderDialog = (
         handleConnectAIClick,
         handleConnectSelect,
         handleCloseConnect,
-        customMode,
-        dualMode,
         fromConnectPicker,
     };
 };

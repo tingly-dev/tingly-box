@@ -18,6 +18,7 @@ import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 import { formatModelNameWithContext1M } from '@/components/rule-card/modelNameUtils';
+import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 
 // Module-level cache so we only fetch the flag catalog once per session.
 // `undefined` = never fetched; `[]` = fetched but empty (don't re-fetch).
@@ -52,6 +53,7 @@ export interface RuleCardProps {
     onRuleChange?: (updatedRule: Rule) => void;
     onProviderModelsChange?: (providerUuid: string, models: ProviderModelData) => void;
     onRefreshProvider?: (providerUuid: string) => void;
+    onProviderUpdated?: (providerUuid: string) => void | Promise<void>;
     onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string, addTier?: number) => void;
     collapsible?: boolean;
     initiallyExpanded?: boolean;
@@ -71,6 +73,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleChange,
     onProviderModelsChange,
     onRefreshProvider,
+    onProviderUpdated,
     onModelSelectOpen,
     collapsible = false,
     initiallyExpanded = !collapsible,
@@ -108,6 +111,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         ruleUuid: rule.uuid,
         onModelSelectOpen,
         showNotification,
+    });
+
+    const { editProvider, providerEditDialogs } = useProviderEditDialog({
+        showNotification,
+        onUpdated: async (providerUuid) => {
+            await onProviderUpdated?.(providerUuid);
+            await onRefreshProvider?.(providerUuid);
+        },
     });
 
     // Delete confirmation state
@@ -314,6 +325,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 extensionsCard={extensionsCard}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
+                onEditProvider={editProvider}
                 onTierChange={handleProviderTierChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
                 onAddService={handleAddServiceButtonClick}
@@ -361,6 +373,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onClose={smartHandlers.handleCancelSmartRuleEdit}
                 onSave={smartHandlers.handleSaveSmartRule}
             />
+
+            {providerEditDialogs}
         </>
     );
 };

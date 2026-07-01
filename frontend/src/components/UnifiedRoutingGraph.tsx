@@ -85,6 +85,7 @@ export interface UnifiedRoutingGraphProps {
     // Callbacks
     onUpdateRecord?: (field: keyof ConfigRecord, value: any) => void;
     onProviderNodeClick?: (providerUuid: string) => void;
+    onEditProvider?: (providerUuid: string) => void;
     onTierChange?: (providerUuid: string, tier: number) => void;
     onDeleteProvider?: (providerUuid: string) => void;
     onAddService?: (tier?: number) => void;
@@ -175,6 +176,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             guideMode = false,
                                                                             onUpdateRecord,
                                                                             onProviderNodeClick,
+                                                                            onEditProvider,
                                                                             onTierChange,
                                                                             onDeleteProvider,
                                                                             onAddService,
@@ -315,6 +317,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 active={active && p.active !== false}
                                 onDelete={() => onDeleteProvider?.(p.uuid)}
                                 onNodeClick={() => onProviderNodeClick?.(p.uuid)}
+                                onEditProvider={onEditProvider}
                                 showTier={false}
                                 forceShowActions={shouldShowActions ?? (hoveredTier === group.tier)}
                                 onMoveTierUp={group.tier > 0 && onTierChange ? () => onTierChange(p.uuid, group.tier - 1) : undefined}
@@ -335,7 +338,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ))}
             </Box>
         );
-    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
+    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -380,6 +383,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 active={active && service.active !== false}
                                                 onDelete={() => onDeleteServiceFromSmartRule?.(rule.uuid, service.uuid)}
                                                 onNodeClick={() => onProviderNodeClick?.(service.provider)}
+                                                onEditProvider={onEditProvider}
                                             />
                                         ))}
                                         <ActionAddNode

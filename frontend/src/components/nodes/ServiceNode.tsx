@@ -2,6 +2,7 @@ import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
     PlayArrow as PlayIcon,
+    Edit as EditIcon,
     KeyboardArrowUp,
     KeyboardArrowDown,
 } from '@/components/icons';
@@ -80,6 +81,7 @@ export interface ServiceNodeProps {
     showTier?: boolean;
     onMoveTierUp?: () => void;
     onMoveTierDown?: () => void;
+    onEditProvider?: (providerUuid: string) => void;
     forceShowActions?: boolean;
 }
 
@@ -193,6 +195,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     showTier = true,
     onMoveTierUp,
     onMoveTierDown,
+    onEditProvider,
     forceShowActions = false,
 }) => {
     const { t } = useTranslation();
@@ -225,6 +228,12 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const handleMenuClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setMenuAnchorEl(e.currentTarget); };
     const handleMenuClose = () => setMenuAnchorEl(null);
     const handleDelete = () => { handleMenuClose(); onDelete(); };
+    const handleEditProvider = provider.provider && providerInfo.exists && onEditProvider
+        ? () => {
+            handleMenuClose();
+            onEditProvider(provider.provider);
+        }
+        : undefined;
     const handleProbeClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setProbeAnchorEl(e.currentTarget); };
     const handleProbeClose = () => setProbeAnchorEl(null);
 
@@ -350,6 +359,17 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ p: 0.5 }}
                             >
                                 <PlayIcon sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
+                    {handleEditProvider && (
+                        <NodeTooltip title={t('rule.service.editProvider')} placement="bottom">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); handleEditProvider(); }}
+                                sx={{ p: 0.5 }}
+                            >
+                                <EditIcon sx={{ fontSize: '1rem' }} />
                             </IconButton>
                         </NodeTooltip>
                     )}

@@ -193,8 +193,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         handleConnectAIClick,
         handleConnectSelect,
         handleCloseConnect,
-        customMode,
-        dualMode,
         fromConnectPicker,
     } = useProviderDialog(showNotification, {
         onProviderAdded: () => {
@@ -210,6 +208,10 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     const handleCreateRule = useCallback(() => {
         openModelSelectForCreate();
     }, [openModelSelectForCreate]);
+
+    const handleProviderUpdated = useCallback(async (_providerUuid: string) => {
+        await onProvidersLoad?.();
+    }, [onProvidersLoad]);
 
     // Handle expand/collapse all
     const handleToggleExpandAll = useCallback(() => {
@@ -432,6 +434,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             onRuleChange={handleRuleChange}
                                             onProviderModelsChange={handleProviderModelsChange}
                                             onRefreshProvider={handleRefreshModels}
+                                            onProviderUpdated={handleProviderUpdated}
                                             collapsible={collapsible}
                                             initiallyExpanded={expandedStates[rule.uuid] ?? collapsible}
                                             onModelSelectOpen={openModelSelectDialog}
@@ -484,8 +487,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                 data={providerFormData}
                 onChange={handleFieldChange}
                 mode="add"
-                customMode={customMode}
-                dualMode={dualMode}
             />
 
             {showScrollTop && (
