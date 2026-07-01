@@ -95,6 +95,8 @@ const MemoryDirName = "memory"
 
 const ImageDirName = "image"
 
+const PromptDirName = "prompts"
+
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
 	homeDir, err := fs.GetUserPath()
@@ -113,6 +115,14 @@ func GetMemoryDir(baseDir string) string {
 // GetLogDir returns the log directory path
 func GetLogDir(baseDir string) string {
 	return filepath.Join(baseDir, LogDirName)
+}
+
+// GetPromptsDir returns the directory where operator-editable prompt override
+// files live, e.g. <baseDir>/prompts/<agent>/<name>.md. Unlike config.json,
+// files here are read on demand and are not merge-written back to disk, so
+// large prompt bodies don't bloat the config file or its wholesale save path.
+func GetPromptsDir(baseDir string) string {
+	return filepath.Join(baseDir, PromptDirName)
 }
 
 func GetDBDir(baseDir string) string {
