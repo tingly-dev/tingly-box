@@ -16,9 +16,9 @@ import {
 } from '@mui/material';
 import type { Provider } from '../types/provider';
 
-// Cap visible model chips per row so wrapping doesn't produce uneven row
-// heights across providers with different model counts.
-const MAX_VISIBLE_MODELS = 4;
+// Fixed chip width so rows form an aligned grid instead of ragged
+// flex-wrap lines whose chip widths vary with label length.
+const MODEL_CHIP_WIDTH = 132;
 
 interface VirtualModelsTableProps {
     providers: Provider[];
@@ -69,26 +69,30 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                                             none registered
                                         </Typography>
                                     ) : (
-                                        <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
-                                            {models.slice(0, MAX_VISIBLE_MODELS).map((m: string) => (
-                                                <Chip
-                                                    key={m}
-                                                    label={m}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    sx={{ height: 20, flexShrink: 0 }}
-                                                />
-                                            ))}
-                                            {models.length > MAX_VISIBLE_MODELS && (
-                                                <Tooltip title={models.slice(MAX_VISIBLE_MODELS).join(', ')}>
+                                        <Box
+                                            sx={{
+                                                display: 'grid',
+                                                gridTemplateColumns: `repeat(auto-fill, ${MODEL_CHIP_WIDTH}px)`,
+                                                gap: 0.5,
+                                            }}
+                                        >
+                                            {models.map((m: string) => (
+                                                <Tooltip key={m} title={m}>
                                                     <Chip
-                                                        label={`+${models.length - MAX_VISIBLE_MODELS}`}
+                                                        label={m}
                                                         size="small"
                                                         variant="outlined"
-                                                        sx={{ height: 20, flexShrink: 0, color: 'text.secondary' }}
+                                                        sx={{
+                                                            height: 20,
+                                                            width: MODEL_CHIP_WIDTH,
+                                                            '& .MuiChip-label': {
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                            },
+                                                        }}
                                                     />
                                                 </Tooltip>
-                                            )}
+                                            ))}
                                         </Box>
                                     )}
                                 </TableCell>
