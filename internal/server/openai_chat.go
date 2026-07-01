@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -163,26 +164,56 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCo
 		template = bs
 	}
 
+	// ── Endpoint auto-detection (OpenAI providers in auto mode, flag on) ──
+	// resolveAutoTarget returns the preferred protocol and whether runtime
+	// fallback should wrap the dispatch. An override or cache hit yields a
+	// definite target (autoFallback=false) that is simply pinned; a cache
+	// miss yields the scenario-preferred protocol with fallback enabled.
+	var autoPreferred protocol.APIType
+	autoFallback := false
+	if s.autoEndpointEnabled() && provider.APIStyle == protocol.APIStyleOpenAI && ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
+		autoPreferred, autoFallback = s.resolveAutoTarget(resolveRuleFlags(c, rule), provider, actualModel, scenarioType, IncomingAPIChat)
+	}
+
 	// ── Per-attempt pipeline (provider-dependent) ──
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
-		func(p *typ.Provider, retryModel string) {
-			areq := req
-			if multi {
-				cloned, err := cloneOpenAIChatRequest(template)
-				if err != nil {
-					s.failAttemptSetup(c, err)
-					return
-				}
-				areq = cloned
+	attempt := func(p *typ.Provider, retryModel string, tgt protocol.APIType) {
+		areq := req
+		if multi {
+			cloned, err := cloneOpenAIChatRequest(template)
+			if err != nil {
+				s.failAttemptSetup(c, err)
+				return
 			}
-			s.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
-		})
+			areq = cloned
+		}
+		s.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, tgt)
+	}
+
+	if autoFallback {
+		// Protocol fallback is the outer loop, provider failover the inner
+		// loop — both share the single gate owned by dispatchWithAutoFallback.
+		s.dispatchWithAutoFallback(c, provider, actualModel, autoPreferred,
+			func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+				served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
+					func(p *typ.Provider, retryModel string) { attempt(p, retryModel, t) }, gate)
+				return served, servedModel, true
+			})
+		return
+	}
+
+	// Non-auto path (autoPreferred is "" → normal resolution; or a pinned
+	// override/cache target when auto mode resolved without fallback).
+	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+		func(p *typ.Provider, retryModel string) { attempt(p, retryModel, autoPreferred) })
 }
 
 // runOpenAIChatAttempt executes the provider-dependent half of an OpenAI chat
 // request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
-func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
+// overrideTarget, when non-empty, forces the OpenAI upstream endpoint for this
+// attempt instead of resolving it from the provider mode — used by endpoint
+// auto-detection to pin a protocol hypothesis across a failover round.
+func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, overrideTarget protocol.APIType) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
@@ -209,14 +240,19 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
-		tempFlags := resolveRuleFlags(c, rule)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
-		if routeErr != nil {
-			s.failAttemptSetup(c, routeErr)
-			return
+		if overrideTarget != "" {
+			// Endpoint auto-detection pinned the protocol for this attempt.
+			target = overrideTarget
+		} else {
+			// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
+			tempFlags := resolveRuleFlags(c, rule)
+			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
+			if routeErr != nil {
+				s.failAttemptSetup(c, routeErr)
+				return
+			}
+			target = resolvedTarget
 		}
-		target = resolvedTarget
 	default:
 		s.failAttemptSetup(c, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
 		return

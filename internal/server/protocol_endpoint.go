@@ -73,7 +73,11 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 	switch mode {
 	case ai.EndpointModeResponses:
 		return protocol.TypeOpenAIResponses, nil
-	case ai.EndpointModeBoth:
+	case ai.EndpointModeBoth, ai.EndpointModeAuto:
+		// Both mirrors the incoming API. Auto also mirrors incoming here —
+		// this is the non-auto fallback path taken when runtime endpoint
+		// auto-detection is gated off; when enabled, resolveAutoTarget +
+		// dispatchWithAutoFallback handle Auto providers instead.
 		if incoming == IncomingAPIResponses {
 			return protocol.TypeOpenAIResponses, nil
 		}

@@ -240,7 +240,74 @@ PR #976 引入此设计。涉及行为变更的两个点：
 
 ---
 
-## 10. 不在本文档范围
+## 10. Auto 模式（运行时协议自适应）
+
+### 10.1 问题
+
+第三方聚合 provider 在同一个 OpenAI-style API base 下托管多种模型，有的只支持 Chat、有的只支持 Responses。`OpenAIEndpointMode` 是 provider 级别的，无法 per-model 区分，且模型列表不可穷尽。
+
+### 10.2 与 AdaptiveProbe（§2.1）的本质区别
+
+| | AdaptiveProbe（已废弃）| EndpointModeAuto |
+|---|---|---|
+| 探测方式 | 独立 probe 请求（烧 token、被限流） | 用户真实请求 |
+| 失败处理 | 缓存失败 → 误判固化 | **只缓存成功，失败不缓存** |
+| 冷启动 | 阻塞 10s | 零阻塞，首请求直接发 |
+| 级联风险 | probe 失败 → 整个 provider 不可用 | 仅影响当前请求，自动 fallback |
+| 实现位置 | 运行时缓存层（§2.1 的根因） | handler 层，resolver 保持纯函数 |
+
+### 10.3 行为
+
+```
+EndpointModeAuto = "auto"
+```
+
+1. **Rule override 最高优先级**：`openai_endpoint_override` 设了 chat/responses 就直接用，跳过 auto。
+2. **查成功缓存**：`provider_uuid:model_name → protocol`，命中则直接用缓存协议。
+3. **缓存未命中**：用 incoming protocol 作为首次尝试。
+4. **首次尝试失败**：排除不可重试的错误（401/403/429/内容相关），其余都做协议 fallback。
+5. **fallback 成功**：缓存 `provider_uuid:model_name → alternate_protocol`（24h TTL）。
+6. **fallback 失败**：返回错误，不缓存。
+
+### 10.4 错误分类（排除法）
+
+不重试的错误（换协议也没用）：
+- 401 / 403：认证问题
+- 429：限流
+- `context_length_exceeded`、`content_policy`、`invalid_api_key`、`model_not_found`：内容/模型问题
+
+其余所有错误（404、500、未知错误）→ 允许 fallback。
+
+### 10.5 实现层次
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 2  Rule flag — openai_endpoint_override              │
+│           仍然最高优先级，设了就跳过 auto                    │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1  Provider mode — EndpointModeAuto                   │
+│           handler 层管理缓存 + fallback                      │
+│           resolver 保持纯函数（auto → mirror incoming）      │
+├─────────────────────────────────────────────────────────────┤
+│  Cache    EndpointCache（in-memory, per provider+model）     │
+│           只写入成功结果，24h TTL，惰性淘汰                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Auto 逻辑在 handler 层（`openai_chat.go`、`openai_responses.go`），使用 `firstChunkGate` 缓冲首次尝试的响应。Gate 与 `dispatchWithPriorityFailover` 共享（通过 `dispatchWithPriorityFailoverGated` 接受外部 gate），避免嵌套。
+
+### 10.6 关键文件
+
+- `ai/provider.go` — `EndpointModeAuto` 常量
+- `internal/server/endpoint_cache.go` — 成功缓存
+- `internal/server/endpoint_auto.go` — 错误分类 + `dispatchWithAutoFallback`
+- `internal/server/failover_dispatch.go` — `dispatchWithPriorityFailoverGated`
+- `internal/server/openai_chat.go` — Chat handler 的 auto 分支
+- `internal/server/openai_responses.go` — Responses handler 的 auto 分支
+
+---
+
+## 11. 不在本文档范围
 
 - Anthropic / Google provider 的路由（走各自原生 endpoint，不进 OpenAI resolver）
 - Smart routing / load balance 选哪个 service（在 endpoint 选择之前）

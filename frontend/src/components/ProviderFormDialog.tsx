@@ -48,6 +48,7 @@ export interface EnhancedProviderFormData {
     apiBaseOpenAI?: string;
     apiBaseAnthropic?: string;
     createDualProvider?: boolean;
+    openaiEndpointMode?: string;
     /** If set, prefer this exact provider ID when resolving the template.
      *  Avoids mismatches when multiple providers share the same base URL. */
     selectedProviderId?: string;
