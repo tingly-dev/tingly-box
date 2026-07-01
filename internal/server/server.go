@@ -341,7 +341,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize routing selector with pipeline. Pass multiLogger so smart
 	// routing stages emit per-request evaluation traces to the smart_routing
 	// log source viewable from the frontend system log page.
-	serviceSelector := routing.NewServiceSelectorWithLogger(cfg, affinityStore, loadBalancer, server.multiLogger)
+	serviceSelector := routing.NewServiceSelectorWithLogger(cfg, affinityStore, loadBalancer, server.multiLogger, cfg.ClaudeCodeDetect)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
 
 	// Initialize load balancer API

@@ -8,6 +8,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
@@ -110,17 +111,21 @@ func NewServiceSelector(
 	affinity AffinityStore,
 	lb LoadBalancer,
 ) *ServiceSelector {
-	return NewServiceSelectorWithLogger(cfg, affinity, lb, nil)
+	return NewServiceSelectorWithLogger(cfg, affinity, lb, nil, smartrouting.ClaudeCodeDetectConfig{})
 }
 
 // NewServiceSelectorWithLogger is like NewServiceSelector but also wires the
 // multi-logger into smart-routing stages so each evaluation is captured to the
 // dedicated smart_routing log source.
+//
+// detectCfg overrides the Claude Code request-kind detection markers. Pass a
+// zero value to use the built-in defaults.
 func NewServiceSelectorWithLogger(
 	cfg ProviderResolver,
 	affinity AffinityStore,
 	lb LoadBalancer,
 	multiLogger *pkgobs.MultiLogger,
+	detectCfg smartrouting.ClaudeCodeDetectConfig,
 ) *ServiceSelector {
 	s := &ServiceSelector{
 		config:        cfg,
@@ -138,6 +143,7 @@ func NewServiceSelectorWithLogger(
 		if multiLogger != nil {
 			stage.SetMultiLogger(multiLogger)
 		}
+		stage.SetDetectConfig(detectCfg)
 		return stage
 	}
 

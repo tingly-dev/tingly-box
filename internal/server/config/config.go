@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
@@ -46,6 +47,7 @@ type Config struct {
 	RemoteCoder        RemoteCoderConfig    `json:"remote_coder"`                                 // Remote-coder service settings
 	RandomUUID         string               `json:"random_uuid"`                                  // A random uuid to help protocol transform for some special provider
 	ClaudeCodeDeviceID string               `json:"claude_code_device_id"`                        // Calc from random claude code device id with sha256
+	ClaudeCodeDetect   smartrouting.ClaudeCodeDetectConfig `json:"claude_code_detect,omitempty"` // Overrides for Claude Code request-kind detection markers
 
 	// Merged fields from Config struct
 	// ProvidersV1 and Providers are legacy JSON-config storage for providers.

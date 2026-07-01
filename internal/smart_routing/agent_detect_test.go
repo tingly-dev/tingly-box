@@ -11,7 +11,7 @@ func TestDetectClaudeCodeRequestKind_Main(t *testing.T) {
 		SystemMessages: []string{"You are Claude Code, Anthropic's official CLI for Claude. Help the user with software engineering."},
 		UserMessages:   []string{"refactor this function"},
 	}
-	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_Subagent(t *testing.T) {
@@ -19,7 +19,7 @@ func TestDetectClaudeCodeRequestKind_Subagent(t *testing.T) {
 		SystemMessages: []string{"You are an agent for a coding assistant. Investigate this question and report back."},
 		UserMessages:   []string{"find all callers of foo()"},
 	}
-	require.Equal(t, ClaudeCodeKindSubagent, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindSubagent, DetectClaudeCodeRequestKind(ctx, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_Compact(t *testing.T) {
@@ -27,7 +27,7 @@ func TestDetectClaudeCodeRequestKind_Compact(t *testing.T) {
 		SystemMessages: []string{"Your task is to create a detailed summary of the conversation so far."},
 		UserMessages:   []string{"<conversation history dump>"},
 	}
-	require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_CompactInUserMessage(t *testing.T) {
@@ -36,16 +36,16 @@ func TestDetectClaudeCodeRequestKind_CompactInUserMessage(t *testing.T) {
 		SystemMessages: []string{},
 		UserMessages:   []string{"Please produce a summary of the conversation that captures key decisions."},
 	}
-	require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_EmptyContext(t *testing.T) {
 	ctx := &RequestContext{}
-	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_NilContext(t *testing.T) {
-	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(nil))
+	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(nil, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_PriorityCompactOverSubagent(t *testing.T) {
@@ -55,7 +55,7 @@ func TestDetectClaudeCodeRequestKind_PriorityCompactOverSubagent(t *testing.T) {
 			"You are an agent. Now your task is to produce a summary of the conversation.",
 		},
 	}
-	require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx, nil))
 }
 
 func TestDetectClaudeCodeRequestKind_MainPreambleSuppressesSubagent(t *testing.T) {
@@ -68,5 +68,47 @@ func TestDetectClaudeCodeRequestKind_MainPreambleSuppressesSubagent(t *testing.T
 			"You can dispatch tasks to a subagent: 'You are an agent...'",
 		},
 	}
-	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx))
+	require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx, nil))
+}
+
+func TestDetectClaudeCodeRequestKind_CustomMarkers(t *testing.T) {
+	cfg := &ClaudeCodeDetectConfig{
+		MainPreamble:   "You are MyBot",
+		SubagentMarker: "You are a sub-bot",
+		CompactMarker:  "compact summary requested",
+	}
+
+	t.Run("custom main preamble", func(t *testing.T) {
+		ctx := &RequestContext{
+			SystemMessages: []string{"You are MyBot, helping the user."},
+		}
+		require.Equal(t, ClaudeCodeKindMain, DetectClaudeCodeRequestKind(ctx, cfg))
+	})
+
+	t.Run("custom subagent marker", func(t *testing.T) {
+		ctx := &RequestContext{
+			SystemMessages: []string{"You are a sub-bot assigned to this task."},
+		}
+		require.Equal(t, ClaudeCodeKindSubagent, DetectClaudeCodeRequestKind(ctx, cfg))
+	})
+
+	t.Run("custom compact marker", func(t *testing.T) {
+		ctx := &RequestContext{
+			SystemMessages: []string{"compact summary requested for this session"},
+		}
+		require.Equal(t, ClaudeCodeKindCompact, DetectClaudeCodeRequestKind(ctx, cfg))
+	})
+
+	t.Run("default markers no longer match with custom config", func(t *testing.T) {
+		// Default "You are Claude Code" should NOT suppress subagent when a custom
+		// main preamble is configured.
+		ctx := &RequestContext{
+			SystemMessages: []string{
+				"You are Claude Code, Anthropic's official CLI.",
+				"You are a sub-bot assigned to a task.",
+			},
+		}
+		// "You are Claude Code" != cfg.MainPreamble, so subagent check runs and matches.
+		require.Equal(t, ClaudeCodeKindSubagent, DetectClaudeCodeRequestKind(ctx, cfg))
+	})
 }

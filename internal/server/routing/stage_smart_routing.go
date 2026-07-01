@@ -17,6 +17,7 @@ type SmartRoutingStage struct {
 	loadBalancer  LoadBalancer
 	affinityStore AffinityStore
 	multiLogger   *pkgobs.MultiLogger // optional; used to emit structured smart-routing logs
+	detectCfg     smartrouting.ClaudeCodeDetectConfig
 }
 
 // NewSmartRoutingStage creates a new smart routing stage
@@ -31,6 +32,13 @@ func NewSmartRoutingStage(lb LoadBalancer, affinity AffinityStore) *SmartRouting
 // smart-routing evaluation logs viewable from the frontend system log page.
 func (s *SmartRoutingStage) SetMultiLogger(ml *pkgobs.MultiLogger) {
 	s.multiLogger = ml
+}
+
+// SetDetectConfig overrides the string markers used to classify Claude Code
+// request kinds (main / subagent / compact). Fields left empty fall back to
+// the built-in defaults.
+func (s *SmartRoutingStage) SetDetectConfig(cfg smartrouting.ClaudeCodeDetectConfig) {
+	s.detectCfg = cfg
 }
 
 // Name returns the stage identifier
@@ -181,7 +189,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	// the scenario is claude_code. Other scenarios leave the field empty so the
 	// agent.claude_code SmartOp simply does not match.
 	if ctx.Scenario.Is(typ.ScenarioClaudeCode) {
-		reqCtx.ClaudeCodeRequestKind = smartrouting.DetectClaudeCodeRequestKind(reqCtx)
+		reqCtx.ClaudeCodeRequestKind = smartrouting.DetectClaudeCodeRequestKind(reqCtx, &s.detectCfg)
 	}
 
 	// Pre-collect capacity info for all services across all smart routing rules.
