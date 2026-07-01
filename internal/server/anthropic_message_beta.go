@@ -44,7 +44,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthropic
 
 	// Get or create the recorder for dual-stage recording (pristine request body).
 	var recorder *ProtocolRecorder
-	if s.ApplyRecording(scenarioType) {
+	if scenarioConfig.IsRecording() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")

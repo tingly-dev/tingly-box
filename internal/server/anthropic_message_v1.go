@@ -46,7 +46,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 	// pristine request as received (post-vision-proxy, pre-pre-chain); the
 	// winning attempt's provider/model is re-bound per attempt via SetActiveService.
 	var recorder *ProtocolRecorder
-	if s.ApplyRecording(scenarioType) {
+	if scenarioConfig.IsRecording() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")
