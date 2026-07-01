@@ -1,15 +1,131 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// HandleOpenAIChatCompletions handles OpenAI v1 chat completion requests
+func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
+
+	scenario := c.Param("scenario")
+
+	// Read raw body
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to read request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Parse OpenAI-style request
+	var req = &protocol.OpenAIChatCompletionRequest{}
+	if err := json.Unmarshal(bodyBytes, req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Validate
+	responseModel := req.Model
+	if req.Model == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Model is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	if len(req.Messages) == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "At least one message is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Determine provider & model
+	var (
+		provider        *typ.Provider
+		selectedService *loadbalance.Service
+		rule            *typ.Rule
+	)
+
+	// Convert string to RuleScenario and validate
+	scenarioType := typ.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	//if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
+	//	c.JSON(http.StatusBadRequest, ErrorResponse{
+	//		Error: ErrorDetail{
+	//			Message: fmt.Sprintf("scenario %s does not support OpenAI chat completions", scenario),
+	//			Type:    "invalid_request_error",
+	//		},
+	//	})
+	//	return
+	//}
+
+	// Check if this is the request model name first
+	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	s.applyVisionProxy(c, scenarioType, rule, &req.ChatCompletionNewParams)
+
+	// Select service using routing pipeline
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	actualModel := selectedService.Model
+	req.Model = actualModel
+
+	s.applyVisionProxy(c, scenarioType, rule, req.ChatCompletionNewParams)
+
+	s.OpenAIChatCompletion(c, req, responseModel, provider, scenarioType, rule)
+}
 
 // OpenAIChatCompletion runs the provider-independent prologue once, then drives
 // the failover loop whose per-attempt callback re-runs the provider-dependent

@@ -1,16 +1,12 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -87,140 +83,6 @@ type (
 		LastID  string           `json:"last_id"`
 	}
 )
-
-// HandleAnthropicMessages handles Anthropic v1 messages API requests
-// This is the entry point that delegates to the appropriate implementation (v1 or beta)
-func (s *Server) HandleAnthropicMessages(c *gin.Context) {
-	scenario := c.Param("scenario")
-	scenarioType := typ.RuleScenario(scenario)
-
-	// Check if beta parameter is set to true
-	beta := c.Query("beta") == "true"
-	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
-
-	// Validate scenario
-	if !isValidRuleScenario(scenarioType) {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	//if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportAnthropic) {
-	//	c.JSON(http.StatusBadRequest, ErrorResponse{
-	//		Error: ErrorDetail{
-	//			Message: fmt.Sprintf("scenario %s does not support Anthropic messages", scenario),
-	//			Type:    "invalid_request_error",
-	//		},
-	//	})
-	//	return
-	//}
-
-	// Read the raw request body first for debugging purposes
-	bodyBytes, err := c.GetRawData()
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-			},
-		})
-		return
-	}
-
-	// Determine provider & requestModel
-	var (
-		provider        *typ.Provider
-		selectedService *loadbalance.Service
-		rule            *typ.Rule
-	)
-	var requestModel string
-	var reqParams interface{} // For smart routing context extraction
-
-	var betaMessages = &protocol.AnthropicBetaMessagesRequest{}
-	var messages = &protocol.AnthropicMessagesRequest{}
-	if beta {
-		if err := json.Unmarshal(bodyBytes, betaMessages); err != nil {
-			logrus.WithError(err).Errorf("Anthropic beta decode error")
-			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-		requestModel = string(betaMessages.Model)
-		reqParams = betaMessages.BetaMessageNewParams
-
-	} else {
-		if err := json.Unmarshal(bodyBytes, messages); err != nil {
-			logrus.WithError(err).Errorf("Anthropic decode error")
-			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Message decode error: %s", err.Error()),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-
-		requestModel = string(messages.Model)
-		reqParams = messages.MessageNewParams
-	}
-
-	// Check if this is the request requestModel name first
-	rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-	if rule == nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "no such rule",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	s.applyVisionProxy(c, scenarioType, rule, reqParams)
-
-	// Select service using routing pipeline
-	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
-	if err != nil {
-		logrus.WithError(err).Errorf("Select service error")
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	if provider.Timeout <= 0 {
-		provider.Timeout = constant.DefaultRequestTimeout
-	}
-
-	actualModel := selectedService.Model
-
-	// Delegate to the appropriate implementation based on beta parameter
-	if beta {
-		s.AnthropicMessagesV1Beta(c, betaMessages, actualModel, requestModel, rule, provider)
-
-	} else {
-		s.AnthropicMessagesV1(c, messages, actualModel, requestModel, rule, provider)
-	}
-}
 
 // HandleAnthropicListModels handles Anthropic v1 models endpoint
 func (s *Server) HandleAnthropicListModels(c *gin.Context) {
