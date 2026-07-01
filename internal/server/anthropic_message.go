@@ -223,7 +223,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 func (s *Server) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *ProtocolRecorder) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
-	provider = s.resolveProviderForClient(provider, protocol.APIStyleAnthropic)
+	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}
@@ -349,7 +349,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthropic
 func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *ProtocolRecorder) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
-	provider = s.resolveProviderForClient(provider, protocol.APIStyleAnthropic)
+	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}

@@ -192,7 +192,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
-	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)
+	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}

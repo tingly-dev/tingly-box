@@ -98,7 +98,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, model string, req anthropic.BetaMessageCountTokensParams) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
-	provider = s.resolveProviderForClient(provider, protocol.APIStyleAnthropic)
+	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
 
 	c.Set("provider", provider.UUID)
 	c.Set("model", model)

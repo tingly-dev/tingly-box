@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/info"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
+	providermodule "github.com/tingly-dev/tingly-box/internal/server/module/provider"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
@@ -180,8 +181,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	//	swagger.WithResponseModel(ToggleProviderResponse{}),
 	//)
 
-	useV2Provider(s, apiV2)
-
 	// Create skill handler with skill manager
 	// Initialize skill manager for skill locations
 	skillManager, err := skill.NewSkillManager(s.config.ConfigDir)
@@ -321,19 +320,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(HistoryResponse{}),
 	)
 
-	// Provider Models Management
-	apiV1.GET("/provider-models/:uuid", s.GetProviderModelsByUUID,
-		swagger.WithDescription("Get all provider models"),
-		swagger.WithTags("models"),
-		swagger.WithResponseModel(ProviderModelsResponse{}),
-	)
-
-	apiV1.POST("/provider-models/:uuid", s.UpdateProviderModelsByUUID,
-		swagger.WithDescription("Fetch models for a specific provider"),
-		swagger.WithTags("models"),
-		swagger.WithResponseModel(ProviderModelsResponse{}),
-	)
-
 	// Onboarding: extract URLs and possible API tokens from arbitrary pasted
 	// text. Vendor-agnostic — the user picks which URL/token to use.
 	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
@@ -360,50 +346,12 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	// - /swagger.json (Swagger 2.0)
 	// - /openapi.json (OpenAPI 3.0)
 	manager.SetupOpenAPIEndpoints()
-}
 
-func useV2Provider(s *Server, api *swagger.RouteGroup) {
+	// Provider CRUD + model management
+	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
+	providermodule.RegisterRoutes(apiV2, providerHandler)
 
-	api.GET("/providers", s.GetProviders,
-		swagger.WithDescription("Get all configured providers with masked tokens"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ProvidersResponse{}),
-	)
-
-	api.GET("/providers/:uuid", s.GetProvider,
-		swagger.WithDescription("Get specific provider details with masked token"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ProviderResponse{}),
-	)
-
-	api.POST("/providers", s.CreateProvider,
-		swagger.WithDescription("Create a new provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithQuery("force", "bool", "Force to add without checking"),
-		swagger.WithRequestModel(CreateProviderRequest{}),
-		swagger.WithResponseModel(CreateProviderResponse{}),
-	)
-
-	api.PUT("/providers/:uuid", s.UpdateProvider,
-		swagger.WithDescription("Update existing provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithRequestModel(UpdateProviderRequest{}),
-		swagger.WithResponseModel(UpdateProviderResponse{}),
-	)
-
-	api.POST("/providers/:uuid/toggle", s.ToggleProvider,
-		swagger.WithDescription("Toggle provider enabled/disabled status"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ToggleProviderResponse{}),
-	)
-
-	api.DELETE("/providers/:uuid", s.DeleteProvider,
-		swagger.WithDescription("Delete a provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(DeleteProviderResponse{}),
-	)
-
-	// Provider template endpoints - register from providertemplate module
+	// Provider template endpoints
 	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)
-	providertemplate.RegisterRoutes(api, providerTemplateHandler)
+	providertemplate.RegisterRoutes(apiV2, providerTemplateHandler)
 }
