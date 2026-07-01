@@ -256,6 +256,11 @@
           "id": "claude-opus-4-8",
           "context": 1000000,
           "max_output": 128000
+        },
+        {
+          "id": "claude-sonnet-5",
+          "context": 1000000,
+          "max_output": 128000
         }
       ],
       "supports_models_endpoint": true,
