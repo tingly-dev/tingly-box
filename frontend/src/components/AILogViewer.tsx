@@ -12,7 +12,6 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    TextField,
     Typography,
     TableSortLabel,
 } from '@mui/material';
@@ -136,21 +135,13 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [details, setDetails] = useState<Record<string, ModelRequestDetail>>({});
     const [error, setError] = useState<string | null>(null);
-    // Initialize scenario filter from initialScenario prop on mount
-    const [scenario, setScenario] = useState(initialScenario ?? '');
-    const [provider, setProvider] = useState('');
-    const [status, setStatus] = useState('');
+    // Always start unfiltered so the user sees the full picture.
+    // initialScenario is kept as a prop only to power the quick-filter chip.
+    const [scenario, setScenario] = useState('');
     const tableContainerRef = useRef<HTMLDivElement>(null);
     // Sorting state
     const [sortField, setSortField] = useState<SortField>('time');
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-
-    // Initialize scenario from initialScenario when prop changes
-    useEffect(() => {
-        if (initialScenario !== undefined) {
-            setScenario(initialScenario);
-        }
-    }, [initialScenario]);
 
     const loadRequests = async () => {
         setLoading(true);
@@ -159,8 +150,6 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
             const response = await getRequests({
                 limit: 200,
                 scenario: scenario || undefined,
-                provider: provider || undefined,
-                status: status || undefined,
             });
             if (response && response.requests) {
                 const sorted = [...response.requests].sort((a, b) => {
@@ -200,7 +189,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
     useEffect(() => {
         loadRequests();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scenario, provider, status, sortField, sortOrder]);
+    }, [scenario, sortField, sortOrder]);
 
     useEffect(() => {
         if (autoRefresh) {
@@ -208,7 +197,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
             return () => clearInterval(id);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoRefresh, scenario, provider, status]);
+    }, [autoRefresh, scenario]);
 
     const handleSort = (field: SortField) => {
         if (sortField === field) {
@@ -378,36 +367,17 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                     </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
-                    <TextField
-                        size="small"
-                        label="Scenario"
-                        value={scenario}
-                        onChange={(e) => setScenario(e.target.value.trim())}
-                        sx={{ width: 130 }}
-                    />
-                    <TextField
-                        size="small"
-                        label="Provider"
-                        value={provider}
-                        onChange={(e) => setProvider(e.target.value.trim())}
-                        sx={{ width: 130 }}
-                    />
-                    <TextField
-                        size="small"
-                        label="Status"
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value.trim())}
-                        sx={{ width: 90 }}
-                    />
-                    {(scenario || provider || status) && (
-                        <Button
+                    {/* Quick-filter chip: one click to apply/remove the context scenario */}
+                    {initialScenario && (
+                        <Chip
+                            label={`filter: ${initialScenario}`}
                             size="small"
-                            variant="outlined"
-                            onClick={() => { setScenario(''); setProvider(''); setStatus(''); }}
-                            sx={{ fontSize: '0.7rem', py: 0.5, px: 1 }}
-                        >
-                            Clear
-                        </Button>
+                            color={scenario === initialScenario ? 'primary' : 'default'}
+                            variant={scenario === initialScenario ? 'filled' : 'outlined'}
+                            onClick={() => setScenario(prev => prev === initialScenario ? '' : initialScenario)}
+                            onDelete={scenario === initialScenario ? () => setScenario('') : undefined}
+                            sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }}
+                        />
                     )}
                 </Stack>
                 <Box sx={{ flex: 1 }} />
