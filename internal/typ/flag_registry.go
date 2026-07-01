@@ -217,7 +217,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "clean_header",
 			Label:       "Clean Header",
-			Description: "Strip x-anthropic-billing-header blocks from system messages before forwarding. Claude Code injects this header for its own billing; it must not leak to third-party providers. On by default for the built-in Claude Code rules, and automatically suppressed when the rule routes to a Claude OAuth provider (whose billing backend consumes the header). Still auto-enabled for claude_desktop during protocol transformation. Turn off only for native Anthropic fidelity.",
+			Description: "Strip x-anthropic-billing-header blocks from system messages and neutralize steganographic markers before forwarding. Claude Code injects billing headers for its own billing; they must not leak to third-party providers. Additionally, Claude Code embeds geolocation markers in the system prompt date string (look-alike apostrophes in \"Today's\" and date separator substitution for China timezone users). This flag normalizes both. On by default for the built-in Claude Code rules, and automatically suppressed when the rule routes to a Claude OAuth provider (whose billing backend consumes the header). Turn off only for native Anthropic fidelity.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
 		},
