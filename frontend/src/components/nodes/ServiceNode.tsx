@@ -250,7 +250,6 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
 
             {provider.provider && providerInfo.exists && (
                 <ProbeV2Menu
-                    anchorEl={probeAnchorEl}
                     open={probeMenuOpen}
                     onClose={handleProbeClose}
                     targetType="provider"

@@ -18,7 +18,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import { ProbeV2Dialog } from '@/components/probe/ProbeV2Dialog';
-import type { Provider, ProviderModelsData } from '../types/provider';
+import type { Provider } from '../types/provider';
 
 interface ModelCardProps {
     model: string;

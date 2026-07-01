@@ -142,7 +142,6 @@ export const GraphSettingsMenu = ({
             {/* Probe V3 Menu */}
             {ruleUuid && (
                 <ProbeMenu
-                    anchorEl={probeAnchorEl}
                     open={Boolean(probeAnchorEl)}
                     onClose={handleProbeClose}
                     targetType="rule"

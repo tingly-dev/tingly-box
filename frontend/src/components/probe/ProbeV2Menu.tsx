@@ -4,10 +4,8 @@ import type { ProbeV2TargetType } from '@/types/probe-v2.ts';
 
 // ProbeV2Menu used to pop a mode-picker menu before opening the dialog. The
 // mode/scope selection now lives inside the dialog itself, so this is a thin
-// wrapper that opens the dialog directly. `anchorEl` is accepted for caller
-// compatibility but unused.
+// wrapper that opens the dialog directly.
 interface ProbeV2MenuProps {
-    anchorEl?: HTMLElement | null;
     open: boolean;
     onClose: () => void;
     targetType: ProbeV2TargetType;
