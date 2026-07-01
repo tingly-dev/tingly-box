@@ -21,7 +21,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
-import { ProbeV2Menu } from '../probe';
+import { ProbeMenu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
@@ -249,7 +249,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
             />
 
             {provider.provider && providerInfo.exists && (
-                <ProbeV2Menu
+                <ProbeMenu
                     open={probeMenuOpen}
                     onClose={handleProbeClose}
                     targetType="provider"

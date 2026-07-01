@@ -12,9 +12,9 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import ModelSelectDialog from './ModelSelectDialog.tsx';
-import { ProbeV2Dialog } from './probe/ProbeV2Dialog';
+import { ProbeDialog } from './probe/ProbeDialog';
 import type { Provider } from '../types/provider';
-import type { ProbeV2Response } from '@/types/probe-v2';
+import type { ProbeResponse } from '@/types/probe';
 
 interface ModelListDialogProps {
     open: boolean;
@@ -51,7 +51,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
         setProbeModel(model);
         setProbeDialogOpen(true);
 
-        // Note: ProbeV2Dialog handles the API call internally
+        // Note: ProbeDialog handles the API call internally
         // We just need to open the dialog with the right parameters
         setTesting(false);
     };
@@ -99,9 +99,9 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                 </DialogContent>
             </Dialog>
 
-            {/* Probe V2 Dialog */}
+            {/* Probe dialog */}
             {provider && probeModel && (
-                <ProbeV2Dialog
+                <ProbeDialog
                     open={probeDialogOpen}
                     onClose={handleCloseProbeDialog}
                     targetType="provider"

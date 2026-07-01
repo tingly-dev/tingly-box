@@ -1,3 +1,2 @@
-export { ProbeV2Dialog } from './ProbeV2Dialog';
-export { ProbeV2Menu } from './ProbeV2Menu';
+export { ProbeDialog } from './ProbeDialog';
 export { ProbeMenu } from './ProbeMenu';

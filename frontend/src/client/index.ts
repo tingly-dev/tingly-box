@@ -3,8 +3,6 @@ import type {paths, components, operations} from './schema';
 export type {paths, components, operations};
 
 // Helper types for commonly used schemas
-// Temporary alias during v1-to-v2 probe migration
-export type ProbeResponse = components['schemas']['ProbeV2Response'];
 export type ErrorDetail = components['schemas']['ErrorDetail'];
 
 // Provider types

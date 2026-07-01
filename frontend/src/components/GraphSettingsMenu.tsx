@@ -25,7 +25,7 @@ export interface GraphSettingsMenuProps {
     onDelete: () => void;
     onToggleActive: () => void;
     onEditFlags?: () => void;
-    // Probe V2 props
+    // Probe props
     ruleUuid?: string;
     ruleName?: string;
     scenario?: string;
@@ -139,7 +139,7 @@ export const GraphSettingsMenu = ({
                 )}
             </Menu>
 
-            {/* Probe V3 Menu */}
+            {/* Probe Menu */}
             {ruleUuid && (
                 <ProbeMenu
                     open={Boolean(probeAnchorEl)}
