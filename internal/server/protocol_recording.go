@@ -306,7 +306,7 @@ func (sr *ProtocolRecorder) emit(err error) {
 	}
 
 	switch sr.mode {
-	case obs.RecordModeAll, obs.RecordModeScenario, obs.RecordModeStagedRequestResponse:
+	case obs.RecordModeStagedRequestResponse:
 		r.OriginalRequest = sr.originalRequest
 		r.TransformedRequest = sr.transformedRequest
 		r.FinalResponse = sr.finalResponse

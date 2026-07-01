@@ -57,7 +57,7 @@ type Server struct {
 	multiLogger *pkgobs.MultiLogger
 
 	// middleware
-	authMW *middleware.AuthMiddleware
+	authMW          *middleware.AuthMiddleware
 	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
@@ -270,21 +270,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Auto-load guardrails if enabled and not injected explicitly.
 	server.initGuardrailsRuntime()
 	server.refreshGuardrailsCredentialCacheOrWarn("server init")
-
-	// Initialize record sink if recording is enabled
-	switch server.recordMode {
-	case "":
-		// Recording disabled
-	case obs.RecordModeAll:
-		recordSink := obs.NewSink(server.recordDir, server.recordMode, server.sinkOpts()...)
-		server.clientPool.SetRecordSink(recordSink)
-		logrus.Debugf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
-	case obs.RecordModeScenario, obs.RecordModeRequestOnly, obs.RecordModeRequestResponse, obs.RecordModeStagedRequestResponse:
-		// Scenario recording is now on-demand, created when scenario flag is enabled
-		logrus.Debugf("Scenario recording mode enabled, sinks will be created on-demand per scenario")
-	default:
-		log.Panicf("Unknown recording mode %s", server.recordMode)
-	}
 
 	// Log recording flag if enabled
 	if server.enableRecording {
@@ -578,4 +563,3 @@ func (s *Server) setupConfigWatcher() {
 		s.registerAdviserFromConfig()
 	})
 }
-
