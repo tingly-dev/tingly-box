@@ -57,7 +57,7 @@ func TestProfileAliasMiddleware_LeavesCanonicalAndUnknownUntouched(t *testing.T)
 	s := newAliasTestServer()
 
 	for _, raw := range []string{
-		"claude_code:p1", // already canonical
+		"claude_code:p1",   // already canonical
 		"claude_code:nope", // unknown alias
 		"claude_code",      // not profiled
 		"openai",           // not profiled
