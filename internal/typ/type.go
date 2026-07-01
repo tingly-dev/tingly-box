@@ -296,6 +296,22 @@ func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
 	return result
 }
 
+// PromptStore holds prompt-related configuration, keyed by agent. It is the
+// single place for prompt templates, detection markers, and similar
+// agent-specific text fragments that need to be operator-configurable rather
+// than hardcoded — grouping them by agent avoids a flat sprawl of unrelated
+// top-level Config fields as more agents/prompt types are added.
+type PromptStore struct {
+	Claude ClaudeAgentPrompts `json:"claude,omitempty" yaml:"claude,omitempty"`
+}
+
+// ClaudeAgentPrompts holds Claude-Code-specific prompt configuration.
+type ClaudeAgentPrompts struct {
+	// Detect overrides the string markers used to classify Claude Code
+	// requests as main/subagent/compact. Empty fields fall back to defaults.
+	Detect smartrouting.ClaudeCodeDetectConfig `json:"detect,omitempty" yaml:"detect,omitempty"`
+}
+
 // AuthType represents the authentication type for a provider
 // Type alias for backward compatibility with common/provider
 type AuthType = ai.AuthType
