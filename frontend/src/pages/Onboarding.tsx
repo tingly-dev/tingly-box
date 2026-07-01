@@ -53,8 +53,6 @@ const Onboarding: React.FC = () => {
     const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>(emptyForm());
     const [isLocalProvider, setIsLocalProvider] = useState(false);
-    const [isCustomMode, setIsCustomMode] = useState(false);
-    const [isDualMode, setIsDualMode] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -92,13 +90,11 @@ const Onboarding: React.FC = () => {
         const built = buildProviderFormData(selection)!;
 
         if (selection.kind === 'custom') {
-            setIsCustomMode(true);
             setIsLocalProvider(false);
             openDialogWith(built.formData);
             return;
         }
 
-        setIsCustomMode(false);
         setIsLocalProvider(selection.kind === 'local');
         openDialogWith(built.formData);
     };
@@ -210,8 +206,6 @@ const Onboarding: React.FC = () => {
                 onClose={() => {
                     setApiKeyDialogOpen(false);
                     setIsLocalProvider(false);
-                    setIsCustomMode(false);
-                    setIsDualMode(false);
                 }}
                 onSubmit={handleSubmit}
                 onForceAdd={handleForceAdd}
@@ -220,8 +214,6 @@ const Onboarding: React.FC = () => {
                 mode="add"
                 isFirstProvider
                 optionalEditableToken={isLocalProvider}
-                customMode={isCustomMode}
-                dualMode={isDualMode}
             />
 
             {/* OAuth Add Dialog - now functional in onboarding */}

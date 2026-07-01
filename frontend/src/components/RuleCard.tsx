@@ -53,6 +53,7 @@ export interface RuleCardProps {
     onRuleChange?: (updatedRule: Rule) => void;
     onProviderModelsChange?: (providerUuid: string, models: ProviderModelData) => void;
     onRefreshProvider?: (providerUuid: string) => void;
+    onProviderUpdated?: (providerUuid: string) => void | Promise<void>;
     onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string, addTier?: number) => void;
     collapsible?: boolean;
     initiallyExpanded?: boolean;
@@ -72,6 +73,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleChange,
     onProviderModelsChange,
     onRefreshProvider,
+    onProviderUpdated,
     onModelSelectOpen,
     collapsible = false,
     initiallyExpanded = !collapsible,
@@ -113,7 +115,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     const { editProvider, providerEditDialogs } = useProviderEditDialog({
         showNotification,
-        onUpdated: (providerUuid) => onRefreshProvider?.(providerUuid),
+        onUpdated: async (providerUuid) => {
+            await onProviderUpdated?.(providerUuid);
+            await onRefreshProvider?.(providerUuid);
+        },
     });
 
     // Delete confirmation state
