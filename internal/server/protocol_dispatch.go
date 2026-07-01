@@ -98,16 +98,20 @@ func (s *Server) dispatchChainResult(
 	case protocol.TypeOpenAIChat:
 		s.dispatchOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeAnthropicV1:
-		s.passthroughAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
+		if isStreaming {
+			s.streamAnthropicV1(c, reqCtx, rule, provider, recorder)
+		} else {
+			s.nonstreamAnthropicV1(c, reqCtx, rule, provider, recorder)
+		}
 	case protocol.TypeAnthropicBeta:
 		switch reqCtx.SourceAPI {
 		case protocol.TypeOpenAIChat:
 			s.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 		case protocol.TypeOpenAIResponses:
 			if isStreaming {
-				s.streamAnthropicBetaFromResponses(c, reqCtx, rule, provider, recorder)
+				s.streamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
 			} else {
-				s.nonstreamAnthropicBetaFromResponses(c, reqCtx, rule, provider, recorder)
+				s.nonstreamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
 			}
 		default:
 			s.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
@@ -243,19 +247,6 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 		parts = append(parts, "vision_proxy")
 	}
 	return strings.Join(parts, ", ")
-}
-
-// passthroughAnthropicV1 handles Anthropic→Anthropic v1 passthrough (original behavior)
-func (s *Server) passthroughAnthropicV1(
-	c *gin.Context, reqCtx *transform.TransformContext,
-	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *ProtocolRecorder,
-) {
-	if !isStreaming {
-		s.dispatchGenericAnthropicV1NonStream(c, reqCtx, rule, provider, recorder)
-		return
-	}
-	s.dispatchGenericAnthropicV1Stream(c, reqCtx, rule, provider, recorder)
 }
 
 // dispatchOpenAIChatFromAnthropicV1 handles OpenAI→Anthropic v1 conversion.
@@ -626,8 +617,6 @@ func buildOpenAIContinuationSegment(
 	return segment
 }
 
-// ── Google ──────────────────────────────────────────────────────────────
-
 func (s *Server) dispatchGoogle(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
@@ -719,8 +708,6 @@ func (s *Server) dispatchGoogle(
 		}
 	}
 }
-
-// ── OpenAI Chat Completions ─────────────────────────────────────────────
 
 func (s *Server) dispatchOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
@@ -839,227 +826,6 @@ func (s *Server) dispatchOpenAIChat(
 			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		}
 	}
-}
-
-func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
-	req := reqCtx.Request.(*responses.ResponseNewParams)
-
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-
-	responsesStream, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, *req)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.handlePreStreamFailure(c, err, recorder)
-		return
-	}
-
-	primedStream, primeErr := stream.PrimeResponsesStream(responsesStream)
-	if primeErr != nil {
-		s.handlePreStreamFailure(c, primeErr, recorder)
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, responseModel)
-	usage, err := stream.HandleResponsesToOpenAIChatStream(hc, primedStream, responseModel)
-	s.trackUsageWithTokenUsage(c, usage, err)
-	if recorder != nil {
-		recorder.RecordResponse(provider, reqCtx.RequestModel)
-	}
-}
-
-func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	actualModel := reqCtx.RequestModel
-	req := reqCtx.Request.(*responses.ResponseNewParams)
-
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-
-	responsesResp, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, *req)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleResponsesToOpenAIChatNonStream(hc, responsesResp)
-	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-	if recorder != nil {
-		recorder.SetAssembledResponse(nonstream.OpenAIResponsesToChat(responsesResp, reqCtx.ResponseModel))
-		recorder.RecordResponse(provider, reqCtx.RequestModel)
-	}
-}
-
-// nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)
-func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	params := reqCtx.Request.(*responses.ResponseNewParams)
-
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	response, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, *params)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleOpenAIResponsesPassthroughNonStream(hc, response)
-	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-	if recorder != nil {
-		recorder.SetAssembledResponse(response)
-		recorder.RecordResponse(provider, reqCtx.RequestModel)
-	}
-}
-
-// streamOpenAIResponses handles Responses API passthrough (streaming)
-// Moved from openai_responses.go:421-456
-func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	responseModel := reqCtx.ResponseModel
-	params := reqCtx.Request.(*responses.ResponseNewParams)
-
-	// Create streaming request with request context for proper cancellation
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, params.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	respStream, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, *params)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.handlePreStreamFailure(c, err, recorder)
-		return
-	}
-
-	primedStream, primeErr := stream.PrimeResponsesStream(respStream)
-	if primeErr != nil {
-		s.handlePreStreamFailure(c, primeErr, recorder)
-		return
-	}
-
-	// Handle the streaming response
-	hc := protocol.NewHandleContext(c, responseModel)
-	usage, err := stream.HandleOpenAIResponsesStream(hc, primedStream, responseModel)
-
-	// Track usage from stream handler
-	s.trackUsageWithTokenUsage(c, usage, err)
-}
-
-// nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
-func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
-
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
-	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleOpenAIChatToResponsesNonStream(hc, chatResp, reqCtx.RequestModel)
-	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-}
-
-// streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
-// Extracted from openai_responses.go:202-216
-func (s *Server) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	responseModel := reqCtx.ResponseModel
-	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
-
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	chatStream, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, chatReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-	hc := protocol.NewHandleContext(c, responseModel)
-	usage, err := stream.HandleOpenAIChatToResponsesStream(hc, chatStream, responseModel)
-	s.trackUsageWithTokenUsage(c, usage, err)
-}
-
-// nonstreamAnthropicBetaFromResponses handles a Responses-shaped client
-// request that has been normalized to Anthropic Beta and forwarded to an
-// Anthropic provider (non-streaming).
-func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-
-	ctx := c.Request.Context()
-	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1Beta(fc, wrapper, anthropicReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleAnthropicBetaToResponsesNonStream(hc, anthropicResp, reqCtx.RequestModel)
-	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
-}
-
-// streamAnthropicBetaFromResponses handles a Responses-shaped client
-// request that has been normalized to Anthropic Beta and forwarded to an
-// Anthropic provider (streaming).
-func (s *Server) streamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	responseModel := reqCtx.ResponseModel
-	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
-
-	ctx := c.Request.Context()
-
-	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
-	fc := forwarding.NewForwardContext(ctx, provider)
-	anthropicStream, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, responseModel)
-	usage, err := stream.HandleAnthropicBetaToOpenAIResponsesStream(hc, anthropicStream, responseModel)
-	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
 // dispatchOpenAIChatToAnthropicBetaGeneric handles OpenAI Chat -> Anthropic Beta

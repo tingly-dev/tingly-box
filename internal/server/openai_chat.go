@@ -1,18 +1,13 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -131,123 +126,4 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = responseModel
 	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
-}
-
-// nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.
-func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
-	req := originalReq
-
-	// Forward request to provider
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
-	if err != nil {
-		// Track error with no usage
-		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		s.trackUsageWithTokenUsage(c, usage, err)
-		c.JSON(upstreamForwardStatus(err), ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to forward request: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-
-	// Extract usage from response
-	inputTokens := int(response.Usage.PromptTokens)
-	outputTokens := int(response.Usage.CompletionTokens)
-	cacheTokens := int(response.Usage.PromptTokensDetails.CachedTokens)
-
-	// Track usage
-	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-	s.trackUsageWithTokenUsage(c, usage, nil)
-
-	// Convert response to JSON map for modification
-	responseJSON, err := json.Marshal(response)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to marshal response: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-
-	var responseMap map[string]interface{}
-	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to process response: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-
-	// Update response model if configured
-	responseMap["model"] = responseModel
-	if stripUsage {
-		delete(responseMap, "usage")
-	}
-
-	if ShouldRoundtripResponse(c, "anthropic") {
-		roundtripped, err := RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to roundtrip response: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
-			return
-		}
-		responseMap = roundtripped
-		responseMap["model"] = responseModel
-		if stripUsage {
-			delete(responseMap, "usage")
-		}
-	}
-
-	// Return modified response
-	c.JSON(http.StatusOK, responseMap)
-}
-
-// streamOpenAIChat handles streaming chat completion requests.
-func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
-	req := originalReq
-
-	// Estimate input tokens up front and hand the scalar to the stream handler,
-	// so it depends on the estimate rather than the request for the usage fallback.
-	estimatedInputTokens := token.EstimateInputTokensSimple(req)
-
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		// Track error with no usage
-		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		s.trackUsageWithTokenUsage(c, usage, err)
-		c.JSON(upstreamForwardStatus(err), ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to create streaming request: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-
-	// Create handle context and handle stream
-	hc := protocol.NewHandleContext(c, responseModel)
-	hc.DisableStreamUsage = disableStreamUsage
-	hc.EstimatedInputTokens = estimatedInputTokens
-
-	usage, err := stream.HandleOpenAIChatStream(hc, streamResp)
-
-	// Track usage from stream handler
-	s.trackUsageWithTokenUsage(c, usage, err)
 }
