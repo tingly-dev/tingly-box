@@ -17,13 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-type anthropicCountTokensVersion int
-
-const (
-	anthropicCountTokensV1 anthropicCountTokensVersion = iota
-	anthropicCountTokensBeta
-)
-
 // AnthropicCountTokens handles Anthropic v1 count_tokens endpoint
 // This is the entry point that delegates to the appropriate implementation (v1 or beta)
 func (s *Server) AnthropicCountTokens(c *gin.Context) {
