@@ -149,21 +149,18 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		"request_model": rule.RequestModel,
 	}).Info(fmt.Sprintf("Rule %s created successfully", rule.UUID))
 
+	// Echo back what was actually persisted (e.g. compacted service tiers)
+	// rather than the rule as submitted.
+	saved := h.config.GetRuleByUUID(rule.UUID)
+	if saved == nil {
+		saved = &rule
+	}
+
 	response := UpdateRuleResponse{
 		Success: true,
 		Message: "Rule saved successfully",
+		Data:    saved,
 	}
-	response.Data.UUID = rule.UUID
-	response.Data.Scenario = string(rule.Scenario)
-	response.Data.RequestModel = rule.RequestModel
-	response.Data.ResponseModel = rule.ResponseModel
-	response.Data.Description = rule.Description
-	response.Data.Provider = rule.GetDefaultProvider()
-	response.Data.DefaultModel = rule.GetDefaultModel()
-	response.Data.Active = rule.Active
-	response.Data.SmartEnabled = rule.SmartEnabled
-	response.Data.Services = rule.Services
-	response.Data.SmartRouting = rule.SmartRouting
 
 	c.JSON(http.StatusOK, response)
 }
@@ -215,10 +212,12 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 
 	// Echo what was actually persisted: UpdateRule may normalize the rule
 	// (e.g. Claude Desktop request models get the [1m] suffix synced with
-	// the context_1m flag), and the client refreshes its local state from
-	// this response.
-	if saved := h.config.GetRuleByUUID(uid); saved != nil {
-		rule = *saved
+	// the context_1m flag, service tiers get compacted), and the client
+	// replaces its local state wholesale from this response.
+	saved := h.config.GetRuleByUUID(uid)
+	if saved == nil {
+		rule.UUID = uid
+		saved = &rule
 	}
 
 	// Log the action
@@ -230,18 +229,8 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 	response := UpdateRuleResponse{
 		Success: true,
 		Message: "Rule saved successfully",
+		Data:    saved,
 	}
-	response.Data.UUID = rule.UUID
-	response.Data.Scenario = string(rule.Scenario)
-	response.Data.RequestModel = rule.RequestModel
-	response.Data.ResponseModel = rule.ResponseModel
-	response.Data.Description = rule.Description
-	response.Data.Provider = rule.GetDefaultProvider()
-	response.Data.DefaultModel = rule.GetDefaultModel()
-	response.Data.Active = rule.Active
-	response.Data.SmartEnabled = rule.SmartEnabled
-	response.Data.Services = rule.Services
-	response.Data.SmartRouting = rule.SmartRouting
 
 	c.JSON(http.StatusOK, response)
 }

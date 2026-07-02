@@ -384,6 +384,79 @@ func TestUpdateRule_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateRule_ResponseEchoesPersistedRuleWithCompactedTiers locks the
+// contract that UpdateRule's response `data` is the full persisted Rule
+// (not a hand-picked subset), and specifically that service tiers come back
+// compacted to a contiguous 0-based sequence rather than whatever the client
+// sent - e.g. moving the sole tier-0 service to tier 1 must not leave tier 0
+// permanently empty.
+func TestUpdateRule_ResponseEchoesPersistedRuleWithCompactedTiers(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
+
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+	router.POST("/rule/:uuid", handler.UpdateRule)
+
+	provider := &typ.Provider{
+		UUID:     "prov-tier-1",
+		Name:     "TierProvider",
+		APIBase:  "https://api.test.com",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-test",
+		Enabled:  true,
+	}
+	if err := cfg.AddProvider(provider); err != nil {
+		t.Fatalf("Failed to add test provider: %v", err)
+	}
+
+	testUUID := uuid.New().String()
+	originalRule := typ.Rule{
+		UUID:         testUUID,
+		RequestModel: "tier-test",
+		Scenario:     "test-scenario",
+		Active:       true,
+		Services: []*loadbalance.Service{
+			{Provider: provider.UUID, Model: "gpt-4", Tier: 0},
+		},
+	}
+	if err := cfg.AddRule(originalRule); err != nil {
+		t.Fatalf("Failed to add test rule: %v", err)
+	}
+
+	// Move the sole tier-0 service to tier 1, as the UI does when dragging it down.
+	updatedRule := typ.Rule{
+		RequestModel: "tier-test",
+		Scenario:     "test-scenario",
+		Active:       true,
+		Services: []*loadbalance.Service{
+			{Provider: provider.UUID, Model: "gpt-4", Tier: 1},
+		},
+	}
+	body, _ := json.Marshal(updatedRule)
+	req, _ := http.NewRequest("POST", "/rule/"+testUUID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp UpdateRuleResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Data == nil {
+		t.Fatal("expected response data to be the persisted rule, got nil")
+	}
+	if len(resp.Data.Services) != 1 || resp.Data.Services[0].Tier != 0 {
+		t.Errorf("expected the echoed rule's service to be compacted back to tier 0, got %+v", resp.Data.Services)
+	}
+}
+
 // TestUpdateRule_ModelChangePreservesFlags locks the contract behind the
 // "switching a rule's model wiped its flags" bug. The endpoint uses full-replace
 // (PUT) semantics, so the frontend must send the complete rule — including flags —

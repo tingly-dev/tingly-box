@@ -217,20 +217,11 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
             api.updateRule(rule.uuid, ruleData).then((result) => {
                 if (result.success) {
                     showNotification(`Configuration saved successfully`, 'success');
-                    if (onRuleChange) {
-                        onRuleChange({
-                            ...rule,
-                            scenario: ruleData.scenario,
-                            request_model: ruleData.request_model,
-                            response_model: ruleData.response_model,
-                            active: ruleData.active,
-                            description: ruleData.description,
-                            flags: ruleData.flags,
-                            services: ruleData.services,
-                            smart_enabled: ruleData.smart_enabled,
-                            smart_routing: ruleData.smart_routing,
-                        });
-                    }
+                    // The response's `data` is the full persisted Rule — trust
+                    // it wholesale rather than the locally-sent payload, so any
+                    // backend normalization (e.g. service tiers compacted to a
+                    // contiguous 0-based sequence) reaches the UI.
+                    onRuleChange?.(result.data as Rule);
                 } else {
                     showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
                 }

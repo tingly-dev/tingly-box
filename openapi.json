@@ -10292,71 +10292,7 @@
         "type": "object",
         "properties": {
           "data": {
-            "type": "object",
-            "description": "Field data",
-            "properties": {
-              "active": {
-                "type": "boolean",
-                "description": "Field active"
-              },
-              "default_model": {
-                "type": "string",
-                "description": "Field default_model"
-              },
-              "description": {
-                "type": "string",
-                "description": "Field description"
-              },
-              "provider": {
-                "type": "string",
-                "description": "Field provider"
-              },
-              "request_model": {
-                "type": "string",
-                "description": "Field request_model"
-              },
-              "response_model": {
-                "type": "string",
-                "description": "Field response_model"
-              },
-              "scenario": {
-                "type": "string",
-                "description": "Field scenario"
-              },
-              "services": {
-                "type": "array",
-                "description": "Field services",
-                "items": {
-                  "type": "object"
-                }
-              },
-              "smart_enabled": {
-                "type": "boolean",
-                "description": "Field smart_enabled"
-              },
-              "smart_routing": {
-                "type": "array",
-                "description": "Field smart_routing",
-                "items": {
-                  "type": "object"
-                }
-              },
-              "uuid": {
-                "type": "string",
-                "description": "Field uuid"
-              }
-            },
-            "required": [
-              "uuid",
-              "scenario",
-              "request_model",
-              "response_model",
-              "description",
-              "provider",
-              "default_model",
-              "active",
-              "smart_enabled"
-            ]
+            "$ref": "#/components/schemas/Rule"
           },
           "message": {
             "type": "string",

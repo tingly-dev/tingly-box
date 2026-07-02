@@ -112,24 +112,16 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
 
                 const result = await api.updateRule(rule.uuid, ruleData);
                 if (result.success) {
-                    // Prefer the persisted values echoed by the server — it may
-                    // normalize the rule (e.g. Claude Desktop request models get
-                    // the [1m] suffix synced with the context_1m flag, and service
-                    // tiers get compacted back to a contiguous 0-based sequence).
-                    const saved = result.data ?? {};
-                    onRuleChange?.({
-                        ...rule,
-                        scenario: ruleData.scenario,
-                        request_model: saved.request_model ?? ruleData.request_model,
-                        response_model: saved.response_model ?? ruleData.response_model,
-                        active: ruleData.active,
-                        description: ruleData.description,
-                        flags: ruleData.flags,
-                        services: saved.services ?? ruleData.services,
-                        smart_enabled: ruleData.smart_enabled,
-                        smart_routing: saved.smart_routing ?? ruleData.smart_routing,
-                        lb_tactic: ruleData.lb_tactic,
-                    });
+                    // The response's `data` is the full persisted Rule, not a
+                    // subset — trust it wholesale instead of merging against
+                    // what was sent. The backend may normalize a saved rule in
+                    // ways the client didn't ask for (Claude Desktop's [1m]
+                    // suffix synced with the context_1m flag, service tiers
+                    // compacted to a contiguous 0-based sequence, etc.), and
+                    // this is the only way every such normalization reaches
+                    // the UI without a matching field having to be added here
+                    // by hand each time.
+                    onRuleChange?.(result.data as Rule);
                     showNotification('Configuration saved successfully', 'success');
                     return true;
                 } else {

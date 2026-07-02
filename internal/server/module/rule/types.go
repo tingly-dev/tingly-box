@@ -1,8 +1,6 @@
 package rule
 
 import (
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -28,26 +26,20 @@ type CreateRuleRequest typ.Rule
 // UpdateRuleRequest represents the request to set/update a rule
 type UpdateRuleRequest typ.Rule
 
-// UpdateRuleResponse represents the response for setting/updating a rule
+// UpdateRuleResponse represents the response for setting/updating a rule.
+//
+// Data is the full persisted Rule, not a hand-picked subset of fields. The
+// backend may normalize a saved rule in ways the client didn't ask for
+// (service tiers compacted to a contiguous 0-based sequence, Claude Desktop's
+// [1m] request-model suffix synced with the context_1m flag, etc.); echoing
+// the complete rule back means every such normalization reaches the client
+// automatically, without a matching field having to be added here by hand
+// each time. The client should replace its local rule state with this value
+// wholesale rather than merging it field-by-field against what it sent.
 type UpdateRuleResponse struct {
-	Success bool   `json:"success" example:"true"`
-	Message string `json:"message" example:"Rule saved successfully"`
-	Data    struct {
-		UUID          string                      `json:"uuid"`
-		Scenario      string                      `json:"scenario" example:"openai"`
-		RequestModel  string                      `json:"request_model" example:"gpt-3.5-turbo"`
-		ResponseModel string                      `json:"response_model" example:"gpt-3.5-turbo"`
-		Description   string                      `json:"description" example:"My rule description"`
-		Provider      string                      `json:"provider" example:"openai"`
-		DefaultModel  string                      `json:"default_model" example:"gpt-3.5-turbo"`
-		Active        bool                        `json:"active" example:"true"`
-		SmartEnabled  bool                        `json:"smart_enabled" example:"false"`
-		// Services echoes the persisted default services, including tiers
-		// normalized by compactRuleTiers - the client should sync its local
-		// state from this rather than the tiers it sent in the request.
-		Services     []*loadbalance.Service      `json:"services,omitempty"`
-		SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty"`
-	} `json:"data"`
+	Success bool      `json:"success" example:"true"`
+	Message string    `json:"message" example:"Rule saved successfully"`
+	Data    *typ.Rule `json:"data"`
 }
 
 // DeleteRuleResponse represents the response for deleting a rule
