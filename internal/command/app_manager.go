@@ -252,9 +252,6 @@ type ImportOptions struct {
 	// OnProviderConflict specifies what to do when a provider already exists.
 	// "use" - use existing provider, "skip" - skip this provider, "suffix" - create with suffixed name
 	OnProviderConflict string
-	// OnRuleConflict specifies what to do when a rule already exists.
-	// "skip" - skip import, "update" - update existing rule, "new" - create with new name
-	OnRuleConflict string
 	// Quiet suppresses progress output
 	Quiet bool
 }
@@ -268,44 +265,10 @@ type ProviderImportInfo struct {
 
 // ImportResult contains the results of an import operation.
 type ImportResult struct {
-	RuleCreated      bool
-	RuleUpdated      bool
 	ProvidersCreated int
 	ProvidersUsed    int
 	Providers        []ProviderImportInfo
 	ProviderMap      map[string]string // old UUID -> new UUID
-}
-
-// ImportRuleFromJSONL imports a rule from JSONL format (either file content or stdin format).
-// The data should be line-delimited JSON with:
-// - Line 1: metadata (type="metadata")
-// - Line 2: rule data (type="rule")
-// - Subsequent lines: provider data (type="provider")
-//
-// Deprecated: Use ImportRule with FormatAuto instead. This method is kept for backward compatibility.
-func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*ImportResult, error) {
-	// Convert command.ImportOptions to dataio.ImportOptions
-	importOpts := exportpkg.ImportOptions{
-		OnProviderConflict: opts.OnProviderConflict,
-		OnRuleConflict:     opts.OnRuleConflict,
-		Quiet:              opts.Quiet,
-	}
-
-	// Use dataio.Import with FormatAuto (will detect JSONL automatically)
-	result, err := exportpkg.Import(data, am.appConfig.GetGlobalConfig(), exportpkg.FormatAuto, importOpts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert dataio.ImportResult to command.ImportResult
-	return &ImportResult{
-		RuleCreated:      result.RuleCreated,
-		RuleUpdated:      result.RuleUpdated,
-		ProvidersCreated: result.ProvidersCreated,
-		ProvidersUsed:    result.ProvidersUsed,
-		Providers:        convertProviderInfoList(result.Providers),
-		ProviderMap:      result.ProviderMap,
-	}, nil
 }
 
 // convertProviderInfoList converts dataio.ProviderImportInfo to command.ProviderImportInfo
@@ -343,16 +306,17 @@ func (am *AppManager) CollectProvidersFromRule(rule *typ.Rule) ([]*typ.Provider,
 	return providers, nil
 }
 
-// ExportRule exports a rule with its providers, or providers only, in the specified format.
-// At least one of rule or providers must be specified.
+// ExportRule exports the providers referenced by a rule (or an explicit
+// provider list) in the specified format. dataio export/import is
+// provider-only; the rule itself is only used here, by the caller, to pick
+// which providers to include — it is not part of the exported payload.
 func (am *AppManager) ExportRule(rule *typ.Rule, providers []*typ.Provider, format exportpkg.Format) (string, error) {
-	if rule == nil && len(providers) == 0 {
-		return "", fmt.Errorf("either rule or providers must be specified for export")
+	if len(providers) == 0 {
+		return "", fmt.Errorf("providers must be specified for export")
 	}
 
 	// Build export request
 	req := &exportpkg.ExportRequest{
-		Rule:      rule,
 		Providers: providers,
 	}
 
@@ -385,29 +349,29 @@ func (am *AppManager) getProviderUUIDsFromRule(rule *typ.Rule) []string {
 // Import
 // ============
 
-// ImportRule imports a rule from data in the specified format
+// ImportRule imports providers from data in the specified format. Despite
+// the name (kept for call-site compatibility), only providers are
+// imported — dataio export/import no longer carries rule data.
 func (am *AppManager) ImportRule(data string, format exportpkg.Format, opts ImportOptions) (*ImportResult, error) {
 	globalConfig := am.appConfig.GetGlobalConfig()
 
 	// Convert command.ImportOptions to import.ImportOptions
 	importOpts := exportpkg.ImportOptions{
 		OnProviderConflict: opts.OnProviderConflict,
-		OnRuleConflict:     opts.OnRuleConflict,
 		Quiet:              opts.Quiet,
 	}
 
 	// Perform import
 	result, err := exportpkg.Import(data, globalConfig, format, importOpts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to import rule: %w", err)
+		return nil, fmt.Errorf("failed to import providers: %w", err)
 	}
 
 	// Convert import.ImportResult to command.ImportResult
 	return &ImportResult{
-		RuleCreated:      result.RuleCreated,
-		RuleUpdated:      result.RuleUpdated,
 		ProvidersCreated: result.ProvidersCreated,
 		ProvidersUsed:    result.ProvidersUsed,
+		Providers:        convertProviderInfoList(result.Providers),
 		ProviderMap:      result.ProviderMap,
 	}, nil
 }

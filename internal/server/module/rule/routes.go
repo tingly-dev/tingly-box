@@ -51,9 +51,9 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(FlagRegistryResponse{}),
 	)
 
-	// POST /rule/import - Import a rule from base64 encoded data
+	// POST /rule/import - Import providers from base64/JSONL encoded export data
 	router.POST("/rule/import", handler.ImportRule,
-		swagger.WithDescription("Import a rule from base64 encoded data"),
+		swagger.WithDescription("Import providers from base64/JSONL encoded export data"),
 		swagger.WithTags("rules"),
 		swagger.WithRequestModel(ImportRuleRequest{}),
 		swagger.WithResponseModel(ImportRuleResponse{}),

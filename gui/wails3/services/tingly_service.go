@@ -13,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/tingly-dev/tingly-box/internal/command"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -202,11 +203,12 @@ func (s *TinglyService) ListRules() []typ.Rule {
 	return s.appManager.ListRules()
 }
 
-// ImportRule imports a rule from JSONL format
+// ImportRule imports providers from JSONL/base64 export data. Despite the
+// name (kept for call-site compatibility), only providers are imported —
+// dataio export/import no longer carries rule data.
 func (s *TinglyService) ImportRule(data string) (*command.ImportResult, error) {
-	return s.appManager.ImportRuleFromJSONL(data, command.ImportOptions{
+	return s.appManager.ImportRule(data, exportpkg.FormatAuto, command.ImportOptions{
 		OnProviderConflict: "use",
-		OnRuleConflict:     "skip",
 		Quiet:              true,
 	})
 }

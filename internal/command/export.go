@@ -9,7 +9,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// runExport exports a rule with providers to file or stdout
+// runExport exports the providers referenced by a rule to file or stdout.
+// The rule is only used to select which providers to include — dataio
+// export/import is provider-only, so the rule itself does not travel in
+// the exported payload.
 func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, outputFile string) error {
 	var format dataio.Format
 	switch strings.ToLower(formatStr) {
@@ -34,10 +37,10 @@ func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, out
 		return fmt.Errorf("failed to collect providers: %w", err)
 	}
 
-	// Export the rule with its providers
+	// Export the providers referenced by the rule
 	content, err := appManager.ExportRule(rule, providers, format)
 	if err != nil {
-		return fmt.Errorf("failed to export rule: %w", err)
+		return fmt.Errorf("failed to export providers: %w", err)
 	}
 
 	// Write to file or stdout
@@ -46,7 +49,7 @@ func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, out
 		if err != nil {
 			return fmt.Errorf("failed to write to file: %w", err)
 		}
-		fmt.Printf("✓ Rule exported to %s\n", outputFile)
+		fmt.Printf("✓ Providers exported to %s\n", outputFile)
 	} else {
 		fmt.Print(content)
 	}

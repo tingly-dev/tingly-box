@@ -510,7 +510,9 @@ func TestDeleteRule_Success(t *testing.T) {
 	}
 }
 
-// TestImportRule_JSONL tests importing a rule from JSONL format
+// TestImportRule_JSONL tests importing providers from JSONL format.
+// dataio export/import is provider-only; a "rule" line in the payload (if
+// present, e.g. from an older export) is simply ignored.
 func TestImportRule_JSONL(t *testing.T) {
 	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
@@ -519,15 +521,12 @@ func TestImportRule_JSONL(t *testing.T) {
 
 	router.POST("/rules/import", handler.ImportRule)
 
-	// Create a minimal JSONL export with proper lb_tactic structure
 	jsonlData := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
-{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true,"timeout":30}
-{"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test rule","services":[{"provider":"prov-1","model":"gpt-4","weight":100}],"lb_tactic":{"type":"round_robin","params":{}},"active":true,"smart_enabled":false,"smart_routing":[]}`
+{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true,"timeout":30}`
 
 	importReq := ImportRuleRequest{
 		Data:               jsonlData,
 		OnProviderConflict: "use",
-		OnRuleConflict:     "new",
 	}
 	body, _ := json.Marshal(importReq)
 	req, _ := http.NewRequest("POST", "/rules/import", bytes.NewBuffer(body))
@@ -541,16 +540,10 @@ func TestImportRule_JSONL(t *testing.T) {
 
 	bodyResp := w.Body.String()
 	assert.Contains(t, bodyResp, `"success":true`)
-	assert.Contains(t, bodyResp, `"rule_created":true`)
-
-	// Verify the rule was imported
-	rules := cfg.GetRequestConfigs()
-	if len(rules) == 0 {
-		t.Error("Expected at least one rule to be imported")
-	}
+	assert.Contains(t, bodyResp, `"providers_created":1`)
 }
 
-// TestImportRule_Base64 tests importing a rule from Base64 format
+// TestImportRule_Base64 tests importing providers from Base64 format
 func TestImportRule_Base64(t *testing.T) {
 	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
@@ -559,11 +552,8 @@ func TestImportRule_Base64(t *testing.T) {
 
 	router.POST("/rules/import", handler.ImportRule)
 
-	// Create a minimal Base64 export
-	// JSONL: {"type":"metadata","version":"1.0"}\n{"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4"}
 	jsonlData := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
-{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}
-{"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test","services":[{"provider":"prov-1","model":"gpt-4"}],"lb_tactic":{"type":"round_robin","params":{}},"active":true,"smart_enabled":false,"smart_routing":[]}`
+{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}`
 
 	// Encode the JSONL data to Base64
 	base64Payload := base64.StdEncoding.EncodeToString([]byte(jsonlData))
@@ -572,7 +562,6 @@ func TestImportRule_Base64(t *testing.T) {
 	importReq := ImportRuleRequest{
 		Data:               base64Data,
 		OnProviderConflict: "use",
-		OnRuleConflict:     "new",
 	}
 	body, _ := json.Marshal(importReq)
 	req, _ := http.NewRequest("POST", "/rules/import", bytes.NewBuffer(body))
@@ -611,15 +600,13 @@ func TestImportRule_ProviderConflictUse(t *testing.T) {
 	}
 	cfg.AddProvider(existingProvider)
 
-	// Import a rule that references a provider with the same UUID but different name
+	// Import a provider with the same UUID but different name
 	jsonlData := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
-{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}
-{"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test","services":[{"provider":"prov-1","model":"gpt-4"}],"lb_tactic":{"type":"round_robin","params":{}},"active":true,"smart_enabled":false,"smart_routing":[]}`
+{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}`
 
 	importReq := ImportRuleRequest{
 		Data:               jsonlData,
 		OnProviderConflict: "use", // Use existing provider
-		OnRuleConflict:     "new",
 	}
 	body, _ := json.Marshal(importReq)
 	req, _ := http.NewRequest("POST", "/rules/import", bytes.NewBuffer(body))
@@ -649,82 +636,6 @@ func TestImportRule_ProviderConflictUse(t *testing.T) {
 	}
 }
 
-// TestImportRule_RuleConflictSkip tests skipping rule on conflict
-func TestImportRule_RuleConflictSkip(t *testing.T) {
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handler := NewHandler(cfg)
-
-	router.POST("/rules/import", handler.ImportRule)
-
-	// Create a provider first so the rule's service reference is valid
-	existingProvider := &typ.Provider{
-		UUID:     uuid.New().String(),
-		Name:     "ExistingProvider",
-		APIBase:  "https://api.existing.com",
-		APIStyle: protocol.APIStyleOpenAI,
-		AuthType: typ.AuthTypeAPIKey,
-		Token:    "sk-existing",
-		Enabled:  true,
-	}
-	cfg.AddProvider(existingProvider)
-
-	// Create an existing rule referencing the provider above
-	existingRule := typ.Rule{
-		UUID:          uuid.New().String(),
-		RequestModel:  "gpt-4",
-		ResponseModel: "gpt-4",
-		Scenario:      "general",
-		Description:   "Existing rule",
-		Services: []*loadbalance.Service{
-			{
-				Provider: existingProvider.UUID,
-				Model:    "gpt-4",
-				Weight:   100,
-			},
-		},
-		Active: true,
-	}
-	if err := cfg.AddRule(existingRule); err != nil {
-		t.Fatalf("Failed to add existing rule: %v", err)
-	}
-
-	// Try to import a rule with the same request_model and scenario
-	jsonlData := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
-{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}
-{"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"New rule","services":[{"provider":"prov-1","model":"gpt-4"}],"lb_tactic":{"type":"round_robin","params":{}},"active":true,"smart_enabled":false,"smart_routing":[]}`
-
-	importReq := ImportRuleRequest{
-		Data:               jsonlData,
-		OnProviderConflict: "use",
-		OnRuleConflict:     "skip", // Skip on conflict
-	}
-	body, _ := json.Marshal(importReq)
-	req, _ := http.NewRequest("POST", "/rules/import", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
-	}
-
-	bodyResp := w.Body.String()
-	assert.Contains(t, bodyResp, `"success":true`)
-
-	// Parse response to check rule info
-	var resp ImportRuleResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	// Rule should not be created (skipped)
-	if resp.Data.RuleCreated {
-		t.Error("Expected rule not to be created (should skip on conflict)")
-	}
-}
-
 // TestImportRule_InvalidData tests importing with invalid data
 func TestImportRule_InvalidData(t *testing.T) {
 	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
@@ -737,7 +648,6 @@ func TestImportRule_InvalidData(t *testing.T) {
 	importReq := ImportRuleRequest{
 		Data:               "invalid data",
 		OnProviderConflict: "use",
-		OnRuleConflict:     "new",
 	}
 	body, _ := json.Marshal(importReq)
 	req, _ := http.NewRequest("POST", "/rules/import", bytes.NewBuffer(body))
@@ -774,15 +684,13 @@ func TestImportRule_ProviderUUIDConflict(t *testing.T) {
 	}
 	cfg.AddProvider(existingProvider)
 
-	// Import a rule that references a provider with the same UUID
+	// Import a provider with the same UUID
 	jsonlData := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
-{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}
-{"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test","services":[{"provider":"prov-1","model":"gpt-4"}],"lb_tactic":{"type":"round_robin","params":{}},"active":true,"smart_enabled":false,"smart_routing":[]}`
+{"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}`
 
 	importReq := ImportRuleRequest{
 		Data:               jsonlData,
 		OnProviderConflict: "use", // Use existing provider with same UUID
-		OnRuleConflict:     "new",
 	}
 	body, _ := json.Marshal(importReq)
 	req, _ := http.NewRequest("POST", "/rules/import", bytes.NewBuffer(body))
@@ -835,7 +743,6 @@ func TestImportRule_MissingData(t *testing.T) {
 
 	importReq := map[string]string{
 		"on_provider_conflict": "use",
-		"on_rule_conflict":     "new",
 		// Missing "data" field
 	}
 	body, _ := json.Marshal(importReq)

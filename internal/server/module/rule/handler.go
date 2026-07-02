@@ -288,7 +288,9 @@ func (h *Handler) GetFlagRegistry(c *gin.Context) {
 	})
 }
 
-// ImportRule imports a rule from base64 encoded data
+// ImportRule imports providers from base64/JSONL encoded export data.
+// Despite the name (kept for API/route compatibility), this only imports
+// providers — dataio export/import no longer carries rule data.
 func (h *Handler) ImportRule(c *gin.Context) {
 	cfg := h.config
 	if cfg == nil {
@@ -316,13 +318,9 @@ func (h *Handler) ImportRule(c *gin.Context) {
 	if req.OnProviderConflict == "" {
 		req.OnProviderConflict = "use" // Use existing if same UUID found
 	}
-	if req.OnRuleConflict == "" {
-		req.OnRuleConflict = "new" // Create new rule with suffixed name if conflict
-	}
 
 	opts := dataio.ImportOptions{
 		OnProviderConflict: req.OnProviderConflict,
-		OnRuleConflict:     req.OnRuleConflict,
 		Quiet:              true,
 	}
 
@@ -330,17 +328,15 @@ func (h *Handler) ImportRule(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Failed to import rule: " + err.Error(),
+			"error":   "Failed to import providers: " + err.Error(),
 		})
 		return
 	}
 
 	response := ImportRuleResponse{
 		Success: true,
-		Message: "Rule imported successfully",
+		Message: "Providers imported successfully",
 	}
-	response.Data.RuleCreated = result.RuleCreated
-	response.Data.RuleUpdated = result.RuleUpdated
 	response.Data.ProvidersCreated = result.ProvidersCreated
 	response.Data.ProvidersUsed = result.ProvidersUsed
 
@@ -356,13 +352,11 @@ func (h *Handler) ImportRule(c *gin.Context) {
 	// Log the action
 	logrus.WithFields(logrus.Fields{
 		"action":            obs.ActionUpdateProvider,
-		"rule_created":      result.RuleCreated,
-		"rule_updated":      result.RuleUpdated,
 		"providers_created": result.ProvidersCreated,
 	}).Info(
 		fmt.Sprintf(
-			"Rule import completed: created=%v, updated=%v, providers=%d",
-			result.RuleCreated, result.RuleUpdated, result.ProvidersCreated,
+			"Provider import completed: created=%d, used=%d",
+			result.ProvidersCreated, result.ProvidersUsed,
 		),
 	)
 

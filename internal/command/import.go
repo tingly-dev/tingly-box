@@ -49,8 +49,7 @@ func runImport(appManager *AppManager, formatStr string, args []string) error {
 
 	// Import using AppManager with defaults for conflicts
 	result, err := appManager.ImportRule(data, format, ImportOptions{
-		OnProviderConflict: "use",  // Use existing provider by default
-		OnRuleConflict:     "skip", // Skip existing rules by default
+		OnProviderConflict: "use", // Use existing provider by default
 		Quiet:              false,
 	})
 
@@ -59,18 +58,14 @@ func runImport(appManager *AppManager, formatStr string, args []string) error {
 	}
 
 	fmt.Printf("\nImport completed!\n")
-	if result.RuleCreated {
-		fmt.Println("✓ Rule created successfully")
-	} else if result.RuleUpdated {
-		fmt.Println("✓ Rule updated successfully")
-	} else {
-		fmt.Println("ℹ No rule was created (possibly already exists)")
-	}
 	if result.ProvidersCreated > 0 {
 		fmt.Printf("✓ Providers created: %d\n", result.ProvidersCreated)
 	}
 	if result.ProvidersUsed > 0 {
 		fmt.Printf("ℹ Providers reused: %d\n", result.ProvidersUsed)
+	}
+	if result.ProvidersCreated == 0 && result.ProvidersUsed == 0 {
+		fmt.Println("ℹ No providers were imported")
 	}
 
 	return nil
