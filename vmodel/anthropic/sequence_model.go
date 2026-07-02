@@ -1,6 +1,8 @@
 package anthropic
 
 import (
+	"context"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -93,6 +95,6 @@ func (m *SequenceModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesReque
 }
 
 // HandleAnthropicStream mirrors HandleAnthropic for the streaming path.
-func (m *SequenceModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
-	return m.ResolveRequest().HandleAnthropicStream(req, emit)
+func (m *SequenceModel) HandleAnthropicStream(ctx context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+	return m.ResolveRequest().HandleAnthropicStream(ctx, req, emit)
 }

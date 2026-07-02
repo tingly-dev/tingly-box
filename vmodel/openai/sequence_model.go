@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"context"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -93,6 +95,6 @@ func (m *SequenceModel) HandleOpenAIChat(req *protocol.OpenAIChatCompletionReque
 }
 
 // HandleOpenAIChatStream mirrors HandleOpenAIChat for the streaming path.
-func (m *SequenceModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
-	return m.ResolveRequest().HandleOpenAIChatStream(req, emit)
+func (m *SequenceModel) HandleOpenAIChatStream(ctx context.Context, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
+	return m.ResolveRequest().HandleOpenAIChatStream(ctx, req, emit)
 }
