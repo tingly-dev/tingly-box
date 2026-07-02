@@ -8,21 +8,27 @@ import (
 )
 
 // execReplace approximates process replacement on Windows, which has no
-// true exec(). The child's stdio handles are inherited independently of
-// the parent, so it starts binPath as a child and exits tingly-box
-// immediately without waiting — the child stays attached to the same
-// console (Ctrl+C still reaches it) and keeps running on its own, while
-// tingly-box does not remain resident for the claude session.
+// true exec(). It starts binPath as a child process with the same stdio
+// handles, then exits tingly-box immediately without waiting.
+//
+// In a normal console session, the child remains attached to the same
+// console, so Ctrl+C should continue to reach it. This is not identical
+// to POSIX exec(), and behavior may differ under job objects, IDEs,
+// services, CI, or custom console/process-group setups.
 func execReplace(binPath string, args []string, env []string) error {
 	cmd := exec.Command(binPath, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = env
+
+	if env != nil {
+		cmd.Env = env
+	}
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+
 	os.Exit(0)
 	return nil
 }
