@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -120,16 +119,12 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 	execArgs := []string{"--settings", settingsPath}
 	execArgs = append(execArgs, claudeArgs...)
 
-	// Exec replaces current process
+	// Exec replaces current process (on Windows, which has no true exec(),
+	// this instead starts the child detached and exits immediately) so
+	// tingly-box does not remain resident for the claude session.
 	binPath := variant.Path
 	//nolint:gosec // intentional exec of user-installed CLI
-	execCmd := exec.Command(binPath, execArgs...)
-	execCmd.Stdin = os.Stdin
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-	execCmd.Env = os.Environ()
-
-	if err := execCmd.Run(); err != nil {
+	if err := execReplace(binPath, execArgs, os.Environ()); err != nil {
 		return fmt.Errorf("failed to run claude CLI: %w", err)
 	}
 	return nil
