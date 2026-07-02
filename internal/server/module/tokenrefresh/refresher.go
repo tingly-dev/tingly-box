@@ -1,4 +1,4 @@
-package background
+package tokenrefresh
 
 import (
 	"context"
@@ -49,14 +49,78 @@ type OAuthRefresher struct {
 	rng           *rand.Rand // Random number generator for jitter
 }
 
-// NewTokenRefresher creates a new token refresher
-func NewTokenRefresher(manager *oauth.Manager, serverConfig providerConfig) *OAuthRefresher {
-	return &OAuthRefresher{
-		manager:       manager,
-		serverConfig:  serverConfig,
+type refresherOptions struct {
+	manager       tokenManager
+	serverConfig  providerConfig
+	checkInterval time.Duration
+	refreshBuffer time.Duration
+	rng           *rand.Rand
+}
+
+// RefresherOption configures an OAuth token refresher.
+type RefresherOption func(*refresherOptions)
+
+// WithTokenManager sets the token manager used for refresh operations.
+func WithTokenManager(manager tokenManager) RefresherOption {
+	return func(o *refresherOptions) {
+		o.manager = manager
+	}
+}
+
+// WithProviderConfig sets the provider config used for persisted OAuth providers.
+func WithProviderConfig(config providerConfig) RefresherOption {
+	return func(o *refresherOptions) {
+		o.serverConfig = config
+	}
+}
+
+// WithCheckInterval sets how often the refresher checks for expiring tokens.
+func WithCheckInterval(interval time.Duration) RefresherOption {
+	return func(o *refresherOptions) {
+		o.checkInterval = interval
+	}
+}
+
+// WithRefreshBuffer sets how soon before expiry a token should be refreshed.
+func WithRefreshBuffer(buffer time.Duration) RefresherOption {
+	return func(o *refresherOptions) {
+		o.refreshBuffer = buffer
+	}
+}
+
+// WithRandSource sets the random generator used for interval jitter.
+func WithRandSource(rng *rand.Rand) RefresherOption {
+	return func(o *refresherOptions) {
+		o.rng = rng
+	}
+}
+
+// NewTokenRefresher creates a new token refresher.
+func NewTokenRefresher(opts ...RefresherOption) *OAuthRefresher {
+	options := &refresherOptions{
 		checkInterval: defaultCheckInterval,
 		refreshBuffer: defaultRefreshBuffer,
 		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
+	for _, opt := range opts {
+		opt(options)
+	}
+	if options.checkInterval == 0 {
+		options.checkInterval = defaultCheckInterval
+	}
+	if options.refreshBuffer == 0 {
+		options.refreshBuffer = defaultRefreshBuffer
+	}
+	if options.rng == nil {
+		options.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+
+	return &OAuthRefresher{
+		manager:       options.manager,
+		serverConfig:  options.serverConfig,
+		checkInterval: options.checkInterval,
+		refreshBuffer: options.refreshBuffer,
+		rng:           options.rng,
 	}
 }
 

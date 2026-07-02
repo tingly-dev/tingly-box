@@ -57,6 +57,88 @@ type Config struct {
 	ProxyURL *url.URL
 }
 
+// ConfigOption configures an OAuth Config.
+type ConfigOption func(*Config)
+
+// WithConfigBaseURL sets the callback base URL used by OAuth flows.
+func WithConfigBaseURL(baseURL string) ConfigOption {
+	return func(c *Config) {
+		c.BaseURL = baseURL
+	}
+}
+
+// WithConfigProxyURL sets the default proxy URL used by OAuth requests.
+func WithConfigProxyURL(proxyURL *url.URL) ConfigOption {
+	return func(c *Config) {
+		c.ProxyURL = proxyURL
+	}
+}
+
+// WithConfigProxyString parses and sets the default proxy URL used by OAuth requests.
+func WithConfigProxyString(proxyURL string) ConfigOption {
+	return func(c *Config) {
+		if proxyURL == "" {
+			return
+		}
+		if u, err := url.Parse(proxyURL); err == nil {
+			c.ProxyURL = u
+		} else {
+			logrus.Errorf("Failed to parse proxy URL: %v", err)
+		}
+	}
+}
+
+// WithConfigProviderConfigs sets the provider configuration map.
+func WithConfigProviderConfigs(configs map[ai.Issuer]*ProviderConfig) ConfigOption {
+	return func(c *Config) {
+		c.ProviderConfigs = configs
+	}
+}
+
+// WithConfigTokenStorage sets the token storage.
+func WithConfigTokenStorage(storage TokenStorage) ConfigOption {
+	return func(c *Config) {
+		c.TokenStorage = storage
+	}
+}
+
+// WithConfigStateStorage sets the state storage.
+func WithConfigStateStorage(storage StateStorage) ConfigOption {
+	return func(c *Config) {
+		c.StateStorage = storage
+	}
+}
+
+// WithConfigSessionStorage sets the session storage.
+func WithConfigSessionStorage(storage SessionStorage) ConfigOption {
+	return func(c *Config) {
+		c.SessionStorage = storage
+	}
+}
+
+// WithConfigStateExpiry sets OAuth state expiration.
+func WithConfigStateExpiry(expiry time.Duration) ConfigOption {
+	return func(c *Config) {
+		c.StateExpiry = expiry
+	}
+}
+
+// WithConfigTokenExpiryBuffer sets the token refresh buffer.
+func WithConfigTokenExpiryBuffer(buffer time.Duration) ConfigOption {
+	return func(c *Config) {
+		c.TokenExpiryBuffer = buffer
+	}
+}
+
+// NewConfig returns an OAuth configuration with defaults plus options.
+func NewConfig(opts ...ConfigOption) *Config {
+	cfg := DefaultConfig()
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
+
 // DefaultConfig returns a default OAuth configuration
 func DefaultConfig() *Config {
 	cfg := &Config{

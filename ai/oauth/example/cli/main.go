@@ -298,10 +298,10 @@ func shouldSkipClientSecret(config *oauth.ProviderConfig) bool {
 }
 
 func newOAuthConfig(baseURL string) *oauth.Config {
-	cfg := oauth.DefaultConfig()
-	cfg.BaseURL = baseURL
-	cfg.ProviderConfigs = make(map[ai.Issuer]*oauth.ProviderConfig)
-	return cfg
+	return oauth.NewConfig(
+		oauth.WithConfigBaseURL(baseURL),
+		oauth.WithConfigProviderConfigs(make(map[ai.Issuer]*oauth.ProviderConfig)),
+	)
 }
 
 func newSignalChan() chan os.Signal {
@@ -312,7 +312,7 @@ func newSignalChan() chan os.Signal {
 
 func runAuthCodeFlow(config *ExampleConfig, registry *oauth.Registry, providerConfig *oauth.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
-	manager := oauth.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauth.WithConfig(oauthConfig), oauth.WithRegistry(registry))
 	manager.Debug = true
 
 	resultChan := make(chan *CallbackResult, 1)
@@ -426,7 +426,7 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth.Registry, providerCo
 
 func runDeviceCodeFlow(config *ExampleConfig, registry *oauth.Registry, providerConfig *oauth.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
-	manager := oauth.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauth.WithConfig(oauthConfig), oauth.WithRegistry(registry))
 	manager.Debug = true
 
 	fmt.Println("\n" + strings.Repeat("=", 80))

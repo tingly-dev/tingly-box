@@ -53,7 +53,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		// Use an empty config for testing (the handler only needs it for the type, not for specific values)
 		serverCfg := &config.Config{}
 		oauthConfig := oauth.DefaultConfig()
-		oauthManager := oauth.NewManager(oauthConfig, registry)
+		oauthManager := oauth.NewManager(oauth.WithConfig(oauthConfig), oauth.WithRegistry(registry))
 		handler := NewHandler(oauthManager, serverCfg)
 
 		// Generate a session ID directly (no longer using SessionManager)
@@ -119,7 +119,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		registry := oauth.NewRegistry()
 		serverCfg := &config.Config{}
 		oauthConfig := oauth.DefaultConfig()
-		oauthManager := oauth.NewManager(oauthConfig, registry)
+		oauthManager := oauth.NewManager(oauth.WithConfig(oauthConfig), oauth.WithRegistry(registry))
 		handler := NewHandler(oauthManager, serverCfg)
 
 		// Create a mock callback request with invalid state
@@ -157,7 +157,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		serverCfg := &config.Config{}
 		oauthConfig := oauth.DefaultConfig()
 		oauthConfig.StateExpiry = 10 * time.Millisecond // Very short expiry
-		oauthManager := oauth.NewManager(oauthConfig, registry)
+		oauthManager := oauth.NewManager(oauth.WithConfig(oauthConfig), oauth.WithRegistry(registry))
 		handler := NewHandler(oauthManager, serverCfg)
 
 		// Generate a session ID directly
@@ -220,7 +220,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		})
 
 		oauthConfig := oauth.DefaultConfig()
-		oauthManager := oauth.NewManager(oauthConfig, registry)
+		oauthManager := oauth.NewManager(oauth.WithConfig(oauthConfig), oauth.WithRegistry(registry))
 
 		// Create a state with sessionID
 		testSessionID := "test-session-from-handler"
@@ -314,7 +314,7 @@ func TestHandler_AuthorizeOAuth_Reauth_Validation(t *testing.T) {
 		})
 		cfg, err := config.NewConfigWithDir(t.TempDir(), config.WithDisableMigration(), config.WithDisableBuiltIn())
 		require.NoError(t, err, "config should build")
-		oauthManager := oauth.NewManager(oauth.DefaultConfig(), registry)
+		oauthManager := oauth.NewManager(oauth.WithConfig(oauth.DefaultConfig()), oauth.WithRegistry(registry))
 		return NewHandler(oauthManager, cfg), cfg
 	}
 
@@ -400,7 +400,7 @@ func TestHandler_Reauth_OverwritesInPlace(t *testing.T) {
 
 	beforeCount := len(cfg.ListProviders())
 
-	oauthManager := oauth.NewManager(oauth.DefaultConfig(), registry)
+	oauthManager := oauth.NewManager(oauth.WithConfig(oauth.DefaultConfig()), oauth.WithRegistry(registry))
 	handler := NewHandler(oauthManager, cfg)
 
 	sessionID := uuid.New().String()

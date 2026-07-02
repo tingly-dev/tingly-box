@@ -289,7 +289,7 @@ func TestManager(t *testing.T) {
 		config := DefaultConfig()
 		registry := NewRegistry()
 
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		if manager == nil {
 			t.Fatal("Expected manager to be created")
@@ -318,7 +318,7 @@ func TestManager(t *testing.T) {
 
 		config := DefaultConfig()
 		config.BaseURL = "http://localhost:8080"
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		authURL, state, err := manager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", "")
 		if err != nil {
@@ -360,7 +360,7 @@ func TestManager(t *testing.T) {
 		})
 
 		config := DefaultConfig()
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		_, _, err := manager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", "")
 		if err == nil {
@@ -375,7 +375,7 @@ func TestManager(t *testing.T) {
 	t.Run("GetAuthURLInvalidProvider", func(t *testing.T) {
 		registry := NewRegistry()
 		config := DefaultConfig()
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		_, _, err := manager.GetAuthURL("user123", ai.Issuer("invalid"), "", "", "")
 		if err == nil {
@@ -397,7 +397,7 @@ func TestManager(t *testing.T) {
 
 		config := DefaultConfig()
 		config.StateExpiry = 10 * time.Millisecond
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		authURL, state, err := manager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", "")
 		if err != nil {
@@ -461,7 +461,7 @@ func TestHandleCallback(t *testing.T) {
 
 		config := DefaultConfig()
 		config.BaseURL = "http://localhost:8080"
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		// First, get auth URL to create a state
 		_, state, err := manager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", "")
@@ -511,7 +511,7 @@ func TestHandleCallback(t *testing.T) {
 	t.Run("CallbackWithError", func(t *testing.T) {
 		registry := NewRegistry()
 		config := DefaultConfig()
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		reqURL, _ := url.Parse("http://localhost:8080/oauth/callback")
 		query := reqURL.Query()
@@ -531,7 +531,7 @@ func TestHandleCallback(t *testing.T) {
 	t.Run("CallbackWithInvalidState", func(t *testing.T) {
 		registry := NewRegistry()
 		config := DefaultConfig()
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		reqURL, _ := url.Parse("http://localhost:8080/oauth/callback")
 		query := reqURL.Query()
@@ -563,7 +563,7 @@ func TestGetToken(t *testing.T) {
 
 		config := DefaultConfig()
 		config.TokenStorage = storage
-		manager := NewManager(config, nil)
+		manager := NewManager(WithConfig(config))
 
 		retrieved, err := manager.GetToken(context.Background(), "user123", ai.IssuerClaudeCode)
 		if err != nil {
@@ -579,7 +579,7 @@ func TestGetToken(t *testing.T) {
 		storage := NewMemoryTokenStorage()
 		config := DefaultConfig()
 		config.TokenStorage = storage
-		manager := NewManager(config, nil)
+		manager := NewManager(WithConfig(config))
 
 		_, err := manager.GetToken(context.Background(), "user123", ai.IssuerClaudeCode)
 		if err != ErrTokenNotFound {
@@ -599,7 +599,7 @@ func TestRevokeToken(t *testing.T) {
 
 	config := DefaultConfig()
 	config.TokenStorage = storage
-	manager := NewManager(config, nil)
+	manager := NewManager(WithConfig(config))
 
 	err := manager.RevokeToken("user123", ai.IssuerClaudeCode)
 	if err != nil {
@@ -629,7 +629,7 @@ func TestListProviders(t *testing.T) {
 
 	config := DefaultConfig()
 	config.TokenStorage = storage
-	manager := NewManager(config, nil)
+	manager := NewManager(WithConfig(config))
 
 	providers, err := manager.ListProviders("user123")
 	if err != nil {
@@ -706,7 +706,7 @@ func TestOptions(t *testing.T) {
 
 	t.Run("getHTTPClient", func(t *testing.T) {
 		config := DefaultConfig()
-		manager := NewManager(config, nil)
+		manager := NewManager(WithConfig(config))
 
 		// Test with no options (should use config's client)
 		opts := applyOptions()
@@ -763,7 +763,7 @@ func TestManager_GetStateData(t *testing.T) {
 		})
 
 		config := DefaultConfig()
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		// Create a state with sessionID
 		_, state, err := manager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "test-name", "test-session-id")
@@ -796,7 +796,7 @@ func TestManager_GetStateData(t *testing.T) {
 
 	t.Run("RetrieveNonExistentState", func(t *testing.T) {
 		config := DefaultConfig()
-		manager := NewManager(config, nil)
+		manager := NewManager(WithConfig(config))
 
 		_, err := manager.GetStateData("non-existent-state")
 		if err != ErrInvalidState {
@@ -818,7 +818,7 @@ func TestManager_GetStateData(t *testing.T) {
 
 		config := DefaultConfig()
 		config.StateExpiry = 10 * time.Millisecond
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		// Create a state
 		_, state, err := manager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", "")
@@ -850,7 +850,7 @@ func TestManager_GetStateData(t *testing.T) {
 		})
 
 		config := DefaultConfig()
-		manager := NewManager(config, registry)
+		manager := NewManager(WithConfig(config), WithRegistry(registry))
 
 		// Create a state with sessionID
 		testSessionID := "test-session-123"

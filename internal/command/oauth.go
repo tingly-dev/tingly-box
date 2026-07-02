@@ -172,19 +172,18 @@ func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, custom
 	ctx := context.Background()
 
 	// Create OAuth manager
-	oauthConfig := oauth2.DefaultConfig()
-	oauthConfig.BaseURL = fmt.Sprintf("http://localhost:%d", callbackPort)
-
-	// Set proxy if provided
+	oauthConfigOpts := []oauth2.ConfigOption{
+		oauth2.WithConfigBaseURL(fmt.Sprintf("http://localhost:%d", callbackPort)),
+	}
 	if proxyURLStr != "" {
-		proxy, err := url.Parse(proxyURLStr)
-		if err != nil {
+		if _, err := url.Parse(proxyURLStr); err != nil {
 			return fmt.Errorf("invalid proxy URL: %w", err)
 		}
-		oauthConfig.ProxyURL = proxy
+		oauthConfigOpts = append(oauthConfigOpts, oauth2.WithConfigProxyString(proxyURLStr))
 	}
+	oauthConfig := oauth2.NewConfig(oauthConfigOpts...)
 
-	manager := oauth2.NewManager(oauthConfig, oauth2.DefaultRegistry())
+	manager := oauth2.NewManager(oauth2.WithConfig(oauthConfig), oauth2.WithRegistry(oauth2.DefaultRegistry()))
 
 	// Determine provider name
 	providerName := customName

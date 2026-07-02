@@ -72,33 +72,74 @@ type StateData struct {
 	SessionID     string // Session ID for status tracking
 }
 
-// NewManager creates a new OAuth manager
-func NewManager(config *Config, registry *Registry) *Manager {
-	if config == nil {
-		config = DefaultConfig()
+type managerOptions struct {
+	config   *Config
+	registry *Registry
+}
+
+// ManagerOption configures an OAuth manager.
+type ManagerOption func(*managerOptions)
+
+// WithConfig sets the OAuth configuration used by the manager.
+func WithConfig(config *Config) ManagerOption {
+	return func(o *managerOptions) {
+		o.config = config
 	}
+}
+
+// WithRegistry sets the provider registry used by the manager.
+func WithRegistry(registry *Registry) ManagerOption {
+	return func(o *managerOptions) {
+		o.registry = registry
+	}
+}
+
+// NewManager creates a new OAuth manager.
+func NewManager(opts ...ManagerOption) *Manager {
+	options := &managerOptions{
+		config:   DefaultConfig(),
+		registry: DefaultRegistry(),
+	}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	oauthConfig := options.config
+	if oauthConfig == nil {
+		oauthConfig = DefaultConfig()
+	}
+	registry := options.registry
 	if registry == nil {
 		registry = DefaultRegistry()
 	}
 
 	// Use storage from config, or create default memory storage
-	tokenStorage := config.TokenStorage
+	tokenStorage := oauthConfig.TokenStorage
 	if tokenStorage == nil {
 		tokenStorage = NewMemoryTokenStorage()
 	}
 
-	stateStorage := config.StateStorage
+	stateStorage := oauthConfig.StateStorage
 	if stateStorage == nil {
 		stateStorage = NewMemoryStateStorage()
 	}
 
-	sessionStorage := config.SessionStorage
+	sessionStorage := oauthConfig.SessionStorage
 	if sessionStorage == nil {
 		sessionStorage = NewMemorySessionStorage()
 	}
 
+	// Keep the normalized storage on Config because manager methods use both the
+	// direct fields below and m.config.*Storage.
+	oauthConfig.TokenStorage = tokenStorage
+	oauthConfig.StateStorage = stateStorage
+	oauthConfig.SessionStorage = sessionStorage
+	if oauthConfig.ProviderConfigs == nil {
+		oauthConfig.ProviderConfigs = make(map[ai.Issuer]*ProviderConfig)
+	}
+
 	m := &Manager{
-		config:         config,
+		config:         oauthConfig,
 		registry:       registry,
 		tokenStorage:   tokenStorage,
 		stateStorage:   stateStorage,

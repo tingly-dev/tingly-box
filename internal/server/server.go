@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
@@ -25,13 +24,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
-	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
+	"github.com/tingly-dev/tingly-box/internal/server/module/tokenrefresh"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -90,7 +89,7 @@ type Server struct {
 	scenarioRegistry    *scenario.Registry
 
 	// OAuth refresher for OAuth auto-refresh
-	oauthRefresher *background.OAuthRefresher
+	oauthRefresher *tokenrefresh.OAuthRefresher
 
 	// OAuth callback server (for providers requiring specific ports like Codex on 1455)
 	oauthCallbackServer *http.Server
@@ -318,20 +317,19 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
-	// Initialize OAuth manager and handler
-	// Note: BaseURL will be dynamically updated for providers with port constraints
-	registry := oauth.DefaultRegistry()
-	oauthConfig := &oauth.Config{
-		BaseURL:           fmt.Sprintf("http://localhost:%d", cfg.GetServerPort()),
-		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
-		TokenStorage:      oauth.NewMemoryTokenStorage(),
-		StateExpiry:       10 * time.Minute,
-		TokenExpiryBuffer: 5 * time.Minute,
-	}
-	oauthManager := oauth.NewManager(oauthConfig, registry)
-
-	// Initialize token refresher for OAuth auto-refresh
-	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
+	// Initialize OAuth module dependencies.
+	// Per-flow callback base URLs are passed as request options for providers with port constraints.
+	oauthConfig := oauth.NewConfig(
+		oauth.WithConfigBaseURL(fmt.Sprintf("http://localhost:%d", cfg.GetServerPort())),
+	)
+	oauthManager := oauth.NewManager(
+		oauth.WithConfig(oauthConfig),
+		oauth.WithRegistry(oauth.DefaultRegistry()),
+	)
+	tokenRefresher := tokenrefresh.NewTokenRefresher(
+		tokenrefresh.WithTokenManager(oauthManager),
+		tokenrefresh.WithProviderConfig(cfg),
+	)
 
 	// Register provider lifecycle hooks for automatic cache invalidation
 	poolHook := hooks.NewClientPoolInvalidationHook(server.clientPool)
