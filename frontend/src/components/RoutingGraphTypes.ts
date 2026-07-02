@@ -11,8 +11,10 @@ export interface ConfigProvider {
     active?: boolean;
     time_window?: number;
     // Tier within a rule. Lower number = tried first (T0 is highest priority);
-    // 0 / undefined = unset, sinks to the bottom tier. Setting this on any
-    // service flips the rule's load-balancing tactic to "tier" (direct + fallback).
+    // 0 / undefined = default/unset. Setting a tier > 0 on any service flips
+    // the rule's load-balancing tactic to "tier" (direct + fallback). The
+    // backend renumbers tiers to a contiguous 0-based sequence on every save,
+    // so tier 0 is never left empty once at least one service is assigned.
     tier?: number;
 }
 

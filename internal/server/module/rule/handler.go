@@ -162,6 +162,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 	response.Data.DefaultModel = rule.GetDefaultModel()
 	response.Data.Active = rule.Active
 	response.Data.SmartEnabled = rule.SmartEnabled
+	response.Data.Services = rule.Services
 	response.Data.SmartRouting = rule.SmartRouting
 
 	c.JSON(http.StatusOK, response)
@@ -239,6 +240,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 	response.Data.DefaultModel = rule.GetDefaultModel()
 	response.Data.Active = rule.Active
 	response.Data.SmartEnabled = rule.SmartEnabled
+	response.Data.Services = rule.Services
 	response.Data.SmartRouting = rule.SmartRouting
 
 	c.JSON(http.StatusOK, response)

@@ -1,6 +1,7 @@
 package rule
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -41,7 +42,11 @@ type UpdateRuleResponse struct {
 		DefaultModel  string                      `json:"default_model" example:"gpt-3.5-turbo"`
 		Active        bool                        `json:"active" example:"true"`
 		SmartEnabled  bool                        `json:"smart_enabled" example:"false"`
-		SmartRouting  []smartrouting.SmartRouting `json:"smart_routing,omitempty"`
+		// Services echoes the persisted default services, including tiers
+		// normalized by compactRuleTiers - the client should sync its local
+		// state from this rather than the tiers it sent in the request.
+		Services     []*loadbalance.Service      `json:"services,omitempty"`
+		SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty"`
 	} `json:"data"`
 }
 

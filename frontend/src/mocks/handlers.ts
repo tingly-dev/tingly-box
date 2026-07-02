@@ -1,5 +1,25 @@
 import { http, HttpResponse } from 'msw'
 
+// Mirrors the backend's compactRuleTiers (internal/server/config/config.go):
+// renumbers each service list's Tier values to a contiguous 0-based sequence
+// on save, so tier 0 is never left empty after e.g. moving the sole T0
+// service to T1.
+function compactTiers(services: any[] | undefined): void {
+    if (!services || services.length === 0) return
+    const distinct = Array.from(new Set(services.map((s) => s.tier ?? 0))).sort((a, b) => a - b)
+    const remap = new Map(distinct.map((tier, i) => [tier, i]))
+    for (const s of services) {
+        s.tier = remap.get(s.tier ?? 0)
+    }
+}
+
+function compactRuleTiers(rule: any): void {
+    compactTiers(rule?.services)
+    for (const routing of rule?.smart_routing ?? []) {
+        compactTiers(routing?.services)
+    }
+}
+
 // ============================================
 // Mock Model Requests (correlated per-request traces)
 // ============================================
@@ -1460,6 +1480,7 @@ export const handlers = [
         for (const rules of Object.values(mockV1Rules)) {
             const idx = rules.findIndex((r) => r.uuid === uuid)
             if (idx >= 0) {
+                compactRuleTiers(body)
                 rules[idx] = { ...rules[idx], ...body }
                 return HttpResponse.json({ success: true, data: rules[idx] })
             }

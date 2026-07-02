@@ -590,6 +590,19 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 	return 0
 }
 
+// compactRuleTiers renumbers the Tier values of a rule's default services and
+// each smart-routing block's services so they stay contiguous starting at 0.
+// Without this, moving the sole tier-0 service to tier 1 (or deleting it)
+// leaves tier 0 empty while tier 1 silently acts as the top tier - correct
+// for routing (which just picks the lowest tier present) but misleading for
+// any code or UI that treats tier 0 as a distinct, literal concept.
+func compactRuleTiers(rule *typ.Rule) {
+	loadbalance.CompactTiers(rule.Services)
+	for i := range rule.SmartRouting {
+		loadbalance.CompactTiers(rule.SmartRouting[i].Services)
+	}
+}
+
 // AddRule updates the default Rule
 func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
@@ -599,6 +612,7 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	if err := c.validateRuleServices(rule); err != nil {
 		return err
 	}
+	compactRuleTiers(&rule)
 
 	// Guard name unique within same scenario
 	for _, rc := range c.Rules {
@@ -629,6 +643,7 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	if err := c.validateRuleServices(rule); err != nil {
 		return err
 	}
+	compactRuleTiers(&rule)
 
 	// Claude Desktop pulls its model picker from /v1/models, which lists rule
 	// request models verbatim — the [1m] context-window advertisement must

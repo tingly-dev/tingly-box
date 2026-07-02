@@ -114,7 +114,8 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                 if (result.success) {
                     // Prefer the persisted values echoed by the server — it may
                     // normalize the rule (e.g. Claude Desktop request models get
-                    // the [1m] suffix synced with the context_1m flag).
+                    // the [1m] suffix synced with the context_1m flag, and service
+                    // tiers get compacted back to a contiguous 0-based sequence).
                     const saved = result.data ?? {};
                     onRuleChange?.({
                         ...rule,
@@ -124,9 +125,9 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         active: ruleData.active,
                         description: ruleData.description,
                         flags: ruleData.flags,
-                        services: ruleData.services,
+                        services: saved.services ?? ruleData.services,
                         smart_enabled: ruleData.smart_enabled,
-                        smart_routing: ruleData.smart_routing,
+                        smart_routing: saved.smart_routing ?? ruleData.smart_routing,
                         lb_tactic: ruleData.lb_tactic,
                     });
                     showNotification('Configuration saved successfully', 'success');

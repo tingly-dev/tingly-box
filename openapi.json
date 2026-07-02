@@ -10323,6 +10323,13 @@
                 "type": "string",
                 "description": "Field scenario"
               },
+              "services": {
+                "type": "array",
+                "description": "Field services",
+                "items": {
+                  "type": "object"
+                }
+              },
               "smart_enabled": {
                 "type": "boolean",
                 "description": "Field smart_enabled"

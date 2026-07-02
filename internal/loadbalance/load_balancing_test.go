@@ -650,3 +650,42 @@ func TestServiceStats_GetStats_NewFields(t *testing.T) {
 		t.Errorf("Expected WindowCostTokens = %d, got %d", stats.WindowCostTokens, copy.WindowCostTokens)
 	}
 }
+
+func TestCompactTiers(t *testing.T) {
+	tests := []struct {
+		name  string
+		tiers []int
+		want  []int
+	}{
+		{"already contiguous", []int{0, 0, 1, 2}, []int{0, 0, 1, 2}},
+		{"gap after moving sole T0 to T1", []int{1}, []int{0}},
+		{"gap in the middle", []int{0, 2, 5}, []int{0, 1, 2}},
+		{"single tier, all zero", []int{0, 0, 0}, []int{0, 0, 0}},
+		{"empty", []int{}, []int{}},
+		{"unsorted input order preserved", []int{5, 0, 5, 2}, []int{2, 0, 2, 1}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			services := make([]*Service, len(tt.tiers))
+			for i, tier := range tt.tiers {
+				services[i] = &Service{Provider: "p", Model: "m", Tier: tier}
+			}
+
+			CompactTiers(services)
+
+			got := make([]int, len(services))
+			for i, s := range services {
+				got[i] = s.Tier
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("CompactTiers() len = %d, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("CompactTiers()[%d] = %d, want %d", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}

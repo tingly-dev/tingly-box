@@ -2,6 +2,7 @@ package loadbalance
 
 import (
 	"encoding/json"
+	"sort"
 	"sync"
 	"time"
 )
@@ -16,6 +17,33 @@ type Service struct {
 	ModelCapacity *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
 	Tier          int          `yaml:"tier,omitempty" json:"tier,omitempty"`                     // Tier within a rule: lower number = tried first (T0 is highest priority). Used by TacticTier.
 	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
+}
+
+// CompactTiers remaps the Tier values of services so the distinct tiers in
+// use are contiguous and start at 0, preserving their relative order. This
+// keeps tier 0 occupied whenever any service exists, so "tier 0" reliably
+// means "the current top tier" rather than drifting into an empty gap left
+// behind after a service is moved off it (e.g. dragging the sole T0 service
+// down to T1 previously left T0 empty and T1 acting as the de-facto top tier).
+func CompactTiers(services []*Service) {
+	distinct := make([]int, 0, len(services))
+	seen := make(map[int]bool, len(services))
+	for _, s := range services {
+		if !seen[s.Tier] {
+			seen[s.Tier] = true
+			distinct = append(distinct, s.Tier)
+		}
+	}
+	sort.Ints(distinct)
+
+	remap := make(map[int]int, len(distinct))
+	for i, tier := range distinct {
+		remap[tier] = i
+	}
+
+	for _, s := range services {
+		s.Tier = remap[s.Tier]
+	}
 }
 
 // ServiceID returns a unique string identifier for the service (provider:model).
