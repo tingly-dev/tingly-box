@@ -12,9 +12,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy"
-	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy/visionproxytest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/visionproxy"
+	"github.com/tingly-dev/tingly-box/internal/visionproxy/visionproxytest"
 )
 
 // _ keeps the responses import used even if a future refactor removes the
