@@ -1,10 +1,10 @@
-// Package processor hosts smart-routing op-level processors. A processor is
-// a side-effect handler bound to a (Position, Operation) tuple in the
-// smart_routing registry: when a rule matches and one of its ops carries a
-// processor, the routing stage runs Process and lets the pipeline continue
-// (implicit bypass) so the LoadBalancer forwards the mutated request.
+// Package visionproxy is the vision proxy plugin: when a downstream model is
+// text-only, it describes image content via a vision-capable upstream and
+// replaces the image blocks with the description so the request still works.
 //
-// First inhabitant: VisionProxyProcessor — describes images via a
-// vision-capable upstream and replaces image content blocks with text so
-// downstream text-only models can serve image-bearing requests.
+// Service (service.go) resolves the effective {provider, model} for a
+// request — rule level wins over scenario level — and hands it to
+// VisionProxyProcessor (vision_proxy.go), which rewrites the typed request
+// in place. See .design/vision-proxy.md for the full design and
+// README.md for the rewrite pipeline.
 package visionproxy

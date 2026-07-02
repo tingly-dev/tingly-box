@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -104,16 +103,6 @@ func mkProcessor(t *testing.T, vc visionClient, providers ...*typ.Provider) *Vis
 	return &VisionProxyProcessor{
 		Client:   vc,
 		Resolver: newFakeProviderResolver(providers...),
-	}
-}
-
-func mkPctx(req any, services ...*loadbalance.Service) *smartrouting.ProcessorContext {
-	return &smartrouting.ProcessorContext{
-		Ctx:       context.Background(),
-		Request:   req,
-		RuleIndex: 0,
-		OpUUID:    "test-op",
-		Services:  services,
 	}
 }
 
@@ -451,9 +440,9 @@ func TestVisionProxy_AnthropicBeta_SuccessReplacesImageWithDescription(t *testin
 	p := mkProcessor(t, fake, prov)
 
 	req := betaReqWithImages("What's in the picture?", tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 1, fake.callCount(), "vision client called once")
 	require.Equal(t, 0, countImages(req), "no image blocks remain")
 	require.Contains(t, collectText(req), "a red apple on a white plate", "description spliced into text")
@@ -465,9 +454,9 @@ func TestVisionProxy_AnthropicV1_Success(t *testing.T) {
 	p := mkProcessor(t, fake, prov)
 
 	req := v1ReqWithImage("describe", tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a blue sky")
 }
@@ -478,9 +467,9 @@ func TestVisionProxy_OpenAI_Success(t *testing.T) {
 	p := mkProcessor(t, fake, prov)
 
 	req := openaiReqWithImage("what is this?", tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a cat sitting on a mat")
 }
@@ -492,9 +481,9 @@ func TestVisionProxy_VisionCallError_StripImageWithUnavailableMarker(t *testing.
 	p := mkProcessor(t, fake, prov)
 
 	req := betaReqWithImages("describe", tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx), "Process must not surface the upstream error — fail-strip semantics")
+	require.NoError(t, p.Process(context.Background(), req, svcs), "Process must not surface the upstream error — fail-strip semantics")
 	require.Equal(t, 0, countImages(req), "image stripped despite upstream failure")
 	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
 }
@@ -505,9 +494,9 @@ func TestVisionProxy_MultipleImages_AllReplacedInOrder(t *testing.T) {
 	p := mkProcessor(t, fake, prov)
 
 	req := betaReqWithImages("compare these", tinyPNGBase64, tinyPNGBase64, tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 3, fake.callCount(), "one describe call per image")
 	require.Equal(t, 0, countImages(req))
 	text := collectText(req)
@@ -522,9 +511,9 @@ func TestVisionProxy_NoImages_NoOp(t *testing.T) {
 	p := mkProcessor(t, fake, prov)
 
 	req := betaReqWithImages("just text") // no image args
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, fake.callCount(), "no images → no vision calls")
 	require.Equal(t, 0, countImages(req))
 }
@@ -535,9 +524,9 @@ func TestVisionProxy_EmptyDescription_StripImageWithUnavailableMarker(t *testing
 	p := mkProcessor(t, fake, prov)
 
 	req := betaReqWithImages("describe", tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "description unavailable",
 		"empty upstream response treated as fail-strip")
@@ -560,9 +549,9 @@ func TestVisionProxy_HistoricalImages_StrippedWithoutDescribe(t *testing.T) {
 		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", tinyPNGBase64),
 		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", tinyPNGBase64),
 	)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 1, fake.callCount(),
 		"only the LAST message's image triggers a describe call; historical images are stripped without upstream cost")
 	require.Equal(t, 0, countImages(req), "all images removed from the request")
@@ -585,9 +574,9 @@ func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
 			v1Message(anthropic.MessageParamRoleUser, "old turn", tinyPNGBase64),
 			v1Message(anthropic.MessageParamRoleUser, "current", tinyPNGBase64),
 		)
-		pctx := mkPctx(req, mkService(prov.UUID, true))
+		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-		require.NoError(t, p.Process(pctx))
+		require.NoError(t, p.Process(context.Background(), req, svcs))
 		require.Equal(t, 1, fake.callCount(), "describe only the latest")
 		require.Equal(t, 0, countImages(req))
 		text := collectText(req)
@@ -606,9 +595,9 @@ func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
 				openaiUserMessageWithImage("current", tinyPNGBase64),
 			},
 		}
-		pctx := mkPctx(req, mkService(prov.UUID, true))
+		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-		require.NoError(t, p.Process(pctx))
+		require.NoError(t, p.Process(context.Background(), req, svcs))
 		require.Equal(t, 1, fake.callCount(), "describe only the latest")
 		require.Equal(t, 0, countImages(req))
 		text := collectText(req)
@@ -622,11 +611,11 @@ func TestVisionProxy_NoUsableService_StripImagesAndReturnNil(t *testing.T) {
 	fake := newFakeVisionClient("never called")
 	p := mkProcessor(t, fake, prov)
 
-	// Service is inactive → no usable service in pctx.Services.
+	// Service is inactive → no usable service in svcs.
 	req := betaReqWithImages("describe", tinyPNGBase64)
-	pctx := mkPctx(req, mkService(prov.UUID, false))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, false)}
 
-	require.NoError(t, p.Process(pctx), "must not error when no usable service")
+	require.NoError(t, p.Process(context.Background(), req, svcs), "must not error when no usable service")
 	require.Equal(t, 0, fake.callCount(), "no service → no vision call")
 	require.Equal(t, 0, countImages(req), "image stripped so downstream still works")
 }
@@ -647,9 +636,9 @@ func TestVisionProxy_Responses_Success(t *testing.T) {
 	req := responsesReqWithItems(
 		responsesMessageItem(responses.EasyInputMessageRoleUser, "what is this?", tinyPNGBase64),
 	)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 1, fake.callCount())
 	require.Equal(t, 0, countImages(req), "no input_image parts remain")
 	require.Contains(t, collectText(req), "a yellow rubber duck")
@@ -666,9 +655,9 @@ func TestVisionProxy_Responses_InputMessageVariant(t *testing.T) {
 	req := responsesReqWithItems(
 		responsesInputMessageItem("user", "interpret this chart", tinyPNGBase64),
 	)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a chart with three bars")
 }
@@ -687,9 +676,9 @@ func TestVisionProxy_Responses_HistoricalImagesStripped(t *testing.T) {
 		responsesMessageItem(responses.EasyInputMessageRoleAssistant, "previous reply", ""),
 		responsesMessageItem(responses.EasyInputMessageRoleUser, "current question", tinyPNGBase64),
 	)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 1, fake.callCount(),
 		"only the LAST item's image triggers a describe call; historical images use the marker")
 	require.Equal(t, 0, countImages(req))
@@ -713,9 +702,9 @@ func TestVisionProxy_Responses_MarshalNoImageURL(t *testing.T) {
 		responsesMessageItem(responses.EasyInputMessageRoleUser, "older", tinyPNGBase64),
 		responsesInputMessageItem("user", "newer", tinyPNGBase64),
 	)
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, countImages(req))
 
 	body, err := req.MarshalJSON()

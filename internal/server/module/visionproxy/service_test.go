@@ -4,9 +4,23 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy/visionproxytest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+func scenarioVisionExt(provider, model string) map[string]interface{} {
+	return map[string]interface{}{
+		config.ExtensionVisionProxyService: map[string]interface{}{
+			"provider": provider,
+			"model":    model,
+		},
+	}
+}
+
+func ruleWithVisionService(provider, model string) *typ.Rule {
+	return &typ.Rule{Flags: typ.RuleFlags{
+		VisionProxyService: &typ.VisionProxyService{Provider: provider, Model: model},
+	}}
+}
 
 // ---------------------------------------------------------------------------
 // Resolve — priority: rule wins over scenario
@@ -21,20 +35,20 @@ func TestResolveVisionService_Priority(t *testing.T) {
 	}{
 		{
 			name:      "rule and scenario both set -> rule wins",
-			ext:       visionproxytest.ScenarioExt("p-scn", "scenario-model"),
-			rule:      visionproxytest.RuleWithService("p-rule", "rule-model"),
+			ext:       scenarioVisionExt("p-scn", "scenario-model"),
+			rule:      ruleWithVisionService("p-rule", "rule-model"),
 			wantModel: "rule-model",
 		},
 		{
 			name:      "only scenario set -> scenario",
-			ext:       visionproxytest.ScenarioExt("p-scn", "scenario-model"),
+			ext:       scenarioVisionExt("p-scn", "scenario-model"),
 			rule:      &typ.Rule{},
 			wantModel: "scenario-model",
 		},
 		{
 			name:      "only rule set -> rule",
 			ext:       map[string]interface{}{},
-			rule:      visionproxytest.RuleWithService("p-rule", "rule-model"),
+			rule:      ruleWithVisionService("p-rule", "rule-model"),
 			wantModel: "rule-model",
 		},
 		{
@@ -45,13 +59,13 @@ func TestResolveVisionService_Priority(t *testing.T) {
 		},
 		{
 			name:      "rule set but model empty -> fall back to scenario",
-			ext:       visionproxytest.ScenarioExt("p-scn", "scenario-model"),
-			rule:      visionproxytest.RuleWithService("p-rule", ""),
+			ext:       scenarioVisionExt("p-scn", "scenario-model"),
+			rule:      ruleWithVisionService("p-rule", ""),
 			wantModel: "scenario-model",
 		},
 		{
 			name:      "nil rule + scenario set -> scenario",
-			ext:       visionproxytest.ScenarioExt("p-scn", "scenario-model"),
+			ext:       scenarioVisionExt("p-scn", "scenario-model"),
 			rule:      nil,
 			wantModel: "scenario-model",
 		},
@@ -97,9 +111,9 @@ func TestParseScenarioVisionService(t *testing.T) {
 		{name: "nil extensions", ext: nil, want: nil},
 		{name: "missing key", ext: map[string]interface{}{"other": "value"}, want: nil},
 		{name: "wrong shape", ext: map[string]interface{}{"vision_proxy_service": "not-an-object"}, want: nil},
-		{name: "missing provider", ext: visionproxytest.ScenarioExt("", "claude-3-5-sonnet"), want: nil},
-		{name: "missing model", ext: visionproxytest.ScenarioExt("p-uuid", ""), want: nil},
-		{name: "valid", ext: visionproxytest.ScenarioExt("p-uuid", "claude-3-5-sonnet"), want: &struct{ provider, model string }{"p-uuid", "claude-3-5-sonnet"}},
+		{name: "missing provider", ext: scenarioVisionExt("", "claude-3-5-sonnet"), want: nil},
+		{name: "missing model", ext: scenarioVisionExt("p-uuid", ""), want: nil},
+		{name: "valid", ext: scenarioVisionExt("p-uuid", "claude-3-5-sonnet"), want: &struct{ provider, model string }{"p-uuid", "claude-3-5-sonnet"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

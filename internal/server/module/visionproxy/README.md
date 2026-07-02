@@ -1,63 +1,49 @@
-# processor
+# visionproxy
 
-Op-level processors for `smart_routing`. A processor is a side-effect handler
-bound to a `(SmartOpPosition, SmartOpOperation)` tuple. When the smart-routing
-stage matches a rule whose ops carry a registered processor, the stage runs
-the processor(s) and returns `(nil, false)` — the **LoadBalancer** (the
-global fallback) then picks an upstream from the parent rule's top-level
-`Services` with the **mutated** request. The bypass is strictly one-shot:
-the mutated request is not re-evaluated against smart-routing rules,
-keeping post-processor behavior predictable.
+The vision proxy plugin: when the downstream model is text-only, describe
+image content via a vision-capable upstream and splice the description in as
+text, so image-bearing requests still work.
 
-The matched rule's `Services` are treated as the **processor's upstream
-candidate pool**, not the routing destination.
+See `.design/vision-proxy.md` for the product-level design (scopes,
+configuration matrix, data model). This README covers the implementation —
+how `Service` resolves the upstream and how `VisionProxyProcessor` rewrites
+the request.
 
 ## Wiring
 
 ```
-boot (server.go)
-  └─► processor.RegisterAll(pool, resolver, logger)
-        ├─► VisionProxyProcessor{
-        │     Client:   NewPoolVisionClient(pool, resolver, logger),
-        │     Resolver: resolver,
-        │   }
-        └─► smartrouting.RegisterProcessor(
-              PositionProxyVision,
-              OpProxyVisionEnabled,
-              visionProc)
-                  │
-                  ▼
-            registry["proxy_vision|enabled"] = visionProc
+boot (internal/server/server.go)
+  └─► visionproxy.NewServiceFromPool(pool, resolver, logger)
+        └─► Service{ Processor: &VisionProxyProcessor{
+              Client:   NewPoolVisionClient(pool, resolver, logger),
+              Resolver: resolver,
+            }}
 
-per request (internal/server/routing/stage_smart_routing.go)
-
-  router.Evaluate(reqCtx)
+per request (internal/server/vision_proxy.go → applyVisionProxy)
+  Service.Apply(ctx, cfg, scenarioType, rule, typedRequest)
         │
-        ├── no match  ──► (nil, false) → next stage
+        ├─ Resolve(cfg, scenarioType, rule) → *loadbalance.Service
+        │    rule.Flags.VisionProxyService wins over
+        │    cfg.Scenarios[...].Extensions["vision_proxy_service"]
+        │    nil  ⇒  neither scope configured a service → no-op
         │
-        └── match rule R
-              │
-              ├── R already in ctx.BypassedSmartRules
-              │     ──► (nil, false) → LoadBalancer
-              │
-              ├── R has no processors
-              │     ──► terminal selection
-              │         (intersect, filter active, return result)
-              │
-              └── R has processors
-                    run each Process(pctx) in op order
-                    (each processor mutates ctx.Request in place)
-                    ctx.BypassedSmartRules[R] = struct{}{}
-                    ──► (nil, false) → LoadBalancer
-                        (with mutated request)
+        └─ Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc})
+             mutates typedRequest in place (see below)
 ```
+
+`Service.Apply` is called directly from the request handlers
+(`openai_chat.go`, `openai_responses.go`, `anthropic_message.go`) before
+service selection — it is not a smart-routing op. An earlier version
+registered `VisionProxyProcessor` into `internal/smart_routing`'s processor
+registry so a matching rule could bypass routing with `{Position:
+proxy_vision, Operation: enabled}`; that path was removed in favor of the
+rule/scenario flags above, which are simpler to configure and don't require
+a second rule.
 
 ## VisionProxyProcessor
 
 Replaces every image content block in the request with a text block.
-Enables **text-only downstream models to accept image-bearing requests**.
-
-Enabling proxy_vision implies the fallback (downstream) model does not
+Enabling vision proxy implies the fallback (downstream) model does not
 support images, so EVERY image block must be removed from the serialized
 request. But describing every image in the conversation history through
 the vision upstream would be wasteful — older images are rarely the
@@ -76,7 +62,7 @@ responsibilities:
 ### Process pipeline
 
 ```
-pctx.Request : *anthropic.BetaMessageNewParams (or v1 / OpenAI)
+req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
 
   messages: [
     { role: user,
@@ -88,7 +74,7 @@ pctx.Request : *anthropic.BetaMessageNewParams (or v1 / OpenAI)
         { OfImage: B }                                       ◄── latest target
       ] } ]
        │
-       │ pickUsableService(pctx.Services)
+       │ pickUsableService(services)
        │   skip nil / inactive / unresolvable-provider svcs
        │
        │ for each message i < lastIdx:
@@ -133,9 +119,8 @@ pctx.Request : *anthropic.BetaMessageNewParams (or v1 / OpenAI)
         { OfText: "What's in this picture?" },
         { OfText: "[image: a red apple on a white plate]" } ] } ]
 
-  smart_routing stage returns (nil, false);
-  LoadBalancer picks main service;
-  forwarder serializes the now-text-only typed request downstream.
+  Service.Apply returns; the (now text-only) typed request continues
+  through the normal service-selection + forwarding path.
 ```
 
 ### Fail-strip semantics
@@ -166,33 +151,24 @@ fail-strip does not apply; they always receive the omitted marker.
 ### Protocol coverage
 
 | Request shape                              | Image block source                             | Notes                                  |
-|--------------------------------------------|------------------------------------------------|----------------------------------------|
+|--------------------------------------------|--------------------------------------------------|----------------------------------------|
 | `*anthropic.BetaMessageNewParams`          | `BetaImageBlockParam.Source` (Base64 \| URL)   | last message described; older stripped |
 | `*anthropic.MessageNewParams`              | `ImageBlockParam.Source` (Base64 \| URL)       | last message described; older stripped |
 | `*openai.ChatCompletionNewParams`          | `user.content[].OfImageURL.ImageURL.URL`       | last message described; older stripped |
+| `*responses.ResponseNewParams`             | `input[].content[].OfInputImage`               | last item described; older stripped    |
 
-Unknown request shapes are left alone (no-op).
+Images nested inside `tool_result` content blocks are also walked (Beta and
+v1 shapes) — tool-returning agents (screenshot / read-image / MCP tools)
+deliver images this way. Unknown request shapes are left alone (no-op).
 
-## Adding a new processor
+## Testing
 
-1. Implement `smartrouting.OpProcessor`:
-   ```go
-   type MyProc struct { /* deps */ }
-   func (p *MyProc) Process(pctx *smartrouting.ProcessorContext) error { … }
-   ```
-2. Register it in `processor.RegisterAll`:
-   ```go
-   smartrouting.RegisterProcessor(
-       smartrouting.PositionXxx,
-       smartrouting.OpXxx,
-       &MyProc{…})
-   ```
-3. Add a `SmartOp` entry in `internal/smart_routing/op.go` and handle the op
-   in the appropriate `evaluateXxxOp` function so rules can declare it.
-
-The matched rule's `Services` are passed in `pctx.Services` for processors
-that need an upstream pool — `pickUsableService`-style selection is the
-processor's responsibility.
+- `visionproxytest/` — shared test doubles (`StubVisionClient`,
+  `StubResolver`, fixture builders) reused by this package's own tests and
+  by `internal/server` tests that exercise `Service.Apply` through the real
+  handler call order (see `internal/server/openai_responses_vision_test.go`).
+- `vision_proxy_e2e_test.go` (build tag `e2e`) drives a real deployment;
+  requires `TINGLY_API_KEY`, see the file header for details.
 
 ## Out of scope (today)
 

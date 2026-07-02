@@ -1,7 +1,7 @@
 // Package visionproxytest provides shared test doubles for the vision proxy
 // plugin, reused both by internal/server/module/visionproxy's own tests and
 // by internal/server tests that need a real Service wired through a
-// processor.VisionProxyProcessor (e.g. handler-ordering regression tests).
+// visionproxy.VisionProxyProcessor (e.g. handler-ordering regression tests).
 package visionproxytest
 
 import (
@@ -9,7 +9,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/processor"
+	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -37,10 +37,10 @@ func (StubResolver) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	return &typ.Provider{UUID: uuid, Name: "stub"}, nil
 }
 
-// NewProcessor builds a processor.VisionProxyProcessor wired to the stub
+// NewProcessor builds a visionproxy.VisionProxyProcessor wired to the stub
 // client/resolver above, echoing "<desc> via <model>" for every described image.
-func NewProcessor() *processor.VisionProxyProcessor {
-	return &processor.VisionProxyProcessor{
+func NewProcessor() *visionproxy.VisionProxyProcessor {
+	return &visionproxy.VisionProxyProcessor{
 		Client:   StubVisionClient{Desc: "desc"},
 		Resolver: StubResolver{},
 	}

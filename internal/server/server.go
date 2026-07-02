@@ -350,9 +350,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.affinityStore = affinityStore
 	server.routingSelector = simpleSelector
 
-	// Register op-level processors (vision proxy, etc.) into the smart-routing
-	// registry. Idempotent — safe across config reloads.
-	server.visionProxyService = visionproxy.NewService(visionproxy.RegisterAll(server.clientPool, server.config, logrus.StandardLogger()))
+	// Wire the vision proxy service. Idempotent — safe across config reloads.
+	server.visionProxyService = visionproxy.NewServiceFromPool(server.clientPool, server.config, logrus.StandardLogger())
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

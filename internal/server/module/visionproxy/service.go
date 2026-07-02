@@ -6,9 +6,11 @@ package visionproxy
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -24,6 +26,17 @@ func NewService(p *VisionProxyProcessor) *Service {
 	return &Service{Processor: p}
 }
 
+// NewServiceFromPool builds a Service backed by the production vision client,
+// dispatching describe calls through the shared ClientPool. Called once
+// during server boot after the ClientPool and config (provider resolver) are
+// constructed.
+func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver, logger *logrus.Logger) *Service {
+	return NewService(&VisionProxyProcessor{
+		Client:   NewPoolVisionClient(pool, resolver, logger),
+		Resolver: resolver,
+	})
+}
+
 // Apply runs the vision proxy plugin against typedRequest, covering both the
 // rule-level and scenario-level scopes. It must run before service selection
 // (after the rule is resolved). The effective service is chosen by Resolve —
@@ -37,11 +50,7 @@ func (s *Service) Apply(ctx context.Context, cfg *config.Config, scenarioType ty
 	if svc == nil {
 		return
 	}
-	_ = s.Processor.Process(&smartrouting.ProcessorContext{
-		Ctx:      ctx,
-		Request:  typedRequest,
-		Services: []*loadbalance.Service{svc},
-	})
+	_ = s.Processor.Process(ctx, typedRequest, []*loadbalance.Service{svc})
 }
 
 // Resolve picks the effective vision service for this request. Rule level
