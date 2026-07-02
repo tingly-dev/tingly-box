@@ -7,6 +7,8 @@
 package anthropic
 
 import (
+	"context"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -17,5 +19,5 @@ import (
 type VirtualModel interface {
 	vmodel.VirtualModel
 	HandleAnthropic(req *protocol.AnthropicBetaMessagesRequest) (VModelResponse, error)
-	HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error
+	HandleAnthropicStream(ctx context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error
 }

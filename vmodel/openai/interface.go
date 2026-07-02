@@ -7,6 +7,8 @@
 package openai
 
 import (
+	"context"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -15,7 +17,7 @@ import (
 type VirtualModel interface {
 	vmodel.VirtualModel
 	HandleOpenAIChat(req *protocol.OpenAIChatCompletionRequest) (VModelResponse, error)
-	HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionRequest, emit func(any)) error
+	HandleOpenAIChatStream(ctx context.Context, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error
 }
 
 // VToolCall is a protocol-agnostic tool call returned by OpenAI Chat models.

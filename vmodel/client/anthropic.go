@@ -45,7 +45,13 @@ func (c *AnthropicClient) ListModels(_ context.Context) ([]string, error) {
 
 // BetaMessagesNew calls the vmodel synchronously and returns an
 // *anthropic.BetaMessage built via JSON round-trip.
-func (c *AnthropicClient) BetaMessagesNew(_ context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	vm := c.reg.Get(string(req.Model))
 	if vm == nil {
 		return nil, fmt.Errorf("vmodel not found: %s", req.Model)
@@ -96,8 +102,8 @@ func (c *AnthropicClient) BetaMessagesNew(_ context.Context, req *anthropic.Beta
 
 // BetaMessagesNewStreaming wraps vm.HandleAnthropicStream with a channel-based
 // decoder so the caller gets a standard anthropicstream.Stream.
-func (c *AnthropicClient) BetaMessagesNewStreaming(_ context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	dec, err := c.betaStreamDecoder(req)
+func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
+	dec, err := c.betaStreamDecoder(ctx, req)
 	if err != nil {
 		return anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](anthropicErrDecoder{err}, nil)
 	}
@@ -126,11 +132,11 @@ func (c *AnthropicClient) MessagesNew(ctx context.Context, req *anthropic.Messag
 // MessagesNewStreaming handles v1 streaming by lifting params to beta and reusing
 // the beta decoder. MessageStreamEventUnion and BetaRawMessageStreamEventUnion share
 // the same SSE wire format, so the same decoder drives both stream types.
-func (c *AnthropicClient) MessagesNewStreaming(_ context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
+func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
 	betaReq, err := v1ToBetaParams(req)
 	if err == nil {
 		var dec anthropicstream.Decoder
-		if dec, err = c.betaStreamDecoder(betaReq); err == nil {
+		if dec, err = c.betaStreamDecoder(ctx, betaReq); err == nil {
 			return anthropicstream.NewStream[anthropic.MessageStreamEventUnion](dec, nil)
 		}
 	}
@@ -139,7 +145,13 @@ func (c *AnthropicClient) MessagesNewStreaming(_ context.Context, req *anthropic
 
 // betaStreamDecoder resolves the vmodel, enforces error injection, and builds the
 // streaming decoder shared by the beta and v1 streaming entry points.
-func (c *AnthropicClient) betaStreamDecoder(req *anthropic.BetaMessageNewParams) (anthropicstream.Decoder, error) {
+func (c *AnthropicClient) betaStreamDecoder(ctx context.Context, req *anthropic.BetaMessageNewParams) (anthropicstream.Decoder, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	vm := c.reg.Get(string(req.Model))
 	if vm == nil {
 		return nil, fmt.Errorf("vmodel not found: %s", req.Model)
@@ -147,7 +159,7 @@ func (c *AnthropicClient) betaStreamDecoder(req *anthropic.BetaMessageNewParams)
 	if err := injectedPreContentError(vm); err != nil {
 		return nil, err
 	}
-	return newAnthropicVModelDecoder(vm, &protocol.AnthropicBetaMessagesRequest{BetaMessageNewParams: req}), nil
+	return newAnthropicVModelDecoder(ctx, vm, &protocol.AnthropicBetaMessagesRequest{BetaMessageNewParams: req}), nil
 }
 
 // v1ToBetaParams converts MessageNewParams → BetaMessageNewParams via JSON
@@ -193,7 +205,10 @@ type anthropicEvent struct {
 	data      []byte
 }
 
-func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.AnthropicBetaMessagesRequest) *anthropicVModelDecoder {
+func newAnthropicVModelDecoder(ctx context.Context, vm anthropicvm.VirtualModel, req *protocol.AnthropicBetaMessagesRequest) *anthropicVModelDecoder {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	ch := make(chan anthropicEvent, 64)
 	d := &anthropicVModelDecoder{ch: ch}
 
@@ -203,43 +218,56 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 	go func() {
 		defer close(ch)
 
-		emit := func(eventType string, payload map[string]interface{}) {
+		emit := func(eventType string, payload map[string]interface{}) bool {
+			if err := ctx.Err(); err != nil {
+				d.err = err
+				return false
+			}
 			b, err := json.Marshal(payload)
 			if err != nil {
-				return
+				return true
 			}
-			ch <- anthropicEvent{eventType: eventType, data: b}
+			select {
+			case <-ctx.Done():
+				d.err = ctx.Err()
+				return false
+			case ch <- anthropicEvent{eventType: eventType, data: b}:
+				return true
+			}
 		}
 
 		// Track started content blocks for proper bracketing.
 		startedBlocks := map[int]bool{}
 		var startOrder []int
 
-		startBlock := func(index int, contentBlock map[string]interface{}) {
+		startBlock := func(index int, contentBlock map[string]interface{}) bool {
 			if startedBlocks[index] {
-				return
+				return true
 			}
 			startedBlocks[index] = true
 			startOrder = append(startOrder, index)
-			emit("content_block_start", map[string]interface{}{
+			return emit("content_block_start", map[string]interface{}{
 				"type":          "content_block_start",
 				"index":         index,
 				"content_block": contentBlock,
 			})
 		}
-		stopAllBlocks := func() {
+		stopAllBlocks := func() bool {
 			for _, idx := range startOrder {
-				emit("content_block_stop", map[string]interface{}{
+				if !emit("content_block_stop", map[string]interface{}{
 					"type":  "content_block_stop",
 					"index": idx,
-				})
+				}) {
+					return false
+				}
 			}
 			startOrder = nil
 			startedBlocks = map[int]bool{}
+			return true
 		}
 
 		// Emit message_start first.
-		emit("message_start", map[string]interface{}{
+		if !emit("message_start", map[string]interface{}{
 			"type": "message_start",
 			"message": map[string]interface{}{
 				"id":            msgID,
@@ -251,39 +279,52 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 				"stop_sequence": nil,
 				"usage":         map[string]interface{}{"input_tokens": 0, "output_tokens": 0},
 			},
-		})
+		}) {
+			return
+		}
 
 		var explicitUsage *anthropicUsageCapture
 		var stopReason string
 		var accumulatedText string
 
-		streamErr := vm.HandleAnthropicStream(req, func(ev any) {
+		streamErr := vm.HandleAnthropicStream(ctx, req, func(ev any) {
+			if ctx.Err() != nil {
+				return
+			}
 			switch e := ev.(type) {
 			case anthropicvm.StreamStartEvent:
 				// message_start was already emitted above; skip duplicate.
 
 			case anthropicvm.TextDeltaEvent:
 				accumulatedText += e.Text
-				startBlock(e.Index, map[string]interface{}{"type": "text", "text": ""})
-				emit("content_block_delta", map[string]interface{}{
+				if !startBlock(e.Index, map[string]interface{}{"type": "text", "text": ""}) {
+					return
+				}
+				if !emit("content_block_delta", map[string]interface{}{
 					"type":  "content_block_delta",
 					"index": e.Index,
 					"delta": map[string]interface{}{"type": "text_delta", "text": e.Text},
-				})
+				}) {
+					return
+				}
 
 			case anthropicvm.ThinkingDeltaEvent:
-				startBlock(e.Index, map[string]interface{}{"type": "thinking", "thinking": ""})
-				emit("content_block_delta", map[string]interface{}{
+				if !startBlock(e.Index, map[string]interface{}{"type": "thinking", "thinking": ""}) {
+					return
+				}
+				if !emit("content_block_delta", map[string]interface{}{
 					"type":  "content_block_delta",
 					"index": e.Index,
 					"delta": map[string]interface{}{"type": "thinking_delta", "thinking": e.Thinking},
-				})
+				}) {
+					return
+				}
 
 			case anthropicvm.ToolUseEvent:
 				if !startedBlocks[e.Index] {
 					startedBlocks[e.Index] = true
 					startOrder = append(startOrder, e.Index)
-					emit("content_block_start", map[string]interface{}{
+					if !emit("content_block_start", map[string]interface{}{
 						"type":  "content_block_start",
 						"index": e.Index,
 						"content_block": map[string]interface{}{
@@ -292,7 +333,9 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 							"name":  e.Name,
 							"input": json.RawMessage(e.Input),
 						},
-					})
+					}) {
+						return
+					}
 				}
 
 			case anthropicvm.UsageEvent:
@@ -306,7 +349,9 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 
 			case anthropicvm.DoneEvent:
 				stopReason = e.StopReason
-				stopAllBlocks()
+				if !stopAllBlocks() {
+					return
+				}
 
 				usageMap := map[string]interface{}{}
 				if explicitUsage != nil {
@@ -323,23 +368,29 @@ func newAnthropicVModelDecoder(vm anthropicvm.VirtualModel, req *protocol.Anthro
 					usageMap["output_tokens"] = token.EstimateTokensString(accumulatedText)
 				}
 
-				emit("message_delta", map[string]interface{}{
+				if !emit("message_delta", map[string]interface{}{
 					"type": "message_delta",
 					"delta": map[string]interface{}{
 						"stop_reason":   stopReason,
 						"stop_sequence": nil,
 					},
 					"usage": usageMap,
-				})
+				}) {
+					return
+				}
 
-				emit("message_stop", map[string]interface{}{
+				if !emit("message_stop", map[string]interface{}{
 					"type": "message_stop",
-				})
+				}) {
+					return
+				}
 			}
 		})
 
 		if streamErr != nil {
 			d.err = streamErr
+		} else if err := ctx.Err(); err != nil {
+			d.err = err
 		}
 	}()
 

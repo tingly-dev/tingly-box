@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -52,7 +53,7 @@ type DoneEvent struct {
 // DefaultStream is a stream adapter for batch-only Anthropic models.
 // It calls HandleAnthropic, chunks text content via token.SplitIntoChunks,
 // and emits typed stream events. Batch-only models should delegate here.
-func DefaultStream(vm VirtualModel, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+func DefaultStream(ctx context.Context, vm VirtualModel, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
 	resp, err := vm.HandleAnthropic(req)
 	if err != nil {
 		return err
@@ -61,9 +62,12 @@ func DefaultStream(vm VirtualModel, req *protocol.AnthropicBetaMessagesRequest, 
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
 			chunks := token.SplitIntoChunks(blk.OfText.Text)
-			vmodel.EmitChunks(chunks, vmodel.DefaultStreamChunkDelay, func(_ int, chunk string) {
+			if err := vmodel.EmitChunks(ctx, chunks, vmodel.DefaultStreamChunkDelay, func(_ int, chunk string) bool {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			})
+				return true
+			}); err != nil {
+				return err
+			}
 		} else if blk.OfToolUse != nil {
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{

@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"context"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/vmodel"
@@ -32,15 +34,18 @@ type DoneEvent struct {
 // DefaultStream is a stream adapter for batch-only OpenAI Chat models.
 // It calls HandleOpenAIChat, chunks text content, and emits typed stream events.
 // Batch-only models should delegate here.
-func DefaultStream(vm VirtualModel, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
+func DefaultStream(ctx context.Context, vm VirtualModel, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
 	resp, err := vm.HandleOpenAIChat(req)
 	if err != nil {
 		return err
 	}
 	chunks := token.SplitIntoChunks(resp.Content)
-	vmodel.EmitChunks(chunks, vmodel.DefaultStreamChunkDelay, func(i int, chunk string) {
+	if err := vmodel.EmitChunks(ctx, chunks, vmodel.DefaultStreamChunkDelay, func(i int, chunk string) bool {
 		emit(DeltaEvent{Index: i, Content: chunk})
-	})
+		return true
+	}); err != nil {
+		return err
+	}
 	for i, tc := range resp.ToolCalls {
 		emit(ToolEvent{Index: i, ToolCall: tc})
 	}

@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -82,6 +83,6 @@ func (m *scenarioModel) HandleOpenAIChat(_ *protocol.OpenAIChatCompletionRequest
 	}, nil
 }
 
-func (m *scenarioModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
-	return DefaultStream(m, req, emit)
+func (m *scenarioModel) HandleOpenAIChatStream(ctx context.Context, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
+	return DefaultStream(ctx, m, req, emit)
 }

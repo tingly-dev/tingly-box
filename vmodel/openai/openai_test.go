@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -89,7 +90,7 @@ func TestMockScenario_DefaultFinishReason_Tool(t *testing.T) {
 func TestMockModel_HandleOpenAIChatStream_EmitsEvents(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{ID: "s", Content: "hi there"})
 	var events []any
-	err := vm.HandleOpenAIChatStream(nil, func(ev any) { events = append(events, ev) })
+	err := vm.HandleOpenAIChatStream(context.Background(), nil, func(ev any) { events = append(events, ev) })
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,7 +108,7 @@ func TestMockModel_HandleOpenAIChatStream_ToolModel(t *testing.T) {
 		ToolCall: &vmodel.ToolCallConfig{Name: "search", Arguments: map[string]interface{}{"q": "test"}},
 	})
 	var events []any
-	_ = vm.HandleOpenAIChatStream(nil, func(ev any) { events = append(events, ev) })
+	_ = vm.HandleOpenAIChatStream(context.Background(), nil, func(ev any) { events = append(events, ev) })
 
 	hasToolEvent := false
 	for _, ev := range events {
@@ -126,7 +127,7 @@ func TestMockModel_HandleOpenAIChatStream_ToolModel(t *testing.T) {
 func TestDefaultStream_ReconstructsContent(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{ID: "s", Content: "hello there"})
 	var texts []string
-	_ = DefaultStream(vm, nil, func(ev any) {
+	_ = DefaultStream(context.Background(), vm, nil, func(ev any) {
 		if delta, ok := ev.(DeltaEvent); ok {
 			texts = append(texts, delta.Content)
 		}

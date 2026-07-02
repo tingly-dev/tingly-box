@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -99,6 +100,6 @@ func (m *scenarioModel) HandleAnthropic(_ *protocol.AnthropicBetaMessagesRequest
 	}, nil
 }
 
-func (m *scenarioModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
-	return DefaultStream(m, req, emit)
+func (m *scenarioModel) HandleAnthropicStream(ctx context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+	return DefaultStream(ctx, m, req, emit)
 }
