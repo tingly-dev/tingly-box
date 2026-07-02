@@ -481,7 +481,7 @@ once the program is consumed is set by `OnExhaust`:
 **Status is the only required field.** Everything else falls back to a default
 provided by the module, so you rarely write a struct literal:
 
-- success content ← step `Content` → `SequenceConfig.DefaultContent` → `vmodel.DefaultSequenceContent`
+- success content ← step `Content` → `SequenceConfig.DefaultContent` → `vmodel.FallbackSequenceContent`
 - error `ErrorType`/`ErrorMessage` ← derived from the status code (`429 → rate_limit_error`, …)
 
 Use the factories — `Steps(...)` for the common status-only case, `Step(status, opts...)` for the rest:

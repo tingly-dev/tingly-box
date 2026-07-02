@@ -36,10 +36,12 @@ type SequenceStep struct {
 	Repeat int `json:"repeat,omitempty" yaml:"repeat,omitempty"`
 }
 
-// DefaultSequenceContent is the module-level fallback body for a success step
+// FallbackSequenceContent is the module-level fallback body for a success step
 // that sets neither its own Content nor SequenceConfig.DefaultContent. It keeps
-// a bare Step(200) useful out of the box.
-const DefaultSequenceContent = "Sequenced virtual response."
+// a bare Step(200) useful out of the box. Distinct from SequenceConfig's
+// DefaultContent — that one is per-model, this one is the last resort when a
+// model configures no default at all.
+const FallbackSequenceContent = "Sequenced virtual response."
 
 // StepOption customizes a SequenceStep built by Step. Only Status is required;
 // these options override the otherwise-defaulted fields for the uncommon cases.
@@ -70,7 +72,7 @@ func WithRepeat(n int) StepOption {
 // Step builds a SequenceStep from a status code plus optional overrides. Status
 // is the only required input — content for a success step and the error
 // type/message for a failure step are filled from defaults at build time
-// (module DefaultSequenceContent / defaultErrorMeta), so Step(429) and
+// (module FallbackSequenceContent / defaultErrorMeta), so Step(429) and
 // Step(200) are both immediately usable.
 func Step(status int, opts ...StepOption) SequenceStep {
 	s := SequenceStep{Status: status}
@@ -113,31 +115,46 @@ const (
 // is walked one step per request. By default the program loops (wraps back to
 // the first step) so the model is reusable across an unbounded number of
 // requests; set OnExhaust to change what happens once it is consumed.
+//
+// Tagged like SequenceStep even though nothing in the codebase currently
+// (de)serializes it: both types describe the same potential external
+// surface (a sequence loaded from a config file or management API), and
+// tagging them together keeps that door open without committing to it yet.
 type SequenceConfig struct {
-	ID          string
-	Name        string
-	Description string
-	Delay       time.Duration
+	ID          string        `json:"id" yaml:"id"`
+	Name        string        `json:"name" yaml:"name"`
+	Description string        `json:"description,omitempty" yaml:"description,omitempty"`
+	Delay       time.Duration `json:"delay,omitempty" yaml:"delay,omitempty"`
 
 	// DefaultContent backs any success step that does not set its own Content.
-	DefaultContent string
+	DefaultContent string `json:"default_content,omitempty" yaml:"default_content,omitempty"`
 
 	// Steps is the response program. Each step is expanded by its Repeat
 	// count at construction time.
-	Steps []SequenceStep
+	Steps []SequenceStep `json:"steps,omitempty" yaml:"steps,omitempty"`
 
 	// OnExhaust selects the behaviour after the program is consumed once:
 	// ExhaustLoop (default) wraps around, ExhaustClamp repeats the last step,
 	// ExhaustFail serves a terminal error.
-	OnExhaust ExhaustPolicy
+	OnExhaust ExhaustPolicy `json:"on_exhaust,omitempty" yaml:"on_exhaust,omitempty"`
 }
 
 // ResolvedStep is the concrete outcome of advancing a Sequence: either a
 // success (Error == nil, use Content) or a pre-content failure (Error set).
 type ResolvedStep struct {
-	Status  int
 	Content string
 	Error   *ErrorInjection // nil for success steps
+}
+
+// HTTPStatus reports the HTTP status this step serves: 200 for a success
+// step, or the configured status for an error step. Derived from Error
+// rather than stored separately, so there is exactly one source of truth for
+// an error step's status.
+func (r ResolvedStep) HTTPStatus() int {
+	if r.Error != nil {
+		return r.Error.Status
+	}
+	return 200
 }
 
 // Sequence is the protocol-neutral engine behind the per-protocol
@@ -173,7 +190,7 @@ func NewSequence(cfg SequenceConfig) *Sequence {
 		}
 	}
 	if len(s.flat) == 0 {
-		s.flat = []ResolvedStep{{Status: 200, Content: cfg.DefaultContent}}
+		s.flat = []ResolvedStep{{Content: cfg.DefaultContent}}
 	}
 	return s
 }
@@ -200,7 +217,6 @@ func (s *Sequence) Next() ResolvedStep {
 // "the script is over" apart from a scripted in-band failure.
 func exhaustedStep() ResolvedStep {
 	return ResolvedStep{
-		Status: 410,
 		Error: &ErrorInjection{
 			Stage:   ErrorStagePreContent,
 			Status:  410,
@@ -220,9 +236,9 @@ func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 			content = s.defaultContent
 		}
 		if content == "" {
-			content = DefaultSequenceContent
+			content = FallbackSequenceContent
 		}
-		return ResolvedStep{Status: 200, Content: content}
+		return ResolvedStep{Content: content}
 	}
 	typ, msg := step.ErrorType, step.ErrorMessage
 	dtyp, dmsg := defaultErrorMeta(step.Status)
@@ -233,7 +249,6 @@ func (s *Sequence) resolve(step SequenceStep) ResolvedStep {
 		msg = dmsg
 	}
 	return ResolvedStep{
-		Status: step.Status,
 		Error: &ErrorInjection{
 			Stage:   ErrorStagePreContent,
 			Status:  step.Status,

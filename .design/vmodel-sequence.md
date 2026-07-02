@@ -25,13 +25,13 @@ deterministic, in-process, wire-correct substrate, but driven by a configurable
 | --------- | ---------------------------------------------------------------------- |
 | `Status`  | `0`/`200` → success (return content); anything else → pre-content error |
 | `Content` | success body; falls back to `SequenceConfig.DefaultContent`             |
-| `Message` / `Type` | error envelope overrides; derived from `Status` when empty     |
+| `ErrorMessage` / `ErrorType` | error envelope overrides; derived from `Status` when empty. Prefixed with `Error` (unlike bare `Content`) because they only apply to the failure branch — the asymmetry marks the exceptional case, not the default one. |
 | `Repeat`  | serve this step N consecutive times (default 1)                        |
 
 **Status is the only required field.** Every other field has a module-provided
 default, resolved at `NewSequence` time:
 
-- success content: step `Content` → `SequenceConfig.DefaultContent` → `vmodel.DefaultSequenceContent`
+- success content: step `Content` → `SequenceConfig.DefaultContent` → `vmodel.FallbackSequenceContent`
 - error `ErrorType`/`ErrorMessage`: derived from `Status` via `defaultErrorMeta`
 
 So the ergonomic surface is the factory, not struct literals:
@@ -56,6 +56,34 @@ pre-content, and folding mid-stream into the sequence step would complicate the
 config for a case the dedicated `virtual-fail-midstream-*` mocks already cover.
 A future `SequenceStep` could grow `Stage`/`MidStream*` fields without breaking
 the wire shape.
+
+### Naming: two deliberate choices under review
+
+- **`vmodel.FallbackSequenceContent` vs. `SequenceConfig.DefaultContent`.**
+  Originally the module constant was also called `DefaultSequenceContent`,
+  which read as a near-duplicate of the config field it backs (same word,
+  different scope/priority). Renamed to `FallbackSequenceContent` so the two
+  levels of the resolution chain (per-model default vs. module-wide last
+  resort) are lexically distinct, not just "the same name in two places."
+
+- **`ResolvedStep` has no `Status` field — it has `HTTPStatus()`.** The initial
+  version stored `Status int` alongside `Error *ErrorInjection`, but for every
+  error step `Status` was set to the same value as `Error.Status` — two
+  fields, one fact, kept in sync by hand at three call sites
+  (`resolve`'s success/error branches and `exhaustedStep`). Auditing actual
+  callers showed the field was read only by tests; the production dispatch
+  path (`SequenceModel.ResolveRequest`) never touched it, only `Content` and
+  `Error`. Replaced the stored field with a method,
+  `func (r ResolvedStep) HTTPStatus() int`, that derives 200-or-`Error.Status`
+  on read — one source of truth, no construction site can let the two drift.
+
+`SequenceConfig` and `OnExhaust` also carry `json`/`yaml` tags now, matching
+`SequenceStep`, even though nothing in the codebase (de)serializes any of
+these types yet. This is a deliberate, acknowledged inconsistency with the
+rest of `vmodel`'s config structs (e.g. `MockModelConfig` has no tags) — it
+keeps the door open for a future config-file- or API-driven sequence without
+committing to that surface now. If that surface never materializes, the tags
+should be removed rather than left as unexercised scaffolding.
 
 ### Per-request resolution — the key decision
 
