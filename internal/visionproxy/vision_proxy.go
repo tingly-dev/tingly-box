@@ -15,21 +15,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// VisionClient is the small dependency VisionProxyProcessor needs to describe
-// an image. The real adapter (NewServiceFromPool wiring in service.go) wraps
-// client.ClientPool and dispatches to the appropriate per-service client
-// based on the chosen service's provider APIStyle. Tests substitute a fake.
-//
-// service is the upstream Process picked from the services it was given. The
-// adapter uses it to resolve which client/provider to call. The fake ignores
-// it and just returns canned text.
-//
-// Returning ("", nil) means "no description available" → fail-strip path.
-// Returning a non-nil error is also fail-strip.
-type VisionClient interface {
-	Describe(ctx context.Context, service *loadbalance.Service, mediaType, base64Data, remoteURL string) (string, error)
-}
-
 // providerResolver is the subset of routing.ProviderResolver this package
 // needs. Defined locally so this package does not depend on
 // internal/server/routing.
