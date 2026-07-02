@@ -20,8 +20,8 @@ func TestSequence_CyclesStatuses(t *testing.T) {
 	want := []int{200, 200, 429, 200, 200, 429, 200}
 	for i, w := range want {
 		got := seq.Next()
-		if got.Status != w {
-			t.Fatalf("request %d: status = %d, want %d", i, got.Status, w)
+		if got.HTTPStatus() != w {
+			t.Fatalf("request %d: status = %d, want %d", i, got.HTTPStatus(), w)
 		}
 		if w == 200 {
 			if got.Error != nil {
@@ -58,7 +58,7 @@ func TestSequence_Repeat(t *testing.T) {
 	}
 	want := []int{200, 200, 200, 500, 200}
 	for i, w := range want {
-		if got := seq.Next().Status; got != w {
+		if got := seq.Next().HTTPStatus(); got != w {
 			t.Fatalf("request %d: status = %d, want %d", i, got, w)
 		}
 	}
@@ -76,7 +76,7 @@ func TestSequence_ExhaustClamp(t *testing.T) {
 	})
 	want := []int{200, 503, 503, 503}
 	for i, w := range want {
-		if got := seq.Next().Status; got != w {
+		if got := seq.Next().HTTPStatus(); got != w {
 			t.Fatalf("request %d: status = %d, want %d", i, got, w)
 		}
 	}
@@ -94,16 +94,16 @@ func TestSequence_ExhaustFail(t *testing.T) {
 		},
 	})
 	// In-program steps behave normally.
-	if got := seq.Next().Status; got != 200 {
+	if got := seq.Next().HTTPStatus(); got != 200 {
 		t.Fatalf("step 0: status = %d, want 200", got)
 	}
-	if got := seq.Next(); got.Status != 429 || got.Error == nil {
+	if got := seq.Next(); got.HTTPStatus() != 429 || got.Error == nil {
 		t.Fatalf("step 1: got %+v, want scripted 429 error", got)
 	}
 	// Every request past the end is the terminal exhausted error.
 	for i := 0; i < 3; i++ {
 		got := seq.Next()
-		if got.Status != 410 || got.Error == nil ||
+		if got.HTTPStatus() != 410 || got.Error == nil ||
 			got.Error.Type != "sequence_exhausted" || got.Error.Message != "sequence exhausted" {
 			t.Fatalf("exhausted request %d: got %+v, want terminal 410 sequence_exhausted", i, got)
 		}
@@ -115,7 +115,7 @@ func TestSequence_ExhaustFail(t *testing.T) {
 func TestSequence_EmptyStepsIsUsable(t *testing.T) {
 	seq := NewSequence(SequenceConfig{DefaultContent: "fallback"})
 	got := seq.Next()
-	if got.Status != 200 || got.Content != "fallback" || got.Error != nil {
+	if got.HTTPStatus() != 200 || got.Content != "fallback" || got.Error != nil {
 		t.Fatalf("empty program: got %+v, want success with default content", got)
 	}
 }
@@ -146,7 +146,7 @@ func TestSequence_PerStepContentAndMessage(t *testing.T) {
 func TestStepsFactory(t *testing.T) {
 	seq := NewSequence(SequenceConfig{Steps: Steps(200, 429)})
 	ok := seq.Next()
-	if ok.Status != 200 || ok.Content != DefaultSequenceContent || ok.Error != nil {
+	if ok.HTTPStatus() != 200 || ok.Content != FallbackSequenceContent || ok.Error != nil {
 		t.Fatalf("success step: got %+v, want module-default content", ok)
 	}
 	fail := seq.Next()
@@ -198,7 +198,7 @@ func TestSequence_ConcurrentNextIsAtomic(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			results[i] = seq.Next().Status
+			results[i] = seq.Next().HTTPStatus()
 		}(i)
 	}
 	wg.Wait()
