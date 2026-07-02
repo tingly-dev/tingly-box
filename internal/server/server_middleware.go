@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -92,10 +93,13 @@ func (s *Server) getUserAuthMiddleware() gin.HandlerFunc {
 	return s.authMW.UserAuthMiddleware()
 }
 
-// getModelAuthMiddleware returns the model auth middleware to use
-func (s *Server) getModelAuthMiddleware() gin.HandlerFunc {
+// getModelAuthMiddleware returns the model auth middleware to use. apiType
+// picks the Anthropic- or OpenAI-shaped error body for auth failures on the
+// route being registered; a caller-supplied customModelAuthMiddleware (via
+// WithModelAuthMiddleware) always wins and is not protocol-parameterized.
+func (s *Server) getModelAuthMiddleware(apiType protocol.APIType) gin.HandlerFunc {
 	if s.customModelAuthMiddleware != nil {
 		return s.customModelAuthMiddleware
 	}
-	return s.authMW.ModelAuthMiddleware()
+	return s.authMW.ModelAuthMiddleware(apiType)
 }

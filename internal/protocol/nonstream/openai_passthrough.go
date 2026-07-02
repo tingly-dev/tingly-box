@@ -23,13 +23,13 @@ func HandleOpenAIResponsesPassthroughNonStream(hc *protocol.HandleContext, resp 
 		var err error
 		responseJSON, err = json.Marshal(resp)
 		if err != nil {
-			hc.SendError(err, "api_error", "marshal_failed")
+			hc.SendError(err, "marshal_failed")
 			return protocol.ZeroTokenUsage(), err
 		}
 	}
 	var responseMap map[string]any
 	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
-		hc.SendError(err, "api_error", "unmarshal_failed")
+		hc.SendError(err, "unmarshal_failed")
 		return protocol.ZeroTokenUsage(), err
 	}
 	responseMap["model"] = hc.ResponseModel
@@ -43,13 +43,13 @@ func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatComp
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
-		hc.SendError(err, "api_error", "marshal_failed")
+		hc.SendError(err, "marshal_failed")
 		return protocol.ZeroTokenUsage(), err
 	}
 
 	var responseMap map[string]interface{}
 	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
-		hc.SendError(err, "api_error", "unmarshal_failed")
+		hc.SendError(err, "unmarshal_failed")
 		return protocol.ZeroTokenUsage(), err
 	}
 

@@ -128,10 +128,10 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 			return acc.Result(), nil
 		}
 		if !hc.GinContext.Writer.Written() {
-			SendStreamingError(hc.GinContext, processErr)
+			SendStreamingError(hc.GinContext, protocol.TypeAnthropicV1, processErr)
 			return acc.Result(), processErr
 		}
-		MarshalAndSendErrorEvent(hc.GinContext, processErr.Error(), "stream_error", "stream_failed")
+		SendAnthropicStreamErrorEvent(hc.GinContext, processErr, protocol.AnthropicErrAPI)
 		return acc.Result(), processErr
 	}
 
@@ -141,7 +141,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 	// the partial content already sent. Cleanly finished streams already
 	// forwarded their own message_delta / message_stop.
 	if sawMessageStart && !sawMessageStop {
-		MarshalAndSendErrorEvent(hc.GinContext, "upstream stream ended before completion", "stream_error", "incomplete_stream")
+		SendAnthropicStreamErrorEvent(hc.GinContext, errors.New("upstream stream ended before completion"), protocol.AnthropicErrAPI)
 	}
 
 	for _, hook := range hc.OnStreamCompleteHooks {
@@ -265,17 +265,17 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 			return acc.Result(), nil
 		}
 		if !hc.GinContext.Writer.Written() {
-			SendStreamingError(hc.GinContext, processErr)
+			SendStreamingError(hc.GinContext, protocol.TypeAnthropicBeta, processErr)
 			return acc.Result(), processErr
 		}
-		MarshalAndSendErrorEvent(hc.GinContext, processErr.Error(), "stream_error", "stream_failed")
+		SendAnthropicStreamErrorEvent(hc.GinContext, processErr, protocol.AnthropicErrAPI)
 		return acc.Result(), processErr
 	}
 
 	// See HandleAnthropic: surface an honest error event when the upstream was
 	// cut after content started.
 	if sawMessageStart && !sawMessageStop {
-		MarshalAndSendErrorEvent(hc.GinContext, "upstream stream ended before completion", "stream_error", "incomplete_stream")
+		SendAnthropicStreamErrorEvent(hc.GinContext, errors.New("upstream stream ended before completion"), protocol.AnthropicErrAPI)
 	}
 
 	for _, hook := range hc.OnStreamCompleteHooks {

@@ -7,11 +7,11 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	mcp "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -32,7 +32,7 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 			defer cancel()
 		}
 		if err != nil {
-			stream.SendStreamingError(c, err)
+			stream.SendStreamingError(c, protocol.TypeOpenAIChat, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -47,7 +47,7 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 		}
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, usage, err)
-			stream.SendInternalError(c, err.Error())
+			stream.SendInternalError(c, protocol.TypeOpenAIChat, err.Error())
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -57,7 +57,7 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 		s.trackUsageWithTokenUsage(c, usage, nil)
 		return
 	}
-	stream.SendInternalError(c, "MCP stream continuation exceeded max rounds")
+	stream.SendInternalError(c, protocol.TypeOpenAIChat, "MCP stream continuation exceeded max rounds")
 	if recorder != nil {
 		recorder.RecordError(stream.ErrMCPStreamContinue)
 	}

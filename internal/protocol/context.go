@@ -37,6 +37,11 @@ type HandleContext struct {
 	// and sets it here, so the stream handler depends on this scalar rather than
 	// the request.
 	EstimatedInputTokens int
+
+	// APIType is the client-facing protocol (Anthropic v1/beta vs OpenAI Chat/
+	// Responses), used to pick the correctly-shaped error body when a request
+	// fails. Set via WithAPIType; the zero value falls back to the OpenAI shape.
+	APIType APIType
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.
@@ -45,6 +50,12 @@ func NewHandleContext(c *gin.Context, responseModel string) *HandleContext {
 		GinContext:    c,
 		ResponseModel: responseModel,
 	}
+}
+
+// WithAPIType sets the client-facing protocol used to shape error responses.
+func (hc *HandleContext) WithAPIType(apiType APIType) *HandleContext {
+	hc.APIType = apiType
+	return hc
 }
 
 type HandleGuardrails struct {
@@ -139,13 +150,7 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 	c := hc.GinContext
 
 	if _, ok := c.Writer.(http.Flusher); !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
+		hc.sendError(fmt.Errorf("streaming not supported by this connection"), "")
 		return fmt.Errorf("streaming not supported")
 	}
 
@@ -231,17 +236,19 @@ func (hc *HandleContext) CallOnStreamComplete() {
 	}
 }
 
-// SendError sends an error response to the client.
-func (hc *HandleContext) SendError(err error, errorType, code string) {
-	c := hc.GinContext
+// sendError sends a protocol-correct error response, picking the Anthropic or
+// OpenAI body shape based on hc.APIType (zero value falls back to OpenAI).
+func (hc *HandleContext) sendError(err error, desc string) {
+	if IsAnthropicAPIType(hc.APIType) {
+		SendAnthropicError(hc.GinContext, err, desc)
+		return
+	}
+	SendOpenAIError(hc.GinContext, err, desc)
+}
 
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: err.Error(),
-			Type:    errorType,
-			Code:    code,
-		},
-	})
+// SendError sends an error response to the client, shaped per hc.APIType.
+func (hc *HandleContext) SendError(err error, desc string) {
+	hc.sendError(err, desc)
 }
 
 // ErrorResponse represents an error response

@@ -206,7 +206,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req *protocol.AnthropicMess
 			if multi {
 				cloned, err := cloneAnthropicV1Request(template)
 				if err != nil {
-					s.failAttemptSetup(c, err)
+					s.failAttemptSetup(c, protocol.TypeAnthropicV1, err)
 					return
 				}
 				areq = cloned
@@ -240,7 +240,7 @@ func (s *Server) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMe
 		req.MessageNewParams, scenarioConfig,
 		s.config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
 	); err != nil {
-		s.failAttemptSetup(c, err)
+		s.failAttemptSetup(c, protocol.TypeAnthropicV1, err)
 		return
 	}
 
@@ -259,7 +259,7 @@ func (s *Server) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMe
 	case protocol.APIStyleOpenAI:
 		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
-			s.failAttemptSetup(c, routeErr)
+			s.failAttemptSetup(c, protocol.TypeAnthropicV1, routeErr)
 			return
 		}
 		target = resolvedTarget
@@ -271,7 +271,7 @@ func (s *Server) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMe
 
 	reqCtx, err := s.transformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		s.failAttemptSetup(c, err)
+		s.failAttemptSetup(c, protocol.TypeAnthropicV1, err)
 		return
 	}
 	defer reqCtx.Release()
@@ -335,7 +335,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthropic
 			if multi {
 				cloned, err := cloneAnthropicBetaRequest(template)
 				if err != nil {
-					s.failAttemptSetup(c, err)
+					s.failAttemptSetup(c, protocol.TypeAnthropicV1, err)
 					return
 				}
 				areq = cloned
@@ -366,7 +366,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req *protocol.Anthropic
 		req.BetaMessageNewParams, scenarioConfig,
 		s.config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
 	); err != nil {
-		s.failAttemptSetup(c, err)
+		s.failAttemptSetup(c, protocol.TypeAnthropicV1, err)
 		return
 	}
 
@@ -386,7 +386,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req *protocol.Anthropic
 	case protocol.APIStyleOpenAI:
 		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
-			s.failAttemptSetup(c, routeErr)
+			s.failAttemptSetup(c, protocol.TypeAnthropicV1, routeErr)
 			return
 		}
 		target = resolvedTarget
@@ -398,7 +398,7 @@ func (s *Server) runAnthropicBetaAttempt(c *gin.Context, req *protocol.Anthropic
 
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		s.failAttemptSetup(c, err)
+		s.failAttemptSetup(c, protocol.TypeAnthropicV1, err)
 		return
 	}
 	defer reqCtx.Release()

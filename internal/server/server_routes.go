@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -69,48 +70,51 @@ func (s *Server) UseAIEndpoints() {
 
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(protocol.TypeOpenAIChat), s.HandleOpenAIChatCompletions)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
-	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.HandleResponsesGet)
+	group.POST("/responses", s.getModelAuthMiddleware(protocol.TypeOpenAIResponses), s.HandleResponsesCreate)
+	group.GET("/responses/:id", s.getModelAuthMiddleware(protocol.TypeOpenAIResponses), s.HandleResponsesGet)
 
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
+	group.POST("/messages", s.getModelAuthMiddleware(protocol.TypeAnthropicV1), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
+	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(protocol.TypeAnthropicV1), s.AnthropicCountTokens)
 
 	// Embeddings endpoint (OpenAI compatible)
-	group.POST("/embeddings", s.getModelAuthMiddleware(), s.HandleOpenAIEmbeddings)
+	group.POST("/embeddings", s.getModelAuthMiddleware(protocol.TypeOpenAIChat), s.HandleOpenAIEmbeddings)
 
 	// Image generation endpoint (OpenAI compatible).
 	// Routed directly to upstream POST /v1/images/generations; the Responses API
 	// (POST /responses with the image_generation tool) is exposed in parallel via
 	// the same scenario, with the caller choosing which surface to use.
-	group.POST("/images/generations", s.getModelAuthMiddleware(), s.HandleOpenAIImageGeneration)
+	group.POST("/images/generations", s.getModelAuthMiddleware(protocol.TypeOpenAIChat), s.HandleOpenAIImageGeneration)
 
-	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
-	group.GET("/models", s.getModelAuthMiddleware(), s.ListModelsByScenario)
+	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels).
+	// The scenario isn't resolved yet at auth time, so this can't pick the
+	// right shape per-request; default to OpenAI (matches the pre-existing
+	// universal shape) since model-listing failures are rarely parsed by type.
+	group.GET("/models", s.getModelAuthMiddleware(protocol.TypeOpenAIChat), s.ListModelsByScenario)
 }
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
-	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
+	group.POST("/chat/completions", s.getModelAuthMiddleware(protocol.TypeOpenAIChat), s.HandleOpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
-	group.GET("/models", s.getModelAuthMiddleware(), s.HandleOpenAIListModels)
+	group.GET("/models", s.getModelAuthMiddleware(protocol.TypeOpenAIChat), s.HandleOpenAIListModels)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", s.getModelAuthMiddleware(), s.HandleResponsesCreate)
-	group.GET("/responses/:id", s.getModelAuthMiddleware(), s.HandleResponsesGet)
+	group.POST("/responses", s.getModelAuthMiddleware(protocol.TypeOpenAIResponses), s.HandleResponsesCreate)
+	group.GET("/responses/:id", s.getModelAuthMiddleware(protocol.TypeOpenAIResponses), s.HandleResponsesGet)
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
+	group.POST("/messages", s.getModelAuthMiddleware(protocol.TypeAnthropicV1), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(), s.AnthropicCountTokens)
+	group.POST("/messages/count_tokens", s.getModelAuthMiddleware(protocol.TypeAnthropicV1), s.AnthropicCountTokens)
 	// Models endpoint (Anthropic compatible)
-	group.GET("/models", s.getModelAuthMiddleware(), s.HandleAnthropicListModels)
+	group.GET("/models", s.getModelAuthMiddleware(protocol.TypeAnthropicV1), s.HandleAnthropicListModels)
 }
 
 // contextMiddleware is a middleware that extracts the scenario parameter from the URL path
@@ -176,14 +180,12 @@ func (s *Server) contextMiddleware(c *gin.Context) {
 // short-circuits to the same handler when it resolves to a vmodel provider
 // (see HandleAnthropicMessages and HandleOpenAIChatCompletions).
 func (s *Server) UseVirtualModelEndpoints() {
-	mw := s.getModelAuthMiddleware()
-
 	openai := s.engine.Group("/virtual/openai")
-	openai.Use(mw)
+	openai.Use(s.getModelAuthMiddleware(protocol.TypeOpenAIChat))
 	s.virtualModelService.SetupOpenAIRoutes(openai)
 
 	anthropic := s.engine.Group("/virtual/anthropic")
-	anthropic.Use(mw)
+	anthropic.Use(s.getModelAuthMiddleware(protocol.TypeAnthropicV1))
 	s.virtualModelService.SetupAnthropicRoutes(anthropic)
 }
 

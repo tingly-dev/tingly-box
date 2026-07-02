@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
@@ -31,7 +32,7 @@ func newModelAuthTestRouter(t *testing.T) (*gin.Engine, *config.Config, string) 
 
 	r := gin.New()
 	am := NewAuthMiddleware(cfg, nil, nil, nil)
-	r.POST("/v1/chat/completions", am.ModelAuthMiddleware(), func(c *gin.Context) {
+	r.POST("/v1/chat/completions", am.ModelAuthMiddleware(protocol.TypeOpenAIChat), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"enterprise_user_id":       c.GetString("enterprise_user_id"),
 			"enterprise_department_id": c.GetString("enterprise_department_id"),

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 )
 
@@ -46,32 +47,31 @@ func hasOnlyMCPToolUsesBeta(content []anthropic.BetaContentBlockUnion) ([]anthro
 
 // respondMCPError writes a JSON error response for non-streaming MCP tool call failures.
 // This consolidates the ~10-line error block repeated across dispatch paths.
-func respondMCPError(s *Server, c *gin.Context, recorder *ProtocolRecorder, err error, msg string) {
+func respondMCPError(s *Server, c *gin.Context, apiType protocol.APIType, recorder *ProtocolRecorder, err error, msg string) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: msg + ": " + err.Error(),
-			Type:    "api_error",
-		},
-	})
+	if protocol.IsAnthropicAPIType(apiType) {
+		c.JSON(http.StatusInternalServerError, protocol.BuildAnthropicError(err, http.StatusInternalServerError))
+	} else {
+		c.JSON(http.StatusInternalServerError, protocol.BuildOpenAIError(err, http.StatusInternalServerError))
+	}
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
 }
 
 // recordMCPError sends a streaming error response for streaming MCP tool call failures.
-func recordMCPError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
+func recordMCPError(s *Server, c *gin.Context, apiType protocol.APIType, err error, recorder *ProtocolRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendStreamingError(c, err)
+	stream.SendStreamingError(c, apiType, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
 }
 
 // recordMCPForwardingError handles MCP errors in non-streaming forward paths.
-func recordMCPForwardingError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
+func recordMCPForwardingError(s *Server, c *gin.Context, apiType protocol.APIType, err error, recorder *ProtocolRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendForwardingError(c, err)
+	stream.SendForwardingError(c, apiType, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}

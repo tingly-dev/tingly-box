@@ -170,7 +170,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCo
 			if multi {
 				cloned, err := cloneOpenAIChatRequest(template)
 				if err != nil {
-					s.failAttemptSetup(c, err)
+					s.failAttemptSetup(c, protocol.TypeOpenAIChat, err)
 					return
 				}
 				areq = cloned
@@ -213,12 +213,12 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 		tempFlags := resolveRuleFlags(c, rule)
 		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
 		if routeErr != nil {
-			s.failAttemptSetup(c, routeErr)
+			s.failAttemptSetup(c, protocol.TypeOpenAIChat, routeErr)
 			return
 		}
 		target = resolvedTarget
 	default:
-		s.failAttemptSetup(c, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
+		s.failAttemptSetup(c, protocol.TypeOpenAIChat, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
 		return
 	}
 
@@ -230,7 +230,7 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 	// === Transform via pipeline ===
 	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
+		s.failAttemptSetup(c, protocol.TypeOpenAIChat, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
 	defer reqCtx.Release()

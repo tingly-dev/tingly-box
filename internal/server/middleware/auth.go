@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
@@ -37,7 +38,9 @@ type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
 
-// abortWithError sends an error response and adds the error to gin context for logging
+// abortWithError sends an error response and adds the error to gin context for
+// logging. Used by UserAuthMiddleware, which guards the admin/UI API rather
+// than an LLM protocol endpoint, so it keeps the plain generic shape.
 func abortWithError(c *gin.Context, statusCode int, message string, errorType string) {
 	// Add error to context so logging middleware can capture it
 	c.Error(fmt.Errorf("%s: %s", errorType, message)).SetType(gin.ErrorTypePublic)
@@ -49,6 +52,25 @@ func abortWithError(c *gin.Context, statusCode int, message string, errorType st
 			Type:    errorType,
 		},
 	})
+	c.Abort()
+}
+
+// abortWithModelAuthError sends a protocol-correct error response for
+// ModelAuthMiddleware, shaped per apiType (Anthropic vs OpenAI), since that
+// middleware guards client-facing LLM protocol routes.
+func abortWithModelAuthError(c *gin.Context, apiType protocol.APIType, statusCode int, message string, anthropicType protocol.AnthropicErrorType, openaiType string) {
+	c.Error(fmt.Errorf("%s: %s", openaiType, message)).SetType(gin.ErrorTypePublic) //nolint:errcheck
+
+	if protocol.IsAnthropicAPIType(apiType) {
+		c.JSON(statusCode, protocol.AnthropicErrorBody{
+			Type:  "error",
+			Error: protocol.AnthropicErrorField{Type: anthropicType, Message: message},
+		})
+	} else {
+		c.JSON(statusCode, protocol.OpenAIErrorBody{
+			Error: protocol.OpenAIErrorField{Type: openaiType, Message: message},
+		})
+	}
 	c.Abort()
 }
 
@@ -297,12 +319,15 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 // 1. JWT API tokens (when multi-tenant is enabled)
 // 2. Global config model token (backward compatibility)
 // 3. Enterprise context JWT (X-TBE-Context-JWT header)
-func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
+//
+// apiType selects the error body shape (Anthropic vs OpenAI) for auth
+// failures, since this middleware guards routes for both client protocols.
+func (am *AuthMiddleware) ModelAuthMiddleware(apiType protocol.APIType) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
 		if authHeader == "" && xApiKey == "" {
-			abortWithError(c, http.StatusUnauthorized, "Model authorization header required", "invalid_request_error")
+			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Model authorization header required", protocol.AnthropicErrAuthentication, "authentication_error")
 			return
 		}
 
@@ -344,13 +369,13 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 
 		// Check global config model token (backward compatibility)
 		if cfg == nil || !cfg.HasModelToken() {
-			abortWithError(c, http.StatusInternalServerError, "config or config model token missing", "invalid_request_error")
+			abortWithModelAuthError(c, apiType, http.StatusInternalServerError, "config or config model token missing", protocol.AnthropicErrAPI, "api_error")
 			return
 		}
 
 		// If global token is disabled and multi-tenant is enabled, reject
 		if cfg.IsMultiTenantEnabled() && cfg.IsGlobalTokenDisabled() {
-			abortWithError(c, http.StatusUnauthorized, "Global token disabled, use API token", "invalid_token_error")
+			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Global token disabled, use API token", protocol.AnthropicErrAuthentication, "authentication_error")
 			return
 		}
 
@@ -367,7 +392,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)
 				if verifyErr != nil {
-					abortWithError(c, http.StatusUnauthorized, "Invalid enterprise context jwt", "invalid_request_error")
+					abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Invalid enterprise context jwt", protocol.AnthropicErrAuthentication, "authentication_error")
 					return
 				}
 				if claims != nil {
@@ -389,10 +414,10 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 			requestToken = xApiKey
 		}
 		if strings.HasPrefix(strings.TrimSpace(requestToken), "sk-tbe-") {
-			abortWithError(c, http.StatusUnauthorized, "Virtual key must be used through TBE /tbe/* endpoints", "invalid_request_error")
+			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Virtual key must be used through TBE /tbe/* endpoints", protocol.AnthropicErrInvalidRequest, "invalid_request_error")
 			return
 		}
 
-		abortWithError(c, http.StatusUnauthorized, "Invalid model authorization token.", "invalid_request_error")
+		abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Invalid model authorization token.", protocol.AnthropicErrAuthentication, "authentication_error")
 	}
 }

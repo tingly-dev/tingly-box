@@ -251,7 +251,7 @@ func TestSendError(t *testing.T) {
 	hc := NewHandleContext(c, "test-model")
 	testErr := errors.New("test error")
 
-	hc.SendError(testErr, "test_type", "test_code")
+	hc.SendError(testErr, "test_code")
 
 	// Verify response was sent
 	assert.Equal(t, http.StatusInternalServerError, w.Code)

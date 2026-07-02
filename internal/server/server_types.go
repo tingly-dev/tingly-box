@@ -1,8 +1,6 @@
 package server
 
 import (
-	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -25,24 +23,16 @@ type ErrorDetail struct {
 	Code    string `json:"code,omitempty"`
 }
 
-// SendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
-func SendErrorResponse(c *gin.Context, err error, desc string) {
-
-	// upstreamForwardStatus returns the status code to send to the client when a
-	// non-streaming forward fails. It propagates the upstream provider's HTTP status
-	// when the error carries one (so a 401/429/4xx is not flattened into a 500) and
-	// defaults to 500 Internal Server Error otherwise.
-	statusCode := protocol.UpstreamStatus(err, http.StatusInternalServerError)
-
-	asErr := fmt.Errorf("%s: %s", err.Error(), desc)
-	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(statusCode, ErrorResponse{
-		Error: ErrorDetail{
-			Message: asErr.Error(),
-			Type:    "protocol_error",
-			Code:    desc,
-		},
-	})
+// SendErrorResponse registers the error into gin context for logging middleware
+// and sends a protocol-correct JSON response, shaped per apiType (Anthropic vs
+// OpenAI). Propagates the upstream provider's real HTTP status/type/message
+// when err carries them; falls back to a status-derived type otherwise.
+func SendErrorResponse(c *gin.Context, apiType protocol.APIType, err error, desc string) {
+	if protocol.IsAnthropicAPIType(apiType) {
+		protocol.SendAnthropicError(c, err, desc)
+		return
+	}
+	protocol.SendOpenAIError(c, err, desc)
 }
 
 // =============================================

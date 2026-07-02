@@ -75,17 +75,10 @@ func handleOpenAIToAnthropicBetaStream(
 		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
 		hc.DispatchStreamError(err)
 		if !conv.MessageStarted() {
-			SendStreamingError(c, err)
+			SendStreamingError(c, protocol.TypeAnthropicBeta, err)
 			return conv.Usage(), err
 		}
-		sendAnthropicStreamEvent(c, "error", map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}, nil)
+		sendAnthropicStreamEvent(c, "error", protocol.BuildAnthropicStreamErrorEvent(err, protocol.AnthropicErrAPI), nil)
 		return conv.Usage(), err
 	}
 	if streamErr := stream.Err(); streamErr != nil {
@@ -96,17 +89,10 @@ func handleOpenAIToAnthropicBetaStream(
 		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", streamErr)
 		hc.DispatchStreamError(streamErr)
 		if !conv.MessageStarted() {
-			SendStreamingError(c, streamErr)
+			SendStreamingError(c, protocol.TypeAnthropicBeta, streamErr)
 			return conv.Usage(), streamErr
 		}
-		sendAnthropicStreamEvent(c, "error", map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": streamErr.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}, nil)
+		sendAnthropicStreamEvent(c, "error", protocol.BuildAnthropicStreamErrorEvent(streamErr, protocol.AnthropicErrAPI), nil)
 		return conv.Usage(), streamErr
 	}
 	return conv.Usage(), nil

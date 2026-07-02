@@ -69,7 +69,7 @@ func (s *Server) nonstreamAnthropicV1(
 	// Run processor
 	response, err := processor.Run(req)
 	if err != nil {
-		recordMCPError(s, c, err, recorder)
+		recordMCPError(s, c, protocol.TypeAnthropicV1, err, recorder)
 		return
 	}
 
@@ -170,7 +170,7 @@ func (s *Server) streamAnthropicV1(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(s, c, err, recorder)
+		recordMCPError(s, c, protocol.TypeAnthropicV1, err, recorder)
 		return
 	}
 }
@@ -326,7 +326,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, err, "Failed to forward request")
+		SendErrorResponse(c, protocol.TypeOpenAIResponses, err, "Failed to forward request")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -356,13 +356,13 @@ func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Transfo
 		defer cancel()
 	}
 	if err != nil {
-		s.handlePreStreamFailure(c, err, recorder)
+		s.handlePreStreamFailure(c, protocol.TypeOpenAIResponses, err, recorder)
 		return
 	}
 
 	primedStream, primeErr := stream.PrimeResponsesStream(respStream)
 	if primeErr != nil {
-		s.handlePreStreamFailure(c, primeErr, recorder)
+		s.handlePreStreamFailure(c, protocol.TypeOpenAIResponses, primeErr, recorder)
 		return
 	}
 

@@ -43,9 +43,9 @@ type preStreamErrorRecorder interface {
 // pre-stream" response: status 500 + JSON error, captured by the
 // buffered failover writer so the orchestrator can retry the next
 // priority tier.
-func (s *Server) handlePreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
+func (s *Server) handlePreStreamFailure(c *gin.Context, apiType protocol.APIType, err error, recorder preStreamErrorRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendStreamingError(c, err)
+	stream.SendStreamingError(c, apiType, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
@@ -59,13 +59,12 @@ func (s *Server) handlePreStreamFailure(c *gin.Context, err error, recorder preS
 // the whole request on one misconfigured provider. Genuine client errors are
 // rejected in the prologue, before the gate is installed, so they remain
 // non-retryable and reach the client unchanged.
-func (s *Server) failAttemptSetup(c *gin.Context, err error) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: err.Error(),
-			Type:    "api_error",
-		},
-	})
+func (s *Server) failAttemptSetup(c *gin.Context, apiType protocol.APIType, err error) {
+	if protocol.IsAnthropicAPIType(apiType) {
+		c.JSON(http.StatusInternalServerError, protocol.BuildAnthropicError(err, http.StatusInternalServerError))
+		return
+	}
+	c.JSON(http.StatusInternalServerError, protocol.BuildOpenAIError(err, http.StatusInternalServerError))
 }
 
 // retryableUpstreamStatuses are the HTTP status codes treated as

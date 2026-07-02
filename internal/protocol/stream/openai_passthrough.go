@@ -262,7 +262,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 		// retryable 5xx so mid-request failover can try the next tier,
 		// instead of a 200 SSE error event.
 		if !c.Writer.Written() {
-			SendStreamingError(c, err)
+			SendStreamingError(c, protocol.TypeOpenAIChat, err)
 			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), err
 		}
 
@@ -431,7 +431,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		// retryable 5xx so mid-request failover can try the next tier,
 		// instead of a 200 SSE error event.
 		if !c.Writer.Written() {
-			SendStreamingError(c, err)
+			SendStreamingError(c, protocol.TypeOpenAIResponses, err)
 			return protocol.NewTokenUsageFull(int(inputTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens)), err
 		}
 		errorChunk := map[string]interface{}{
@@ -567,7 +567,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStre
 		// Stream failed before any content reached the client: surface a
 		// retryable 5xx so mid-request failover can try the next tier.
 		if !c.Writer.Written() {
-			SendStreamingError(c, err)
+			SendStreamingError(c, protocol.TypeAnthropicV1, err)
 		}
 		return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), fmt.Errorf("stream error: %w", err)
 	}

@@ -22,42 +22,48 @@ func SendSSErrorEventJSON(c *gin.Context, errorJSON []byte) {
 	c.SSEvent("error", string(errorJSON))
 }
 
-// BuildErrorEvent builds a standard error event map
-func BuildErrorEvent(message, errorType, code string) map[string]interface{} {
-	return map[string]interface{}{
-		"type": "error",
-		"error": map[string]interface{}{
-			"message": message,
-			"type":    errorType,
-			"code":    code,
-		},
-	}
-}
-
-// MarshalAndSendErrorEvent marshals and sends an error event
-func MarshalAndSendErrorEvent(c *gin.Context, message, errorType, code string) {
-	errorEvent := BuildErrorEvent(message, errorType, code)
-	errorJSON, marshalErr := json.Marshal(errorEvent)
+// SendAnthropicStreamErrorEvent sends an Anthropic SSE "error" event mid-stream
+// (after message_start, once the HTTP status line has already committed).
+// It builds the event through protocol.BuildAnthropicStreamErrorEvent so the
+// type/message resolution never drifts from the pre-stream JSON error path in
+// SendAnthropicError. fallbackType is used when err carries no recognizable
+// upstream error.type.
+func SendAnthropicStreamErrorEvent(c *gin.Context, err error, fallbackType protocol.AnthropicErrorType) {
+	event := protocol.BuildAnthropicStreamErrorEvent(err, fallbackType)
+	errorJSON, marshalErr := json.Marshal(event)
 	if marshalErr != nil {
 		logrus.WithContext(c.Request.Context()).Debugf("Failed to marshal error event: %v", marshalErr)
-		SendSSErrorEvent(c, "Failed to marshal error", "internal_error")
-	} else {
-		SendSSErrorEventJSON(c, errorJSON)
+		SendSSErrorEvent(c, "Failed to marshal error", string(protocol.AnthropicErrAPI))
+		return
 	}
+	SendSSErrorEventJSON(c, errorJSON)
 }
 
 // =============================================
 // HTTP Error Response Helpers
 // =============================================
 
-// SendInvalidRequestBodyError sends an error response for invalid request body
+// SendInvalidRequestBodyError sends an error response for invalid request body.
+// Anthropic-only (its one caller, AnthropicCountTokens, is a v1-only route).
 func SendInvalidRequestBodyError(c *gin.Context, err error) {
-	c.JSON(http.StatusBadRequest, protocol.ErrorResponse{
-		Error: protocol.ErrorDetail{
+	c.JSON(http.StatusBadRequest, protocol.AnthropicErrorBody{
+		Type: "error",
+		Error: protocol.AnthropicErrorField{
+			Type:    protocol.AnthropicErrInvalidRequest,
 			Message: "Invalid request body: " + err.Error(),
-			Type:    "invalid_request_error",
 		},
 	})
+}
+
+// sendProtocolError dispatches to the Anthropic- or OpenAI-shaped sender based
+// on apiType, the shared implementation behind SendStreamingError/
+// SendForwardingError/SendInternalError below.
+func sendProtocolError(c *gin.Context, apiType protocol.APIType, err error, desc string) {
+	if protocol.IsAnthropicAPIType(apiType) {
+		protocol.SendAnthropicError(c, err, desc)
+		return
+	}
+	protocol.SendOpenAIError(c, err, desc)
 }
 
 // SendStreamingError sends an error response for streaming request failures.
@@ -65,38 +71,19 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 // guards this with conv.MessageStarted()), the HTTP status is still settable, so
 // we propagate the upstream provider's status (401/429/4xx) instead of
 // flattening every pre-stream failure into a 500.
-func SendStreamingError(c *gin.Context, err error) {
-	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
-		Error: protocol.ErrorDetail{
-			Message: "Failed to create streaming request: " + err.Error(),
-			Type:    "api_error",
-		},
-	})
+func SendStreamingError(c *gin.Context, apiType protocol.APIType, err error) {
+	sendProtocolError(c, apiType, err, "Failed to create streaming request")
 }
 
 // SendForwardingError sends an error response for request forwarding failures,
 // propagating the upstream provider's HTTP status when the error carries one.
-func SendForwardingError(c *gin.Context, err error) {
-	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
-		Error: protocol.ErrorDetail{
-			Message: "Failed to forward request: " + err.Error(),
-			Type:    "api_error",
-		},
-	})
+func SendForwardingError(c *gin.Context, apiType protocol.APIType, err error) {
+	sendProtocolError(c, apiType, err, "Failed to forward request")
 }
 
 // SendInternalError sends an error response for internal errors
-func SendInternalError(c *gin.Context, errMsg string) {
-	c.Error(fmt.Errorf("%s", errMsg)).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
-		Error: protocol.ErrorDetail{
-			Message: errMsg,
-			Type:    "api_error",
-			Code:    "streaming_unsupported",
-		},
-	})
+func SendInternalError(c *gin.Context, apiType protocol.APIType, errMsg string) {
+	sendProtocolError(c, apiType, fmt.Errorf("%s", errMsg), "")
 }
 
 // buildStreamState creates a streamState from Anthropic usage stats.
