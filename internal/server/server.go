@@ -32,6 +32,7 @@ import (
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
+	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy"
 	"github.com/tingly-dev/tingly-box/internal/server/processor"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
@@ -132,9 +133,9 @@ type Server struct {
 	// routing selector for service selection pipeline
 	routingSelector *routing.SimpleSelector
 
-	// vision proxy processor, reused by the scenario-level vision proxy plugin
+	// vision proxy service, reused by the scenario-level vision proxy plugin
 	// (also registered into the smart-routing registry for the proxy_vision op)
-	visionProxyProcessor *processor.VisionProxyProcessor
+	visionProxyService *visionproxy.Service
 
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup
@@ -352,7 +353,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Register op-level processors (vision proxy, etc.) into the smart-routing
 	// registry. Idempotent — safe across config reloads.
-	server.visionProxyProcessor = processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger())
+	server.visionProxyService = visionproxy.NewService(processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger()))
 
 	// Start affinity store background GC
 	affinityStore.StartGC()
@@ -586,4 +587,13 @@ func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
 
 	logrus.Info("Provider quota manager initialized")
 	return quotaMgr, nil
+}
+
+// applyVisionProxy is the single entry point for the vision proxy plugin,
+// covering both the rule-level and scenario-level scopes. It must run before
+// service selection (after the rule is resolved). Delegates to
+// visionproxy.Service — see internal/server/module/visionproxy and
+// .design/vision-proxy.md for the design.
+func (s *Server) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
+	s.visionProxyService.Apply(c.Request.Context(), s.config, scenarioType, rule, typedRequest)
 }
