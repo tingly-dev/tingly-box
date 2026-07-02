@@ -1,4 +1,4 @@
-package processor
+package visionproxy
 
 import (
 	"context"
@@ -12,39 +12,23 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
-	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// visionClient is the small dependency VisionProxyProcessor needs to describe
-// an image. The real adapter (RegisterAll wiring in server.go) wraps
-// client.ClientPool and dispatches to the appropriate per-service client
-// based on the chosen service's provider APIStyle. Tests substitute a fake.
-//
-// service is the upstream the processor picked from pctx.Services. The
-// adapter uses it to resolve which client/provider to call. The fake ignores
-// it and just returns canned text.
-//
-// Returning ("", nil) means "no description available" → fail-strip path.
-// Returning a non-nil error is also fail-strip.
-type visionClient interface {
-	Describe(ctx context.Context, service *loadbalance.Service, mediaType, base64Data, remoteURL string) (string, error)
-}
-
-// providerResolver is the subset of routing.ProviderResolver this processor
-// needs. Defined locally so the processor package does not depend on
+// providerResolver is the subset of routing.ProviderResolver this package
+// needs. Defined locally so this package does not depend on
 // internal/server/routing.
 type providerResolver interface {
 	GetProviderByUUID(uuid string) (*typ.Provider, error)
 }
 
-// VisionProxyProcessor implements smartrouting.OpProcessor. When a smart-rule
-// op carries this processor, the routing stage calls Process with the typed
-// request; Process replaces every image content block with a text block
-// containing the upstream's description (or a fail-strip marker), then
-// returns nil so the pipeline continues.
+// VisionProxyProcessor rewrites a typed request in place: every image
+// content block becomes a text block, either the vision upstream's
+// description (latest message) or a fixed omitted-marker (history). It is
+// the image-rewriting engine behind Service.Apply — see service.go for the
+// rule/scenario resolution that picks the upstream and invokes Process.
 type VisionProxyProcessor struct {
-	Client   visionClient
+	Client   VisionClient
 	Resolver providerResolver
 }
 
@@ -60,21 +44,22 @@ const imageUnavailableText = "[image: (description unavailable)]"
 // message are sent through the vision upstream for description.
 const imageHistoricalText = "[image: (omitted from history)]"
 
-// Process mutates pctx.Request in place: every image block becomes a text
-// block. On any failure (no usable service, vision client error, empty
-// upstream response) the image is still removed so a downstream text-only
-// model does not choke on an unsupported content block.
-func (p *VisionProxyProcessor) Process(pctx *smartrouting.ProcessorContext) error {
-	if pctx == nil || pctx.Request == nil {
+// Process mutates req in place: every image block becomes a text block. On
+// any failure (no usable service, vision client error, empty upstream
+// response) the image is still removed so a downstream text-only model does
+// not choke on an unsupported content block. services is the candidate
+// upstream pool — the first active, resolvable service is used; pass a
+// single already-resolved service for the common case.
+func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []*loadbalance.Service) error {
+	if req == nil {
 		return nil
 	}
-	usable := p.pickUsableService(pctx.Services)
-	ctx := pctx.Ctx
+	usable := p.pickUsableService(services)
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	switch req := pctx.Request.(type) {
+	switch req := req.(type) {
 	case *anthropic.BetaMessageNewParams:
 		p.processBeta(ctx, req, usable)
 	case *anthropic.MessageNewParams:

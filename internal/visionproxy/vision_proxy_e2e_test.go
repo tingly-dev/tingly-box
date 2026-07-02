@@ -1,15 +1,14 @@
 //go:build e2e
 // +build e2e
 
-package processor
+package visionproxy
 
-// E2E test for the vision-proxy smart-routing bypass against a real
-// tingly-box deployment.
+// E2E test for the vision proxy plugin against a real tingly-box deployment.
 //
 // Quickest path (local debug — only the API key is required):
 //
 //   TINGLY_API_KEY='sk-…' \
-//     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/server/processor/...
+//     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/server/module/visionproxy/...
 //
 // Defaults used when the env var is absent:
 //   TINGLY_BASE_URL   = http://localhost:12580/anthropic
@@ -19,11 +18,11 @@ package processor
 // Override any of them to point at a remote deployment, a different model,
 // or a real image. The API key has no default — an unset key skips the test.
 //
-// Expected wiring on the server side:
-//   - A SmartRouting rule with op {Position: proxy_vision, Operation: enabled}
-//   - That rule's Services point at a vision-capable Anthropic upstream
-//   - The user-facing rule (matched by TINGLY_MODEL) is configured with a
-//     text-only downstream model in its main Services list
+// Expected wiring on the server side (see .design/vision-proxy.md):
+//   - The user-facing rule (matched by TINGLY_MODEL) has a rule-level or
+//     scenario-level vision proxy service configured, pointing at a
+//     vision-capable Anthropic upstream
+//   - That same rule's downstream (main) Services list is a text-only model
 //
 // What the test does:
 //   - Sends a v1 Messages.New request (and a Beta variant) with one user
@@ -91,8 +90,9 @@ func e2eImageSource(t *testing.T) (mediaType, b64 string) {
 
 // TestVisionProxy_E2E_V1Messages sends a v1 Messages.New request with text
 // + image against a real tingly-box deployment. The deployment is expected
-// to have a `proxy_vision.enabled` smart-routing rule that handles the
-// image describe step before routing to the (text-only) downstream model.
+// to have vision proxy configured (rule-level or scenario-level; see
+// .design/vision-proxy.md) so the image is described before the request
+// reaches the (text-only) downstream model.
 func TestVisionProxy_E2E_V1Messages(t *testing.T) {
 	apiKey := os.Getenv("TINGLY_API_KEY")
 	if apiKey == "" {
@@ -143,7 +143,7 @@ func TestVisionProxy_E2E_V1Messages(t *testing.T) {
 	t.Logf("response (id=%s stop_reason=%s usage=in:%d/out:%d):\n%s",
 		resp.ID, resp.StopReason, resp.Usage.InputTokens, resp.Usage.OutputTokens, body)
 
-	require.NotEmpty(t, body, "downstream model must produce a non-empty text response — empty response usually means smart-routing matched no rule, or the downstream model itself rejected the request")
+	require.NotEmpty(t, body, "downstream model must produce a non-empty text response — empty response usually means the rule matched no service, or the downstream model itself rejected the request")
 
 	// Soft-warn (not fail) when the response carries the fail-strip marker:
 	// vision proxy ran but the upstream describe call failed. Routing

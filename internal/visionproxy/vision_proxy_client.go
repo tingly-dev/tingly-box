@@ -1,4 +1,4 @@
-package processor
+package visionproxy
 
 import (
 	"context"
@@ -17,7 +17,22 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// poolVisionClient is the production visionClient. It dispatches each
+// VisionClient is the small dependency VisionProxyProcessor needs to describe
+// an image. The real adapter (NewServiceFromPool wiring in service.go) wraps
+// client.ClientPool and dispatches to the appropriate per-service client
+// based on the chosen service's provider APIStyle. Tests substitute a fake.
+//
+// service is the upstream Process picked from the services it was given. The
+// adapter uses it to resolve which client/provider to call. The fake ignores
+// it and just returns canned text.
+//
+// Returning ("", nil) means "no description available" → fail-strip path.
+// Returning a non-nil error is also fail-strip.
+type VisionClient interface {
+	Describe(ctx context.Context, service *loadbalance.Service, mediaType, base64Data, remoteURL string) (string, error)
+}
+
+// poolVisionClient is the production VisionClient. It dispatches each
 // describe call to the appropriate per-service client obtained from the
 // shared ClientPool. Supports Anthropic-style and OpenAI-style providers;
 // unknown styles return an error and the processor falls back to the
@@ -25,7 +40,6 @@ import (
 type poolVisionClient struct {
 	pool     *client.ClientPool
 	resolver providerResolver
-	logger   *logrus.Logger
 	prompt   string
 }
 
@@ -35,11 +49,10 @@ const defaultVisionMaxTokens = 256
 // NewPoolVisionClient builds the production vision client backed by the
 // shared SDK pool. resolver is typically the routing.ProviderResolver
 // implementation (server config). logger may be nil.
-func NewPoolVisionClient(pool *client.ClientPool, resolver providerResolver, logger *logrus.Logger) visionClient {
+func NewPoolVisionClient(pool *client.ClientPool, resolver providerResolver) VisionClient {
 	return &poolVisionClient{
 		pool:     pool,
 		resolver: resolver,
-		logger:   logger,
 		prompt:   defaultVisionPrompt,
 	}
 }

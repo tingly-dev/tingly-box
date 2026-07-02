@@ -1,11 +1,14 @@
-package processor
+package visionproxy
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 // Regression for the case the original processBeta/processV1 missed:
@@ -42,9 +45,9 @@ func TestVisionProxy_AnthropicBeta_ToolResultImage_Described(t *testing.T) {
 			},
 		}},
 	}
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 1, fake.callCount(), "vision client called for the tool_result-nested image")
 	require.Equal(t, 0, countImages(req), "no image blocks remain anywhere (top-level OR inside tool_result)")
 	require.Contains(t, collectText(req), "a screenshot of a terminal", "description spliced into the tool_result content")
@@ -77,9 +80,9 @@ func TestVisionProxy_AnthropicV1_ToolResultImage_Described(t *testing.T) {
 			},
 		}},
 	}
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 1, fake.callCount())
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "a cat photo")
@@ -124,9 +127,9 @@ func TestVisionProxy_AnthropicBeta_HistoricalToolResultImage_StrippedNoCall(t *t
 			},
 		},
 	}
-	pctx := mkPctx(req, mkService(prov.UUID, true))
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
-	require.NoError(t, p.Process(pctx))
+	require.NoError(t, p.Process(context.Background(), req, svcs))
 	require.Equal(t, 0, fake.callCount(), "no vision call for historical images")
 	require.Equal(t, 0, countImages(req))
 	require.True(t, strings.Contains(collectText(req), imageHistoricalText), "historical marker present")
