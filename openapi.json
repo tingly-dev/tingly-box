@@ -2604,72 +2604,6 @@
         }
       }
     },
-    "/api/v1/provider-models/{uuid}": {
-      "get": {
-        "tags": [
-          "models"
-        ],
-        "summary": "Get all provider models",
-        "description": "Get all provider models",
-        "operationId": "apiV1Provider-modelsUuidGet",
-        "parameters": [
-          {
-            "name": "uuid",
-            "in": "path",
-            "description": "Unique identifier (UUID)",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderModelsResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "models"
-        ],
-        "summary": "Fetch models for a specific provider",
-        "description": "Fetch models for a specific provider",
-        "operationId": "apiV1Provider-modelsUuidPost",
-        "parameters": [
-          {
-            "name": "uuid",
-            "in": "path",
-            "description": "Unique identifier (UUID)",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderModelsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/requests": {
       "get": {
         "tags": [
@@ -4236,6 +4170,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LightweightResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-models/{uuid}": {
+      "get": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Get all provider models",
+        "description": "Get all provider models",
+        "operationId": "apiV2Provider-modelsUuidGet",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Fetch models for a specific provider",
+        "description": "Fetch models for a specific provider",
+        "operationId": "apiV2Provider-modelsUuidPost",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModelsResponse"
                 }
               }
             }
@@ -6244,7 +6244,7 @@
           "health": {
             "type": "boolean",
             "description": "Field health",
-            "example": false
+            "example": true
           },
           "service": {
             "type": "string",
@@ -6570,7 +6570,7 @@
           "release_url": {
             "type": "string",
             "description": "Field release_url",
-            "example": "https://github.com/tingly-dev/tingly-box/releases/tag/v0.260130.1200"
+            "example": "https://github.com/tingly-dev/tingly-box/releases"
           },
           "should_notify": {
             "type": "boolean",
@@ -10793,8 +10793,7 @@
           },
           "message": {
             "type": "string",
-            "description": "Field message",
-            "example": "Provider models successfully"
+            "description": "Field message"
           },
           "success": {
             "type": "boolean",
@@ -10804,7 +10803,6 @@
         },
         "required": [
           "success",
-          "message",
           "data"
         ]
       },
@@ -10863,8 +10861,16 @@
       "description": "Operations related to token"
     },
     {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
     },
     {
       "name": "rules",
@@ -10875,6 +10881,54 @@
       "description": "Operations related to scenarios"
     },
     {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "requests",
+      "description": "Operations related to requests"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "feishu",
+      "description": "Operations related to feishu"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
       "name": "history",
       "description": "Operations related to history"
     },
@@ -10883,88 +10937,32 @@
       "description": "Operations related to skills"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
-    },
-    {
       "name": "providers",
       "description": "Operations related to providers"
-    },
-    {
-      "name": "feishu",
-      "description": "Operations related to feishu"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "requests",
-      "description": "Operations related to requests"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
     },
     {
       "name": "imbot-admin",
       "description": "Operations related to imbot-admin"
     },
     {
-      "name": "weixin",
-      "description": "Operations related to weixin"
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
     },
     {
       "name": "mcp-transport",
       "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
     }
   ]
 }

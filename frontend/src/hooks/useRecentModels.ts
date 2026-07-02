@@ -7,7 +7,7 @@ const RECENT_MODELS_STORAGE_KEY = 'tingly_recent_models';
 const LAST_PROVIDER_STORAGE_KEY = 'tingly_last_provider';
 const MAX_RECENT_MODELS = 3;
 const DEFAULT_RECENT_MODELS = {};
-const DEFAULT_LAST_PROVIDER = '';
+const DEFAULT_LAST_PROVIDER_DATA: Record<string, string> = {};
 
 // Type for recent models data
 export type RecentModelsData = { [providerUuid: string]: string[] };
@@ -25,7 +25,7 @@ export const useRecentModels = () => {
     const { data: recentModels, version, saveData, removeKey, setData, refetch, loadData } =
         useLocalStorage<RecentModelsData>(RECENT_MODELS_STORAGE_KEY, DEFAULT_RECENT_MODELS);
     const { data: lastProvider, saveData: saveLastProvider } =
-        useLocalStorage<Record<string, string>>(LAST_PROVIDER_STORAGE_KEY, {});
+        useLocalStorage<Record<string, string>>(LAST_PROVIDER_STORAGE_KEY, DEFAULT_LAST_PROVIDER_DATA);
 
     // Listen for recent models updates from other components and reload
     useEffect(() => {

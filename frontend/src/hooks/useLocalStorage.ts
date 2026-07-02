@@ -41,13 +41,15 @@ export function useLocalStorage<T extends Record<string, any>>(
   const [version, setVersion] = useState(0);
 
   // Load data from localStorage
+  // Always returns a fresh object so callers can safely mutate it (e.g. saveData/removeKey)
+  // without corrupting the shared `defaultValue` reference.
   const loadData = useCallback((): T => {
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? deserializer(stored) : defaultValue;
+      return stored ? deserializer(stored) : {...defaultValue};
     } catch (error) {
       console.error(`Failed to load ${storageKey} from storage:`, error);
-      return defaultValue;
+      return {...defaultValue};
     }
   }, [storageKey, deserializer, defaultValue]);
 

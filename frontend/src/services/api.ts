@@ -211,7 +211,7 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/provider-models/{uuid}', {
+            const response = await client.POST('/api/v2/provider-models/{uuid}', {
                 headers,
                 params: {path: {uuid}}
             });
@@ -232,7 +232,7 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/provider-models/{uuid}', {
+            const response = await client.GET('/api/v2/provider-models/{uuid}', {
                 headers,
                 params: {path: {uuid}}
             });
