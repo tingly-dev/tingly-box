@@ -1045,8 +1045,8 @@ export const handlers = [
         })
     }),
 
-    // ── v1 provider models by UUID (used by ModelSelectDialog) ───────────────
-    http.get('/api/v1/provider-models/:uuid', ({ params }) => {
+    // ── v2 provider models by UUID (used by ModelSelectDialog) ───────────────
+    http.get('/api/v2/provider-models/:uuid', ({ params }) => {
         const { uuid } = params as { uuid: string }
         const modelMap: Record<string, string[]> = {
             'mock-provider-anthropic': [
