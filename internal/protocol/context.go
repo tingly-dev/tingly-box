@@ -38,10 +38,11 @@ type HandleContext struct {
 	// the request.
 	EstimatedInputTokens int
 
-	// APIType is the client-facing protocol (Anthropic v1/beta vs OpenAI Chat/
-	// Responses), used to pick the correctly-shaped error body when a request
-	// fails. Set via WithAPIType; the zero value falls back to the OpenAI shape.
-	APIType APIType
+	// SourceAPIType is the client-facing protocol (Anthropic v1/beta vs
+	// OpenAI Chat/Responses), used to pick the correctly-shaped error body
+	// when a request fails. Set via WithSourceAPIType; the zero value falls
+	// back to the OpenAI shape.
+	SourceAPIType APIType
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.
@@ -52,9 +53,9 @@ func NewHandleContext(c *gin.Context, responseModel string) *HandleContext {
 	}
 }
 
-// WithAPIType sets the client-facing protocol used to shape error responses.
-func (hc *HandleContext) WithAPIType(apiType APIType) *HandleContext {
-	hc.APIType = apiType
+// WithSourceAPIType sets the client-facing protocol used to shape error responses.
+func (hc *HandleContext) WithSourceAPIType(apiType APIType) *HandleContext {
+	hc.SourceAPIType = apiType
 	return hc
 }
 
@@ -237,16 +238,16 @@ func (hc *HandleContext) CallOnStreamComplete() {
 }
 
 // sendError sends a protocol-correct error response, picking the Anthropic or
-// OpenAI body shape based on hc.APIType (zero value falls back to OpenAI).
+// OpenAI body shape based on hc.SourceAPIType (zero value falls back to OpenAI).
 func (hc *HandleContext) sendError(err error, desc string) {
-	if IsAnthropicAPIType(hc.APIType) {
+	if IsAnthropicAPIType(hc.SourceAPIType) {
 		SendAnthropicError(hc.GinContext, err, desc)
 		return
 	}
 	SendOpenAIError(hc.GinContext, err, desc)
 }
 
-// SendError sends an error response to the client, shaped per hc.APIType.
+// SendError sends an error response to the client, shaped per hc.SourceAPIType.
 func (hc *HandleContext) SendError(err error, desc string) {
 	hc.sendError(err, desc)
 }
