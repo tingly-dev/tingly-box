@@ -9,8 +9,8 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/visionproxy"
 )
 
 // PNG is a 1x1 transparent PNG used wherever tests need a real image block.
