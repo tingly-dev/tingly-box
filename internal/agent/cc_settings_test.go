@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -136,5 +138,140 @@ func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
 	// Missing rules keep the canonical tingly/* fallbacks.
 	if got := env["ANTHROPIC_MODEL"]; got != "tingly/cc-default" {
 		t.Errorf("default model = %q, want %q", got, "tingly/cc-default")
+	}
+}
+
+func TestSyncProfileNameSymlink_CreatesLink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p1.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := syncProfileNameSymlink(dir, "p1", "ds", ""); err != nil {
+		t.Fatalf("syncProfileNameSymlink: %v", err)
+	}
+
+	target, err := os.Readlink(filepath.Join(dir, "ds.json"))
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "p1.json" {
+		t.Errorf("ds.json -> %q, want %q", target, "p1.json")
+	}
+}
+
+func TestSyncProfileNameSymlink_NoOpWhenNameEmptyOrEqualsID(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := syncProfileNameSymlink(dir, "p1", "", ""); err != nil {
+		t.Fatalf("empty name: %v", err)
+	}
+	if err := syncProfileNameSymlink(dir, "p1", "p1", ""); err != nil {
+		t.Fatalf("name == id: %v", err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected no files created, got %v", entries)
+	}
+}
+
+func TestSyncProfileNameSymlink_RenameRemovesOldLink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p1.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := syncProfileNameSymlink(dir, "p1", "ds", ""); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := syncProfileNameSymlink(dir, "p1", "newname", "ds"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+
+	if _, err := os.Lstat(filepath.Join(dir, "ds.json")); !os.IsNotExist(err) {
+		t.Errorf("expected ds.json to be removed after rename, lstat err = %v", err)
+	}
+	target, err := os.Readlink(filepath.Join(dir, "newname.json"))
+	if err != nil {
+		t.Fatalf("readlink newname.json: %v", err)
+	}
+	if target != "p1.json" {
+		t.Errorf("newname.json -> %q, want %q", target, "p1.json")
+	}
+}
+
+func TestSyncProfileNameSymlink_DoesNotClobberRealFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p1.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// A real (non-symlink) file happens to occupy the alias name.
+	if err := os.WriteFile(filepath.Join(dir, "ds.json"), []byte(`{"real":true}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := syncProfileNameSymlink(dir, "p1", "ds", "")
+	if err == nil {
+		t.Fatal("expected error when alias name collides with a real file")
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(dir, "ds.json"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != `{"real":true}` {
+		t.Errorf("real file content was modified: %s", data)
+	}
+}
+
+func TestSyncProfileNameSymlink_IdempotentWhenAlreadyCorrect(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p1.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := syncProfileNameSymlink(dir, "p1", "ds", ""); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+	if err := syncProfileNameSymlink(dir, "p1", "ds", ""); err != nil {
+		t.Fatalf("second sync (idempotent): %v", err)
+	}
+
+	target, err := os.Readlink(filepath.Join(dir, "ds.json"))
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "p1.json" {
+		t.Errorf("ds.json -> %q, want %q", target, "p1.json")
+	}
+}
+
+func TestRemoveProfileNameSymlink_OnlyRemovesOwnSymlink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p1.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncProfileNameSymlink(dir, "p1", "ds", ""); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	removeProfileNameSymlink(dir, "p1", "ds")
+
+	if _, err := os.Lstat(filepath.Join(dir, "ds.json")); !os.IsNotExist(err) {
+		t.Errorf("expected ds.json removed, lstat err = %v", err)
+	}
+
+	// Removing again (already gone) and removing a name that maps to a real
+	// file must not error or delete unrelated files.
+	if err := os.WriteFile(filepath.Join(dir, "other.json"), []byte(`{"real":true}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	removeProfileNameSymlink(dir, "p1", "other")
+	if _, err := os.Lstat(filepath.Join(dir, "other.json")); err != nil {
+		t.Errorf("real file should not have been removed: %v", err)
 	}
 }

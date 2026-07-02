@@ -104,7 +104,11 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 	if settingsID == "" {
 		settingsID = "default"
 	}
-	settingsPath, err := agent.BuildCCProfileSettings(settingsID, scenarioPath, env)
+	profileName := ""
+	if profileMeta != nil {
+		profileName = profileMeta.Name
+	}
+	settingsPath, err := agent.BuildCCProfileSettings(settingsID, scenarioPath, profileName, env)
 	if err != nil {
 		return err
 	}

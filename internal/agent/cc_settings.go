@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -98,8 +100,13 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 // file at ~/.tingly-box/claude/<profileID>.json. It copies ~/.claude/settings.json
 // as a base (if it exists), installs the shared status line script, generates a
 // per-profile wrapper script, and merges the tingly env vars.
+//
+// profileName, if non-empty and different from profileID, also gets a
+// human-readable symlink (e.g. ds.json -> p1.json) so the profile is
+// browsable by name, not just by its opaque ID. Pass "" to skip.
+//
 // Returns the path to the written file.
-func BuildCCProfileSettings(profileID, scenarioPath string, env map[string]string) (string, error) {
+func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map[string]string) (string, error) {
 	profileDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
 	destPath := filepath.Join(profileDir, profileID+".json")
 
@@ -145,7 +152,86 @@ func BuildCCProfileSettings(profileID, scenarioPath string, env map[string]strin
 		return "", fmt.Errorf("failed to apply settings: %s", result.Message)
 	}
 
+	if err := syncProfileNameSymlink(profileDir, profileID, profileName, ""); err != nil {
+		// Non-fatal: the ID-named settings file is already usable; the alias is
+		// a convenience for browsing ~/.tingly-box/claude/.
+		logrus.WithError(err).Warn("failed to sync profile name symlink")
+	}
+
 	return destPath, nil
+}
+
+// SyncProfileNameSymlink (re)points a human-readable symlink at the profile's
+// ID-named settings file, e.g. ~/.tingly-box/claude/ds.json -> p1.json, so the
+// profile is browsable by name instead of only by its opaque "p1" ID.
+//
+// name may be empty (unnamed/default profile) or equal to profileID (nothing
+// to alias) — both are no-ops. oldName, if non-empty and different from name,
+// has its stale symlink removed first (rename case).
+func SyncProfileNameSymlink(profileID, name, oldName string) error {
+	profileDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
+	return syncProfileNameSymlink(profileDir, profileID, name, oldName)
+}
+
+func syncProfileNameSymlink(profileDir, profileID, name, oldName string) error {
+	target := profileID + ".json"
+
+	if oldName != "" && oldName != name {
+		removeProfileNameSymlink(profileDir, profileID, oldName)
+	}
+
+	if name == "" || name == profileID {
+		return nil
+	}
+
+	linkPath := filepath.Join(profileDir, name+".json")
+
+	// If something already occupies linkPath and it isn't our symlink, leave it
+	// alone rather than clobbering an unrelated file.
+	if info, err := os.Lstat(linkPath); err == nil {
+		if info.Mode()&os.ModeSymlink == 0 {
+			return fmt.Errorf("cannot create profile symlink: %s already exists and is not a symlink", linkPath)
+		}
+		if existing, err := os.Readlink(linkPath); err == nil && existing == target {
+			return nil // already correct
+		}
+		if err := os.Remove(linkPath); err != nil {
+			return fmt.Errorf("failed to replace stale profile symlink: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat profile symlink: %w", err)
+	}
+
+	if err := os.Symlink(target, linkPath); err != nil {
+		return fmt.Errorf("failed to create profile symlink: %w", err)
+	}
+	return nil
+}
+
+// RemoveProfileNameSymlink removes the name-based symlink for a profile, if any.
+func RemoveProfileNameSymlink(profileID, name string) {
+	profileDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
+	removeProfileNameSymlink(profileDir, profileID, name)
+}
+
+func removeProfileNameSymlink(profileDir, profileID, name string) {
+	if name == "" || name == profileID {
+		return
+	}
+	linkPath := filepath.Join(profileDir, name+".json")
+	info, err := os.Lstat(linkPath)
+	if err != nil {
+		return // nothing to remove
+	}
+	// Only remove it if it's actually a symlink pointing at this profile's
+	// settings file — never touch a real file that happens to share the name.
+	if info.Mode()&os.ModeSymlink == 0 {
+		return
+	}
+	if target, err := os.Readlink(linkPath); err != nil || target != profileID+".json" {
+		return
+	}
+	_ = os.Remove(linkPath)
 }
 
 func buildCCProfileStatusLineScript(profileDir, profileID, scenarioPath string) (string, error) {

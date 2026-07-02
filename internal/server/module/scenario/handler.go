@@ -481,7 +481,7 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
 	apiKey := h.config.GetModelToken()
 	env := agent.GenerateCCEnv(h.config, baseURL, apiKey, profiledScenario, meta.Unified, true)
-	if _, settingsErr := agent.BuildCCProfileSettings(meta.ID, profiledScenario, env); settingsErr != nil {
+	if _, settingsErr := agent.BuildCCProfileSettings(meta.ID, profiledScenario, meta.Name, env); settingsErr != nil {
 		logrus.WithError(settingsErr).Warn("failed to create Claude Code settings for new profile")
 	}
 
@@ -512,18 +512,25 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	// If name is not provided, preserve existing profile name
+	existing, ok := h.config.GetProfile(scenario, profileID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile not found"})
+		return
+	}
+	oldName := existing.Name
 	if req.Name == "" {
-		existing, ok := h.config.GetProfile(scenario, profileID)
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile not found"})
-			return
-		}
 		req.Name = existing.Name
 	}
 
 	if err := h.config.UpdateProfile(scenario, profileID, req.Name, req.Unified); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
+	}
+
+	// Repoint the name-based symlink to match the new name; harmless no-op if
+	// the name didn't change.
+	if err := agent.SyncProfileNameSymlink(profileID, req.Name, oldName); err != nil {
+		logrus.WithError(err).Warn("failed to sync profile name symlink after rename")
 	}
 
 	updated, _ := h.config.GetProfile(scenario, profileID)
@@ -547,10 +554,18 @@ func (h *Handler) DeleteProfile(c *gin.Context) {
 		return
 	}
 
+	// Capture the name before deletion so we can clean up its symlink.
+	profileName := ""
+	if existing, ok := h.config.GetProfile(scenario, profileID); ok {
+		profileName = existing.Name
+	}
+
 	if err := h.config.DeleteProfile(scenario, profileID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+
+	agent.RemoveProfileNameSymlink(profileID, profileName)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile deleted"})
 }
