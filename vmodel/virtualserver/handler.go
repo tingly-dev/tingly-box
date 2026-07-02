@@ -266,7 +266,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 			startedBlocks = map[int]bool{}
 		}
 
-		err := vm.HandleAnthropicStream(req, func(ev any) {
+		err := vm.HandleAnthropicStream(c.Request.Context(), req, func(ev any) {
 			if gate != nil {
 				switch ev.(type) {
 				case anthropicvm.DoneEvent, anthropicvm.UsageEvent:
@@ -455,7 +455,7 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 		var completionText string
 		var explicitUsage *vmodel.MockUsage
 
-		err := vm.HandleOpenAIChatStream(req, func(ev any) {
+		err := vm.HandleOpenAIChatStream(c.Request.Context(), req, func(ev any) {
 			select {
 			case <-c.Request.Context().Done():
 				logrus.Debug("Client disconnected during streaming")

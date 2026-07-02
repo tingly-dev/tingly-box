@@ -50,7 +50,13 @@ func (c *OpenAIClient) ListModels(_ context.Context) ([]string, error) {
 
 // ChatCompletionsNew calls the vmodel synchronously and returns an
 // *openai.ChatCompletion built via JSON round-trip.
-func (c *OpenAIClient) ChatCompletionsNew(_ context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	vm := c.reg.Get(req.Model)
 	if vm == nil {
 		return nil, fmt.Errorf("vmodel not found: %s", req.Model)
@@ -125,7 +131,13 @@ func (c *OpenAIClient) ChatCompletionsNew(_ context.Context, req openai.ChatComp
 
 // ChatCompletionsNewStreaming wraps vm.HandleOpenAIChatStream with a
 // channel-based decoder so the caller gets a standard ssestream.Stream.
-func (c *OpenAIClient) ChatCompletionsNewStreaming(_ context.Context, req openai.ChatCompletionNewParams) *openaistream.Stream[openai.ChatCompletionChunk] {
+func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *openaistream.Stream[openai.ChatCompletionChunk] {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return openaistream.NewStream[openai.ChatCompletionChunk](errDecoder{err}, nil)
+	}
 	vm := c.reg.Get(req.Model)
 	if vm == nil {
 		return openaistream.NewStream[openai.ChatCompletionChunk](errDecoder{fmt.Errorf("vmodel not found: %s", req.Model)}, nil)
@@ -138,7 +150,7 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(_ context.Context, req openai
 		ChatCompletionNewParams: &req,
 	}
 
-	dec := newOpenAIVModelDecoder(vm, vmReq)
+	dec := newOpenAIVModelDecoder(ctx, vm, vmReq)
 	return openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
 }
 
@@ -168,7 +180,10 @@ type openAIVModelDecoder struct {
 	err     error
 }
 
-func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCompletionRequest) *openAIVModelDecoder {
+func newOpenAIVModelDecoder(ctx context.Context, vm openaivm.VirtualModel, req *protocol.OpenAIChatCompletionRequest) *openAIVModelDecoder {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	ch := make(chan []byte, 64)
 	d := &openAIVModelDecoder{ch: ch}
 
@@ -184,20 +199,33 @@ func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCo
 
 		chunkIndex := 0
 
-		emitJSON := func(v interface{}) {
+		emitJSON := func(v interface{}) bool {
+			if err := ctx.Err(); err != nil {
+				d.err = err
+				return false
+			}
 			b, err := json.Marshal(v)
 			if err != nil {
-				return
+				return true
 			}
-			ch <- b
+			select {
+			case <-ctx.Done():
+				d.err = ctx.Err()
+				return false
+			case ch <- b:
+				return true
+			}
 		}
 
-		streamErr := vm.HandleOpenAIChatStream(req, func(ev any) {
+		streamErr := vm.HandleOpenAIChatStream(ctx, req, func(ev any) {
+			if ctx.Err() != nil {
+				return
+			}
 			switch e := ev.(type) {
 			case openaivm.DeltaEvent:
 				chunkIndex = e.Index + 1
 				completionText += e.Content
-				emitJSON(map[string]interface{}{
+				if !emitJSON(map[string]interface{}{
 					"id":      msgID,
 					"object":  "chat.completion.chunk",
 					"created": created,
@@ -209,11 +237,13 @@ func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCo
 							"finish_reason": nil,
 						},
 					},
-				})
+				}) {
+					return
+				}
 
 			case openaivm.ToolEvent:
 				tc := e.ToolCall
-				emitJSON(map[string]interface{}{
+				if !emitJSON(map[string]interface{}{
 					"id":      msgID,
 					"object":  "chat.completion.chunk",
 					"created": created,
@@ -237,7 +267,9 @@ func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCo
 							"finish_reason": nil,
 						},
 					},
-				})
+				}) {
+					return
+				}
 
 			case openaivm.UsageEvent:
 				u := e.Usage
@@ -249,7 +281,7 @@ func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCo
 				}
 
 			case openaivm.DoneEvent:
-				emitJSON(map[string]interface{}{
+				if !emitJSON(map[string]interface{}{
 					"id":      msgID,
 					"object":  "chat.completion.chunk",
 					"created": created,
@@ -261,7 +293,9 @@ func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCo
 							"finish_reason": e.FinishReason,
 						},
 					},
-				})
+				}) {
+					return
+				}
 
 				// Trailing usage chunk — mirrors real OpenAI stream_options.include_usage.
 				usageMap := map[string]interface{}{}
@@ -286,19 +320,23 @@ func newOpenAIVModelDecoder(vm openaivm.VirtualModel, req *protocol.OpenAIChatCo
 					usageMap["completion_tokens"] = comp
 					usageMap["total_tokens"] = p + comp
 				}
-				emitJSON(map[string]interface{}{
+				if !emitJSON(map[string]interface{}{
 					"id":      msgID,
 					"object":  "chat.completion.chunk",
 					"created": created,
 					"model":   model,
 					"choices": []interface{}{},
 					"usage":   usageMap,
-				})
+				}) {
+					return
+				}
 			}
 		})
 
 		if streamErr != nil {
 			d.err = streamErr
+		} else if err := ctx.Err(); err != nil {
+			d.err = err
 		}
 	}()
 

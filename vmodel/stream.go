@@ -1,6 +1,9 @@
 package vmodel
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // DefaultStreamChunkDelay is the per-chunk sleep used by stream helpers when
 // no explicit total simulated delay is configured.
@@ -19,15 +22,37 @@ func ResolveChunkDelay(totalDelay time.Duration, chunkCount int) time.Duration {
 	return DefaultStreamChunkDelay
 }
 
-// EmitChunks invokes emit for every chunk in order, sleeping perChunkDelay
-// before each emission. It is the protocol-neutral inner loop shared by mock
-// streams. Callers construct their own protocol-specific event types inside
-// the emit closure.
-func EmitChunks(chunks []string, perChunkDelay time.Duration, emit func(index int, chunk string)) {
+// EmitChunks returns the
+// context error if cancellation happens while waiting or if the emit callback
+// stops accepting chunks.
+func EmitChunks(ctx context.Context, chunks []string, perChunkDelay time.Duration, emit func(index int, chunk string) bool) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for i, chunk := range chunks {
 		if perChunkDelay > 0 {
-			time.Sleep(perChunkDelay)
+			timer := time.NewTimer(perChunkDelay)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+			}
+		} else {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 		}
-		emit(i, chunk)
+		if !emit(i, chunk) {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return context.Canceled
+		}
 	}
+	return nil
 }

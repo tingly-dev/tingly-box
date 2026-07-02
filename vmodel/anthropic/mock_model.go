@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -121,7 +122,7 @@ func (m *MockModel) toolResponse() VModelResponse {
 }
 
 // HandleAnthropicStream streams fixed content using configured chunks with simulated delay.
-func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+func (m *MockModel) HandleAnthropicStream(ctx context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
 	resp, err := m.HandleAnthropic(req)
 	if err != nil {
 		return err
@@ -131,9 +132,12 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 	perChunk := vmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
-			vmodel.EmitChunks(chunks, perChunk, func(_ int, chunk string) {
+			if err := vmodel.EmitChunks(ctx, chunks, perChunk, func(_ int, chunk string) bool {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			})
+				return true
+			}); err != nil {
+				return err
+			}
 		} else if blk.OfToolUse != nil {
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{

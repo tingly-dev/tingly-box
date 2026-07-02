@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -243,7 +244,7 @@ func TestMockScenario_DefaultStopReasons(t *testing.T) {
 func TestMockModel_HandleAnthropicStream_EmitsEvents(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{ID: "s", Content: "hello world"})
 	var events []any
-	err := vm.HandleAnthropicStream(makeReq("hi"), func(ev any) { events = append(events, ev) })
+	err := vm.HandleAnthropicStream(context.Background(), makeReq("hi"), func(ev any) { events = append(events, ev) })
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -276,7 +277,7 @@ func TestMockModel_HandleAnthropicStream_ToolModel_EmitsToolUseEvent(t *testing.
 		ToolCall: &vmodel.ToolCallConfig{Name: "my_tool", Arguments: map[string]interface{}{"k": "v"}},
 	})
 	var events []any
-	_ = vm.HandleAnthropicStream(makeReq("hi"), func(ev any) { events = append(events, ev) })
+	_ = vm.HandleAnthropicStream(context.Background(), makeReq("hi"), func(ev any) { events = append(events, ev) })
 
 	hasToolUse := false
 	for _, ev := range events {
@@ -299,7 +300,7 @@ func TestMockModel_HandleAnthropicStream_ToolModel_EmitsToolUseEvent(t *testing.
 func TestTransformModel_HandleAnthropicStream_UsesDefaultAdapter(t *testing.T) {
 	vm := NewTransformModel(&TransformModelConfig{ID: "t"})
 	var events []any
-	err := vm.HandleAnthropicStream(makeReq("hello"), func(ev any) { events = append(events, ev) })
+	err := vm.HandleAnthropicStream(context.Background(), makeReq("hello"), func(ev any) { events = append(events, ev) })
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -314,7 +315,7 @@ func TestTransformModel_HandleAnthropicStream_UsesDefaultAdapter(t *testing.T) {
 func TestDefaultStream_ReconstructsContent(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{ID: "s", Content: "reconstruct me"})
 	var texts []string
-	_ = DefaultStream(vm, makeReq("hi"), func(ev any) {
+	_ = DefaultStream(context.Background(), vm, makeReq("hi"), func(ev any) {
 		if delta, ok := ev.(TextDeltaEvent); ok {
 			texts = append(texts, delta.Text)
 		}

@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -107,16 +108,19 @@ func (m *MockModel) toolResponse() VModelResponse {
 }
 
 // HandleOpenAIChatStream streams fixed content using configured chunks with simulated delay.
-func (m *MockModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
+func (m *MockModel) HandleOpenAIChatStream(ctx context.Context, req *protocol.OpenAIChatCompletionRequest, emit func(any)) error {
 	resp, err := m.HandleOpenAIChat(req)
 	if err != nil {
 		return err
 	}
 	chunks := m.streamChunks()
 	perChunk := vmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
-	vmodel.EmitChunks(chunks, perChunk, func(i int, chunk string) {
+	if err := vmodel.EmitChunks(ctx, chunks, perChunk, func(i int, chunk string) bool {
 		emit(DeltaEvent{Index: i, Content: chunk})
-	})
+		return true
+	}); err != nil {
+		return err
+	}
 	for i, tc := range resp.ToolCalls {
 		emit(ToolEvent{Index: i, ToolCall: tc})
 	}

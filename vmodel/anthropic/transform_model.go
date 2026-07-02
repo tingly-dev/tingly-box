@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"fmt"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
@@ -44,8 +45,8 @@ func NewTransformModel(cfg *TransformModelConfig) *TransformModel {
 }
 
 // HandleAnthropicStream delegates to DefaultStream since TransformModel is batch-only.
-func (m *TransformModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
-	return DefaultStream(m, req, emit)
+func (m *TransformModel) HandleAnthropicStream(ctx context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+	return DefaultStream(ctx, m, req, emit)
 }
 
 // HandleAnthropic applies Chain then Transformer to req in-place and returns the response.
