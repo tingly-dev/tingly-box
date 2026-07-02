@@ -22,8 +22,8 @@ func NewBase64Exporter() *Base64Exporter {
 
 // Export performs the export in Base64 format
 func (e *Base64Exporter) Export(req *ExportRequest) (*ExportResult, error) {
-	if req.Rule == nil {
-		return nil, fmt.Errorf("rule is required for export")
+	if len(req.Providers) == 0 {
+		return nil, fmt.Errorf("providers must be specified for export")
 	}
 
 	// First, get JSONL content

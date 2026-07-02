@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestFormatDetectionEdgeCases tests format detection with various edge cases
@@ -192,27 +192,14 @@ func TestExportDataStructureValidation(t *testing.T) {
 		t.Error("Metadata version field incorrect")
 	}
 
-	ruleData := RuleData{
-		Type:         "rule",
-		UUID:         "test-uuid",
-		Scenario:     "general",
-		RequestModel: "gpt-4",
-		Services:     []*loadbalance.Service{},
-	}
-
-	if ruleData.Type != "rule" {
-		t.Error("Rule data type field incorrect")
-	}
-	if ruleData.UUID == "" {
-		t.Error("Rule data UUID is required")
-	}
-
 	providerData := ProviderData{
-		Type:    "provider",
-		UUID:    "prov-uuid",
-		Name:    "Test Provider",
-		APIBase: "https://api.example.com",
-		Enabled: true,
+		Type: "provider",
+		Provider: typ.Provider{
+			UUID:    "prov-uuid",
+			Name:    "Test Provider",
+			APIBase: "https://api.example.com",
+			Enabled: true,
+		},
 	}
 
 	if providerData.Type != "provider" {
@@ -257,4 +244,3 @@ func TestCrossFormatCompatibility(t *testing.T) {
 		}
 	}
 }
-

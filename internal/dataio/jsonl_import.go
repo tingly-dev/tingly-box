@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -17,9 +16,6 @@ type ImportOptions struct {
 	// OnProviderConflict specifies what to do when a provider already exists.
 	// "use" - use existing provider, "skip" - skip this provider, "suffix" - create with suffixed name
 	OnProviderConflict string
-	// OnRuleConflict specifies what to do when a rule already exists.
-	// "skip" - skip import, "update" - update existing rule, "new" - create with new name
-	OnRuleConflict string
 	// Quiet suppresses progress output
 	Quiet bool
 }
@@ -33,8 +29,6 @@ type ProviderImportInfo struct {
 
 // ImportResult contains the results of an import operation
 type ImportResult struct {
-	RuleCreated      bool
-	RuleUpdated      bool
 	ProvidersCreated int
 	ProvidersUsed    int
 	Providers        []ProviderImportInfo
@@ -70,14 +64,10 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 	if opts.OnProviderConflict == "" {
 		opts.OnProviderConflict = "use"
 	}
-	if opts.OnRuleConflict == "" {
-		opts.OnRuleConflict = "skip"
-	}
 
 	// Parse lines
 	scanner := bufio.NewScanner(strings.NewReader(data))
 	var metadata *Metadata
-	var ruleData *RuleData
 	providersData := []*ProviderData{}
 
 	lineNum := 0
@@ -103,11 +93,6 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 				return nil, fmt.Errorf("unsupported export version: %s", metadata.Version)
 			}
 
-		case "rule":
-			if err := json.Unmarshal([]byte(line), &ruleData); err != nil {
-				return nil, fmt.Errorf("line %d: invalid rule data: %w", lineNum, err)
-			}
-
 		case "provider":
 			var provider ProviderData
 			if err := json.Unmarshal([]byte(line), &provider); err != nil {
@@ -124,11 +109,11 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 		return nil, fmt.Errorf("error reading input: %w", err)
 	}
 
-	if ruleData == nil && len(providersData) == 0 {
-		return nil, fmt.Errorf("no rule or provider data found in export")
+	if len(providersData) == 0 {
+		return nil, fmt.Errorf("no provider data found in export")
 	}
 
-	// Import providers first (before rule processing, so they're available for the rule)
+	// Import providers
 	for _, p := range providersData {
 		providerResult, err := i.importProvider(globalConfig, p, opts.OnProviderConflict, result.ProviderMap)
 		if err != nil {
@@ -144,88 +129,6 @@ func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts Im
 		if providerResult.info != nil {
 			result.Providers = append(result.Providers, *providerResult.info)
 		}
-	}
-
-	// If we don't have rule data, we're done (provider-only import)
-	if ruleData == nil {
-		return result, nil
-	}
-
-	// Collect unique provider UUIDs from services for validation
-	requiredProviderUUIDs := make(map[string]bool)
-	for _, service := range ruleData.Services {
-		if service.Provider != "" {
-			requiredProviderUUIDs[service.Provider] = true
-		}
-	}
-
-	// Validate that all required providers have been mapped
-	var missingProviders []string
-	for oldUUID := range requiredProviderUUIDs {
-		if _, mapped := result.ProviderMap[oldUUID]; !mapped {
-			// Check if this UUID exists as a provider in the export data
-			found := false
-			for _, p := range providersData {
-				if p.UUID == oldUUID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				missingProviders = append(missingProviders, oldUUID)
-			}
-		}
-	}
-
-	// If there are missing providers that weren't in the export, fail with a clear error
-	if len(missingProviders) > 0 {
-		return nil, fmt.Errorf("rule references providers that were not included in the export: %v. Please ensure all providers referenced by the rule are included in the export data", missingProviders)
-	}
-
-	// Check for existing rule
-	existingRule := globalConfig.GetRuleByRequestModelAndScenario(ruleData.RequestModel, typ.RuleScenario(ruleData.Scenario))
-
-	// Remap provider UUIDs in services
-	for i := range ruleData.Services {
-		if oldUUID, ok := result.ProviderMap[ruleData.Services[i].Provider]; ok {
-			ruleData.Services[i].Provider = oldUUID
-		}
-	}
-
-	// Create or update rule
-	rule := typ.Rule{
-		UUID:          uuid.New().String(),
-		Scenario:      typ.RuleScenario(ruleData.Scenario),
-		RequestModel:  ruleData.RequestModel,
-		ResponseModel: ruleData.ResponseModel,
-		Description:   ruleData.Description,
-		Services:      ruleData.Services,
-		LBTactic:      ruleData.LBTactic,
-		Active:        ruleData.Active,
-	}
-
-	if existingRule != nil {
-		switch opts.OnRuleConflict {
-		case "skip":
-			return result, nil
-		case "update":
-			rule.UUID = existingRule.UUID
-			if err := globalConfig.UpdateRule(existingRule.UUID, rule); err != nil {
-				return nil, fmt.Errorf("failed to update rule: %w", err)
-			}
-			result.RuleUpdated = true
-		case "new":
-			rule.RequestModel = fmt.Sprintf("%s-imported", ruleData.RequestModel)
-			if err := globalConfig.AddRule(rule); err != nil {
-				return nil, fmt.Errorf("failed to add rule: %w", err)
-			}
-			result.RuleCreated = true
-		}
-	} else {
-		if err := globalConfig.AddRule(rule); err != nil {
-			return nil, fmt.Errorf("failed to add rule: %w", err)
-		}
-		result.RuleCreated = true
 	}
 
 	return result, nil
@@ -298,25 +201,26 @@ func (i *JSONLImporter) importProvider(globalConfig *config.Config, p *ProviderD
 		p.Name = newName
 	}
 
-	// Create new provider with new UUID
-	newProvider := &typ.Provider{
-		UUID:             providerUUID,
-		Name:             p.Name,
-		APIBase:          p.APIBase,
-		APIStyle:         protocol.APIStyle(p.APIStyle),
-		APIBaseOpenAI:    p.APIBaseOpenAI,
-		APIBaseAnthropic: p.APIBaseAnthropic,
-		AuthType:         typ.AuthType(p.AuthType),
-		Token:            p.Token,
-		OAuthDetail:      p.OAuthDetail,
-		Enabled:          p.Enabled,
-		ProxyURL:         p.ProxyURL,
-		Timeout:          p.Timeout,
-		Tags:             p.Tags,
-		Models:           p.Models,
-	}
+	// Create new provider with new UUID. Shallow-copy the embedded Provider so
+	// we inherit every field automatically, then apply the deliberate
+	// import-time overrides below.
+	newProvider := p.Provider
+	newProvider.UUID = providerUUID
+	newProvider.Name = p.Name
 
-	if err := globalConfig.AddProvider(newProvider); err != nil {
+	// Imported providers are always user-owned. Without this, an export that
+	// happens to carry Source: "builtin" (e.g. from another instance's
+	// support bundle) would create a provider that's permanently locked from
+	// edit/delete via the API (see Provider.IsBuiltin gating in
+	// internal/server/module/provider/handler.go).
+	newProvider.Source = typ.ProviderSourceUser
+
+	// LastUpdated is a freshness cache for Models, not portable data; reset it
+	// so any staleness-driven refresh logic treats the import as needing a
+	// fresh check rather than trusting a timestamp from the source instance.
+	newProvider.LastUpdated = ""
+
+	if err := globalConfig.AddProvider(&newProvider); err != nil {
 		return nil, fmt.Errorf("failed to add provider: %w", err)
 	}
 

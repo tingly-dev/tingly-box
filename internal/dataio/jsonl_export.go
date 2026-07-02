@@ -9,7 +9,6 @@ import (
 
 // ExportRequest contains the data needed for export
 type ExportRequest struct {
-	Rule      *typ.Rule
 	Providers []*typ.Provider
 }
 
@@ -23,8 +22,8 @@ func NewJSONLExporter() *JSONLExporter {
 
 // Export performs the export in JSONL format
 func (e *JSONLExporter) Export(req *ExportRequest) (*ExportResult, error) {
-	if req.Rule == nil && len(req.Providers) == 0 {
-		return nil, fmt.Errorf("either rule or providers must be specified for export")
+	if len(req.Providers) == 0 {
+		return nil, fmt.Errorf("providers must be specified for export")
 	}
 
 	lines, err := e.buildJSONLLines(req)
@@ -43,9 +42,9 @@ func (e *JSONLExporter) Format() Format {
 	return FormatJSONL
 }
 
-// buildJSONLLines constructs the JSONL content from rule and providers
+// buildJSONLLines constructs the JSONL content from providers
 func (e *JSONLExporter) buildJSONLLines(req *ExportRequest) (string, error) {
-	lines := make([]string, 0, 2+len(req.Providers))
+	lines := make([]string, 0, 1+len(req.Providers))
 
 	// Line 1: Metadata
 	metadata := Metadata{
@@ -59,31 +58,8 @@ func (e *JSONLExporter) buildJSONLLines(req *ExportRequest) (string, error) {
 	}
 	lines = append(lines, string(metadataLine))
 
-	// Line 2: Rule (if present)
-	if req.Rule != nil {
-		ruleData := e.buildRuleData(req.Rule)
-		ruleLine, err := json.Marshal(ruleData)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal rule: %w", err)
-		}
-		lines = append(lines, string(ruleLine))
-	}
-
 	// Subsequent lines: Providers
-	var providerUUIDs []string
-	if req.Rule != nil {
-		// Only export providers that are referenced in the rule
-		providerUUIDs = e.getProviderUUIDs(req.Rule)
-	}
 	for _, provider := range req.Providers {
-		// If we have a rule, only export providers referenced by it
-		// If we don't have a rule, export all providers
-		if req.Rule != nil {
-			if !e.contains(providerUUIDs, provider.UUID) {
-				continue
-			}
-		}
-
 		providerData := e.buildProviderData(provider)
 		providerLine, err := json.Marshal(providerData)
 		if err != nil {
@@ -95,72 +71,11 @@ func (e *JSONLExporter) buildJSONLLines(req *ExportRequest) (string, error) {
 	return joinLines(lines), nil
 }
 
-// buildRuleData converts a Rule to RuleData
-func (e *JSONLExporter) buildRuleData(rule *typ.Rule) RuleData {
-	// Convert SmartRouting to []interface{} for JSON marshaling
-	smartRouting := make([]interface{}, len(rule.SmartRouting))
-	for i, sr := range rule.SmartRouting {
-		smartRouting[i] = sr
-	}
-
-	return RuleData{
-		Type:          "rule",
-		UUID:          rule.UUID,
-		Scenario:      string(rule.Scenario),
-		RequestModel:  rule.RequestModel,
-		ResponseModel: rule.ResponseModel,
-		Description:   rule.Description,
-		Services:      rule.Services,
-		LBTactic:      rule.LBTactic,
-		Active:        rule.Active,
-		SmartEnabled:  rule.SmartEnabled,
-		SmartRouting:  smartRouting,
-	}
-}
-
-// buildProviderData converts a Provider to ProviderData
+// buildProviderData converts a Provider to ProviderData. Embedding means this
+// is a straight copy — no field list to keep in sync with ai.Provider.
 func (e *JSONLExporter) buildProviderData(provider *typ.Provider) ProviderData {
 	return ProviderData{
-		Type:             "provider",
-		UUID:             provider.UUID,
-		Name:             provider.Name,
-		APIBase:          provider.APIBase,
-		APIStyle:         string(provider.APIStyle),
-		APIBaseOpenAI:    provider.APIBaseOpenAI,
-		APIBaseAnthropic: provider.APIBaseAnthropic,
-		AuthType:         string(provider.AuthType),
-		Token:            provider.Token,
-		OAuthDetail:      provider.OAuthDetail,
-		Enabled:          provider.Enabled,
-		ProxyURL:         provider.ProxyURL,
-		Timeout:          provider.Timeout,
-		Tags:             provider.Tags,
-		Models:           provider.Models,
+		Type:     "provider",
+		Provider: *provider,
 	}
-}
-
-// getProviderUUIDs extracts all provider UUIDs from the rule's services
-func (e *JSONLExporter) getProviderUUIDs(rule *typ.Rule) []string {
-	uuids := make(map[string]bool)
-	for _, service := range rule.Services {
-		if service.Provider != "" {
-			uuids[service.Provider] = true
-		}
-	}
-
-	result := make([]string, 0, len(uuids))
-	for uuid := range uuids {
-		result = append(result, uuid)
-	}
-	return result
-}
-
-// contains checks if a string slice contains a specific string
-func (e *JSONLExporter) contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
