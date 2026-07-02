@@ -8,18 +8,28 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// EndpointCacheGetFn looks up a cached protocol for a provider+model pair.
+// Returns the cached APIType and true on hit, or ("", false) on miss.
+type EndpointCacheGetFn func(providerUUID, model string) (protocol.APIType, bool)
+
+// EndpointCacheSetFn writes a successful protocol result into the cache.
+type EndpointCacheSetFn func(providerUUID, model string, target protocol.APIType)
+
 // E2EService runs SDK-level end-to-end probes against a rule, a saved
 // provider, or an inline provider config. It is independent of *Server and
 // is wired in NewServer.
 type E2EService struct {
-	config     *config.Config
-	clientPool *client.ClientPool
+	config      *config.Config
+	clientPool  *client.ClientPool
+	endpointGet EndpointCacheGetFn
+	endpointSet EndpointCacheSetFn
 }
 
 // NewE2EService constructs a E2EService.
@@ -28,6 +38,21 @@ func NewE2EService(cfg *config.Config, pool *client.ClientPool) *E2EService {
 		config:     cfg,
 		clientPool: pool,
 	}
+}
+
+// SetEndpointCache wires the endpoint auto-detection cache into the probe
+// service. When set, ProbeProviderWithSDK uses the cache for providers with
+// EndpointModeAuto to avoid unnecessary fallback retries.
+func (e *E2EService) SetEndpointCache(get EndpointCacheGetFn, set EndpointCacheSetFn) {
+	e.endpointGet = get
+	e.endpointSet = set
+}
+
+func (e *E2EService) autoEndpointEnabled() bool {
+	if e.config == nil {
+		return false
+	}
+	return e.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionAutoEndpoint)
 }
 
 // Probe performs a non-streaming probe against the target described by req.
@@ -166,7 +191,7 @@ func (e *E2EService) resolveProviderTarget(ctx context.Context, req *E2ERequest)
 	apiStyle := provider.APIStyle
 	probeHeaders := map[string]string{
 		"X-Tingly-Probe-Service": req.ProviderUUID + ":" + model,
-		"X-Tingly-Debug-Routing":   "1",
+		"X-Tingly-Debug-Routing": "1",
 	}
 	logrus.Debugf("[probe-e2e] provider %s -> TB loopback %s (service pin=%s:%s)", provider.UUID, apiBase, req.ProviderUUID, model)
 
@@ -300,9 +325,10 @@ func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Pro
 			client.ApplyProbeHeadersToClient(oc)
 			routing = client.ApplyRoutingCaptureToClient(oc)
 		}
-		// Codex OAuth providers only speak the Responses API.
 		if isCodexOAuth(provider) {
 			result, err = probeOpenAIResponses(ctx, oc, model, message, mode)
+		} else if e.autoEndpointEnabled() && ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
+			result, err = e.probeOpenAIAutoFallback(ctx, oc, provider, model, message, mode)
 		} else {
 			result, err = probeOpenAIChat(ctx, oc, model, message, mode)
 		}
@@ -364,6 +390,53 @@ func applyRoutingCapture(result *E2EData, cap *client.RoutingCapture) {
 		result.MatchedRuleDesc = desc
 	} else {
 		result.MatchedRuleDesc = cap.MatchedRuleDesc
+	}
+}
+
+// probeOpenAIAutoFallback tries the preferred protocol first; on retryable
+// failure it falls back to the alternate protocol. Results are cached via
+// endpointGet/endpointSet when available.
+func (e *E2EService) probeOpenAIAutoFallback(
+	ctx context.Context, oc client.OpenAIClientInterface,
+	provider *typ.Provider, model, message string, mode E2EMode,
+) (*E2EData, error) {
+	firstProto, altProto := protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses
+	if e.endpointGet != nil {
+		if cached, ok := e.endpointGet(provider.UUID, model); ok && cached == protocol.TypeOpenAIResponses {
+			firstProto, altProto = protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat
+		}
+	}
+
+	probeFn := func(proto protocol.APIType) (*E2EData, error) {
+		if proto == protocol.TypeOpenAIResponses {
+			return probeOpenAIResponses(ctx, oc, model, message, mode)
+		}
+		return probeOpenAIChat(ctx, oc, model, message, mode)
+	}
+
+	result, err := probeFn(firstProto)
+	if err == nil && result != nil && result.Content != "" {
+		e.cacheEndpoint(provider.UUID, model, firstProto)
+		return result, nil
+	}
+
+	if err != nil && client.IsNonRetryableForProtocolSwitch(err) {
+		return result, err
+	}
+
+	logrus.Infof("[probe-auto] %s:%s %s probe failed, trying %s: %v", provider.Name, model, firstProto, altProto, err)
+	result, err = probeFn(altProto)
+	if err == nil && result != nil && result.Content != "" {
+		e.cacheEndpoint(provider.UUID, model, altProto)
+		return result, nil
+	}
+
+	return result, err
+}
+
+func (e *E2EService) cacheEndpoint(providerUUID, model string, proto protocol.APIType) {
+	if e.endpointSet != nil {
+		e.endpointSet(providerUUID, model, proto)
 	}
 }
 

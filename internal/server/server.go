@@ -126,6 +126,9 @@ type Server struct {
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
 
+	// endpoint cache for auto endpoint mode (per provider+model → protocol)
+	endpointCache *EndpointCache
+
 	// affinity store for smart routing session-model locking
 	affinityStore *AffinityStore
 
@@ -243,6 +246,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool()
+	server.endpointCache = NewEndpointCache(defaultEndpointCacheTTL)
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()
@@ -378,6 +382,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// E2E probe service handles /api/v2/probe end-to-end without touching *Server.
 	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
+	server.probeE2EService.SetEndpointCache(server.endpointCache.Get, server.endpointCache.Set)
 	server.probeLightweight = probe.NewLightweightService(server.clientPool)
 
 	// Initialize OTel meter setup for token tracking

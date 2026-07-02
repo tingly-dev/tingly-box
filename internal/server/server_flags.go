@@ -30,6 +30,14 @@ func (s *Server) mcpEnabled() bool {
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
 }
 
+// autoEndpointEnabled checks if auto endpoint detection is enabled via scenario flag.
+func (s *Server) autoEndpointEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionAutoEndpoint)
+}
+
 func (s *Server) initGuardrailsRuntime() {
 	runtime := s.currentGuardrailsRuntime()
 	if (runtime != nil && runtime.PolicyEngine() != nil) || s.config == nil {
