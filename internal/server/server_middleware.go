@@ -1,10 +1,14 @@
 package server
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -98,4 +102,50 @@ func (s *Server) getModelAuthMiddleware() gin.HandlerFunc {
 		return s.customModelAuthMiddleware
 	}
 	return s.authMW.ModelAuthMiddleware()
+}
+
+// contextMiddleware is a middleware that extracts the scenario parameter from the URL path
+// and injects it into the request context for use by downstream components (e.g., RecordRoundTripper).
+// It also validates profile suffixes (e.g., "claude_code:p1") if present.
+func (s *Server) contextMiddleware(c *gin.Context) {
+	rawScenario := c.Param("scenario")
+	ctx := context.WithValue(c.Request.Context(), client.ScenarioContextKey, rawScenario)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Validate profile if present (e.g., "claude_code:p1")
+	if typ.IsProfiledScenario(typ.RuleScenario(rawScenario)) {
+		base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
+		if base == "" || profileID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("invalid scenario format: '%s'", rawScenario),
+			})
+			c.Abort()
+			return
+		}
+
+		// Check base scenario exists in registry
+		if _, ok := typ.GetScenarioDescriptor(typ.RuleScenario(rawScenario)); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("unknown scenario '%s'", base),
+			})
+			c.Abort()
+			return
+		}
+
+		// Check profile exists in config
+		if s.config != nil {
+			if _, ok := s.config.GetProfile(typ.RuleScenario(base), profileID); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   fmt.Sprintf("unknown profile '%s' for scenario '%s'", profileID, base),
+				})
+				c.Abort()
+				return
+			}
+		}
+	}
+
+	c.Next()
 }
