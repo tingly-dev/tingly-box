@@ -55,35 +55,48 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 	})
 }
 
-// sendProtocolError dispatches to the Anthropic- or OpenAI-shaped sender based
-// on apiType, the shared implementation behind SendStreamingError/
-// SendForwardingError/SendInternalError below.
-func sendProtocolError(c *gin.Context, apiType protocol.APIType, err error, desc string) {
-	if protocol.IsAnthropicAPIType(apiType) {
+// sendProtocolError is the shared implementation behind the
+// SendAnthropicXxx/SendOpenAIXxx pairs below.
+func sendProtocolError(c *gin.Context, isAnthropic bool, err error, desc string) {
+	if isAnthropic {
 		protocol.SendAnthropicError(c, err, desc)
 		return
 	}
 	protocol.SendOpenAIError(c, err, desc)
 }
 
-// SendStreamingError sends an error response for streaming request failures.
-// When the failure occurs before any SSE frame has been written (the caller
-// guards this with conv.MessageStarted()), the HTTP status is still settable, so
-// we propagate the upstream provider's status (401/429/4xx) instead of
-// flattening every pre-stream failure into a 500.
-func SendStreamingError(c *gin.Context, apiType protocol.APIType, err error) {
-	sendProtocolError(c, apiType, err, "Failed to create streaming request")
+// SendAnthropicStreamingError/SendOpenAIStreamingError send an error response
+// for streaming request failures. When the failure occurs before any SSE
+// frame has been written (the caller guards this with conv.MessageStarted()),
+// the HTTP status is still settable, so we propagate the upstream provider's
+// status (401/429/4xx) instead of flattening every pre-stream failure into a 500.
+func SendAnthropicStreamingError(c *gin.Context, err error) {
+	sendProtocolError(c, true, err, "Failed to create streaming request")
 }
 
-// SendForwardingError sends an error response for request forwarding failures,
-// propagating the upstream provider's HTTP status when the error carries one.
-func SendForwardingError(c *gin.Context, apiType protocol.APIType, err error) {
-	sendProtocolError(c, apiType, err, "Failed to forward request")
+func SendOpenAIStreamingError(c *gin.Context, err error) {
+	sendProtocolError(c, false, err, "Failed to create streaming request")
 }
 
-// SendInternalError sends an error response for internal errors
-func SendInternalError(c *gin.Context, apiType protocol.APIType, errMsg string) {
-	sendProtocolError(c, apiType, fmt.Errorf("%s", errMsg), "")
+// SendAnthropicForwardingError/SendOpenAIForwardingError send an error
+// response for request forwarding failures, propagating the upstream
+// provider's HTTP status when the error carries one.
+func SendAnthropicForwardingError(c *gin.Context, err error) {
+	sendProtocolError(c, true, err, "Failed to forward request")
+}
+
+func SendOpenAIForwardingError(c *gin.Context, err error) {
+	sendProtocolError(c, false, err, "Failed to forward request")
+}
+
+// SendAnthropicInternalError/SendOpenAIInternalError send an error response
+// for internal (gateway-side) errors.
+func SendAnthropicInternalError(c *gin.Context, errMsg string) {
+	sendProtocolError(c, true, fmt.Errorf("%s", errMsg), "")
+}
+
+func SendOpenAIInternalError(c *gin.Context, errMsg string) {
+	sendProtocolError(c, false, fmt.Errorf("%s", errMsg), "")
 }
 
 // buildStreamState creates a streamState from Anthropic usage stats.

@@ -271,7 +271,7 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 
 	response, usage, err := s.runGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
-		recordMCPError(s, c, protocol.TypeOpenAIChat, err, recorder)
+		recordOpenAIMCPError(s, c, err, recorder)
 		return
 	}
 
@@ -339,7 +339,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(s, c, protocol.TypeOpenAIChat, err, recorder)
+		recordOpenAIMCPError(s, c, err, recorder)
 	}
 }
 
@@ -356,7 +356,7 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 
 	response, usage, err := s.runGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
-		recordMCPError(s, c, protocol.TypeAnthropicBeta, err, recorder)
+		recordAnthropicMCPError(s, c, err, recorder)
 		return
 	}
 
@@ -446,6 +446,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(s, c, protocol.TypeAnthropicBeta, err, recorder)
+		recordAnthropicMCPError(s, c, err, recorder)
 	}
 }

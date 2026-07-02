@@ -39,31 +39,40 @@ type preStreamErrorRecorder interface {
 	RecordError(error)
 }
 
-// handlePreStreamFailure emits the canonical "upstream failed
-// pre-stream" response: status 500 + JSON error, captured by the
-// buffered failover writer so the orchestrator can retry the next
-// priority tier.
-func (s *Server) handlePreStreamFailure(c *gin.Context, apiType protocol.APIType, err error, recorder preStreamErrorRecorder) {
+// handleAnthropicPreStreamFailure/handleOpenAIPreStreamFailure emit the
+// canonical "upstream failed pre-stream" response: status 500 + JSON error,
+// captured by the buffered failover writer so the orchestrator can retry the
+// next priority tier.
+func (s *Server) handleAnthropicPreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendStreamingError(c, apiType, err)
+	stream.SendAnthropicStreamingError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
 }
 
-// failAttemptSetup reports an in-attempt setup failure — target/endpoint
-// resolution, the pre-transform chain, or the transform itself — that happens
-// before any upstream call. It always writes a 500-class status, which the
-// failover gate buffers and treats as retryable, so the orchestrator advances
-// to the next candidate (possibly a different API style) instead of terminating
-// the whole request on one misconfigured provider. Genuine client errors are
-// rejected in the prologue, before the gate is installed, so they remain
-// non-retryable and reach the client unchanged.
-func (s *Server) failAttemptSetup(c *gin.Context, apiType protocol.APIType, err error) {
-	if protocol.IsAnthropicAPIType(apiType) {
-		c.JSON(http.StatusInternalServerError, protocol.BuildAnthropicError(err, http.StatusInternalServerError))
-		return
+func (s *Server) handleOpenAIPreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
+	s.trackUsageFromContext(c, 0, 0, err)
+	stream.SendOpenAIStreamingError(c, err)
+	if recorder != nil {
+		recorder.RecordError(err)
 	}
+}
+
+// failAnthropicAttemptSetup/failOpenAIAttemptSetup report an in-attempt setup
+// failure — target/endpoint resolution, the pre-transform chain, or the
+// transform itself — that happens before any upstream call. They always write
+// a 500-class status, which the failover gate buffers and treats as
+// retryable, so the orchestrator advances to the next candidate (possibly a
+// different API style) instead of terminating the whole request on one
+// misconfigured provider. Genuine client errors are rejected in the
+// prologue, before the gate is installed, so they remain non-retryable and
+// reach the client unchanged.
+func (s *Server) failAnthropicAttemptSetup(c *gin.Context, err error) {
+	c.JSON(http.StatusInternalServerError, protocol.BuildAnthropicError(err, http.StatusInternalServerError))
+}
+
+func (s *Server) failOpenAIAttemptSetup(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, protocol.BuildOpenAIError(err, http.StatusInternalServerError))
 }
 

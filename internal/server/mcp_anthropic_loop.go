@@ -45,33 +45,48 @@ func hasOnlyMCPToolUsesBeta(content []anthropic.BetaContentBlockUnion) ([]anthro
 	return toolUses, true
 }
 
-// respondMCPError writes a JSON error response for non-streaming MCP tool call failures.
-// This consolidates the ~10-line error block repeated across dispatch paths.
-func respondMCPError(s *Server, c *gin.Context, apiType protocol.APIType, recorder *ProtocolRecorder, err error, msg string) {
+// respondAnthropicMCPError/respondOpenAIMCPError write a JSON error response
+// for non-streaming MCP tool call failures. This consolidates the ~10-line
+// error block repeated across dispatch paths.
+func respondAnthropicMCPError(s *Server, c *gin.Context, recorder *ProtocolRecorder, err error, msg string) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	if protocol.IsAnthropicAPIType(apiType) {
-		c.JSON(http.StatusInternalServerError, protocol.BuildAnthropicError(err, http.StatusInternalServerError))
-	} else {
-		c.JSON(http.StatusInternalServerError, protocol.BuildOpenAIError(err, http.StatusInternalServerError))
-	}
+	c.JSON(http.StatusInternalServerError, protocol.BuildAnthropicError(err, http.StatusInternalServerError))
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
 }
 
-// recordMCPError sends a streaming error response for streaming MCP tool call failures.
-func recordMCPError(s *Server, c *gin.Context, apiType protocol.APIType, err error, recorder *ProtocolRecorder) {
+func respondOpenAIMCPError(s *Server, c *gin.Context, recorder *ProtocolRecorder, err error, msg string) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendStreamingError(c, apiType, err)
+	c.JSON(http.StatusInternalServerError, protocol.BuildOpenAIError(err, http.StatusInternalServerError))
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
 }
 
-// recordMCPForwardingError handles MCP errors in non-streaming forward paths.
-func recordMCPForwardingError(s *Server, c *gin.Context, apiType protocol.APIType, err error, recorder *ProtocolRecorder) {
+// recordAnthropicMCPError/recordOpenAIMCPError send a streaming error
+// response for streaming MCP tool call failures.
+func recordAnthropicMCPError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendForwardingError(c, apiType, err)
+	stream.SendAnthropicStreamingError(c, err)
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
+func recordOpenAIMCPError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
+	s.trackUsageFromContext(c, 0, 0, err)
+	stream.SendOpenAIStreamingError(c, err)
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
+// recordAnthropicMCPForwardingError handles MCP errors in non-streaming
+// forward paths.
+func recordAnthropicMCPForwardingError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
+	s.trackUsageFromContext(c, 0, 0, err)
+	stream.SendAnthropicForwardingError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}

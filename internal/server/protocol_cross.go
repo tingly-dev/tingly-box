@@ -45,7 +45,7 @@ func (s *Server) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel st
 
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		stream.SendForwardingError(c, protocol.TypeAnthropicBeta, err)
+		stream.SendAnthropicForwardingError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -88,13 +88,13 @@ func (s *Server) streamResponsesToAnthropicBeta(c *gin.Context, proxyModel strin
 		defer cancel()
 	}
 	if err != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicBeta, err, streamRec)
+		s.handleAnthropicPreStreamFailure(c, err, streamRec)
 		return
 	}
 
 	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
 	if primeErr != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicBeta, primeErr, streamRec)
+		s.handleAnthropicPreStreamFailure(c, primeErr, streamRec)
 		return
 	}
 
@@ -142,13 +142,13 @@ func (s *Server) assembleResponsesToAnthropicBeta(c *gin.Context, proxyModel str
 		defer cancel()
 	}
 	if err != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicBeta, err, streamRec)
+		s.handleAnthropicPreStreamFailure(c, err, streamRec)
 		return
 	}
 
 	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
 	if primeErr != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicBeta, primeErr, streamRec)
+		s.handleAnthropicPreStreamFailure(c, primeErr, streamRec)
 		return
 	}
 
@@ -184,7 +184,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transfor
 	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, protocol.TypeOpenAIResponses, err, "Failed to forward request")
+		protocol.SendOpenAIError(c, err, "Failed to forward request")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -210,7 +210,7 @@ func (s *Server) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.T
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, protocol.TypeOpenAIResponses, err, "Failed to create streaming request")
+		protocol.SendOpenAIError(c, err, "Failed to create streaming request")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -236,7 +236,7 @@ func (s *Server) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *trans
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, protocol.TypeOpenAIResponses, err, "Failed to forward request")
+		protocol.SendOpenAIError(c, err, "Failed to forward request")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -265,7 +265,7 @@ func (s *Server) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transfor
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, protocol.TypeOpenAIResponses, err, "Failed to create streaming request")
+		protocol.SendOpenAIError(c, err, "Failed to create streaming request")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -289,13 +289,13 @@ func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.Transfo
 		defer cancel()
 	}
 	if err != nil {
-		s.handlePreStreamFailure(c, protocol.TypeOpenAIChat, err, recorder)
+		s.handleOpenAIPreStreamFailure(c, err, recorder)
 		return
 	}
 
 	primedStream, primeErr := stream.PrimeResponsesStream(responsesStream)
 	if primeErr != nil {
-		s.handlePreStreamFailure(c, protocol.TypeOpenAIChat, primeErr, recorder)
+		s.handleOpenAIPreStreamFailure(c, primeErr, recorder)
 		return
 	}
 
@@ -320,7 +320,7 @@ func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.Tran
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, protocol.TypeOpenAIChat, err, "Failed to forward request")
+		protocol.SendOpenAIError(c, err, "Failed to forward request")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -360,7 +360,7 @@ func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string
 
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		stream.SendForwardingError(c, protocol.TypeAnthropicV1, err)
+		stream.SendAnthropicForwardingError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -412,7 +412,7 @@ func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, a
 	}
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		stream.SendStreamingError(c, protocol.TypeAnthropicV1, err)
+		stream.SendAnthropicStreamingError(c, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}
@@ -424,7 +424,7 @@ func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, a
 	// before any byte hits the wire.
 	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
 	if primeErr != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicV1, primeErr, streamRec)
+		s.handleAnthropicPreStreamFailure(c, primeErr, streamRec)
 		return
 	}
 
@@ -472,13 +472,13 @@ func (s *Server) assembleResponsesToAnthropic(c *gin.Context, proxyModel string,
 		defer cancel()
 	}
 	if err != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicV1, err, streamRec)
+		s.handleAnthropicPreStreamFailure(c, err, streamRec)
 		return
 	}
 
 	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
 	if primeErr != nil {
-		s.handlePreStreamFailure(c, protocol.TypeAnthropicV1, primeErr, streamRec)
+		s.handleAnthropicPreStreamFailure(c, primeErr, streamRec)
 		return
 	}
 

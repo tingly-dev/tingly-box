@@ -32,7 +32,7 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 			defer cancel()
 		}
 		if err != nil {
-			stream.SendStreamingError(c, protocol.TypeOpenAIChat, err)
+			stream.SendOpenAIStreamingError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -47,7 +47,7 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 		}
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, usage, err)
-			stream.SendInternalError(c, protocol.TypeOpenAIChat, err.Error())
+			stream.SendOpenAIInternalError(c, err.Error())
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -57,7 +57,7 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 		s.trackUsageWithTokenUsage(c, usage, nil)
 		return
 	}
-	stream.SendInternalError(c, protocol.TypeOpenAIChat, "MCP stream continuation exceeded max rounds")
+	stream.SendOpenAIInternalError(c, "MCP stream continuation exceeded max rounds")
 	if recorder != nil {
 		recorder.RecordError(stream.ErrMCPStreamContinue)
 	}

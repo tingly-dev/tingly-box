@@ -281,7 +281,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			SendErrorResponse(c, protocol.TypeOpenAIChat, err, "Failed to create streaming request")
+			protocol.SendOpenAIError(c, err, "Failed to create streaming request")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -299,7 +299,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 					s.trackUsageFromContext(c, 0, 0, err)
 				}
 			}
-			SendErrorResponse(c, protocol.TypeOpenAIChat, err, "Failed to create streaming request")
+			protocol.SendOpenAIError(c, err, "Failed to create streaming request")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -321,7 +321,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 			var genericUsage *mcp.TokenUsage
 			anthropicResp, genericUsage, err = s.runGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
 			if err != nil {
-				respondMCPError(s, c, protocol.TypeOpenAIChat, recorder, err, "Failed to handle MCP tool calls")
+				respondOpenAIMCPError(s, c, recorder, err, "Failed to handle MCP tool calls")
 				return
 			}
 			if genericUsage != nil {
@@ -336,7 +336,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
-				SendErrorResponse(c, protocol.TypeOpenAIChat, err, "Failed to forward Anthropic request")
+				protocol.SendOpenAIError(c, err, "Failed to forward Anthropic request")
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -351,7 +351,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 		if ShouldRoundtripResponse(c, "anthropic") {
 			roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
 			if err != nil {
-				SendErrorResponse(c, protocol.TypeOpenAIChat, err, "Failed to roundtrip response")
+				protocol.SendOpenAIError(c, err, "Failed to roundtrip response")
 				return
 			}
 			openaiResp = roundtripped
@@ -406,7 +406,7 @@ func (s *Server) passthroughAnthropicBeta(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			stream.SendStreamingError(c, protocol.TypeAnthropicBeta, err)
+			stream.SendAnthropicStreamingError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -427,7 +427,7 @@ func (s *Server) passthroughAnthropicBeta(
 			var usage *mcp.TokenUsage
 			anthropicResp, usage, err = s.runGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
 			if err != nil {
-				recordMCPForwardingError(s, c, protocol.TypeAnthropicBeta, err, recorder)
+				recordAnthropicMCPForwardingError(s, c, err, recorder)
 				return
 			}
 			if usage != nil {
@@ -444,7 +444,7 @@ func (s *Server) passthroughAnthropicBeta(
 			}
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
-				stream.SendForwardingError(c, protocol.TypeAnthropicBeta, err)
+				stream.SendAnthropicForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -634,7 +634,7 @@ func (s *Server) dispatchGoogle(
 			defer cancel()
 		}
 		if err != nil {
-			stream.SendStreamingError(c, reqCtx.SourceAPI, err)
+			stream.SendAnthropicStreamingError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -650,7 +650,7 @@ func (s *Server) dispatchGoogle(
 		}
 		if err != nil {
 			s.trackUsageWithTokenUsage(c, usage, err)
-			stream.SendInternalError(c, reqCtx.SourceAPI, err.Error())
+			stream.SendAnthropicInternalError(c, err.Error())
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -662,7 +662,7 @@ func (s *Server) dispatchGoogle(
 		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 		resp, _, err := forwarding.ForwardGoogle(fc, wrapper, model, req, cfg)
 		if err != nil {
-			stream.SendForwardingError(c, reqCtx.SourceAPI, err)
+			stream.SendAnthropicForwardingError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -686,7 +686,7 @@ func (s *Server) dispatchGoogle(
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
-					stream.SendInternalError(c, reqCtx.SourceAPI, "Failed to roundtrip resp: "+err.Error())
+					stream.SendAnthropicInternalError(c, "Failed to roundtrip resp: "+err.Error())
 					return
 				}
 				anthropicResp = roundtripped
@@ -774,7 +774,7 @@ func (s *Server) dispatchOpenAIChat(
 			var genericUsage *mcp.TokenUsage
 			resp, genericUsage, err = s.runGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 			if err != nil {
-				stream.SendForwardingError(c, reqCtx.SourceAPI, err)
+				stream.SendAnthropicForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -788,7 +788,7 @@ func (s *Server) dispatchOpenAIChat(
 			fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 			resp, _, err = forwarding.ForwardOpenAIChat(fc, wrapper, req)
 			if err != nil {
-				stream.SendForwardingError(c, reqCtx.SourceAPI, err)
+				stream.SendAnthropicForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -805,7 +805,7 @@ func (s *Server) dispatchOpenAIChat(
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
-					stream.SendInternalError(c, reqCtx.SourceAPI, "Failed to roundtrip resp: "+err.Error())
+					stream.SendAnthropicInternalError(c, "Failed to roundtrip resp: "+err.Error())
 					return
 				}
 				anthropicResp = roundtripped
@@ -858,7 +858,7 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 		defer cancel()
 	}
 	if err != nil {
-		stream.SendStreamingError(c, protocol.TypeOpenAIChat, err)
+		stream.SendOpenAIStreamingError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -871,7 +871,7 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 	usage, err := stream.AnthropicToOpenAIStream(hc, anthropicReq, anthropicStream, responseModel, false)
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, usage, err)
-		stream.SendInternalError(c, protocol.TypeOpenAIChat, err.Error())
+		stream.SendOpenAIInternalError(c, err.Error())
 		if recorder != nil {
 			recorder.RecordError(err)
 		}

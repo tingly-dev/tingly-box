@@ -4,9 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/probe"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // Error Models
@@ -21,18 +19,6 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code,omitempty"`
-}
-
-// SendErrorResponse registers the error into gin context for logging middleware
-// and sends a protocol-correct JSON response, shaped per apiType (Anthropic vs
-// OpenAI). Propagates the upstream provider's real HTTP status/type/message
-// when err carries them; falls back to a status-derived type otherwise.
-func SendErrorResponse(c *gin.Context, apiType protocol.APIType, err error, desc string) {
-	if protocol.IsAnthropicAPIType(apiType) {
-		protocol.SendAnthropicError(c, err, desc)
-		return
-	}
-	protocol.SendOpenAIError(c, err, desc)
 }
 
 // =============================================

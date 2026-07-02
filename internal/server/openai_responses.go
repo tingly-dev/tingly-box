@@ -177,7 +177,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 			if multi {
 				clonedParams, err := cloneResponsesParams(req.ResponseNewParams)
 				if err != nil {
-					s.failAttemptSetup(c, protocol.TypeOpenAIResponses, err)
+					s.failOpenAIAttemptSetup(c, err)
 					return
 				}
 				areq.ResponseNewParams = clonedParams
@@ -206,17 +206,17 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.Respons
 	case protocol.APIStyleAnthropic:
 		target = protocol.TypeAnthropicBeta
 	case protocol.APIStyleGoogle:
-		s.failAttemptSetup(c, protocol.TypeOpenAIResponses, fmt.Errorf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name))
+		s.failOpenAIAttemptSetup(c, fmt.Errorf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name))
 		return
 	case protocol.APIStyleOpenAI:
 		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
-			s.failAttemptSetup(c, protocol.TypeOpenAIResponses, routeErr)
+			s.failOpenAIAttemptSetup(c, routeErr)
 			return
 		}
 		target = resolvedTarget
 	default:
-		s.failAttemptSetup(c, protocol.TypeOpenAIResponses, fmt.Errorf("Unsupported provider API style: %s", provider.APIStyle))
+		s.failOpenAIAttemptSetup(c, fmt.Errorf("Unsupported provider API style: %s", provider.APIStyle))
 		return
 	}
 
@@ -225,7 +225,7 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.Respons
 	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
 	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		s.failAttemptSetup(c, protocol.TypeOpenAIResponses, fmt.Errorf("Transform failed: %w", err))
+		s.failOpenAIAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
 	defer reqCtx.Release()
