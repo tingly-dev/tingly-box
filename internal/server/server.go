@@ -33,7 +33,6 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/visionproxy"
-	"github.com/tingly-dev/tingly-box/internal/server/processor"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -353,7 +352,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Register op-level processors (vision proxy, etc.) into the smart-routing
 	// registry. Idempotent — safe across config reloads.
-	server.visionProxyService = visionproxy.NewService(processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger()))
+	server.visionProxyService = visionproxy.NewService(visionproxy.RegisterAll(server.clientPool, server.config, logrus.StandardLogger()))
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

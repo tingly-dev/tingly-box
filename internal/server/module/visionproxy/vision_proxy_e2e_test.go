@@ -1,7 +1,7 @@
 //go:build e2e
 // +build e2e
 
-package processor
+package visionproxy
 
 // E2E test for the vision-proxy smart-routing bypass against a real
 // tingly-box deployment.

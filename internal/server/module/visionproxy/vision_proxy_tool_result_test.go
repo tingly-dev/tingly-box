@@ -1,4 +1,4 @@
-package processor
+package visionproxy
 
 import (
 	"strings"

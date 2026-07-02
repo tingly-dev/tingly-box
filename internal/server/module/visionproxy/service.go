@@ -8,7 +8,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/processor"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -16,12 +15,12 @@ import (
 // Service wraps the vision proxy processor and resolves the effective vision
 // service ({provider, model}) for a request before applying it in place.
 type Service struct {
-	Processor *processor.VisionProxyProcessor
+	Processor *VisionProxyProcessor
 }
 
 // NewService builds a Service around the given processor. A nil processor
 // makes Apply a no-op.
-func NewService(p *processor.VisionProxyProcessor) *Service {
+func NewService(p *VisionProxyProcessor) *Service {
 	return &Service{Processor: p}
 }
 

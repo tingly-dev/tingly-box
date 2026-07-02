@@ -7,4 +7,4 @@
 // First inhabitant: VisionProxyProcessor — describes images via a
 // vision-capable upstream and replaces image content blocks with text so
 // downstream text-only models can serve image-bearing requests.
-package processor
+package visionproxy
