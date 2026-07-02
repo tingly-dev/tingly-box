@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -84,10 +85,10 @@ func (s *Server) resolveAutoTarget(
 // autoDispatchFn is the callback for dispatchWithAutoFallback.
 // It performs transform + dispatch for a given target protocol, using
 // the provided gate. Returns the provider/model that served the final
-// attempt (failover may have moved past the initially selected service)
-// and ok=true if dispatch executed (even on error); ok=false means the
-// transform itself failed.
-type autoDispatchFn func(target protocol.APIType, gate *firstChunkGate) (served *typ.Provider, servedModel string, ok bool)
+// attempt (failover may have moved past the initially selected service);
+// served is nil when dispatch never got a servable provider (e.g. the
+// transform itself failed before failover could run).
+type autoDispatchFn func(target protocol.APIType, gate *firstChunkGate) (served *typ.Provider, servedModel string)
 
 // gateSucceeded reports whether the attempt behind the gate produced a
 // success: either the stream committed its first chunk, or a buffered
@@ -119,10 +120,10 @@ func (s *Server) dispatchWithAutoFallback(
 	}()
 
 	// First attempt with preferred protocol
-	served, servedModel, ok := dispatch(preferredTarget, gate)
+	served, servedModel := dispatch(preferredTarget, gate)
 
 	if gateSucceeded(gate) {
-		if ok && served != nil {
+		if served != nil {
 			s.endpointCache.Set(served.UUID, servedModel, preferredTarget)
 		}
 		return
@@ -146,9 +147,46 @@ func (s *Server) dispatchWithAutoFallback(
 	gate.Discard()
 	clearGinErrors(c)
 
-	served, servedModel, ok = dispatch(altTarget, gate)
+	served, servedModel = dispatch(altTarget, gate)
 
-	if gateSucceeded(gate) && ok && served != nil {
+	if gateSucceeded(gate) && served != nil {
 		s.endpointCache.Set(served.UUID, servedModel, altTarget)
 	}
+}
+
+// autoDispatchOrFailover decides whether endpoint auto-detection applies to
+// this request and dispatches accordingly. With auto-detection, provider
+// failover runs nested inside protocol fallback, both sharing one gate
+// (owned by dispatchWithAutoFallback). Without it, this is a plain provider
+// failover using the statically resolved target (which may be "" — the
+// zero value protocol.APIType — meaning attempt must resolve it itself).
+//
+// attempt is the per-provider-attempt callback; its target argument is the
+// protocol to use for that attempt.
+func (s *Server) autoDispatchOrFailover(
+	c *gin.Context,
+	rule *typ.Rule,
+	provider *typ.Provider,
+	actualModel string,
+	scenarioType typ.RuleScenario,
+	incoming IncomingAPIType,
+	attempt func(p *typ.Provider, retryModel string, target protocol.APIType),
+) {
+	var target protocol.APIType
+	autoFallback := false
+	if s.autoEndpointEnabled() && provider.APIStyle == protocol.APIStyleOpenAI && ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
+		target, autoFallback = s.resolveAutoTarget(resolveRuleFlags(c, rule), provider, actualModel, scenarioType, incoming)
+	}
+
+	if autoFallback {
+		s.dispatchWithAutoFallback(c, provider, actualModel, target,
+			func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
+				return s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
+					func(p *typ.Provider, retryModel string) { attempt(p, retryModel, t) }, gate)
+			})
+		return
+	}
+
+	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+		func(p *typ.Provider, retryModel string) { attempt(p, retryModel, target) })
 }

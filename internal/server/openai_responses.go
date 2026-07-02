@@ -9,7 +9,6 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -171,40 +170,21 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	// PreprocessInputData and vision proxy are not re-run).
 	multi := len(rule.GetActiveServices()) > 1
 
-	// ── Endpoint auto-detection (OpenAI providers in auto mode, flag on) ──
-	var autoPreferred protocol.APIType
-	autoFallback := false
-	if s.autoEndpointEnabled() && provider.APIStyle == protocol.APIStyleOpenAI && ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
-		autoPreferred, autoFallback = s.resolveAutoTarget(resolveRuleFlags(c, rule), provider, actualModel, scenarioType, IncomingAPIResponses)
-	}
-
-	// ── Per-attempt pipeline (provider-dependent) ──
-	attempt := func(p *typ.Provider, retryModel string, tgt protocol.APIType) {
-		areq := req
-		if multi {
-			clonedParams, err := cloneResponsesParams(req.ResponseNewParams)
-			if err != nil {
-				s.failAttemptSetup(c, err)
-				return
+	// ── Per-attempt pipeline (provider-dependent), routed through endpoint
+	// auto-detection when applicable ──
+	s.autoDispatchOrFailover(c, rule, provider, actualModel, scenarioType, IncomingAPIResponses,
+		func(p *typ.Provider, retryModel string, tgt protocol.APIType) {
+			areq := req
+			if multi {
+				clonedParams, err := cloneResponsesParams(req.ResponseNewParams)
+				if err != nil {
+					s.failAttemptSetup(c, err)
+					return
+				}
+				areq.ResponseNewParams = clonedParams
 			}
-			areq.ResponseNewParams = clonedParams
-		}
-		s.runOpenAIResponsesAttempt(c, areq, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, tgt)
-	}
-
-	if autoFallback {
-		// Protocol fallback outer, provider failover inner — one shared gate.
-		s.dispatchWithAutoFallback(c, provider, actualModel, autoPreferred,
-			func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
-				served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
-					func(p *typ.Provider, retryModel string) { attempt(p, retryModel, t) }, gate)
-				return served, servedModel, true
-			})
-		return
-	}
-
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
-		func(p *typ.Provider, retryModel string) { attempt(p, retryModel, autoPreferred) })
+			s.runOpenAIResponsesAttempt(c, areq, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, tgt)
+		})
 }
 
 // runOpenAIResponsesAttempt executes the provider-dependent half of an OpenAI

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -164,47 +163,21 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCo
 		template = bs
 	}
 
-	// ── Endpoint auto-detection (OpenAI providers in auto mode, flag on) ──
-	// resolveAutoTarget returns the preferred protocol and whether runtime
-	// fallback should wrap the dispatch. An override or cache hit yields a
-	// definite target (autoFallback=false) that is simply pinned; a cache
-	// miss yields the scenario-preferred protocol with fallback enabled.
-	var autoPreferred protocol.APIType
-	autoFallback := false
-	if s.autoEndpointEnabled() && provider.APIStyle == protocol.APIStyleOpenAI && ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
-		autoPreferred, autoFallback = s.resolveAutoTarget(resolveRuleFlags(c, rule), provider, actualModel, scenarioType, IncomingAPIChat)
-	}
-
-	// ── Per-attempt pipeline (provider-dependent) ──
-	attempt := func(p *typ.Provider, retryModel string, tgt protocol.APIType) {
-		areq := req
-		if multi {
-			cloned, err := cloneOpenAIChatRequest(template)
-			if err != nil {
-				s.failAttemptSetup(c, err)
-				return
+	// ── Per-attempt pipeline (provider-dependent), routed through endpoint
+	// auto-detection when applicable ──
+	s.autoDispatchOrFailover(c, rule, provider, actualModel, scenarioType, IncomingAPIChat,
+		func(p *typ.Provider, retryModel string, tgt protocol.APIType) {
+			areq := req
+			if multi {
+				cloned, err := cloneOpenAIChatRequest(template)
+				if err != nil {
+					s.failAttemptSetup(c, err)
+					return
+				}
+				areq = cloned
 			}
-			areq = cloned
-		}
-		s.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, tgt)
-	}
-
-	if autoFallback {
-		// Protocol fallback is the outer loop, provider failover the inner
-		// loop — both share the single gate owned by dispatchWithAutoFallback.
-		s.dispatchWithAutoFallback(c, provider, actualModel, autoPreferred,
-			func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
-				served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
-					func(p *typ.Provider, retryModel string) { attempt(p, retryModel, t) }, gate)
-				return served, servedModel, true
-			})
-		return
-	}
-
-	// Non-auto path (autoPreferred is "" → normal resolution; or a pinned
-	// override/cache target when auto mode resolved without fallback).
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
-		func(p *typ.Provider, retryModel string) { attempt(p, retryModel, autoPreferred) })
+			s.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, tgt)
+		})
 }
 
 // runOpenAIChatAttempt executes the provider-dependent half of an OpenAI chat

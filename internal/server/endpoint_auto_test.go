@@ -68,10 +68,10 @@ func TestDispatchWithAutoFallback_CacheAttributedToServingProvider(t *testing.T)
 
 	// Simulate a dispatch where failover moved past the initial provider:
 	// the gate commits (success) and the serving identity differs from initial.
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		gate.WriteHeader(200)
 		gate.CommitFirstChunk()
-		return serving, "served-model", true
+		return serving, "served-model"
 	}
 
 	s.dispatchWithAutoFallback(c, initial, "req-model", protocol.TypeOpenAIChat, dispatch)
@@ -89,8 +89,8 @@ func TestDispatchWithAutoFallback_CacheAttributedToServingProvider(t *testing.T)
 }
 
 // TestDispatchWithAutoFallback_NoCacheOnTransformFailure ensures a failed
-// transform (ok=false, served=nil) never writes a cache entry even if the
-// gate state looks successful.
+// transform (served=nil) never writes a cache entry even if the gate state
+// looks successful.
 func TestDispatchWithAutoFallback_NoCacheOnTransformFailure(t *testing.T) {
 	s := &Server{endpointCache: NewEndpointCache(0)}
 	initial := &typ.Provider{UUID: "prov-initial"}
@@ -99,9 +99,9 @@ func TestDispatchWithAutoFallback_NoCacheOnTransformFailure(t *testing.T) {
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		gate.WriteHeader(200) // transform error path writes a JSON error; simulate benign status
-		return nil, "", false
+		return nil, ""
 	}
 
 	s.dispatchWithAutoFallback(c, initial, "m", protocol.TypeOpenAIChat, dispatch)
@@ -122,11 +122,11 @@ func TestDispatchWithAutoFallback_FirstAttemptSucceeds(t *testing.T) {
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
 	calls := 0
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		calls++
 		gate.WriteHeader(200)
 		gate.CommitFirstChunk()
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIResponses, dispatch)
@@ -152,18 +152,18 @@ func TestDispatchWithAutoFallback_FallbackSucceeds(t *testing.T) {
 	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
 
 	var targets []protocol.APIType
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		targets = append(targets, target)
 		if target == protocol.TypeOpenAIResponses {
 			// In practice, upstream 404 is converted to 500 by SendStreamingError
 			gate.WriteHeader(http.StatusInternalServerError)
 			gate.Write([]byte(`{"error":"endpoint not found"}`))
 			c.Error(fmt.Errorf("status 500: endpoint not found"))
-			return provider, "model-a", true
+			return provider, "model-a"
 		}
 		gate.WriteHeader(200)
 		gate.CommitFirstChunk()
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIResponses, dispatch)
@@ -194,12 +194,12 @@ func TestDispatchWithAutoFallback_BothFail(t *testing.T) {
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
 	calls := 0
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		calls++
 		gate.WriteHeader(http.StatusBadGateway)
 		gate.Write([]byte(`{"error":"upstream failed"}`))
 		c.Error(fmt.Errorf("status 502: bad gateway"))
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIChat, dispatch)
@@ -224,12 +224,12 @@ func TestDispatchWithAutoFallback_NonRetryableSkipsFallback(t *testing.T) {
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
 	calls := 0
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		calls++
 		gate.WriteHeader(http.StatusUnauthorized)
 		gate.Write([]byte(`{"error":"unauthorized"}`))
 		c.Error(fmt.Errorf("status 401: unauthorized"))
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIChat, dispatch)
@@ -254,10 +254,10 @@ func TestDispatchWithAutoFallback_Status0NoRetry(t *testing.T) {
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
 	calls := 0
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		calls++
 		// Intentionally do nothing — simulate a handler that returns without writing
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIChat, dispatch)
@@ -278,12 +278,12 @@ func TestDispatchWithAutoFallback_GinErrorsClearedBetweenAttempts(t *testing.T) 
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		if target == protocol.TypeOpenAIChat {
 			gate.WriteHeader(http.StatusInternalServerError)
 			gate.Write([]byte(`{"error":"endpoint not found"}`))
 			c.Error(fmt.Errorf("status 500: endpoint not found"))
-			return provider, "model-a", true
+			return provider, "model-a"
 		}
 		// Fallback: verify errors were cleared
 		if len(c.Errors) != 0 {
@@ -291,7 +291,7 @@ func TestDispatchWithAutoFallback_GinErrorsClearedBetweenAttempts(t *testing.T) 
 		}
 		gate.WriteHeader(200)
 		gate.CommitFirstChunk()
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIChat, dispatch)
@@ -310,12 +310,12 @@ func TestDispatchWithAutoFallback_NonRetryableErrorViaGinContext(t *testing.T) {
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
 	calls := 0
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		calls++
 		gate.WriteHeader(http.StatusInternalServerError)
 		gate.Write([]byte(`{"error":"rate limit exceeded"}`))
 		c.Error(fmt.Errorf("rate limit exceeded"))
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIChat, dispatch)
@@ -337,11 +337,11 @@ func TestDispatchWithAutoFallback_BufferedSuccessNonStreaming(t *testing.T) {
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 
-	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+	dispatch := func(target protocol.APIType, gate *firstChunkGate) (*typ.Provider, string) {
 		gate.WriteHeader(200)
 		gate.Write([]byte(`{"id":"resp-1"}`))
 		// No CommitFirstChunk — simulates non-streaming response
-		return provider, "model-a", true
+		return provider, "model-a"
 	}
 
 	s.dispatchWithAutoFallback(c, provider, "model-a", protocol.TypeOpenAIChat, dispatch)
