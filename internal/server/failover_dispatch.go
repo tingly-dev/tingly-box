@@ -336,19 +336,42 @@ func (s *Server) dispatchWithPriorityFailover(
 	initialModel string,
 	attempt dispatchAttempt,
 ) {
+	s.dispatchWithPriorityFailoverGated(c, rule, initialProvider, initialModel, attempt, nil)
+}
+
+// dispatchWithPriorityFailoverGated is the gated variant. When
+// externalGate is non-nil the caller owns the gate lifecycle (install on
+// c.Writer, defer restore+commit); the function reuses it instead of
+// creating a new one. Pass nil for the original self-managed behavior.
+//
+// Returns the provider/model of the final attempt so callers that key
+// state on the serving identity (e.g. the endpoint auto-detection cache)
+// attribute it to the service that actually handled the request, not the
+// initially selected one.
+func (s *Server) dispatchWithPriorityFailoverGated(
+	c *gin.Context,
+	rule *typ.Rule,
+	initialProvider *typ.Provider,
+	initialModel string,
+	attempt dispatchAttempt,
+	externalGate *firstChunkGate,
+) (*typ.Provider, string) {
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) <= 1 {
 		attempt(initialProvider, initialModel)
-		return
+		return initialProvider, initialModel
 	}
 
-	realWriter := c.Writer
-	gate := newFirstChunkGate(realWriter)
-	c.Writer = gate
-	defer func() {
-		c.Writer = realWriter
-		gate.CommitIfBuffered()
-	}()
+	gate := externalGate
+	if gate == nil {
+		realWriter := c.Writer
+		gate = newFirstChunkGate(realWriter)
+		c.Writer = gate
+		defer func() {
+			c.Writer = realWriter
+			gate.CommitIfBuffered()
+		}()
+	}
 
 	tried := map[string]bool{}
 	provider := initialProvider
@@ -392,7 +415,7 @@ func (s *Server) dispatchWithPriorityFailover(
 				"provider":       provider.Name,
 				"model":          model,
 			}).Infof("[failover] succeeded on attempt %d with %s/%s", i+1, provider.UUID, model)
-			return
+			return provider, model
 		}
 		status := gate.Status()
 		if !isRetryableStatus(status) {
@@ -405,7 +428,7 @@ func (s *Server) dispatchWithPriorityFailover(
 				"model":          model,
 				"status":         status,
 			}).Warnf("[failover] attempt %d returned status %d with %s/%s", i+1, status, provider.UUID, model)
-			return
+			return provider, model
 		}
 
 		// Pass "" so the candidate pool spans all API styles: each attempt
@@ -420,7 +443,7 @@ func (s *Server) dispatchWithPriorityFailover(
 				"status":         status,
 				"error":          err.Error(),
 			}).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
-			return
+			return provider, model
 		}
 		if nextProvider == nil || nextService == nil {
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
@@ -429,7 +452,7 @@ func (s *Server) dispatchWithPriorityFailover(
 				"total_attempts": len(activeServices),
 				"status":         status,
 			}).Warnf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
-			return
+			return provider, model
 		}
 
 		nextServiceID := loadbalance.FormatServiceID(nextProvider.UUID, nextService.Model)
@@ -449,4 +472,5 @@ func (s *Server) dispatchWithPriorityFailover(
 		provider = nextProvider
 		model = nextService.Model
 	}
+	return provider, model
 }

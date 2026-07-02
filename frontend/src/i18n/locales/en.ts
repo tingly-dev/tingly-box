@@ -735,7 +735,10 @@ export default {
       "enabled": "enabled",
       "disabled": "disabled - Click to enable",
       "guardrailsEnabledInfo": "Guardrails is enabled. A \"Guardrails\" page is available in the sidebar for rule management.",
-      "mcpEnabledInfo": "MCP Tools is enabled. An \"MCP Tools\" page is available under System in the sidebar for configuration."
+      "mcpEnabledInfo": "MCP Tools is enabled. An \"MCP Tools\" page is available under System in the sidebar for configuration.",
+      "autoEndpoint": "Auto Endpoint",
+      "enableAutoEndpoint": "Enable Auto Endpoint Detection - automatically detect whether each model supports Chat Completions or Responses API",
+      "autoEndpointEnabledInfo": "Auto Endpoint Detection is enabled. For OpenAI-compatible providers, the system will automatically try the preferred protocol and fall back to the alternate on failure, caching successful results per model."
     },
     "about": {
       "title": "About",

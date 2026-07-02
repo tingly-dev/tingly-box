@@ -736,7 +736,10 @@ export default {
       "enabled": "已启用",
       "disabled": "已禁用 - 点击启用",
       "guardrailsEnabledInfo": "Guardrails 已启用。侧边栏中提供了「Guardrails」页面用于规则管理。",
-      "mcpEnabledInfo": "MCP Tools 已启用。侧边栏 System 下方提供了「MCP Tools」页面进行配置。"
+      "mcpEnabledInfo": "MCP Tools 已启用。侧边栏 System 下方提供了「MCP Tools」页面进行配置。",
+      "autoEndpoint": "自动端点检测",
+      "enableAutoEndpoint": "启用自动端点检测 - 自动识别每个模型支持 Chat Completions 还是 Responses API",
+      "autoEndpointEnabledInfo": "自动端点检测已启用。对于 OpenAI 兼容的 Provider，系统将自动尝试首选协议，失败时回退到备选协议，并按模型缓存成功结果。"
     },
     "about": {
       "title": "关于",

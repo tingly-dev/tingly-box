@@ -9,4 +9,5 @@ const (
 	ExtensionMCP                = "mcp"
 	ExtensionSkillUser          = "skill_user"
 	ExtensionSkillIDE           = "skill_ide"
+	ExtensionAutoEndpoint       = "auto_endpoint"
 )

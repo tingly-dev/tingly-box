@@ -1,5 +1,5 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
-import { Psychology as IconBrain, Shield as IconShield, SettingsApplications } from '@/components/icons';
+import { Psychology as IconBrain, Shield as IconShield, SettingsApplications, Autorenew } from '@/components/icons';
 import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -19,6 +19,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [mcpEnabled, setMCPEnabled] = useState(false);
+    const [autoEndpointEnabled, setAutoEndpointEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const {refresh} = useFeatureFlags();
 
@@ -42,6 +43,10 @@ const GlobalExperimentalFeatures: React.FC = () => {
             // Load MCP flag
             const mcpResult = await api.getScenarioFlag('_global', 'mcp');
             setMCPEnabled(mcpResult?.data?.value || false);
+
+            // Load Auto Endpoint flag
+            const autoEndpointResult = await api.getScenarioFlag('_global', 'auto_endpoint');
+            setAutoEndpointEnabled(autoEndpointResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -100,6 +105,24 @@ const GlobalExperimentalFeatures: React.FC = () => {
             })
             .catch((err) => {
                 console.error('Failed to set MCP:', err);
+                loadFeatures();
+            });
+    };
+
+    const toggleAutoEndpoint = () => {
+        const newValue = !autoEndpointEnabled;
+        api.setScenarioFlag('_global', 'auto_endpoint', newValue)
+            .then((result) => {
+                if (result.success) {
+                    setAutoEndpointEnabled(newValue);
+                    refresh();
+                } else {
+                    console.error('Failed to set Auto Endpoint:', result);
+                    loadFeatures();
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to set Auto Endpoint:', err);
                 loadFeatures();
             });
     };
@@ -214,6 +237,35 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
                         {t('system.experimentalFeatures.mcpEnabledInfo')}
+                    </Typography>
+                </Alert>
+            )}
+
+            {/* Auto Endpoint Section */}
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                    <Autorenew sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+                        {t('system.experimentalFeatures.autoEndpoint')}
+                    </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                    <Tooltip title={t('system.experimentalFeatures.enableAutoEndpoint') + (autoEndpointEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)} arrow>
+                        <Chip
+                            label={`${t('system.experimentalFeatures.autoEndpoint')} · ${autoEndpointEnabled ? t('common.on') : t('common.off')}`}
+                            onClick={toggleAutoEndpoint}
+                            size="small"
+                            sx={{ ...chipStyle(autoEndpointEnabled), cursor: 'pointer', pointerEvents: 'auto' }}
+                        />
+                    </Tooltip>
+                </Box>
+            </Box>
+
+            {autoEndpointEnabled && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                        {t('system.experimentalFeatures.autoEndpointEnabledInfo')}
                     </Typography>
                 </Alert>
             )}
