@@ -200,6 +200,17 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.Respons
 	req.Model = responses.ResponsesModel(actualModel)
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
+	// === Cap max_output_tokens at model's maximum ===
+	// defaultMaxTokens is 0 (no fill): DefaultMaxTokens is an Anthropic-only
+	// setting. Omitted max_output_tokens stays omitted; the upstream provider
+	// applies its own default (the WithMaxTokens(maxAllowed) option further
+	// below is unrelated — it only seeds a fallback for cross-protocol
+	// conversions that require a value, e.g. when the target is Anthropic).
+	if err := executeOpenAIResponsesPreChain(req.ResponseNewParams, 0, maxAllowed); err != nil {
+		s.failAttemptSetup(c, fmt.Errorf("max_output_tokens validation failed: %w", err))
+		return
+	}
+
 	// Determine target API type based on provider API style
 	target := protocol.TypeOpenAIResponses
 	switch provider.APIStyle {
