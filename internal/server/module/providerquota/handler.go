@@ -1,4 +1,4 @@
-package provider_quota
+package providerquota
 
 import (
 	"context"

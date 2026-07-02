@@ -31,7 +31,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
-	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
+	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"

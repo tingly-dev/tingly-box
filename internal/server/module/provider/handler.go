@@ -20,7 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	providerquota "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
+	providerquota "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
