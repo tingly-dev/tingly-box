@@ -2714,39 +2714,6 @@
         }
       }
     },
-    "/api/v1/rule/import": {
-      "post": {
-        "tags": [
-          "rules"
-        ],
-        "summary": "Import a rule from base64 encoded data",
-        "description": "Import a rule from base64 encoded data",
-        "operationId": "apiV1RuleImportPost",
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportRuleRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportRuleResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/rule/{uuid}": {
       "get": {
         "tags": [
@@ -4170,6 +4137,81 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LightweightResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-export": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Export a single provider as base64/JSONL encoded data",
+        "description": "Export a single provider as base64/JSONL encoded data",
+        "operationId": "apiV2Provider-exportGet",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "query",
+            "description": "UUID of the provider to export",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Export format: base64 (default) or jsonl",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportProviderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-import": {
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Import providers from base64/JSONL encoded export data",
+        "description": "Import providers from base64/JSONL encoded export data",
+        "operationId": "apiV2Provider-importPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProvidersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportProvidersResponse"
                 }
               }
             }
@@ -5915,6 +5957,44 @@
           "message"
         ]
       },
+      "ExportProviderResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Field data",
+            "properties": {
+              "data": {
+                "type": "string",
+                "description": "Base64 or JSONL encoded provider export data"
+              },
+              "format": {
+                "type": "string",
+                "description": "Field format"
+              }
+            },
+            "required": [
+              "format",
+              "data"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message",
+            "example": "Provider exported successfully"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ]
+      },
       "ExtractData": {
         "type": "object",
         "properties": {
@@ -6426,32 +6506,26 @@
           "skippedUnchangedFiles"
         ]
       },
-      "ImportRuleRequest": {
+      "ImportProvidersRequest": {
         "type": "object",
         "properties": {
           "data": {
             "type": "string",
-            "description": "Base64 encoded rule export data",
+            "description": "Base64 encoded provider export data",
             "example": "TGB64:1.0:..."
           },
           "on_provider_conflict": {
             "type": "string",
             "description": "How to handle provider conflicts",
             "example": "use"
-          },
-          "on_rule_conflict": {
-            "type": "string",
-            "description": "How to handle rule conflicts",
-            "example": "new"
           }
         },
         "required": [
           "data",
-          "on_provider_conflict",
-          "on_rule_conflict"
+          "on_provider_conflict"
         ]
       },
-      "ImportRuleResponse": {
+      "ImportProvidersResponse": {
         "type": "object",
         "properties": {
           "data": {
@@ -6474,19 +6548,9 @@
                 "type": "integer",
                 "format": "int64",
                 "description": "Field providers_used"
-              },
-              "rule_created": {
-                "type": "boolean",
-                "description": "Field rule_created"
-              },
-              "rule_updated": {
-                "type": "boolean",
-                "description": "Field rule_updated"
               }
             },
             "required": [
-              "rule_created",
-              "rule_updated",
               "providers_created",
               "providers_used"
             ]
@@ -6494,7 +6558,7 @@
           "message": {
             "type": "string",
             "description": "Field message",
-            "example": "Rule imported successfully"
+            "example": "Providers imported successfully"
           },
           "success": {
             "type": "boolean",
@@ -10857,16 +10921,8 @@
   },
   "tags": [
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
+      "name": "logs",
+      "description": "Operations related to logs"
     },
     {
       "name": "actions",
@@ -10877,56 +10933,28 @@
       "description": "Operations related to rules"
     },
     {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
       "name": "oauth",
       "description": "Operations related to oauth"
     },
     {
-      "name": "weixin",
-      "description": "Operations related to weixin"
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
     },
     {
       "name": "requests",
       "description": "Operations related to requests"
     },
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "feishu",
-      "description": "Operations related to feishu"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
     },
     {
       "name": "history",
@@ -10941,28 +10969,64 @@
       "description": "Operations related to providers"
     },
     {
-      "name": "imbot-admin",
-      "description": "Operations related to imbot-admin"
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "feishu",
+      "description": "Operations related to feishu"
     },
     {
       "name": "config",
       "description": "Operations related to config"
     },
     {
-      "name": "mcp",
-      "description": "Operations related to mcp"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "imbot-admin",
+      "description": "Operations related to imbot-admin"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
     },
     {
       "name": "info",
       "description": "Operations related to info"
     },
     {
-      "name": "logs",
-      "description": "Operations related to logs"
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
     }
   ]
 }
