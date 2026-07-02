@@ -3,6 +3,8 @@ package server
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -368,5 +370,26 @@ func executeAnthropicBetaPreChain(
 		return nil
 	}
 	_, err := transform.NewTransformChain(transforms).Execute(ctx)
+	return err
+}
+
+// executeOpenAIChatPreChain applies the same max_tokens fill/cap rules as the
+// Anthropic pre-chain (buildAnthropicPreChain) to an OpenAI Chat Completions
+// request, ahead of the transform chain / provider dispatch. Without this,
+// requests using max_completion_tokens (or a maxAllowed=0 "no cap" config)
+// would go upstream unbounded — the request-time cap in runOpenAIChatAttempt
+// only ever adjusted max_tokens.
+func executeOpenAIChatPreChain(req *openai.ChatCompletionNewParams, defaultMaxTokens, maxAllowed int) error {
+	mt := servertransform.NewMaxTokensTransform(defaultMaxTokens, maxAllowed)
+	_, err := transform.NewTransformChain([]transform.Transform{mt}).Execute(transform.NewTransformContext(req))
+	return err
+}
+
+// executeOpenAIResponsesPreChain is the Responses-API counterpart of
+// executeOpenAIChatPreChain — it caps/fills max_output_tokens, which
+// previously had no enforcement at all on the Responses path.
+func executeOpenAIResponsesPreChain(req *responses.ResponseNewParams, defaultMaxTokens, maxAllowed int) error {
+	mt := servertransform.NewMaxTokensTransform(defaultMaxTokens, maxAllowed)
+	_, err := transform.NewTransformChain([]transform.Transform{mt}).Execute(transform.NewTransformContext(req))
 	return err
 }

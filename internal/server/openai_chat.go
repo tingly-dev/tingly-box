@@ -195,9 +195,14 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 
 	transform.AlignToolMessagesForOpenAI(req.ChatCompletionNewParams)
 
-	// === Cap max_tokens at model's maximum ===
-	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
-		req.MaxTokens.Value = int64(maxAllowed)
+	// === Cap max_tokens / max_completion_tokens at model's maximum ===
+	// defaultMaxTokens is 0 (no fill) here: DefaultMaxTokens is an Anthropic-only
+	// setting (max_tokens is mandatory on that API); OpenAI callers that omit
+	// max_tokens get no field injected, same as before this cap existed, and the
+	// upstream provider applies its own default.
+	if err := executeOpenAIChatPreChain(req.ChatCompletionNewParams, 0, maxAllowed); err != nil {
+		s.failAttemptSetup(c, fmt.Errorf("max_tokens validation failed: %w", err))
+		return
 	}
 
 	// === Determine target API type ===
