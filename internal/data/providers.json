@@ -208,32 +208,17 @@
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
         {
-          "id": "claude-sonnet-4-20250514",
-          "context": 200000,
-          "max_output": 64000
-        },
-        {
-          "id": "claude-opus-4-20250514",
-          "context": 200000,
-          "max_output": 32000
-        },
-        {
-          "id": "claude-opus-4-1-20250805",
-          "context": 200000,
-          "max_output": 32000
-        },
-        {
-          "id": "claude-sonnet-4-5-20250929",
+          "id": "claude-sonnet-4-5",
           "context": 1000000,
           "max_output": 64000
         },
         {
-          "id": "claude-haiku-4-5-20251001",
+          "id": "claude-haiku-4-5",
           "context": 200000,
           "max_output": 64000
         },
         {
-          "id": "claude-opus-4-5-20251101",
+          "id": "claude-opus-4-5",
           "context": 1000000,
           "max_output": 64000
         },
@@ -259,6 +244,11 @@
         },
         {
           "id": "claude-sonnet-5",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "claude-fable-5",
           "context": 1000000,
           "max_output": 128000
         }
