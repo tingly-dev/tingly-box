@@ -120,8 +120,8 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 	execArgs = append(execArgs, claudeArgs...)
 
 	// Exec replaces current process (on Windows, which has no true exec(),
-	// this instead runs the child and exits once it finishes) so the
-	// tingly-box process does not remain resident for the claude session.
+	// this instead starts the child detached and exits immediately) so
+	// tingly-box does not remain resident for the claude session.
 	binPath := variant.Path
 	//nolint:gosec // intentional exec of user-installed CLI
 	if err := execReplace(binPath, execArgs, os.Environ()); err != nil {
