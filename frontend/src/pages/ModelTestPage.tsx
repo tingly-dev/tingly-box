@@ -17,8 +17,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
-import { ProbeV2Dialog } from '@/components/probe/ProbeV2Dialog';
-import type { Provider, ProviderModelsData } from '../types/provider';
+import { ProbeDialog } from '@/components/probe/ProbeDialog';
+import type { Provider } from '../types/provider';
 
 interface ModelCardProps {
     model: string;
@@ -174,7 +174,7 @@ const ModelTestPage = () => {
         setSelectedModel(model);
         setProbeDialogOpen(true);
 
-        // Note: ProbeV2Dialog handles the API call internally
+        // Note: ProbeDialog handles the API call internally
         // We just need to open the dialog with the right parameters
         setTestingModel(null);
     };
@@ -291,9 +291,9 @@ const ModelTestPage = () => {
                 </Grid>
             )}
 
-            {/* Probe V2 Dialog */}
+            {/* Probe dialog */}
             {selectedModel && provider && (
-                <ProbeV2Dialog
+                <ProbeDialog
                     open={probeDialogOpen}
                     onClose={handleCloseProbeDialog}
                     targetType="provider"

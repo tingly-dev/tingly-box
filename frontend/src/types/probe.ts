@@ -1,11 +1,11 @@
-// Probe V2 Types
+// Probe Types
 // Note: These are custom types not in the codegen schema
 
-export type ProbeV2TargetType = 'rule' | 'provider' | 'provider_config';
-export type ProbeV2TestMode = 'simple' | 'streaming' | 'tool';
+export type ProbeTargetType = 'rule' | 'provider' | 'provider_config';
+export type ProbeTestMode = 'simple' | 'streaming' | 'tool';
 
-export interface ProbeV2Request {
-    target_type: ProbeV2TargetType;
+export interface ProbeRequest {
+    target_type: ProbeTargetType;
 
     // Rule test (required)
     scenario?: string;
@@ -16,7 +16,7 @@ export interface ProbeV2Request {
     model?: string;
 
     // Test mode
-    test_mode: ProbeV2TestMode;
+    test_mode: ProbeTestMode;
 
     // Optional custom message
     message?: string;
@@ -33,7 +33,7 @@ export interface ProbeToolCall {
     input: Record<string, unknown>;
 }
 
-export interface ProbeV2Response {
+export interface ProbeResponse {
     success: boolean;
     error?: {
         message: string;

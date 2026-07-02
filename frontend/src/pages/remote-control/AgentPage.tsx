@@ -58,7 +58,7 @@ const AgentPage = () => {
 
     const handleCWDChange = useCallback(async (uuid: string, cwd: string) => {
         try {
-            const result = await api.updateImbotSetting(uuid, { default_cwd: cwd });
+            const result = await api.updateImBotSetting(uuid, { default_cwd: cwd });
             if (result?.success) {
                 await loadImbots();
             } else {

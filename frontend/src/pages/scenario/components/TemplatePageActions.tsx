@@ -20,7 +20,7 @@ export interface TemplatePageActionsProps {
     onViewLogs?: () => void;
     // Icon button actions - these will be rendered next to the title instead
     onShowGuide?: () => void;
-    // Probe V2 props
+    // Probe props
     scenario?: string;
 }
 

@@ -34,9 +34,5 @@ export interface ProviderModelsDataByUuid {
     [providerUuid: string]: ProviderModelData;
 }
 
-// Legacy index types (deprecated, use ProviderModelsDataByUuid)
-// @deprecated Use ProviderModelsDataByUuid instead
-export type ProviderModelsData = Record<string, ProviderModelData>;
-
 // Re-export for consumers
 export type { ProviderResponse, ProviderModelInfo, OAuthDetail };

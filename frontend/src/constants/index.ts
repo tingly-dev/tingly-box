@@ -29,6 +29,3 @@ export const NOTIFICATION_TYPES = {
   WARNING: 'warning',
   INFO: 'info',
 } as const;
-
-// Export feature flags
-export * from './featureFlags';

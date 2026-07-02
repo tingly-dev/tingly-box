@@ -6,7 +6,7 @@ import PageLayout from '@/components/PageLayout';
 import Surface from '@/components/Surface';
 import ProviderTable from '@/components/provider-list/ProviderTable';
 import ProviderFilterBar from '@/components/provider-list/ProviderFilterBar';
-import { useNotification } from '@/hooks/useNotification';
+import { useNotify } from '@/hooks/useNotify';
 
 interface ProviderData {
   id: string;
@@ -37,7 +37,7 @@ const ProviderListPage: React.FC = () => {
   const [providers, setProviders] = useState<ProviderData[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
-  const { notification, showSuccess } = useNotification();
+  const { success } = useNotify();
 
   // Load providers from API
   useEffect(() => {
@@ -98,7 +98,7 @@ const ProviderListPage: React.FC = () => {
   });
 
   return (
-    <PageLayout loading={loading} notification={notification}>
+    <PageLayout loading={loading}>
       <Box sx={{ py: 3, px: { xs: 2, md: 3 } }}>
         <Stack spacing={2.5}>
           <PageHeader
@@ -115,7 +115,7 @@ const ProviderListPage: React.FC = () => {
             />
             <ProviderTable
               providers={sortedProviders}
-              onCopySuccess={showSuccess}
+              onCopySuccess={success}
             />
           </Surface>
         </Stack>

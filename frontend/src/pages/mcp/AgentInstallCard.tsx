@@ -44,7 +44,7 @@ interface RuntimeSelectorProps {
  * A row of pill-shaped toggle buttons, one per runtime.
  * Active button uses emerald/green fill; inactive is white with a grey border.
  */
-export const RuntimeSelector: React.FC<RuntimeSelectorProps> = ({ options, value, onChange }) => (
+const RuntimeSelector: React.FC<RuntimeSelectorProps> = ({ options, value, onChange }) => (
     <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
         {(Object.entries(options) as [AgentRuntime, RuntimeOption][]).map(([key, opt]) => {
             const active = value === key;
@@ -90,7 +90,7 @@ interface CodeBlockProps {
  * Dark-themed code block: filename header bar + syntax-coloured command pre.
  * Includes a copy-to-clipboard button in the header.
  */
-export const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }) => {
+const CodeBlock: React.FC<CodeBlockProps> = ({ filename, runtimeLabel, command }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = useCallback(() => {

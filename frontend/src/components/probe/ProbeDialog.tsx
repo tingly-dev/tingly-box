@@ -29,7 +29,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
-import type { ProbeV2TestMode, ProbeV2TargetType } from '@/types/probe-v2.ts';
+import type { ProbeTestMode, ProbeTargetType } from '@/types/probe.ts';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -62,23 +62,23 @@ interface ProbeResult {
     data?: ProbeResultData;
 }
 
-interface ProbeV2DialogProps {
+interface ProbeDialogProps {
     open: boolean;
     onClose: () => void;
-    targetType: ProbeV2TargetType;
+    targetType: ProbeTargetType;
     targetId: string;
     targetName: string;
     scenario?: string;
     model?: string;
     /** Initial request shape; can be changed inside the dialog. Defaults to stream. */
-    testMode?: ProbeV2TestMode;
+    testMode?: ProbeTestMode;
 }
 
 // ── Constants / helpers ────────────────────────────────────────────────────
 
 // Request shapes the probe exercises (the "形态" dimension): we only need
 // non-streaming vs streaming. ('simple' is the backend's value for nonstream.)
-const MODES: { value: ProbeV2TestMode; tKey: string }[] = [
+const MODES: { value: ProbeTestMode; tKey: string }[] = [
     { value: 'simple', tKey: 'probe.nonstream' },
     { value: 'streaming', tKey: 'probe.stream' },
 ];
@@ -102,7 +102,7 @@ const UPSTREAM_API_LABELS: Record<string, string> = {
 
 const getUserAuthToken = (): string | null => localStorage.getItem('user_auth_token');
 
-const defaultMessage = (mode: ProbeV2TestMode): string =>
+const defaultMessage = (mode: ProbeTestMode): string =>
     mode === 'tool'
         ? "Please use the bash tool to list the current directory contents with 'ls -la'."
         : 'Hello, this is a test message. Please respond with a short greeting.';
@@ -308,7 +308,7 @@ const Journey = memo(
         bypassed,
     }: {
         result: ProbeResult;
-        targetType: ProbeV2TargetType;
+        targetType: ProbeTargetType;
         targetName: string;
         scenario?: string;
         model?: string;
@@ -367,7 +367,7 @@ const Journey = memo(
 
 // ── Main dialog ──────────────────────────────────────────────────────────
 
-export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
+export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     open,
     onClose,
     targetType,
@@ -378,7 +378,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     testMode = 'streaming',
 }) => {
     const { t } = useTranslation();
-    const [mode, setMode] = useState<ProbeV2TestMode>(testMode);
+    const [mode, setMode] = useState<ProbeTestMode>(testMode);
     // 范围: false = 经过 TB (default), true = 直连上游. Provider targets only.
     const [direct, setDirect] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -664,4 +664,4 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     );
 };
 
-export default ProbeV2Dialog;
+export default ProbeDialog;
