@@ -93,7 +93,7 @@ func runModelsEndpoint(t *testing.T, ts *TestServer, isRealConfig bool) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	userToken := globalConfig.GetUserToken()
 	// Use "glm" provider UUID to test provider models endpoint
-	req, _ := http.NewRequest("GET", "/api/v1/provider-models/glm", nil)
+	req, _ := http.NewRequest("GET", "/api/v2/provider-models/glm", nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+userToken)
 	w := httptest.NewRecorder()
@@ -234,7 +234,7 @@ func runProviderModelsEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfi
 
 	for _, providerName := range []string{"anthropic", "glm"} {
 		t.Run(providerName, func(t *testing.T) {
-			req, _ := http.NewRequest("POST", "/api/v1/provider-models/"+providerName, nil)
+			req, _ := http.NewRequest("POST", "/api/v2/provider-models/"+providerName, nil)
 			req.Header.Set("Authorization", "Bearer "+userToken)
 			w := httptest.NewRecorder()
 			ts.ginEngine.ServeHTTP(w, req)
@@ -255,7 +255,7 @@ func runProviderModelsEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfi
 
 func runProviderModelsEndpointWithoutAuth(t *testing.T, ts *TestServer) {
 	// Use "glm" provider UUID to test provider models endpoint
-	req, _ := http.NewRequest("GET", "/api/v1/provider-models/glm", nil)
+	req, _ := http.NewRequest("GET", "/api/v2/provider-models/glm", nil)
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 
