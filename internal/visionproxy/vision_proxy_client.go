@@ -17,7 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// poolVisionClient is the production visionClient. It dispatches each
+// poolVisionClient is the production VisionClient. It dispatches each
 // describe call to the appropriate per-service client obtained from the
 // shared ClientPool. Supports Anthropic-style and OpenAI-style providers;
 // unknown styles return an error and the processor falls back to the
@@ -35,7 +35,7 @@ const defaultVisionMaxTokens = 256
 // NewPoolVisionClient builds the production vision client backed by the
 // shared SDK pool. resolver is typically the routing.ProviderResolver
 // implementation (server config). logger may be nil.
-func NewPoolVisionClient(pool *client.ClientPool, resolver providerResolver, logger *logrus.Logger) visionClient {
+func NewPoolVisionClient(pool *client.ClientPool, resolver providerResolver, logger *logrus.Logger) VisionClient {
 	return &poolVisionClient{
 		pool:     pool,
 		resolver: resolver,

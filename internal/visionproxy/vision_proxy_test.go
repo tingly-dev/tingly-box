@@ -98,7 +98,7 @@ func mkService(provider string, active bool) *loadbalance.Service {
 	return &loadbalance.Service{Provider: provider, Model: "vision-model", Weight: 1, Active: active}
 }
 
-func mkProcessor(t *testing.T, vc visionClient, providers ...*typ.Provider) *VisionProxyProcessor {
+func mkProcessor(t *testing.T, vc VisionClient, providers ...*typ.Provider) *VisionProxyProcessor {
 	t.Helper()
 	return &VisionProxyProcessor{
 		Client:   vc,
