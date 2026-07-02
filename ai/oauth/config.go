@@ -95,24 +95,12 @@ func WithConfigProviderConfigs(configs map[ai.Issuer]*ProviderConfig) ConfigOpti
 	}
 }
 
-// WithConfigTokenStorage sets the token storage.
-func WithConfigTokenStorage(storage TokenStorage) ConfigOption {
+// WithStorage sets the OAuth token, state, and session storage.
+func WithStorage(tokenStorage TokenStorage, stateStorage StateStorage, sessionStorage SessionStorage) ConfigOption {
 	return func(c *Config) {
-		c.TokenStorage = storage
-	}
-}
-
-// WithConfigStateStorage sets the state storage.
-func WithConfigStateStorage(storage StateStorage) ConfigOption {
-	return func(c *Config) {
-		c.StateStorage = storage
-	}
-}
-
-// WithConfigSessionStorage sets the session storage.
-func WithConfigSessionStorage(storage SessionStorage) ConfigOption {
-	return func(c *Config) {
-		c.SessionStorage = storage
+		c.TokenStorage = tokenStorage
+		c.StateStorage = stateStorage
+		c.SessionStorage = sessionStorage
 	}
 }
 
