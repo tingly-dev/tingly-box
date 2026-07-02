@@ -351,7 +351,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.routingSelector = simpleSelector
 
 	// Wire the vision proxy service. Idempotent — safe across config reloads.
-	server.visionProxyService = visionproxy.NewServiceFromPool(server.clientPool, server.config, logrus.StandardLogger())
+	server.visionProxyService = visionproxy.NewServiceFromPool(server.clientPool, server.config)
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

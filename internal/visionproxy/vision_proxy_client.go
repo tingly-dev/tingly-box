@@ -25,7 +25,6 @@ import (
 type poolVisionClient struct {
 	pool     *client.ClientPool
 	resolver providerResolver
-	logger   *logrus.Logger
 	prompt   string
 }
 
@@ -35,11 +34,10 @@ const defaultVisionMaxTokens = 256
 // NewPoolVisionClient builds the production vision client backed by the
 // shared SDK pool. resolver is typically the routing.ProviderResolver
 // implementation (server config). logger may be nil.
-func NewPoolVisionClient(pool *client.ClientPool, resolver providerResolver, logger *logrus.Logger) VisionClient {
+func NewPoolVisionClient(pool *client.ClientPool, resolver providerResolver) VisionClient {
 	return &poolVisionClient{
 		pool:     pool,
 		resolver: resolver,
-		logger:   logger,
 		prompt:   defaultVisionPrompt,
 	}
 }

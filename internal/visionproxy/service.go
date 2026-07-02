@@ -6,8 +6,6 @@ package visionproxy
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -30,9 +28,9 @@ func NewService(p *VisionProxyProcessor) *Service {
 // dispatching describe calls through the shared ClientPool. Called once
 // during server boot after the ClientPool and config (provider resolver) are
 // constructed.
-func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver, logger *logrus.Logger) *Service {
+func NewServiceFromPool(pool *client.ClientPool, resolver providerResolver) *Service {
 	return NewService(&VisionProxyProcessor{
-		Client:   NewPoolVisionClient(pool, resolver, logger),
+		Client:   NewPoolVisionClient(pool, resolver),
 		Resolver: resolver,
 	})
 }
