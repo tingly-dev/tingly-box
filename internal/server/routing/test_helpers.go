@@ -162,10 +162,6 @@ func (m *mockConfig) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 	return time.Duration(rule.Flags.SessionAffinity) * time.Second
 }
 
-func (m *mockConfig) GetEffectiveCompactKeyword(rule *typ.Rule) string {
-	return typ.ResolveCompactKeyword(rule.Flags.CompactKeyword, "")
-}
-
 // testAffinityEntry creates a test affinity entry.
 func testAffinityEntry(svc *loadbalance.Service) *AffinityEntry {
 	return &AffinityEntry{

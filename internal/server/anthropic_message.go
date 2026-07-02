@@ -120,17 +120,25 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 
 	s.applyVisionProxy(c, scenarioType, rule, reqParams)
 
-	// Select service using routing pipeline
-	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
-	if err != nil {
-		logrus.WithError(err).Errorf("Select service error")
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
+	// Rapid-compact wake check: when the latest user message contains the
+	// configured compact_keyword, short-circuit straight to the local
+	// XML-compaction virtual model instead of selecting a real upstream.
+	// Must run before routingSelector.SelectService — see applyCompactWake.
+	if forcedProvider, forcedService := s.applyCompactWake(scenarioType, rule, reqParams); forcedService != nil {
+		provider, selectedService = forcedProvider, forcedService
+	} else {
+		// Select service using routing pipeline
+		provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
+		if err != nil {
+			logrus.WithError(err).Errorf("Select service error")
+			c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
 	}
 
 	if provider.Timeout <= 0 {

@@ -148,7 +148,8 @@ func resolveRuleFlagsWithScenario(
 		// Inject scenario-level CompactKeyword if rule hasn't set one explicitly.
 		// Override inheritance: rule value wins when non-empty. The empty result
 		// is later resolved to the built-in default by typ.ResolveCompactKeyword
-		// at the smart-routing match site (Config.GetEffectiveCompactKeyword).
+		// at the rapid-compact wake check (Config.GetEffectiveCompactKeyword,
+		// called from Server.applyCompactWake).
 		if flags.CompactKeyword == "" && scenarioConfig.Flags.CompactKeyword != "" {
 			flags.CompactKeyword = scenarioConfig.Flags.CompactKeyword
 		}

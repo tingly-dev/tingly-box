@@ -593,8 +593,10 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 // GetEffectiveCompactKeyword resolves the Claude Code rapid-compact wake
 // keyword for a rule using override inheritance: rule explicit (non-empty)
 // wins, else the scenario default, else the built-in typ.DefaultCompactKeyword.
-// Mirrors GetEffectiveAffinity. Used by the smart-routing stage to decide
-// whether the agent.claude_code / wake_compact op matches.
+// Mirrors GetEffectiveAffinity. Used by Server.resolveCompactWakeService (a
+// pre-service-selection hook, see internal/server/compact_wake.go) to decide
+// whether the latest user message should short-circuit to the rapid-compact
+// virtual model.
 func (c *Config) GetEffectiveCompactKeyword(rule *typ.Rule) string {
 	scenarioDefault := ""
 

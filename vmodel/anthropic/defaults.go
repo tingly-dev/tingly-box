@@ -54,7 +54,7 @@ func RegisterDefaults(r *Registry) {
 		{
 			ID:          "claude-code-compact",
 			Name:        "Claude Code Compact",
-			Description: "Rapid compaction endpoint: compacts the conversation into an XML summary when the request carries tool definitions. Wake-keyword gating lives in smart routing (agent.claude_code/wake_compact op + compact_keyword flag) — route matched requests here for an instant summary with no upstream token cost.",
+			Description: "Rapid compaction endpoint: compacts the conversation into an XML summary when the request carries tool definitions. Wake-keyword gating happens upfront, before service selection (Server.applyCompactWake + the compact_keyword flag) — a match forces requests straight here for an instant summary with no upstream token cost.",
 			Chain:       transform.NewTransformChain([]transform.Transform{NewClaudeCodeCompactTransform()}),
 		},
 		{

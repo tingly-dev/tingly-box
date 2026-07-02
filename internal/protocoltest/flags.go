@@ -139,6 +139,26 @@ func sendFlag(t flagTB, env *TestEnv, source, target protocol.APIType, reqModel 
 	return res
 }
 
+// anthropicResponseText extracts and concatenates the text blocks from a
+// non-streaming Anthropic Messages API response body.
+func anthropicResponseText(t flagTB, raw []byte) string {
+	t.Helper()
+	var parsed struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal anthropic response: %v", err)
+	}
+	var sb strings.Builder
+	for _, block := range parsed.Content {
+		sb.WriteString(block.Text)
+	}
+	return sb.String()
+}
+
 // upstreamToolNames extracts the function/tool names from a captured OpenAI-style
 // upstream request body.
 func upstreamToolNames(body map[string]any) []string {
@@ -532,6 +552,77 @@ func ruleFlagCases() []flagCase {
 			}
 			if beta := up.Headers.Get("anthropic-beta"); !strings.Contains(beta, "context-1m") {
 				t.Errorf("rule flag did not inject context-1m beta upstream; anthropic-beta=%q", beta)
+			}
+		}},
+
+		// ── compact_keyword ──────────────────────────────────────────────────
+		// A claude_code request whose latest user message contains the
+		// configured wake keyword must be short-circuited to the local
+		// XML-compaction virtual model BEFORE service selection: the real
+		// upstream configured on the rule must never see the request, and the
+		// response must carry the compacted-summary markers.
+		{key: "compact_keyword", run: func(t flagTB, env *TestEnv) {
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-compact-anthropic"
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL(),
+				APIStyle: protocol.APIStyleAnthropic,
+				Token:    "virtual-token",
+				Enabled:  true,
+				Timeout:  int64(constant.DefaultRequestTimeout),
+			})
+
+			const reqModel = "pv-flag-compact"
+			providerModel := "virtual-model-" + s.Name
+			rule := typ.Rule{
+				UUID:          reqModel,
+				Scenario:      typ.ScenarioClaudeCode,
+				RequestModel:  reqModel,
+				ResponseModel: providerModel,
+				Services: []*loadbalance.Service{
+					{Provider: providerName, Model: providerModel, Weight: 1, Active: true, TimeWindow: 300},
+				},
+				LBTactic: typ.Tactic{Type: loadbalance.TacticAdaptive, Params: typ.DefaultAdaptiveParams()},
+				Active:   true,
+				Flags:    typ.RuleFlags{CompactKeyword: "compact"},
+			}
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+
+			_, base := flagBaseRequest(protocol.TypeAnthropicV1, reqModel, false)
+			var m map[string]any
+			if err := json.Unmarshal(base, &m); err != nil {
+				t.Fatalf("unmarshal base request: %v", err)
+			}
+			// tools must be present for the compact transform to fire, and the
+			// latest user message must carry the wake keyword.
+			m["tools"] = []map[string]any{
+				{"name": "read_file", "description": "read a file", "input_schema": map[string]any{"type": "object"}},
+			}
+			m["messages"] = []map[string]any{
+				{"role": "user", "content": "What is the capital of France?"},
+				{"role": "assistant", "content": "It is Paris."},
+				{"role": "user", "content": "please compact"},
+			}
+			body := mustMarshal(m)
+
+			res, err := env.dispatch(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, s.Name,
+				"/tingly/claude_code/v1/messages", body, nil, false)
+			if err != nil {
+				t.Fatalf("dispatch: %v", err)
+			}
+			if res.HTTPStatus != 200 {
+				t.Fatalf("compact-wake request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
+			}
+			if up := env.virtual.LastRequest(EndpointAnthropic); up != nil {
+				t.Errorf("compact_keyword must short-circuit before the real upstream; got a captured request: %s",
+					truncate(string(up.Body), 300))
+			}
+			respText := anthropicResponseText(t, res.RawBody)
+			if !strings.Contains(respText, "<analysis>") && !strings.Contains(respText, "<summary>") {
+				t.Errorf("expected compacted-summary markers in response, got: %s", truncate(respText, 300))
 			}
 		}},
 

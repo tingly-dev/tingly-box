@@ -11,15 +11,16 @@ import (
 // routed to the rapid-compact virtual model.
 //
 // Gating note: the wake-keyword decision (whether a request is a rapid-compact
-// request at all) lives in the smart-routing layer — the
-// agent.claude_code/wake_compact op matches the configurable compact_keyword
-// flag and routes only matching requests here. By the time a request reaches
-// this transform it has already been selected for compaction, so this layer
-// only keeps a minimal structural guard: it compacts when the request carries
-// tool definitions (the shape of a real Claude Code agent turn) and otherwise
+// request at all) lives upfront in Server.applyCompactWake — it checks the
+// configurable compact_keyword flag against the latest user message and, on a
+// match, forces service selection straight to this virtual model (see
+// internal/server/compact_wake.go). By the time a request reaches this
+// transform it has already been selected for compaction, so this layer only
+// keeps a minimal structural guard: it compacts when the request carries tool
+// definitions (the shape of a real Claude Code agent turn) and otherwise
 // passes through untouched. The keyword is intentionally NOT re-checked here —
 // re-checking a literal word would break custom keywords and duplicate the
-// gating that already happened during routing.
+// gating that already happened upfront.
 type ClaudeCodeCompactTransform struct {
 	inner *smart_compact.XMLCompactTransform
 }

@@ -177,11 +177,11 @@ type ScenarioFlags struct {
 	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty" yaml:"claude_code_compat,omitempty"`
 
 	// CompactKeyword configures the Claude Code rapid-compact wake keyword as a
-	// scenario-wide default. When the latest user message contains this keyword,
-	// the agent.claude_code/wake_compact smart-routing op matches, letting a rule
-	// route the request to the local XML-compaction virtual model (instant
-	// summary, no upstream token cost). Empty means use the built-in default
-	// ("compact"). Individual rules override via RuleFlags.CompactKeyword.
+	// scenario-wide default. When the latest user message contains this
+	// keyword, the request is short-circuited (before service selection) to
+	// the local XML-compaction virtual model — instant summary, no upstream
+	// token cost. Empty means use the built-in default ("compact").
+	// Individual rules override via RuleFlags.CompactKeyword.
 	CompactKeyword string `json:"compact_keyword,omitempty" yaml:"compact_keyword,omitempty"`
 }
 
@@ -267,11 +267,11 @@ type RuleFlags struct {
 
 	// CompactKeyword configures the Claude Code rapid-compact wake keyword for
 	// this rule. When the latest user message contains this keyword, the
-	// agent.claude_code/wake_compact smart-routing op matches so the rule can
-	// route the request to the local XML-compaction virtual model. Empty means
-	// inherit the scenario default (ScenarioFlags.CompactKeyword), which itself
-	// falls back to the built-in default ("compact"). Rule value wins when
-	// non-empty (override inheritance).
+	// request is short-circuited (before service selection) to the local
+	// XML-compaction virtual model. Empty means inherit the scenario default
+	// (ScenarioFlags.CompactKeyword), which itself falls back to the built-in
+	// default ("compact"). Rule value wins when non-empty (override
+	// inheritance).
 	CompactKeyword string `json:"compact_keyword,omitempty" yaml:"compact_keyword,omitempty"`
 }
 

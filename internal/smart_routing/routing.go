@@ -532,27 +532,6 @@ func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) OpE
 func (r *Router) evaluateAgentClaudeCodeOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 	res := newOpResult(op)
 
-	// wake_compact is a bool op reading CompactWake (latest user message contains
-	// the configured rapid-compact wake keyword). Like the request-kind op, it
-	// only fires under the claude_code scenario; for other scenarios the stage
-	// leaves CompactWake false.
-	if op.Operation == OpAgentClaudeCodeWakeCompact {
-		res.Actual = boolStr(ctx.CompactWake)
-		val, err := op.Bool()
-		if err != nil && op.Value != "" {
-			log.Printf("[smart_routing] invalid agent.claude_code wake_compact value '%s': %v", op.Value, err)
-			res.Reason = fmt.Sprintf("invalid bool %q: %v", op.Value, err)
-			return res
-		}
-		if op.Value != "" && !val {
-			res.Reason = "value=false; check is no-op"
-			return res
-		}
-		res.Matched = ctx.CompactWake
-		res.Reason = "rapid-compact wake keyword present"
-		return res
-	}
-
 	res.Actual = ctx.ClaudeCodeRequestKind
 	value, err := op.String()
 	if err != nil {

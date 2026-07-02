@@ -198,14 +198,6 @@ var Operations = []SmartOp{
 			Type:        ValueTypeString,
 		},
 	},
-	{
-		Position:  PositionAgentClaudeCode,
-		Operation: OpAgentClaudeCodeWakeCompact,
-		Meta: SmartOpMeta{
-			Description: "Latest user message contains the configured rapid-compact wake keyword (compact_keyword flag). Route matched requests to the local XML-compaction virtual model.",
-			Type:        ValueTypeBool,
-		},
-	},
 
 	// Service capacity operations (seat utilization %)
 	{
@@ -301,8 +293,4 @@ const (
 
 	// Agent (Claude Code) request kind operations
 	OpAgentClaudeCodeEquals SmartOpOperation = "equals" // Claude Code request kind equals the value
-	// OpAgentClaudeCodeWakeCompact matches when the latest user message contains
-	// the configured rapid-compact wake keyword (compact_keyword flag). Value
-	// type is bool ("enabled"): the op fires when CompactWake is true.
-	OpAgentClaudeCodeWakeCompact SmartOpOperation = "wake_compact"
 )

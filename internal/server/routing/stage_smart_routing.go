@@ -2,7 +2,6 @@ package routing
 
 import (
 	"context"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -17,15 +16,7 @@ import (
 type SmartRoutingStage struct {
 	loadBalancer  LoadBalancer
 	affinityStore AffinityStore
-	multiLogger   *pkgobs.MultiLogger    // optional; used to emit structured smart-routing logs
-	compactKwords compactKeywordResolver // optional; resolves the rapid-compact wake keyword per rule
-}
-
-// compactKeywordResolver resolves the effective Claude Code rapid-compact wake
-// keyword for a rule (rule override > scenario default > built-in default).
-// Satisfied by ProviderResolver / *config.Config.
-type compactKeywordResolver interface {
-	GetEffectiveCompactKeyword(rule *typ.Rule) string
+	multiLogger   *pkgobs.MultiLogger // optional; used to emit structured smart-routing logs
 }
 
 // NewSmartRoutingStage creates a new smart routing stage
@@ -34,13 +25,6 @@ func NewSmartRoutingStage(lb LoadBalancer, affinity AffinityStore) *SmartRouting
 		loadBalancer:  lb,
 		affinityStore: affinity,
 	}
-}
-
-// SetCompactKeywordResolver attaches the resolver used to populate
-// RequestContext.CompactWake for the agent.claude_code/wake_compact op. Optional:
-// when nil, CompactWake is left false and wake_compact ops simply never match.
-func (s *SmartRoutingStage) SetCompactKeywordResolver(r compactKeywordResolver) {
-	s.compactKwords = r
 }
 
 // SetMultiLogger attaches the multi-logger so the stage can emit structured
@@ -198,7 +182,6 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	// agent.claude_code SmartOp simply does not match.
 	if ctx.Scenario.Is(typ.ScenarioClaudeCode) {
 		reqCtx.ClaudeCodeRequestKind = smartrouting.DetectClaudeCodeRequestKind(reqCtx)
-		reqCtx.CompactWake = s.detectCompactWake(ctx, reqCtx)
 	}
 
 	// Pre-collect capacity info for all services across all smart routing rules.
@@ -346,31 +329,6 @@ func (s *SmartRoutingStage) selectFromServices(services []*loadbalance.Service, 
 		return nil
 	}
 	return service
-}
-
-// detectCompactWake reports whether the latest user message contains the
-// effective rapid-compact wake keyword for this rule. The keyword is resolved
-// rule override > scenario default > built-in default via the injected
-// resolver; when no resolver is wired it falls back to the built-in default.
-// Matching is case-insensitive and only considers the latest user message when
-// that message actually carried text (a trailing tool_result must not match a
-// stale earlier message). Used to populate RequestContext.CompactWake for the
-// agent.claude_code/wake_compact op.
-func (s *SmartRoutingStage) detectCompactWake(ctx *SelectionContext, reqCtx *smartrouting.RequestContext) bool {
-	if !reqCtx.LatestUserHasText {
-		return false
-	}
-	keyword := typ.DefaultCompactKeyword
-	if s.compactKwords != nil && ctx.Rule != nil {
-		keyword = s.compactKwords.GetEffectiveCompactKeyword(ctx.Rule)
-	}
-	if keyword == "" {
-		return false
-	}
-	return strings.Contains(
-		strings.ToLower(reqCtx.GetLatestUserMessage()),
-		strings.ToLower(keyword),
-	)
 }
 
 // collectAllCapacityInfo collects seat-capacity info for all services across all smart routing rules.

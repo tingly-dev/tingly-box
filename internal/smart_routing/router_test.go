@@ -696,41 +696,6 @@ func TestValidateSmartOp_AgentClaudeCode(t *testing.T) {
 	require.NoError(t, ValidateSmartOp(&op))
 }
 
-func TestValidateSmartOp_AgentClaudeCodeWakeCompact(t *testing.T) {
-	op := SmartOp{
-		Position:  PositionAgentClaudeCode,
-		Operation: OpAgentClaudeCodeWakeCompact,
-	}
-	require.NoError(t, ValidateSmartOp(&op))
-}
-
-// TestEvaluate_AgentClaudeCode_WakeCompact verifies the wake_compact op matches
-// when the stage-populated CompactWake flag is set (latest user message contains
-// the configured rapid-compact wake keyword) and falls through otherwise.
-func TestEvaluate_AgentClaudeCode_WakeCompact(t *testing.T) {
-	svc := &loadbalance.Service{Provider: "p", Model: "compact-vm", Weight: 1, Active: true}
-	router, err := NewRouter([]SmartRouting{
-		{
-			Description: "rapid compact",
-			Ops: []SmartOp{
-				{Position: PositionAgentClaudeCode, Operation: OpAgentClaudeCodeWakeCompact},
-			},
-			Services: []*loadbalance.Service{svc},
-		},
-	})
-	require.NoError(t, err)
-
-	// CompactWake true → routes to the compaction vmodel.
-	services, matched := router.EvaluateRequest(&RequestContext{CompactWake: true})
-	require.True(t, matched)
-	require.Len(t, services, 1)
-	require.Equal(t, "compact-vm", services[0].Model)
-
-	// CompactWake false → no match (keyword absent, or non-claude_code scenario).
-	_, matched = router.EvaluateRequest(&RequestContext{CompactWake: false})
-	require.False(t, matched)
-}
-
 // TestLatestUser_ToolResultDoesNotFalseMatch verifies that when the most recent
 // user-role message is a tool_result (no text content), a latest_user contains
 // rule does NOT match against the stale previous user text — the request must

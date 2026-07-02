@@ -47,14 +47,6 @@ type RequestContext struct {
 	// SmartRoutingStage only when the request scenario is claude_code. Empty otherwise.
 	ClaudeCodeRequestKind string
 
-	// CompactWake is true when the latest user message contains the configured
-	// rapid-compact wake keyword (compact_keyword flag, resolved rule > scenario
-	// > built-in default). Populated by SmartRoutingStage only when the request
-	// scenario is claude_code; false otherwise. Read by the
-	// agent.claude_code / wake_compact op so a rule can route wake requests to
-	// the local XML-compaction virtual model.
-	CompactWake bool
-
 	// Service runtime characteristics — populated by SmartRoutingStage before router evaluation.
 	// These fields are set per-rule inside evaluateRule to avoid cross-rule contamination.
 	ServiceStats    []loadbalance.ServiceStats // TTFT / latency snapshots

@@ -77,18 +77,19 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 }
 
 // TestClaudeCodeCompact_CompressesOnArrivalWithTools verifies the gating
-// design: the wake-keyword decision lives in the smart-routing layer, so once a
-// tool-bearing request reaches the rapid-compact virtual model it is compacted
-// regardless of whether the literal word "compact" appears — the request was
-// already selected for compaction by the agent.claude_code/wake_compact op.
-// This lets custom compact_keyword values work end-to-end.
+// design: the wake-keyword decision lives upfront in Server.applyCompactWake
+// (before service selection), so once a tool-bearing request reaches the
+// rapid-compact virtual model it is compacted regardless of whether the
+// literal word "compact" appears — the request was already selected for
+// compaction before it got here. This lets custom compact_keyword values
+// work end-to-end.
 func TestClaudeCodeCompact_CompressesOnArrivalWithTools(t *testing.T) {
 	vm := newCompactVM()
 
 	originalMessages := []sdk.BetaMessageParam{
 		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First user message")}},
 		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First assistant response")}},
-		// No literal "compact" keyword here — routing already gated this request.
+		// No literal "compact" keyword here — the wake check already gated this request upfront.
 		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("please compress now")}},
 	}
 

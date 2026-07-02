@@ -231,7 +231,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "compact_keyword",
 			Label:           "Rapid-compact wake keyword",
-			Description:     "Wake keyword for Claude Code rapid compaction. When the latest user message contains this keyword, the agent.claude_code / wake_compact smart-routing op matches, so a rule can route the request to the local XML-compaction virtual model — an instant conversation summary with no upstream token cost. Leave empty to use the built-in default (\"compact\"). Can also be set scenario-wide; the rule value wins when both are set.",
+			Description:     "Wake keyword for Claude Code rapid compaction. When the latest user message contains this keyword, the request is short-circuited to the local XML-compaction virtual model before service selection — an instant conversation summary with no upstream token cost. Leave empty to use the built-in default (\"compact\"). Can also be set scenario-wide; the rule value wins when both are set.",
 			Type:            FlagTypeString,
 			Category:        FlagCategoryApp,
 			Placeholder:     "compact",
