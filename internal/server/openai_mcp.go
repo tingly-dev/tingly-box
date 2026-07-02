@@ -28,7 +28,7 @@ func (s *Server) streamOpenAIChatToAnthropicV1WithMCP(
 			defer cancel()
 		}
 		if err != nil {
-			stream.SendAnthropicStreamingError(c, err)
+			stream.SendAnthropicStreamError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -82,7 +82,7 @@ func (s *Server) streamOpenAIChatToAnthropicBetaWithMCP(
 			defer cancel()
 		}
 		if err != nil {
-			stream.SendAnthropicStreamingError(c, err)
+			stream.SendAnthropicStreamError(c, err)
 			if streamRec != nil {
 				streamRec.RecordError(err)
 			}

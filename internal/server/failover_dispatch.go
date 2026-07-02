@@ -45,7 +45,7 @@ type preStreamErrorRecorder interface {
 // next priority tier.
 func (s *Server) handleAnthropicPreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendAnthropicStreamingError(c, err)
+	stream.SendAnthropicStreamError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
@@ -53,7 +53,7 @@ func (s *Server) handleAnthropicPreStreamFailure(c *gin.Context, err error, reco
 
 func (s *Server) handleOpenAIPreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendOpenAIStreamingError(c, err)
+	stream.SendOpenAIStreamError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
@@ -79,11 +79,11 @@ func (s *Server) failOpenAIAttemptSetup(c *gin.Context, err error) {
 // retryableUpstreamStatuses are the HTTP status codes treated as
 // "upstream transiently sick, try the next priority tier".
 //
-// 500 is included because in-process error helpers (SendStreamingError,
-// SendErrorResponse on forwarding failure) wrap upstream pre-stream
-// errors as 500. 502 covers the explicit "upstream stream failed" path.
-// Keeping both means refactors that change one helper's status code
-// don't silently break failover.
+// 500 is included because in-process error helpers (SendAnthropicStreamError/
+// SendOpenAIStreamError, SendAnthropicError/SendOpenAIError on forwarding
+// failure) wrap upstream pre-stream errors as 500. 502 covers the explicit
+// "upstream stream failed" path. Keeping both means refactors that change
+// one helper's status code don't silently break failover.
 var retryableUpstreamStatuses = map[int]bool{
 	http.StatusTooManyRequests:     true,
 	http.StatusBadGateway:          true,

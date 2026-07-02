@@ -57,18 +57,22 @@ func abortWithError(c *gin.Context, statusCode int, message string, errorType st
 
 // abortWithModelAuthError sends a protocol-correct error response for
 // ModelAuthMiddleware, shaped per apiType (Anthropic vs OpenAI), since that
-// middleware guards client-facing LLM protocol routes.
-func abortWithModelAuthError(c *gin.Context, apiType protocol.APIType, statusCode int, message string, anthropicType protocol.AnthropicErrorType, openaiType string) {
-	c.Error(fmt.Errorf("%s: %s", openaiType, message)).SetType(gin.ErrorTypePublic) //nolint:errcheck
+// middleware guards client-facing LLM protocol routes. errType is an
+// AnthropicErrorType even for the OpenAI body: OpenAI's error.type is a
+// free-form string, and every type this middleware needs (authentication_
+// error, invalid_request_error, api_error) is already shared vocabulary
+// between the two protocols, so a single value covers both bodies.
+func abortWithModelAuthError(c *gin.Context, apiType protocol.APIType, statusCode int, message string, errType protocol.AnthropicErrorType) {
+	c.Error(fmt.Errorf("%s: %s", errType, message)).SetType(gin.ErrorTypePublic) //nolint:errcheck
 
 	if protocol.IsAnthropicAPIType(apiType) {
 		c.JSON(statusCode, protocol.AnthropicErrorBody{
 			Type:  "error",
-			Error: protocol.AnthropicErrorField{Type: anthropicType, Message: message},
+			Error: protocol.AnthropicErrorField{Type: errType, Message: message},
 		})
 	} else {
 		c.JSON(statusCode, protocol.OpenAIErrorBody{
-			Error: protocol.OpenAIErrorField{Type: openaiType, Message: message},
+			Error: protocol.OpenAIErrorField{Type: string(errType), Message: message},
 		})
 	}
 	c.Abort()
@@ -327,7 +331,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware(apiType protocol.APIType) gin.Hand
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
 		if authHeader == "" && xApiKey == "" {
-			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Model authorization header required", protocol.AnthropicErrAuthentication, "authentication_error")
+			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Model authorization header required", protocol.AnthropicErrAuthentication)
 			return
 		}
 
@@ -369,13 +373,13 @@ func (am *AuthMiddleware) ModelAuthMiddleware(apiType protocol.APIType) gin.Hand
 
 		// Check global config model token (backward compatibility)
 		if cfg == nil || !cfg.HasModelToken() {
-			abortWithModelAuthError(c, apiType, http.StatusInternalServerError, "config or config model token missing", protocol.AnthropicErrAPI, "api_error")
+			abortWithModelAuthError(c, apiType, http.StatusInternalServerError, "config or config model token missing", protocol.AnthropicErrAPI)
 			return
 		}
 
 		// If global token is disabled and multi-tenant is enabled, reject
 		if cfg.IsMultiTenantEnabled() && cfg.IsGlobalTokenDisabled() {
-			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Global token disabled, use API token", protocol.AnthropicErrAuthentication, "authentication_error")
+			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Global token disabled, use API token", protocol.AnthropicErrAuthentication)
 			return
 		}
 
@@ -392,7 +396,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware(apiType protocol.APIType) gin.Hand
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)
 				if verifyErr != nil {
-					abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Invalid enterprise context jwt", protocol.AnthropicErrAuthentication, "authentication_error")
+					abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Invalid enterprise context jwt", protocol.AnthropicErrAuthentication)
 					return
 				}
 				if claims != nil {
@@ -414,10 +418,10 @@ func (am *AuthMiddleware) ModelAuthMiddleware(apiType protocol.APIType) gin.Hand
 			requestToken = xApiKey
 		}
 		if strings.HasPrefix(strings.TrimSpace(requestToken), "sk-tbe-") {
-			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Virtual key must be used through TBE /tbe/* endpoints", protocol.AnthropicErrInvalidRequest, "invalid_request_error")
+			abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Virtual key must be used through TBE /tbe/* endpoints", protocol.AnthropicErrInvalidRequest)
 			return
 		}
 
-		abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Invalid model authorization token.", protocol.AnthropicErrAuthentication, "authentication_error")
+		abortWithModelAuthError(c, apiType, http.StatusUnauthorized, "Invalid model authorization token.", protocol.AnthropicErrAuthentication)
 	}
 }

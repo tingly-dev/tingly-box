@@ -128,7 +128,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 			return acc.Result(), nil
 		}
 		if !hc.GinContext.Writer.Written() {
-			SendAnthropicStreamingError(hc.GinContext, processErr)
+			SendAnthropicStreamError(hc.GinContext, processErr)
 			return acc.Result(), processErr
 		}
 		SendAnthropicStreamErrorEvent(hc.GinContext, processErr, protocol.AnthropicErrAPI)
@@ -265,7 +265,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 			return acc.Result(), nil
 		}
 		if !hc.GinContext.Writer.Written() {
-			SendAnthropicStreamingError(hc.GinContext, processErr)
+			SendAnthropicStreamError(hc.GinContext, processErr)
 			return acc.Result(), processErr
 		}
 		SendAnthropicStreamErrorEvent(hc.GinContext, processErr, protocol.AnthropicErrAPI)

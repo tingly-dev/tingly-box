@@ -326,7 +326,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		protocol.SendOpenAIError(c, err, "Failed to forward request")
+		protocol.SendOpenAIError(c, err, protocol.DescForwardRequest)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}

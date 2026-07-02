@@ -65,28 +65,28 @@ func sendProtocolError(c *gin.Context, isAnthropic bool, err error, desc string)
 	protocol.SendOpenAIError(c, err, desc)
 }
 
-// SendAnthropicStreamingError/SendOpenAIStreamingError send an error response
-// for streaming request failures. When the failure occurs before any SSE
-// frame has been written (the caller guards this with conv.MessageStarted()),
-// the HTTP status is still settable, so we propagate the upstream provider's
-// status (401/429/4xx) instead of flattening every pre-stream failure into a 500.
-func SendAnthropicStreamingError(c *gin.Context, err error) {
-	sendProtocolError(c, true, err, "Failed to create streaming request")
+// SendAnthropicStreamError/SendOpenAIStreamError send an error response for
+// stream request failures. When the failure occurs before any SSE frame has
+// been written (the caller guards this with conv.MessageStarted()), the HTTP
+// status is still settable, so we propagate the upstream provider's status
+// (401/429/4xx) instead of flattening every pre-stream failure into a 500.
+func SendAnthropicStreamError(c *gin.Context, err error) {
+	sendProtocolError(c, true, err, protocol.DescCreateStreamRequest)
 }
 
-func SendOpenAIStreamingError(c *gin.Context, err error) {
-	sendProtocolError(c, false, err, "Failed to create streaming request")
+func SendOpenAIStreamError(c *gin.Context, err error) {
+	sendProtocolError(c, false, err, protocol.DescCreateStreamRequest)
 }
 
 // SendAnthropicForwardingError/SendOpenAIForwardingError send an error
 // response for request forwarding failures, propagating the upstream
 // provider's HTTP status when the error carries one.
 func SendAnthropicForwardingError(c *gin.Context, err error) {
-	sendProtocolError(c, true, err, "Failed to forward request")
+	sendProtocolError(c, true, err, protocol.DescForwardRequest)
 }
 
 func SendOpenAIForwardingError(c *gin.Context, err error) {
-	sendProtocolError(c, false, err, "Failed to forward request")
+	sendProtocolError(c, false, err, protocol.DescForwardRequest)
 }
 
 // SendAnthropicInternalError/SendOpenAIInternalError send an error response

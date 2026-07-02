@@ -89,21 +89,23 @@ func anthropicTypeFromStatus(status int) AnthropicErrorType {
 }
 
 // openaiTypeFromStatus mirrors anthropicTypeFromStatus for OpenAI, whose SDK
-// treats error.type as a free-form string rather than an enum.
+// treats error.type as a free-form string rather than an enum. Reuses the
+// Anthropic constants' underlying strings where the vocabulary overlaps,
+// instead of re-typing the same literals.
 func openaiTypeFromStatus(status int) string {
 	switch status {
 	case http.StatusUnauthorized:
-		return "authentication_error"
+		return string(AnthropicErrAuthentication)
 	case http.StatusForbidden:
-		return "permission_error"
+		return string(AnthropicErrPermission)
 	case http.StatusNotFound:
-		return "not_found_error"
+		return string(AnthropicErrNotFound)
 	case http.StatusTooManyRequests:
-		return "rate_limit_error"
+		return string(AnthropicErrRateLimit)
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
-		return "invalid_request_error"
+		return string(AnthropicErrInvalidRequest)
 	default:
-		return "api_error"
+		return string(AnthropicErrAPI)
 	}
 }
 
@@ -181,6 +183,15 @@ func BuildOpenAIError(err error, statusCode int) OpenAIErrorBody {
 	}
 	return OpenAIErrorBody{Error: field}
 }
+
+// Shared error-message prefixes, used by both the Anthropic and OpenAI Send
+// helpers (in this package and internal/protocol/stream) so the wording never
+// drifts between the two variants of the same failure.
+const (
+	DescForwardRequest      = "Failed to forward request"
+	DescCreateStreamRequest = "Failed to create stream request"
+	DescRoundtripResponse   = "Failed to roundtrip response"
+)
 
 // prefixMessage prepends desc to an already-built error message when desc is
 // non-empty, so callers can keep attaching local debugging context (e.g.

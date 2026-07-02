@@ -281,7 +281,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			protocol.SendOpenAIError(c, err, "Failed to create streaming request")
+			protocol.SendOpenAIError(c, err, protocol.DescCreateStreamRequest)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -299,7 +299,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 					s.trackUsageFromContext(c, 0, 0, err)
 				}
 			}
-			protocol.SendOpenAIError(c, err, "Failed to create streaming request")
+			protocol.SendOpenAIError(c, err, protocol.DescCreateStreamRequest)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -351,7 +351,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 		if ShouldRoundtripResponse(c, "anthropic") {
 			roundtripped, err := RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
 			if err != nil {
-				protocol.SendOpenAIError(c, err, "Failed to roundtrip response")
+				protocol.SendOpenAIError(c, err, protocol.DescRoundtripResponse)
 				return
 			}
 			openaiResp = roundtripped
@@ -406,7 +406,7 @@ func (s *Server) passthroughAnthropicBeta(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			stream.SendAnthropicStreamingError(c, err)
+			stream.SendAnthropicStreamError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -634,7 +634,7 @@ func (s *Server) dispatchGoogle(
 			defer cancel()
 		}
 		if err != nil {
-			stream.SendAnthropicStreamingError(c, err)
+			stream.SendAnthropicStreamError(c, err)
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -686,7 +686,7 @@ func (s *Server) dispatchGoogle(
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
-					stream.SendAnthropicInternalError(c, "Failed to roundtrip resp: "+err.Error())
+					stream.SendAnthropicInternalError(c, protocol.DescRoundtripResponse+": "+err.Error())
 					return
 				}
 				anthropicResp = roundtripped
@@ -805,7 +805,7 @@ func (s *Server) dispatchOpenAIChat(
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
-					stream.SendAnthropicInternalError(c, "Failed to roundtrip resp: "+err.Error())
+					stream.SendAnthropicInternalError(c, protocol.DescRoundtripResponse+": "+err.Error())
 					return
 				}
 				anthropicResp = roundtripped
@@ -858,7 +858,7 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 		defer cancel()
 	}
 	if err != nil {
-		stream.SendOpenAIStreamingError(c, err)
+		stream.SendOpenAIStreamError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}

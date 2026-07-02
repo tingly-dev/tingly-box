@@ -75,7 +75,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
 		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
-			SendOpenAIStreamingError(c, err)
+			SendOpenAIStreamError(c, err)
 			return usage, streamErr
 		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
@@ -94,7 +94,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
 		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
-			SendOpenAIStreamingError(c, err)
+			SendOpenAIStreamError(c, err)
 			return usage, streamErr
 		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")

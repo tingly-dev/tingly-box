@@ -36,7 +36,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 	if err != nil {
 		if !c.Writer.Written() && !errors.Is(err, context.Canceled) && !errors.Is(err, io.EOF) {
 			logrus.WithContext(c.Request.Context()).Errorf("Anthropic to Responses pre-stream error: %v", err)
-			SendOpenAIStreamingError(c, err)
+			SendOpenAIStreamError(c, err)
 			return protocol.ZeroTokenUsage(), err
 		}
 		if errors.Is(err, context.Canceled) {

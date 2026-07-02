@@ -68,7 +68,7 @@ func respondOpenAIMCPError(s *Server, c *gin.Context, recorder *ProtocolRecorder
 // response for streaming MCP tool call failures.
 func recordAnthropicMCPError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendAnthropicStreamingError(c, err)
+	stream.SendAnthropicStreamError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
@@ -76,7 +76,7 @@ func recordAnthropicMCPError(s *Server, c *gin.Context, err error, recorder *Pro
 
 func recordOpenAIMCPError(s *Server, c *gin.Context, err error, recorder *ProtocolRecorder) {
 	s.trackUsageFromContext(c, 0, 0, err)
-	stream.SendOpenAIStreamingError(c, err)
+	stream.SendOpenAIStreamError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
