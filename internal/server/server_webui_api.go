@@ -21,13 +21,8 @@ import (
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// NewGinHandlerWrapper converts gin.HandlerFunc to swagger.Handler
-func NewGinHandlerWrapper(h gin.HandlerFunc) swagger.Handler {
-	return swagger.Handler(h)
-}
-
-// useWebAPIEndpoints configures API routes for web UI using swagger manager
-func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
+// UseWebAPIEndpoints configures API routes for web UI using swagger manager
+func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Set Swagger information
 	manager.SetSwaggerInfo(swagger.SwaggerInfo{
 		Title:       "Tingly Box API",
@@ -97,58 +92,58 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV2.Router.Use(s.getUserAuthMiddleware())
 
 	// Log API routes (HTTP request logs from memory)
-	apiV1.GET("/log", s.GetLogs,
+	apiV1.GET("/log", s.controlHandler.GetLogs,
 		swagger.WithDescription("Get HTTP request logs with optional filtering"),
 		swagger.WithTags("logs"),
 		swagger.WithResponseModel(LogsResponse{}),
 	)
-	apiV1.GET("/log/stats", s.GetLogStats,
+	apiV1.GET("/log/stats", s.controlHandler.GetLogStats,
 		swagger.WithDescription("Get HTTP request log statistics"),
 		swagger.WithTags("logs"),
 	)
-	apiV1.DELETE("/log", s.ClearLogs,
+	apiV1.DELETE("/log", s.controlHandler.ClearLogs,
 		swagger.WithDescription("Clear all HTTP request logs"),
 		swagger.WithTags("logs"),
 	)
 
 	// System Log API routes (application logs from JSON file)
-	apiV1.GET("/system/logs", s.GetSystemLogs,
+	apiV1.GET("/system/logs", s.controlHandler.GetSystemLogs,
 		swagger.WithDescription("Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return."),
 		swagger.WithTags("system-logs"),
 		swagger.WithResponseModel(SystemLogsResponse{}),
 	)
-	apiV1.GET("/system/logs/stats", s.GetSystemLogStats,
+	apiV1.GET("/system/logs/stats", s.controlHandler.GetSystemLogStats,
 		swagger.WithDescription("Get system log statistics"),
 		swagger.WithTags("system-logs"),
 	)
-	apiV1.GET("/system/logs/level", s.GetSystemLogLevel,
+	apiV1.GET("/system/logs/level", s.controlHandler.GetSystemLogLevel,
 		swagger.WithDescription("Get the current system log level"),
 		swagger.WithTags("system-logs"),
 	)
-	apiV1.POST("/system/logs/level", s.SetSystemLogLevel,
+	apiV1.POST("/system/logs/level", s.controlHandler.SetSystemLogLevel,
 		swagger.WithDescription("Set the minimum log level for system logs"),
 		swagger.WithTags("system-logs"),
 	)
 
 	// Model Request routes (correlated per-request traces across pipeline stages)
-	apiV1.GET("/requests", s.GetModelRequests,
+	apiV1.GET("/requests", s.controlHandler.GetModelRequests,
 		swagger.WithDescription("List recent model requests, one row per correlation id, joining the HTTP access log, model-request stage logs and smart-routing traces. Supports 'limit', 'scenario', 'provider' and 'status' filters."),
 		swagger.WithTags("requests"),
 		swagger.WithResponseModel(ModelRequestsResponse{}),
 	)
-	apiV1.GET("/requests/:id", s.GetModelRequestDetail,
+	apiV1.GET("/requests/:id", s.controlHandler.GetModelRequestDetail,
 		swagger.WithDescription("Get the full, time-ordered event timeline for a single model request by correlation id."),
 		swagger.WithTags("requests"),
 		swagger.WithResponseModel(ModelRequestDetail{}),
 	)
 
 	// Action History API routes (user operations/audit log)
-	apiV1.GET("/actions/history", s.GetActionHistory,
+	apiV1.GET("/actions/history", s.controlHandler.GetActionHistory,
 		swagger.WithDescription("Get user action history from memory (recent operations)"),
 		swagger.WithTags("actions"),
 		swagger.WithResponseModel(ActionHistoryResponse{}),
 	)
-	apiV1.GET("/actions/stats", s.GetActionStats,
+	apiV1.GET("/actions/stats", s.controlHandler.GetActionStats,
 		swagger.WithDescription("Get statistics about user actions"),
 		swagger.WithTags("actions"),
 	)
@@ -200,13 +195,13 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	}
 
 	// Server Management
-	apiV1.GET("/status", s.GetStatus,
+	apiV1.GET("/status", s.controlHandler.GetStatus,
 		swagger.WithDescription("Get server status and statistics"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(StatusResponse{}),
 	)
 
-	apiV1.POST("/server/start", s.StartServer,
+	apiV1.POST("/server/start", s.controlHandler.StartServer,
 		swagger.WithDescription("Start the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
@@ -218,7 +213,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	apiV1.POST("/server/restart", s.RestartServer,
+	apiV1.POST("/server/restart", s.controlHandler.RestartServer,
 		swagger.WithDescription("Restart the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
@@ -233,93 +228,93 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	scenario.RegisterRoutes(apiV1, scenarioHandler)
 
 	// Guardrails Management
-	apiV1.GET("/guardrails/config", s.GetGuardrailsConfig,
+	apiV1.GET("/guardrails/config", s.guardrailsHandler.GetGuardrailsConfig,
 		swagger.WithDescription("Get guardrails config content and parsed config"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.GET("/guardrails/builtins", s.GetGuardrailsBuiltins,
+	apiV1.GET("/guardrails/builtins", s.guardrailsHandler.GetGuardrailsBuiltins,
 		swagger.WithDescription("Get curated builtin guardrails policies"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.GET("/guardrails/registry", s.GetGuardrailsRegistry,
+	apiV1.GET("/guardrails/registry", s.guardrailsHandler.GetGuardrailsRegistry,
 		swagger.WithDescription("List downloadable guardrails policies from a remote registry"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/registry/install", s.InstallGuardrailsRegistryPolicy,
+	apiV1.POST("/guardrails/registry/install", s.guardrailsHandler.InstallGuardrailsRegistryPolicy,
 		swagger.WithDescription("Download a guardrails policy from a remote registry into the local guardrails directory"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.GET("/guardrails/credentials", s.GetGuardrailsCredentials,
+	apiV1.GET("/guardrails/credentials", s.guardrailsHandler.GetGuardrailsCredentials,
 		swagger.WithDescription("List protected credentials used by guardrails pseudonymization"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.GET("/guardrails/credential/:id", s.GetGuardrailsCredential,
+	apiV1.GET("/guardrails/credential/:id", s.guardrailsHandler.GetGuardrailsCredential,
 		swagger.WithDescription("Get a protected credential for the local editor dialog"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/credential", s.CreateGuardrailsCredential,
+	apiV1.POST("/guardrails/credential", s.guardrailsHandler.CreateGuardrailsCredential,
 		swagger.WithDescription("Create a protected credential for guardrails pseudonymization"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.PUT("/guardrails/credential/:id", s.UpdateGuardrailsCredential,
+	apiV1.PUT("/guardrails/credential/:id", s.guardrailsHandler.UpdateGuardrailsCredential,
 		swagger.WithDescription("Update a protected credential for guardrails pseudonymization"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.DELETE("/guardrails/credential/:id", s.DeleteGuardrailsCredential,
+	apiV1.DELETE("/guardrails/credential/:id", s.guardrailsHandler.DeleteGuardrailsCredential,
 		swagger.WithDescription("Delete a protected credential for guardrails pseudonymization"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.PUT("/guardrails/config", s.UpdateGuardrailsConfig,
+	apiV1.PUT("/guardrails/config", s.guardrailsHandler.UpdateGuardrailsConfig,
 		swagger.WithDescription("Update guardrails config and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/fragment/import", s.ImportGuardrailsFragment,
+	apiV1.POST("/guardrails/fragment/import", s.guardrailsHandler.ImportGuardrailsFragment,
 		swagger.WithDescription("Import one or more guardrails policies into the shared custom fragment"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/fragment/export", s.ExportGuardrailsFragments,
+	apiV1.POST("/guardrails/fragment/export", s.guardrailsHandler.ExportGuardrailsFragments,
 		swagger.WithDescription("Export one or more imported guardrails policy fragments"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.PUT("/guardrails/policy/:id", s.UpdateGuardrailsPolicy,
+	apiV1.PUT("/guardrails/policy/:id", s.guardrailsHandler.UpdateGuardrailsPolicy,
 		swagger.WithDescription("Update a guardrails policy and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.DELETE("/guardrails/policy/:id", s.DeleteGuardrailsPolicy,
+	apiV1.DELETE("/guardrails/policy/:id", s.guardrailsHandler.DeleteGuardrailsPolicy,
 		swagger.WithDescription("Delete a guardrails policy and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/policy", s.CreateGuardrailsPolicy,
+	apiV1.POST("/guardrails/policy", s.guardrailsHandler.CreateGuardrailsPolicy,
 		swagger.WithDescription("Create a new guardrails policy and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.PUT("/guardrails/group/:id", s.UpdateGuardrailsGroup,
+	apiV1.PUT("/guardrails/group/:id", s.guardrailsHandler.UpdateGuardrailsGroup,
 		swagger.WithDescription("Update a guardrails group and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.DELETE("/guardrails/group/:id", s.DeleteGuardrailsGroup,
+	apiV1.DELETE("/guardrails/group/:id", s.guardrailsHandler.DeleteGuardrailsGroup,
 		swagger.WithDescription("Delete a guardrails group and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/group", s.CreateGuardrailsGroup,
+	apiV1.POST("/guardrails/group", s.guardrailsHandler.CreateGuardrailsGroup,
 		swagger.WithDescription("Create a new guardrails group and reload engine"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.POST("/guardrails/reload", s.ReloadGuardrailsConfig,
+	apiV1.POST("/guardrails/reload", s.guardrailsHandler.ReloadGuardrailsConfig,
 		swagger.WithDescription("Reload guardrails config from disk"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.GET("/guardrails/history", s.GetGuardrailsHistory,
+	apiV1.GET("/guardrails/history", s.guardrailsHandler.GetGuardrailsHistory,
 		swagger.WithDescription("Get recent guardrails interception history"),
 		swagger.WithTags("guardrails"),
 	)
-	apiV1.DELETE("/guardrails/history", s.ClearGuardrailsHistory,
+	apiV1.DELETE("/guardrails/history", s.guardrailsHandler.ClearGuardrailsHistory,
 		swagger.WithDescription("Clear guardrails interception history"),
 		swagger.WithTags("guardrails"),
 	)
 
 	// History
-	apiV1.GET("/history", s.GetHistory,
+	apiV1.GET("/history", s.controlHandler.GetHistory,
 		swagger.WithDescription("Get request history"),
 		swagger.WithTags("history"),
 		swagger.WithResponseModel(HistoryResponse{}),
@@ -334,14 +329,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeE2EService, s.probeLightweight))
 
 	// Token Management
-	apiV1.POST("/token", s.GenerateToken,
+	apiV1.POST("/token", s.controlHandler.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),
 		swagger.WithTags("token"),
 		swagger.WithRequestModel(GenerateTokenRequest{}),
 		swagger.WithResponseModel(TokenResponse{}),
 	)
 
-	apiV1.GET("/token", s.GetToken,
+	apiV1.GET("/token", s.controlHandler.GetToken,
 		swagger.WithDescription("Get existing API token or generate new one"),
 		swagger.WithTags("token"),
 		swagger.WithResponseModel(TokenResponse{}),
@@ -481,25 +476,4 @@ func (s *Server) ResetModelToken(c *gin.Context) {
 			"token": newToken,
 		},
 	})
-}
-
-// Helper function to mask tokens for display
-func maskToken(token string) string {
-	if token == "" {
-		return ""
-	}
-
-	// If already masked, return as is
-	if strings.Contains(token, "...") {
-		return token
-	}
-
-	// For very short tokens, mask all characters
-	if len(token) <= 8 {
-		return strings.Repeat("*", len(token))
-	}
-
-	// For longer tokens, show first 12 and last 4 characters
-	// This works for both short and long tokens
-	return token[:12] + "..." + token[len(token)-4:]
 }

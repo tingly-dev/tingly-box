@@ -24,6 +24,11 @@ import (
 // synthetic ssestream.Stream rather than spinning up the full gin router
 // + httptest upstream + routing pipeline. The wiring assertion is the
 // same and the test is ~150 lines lighter.
+//
+// Shared helpers (memExporter, streamableRecorder, ctxWithTimeout,
+// newRecordingTestHandler) live in recording_hooks_test.go — this used to be
+// root's last remaining recording e2e test with its own local copies; now
+// that both files share the aimodel package, they reuse the same helpers.
 
 // fakeDecoder implements ssestream.Decoder over a static event slice.
 type fakeDecoder struct {
@@ -46,16 +51,7 @@ func (f *fakeDecoder) Err() error             { return nil }
 func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
 
-	// Wire an in-memory exporter so we can inspect what was recorded.
-	mem := &memExporter{}
-	sink := obs.NewSink("", obs.RecordModeStagedRequestResponse, obs.WithExporters(mem))
-	require.NotNil(t, sink)
-	t.Cleanup(func() { sink.Close() })
-
-	s := &Server{
-		scenarioRecordSinks: map[typ.RuleScenario]*obs.Sink{scenario: sink},
-		recordMode:          obs.RecordModeStagedRequestResponse,
-	}
+	h, sink, mem := newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
 
 	// Gin context with CloseNotify-capable writer (gin.Context.Stream needs it).
 	gin.SetMode(gin.TestMode)
@@ -66,7 +62,7 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	provider := &typ.Provider{Name: "anthropic-test-prov"}
 
 	// Recorder built via the production entry point.
-	recorder := s.EnsureProtocolRecorder(c, string(scenario), provider, "actual-stream-model", obs.RecordModeStagedRequestResponse, nil)
+	recorder := h.EnsureProtocolRecorder(c, string(scenario), provider, "actual-stream-model", obs.RecordModeStagedRequestResponse, nil)
 	require.NotNil(t, recorder)
 
 	// Synthetic SSE event sequence. The Stream decoder will JSON-unmarshal
@@ -87,7 +83,7 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	// Direct call into the inner streaming handler — the function under
 	// test. If AttachRecorderHooks were dropped, the assertion below
 	// (assembled body in FinalResponse) would fail.
-	s.streamAnthropicBeta(c, req, streamResp, string(req.Model), "proxy-stream-model", provider, recorder)
+	h.StreamAnthropicBeta(c, req, streamResp, string(req.Model), "proxy-stream-model", provider, recorder)
 
 	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
 

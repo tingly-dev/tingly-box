@@ -7,7 +7,7 @@ import (
 )
 
 // isCursorRequest reports whether the inbound request looks like it came from
-// the Cursor IDE, based on common request headers. Used by resolveRuleFlags to
+// the Cursor IDE, based on common request headers. Used by ResolveRuleFlags to
 // fold the cursor_compat_auto flag into an effective cursor_compat decision.
 func isCursorRequest(c *gin.Context) bool {
 	if c == nil {

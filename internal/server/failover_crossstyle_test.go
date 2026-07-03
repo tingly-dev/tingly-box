@@ -47,7 +47,7 @@ func TestSelectFallbackService_SpansAPIStyles(t *testing.T) {
 	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{ProbeEnabled: false})
 	hf := typ.NewHealthFilter(hm)
 	lb := NewLoadBalancer(cfg, hf)
-	s := &Server{config: cfg, loadBalancer: lb, healthMonitor: hm}
+	h := NewHandler(AIHandlerDeps{Config: cfg, LoadBalancer: lb, HealthMonitor: hm})
 
 	rule := &typ.Rule{
 		UUID: "cross-style-rule",
@@ -67,7 +67,7 @@ func TestSelectFallbackService_SpansAPIStyles(t *testing.T) {
 	}
 
 	// Heterogeneous pool ("") must fall over to the OpenAI provider.
-	p, svc, err := s.selectFallbackService(rule, tried, "")
+	p, svc, err := h.selectFallbackService(rule, tried, "")
 	if err != nil {
 		t.Fatalf("selectFallbackService(\"\") error: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSelectFallbackService_SpansAPIStyles(t *testing.T) {
 	// Pinned to the original Anthropic style, the OpenAI candidate is filtered
 	// out and the only remaining service is excluded → no candidate. This is the
 	// limitation the lift removes.
-	p2, svc2, err := s.selectFallbackService(rule, tried, protocol.APIStyleAnthropic)
+	p2, svc2, err := h.selectFallbackService(rule, tried, protocol.APIStyleAnthropic)
 	if err != nil {
 		t.Fatalf("selectFallbackService(anthropic) error: %v", err)
 	}

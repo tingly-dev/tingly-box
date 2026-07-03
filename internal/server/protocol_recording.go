@@ -83,14 +83,21 @@ func (sr *ProtocolRecorder) breakerServiceID() string {
 // EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,
 // reusing any recorder already stored in the gin context. Returns nil when
 // recording is disabled (no sink) or the request body cannot be read.
-func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *ProtocolRecorder {
+//
+// GetOrCreateScenarioSink is a AIHandlerDeps callback rather than a direct call
+// because scenario sink lifecycle (creation, mutex, recordDir) still lives on
+// root *Server — see AIHandlerDeps.
+func (ah *AIHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *ProtocolRecorder {
 	if rec, ok := getRecorderFromContext(c); ok {
 		rec.bindProvider(provider, model, mode)
 		return rec
 	}
 
+	if ah.deps.GetOrCreateScenarioSink == nil {
+		return nil
+	}
 	scenarioType := typ.RuleScenario(scenario)
-	sink := s.GetOrCreateScenarioSink(scenarioType)
+	sink := ah.deps.GetOrCreateScenarioSink(scenarioType)
 	if sink == nil {
 		return nil
 	}
@@ -132,6 +139,14 @@ func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 		originalRequest: req,
 		mode:            mode,
 	}, nil
+}
+
+// GetRecorderFromContext returns the ProtocolRecorder stashed in c by
+// EnsureProtocolRecorder, if any. Exported for root callers
+// (failover_dispatch.go, protocol_cross.go — both still Step 7-9 territory)
+// that need to re-bind or inspect the active recorder mid-request.
+func GetRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
+	return getRecorderFromContext(c)
 }
 
 func getRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {

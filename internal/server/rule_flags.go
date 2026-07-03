@@ -10,14 +10,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// rulePreBaseTransforms builds the per-rule list of pre-Base transforms for the
+// RulePreBaseTransforms builds the per-rule list of pre-Base transforms for the
 // chain's preBase slot. Pre-Base transforms act on the *inbound* request shape —
 // they run before BaseTransform's protocol conversion, so the type-switch inside
 // each transform sees what the client actually sent.
 //
 // Returns nil when no rule-level flag requires a pre-Base stage so callers can
 // pass the result straight to BuildTransformChain's preBase parameter.
-func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
+func RulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 	var pre []transform.Transform
 	if flags.CursorCompat {
 		pre = append(pre, transform.NewOpenAICursorCompatTransform())
@@ -50,7 +50,7 @@ func parseBlockTools(raw string) []string {
 	return names
 }
 
-// rulePreVendorTransforms builds the per-rule list of pre-Vendor transforms for
+// RulePreVendorTransforms builds the per-rule list of pre-Vendor transforms for
 // the chain's preVendor slot (after Consistency, before Vendor). These act on
 // the *target* request shape — they run after BaseTransform's protocol
 // conversion, so the type-switch inside each transform matches the
@@ -62,7 +62,7 @@ func parseBlockTools(raw string) []string {
 //
 // Takes already-resolved flags so callers that need other fields off
 // RuleFlags (CustomUserAgent, SkipUsage) can resolve once and share.
-func rulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
+func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	var preVendor []transform.Transform
 	if flags.UseMaxCompletionTokens || flags.UseMaxTokens {
 		preVendor = append(preVendor, transform.NewOpenAIMaxTokensRewriteTransform(
@@ -76,14 +76,14 @@ func rulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	return preVendor
 }
 
-// resolveRuleFlags returns the effective flags for this request: a copy of
+// ResolveRuleFlags returns the effective flags for this request: a copy of
 // the rule's persisted flags, with:
 // - cursor_compat_auto folded into cursor_compat when the inbound request carries Cursor headers
 // Returns the zero value when no rule is bound.
 //
 // All flag folding/injection happens here (not at each handler call site) so that
-// rulePreBaseTransforms and downstream consumers read the same merged value.
-func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
+// RulePreBaseTransforms and downstream consumers read the same merged value.
+func ResolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 	if rule == nil {
 		return typ.RuleFlags{}
 	}
@@ -97,7 +97,7 @@ func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 	return flags
 }
 
-// resolveRuleFlagsWithScenario extends resolveRuleFlags to also inject scenario-level
+// ResolveRuleFlagsWithScenario extends resolveRuleFlags to also inject scenario-level
 // flags and auto-apply CleanHeader for protocol transformation scenarios.
 //
 // This is the main entry point that merges:
@@ -112,7 +112,7 @@ func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 // handler. The User-Agent is the one rule flag that has to reach a deep
 // component (the outbound transport) via ctx, so this central merge point is
 // where it gets applied.
-func resolveRuleFlagsWithScenario(
+func ResolveRuleFlagsWithScenario(
 	c *gin.Context,
 	rule *typ.Rule,
 	scenarioType typ.RuleScenario,
@@ -120,7 +120,7 @@ func resolveRuleFlagsWithScenario(
 	sourceAPI, targetAPI protocol.APIType,
 	provider *typ.Provider,
 ) typ.RuleFlags {
-	flags := resolveRuleFlags(c, rule)
+	flags := ResolveRuleFlags(c, rule)
 
 	if scenarioConfig != nil {
 		// Only inject scenario-level ThinkingEffort if rule hasn't set it explicitly
@@ -189,7 +189,7 @@ func applyContext1M(c *gin.Context, flags typ.RuleFlags) {
 // override. No-op when no override is configured, so the vendor/provider
 // User-Agent is left untouched.
 //
-// Called from resolveRuleFlagsWithScenario, which every handler now routes
+// Called from ResolveRuleFlagsWithScenario, which every handler now routes
 // through — so no handler needs to apply the User-Agent itself.
 func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
 	if flags.CustomUserAgent == "" || c == nil || c.Request == nil {
@@ -198,14 +198,14 @@ func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
 	c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), flags.CustomUserAgent))
 }
 
-// shouldStripUsage merges the cursor_compat and skip_usage hints carried in
+// ShouldStripUsage merges the cursor_compat and skip_usage hints carried in
 // reqCtx.Extra. The dispatch layer ORs both together so a rule that only
 // flips skip_usage still strips the usage block, and cursor_compat keeps its
 // historical behavior of suppressing usage as a side effect.
 //
 // Extracted so the wiring is unit-testable independent of the surrounding
 // transform/forward machinery.
-func shouldStripUsage(extra map[string]interface{}) bool {
+func ShouldStripUsage(extra map[string]interface{}) bool {
 	if extra == nil {
 		return false
 	}

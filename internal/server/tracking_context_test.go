@@ -94,7 +94,7 @@ func TestGetTrackingContext_EmptyContext(t *testing.T) {
 func TestCalculateLatencyFromStart(t *testing.T) {
 	t.Run("100ms latency", func(t *testing.T) {
 		start := time.Now().Add(-100 * time.Millisecond)
-		latency := calculateLatencyFromStart(start)
+		latency := CalculateLatencyFromStart(start)
 
 		// Allow some tolerance for execution time
 		assert.GreaterOrEqual(t, latency, 95)
@@ -102,7 +102,7 @@ func TestCalculateLatencyFromStart(t *testing.T) {
 	})
 
 	t.Run("zero time", func(t *testing.T) {
-		latency := calculateLatencyFromStart(time.Time{})
+		latency := CalculateLatencyFromStart(time.Time{})
 		assert.Equal(t, 0, latency)
 	})
 }
@@ -124,7 +124,7 @@ func TestExtractScenarioFromPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractScenarioFromPath(tt.path)
+			result := ExtractScenarioFromPath(tt.path)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -204,7 +204,7 @@ func TestDetectCacheHit(t *testing.T) {
 			CacheInputTokens: 80, // Cache was used
 		}
 
-		cacheHit := detectCacheHit(usage)
+		cacheHit := DetectCacheHit(usage)
 		assert.True(t, cacheHit)
 	})
 
@@ -215,12 +215,12 @@ func TestDetectCacheHit(t *testing.T) {
 			CacheInputTokens: 0, // No cache
 		}
 
-		cacheHit := detectCacheHit(usage)
+		cacheHit := DetectCacheHit(usage)
 		assert.False(t, cacheHit)
 	})
 
 	t.Run("nil usage", func(t *testing.T) {
-		cacheHit := detectCacheHit(nil)
+		cacheHit := DetectCacheHit(nil)
 		assert.False(t, cacheHit)
 	})
 }

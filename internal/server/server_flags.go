@@ -23,11 +23,7 @@ func (s *Server) guardrailsEnabled() bool {
 
 // mcpEnabled checks if MCP feature is enabled via scenario flag
 func (s *Server) mcpEnabled() bool {
-	if s.config == nil {
-		return false
-	}
-	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionMCP) ||
-		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
+	return MCPEnabled(s.config)
 }
 
 func (s *Server) initGuardrailsRuntime() {
@@ -40,7 +36,7 @@ func (s *Server) initGuardrailsRuntime() {
 		return
 	}
 
-	cfgPath, err := FindGuardrailsConfig(s.config.ConfigDir)
+	cfgPath, err := config.FindConfig(s.config.ConfigDir)
 	if err != nil {
 		if !strings.Contains(err.Error(), "no guardrails config") {
 			logrus.WithError(err).Warn("Failed to locate guardrails config")
@@ -74,7 +70,7 @@ func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
 		return "", fmt.Errorf("config directory not set")
 	}
 
-	path := GetGuardrailsConfigPath(s.config.ConfigDir)
+	path := config.ConfigPath(s.config.ConfigDir)
 	cfg := guardrailscore.Config{
 		Groups: []guardrailscore.PolicyGroup{
 			{
@@ -85,11 +81,11 @@ func (s *Server) ensureDefaultGuardrailsConfig() (string, error) {
 		},
 	}
 
-	data, err := marshalGuardrailsConfig(cfg)
+	data, err := config.MarshalConfig(cfg)
 	if err != nil {
 		return "", err
 	}
-	if err := writeFileAtomic(path, data); err != nil {
+	if err := config.WriteFileAtomic(path, data); err != nil {
 		return "", err
 	}
 

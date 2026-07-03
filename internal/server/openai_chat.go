@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -14,7 +15,7 @@ import (
 )
 
 // HandleOpenAIChatCompletions handles OpenAI v1 chat completion requests
-func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
+func (ah *AIHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 
 	scenario := c.Param("scenario")
 
@@ -73,7 +74,7 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 
 	// Convert string to RuleScenario and validate
 	scenarioType := typ.RuleScenario(scenario)
-	if !isValidRuleScenario(scenarioType) {
+	if !IsValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
@@ -94,7 +95,7 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 	//}
 
 	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
+	rule, err = ah.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -105,10 +106,10 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
-	s.applyVisionProxy(c, scenarioType, rule, &req.ChatCompletionNewParams)
+	ah.applyVisionProxy(c, scenarioType, rule, &req.ChatCompletionNewParams)
 
 	// Select service using routing pipeline
-	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
+	provider, selectedService, err = ah.deps.RoutingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -122,16 +123,16 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 	actualModel := selectedService.Model
 	req.Model = actualModel
 
-	s.applyVisionProxy(c, scenarioType, rule, req.ChatCompletionNewParams)
+	ah.applyVisionProxy(c, scenarioType, rule, req.ChatCompletionNewParams)
 
-	s.OpenAIChatCompletion(c, req, responseModel, provider, scenarioType, rule)
+	ah.OpenAIChatCompletion(c, req, responseModel, provider, scenarioType, rule)
 }
 
 // OpenAIChatCompletion runs the provider-independent prologue once, then drives
 // the failover loop whose per-attempt callback re-runs the provider-dependent
 // pipeline (align → cap → target resolution → transform → dispatch) so failover
 // can rotate across heterogeneous API styles.
-func (s *Server) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, scenarioType typ.RuleScenario, rule *typ.Rule) {
+func (ah *AIHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, scenarioType typ.RuleScenario, rule *typ.Rule) {
 	// ── One-time prologue (provider-independent) ──
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
@@ -139,7 +140,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCo
 
 	isStreaming := req.Stream
 	actualModel := req.Model
-	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
+	scenarioConfig := ah.deps.Config.GetScenarioConfig(scenarioType)
 
 	// Inject session ID into request context so all downstream code can access it
 	sessionID := resolveSessionID(c, &req.ChatCompletionNewParams)
@@ -164,25 +165,25 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAIChatCo
 	}
 
 	// ── Per-attempt pipeline (provider-dependent) ──
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+	ah.DispatchWithPriorityFailover(c, rule, provider, actualModel,
 		func(p *typ.Provider, retryModel string) {
 			areq := req
 			if multi {
-				cloned, err := cloneOpenAIChatRequest(template)
+				cloned, err := CloneOpenAIChatRequest(template)
 				if err != nil {
-					s.failAttemptSetup(c, err)
+					ah.FailAttemptSetup(c, err)
 					return
 				}
 				areq = cloned
 			}
-			s.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
+			ah.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
 		})
 }
 
 // runOpenAIChatAttempt executes the provider-dependent half of an OpenAI chat
 // request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
-func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
+func (ah *AIHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
@@ -191,7 +192,7 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 	}
 
 	req.Model = actualModel
-	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	maxAllowed := ah.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	transform.AlignToolMessagesForOpenAI(req.ChatCompletionNewParams)
 
@@ -210,27 +211,27 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
-		tempFlags := resolveRuleFlags(c, rule)
+		tempFlags := ResolveRuleFlags(c, rule)
 		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
 		if routeErr != nil {
-			s.failAttemptSetup(c, routeErr)
+			ah.FailAttemptSetup(c, routeErr)
 			return
 		}
 		target = resolvedTarget
 	default:
-		s.failAttemptSetup(c, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
+		ah.FailAttemptSetup(c, fmt.Errorf("Unsupported API style: %s %s", provider.Name, apiStyle))
 		return
 	}
 
 	// === Resolve flags with scenario injection ===
 	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
 	// request context, so no separate call is needed here.)
-	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
+	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
 
 	// === Transform via pipeline ===
-	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
+	reqCtx, err := ah.TransformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
+		ah.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
 	defer reqCtx.Release()
@@ -241,5 +242,5 @@ func (s *Server) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCo
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = responseModel
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+	ah.DispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }

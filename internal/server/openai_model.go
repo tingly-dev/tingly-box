@@ -8,21 +8,44 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// OpenAIModel represents a model in OpenAI's models API format
+type OpenAIModel struct {
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Created     int64  `json:"created"`
+	OwnedBy     string `json:"owned_by"`
+	Description string `json:"description,omitempty"` // Model description
+	Context     int    `json:"context,omitempty"`     // Max context window
+	MaxOutput   int    `json:"max_output,omitempty"`  // Max output tokens
+	// AuthType reflects the primary backing provider's auth type. It is
+	// non-standard (OpenAI's models API has no such field) and consumed by
+	// the tingly-box frontend to order model picker entries:
+	// oauth -> api_key -> vmodel.
+	AuthType string `json:"auth_type,omitempty"`
+}
+
+// OpenAIModelsResponse represents OpenAI's models API response format
+type OpenAIModelsResponse struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
+}
+
 // HandleOpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
-func (s *Server) HandleOpenAIListModels(c *gin.Context) {
-	s.openAIListModelsWithScenario(c, nil)
+func (ah *AIHandler) HandleOpenAIListModels(c *gin.Context) {
+	ah.openAIListModelsWithScenario(c, nil)
 }
 
 // OpenAIListModelsForScenario handles scenario-scoped model listing for OpenAI format
-func (s *Server) OpenAIListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
-	s.openAIListModelsWithScenario(c, &scenario)
+func (ah *AIHandler) OpenAIListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
+	ah.openAIListModelsWithScenario(c, &scenario)
 }
 
-func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
-	cfg := s.config
+func (ah *AIHandler) openAIListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
+	cfg := ah.deps.Config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -41,7 +64,7 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		if !rule.Active {
 			continue
 		}
-		if scenario != nil && !shouldIncludeRuleInModelList(*scenario, rule.GetScenario()) {
+		if scenario != nil && !ShouldIncludeRuleInModelList(*scenario, rule.GetScenario()) {
 			continue
 		}
 
@@ -110,13 +133,13 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 			Description: description,
 			Context:     context,
 			MaxOutput:   maxOutput,
-			AuthType:    string(primaryAuthTypeForRule(cfg, rule)),
+			AuthType:    string(PrimaryAuthTypeForRule(cfg, rule)),
 		})
 	}
 
 	sort.SliceStable(models, func(i, j int) bool {
-		return authTypeSortWeight(typ.AuthType(models[i].AuthType)) <
-			authTypeSortWeight(typ.AuthType(models[j].AuthType))
+		return AuthTypeSortWeight(typ.AuthType(models[i].AuthType)) <
+			AuthTypeSortWeight(typ.AuthType(models[j].AuthType))
 	})
 
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
@@ -126,12 +149,12 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 }
 
 // ListModelsByScenario handles the /v1/models endpoint for scenario-based routing
-func (s *Server) ListModelsByScenario(c *gin.Context) {
+func (ah *AIHandler) ListModelsByScenario(c *gin.Context) {
 	scenario := c.Param("scenario")
 
 	// Convert string to RuleScenario and validate
 	scenarioType := typ.RuleScenario(scenario)
-	if !isValidRuleScenario(scenarioType) {
+	if !IsValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"message": fmt.Sprintf("invalid scenario: %s", scenario),
@@ -144,9 +167,9 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 	// Route to appropriate handler based on scenario
 	switch scenarioType.Base() {
 	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
-		s.AnthropicListModelsForScenario(c, scenarioType)
+		ah.AnthropicListModelsForScenario(c, scenarioType)
 	default:
 		// OpenAI is the default
-		s.OpenAIListModelsForScenario(c, scenarioType)
+		ah.OpenAIListModelsForScenario(c, scenarioType)
 	}
 }

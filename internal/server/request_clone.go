@@ -21,35 +21,35 @@ import (
 // copy would alias. JSON round-trip preserves both those extras and the
 // param.Opt "null vs omitted vs present" tri-state.
 
-// cloneAnthropicV1Request rebuilds an Anthropic v1 request from a marshalled
+// CloneAnthropicV1Request rebuilds an Anthropic v1 request from a marshalled
 // template (produced by AnthropicMessagesRequest.MarshalJSON).
-func cloneAnthropicV1Request(template []byte) (*protocol.AnthropicMessagesRequest, error) {
+func CloneAnthropicV1Request(template []byte) (*protocol.AnthropicMessagesRequest, error) {
 	var r = &protocol.AnthropicMessagesRequest{}
 	err := json.Unmarshal(template, &r)
 	return r, err
 }
 
-// cloneAnthropicBetaRequest rebuilds an Anthropic beta request from a marshalled
+// CloneAnthropicBetaRequest rebuilds an Anthropic beta request from a marshalled
 // template (produced by AnthropicBetaMessagesRequest.MarshalJSON).
-func cloneAnthropicBetaRequest(template []byte) (*protocol.AnthropicBetaMessagesRequest, error) {
+func CloneAnthropicBetaRequest(template []byte) (*protocol.AnthropicBetaMessagesRequest, error) {
 	var r = &protocol.AnthropicBetaMessagesRequest{}
 	err := json.Unmarshal(template, &r)
 	return r, err
 }
 
-// cloneOpenAIChatRequest rebuilds an OpenAI chat request from a marshalled
+// CloneOpenAIChatRequest rebuilds an OpenAI chat request from a marshalled
 // template (produced by OpenAIChatCompletionRequest.MarshalJSON).
-func cloneOpenAIChatRequest(template []byte) (*protocol.OpenAIChatCompletionRequest, error) {
+func CloneOpenAIChatRequest(template []byte) (*protocol.OpenAIChatCompletionRequest, error) {
 	var r = &protocol.OpenAIChatCompletionRequest{}
 	err := json.Unmarshal(template, &r)
 	return r, err
 }
 
-// cloneResponsesParams clones the typed responses.ResponseNewParams. It marshals
+// CloneResponsesParams clones the typed responses.ResponseNewParams. It marshals
 // and unmarshals the SDK struct directly — NOT through ResponseCreateRequest,
 // whose UnmarshalJSON re-runs PreprocessInputData (input-item type injection)
 // that has already been applied to the template.
-func cloneResponsesParams(template *responses.ResponseNewParams) (*responses.ResponseNewParams, error) {
+func CloneResponsesParams(template *responses.ResponseNewParams) (*responses.ResponseNewParams, error) {
 	b, err := json.Marshal(template)
 	if err != nil {
 		return nil, err

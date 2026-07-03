@@ -11,14 +11,99 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// ServiceHealthResponse represents the health check response for services
+type ServiceHealthResponse struct {
+	Rule   string                 `json:"rule" example:"gpt-4"`
+	Health map[string]interface{} `json:"health"`
+}
+
+// UpdateRuleTacticRequest represents the request to update rule tactic
+type UpdateRuleTacticRequest struct {
+	Tactic string `json:"tactic" binding:"required,oneof=token_based random latency_based speed_based adaptive" description:"Load balancing tactic" example:"adaptive"`
+}
+
+// UpdateRuleTacticResponse represents the response for updating rule tactic
+type UpdateRuleTacticResponse struct {
+	Message string `json:"message" example:"Tactic updated successfully"`
+	Tactic  string `json:"tactic" example:"adaptive"`
+}
+
+// RuleStatsResponse represents the statistics response for a rule
+type RuleStatsResponse struct {
+	Rule  string                 `json:"rule" example:"gpt-4"`
+	Stats map[string]interface{} `json:"stats"`
+}
+
+// ServiceStatsResponse represents the statistics response for a service
+type ServiceStatsResponse struct {
+	ServiceID string                 `json:"service_id" example:"openai:gpt-4"`
+	Stats     map[string]interface{} `json:"stats,omitempty"`
+}
+
+// AllStatsResponse represents the response for all statistics
+type AllStatsResponse struct {
+	Stats map[string]interface{} `json:"stats"`
+}
+
+// CurrentServiceResponse represents the current service response
+type CurrentServiceResponse struct {
+	Rule      string                 `json:"rule" example:"gpt-4"`
+	Service   interface{}            `json:"service"`
+	ServiceID string                 `json:"service_id" example:"openai:gpt-4"`
+	Tactic    string                 `json:"tactic" example:"adaptive"`
+	Stats     map[string]interface{} `json:"stats,omitempty"`
+}
+
+// ServiceMetric represents a service metric entry
+type ServiceMetric struct {
+	ServiceID            string `json:"service_id" example:"openai:gpt-4"`
+	RequestCount         int64  `json:"request_count" example:"100"`
+	WindowRequestCount   int64  `json:"window_request_count" example:"50"`
+	WindowTokensConsumed int64  `json:"window_tokens_consumed" example:"25000"`
+	WindowInputTokens    int64  `json:"window_input_tokens" example:"15000"`
+	WindowOutputTokens   int64  `json:"window_output_tokens" example:"10000"`
+	LastUsed             string `json:"last_used" example:"2024-01-01T12:00:00Z"`
+}
+
+// MetricsResponse represents the metrics response
+type MetricsResponse struct {
+	Metrics       []ServiceMetric `json:"metrics"`
+	TotalServices int             `json:"total_services" example:"5"`
+}
+
+// ClearStatsResponse represents the response for clearing statistics
+type ClearStatsResponse struct {
+	Message string `json:"message" example:"Statistics cleared for rule: gpt-4"`
+}
+
+// RuleSummaryResponse represents a rule summary response
+type RuleSummaryResponse struct {
+	Summary interface{} `json:"summary"`
+}
+
+// LoadBalancerEngine is the narrow slice of the AI Model API's load-balancer
+// engine (internal/server(aimodel).LoadBalancer) that the admin REST surface
+// needs. Declared as an interface here — rather than importing the concrete
+// type — to avoid an import cycle, since the root server package already
+// imports this webui package for static-asset wiring.
+type LoadBalancerEngine interface {
+	SelectService(rule *typ.Rule) (*loadbalance.Service, error)
+	GetServiceStats(provider, model string) *loadbalance.ServiceStats
+	GetAllServiceStats() map[string]*loadbalance.ServiceStats
+	ClearServiceStats(provider, model string)
+	ClearAllStats()
+	GetRuleSummary(rule *typ.Rule) map[string]interface{}
+	HealthFilter() *typ.HealthFilter
+}
+
 // LoadBalancerAPI provides REST endpoints for load balancer management
 type LoadBalancerAPI struct {
-	loadBalancer *LoadBalancer
+	loadBalancer LoadBalancerEngine
 	config       *config.Config
 }
 
 // NewLoadBalancerAPI creates a new load balancer API
-func NewLoadBalancerAPI(loadBalancer *LoadBalancer, cfg *config.Config) *LoadBalancerAPI {
+func NewLoadBalancerAPI(loadBalancer LoadBalancerEngine, cfg *config.Config) *LoadBalancerAPI {
 	return &LoadBalancerAPI{
 		loadBalancer: loadBalancer,
 		config:       cfg,

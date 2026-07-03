@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
@@ -174,6 +175,25 @@ type Server struct {
 	customModelAuthMiddleware gin.HandlerFunc // For Model API routes
 
 	version string
+
+	// controlHandler is the WebUI Management API's aggregate handler
+	// (internal/server/webui.ControlHandler). Constructed as the LAST step of
+	// NewServer, after every field it depends on (memoryLogMW, multiLogger,
+	// config, jwtManager, ...) has already been set — do not move this
+	// construction earlier without checking every field it reads.
+	controlHandler *WebUIHandler
+
+	// guardrailsHandler is the WebUI Management API's guardrails admin
+	// handler (internal/server/webui.GuardrailsHandler). Same construction
+	// constraint as controlHandler above.
+	guardrailsHandler *GuardrailsHandler
+
+	// aiHandler is the AI Model API's aggregate handler
+	// (internal/server/aimodel.AIHandler), covering MCP-in-gateway dispatch,
+	// recording, and (eventually) protocol dispatch/transform/passthrough.
+	// Same last-step construction constraint as controlHandler above — every
+	// field/callback in aimodel.Deps must already be set.
+	aiHandler *AIHandler
 }
 
 // NewServer creates a new HTTP server instance with functional options
@@ -243,7 +263,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool()
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
-	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
+	historyStore := guardrailsutils.NewStore(200, config.HistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()
 	if grRuntime == nil {
 		server.setGuardrailsRuntimeRef(&guardrails.Guardrails{History: historyStore})
@@ -438,6 +458,48 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	} else {
 		server.quotaManager = quotaMgr
 	}
+
+	// Construct the WebUI Management API's control handler. This MUST be the
+	// last step before setupMiddleware/setupRoutes — every field it reads
+	// (memoryLogMW, multiLogger, jwtManager, config) needs to already be set.
+	server.controlHandler = NewControlHandler(WebUIDeps{
+		MemoryLogMW: server.memoryLogMW,
+		MultiLogger: server.multiLogger,
+		Config:      server.config,
+		JWTManager:  server.jwtManager,
+	})
+
+	// Construct the WebUI Management API's guardrails admin handler. Same
+	// last-step constraint as controlHandler above — Runtime is *Server
+	// itself via the exported adapter methods in guardrails_runtime_adapter.go.
+	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
+		Config:             server.config,
+		Runtime:            server,
+		GuardrailsConfigMu: &server.guardrailsConfigMu,
+	})
+
+	// Construct the AI Model API's aggregate handler. Same last-step
+	// constraint as controlHandler above. The callback fields reach back into
+	// root state that has not moved to aimodel yet (usage tracking, affinity
+	// store, recording sinks, guardrails runtime) — see aimodel.Deps.
+	server.aiHandler = NewHandler(AIHandlerDeps{
+		Config:                   server.config,
+		TokenTracker:             server.tokenTracker,
+		HealthMonitor:            server.healthMonitor,
+		ClientPool:               server.clientPool,
+		LoadBalancer:             server.loadBalancer,
+		MCPRuntime:               server.mcpRuntime,
+		TemplateManager:          server.templateManager,
+		RoutingSelector:          server.routingSelector,
+		VisionProxyService:       server.visionProxyService,
+		GetServertoolPipeline:    func() *servertool.Pipeline { return server.servertoolPipeline },
+		TrackUsageWithTokenUsage: server.trackUsageWithTokenUsage,
+		TrackUsageFromContext:    server.trackUsageFromContext,
+		UpdateAffinityMessageID:  server.updateAffinityMessageID,
+		GetOrCreateScenarioSink:  server.GetOrCreateScenarioSink,
+		CurrentGuardrailsRuntime: server.currentGuardrailsRuntime,
+		GetScenarioRecordMode:    server.GetScenarioRecordMode,
+	})
 
 	// Setup middleware
 	server.setupMiddleware()

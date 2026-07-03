@@ -20,7 +20,7 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("writes image and prompt under configDir/image", func(t *testing.T) {
 		tmp := t.TempDir()
-		s := &Server{config: &config.Config{ConfigDir: tmp}}
+		h := &AIHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		req := &openai.ImageGenerateParams{
 			Prompt: "a red bicycle",
@@ -29,7 +29,7 @@ func TestPersistImageGeneration(t *testing.T) {
 		}
 		resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}}}
 
-		s.persistImageGeneration(req, resp)
+		h.persistImageGeneration(req, resp)
 
 		imageRoot := constant.GetImageDir(tmp)
 		dirs, err := os.ReadDir(imageRoot)
@@ -61,10 +61,10 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("writes multiple images with indexed filenames", func(t *testing.T) {
 		tmp := t.TempDir()
-		s := &Server{config: &config.Config{ConfigDir: tmp}}
+		h := &AIHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}, {B64JSON: b64}}}
-		s.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
+		h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
 
 		dirs, err := os.ReadDir(constant.GetImageDir(tmp))
 		require.NoError(t, err)
@@ -83,10 +83,10 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("skips images without base64 data", func(t *testing.T) {
 		tmp := t.TempDir()
-		s := &Server{config: &config.Config{ConfigDir: tmp}}
+		h := &AIHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		resp := &openai.ImagesResponse{Data: []openai.Image{{URL: "https://example.com/x.png"}}}
-		s.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
+		h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
 
 		_, err := os.ReadDir(constant.GetImageDir(tmp))
 		assert.True(t, os.IsNotExist(err), "no image directory should be created")
@@ -94,9 +94,9 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("no-op for empty response", func(t *testing.T) {
 		tmp := t.TempDir()
-		s := &Server{config: &config.Config{ConfigDir: tmp}}
+		h := &AIHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
-		s.persistImageGeneration(&openai.ImageGenerateParams{}, &openai.ImagesResponse{})
+		h.persistImageGeneration(&openai.ImageGenerateParams{}, &openai.ImagesResponse{})
 
 		_, err := os.ReadDir(constant.GetImageDir(tmp))
 		assert.True(t, os.IsNotExist(err))

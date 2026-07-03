@@ -15,11 +15,13 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/require"
+
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -71,6 +73,16 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 		mcpRuntime: rt,
 		config:     conf,
 	}
+	server.aiHandler = NewHandler(AIHandlerDeps{
+		Config:                conf,
+		ClientPool:            cp,
+		MCPRuntime:            rt,
+		GetServertoolPipeline: func() *servertool.Pipeline { return server.servertoolPipeline },
+	})
+	// registerAdviserFromConfig sets server.servertoolPipeline; ordering
+	// relative to aiHandler construction no longer matters since
+	// GetServertoolPipeline reads server.servertoolPipeline fresh on each
+	// call via closure, not a value snapshot.
 	server.registerAdviserFromConfig()
 	return server
 }
@@ -206,7 +218,7 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 		},
 	}
 
-	finalResp, _, err := s.runGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
+	finalResp, _, err := s.aiHandler.RunGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)
@@ -326,7 +338,7 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 		},
 	}
 
-	finalResp, _, err := s.runGenericAnthropicV1NonStream(context.Background(), provider, req, nil)
+	finalResp, _, err := s.aiHandler.RunGenericAnthropicV1NonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)
@@ -435,7 +447,7 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 		},
 	}
 
-	finalResp, _, err := s.runGenericAnthropicBetaNonStream(context.Background(), provider, req, nil)
+	finalResp, _, err := s.aiHandler.RunGenericAnthropicBetaNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)
@@ -541,7 +553,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 		},
 	}
 
-	finalResp, _, err := s.runGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
+	finalResp, _, err := s.aiHandler.RunGenericOpenAIChatNonStream(context.Background(), provider, req, nil)
 	require.NoError(t, err)
 	require.Equal(t, 2, workerCalls)
 	require.True(t, workerSawDisabledError)
@@ -676,7 +688,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
 		},
 	}
-	require.True(t, hasDeclaredMCPAnthropicV1Tools(&req))
+	require.True(t, HasDeclaredMCPAnthropicV1Tools(&req))
 
 	reqCtx := transform.NewTransformContext(&req)
 	reqCtx.SourceAPI = protocol.TypeAnthropicV1
@@ -690,7 +702,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	rule := &typ.Rule{}
 	SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, true)
 
-	s.dispatchChainResult(c, reqCtx, rule, provider, true, nil)
+	s.aiHandler.DispatchChainResult(c, reqCtx, rule, provider, true, nil)
 
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)

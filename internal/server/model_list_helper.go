@@ -5,21 +5,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// shouldIncludeRuleInModelList reports whether a rule should appear in the
+// ShouldIncludeRuleInModelList reports whether a rule should appear in the
 // model list for the requested scenario. Each scenario — base or profiled —
 // is an isolated scope: it only lists rules bound to that exact scenario.
 // Transport compatibility does not grant cross-scenario visibility.
-func shouldIncludeRuleInModelList(requestedScenario typ.RuleScenario, ruleScenario typ.RuleScenario) bool {
+func ShouldIncludeRuleInModelList(requestedScenario typ.RuleScenario, ruleScenario typ.RuleScenario) bool {
 	return requestedScenario == ruleScenario
 }
 
-// primaryAuthTypeForRule returns the AuthType of the first active service's
+// PrimaryAuthTypeForRule returns the AuthType of the first active service's
 // provider in a rule. It is used by /v1/models endpoints so the frontend can
 // order picker entries oauth -> api_key -> vmodel.
 //
 // Returns AuthTypeAPIKey as the fallback for empty/unresolvable rules so they
 // land in the middle group rather than at the head or tail.
-func primaryAuthTypeForRule(cfg *config.Config, rule typ.Rule) typ.AuthType {
+func PrimaryAuthTypeForRule(cfg *config.Config, rule typ.Rule) typ.AuthType {
 	if cfg == nil {
 		return typ.AuthTypeAPIKey
 	}
@@ -41,10 +41,10 @@ func primaryAuthTypeForRule(cfg *config.Config, rule typ.Rule) typ.AuthType {
 	return typ.AuthTypeAPIKey
 }
 
-// authTypeSortWeight ranks auth types for /v1/models ordering:
+// AuthTypeSortWeight ranks auth types for /v1/models ordering:
 // oauth (0) -> api_key (1) -> vmodel (2). Any unknown value is treated as
 // api_key so legacy entries cluster with regular providers.
-func authTypeSortWeight(a typ.AuthType) int {
+func AuthTypeSortWeight(a typ.AuthType) int {
 	switch a {
 	case typ.AuthTypeOAuth:
 		return 0

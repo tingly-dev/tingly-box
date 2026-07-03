@@ -12,21 +12,57 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// testAdvisorProvider/testAdvisorSource are a minimal local copy of root's
+// advisor_test_helpers_test.go — duplicated rather than exported since this
+// is test-only fixture data and root's copy still serves 2 other root-only
+// test files (advisor_integration_test.go, mcp_response_hook_integration_test.go).
+func testAdvisorProvider(url, key string, style protocol.APIStyle) func(string) (*typ.Provider, error) {
+	return func(string) (*typ.Provider, error) {
+		return &typ.Provider{
+			Name:     "test-advisor",
+			APIBase:  url,
+			Token:    key,
+			APIStyle: style,
+			Enabled:  true,
+		}, nil
+	}
+}
+
+func testAdvisorConfig(url, key, model string, style protocol.APIStyle, maxUses int) *typ.AdvisorConfig {
+	return &typ.AdvisorConfig{
+		ProviderUUID:      "test",
+		ProviderResolver:  testAdvisorProvider(url, key, style),
+		Model:             model,
+		MaxUsesPerRequest: maxUses,
+	}
+}
+
+func testAdvisorSource(url, key, model string, style protocol.APIStyle, maxUses int) typ.MCPSourceConfig {
+	return typ.MCPSourceConfig{
+		ID:         "advisor",
+		Transport:  "advisor",
+		Enabled:    typ.BoolPtr(true),
+		Visibility: typ.ToolVisibilityServer,
+		Tools:      []string{"advisor"},
+		Advisor:    testAdvisorConfig(url, key, model, style, maxUses),
+	}
+}
+
 func TestCallMCPToolWithGuard_DisabledToolReturnsCallingDisabledTools(t *testing.T) {
-	s := &Server{
-		mcpRuntime: mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+	h := NewHandler(AIHandlerDeps{
+		MCPRuntime: mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
 			// No enabled server tools => any MCP tool name should be treated as disabled.
 			return &typ.MCPRuntimeConfig{}
 		}),
-	}
+	})
 
-	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__webtools__mcp_web_search", `{"query":"x"}`, nil)
+	_, result, err := h.CallMCPToolWithHooks(context.Background(), "tingly_box_mcp__webtools__mcp_web_search", `{"query":"x"}`, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "calling disabled tools")
 	require.Contains(t, result.FirstText(), `"error":"calling disabled tools: tingly_box_mcp__webtools__mcp_web_search"`)
@@ -102,10 +138,10 @@ func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testin
 
 	pipeline := servertool.NewPipeline()
 	pipeline.Register(advisortool.NewProvider(*cfg.Sources[0].Advisor, cp, rt.SessionStore()))
-	s := &Server{mcpRuntime: rt, servertoolPipeline: pipeline}
+	h := NewHandler(AIHandlerDeps{MCPRuntime: rt, GetServertoolPipeline: func() *servertool.Pipeline { return pipeline }})
 	msgs := []map[string]any{{"role": "user", "content": "please advise"}}
 
-	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{}`, msgs)
+	_, result, err := h.CallMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{}`, msgs)
 	require.NoError(t, err)
 	require.Contains(t, result.FirstText(), "created-by-hook")
 	require.NotEmpty(t, capturedMessages)
@@ -169,7 +205,7 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 
 	t.Cleanup(rt.Close)
 
-	s := &Server{mcpRuntime: rt}
+	h := NewHandler(AIHandlerDeps{MCPRuntime: rt})
 
 	toolName := "tingly_box_mcp__advisor__advisor"
 	msgs := []map[string]any{{"role": "user", "content": "hello"}}
@@ -179,15 +215,15 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 		UsesRemaining: &uses,
 	})
 
-	_, result1, err1 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
+	_, result1, err1 := h.CallMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err1)
 	require.Contains(t, result1.FirstText(), "plan")
 
-	ctx, result2, err2 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
+	ctx, result2, err2 := h.CallMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err2)
 	require.Contains(t, result2.FirstText(), "plan")
 
-	_, result3, err3 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
+	_, result3, err3 := h.CallMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err3)
 	require.Equal(t, "Advisor consultations exhausted for this request.", result3.FirstText())
 }
@@ -219,7 +255,7 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 	}
 	t.Cleanup(rt.Close)
 
-	s := &Server{mcpRuntime: rt}
+	h := NewHandler(AIHandlerDeps{MCPRuntime: rt})
 
 	uses := 3
 	// Pre-set depth to 2 to simulate a loopback (advisor calling itself).
@@ -229,7 +265,7 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 		UsesRemaining: &uses,
 	})
 
-	_, result, err := s.callMCPToolWithHooks(ctx, "tingly_box_mcp__advisor__advisor", `{}`, nil)
+	_, result, err := h.CallMCPToolWithHooks(ctx, "tingly_box_mcp__advisor__advisor", `{}`, nil)
 	require.NoError(t, err)
 	require.Contains(t, result.FirstText(), "recursion limit reached")
 }

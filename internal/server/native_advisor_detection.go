@@ -9,7 +9,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-func hasNativeAdvisorBeta(req *protocol.AnthropicBetaMessagesRequest) bool {
+func HasNativeAdvisorBeta(req *protocol.AnthropicBetaMessagesRequest) bool {
 	return betaHistoryHasAdvisorBlocks(req.BetaMessageNewParams.Messages)
 }
 

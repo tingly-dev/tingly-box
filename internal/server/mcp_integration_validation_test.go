@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -26,8 +26,7 @@ func TestGenericMCPIntegration_ImportCycleResolved(t *testing.T) {
 	adapter := mcp.NewAnthropicV1Adapter()
 
 	// Create forwarder using the new forwarding package
-	server := &Server{}
-	ctxProvider := &forwardContextProvider{server: server}
+	ctxProvider := &forwardContextProvider{}
 	forwarder := mcp.NewAnthropicV1Forwarder(nil, ctxProvider)
 
 	// If we got here without import cycle error, the architecture is valid
@@ -39,8 +38,7 @@ func TestGenericMCPIntegration_ImportCycleResolved(t *testing.T) {
 
 // TestGenericMCPIntegration_AllForwardersCreated validates all forwarder types can be created
 func TestGenericMCPIntegration_AllForwardersCreated(t *testing.T) {
-	server := &Server{}
-	ctxProvider := &forwardContextProvider{server: server}
+	ctxProvider := &forwardContextProvider{}
 
 	// Test Anthropic V1 forwarder
 	v1Forwarder := mcp.NewAnthropicV1Forwarder(nil, ctxProvider)

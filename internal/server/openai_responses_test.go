@@ -189,8 +189,8 @@ func TestConvertToResponsesParams_Simple(t *testing.T) {
 		"input": "Hello world"
 	}`)
 
-	server := &Server{} // Minimal server for testing
-	params, err := server.convertToResponsesParams(body, "gpt-4")
+	h := &AIHandler{} // Minimal handler for testing
+	params, err := h.convertToResponsesParams(body, "gpt-4")
 	if err != nil {
 		t.Fatalf("Failed to convert params: %v", err)
 	}
@@ -210,8 +210,8 @@ func TestConvertToResponsesParams_Complex(t *testing.T) {
 		"instructions": "Be concise"
 	}`)
 
-	server := &Server{}
-	params, err := server.convertToResponsesParams(body, "gpt-4")
+	h := &AIHandler{}
+	params, err := h.convertToResponsesParams(body, "gpt-4")
 	if err != nil {
 		t.Fatalf("Failed to convert params: %v", err)
 	}
@@ -277,21 +277,21 @@ func TestHandleResponsesCreate_VisionProxyAppliesBeforeChatConversion(t *testing
 		"stream": true,
 	})
 
-	s := visionTestServer("claude_code", scenarioVisionExt("p-rule", "vision-model"))
+	h := visionTestServer("claude_code", scenarioVisionExt("p-rule", "vision-model"))
 
 	// Mirror the handler ordering exactly. This is the part under test.
 	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	params, err := s.convertToResponsesParams(bodyBytes, "downstream-text-only-model")
+	params, err := h.convertToResponsesParams(bodyBytes, "downstream-text-only-model")
 	if err != nil {
 		t.Fatalf("convertToResponsesParams: %v", err)
 	}
 	req.ResponseNewParams = params
 	req.Model = "downstream-text-only-model"
 	// Vision proxy MUST run after the assignment above — that is the fix.
-	s.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, req.ResponseNewParams)
+	h.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, req.ResponseNewParams)
 
 	// The conversion step is what DeepSeek receives; assert no image_url
 	// or input_image survives on the wire-level shape.
@@ -334,15 +334,15 @@ func TestHandleResponsesCreate_VisionProxyBeforeReparseIsIneffective(t *testing.
 		},
 	})
 
-	s := visionTestServer("claude_code", scenarioVisionExt("p-rule", "vision-model"))
+	h := visionTestServer("claude_code", scenarioVisionExt("p-rule", "vision-model"))
 
 	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	// Wrong order: apply BEFORE the re-parse.
-	s.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, req.ResponseNewParams)
-	params, err := s.convertToResponsesParams(bodyBytes, "downstream-text-only-model")
+	h.applyVisionProxy(newVisionTestGinCtx(), "claude_code", &typ.Rule{}, req.ResponseNewParams)
+	params, err := h.convertToResponsesParams(bodyBytes, "downstream-text-only-model")
 	if err != nil {
 		t.Fatalf("convertToResponsesParams: %v", err)
 	}
@@ -371,7 +371,7 @@ func mustMarshalResponsesBody(t *testing.T, body map[string]any) []byte {
 
 // visionTestPNG re-exports visionproxytest.PNG for tests in this package
 // (e.g. openai_responses_vision_test.go) that need a real applyVisionProxy
-// call through *Server rather than visionproxy.Service in isolation.
+// call through *AIHandler rather than visionproxy.Service in isolation.
 // Logic-level coverage for the plugin itself lives in
 // internal/server/module/visionproxy.
 const visionTestPNG = visionproxytest.PNG
@@ -383,16 +383,18 @@ func newVisionTestGinCtx() *gin.Context {
 	return c
 }
 
-// visionTestServer builds a Server whose scenario config carries the given
+// visionTestServer builds a AIHandler whose scenario config carries the given
 // Extensions, with a stub vision processor that echoes the model used.
-func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *Server {
-	return &Server{
-		config: &config.Config{
-			Scenarios: []typ.ScenarioConfig{
-				{Scenario: scenario, Extensions: ext},
+func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *AIHandler {
+	return &AIHandler{
+		deps: AIHandlerDeps{
+			Config: &config.Config{
+				Scenarios: []typ.ScenarioConfig{
+					{Scenario: scenario, Extensions: ext},
+				},
 			},
+			VisionProxyService: visionproxy.NewService(visionproxytest.NewProcessor()),
 		},
-		visionProxyService: visionproxy.NewService(visionproxytest.NewProcessor()),
 	}
 }
 

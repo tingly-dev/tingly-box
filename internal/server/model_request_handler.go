@@ -70,8 +70,8 @@ type requestGroup struct {
 // Query parameters:
 //   - limit: maximum number of requests to return (default: 100, max: 1000)
 //   - scenario / provider / status: optional exact-match filters
-func (s *Server) GetModelRequests(c *gin.Context) {
-	if s.multiLogger == nil {
+func (h *WebUIHandler) GetModelRequests(c *gin.Context) {
+	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Logger not available"})
 		return
 	}
@@ -81,7 +81,7 @@ func (s *Server) GetModelRequests(c *gin.Context) {
 	providerFilter := c.Query("provider")
 	statusFilter := c.Query("status")
 
-	groups := s.collectRequestGroups()
+	groups := h.collectRequestGroups()
 
 	summaries := make([]ModelRequestSummary, 0, len(groups))
 	for _, g := range groups {
@@ -119,8 +119,8 @@ func (s *Server) GetModelRequests(c *gin.Context) {
 }
 
 // GetModelRequestDetail returns the full event timeline for a single request id.
-func (s *Server) GetModelRequestDetail(c *gin.Context) {
-	if s.multiLogger == nil {
+func (h *WebUIHandler) GetModelRequestDetail(c *gin.Context) {
+	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Logger not available"})
 		return
 	}
@@ -131,7 +131,7 @@ func (s *Server) GetModelRequestDetail(c *gin.Context) {
 		return
 	}
 
-	groups := s.collectRequestGroups()
+	groups := h.collectRequestGroups()
 	g, ok := groups[id]
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "request not found"})
@@ -154,11 +154,11 @@ func (s *Server) GetModelRequestDetail(c *gin.Context) {
 
 // collectRequestGroups scans the HTTP, model_request and smart_routing memory
 // sinks and groups every entry by its request_id.
-func (s *Server) collectRequestGroups() map[string]*requestGroup {
+func (h *WebUIHandler) collectRequestGroups() map[string]*requestGroup {
 	groups := make(map[string]*requestGroup)
 
 	ingest := func(source obs.LogSource) {
-		entries := s.multiLogger.WithSource(source).GetMemoryEntries()
+		entries := h.deps.MultiLogger.WithSource(source).GetMemoryEntries()
 		for _, entry := range entries {
 			id, _ := entry.Data["request_id"].(string)
 			if id == "" {

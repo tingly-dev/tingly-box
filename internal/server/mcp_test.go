@@ -12,8 +12,8 @@ func TestAnthropicBetaGenericPathUsesProviderLimits(t *testing.T) {
 	s := &Server{config: &config.Config{}}
 
 	provider := &typ.Provider{Name: "deepseek"}
-	assert.True(t, s.shouldUseGenericMCPForProvider(provider))
+	assert.True(t, ShouldUseGenericMCPForProvider(s.config, provider))
 
 	s.config.GenericMCP.ProviderLimits = "other-provider"
-	assert.False(t, s.shouldUseGenericMCPForProvider(provider))
+	assert.False(t, ShouldUseGenericMCPForProvider(s.config, provider))
 }

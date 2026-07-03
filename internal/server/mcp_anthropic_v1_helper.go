@@ -22,23 +22,23 @@ import (
 // ServerOps Adapter
 // ===================================================================
 
-// serverOpsAdapter implements mcp.ServerOps by wrapping Server
+// serverOpsAdapter implements mcp.ServerOps by wrapping AIHandler
 type serverOpsAdapter struct {
-	server     *Server
+	handler    *AIHandler
 	recorder   *ProtocolRecorder
 	advisorCtx *coretool.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
 }
 
-func newServerOpsAdapter(server *Server, recorder *ProtocolRecorder) *serverOpsAdapter {
+func newServerOpsAdapter(handler *AIHandler, recorder *ProtocolRecorder) *serverOpsAdapter {
 	return &serverOpsAdapter{
-		server:   server,
+		handler:  handler,
 		recorder: recorder,
 	}
 }
 
 func (a *serverOpsAdapter) TrackUsage(c *gin.Context, input, output, cache int) {
 	usage := protocol.NewTokenUsageWithCache(input, output, cache)
-	a.server.trackUsageWithTokenUsage(c, usage, nil)
+	a.handler.trackUsageWithTokenUsage(c, usage, nil)
 }
 
 func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error) {
@@ -48,7 +48,7 @@ func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments 
 	if a.advisorCtx != nil {
 		callCtx = coretool.WithAdvisorContext(ctx, a.advisorCtx)
 	}
-	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
+	updatedCtx, result, err := a.handler.CallMCPToolWithHooks(callCtx, toolName, arguments, messages)
 	// Extract and persist the AdvisorContext pointer for the next round.
 	if ac, ok := coretool.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
@@ -61,7 +61,7 @@ func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, a
 	if a.advisorCtx != nil {
 		callCtx = coretool.WithAdvisorContext(ctx, a.advisorCtx)
 	}
-	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
+	updatedCtx, result, err := a.handler.CallMCPToolWithHooks(callCtx, toolName, arguments, messages)
 	if ac, ok := coretool.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
 	}
@@ -108,25 +108,24 @@ func (a *protocolRecorderAdapter) RecordResponse(provider any, model string) {
 // ForwardContextProvider
 // ===================================================================
 
-// forwardContextProvider implements mcp.ForwardContextGetter
-type forwardContextProvider struct {
-	server *Server
-}
+// forwardContextProvider implements mcp.ForwardContextGetter. It carries no
+// state of its own — NewForwardContext only needs the per-call ctx/provider.
+type forwardContextProvider struct{}
 
 func (p *forwardContextProvider) NewForwardContext(ctx context.Context, provider *typ.Provider) *forwarding.ForwardContext {
 	return forwarding.NewForwardContext(ctx, provider)
 }
 
-func (s *Server) runGenericOpenAIChatNonStream(
+func (ah *AIHandler) RunGenericOpenAIChatNonStream(
 	ctx context.Context,
 	provider *typ.Provider,
 	req *openai.ChatCompletionNewParams,
 	recorder *ProtocolRecorder,
 ) (*openai.ChatCompletion, *mcp.TokenUsage, error) {
 	adapter := mcp.NewOpenAIChatAdapter()
-	forwarder := mcp.NewOpenAIChatForwarder(s.clientPool, &forwardContextProvider{server: s})
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
-	serverOps := newServerOpsAdapter(s, recorder)
+	forwarder := mcp.NewOpenAIChatForwarder(ah.deps.ClientPool, &forwardContextProvider{})
+	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
+	serverOps := newServerOpsAdapter(ah, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	var recorderAdapter mcp.ProtocolRecorder
@@ -164,16 +163,16 @@ func (s *Server) runGenericOpenAIChatNonStream(
 	return openaiResp, &usage, nil
 }
 
-func (s *Server) runGenericAnthropicV1NonStream(
+func (ah *AIHandler) RunGenericAnthropicV1NonStream(
 	ctx context.Context,
 	provider *typ.Provider,
 	req *anthropic.MessageNewParams,
 	recorder *ProtocolRecorder,
 ) (*anthropic.Message, *mcp.TokenUsage, error) {
 	adapter := mcp.NewAnthropicV1Adapter()
-	forwarder := mcp.NewAnthropicV1Forwarder(s.clientPool, &forwardContextProvider{server: s})
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
-	serverOps := newServerOpsAdapter(s, recorder)
+	forwarder := mcp.NewAnthropicV1Forwarder(ah.deps.ClientPool, &forwardContextProvider{})
+	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
+	serverOps := newServerOpsAdapter(ah, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	var recorderAdapter mcp.ProtocolRecorder
@@ -211,7 +210,7 @@ func (s *Server) runGenericAnthropicV1NonStream(
 	return v1Resp, &usage, nil
 }
 
-func (s *Server) runGenericAnthropicBetaNonStream(
+func (ah *AIHandler) RunGenericAnthropicBetaNonStream(
 	ctx context.Context,
 	provider *typ.Provider,
 	req *anthropic.BetaMessageNewParams,
@@ -219,9 +218,9 @@ func (s *Server) runGenericAnthropicBetaNonStream(
 ) (*anthropic.BetaMessage, *mcp.TokenUsage, error) {
 
 	adapter := mcp.NewAnthropicBetaAdapter()
-	forwarder := mcp.NewAnthropicBetaForwarder(s.clientPool, &forwardContextProvider{server: s})
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
-	serverOps := newServerOpsAdapter(s, recorder)
+	forwarder := mcp.NewAnthropicBetaForwarder(ah.deps.ClientPool, &forwardContextProvider{})
+	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
+	serverOps := newServerOpsAdapter(ah, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	var recorderAdapter mcp.ProtocolRecorder
@@ -259,8 +258,8 @@ func (s *Server) runGenericAnthropicBetaNonStream(
 	return betaResp, &usage, nil
 }
 
-// dispatchGenericOpenAIChatNonStream handles O→O non-streaming with generic processor
-func (s *Server) dispatchGenericOpenAIChatNonStream(
+// DispatchGenericOpenAIChatNonStream handles O→O non-streaming with generic processor
+func (ah *AIHandler) DispatchGenericOpenAIChatNonStream(
 	c *gin.Context,
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
@@ -269,26 +268,26 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 ) {
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
-	response, usage, err := s.runGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
+	response, usage, err := ah.RunGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
-		recordMCPError(s, c, err, recorder)
+		recordMCPError(ah, c, err, recorder)
 		return
 	}
 
 	if usage != nil {
 		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
-		s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+		ah.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	}
 
 	// Update affinity
-	s.updateAffinityMessageID(c, rule, string(response.ID))
+	ah.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Return response (OpenAI format)
 	c.JSON(http.StatusOK, response)
 }
 
-// dispatchGenericOpenAIChatStream handles O→O streaming with generic interceptor
-func (s *Server) dispatchGenericOpenAIChatStream(
+// DispatchGenericOpenAIChatStream handles O→O streaming with generic interceptor
+func (ah *AIHandler) DispatchGenericOpenAIChatStream(
 	c *gin.Context,
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
@@ -303,13 +302,13 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	adapter := mcp.NewOpenAIChatAdapter()
 
 	// Create forwarder
-	forwarder := mcp.NewOpenAIChatForwarder(s.clientPool, &forwardContextProvider{server: s})
+	forwarder := mcp.NewOpenAIChatForwarder(ah.deps.ClientPool, &forwardContextProvider{})
 
 	// Get virtual registry
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
+	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
 
 	// Create server ops adapter
-	serverOps := newServerOpsAdapter(s, recorder)
+	serverOps := newServerOpsAdapter(ah, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
@@ -339,12 +338,12 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(s, c, err, recorder)
+		recordMCPError(ah, c, err, recorder)
 	}
 }
 
-// dispatchGenericAnthropicBetaNonStream handles Aβ→Aβ non-streaming with generic processor
-func (s *Server) dispatchGenericAnthropicBetaNonStream(
+// DispatchGenericAnthropicBetaNonStream handles Aβ→Aβ non-streaming with generic processor
+func (ah *AIHandler) DispatchGenericAnthropicBetaNonStream(
 	c *gin.Context,
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
@@ -354,32 +353,32 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 	actualModel := reqCtx.RequestModel
 
-	response, usage, err := s.runGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
+	response, usage, err := ah.RunGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
-		recordMCPError(s, c, err, recorder)
+		recordMCPError(ah, c, err, recorder)
 		return
 	}
 
 	if usage != nil {
 		tokenUsage := protocol.NewTokenUsageWithCache(usage.InputTokens, usage.OutputTokens, usage.CacheTokens)
-		s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+		ah.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	}
 
 	// Update affinity and get typed message
-	s.updateAffinityMessageID(c, rule, string(response.ID))
+	ah.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
-	if s.guardrailsEnabledForScenario(scenario) {
-		s.applyGuardrailsToAnthropicV1BetaNonStreamResponse(c, req, actualModel, provider, response)
+	if ah.guardrailsEnabledForScenario(scenario) {
+		ApplyGuardrailsToAnthropicV1BetaNonStreamResponse(c, ah.currentGuardrailsRuntime(), req, actualModel, provider, response)
 	}
 
 	// Return response
 	nonstream.WriteAnthropicMessage(c, response)
 }
 
-// dispatchGenericAnthropicBetaStream handles Aβ→Aβ streaming with generic interceptor
-func (s *Server) dispatchGenericAnthropicBetaStream(
+// DispatchGenericAnthropicBetaStream handles Aβ→Aβ streaming with generic interceptor
+func (ah *AIHandler) DispatchGenericAnthropicBetaStream(
 	c *gin.Context,
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
@@ -394,13 +393,13 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 	adapter := mcp.NewAnthropicBetaAdapter()
 
 	// Create forwarder
-	forwarder := mcp.NewAnthropicBetaForwarder(s.clientPool, &forwardContextProvider{server: s})
+	forwarder := mcp.NewAnthropicBetaForwarder(ah.deps.ClientPool, &forwardContextProvider{})
 
 	// Get virtual registry
-	virtualRegistry := s.mcpRuntime.VirtualRegistry()
+	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
 
 	// Create server ops adapter
-	serverOps := newServerOpsAdapter(s, recorder)
+	serverOps := newServerOpsAdapter(ah, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
@@ -417,16 +416,17 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
-	guardrailsEnabled := s.guardrailsEnabledForScenario(scenario)
+	guardrailsEnabled := ah.guardrailsEnabledForScenario(scenario)
 	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
 	if guardrailsEnabled {
 		hc.EnsureGuardrails().Enabled = true
 		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
 		baseEventHooks := len(hc.OnStreamEventHooks)
 		baseErrorHooks := len(hc.OnStreamErrorHooks)
-		s.attachGuardrailsHooks(c, hc, actualModel, provider, messages)
+		runtime := ah.currentGuardrailsRuntime()
+		AttachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages)
 		interceptorCfg.OnBeforeRound = func(round int) error {
-			s.reattachGuardrailsHooks(c, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
+			ReattachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
 			return nil
 		}
 	}
@@ -446,6 +446,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(s, c, err, recorder)
+		recordMCPError(ah, c, err, recorder)
 	}
 }

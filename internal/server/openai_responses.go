@@ -16,7 +16,7 @@ import (
 )
 
 // HandleResponsesCreate handles POST /v1/responses
-func (s *Server) HandleResponsesCreate(c *gin.Context) {
+func (ah *AIHandler) HandleResponsesCreate(c *gin.Context) {
 	scenario := c.Param("scenario")
 
 	// Read raw body
@@ -74,7 +74,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	)
 
 	scenarioType := typ.RuleScenario(scenario)
-	if !isValidRuleScenario(scenarioType) {
+	if !IsValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
@@ -95,7 +95,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
+	rule, err = ah.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -107,7 +107,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	// Select service using routing pipeline
-	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)
+	provider, selectedService, err = ah.deps.RoutingSelector.SelectService(c, scenarioType, rule, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -119,7 +119,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	maxAllowed := ah.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// Inject session ID into request context so all downstream code can access it
 	sessionID := resolveSessionID(c, req.ResponseNewParams)
@@ -129,7 +129,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	SetTrackingContext(c, rule, provider, actualModel, req.Model, req.Stream)
 
 	// Convert request to OpenAI SDK format first so fallback conversions can reuse it.
-	params, err := s.convertToResponsesParams(bodyBytes, actualModel)
+	params, err := ah.convertToResponsesParams(bodyBytes, actualModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -146,23 +146,23 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 
 	// Apply vision proxy BEFORE failover loop so it runs exactly once.
 	// Vision descriptions must be consistent across all failover attempts.
-	s.applyVisionProxy(c, scenarioType, rule, req.ResponseNewParams)
+	ah.applyVisionProxy(c, scenarioType, rule, req.ResponseNewParams)
 
-	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
+	ah.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
 
 // ResponsesCreate runs the provider-independent prologue once, then drives the
 // failover loop whose per-attempt callback re-runs the provider-dependent
 // pipeline (target resolution → transform → dispatch) so failover can rotate
 // across heterogeneous API styles.
-func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req *protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
+func (ah *AIHandler) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req *protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
 	// ── One-time prologue (provider-independent) ──
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
 	detectAndApplyContext1MFromIncomingRequest(c, rule)
 
 	isStreaming := req.Stream
-	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
+	scenarioConfig := ah.deps.Config.GetScenarioConfig(scenarioType)
 	actualModel := string(req.Model)
 
 	// Snapshot a pristine template only when failover is possible. The template
@@ -171,25 +171,25 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	multi := len(rule.GetActiveServices()) > 1
 
 	// ── Per-attempt pipeline (provider-dependent) ──
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+	ah.DispatchWithPriorityFailover(c, rule, provider, actualModel,
 		func(p *typ.Provider, retryModel string) {
 			areq := req
 			if multi {
-				clonedParams, err := cloneResponsesParams(req.ResponseNewParams)
+				clonedParams, err := CloneResponsesParams(req.ResponseNewParams)
 				if err != nil {
-					s.failAttemptSetup(c, err)
+					ah.FailAttemptSetup(c, err)
 					return
 				}
 				areq.ResponseNewParams = clonedParams
 			}
-			s.runOpenAIResponsesAttempt(c, areq, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
+			ah.runOpenAIResponsesAttempt(c, areq, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
 		})
 }
 
 // runOpenAIResponsesAttempt executes the provider-dependent half of an OpenAI
 // Responses request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
-func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
+func (ah *AIHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.ResponseCreateRequest, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
@@ -198,7 +198,7 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.Respons
 	}
 
 	req.Model = responses.ResponsesModel(actualModel)
-	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	maxAllowed := ah.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// Determine target API type based on provider API style
 	target := protocol.TypeOpenAIResponses
@@ -206,26 +206,26 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.Respons
 	case protocol.APIStyleAnthropic:
 		target = protocol.TypeAnthropicBeta
 	case protocol.APIStyleGoogle:
-		s.failAttemptSetup(c, fmt.Errorf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name))
+		ah.FailAttemptSetup(c, fmt.Errorf("Responses API does not support Google-style providers yet. Provider: %s", provider.Name))
 		return
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ResolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
-			s.failAttemptSetup(c, routeErr)
+			ah.FailAttemptSetup(c, routeErr)
 			return
 		}
 		target = resolvedTarget
 	default:
-		s.failAttemptSetup(c, fmt.Errorf("Unsupported provider API style: %s", provider.APIStyle))
+		ah.FailAttemptSetup(c, fmt.Errorf("Unsupported provider API style: %s", provider.APIStyle))
 		return
 	}
 
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
-	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
-	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
+	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
+	reqCtx, err := ah.TransformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {
-		s.failAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
+		ah.FailAttemptSetup(c, fmt.Errorf("Transform failed: %w", err))
 		return
 	}
 	defer reqCtx.Release()
@@ -236,12 +236,12 @@ func (s *Server) runOpenAIResponsesAttempt(c *gin.Context, req *protocol.Respons
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
 	reqCtx.RequestModel = actualModel
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+	ah.DispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format
 // This handles the model override and forwards the rest as-is
-func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) (*responses.ResponseNewParams, error) {
+func (ah *AIHandler) convertToResponsesParams(bodyBytes []byte, actualModel string) (*responses.ResponseNewParams, error) {
 	// Preprocess to add type fields to input items (needed for union deserialization)
 	// and flatten output_text content blocks
 	processedData, err := protocol.PreprocessInputData(bodyBytes)
@@ -272,7 +272,7 @@ func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) 
 }
 
 // HandleResponsesGet handles GET /v1/responses/{id}
-func (s *Server) HandleResponsesGet(c *gin.Context) {
+func (ah *AIHandler) HandleResponsesGet(c *gin.Context) {
 	responseID := c.Param("id")
 
 	if responseID == "" {

@@ -51,7 +51,7 @@ func SetTrackingContext(c *gin.Context, rule *typ.Rule, provider *typ.Provider, 
 	if _, exists := c.Get(ContextKeyScenario); !exists {
 		scenario := "unknown"
 		if c.Request != nil && c.Request.URL != nil {
-			scenario = extractScenarioFromPath(c.Request.URL.Path)
+			scenario = ExtractScenarioFromPath(c.Request.URL.Path)
 		}
 		c.Set(ContextKeyScenario, scenario)
 	}
@@ -91,8 +91,8 @@ func GetTrackingContextScenario(c *gin.Context) (scenario string) {
 	return
 }
 
-// calculateLatencyFromStart calculates the elapsed time in milliseconds since the start time.
-func calculateLatencyFromStart(startTime time.Time) int {
+// CalculateLatencyFromStart calculates the elapsed time in milliseconds since the start time.
+func CalculateLatencyFromStart(startTime time.Time) int {
 	if startTime.IsZero() {
 		return 0
 	}
@@ -203,7 +203,7 @@ func CalculateTPS(c *gin.Context, outputTokens int, streamed bool) float64 {
 	return float64(outputTokens) / duration
 }
 
-// detectCacheHit determines if a request was served from cache based on TokenUsage.
+// DetectCacheHit determines if a request was served from cache based on TokenUsage.
 // Returns true if cache was hit, false otherwise.
 //
 // Detection logic:
@@ -216,7 +216,7 @@ func CalculateTPS(c *gin.Context, outputTokens int, streamed bool) float64 {
 //
 // Returns:
 //   - true if cache hit detected, false otherwise
-func detectCacheHit(usage *protocol.TokenUsage) bool {
+func DetectCacheHit(usage *protocol.TokenUsage) bool {
 	if usage == nil {
 		return false
 	}

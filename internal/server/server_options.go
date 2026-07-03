@@ -204,3 +204,10 @@ func (s *Server) GetScenarioRecordMode(scenario typ.RuleScenario) obs.RecordMode
 
 	return s.recordMode
 }
+
+// EnsureProtocolRecorder delegates to the AI Model API handler, which owns
+// the ProtocolRecorder type. Kept as a thin root wrapper since callers
+// (anthropic_message.go and its tests) have not moved to aimodel yet.
+func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *ProtocolRecorder {
+	return s.aiHandler.EnsureProtocolRecorder(c, scenario, provider, model, mode, bs)
+}

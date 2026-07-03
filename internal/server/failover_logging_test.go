@@ -91,11 +91,11 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 
 	hm := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
 	hf := typ.NewHealthFilter(hm)
-	s := &Server{
-		config:        cfg,
-		loadBalancer:  NewLoadBalancer(cfg, hf),
-		healthMonitor: hm,
-	}
+	h := NewHandler(AIHandlerDeps{
+		Config:        cfg,
+		LoadBalancer:  NewLoadBalancer(cfg, hf),
+		HealthMonitor: hm,
+	})
 
 	newCtx := func(reqID string) *gin.Context {
 		rec := httptest.NewRecorder()
@@ -126,7 +126,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 			}
 		}
 
-		s.dispatchWithPriorityFailover(c, rule, providerT0, "gpt-4o", attempt)
+		h.DispatchWithPriorityFailover(c, rule, providerT0, "gpt-4o", attempt)
 
 		printCapturedLog(t, hook.entries)
 
@@ -157,7 +157,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 			c.Writer.WriteHeader(http.StatusTooManyRequests)
 		}
 
-		s.dispatchWithPriorityFailover(c, rule, providerT0, "gpt-4o", attempt)
+		h.DispatchWithPriorityFailover(c, rule, providerT0, "gpt-4o", attempt)
 
 		printCapturedLog(t, hook.entries)
 

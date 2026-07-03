@@ -14,7 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-func newModelRequestTestServer(t *testing.T) *Server {
+func newModelRequestTestServer(t *testing.T) *WebUIHandler {
 	t.Helper()
 	cfg := &obs.MultiLoggerConfig{
 		TextLogPath: "",
@@ -27,37 +27,37 @@ func newModelRequestTestServer(t *testing.T) *Server {
 	}
 	ml, err := obs.NewMultiLogger(cfg)
 	assert.NoError(t, err)
-	return &Server{multiLogger: ml}
+	return NewControlHandler(WebUIDeps{MultiLogger: ml})
 }
 
-func emitHTTP(s *Server, fields logrus.Fields) {
-	s.multiLogger.GetLogrusLogger(obs.LogSourceHTTP).WithFields(fields).Info("http")
+func emitHTTP(h *WebUIHandler, fields logrus.Fields) {
+	h.deps.MultiLogger.GetLogrusLogger(obs.LogSourceHTTP).WithFields(fields).Info("http")
 }
 
-func emitModelStage(s *Server, id, stage string, level logrus.Level) {
-	s.multiLogger.GetLogrusLogger(obs.LogSourceModelRequest).
+func emitModelStage(h *WebUIHandler, id, stage string, level logrus.Level) {
+	h.deps.MultiLogger.GetLogrusLogger(obs.LogSourceModelRequest).
 		WithFields(logrus.Fields{"request_id": id, "stage": stage}).Log(level, "stage")
 }
 
 func TestGetModelRequests_GroupsAndFilters(t *testing.T) {
-	s := newModelRequestTestServer(t)
+	h := newModelRequestTestServer(t)
 
 	// r1: a successful anthropic model request with a transform-stage warning.
-	emitHTTP(s, logrus.Fields{
+	emitHTTP(h, logrus.Fields{
 		"request_id": "r1", "status": 200, "method": "POST", "path": "/anthropic/v1/messages",
 		"latency": 1500 * time.Millisecond, "scenario": "anthropic",
 		"request_model": "claude-req", "routed_model": "claude-routed", "routed_provider": "prov-a",
 	})
-	emitModelStage(s, "r1", "transform", logrus.WarnLevel)
+	emitModelStage(h, "r1", "transform", logrus.WarnLevel)
 
 	// r2: a failed openai model request.
-	emitHTTP(s, logrus.Fields{
+	emitHTTP(h, logrus.Fields{
 		"request_id": "r2", "status": 500, "method": "POST", "path": "/openai/v1/chat/completions",
 		"scenario": "openai", "request_model": "gpt-req",
 	})
 
 	// r3: a plain webui API call — has a request_id but no model semantics; must be excluded.
-	emitHTTP(s, logrus.Fields{
+	emitHTTP(h, logrus.Fields{
 		"request_id": "r3", "status": 200, "method": "GET", "path": "/api/v1/providers",
 	})
 
@@ -65,7 +65,7 @@ func TestGetModelRequests_GroupsAndFilters(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/requests", nil)
-	s.GetModelRequests(c)
+	h.GetModelRequests(c)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp ModelRequestsResponse
@@ -98,7 +98,7 @@ func TestGetModelRequests_GroupsAndFilters(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/v1/requests?scenario=anthropic", nil)
-	s.GetModelRequests(c2)
+	h.GetModelRequests(c2)
 	var filtered ModelRequestsResponse
 	assert.NoError(t, json.Unmarshal(w2.Body.Bytes(), &filtered))
 	assert.Equal(t, 1, filtered.Total)
@@ -106,11 +106,11 @@ func TestGetModelRequests_GroupsAndFilters(t *testing.T) {
 }
 
 func TestGetModelRequestDetail_TimelineOrdered(t *testing.T) {
-	s := newModelRequestTestServer(t)
+	h := newModelRequestTestServer(t)
 
-	emitModelStage(s, "rX", "inbound", logrus.InfoLevel)
-	emitModelStage(s, "rX", "upstream", logrus.InfoLevel)
-	emitHTTP(s, logrus.Fields{
+	emitModelStage(h, "rX", "inbound", logrus.InfoLevel)
+	emitModelStage(h, "rX", "upstream", logrus.InfoLevel)
+	emitHTTP(h, logrus.Fields{
 		"request_id": "rX", "status": 200, "method": "POST", "path": "/anthropic/v1/messages",
 		"scenario": "anthropic",
 	})
@@ -119,7 +119,7 @@ func TestGetModelRequestDetail_TimelineOrdered(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/requests/rX", nil)
 	c.Params = gin.Params{{Key: "id", Value: "rX"}}
-	s.GetModelRequestDetail(c)
+	h.GetModelRequestDetail(c)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var detail ModelRequestDetail
@@ -136,6 +136,6 @@ func TestGetModelRequestDetail_TimelineOrdered(t *testing.T) {
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = httptest.NewRequest(http.MethodGet, "/api/v1/requests/nope", nil)
 	c2.Params = gin.Params{{Key: "id", Value: "nope"}}
-	s.GetModelRequestDetail(c2)
+	h.GetModelRequestDetail(c2)
 	assert.Equal(t, http.StatusNotFound, w2.Code)
 }

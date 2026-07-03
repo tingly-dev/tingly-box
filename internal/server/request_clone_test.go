@@ -22,7 +22,7 @@ func TestCloneAnthropicV1Request_RoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clone, err := cloneAnthropicV1Request(tmpl)
+	clone, err := CloneAnthropicV1Request(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestCloneAnthropicBetaRequest_RoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clone, err := cloneAnthropicBetaRequest(tmpl)
+	clone, err := CloneAnthropicBetaRequest(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestCloneOpenAIChatRequest_RoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clone, err := cloneOpenAIChatRequest(tmpl)
+	clone, err := CloneOpenAIChatRequest(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestCloneResponsesParams_RoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clone, err := cloneResponsesParams(orig.ResponseNewParams)
+	clone, err := CloneResponsesParams(orig.ResponseNewParams)
 	if err != nil {
 		t.Fatal(err)
 	}

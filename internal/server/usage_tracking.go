@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -79,7 +80,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 		return
 	}
 
-	latencyMs := calculateLatencyFromStart(startTime)
+	latencyMs := CalculateLatencyFromStart(startTime)
 
 	// Determine status and error code from error
 	status, errorCode := "success", ""
@@ -175,7 +176,7 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 		return
 	}
 
-	latencyMs := calculateLatencyFromStart(startTime)
+	latencyMs := CalculateLatencyFromStart(startTime)
 
 	// Determine status and error code from error
 	status, errorCode := "success", ""
@@ -205,7 +206,7 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 	}).Debug("trackUsage: token usage recorded")
 
 	// Detect cache hit from usage data and set in context
-	cacheHit := detectCacheHit(usage)
+	cacheHit := DetectCacheHit(usage)
 	SetCacheHit(c, cacheHit)
 
 	// Collect all metrics from context and usage

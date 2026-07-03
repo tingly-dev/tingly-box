@@ -29,7 +29,16 @@ func GenerateOpenAPI(cfg *config.Config) (string, error) {
 	server := &Server{
 		engine: engine,
 		config: cfg,
+		// controlHandler/guardrailsHandler need no live logger/token-manager
+		// wiring for schema generation — their handlers are only referenced
+		// (never invoked) here.
+		controlHandler: NewControlHandler(WebUIDeps{Config: cfg}),
 	}
+	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
+		Config:             cfg,
+		Runtime:            server,
+		GuardrailsConfigMu: &server.guardrailsConfigMu,
+	})
 
 	// Create route manager
 	manager := swagger.NewRouteManager(engine)
@@ -54,7 +63,7 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	notifymodule.RegisterRoutes(engine, notifyHandler)
 
 	// Web API endpoints (uses the same method as the running server)
-	s.useWebAPIEndpoints(manager)
+	s.UseWebAPIEndpoints(manager)
 
 	// OAuth API routes - register from oauth module
 	apiV1 := manager.NewGroup("api", "v1", "")

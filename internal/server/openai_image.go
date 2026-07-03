@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -29,11 +30,11 @@ import (
 // Exposed via the mixin route group, so any scenario whose descriptor declares
 // TransportImageGen (or TransportOpenAI as a mixin) can reach it. The canonical
 // home is the dedicated `imagegen` scenario.
-func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
+func (ah *AIHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
 
-	if !isValidRuleScenario(scenarioType) {
+	if !IsValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
@@ -98,7 +99,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	requestModel := req.Model
 	responseModel := requestModel
 
-	rule, err := s.determineRuleWithScenario(c, scenarioType, requestModel)
+	rule, err := ah.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -109,7 +110,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
-	provider, selectedService, err := s.routingSelector.SelectServiceForImageGeneration(c, scenarioType, rule)
+	provider, selectedService, err := ah.deps.RoutingSelector.SelectServiceForImageGeneration(c, scenarioType, rule)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -134,14 +135,14 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	// OpenAI-compatible providers go straight through the SDK, DashScope and
 	// MiniMax are dispatched to their native imagegen adapters, and Codex
 	// (ChatGPT OAuth) rides the Responses API. The handler stays uniform.
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
+	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 	resp, cancel, err := forwarding.ForwardOpenAIImageGeneration(fc, wrapper, &req)
 	if cancel != nil {
 		defer cancel()
 	}
 	if err != nil {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		s.trackUsageWithTokenUsage(c, usage, err)
+		ah.trackUsageWithTokenUsage(c, usage, err)
 		logrus.Errorf("Failed to forward image generation request: %v", err)
 		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
 			Error: ErrorDetail{
@@ -153,10 +154,10 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	}
 
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
-	s.trackUsageWithTokenUsage(c, usage, nil)
+	ah.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Persist generated images under the config image directory (best-effort).
-	s.persistImageGeneration(&req, resp)
+	ah.persistImageGeneration(&req, resp)
 
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
@@ -190,14 +191,14 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 // This used to live inside the Codex client and wrote to .tingly-image/ in the
 // process working directory. It now belongs to the server layer so persistence
 // is uniform across providers and rooted at the application config directory.
-func (s *Server) persistImageGeneration(req *openai.ImageGenerateParams, resp *openai.ImagesResponse) {
+func (ah *AIHandler) persistImageGeneration(req *openai.ImageGenerateParams, resp *openai.ImagesResponse) {
 	if resp == nil || len(resp.Data) == 0 {
 		return
 	}
 
 	baseDir := ""
-	if s.config != nil {
-		baseDir = s.config.ConfigDir
+	if ah.deps.Config != nil {
+		baseDir = ah.deps.Config.ConfigDir
 	}
 	if baseDir == "" {
 		baseDir = constant.GetTinglyConfDir()

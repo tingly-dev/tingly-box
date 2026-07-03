@@ -19,7 +19,7 @@ import (
 
 // AnthropicCountTokens handles Anthropic v1 count_tokens endpoint
 // This is the entry point that delegates to the appropriate implementation (v1 or beta)
-func (s *Server) AnthropicCountTokens(c *gin.Context) {
+func (ah *AIHandler) AnthropicCountTokens(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
 
@@ -67,7 +67,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	}
 
 	// Check if this is the request requestModel name first
-	rule, err := s.determineRuleWithScenario(c, scenarioType, requestModel)
+	rule, err := ah.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -78,7 +78,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 		return
 	}
 
-	provider, selectedService, err := s.routingSelector.SelectService(c, scenarioType, rule, nil)
+	provider, selectedService, err := ah.deps.RoutingSelector.SelectService(c, scenarioType, rule, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -91,11 +91,11 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 
 	useModel := selectedService.Model
 	params.Model = useModel
-	s.anthropicCountTokens(c, provider, useModel, params)
+	ah.anthropicCountTokens(c, provider, useModel, params)
 }
 
 // anthropicCountTokens unified token counting implementation
-func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, model string, req anthropic.BetaMessageCountTokensParams) {
+func (ah *AIHandler) anthropicCountTokens(c *gin.Context, provider *typ.Provider, model string, req anthropic.BetaMessageCountTokensParams) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
@@ -104,7 +104,7 @@ func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, mo
 	c.Set("model", model)
 
 	apiStyle := provider.APIStyle
-	wrapper := s.clientPool.GetAnthropicClient(context.Background(), provider, model)
+	wrapper := ah.deps.ClientPool.GetAnthropicClient(context.Background(), provider, model)
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -119,13 +119,13 @@ func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, mo
 		})
 		return
 	case protocol.APIStyleAnthropic:
-		s.anthropicCountTokensViaAPI(c, ctx, wrapper, req)
+		ah.anthropicCountTokensViaAPI(c, ctx, wrapper, req)
 	case protocol.APIStyleOpenAI, protocol.APIStyleGoogle:
-		s.anthropicCountTokensViaTiktoken(c, req)
+		ah.anthropicCountTokensViaTiktoken(c, req)
 	}
 }
 
-func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context, wrapper client.AnthropicClientInterface, req anthropic.BetaMessageCountTokensParams) {
+func (ah *AIHandler) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context, wrapper client.AnthropicClientInterface, req anthropic.BetaMessageCountTokensParams) {
 	message, err := wrapper.BetaMessagesCountTokens(ctx, &req)
 	if err != nil {
 		stream.SendInvalidRequestBodyError(c, err)
@@ -134,7 +134,7 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 	c.JSON(http.StatusOK, message)
 }
 
-func (s *Server) anthropicCountTokensViaTiktoken(c *gin.Context, req anthropic.BetaMessageCountTokensParams) {
+func (ah *AIHandler) anthropicCountTokensViaTiktoken(c *gin.Context, req anthropic.BetaMessageCountTokensParams) {
 	count, err := token.CountBetaTokensViaTiktoken(&req)
 	if err != nil {
 		stream.SendInvalidRequestBodyError(c, err)

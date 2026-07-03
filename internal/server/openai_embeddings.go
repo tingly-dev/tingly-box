@@ -21,11 +21,11 @@ import (
 // descriptor declares TransportOpenAI or TransportEmbed can reach it. The
 // canonical home is the dedicated `embed` scenario; `openai` scenario also
 // works because its descriptor is extended with TransportEmbed.
-func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
+func (ah *AIHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
 
-	if !isValidRuleScenario(scenarioType) {
+	if !IsValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
@@ -91,7 +91,7 @@ func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
 	requestModel := string(req.Model)
 	responseModel := requestModel
 
-	rule, err := s.determineRuleWithScenario(c, scenarioType, requestModel)
+	rule, err := ah.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -102,7 +102,7 @@ func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
 		return
 	}
 
-	provider, selectedService, err := s.routingSelector.SelectServiceForEmbeddings(c, scenarioType, rule)
+	provider, selectedService, err := ah.deps.RoutingSelector.SelectServiceForEmbeddings(c, scenarioType, rule)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -131,7 +131,7 @@ func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
 
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, false)
 
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
+	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
 	resp, cancel, err := forwarding.ForwardOpenAIEmbeddings(fc, wrapper, &req)
@@ -140,7 +140,7 @@ func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
 	}
 	if err != nil {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		s.trackUsageWithTokenUsage(c, usage, err)
+		ah.trackUsageWithTokenUsage(c, usage, err)
 		logrus.Errorf("Failed to forward embeddings request: %v", err)
 		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
 			Error: ErrorDetail{
@@ -152,7 +152,7 @@ func (s *Server) HandleOpenAIEmbeddings(c *gin.Context) {
 	}
 
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.PromptTokens), 0, 0)
-	s.trackUsageWithTokenUsage(c, usage, nil)
+	ah.trackUsageWithTokenUsage(c, usage, nil)
 
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {

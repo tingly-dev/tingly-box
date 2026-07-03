@@ -23,7 +23,7 @@ func newGinContext(t *testing.T) *gin.Context {
 }
 
 func TestResolveRuleFlags_NilRule(t *testing.T) {
-	got := resolveRuleFlags(newGinContext(t), nil)
+	got := ResolveRuleFlags(newGinContext(t), nil)
 	want := typ.RuleFlags{}
 	if got != want {
 		t.Errorf("resolveRuleFlags(nil) = %#v, want zero value %#v", got, want)
@@ -40,7 +40,7 @@ func TestResolveRuleFlags_CopiesFlags(t *testing.T) {
 			UseMaxTokens:           true,
 		},
 	}
-	got := resolveRuleFlags(newGinContext(t), rule)
+	got := ResolveRuleFlags(newGinContext(t), rule)
 	if !got.CursorCompat || !got.SkipUsage || !got.UseMaxCompletionTokens || !got.UseMaxTokens {
 		t.Errorf("bool flags lost: %#v", got)
 	}
@@ -59,7 +59,7 @@ func TestResolveRuleFlags_AutoDetectFoldedIn(t *testing.T) {
 	c := newGinContext(t)
 	c.Request.Header.Set("User-Agent", "Cursor/0.42")
 
-	got := resolveRuleFlags(c, rule)
+	got := ResolveRuleFlags(c, rule)
 	if !got.CursorCompat {
 		t.Errorf("expected CursorCompat folded to true via auto-detect, got %#v", got)
 	}
@@ -72,38 +72,38 @@ func TestResolveRuleFlags_AutoDetectInactiveWithoutHeader(t *testing.T) {
 			CursorCompatAuto: true,
 		},
 	}
-	got := resolveRuleFlags(newGinContext(t), rule)
+	got := ResolveRuleFlags(newGinContext(t), rule)
 	if got.CursorCompat {
 		t.Errorf("expected CursorCompat to stay false without Cursor headers, got %#v", got)
 	}
 }
 
 func TestShouldStripUsage_NilExtra(t *testing.T) {
-	if shouldStripUsage(nil) {
+	if ShouldStripUsage(nil) {
 		t.Errorf("nil extra map should not strip usage")
 	}
 }
 
 func TestShouldStripUsage_EmptyExtra(t *testing.T) {
-	if shouldStripUsage(map[string]interface{}{}) {
+	if ShouldStripUsage(map[string]interface{}{}) {
 		t.Errorf("empty extra map should not strip usage")
 	}
 }
 
 func TestShouldStripUsage_CursorCompatTrue(t *testing.T) {
-	if !shouldStripUsage(map[string]interface{}{"cursor_compat": true}) {
+	if !ShouldStripUsage(map[string]interface{}{"cursor_compat": true}) {
 		t.Errorf("cursor_compat=true should strip usage")
 	}
 }
 
 func TestShouldStripUsage_SkipUsageTrue(t *testing.T) {
-	if !shouldStripUsage(map[string]interface{}{"skip_usage": true}) {
+	if !ShouldStripUsage(map[string]interface{}{"skip_usage": true}) {
 		t.Errorf("skip_usage=true should strip usage")
 	}
 }
 
 func TestShouldStripUsage_BothTrue(t *testing.T) {
-	if !shouldStripUsage(map[string]interface{}{
+	if !ShouldStripUsage(map[string]interface{}{
 		"cursor_compat": true,
 		"skip_usage":    true,
 	}) {
@@ -112,7 +112,7 @@ func TestShouldStripUsage_BothTrue(t *testing.T) {
 }
 
 func TestShouldStripUsage_BothFalse(t *testing.T) {
-	if shouldStripUsage(map[string]interface{}{
+	if ShouldStripUsage(map[string]interface{}{
 		"cursor_compat": false,
 		"skip_usage":    false,
 	}) {
@@ -122,7 +122,7 @@ func TestShouldStripUsage_BothFalse(t *testing.T) {
 
 func TestShouldStripUsage_NonBoolValueIgnored(t *testing.T) {
 	// Defensive: a non-bool sneaks past the type assertion as false.
-	if shouldStripUsage(map[string]interface{}{
+	if ShouldStripUsage(map[string]interface{}{
 		"cursor_compat": "yes",
 		"skip_usage":    1,
 	}) {
@@ -131,14 +131,14 @@ func TestShouldStripUsage_NonBoolValueIgnored(t *testing.T) {
 }
 
 func TestRulePreBaseTransforms_NoFlags(t *testing.T) {
-	got := rulePreBaseTransforms(typ.RuleFlags{})
+	got := RulePreBaseTransforms(typ.RuleFlags{})
 	if got != nil {
 		t.Errorf("expected nil for zero-value flags, got %d transforms", len(got))
 	}
 }
 
 func TestRulePreBaseTransforms_CursorCompat(t *testing.T) {
-	got := rulePreBaseTransforms(typ.RuleFlags{CursorCompat: true})
+	got := RulePreBaseTransforms(typ.RuleFlags{CursorCompat: true})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -149,7 +149,7 @@ func TestRulePreBaseTransforms_CursorCompat(t *testing.T) {
 
 func TestRulePreBaseTransforms_OtherFlagsAlone_NoTransform(t *testing.T) {
 	// Post-base flags must not surface in the pre-base list.
-	got := rulePreBaseTransforms(typ.RuleFlags{
+	got := RulePreBaseTransforms(typ.RuleFlags{
 		UseMaxCompletionTokens: true,
 		UseMaxTokens:           true,
 		SkipUsage:              true,
@@ -161,14 +161,14 @@ func TestRulePreBaseTransforms_OtherFlagsAlone_NoTransform(t *testing.T) {
 }
 
 func TestRulePreVendorTransforms_NoFlags(t *testing.T) {
-	got := rulePreVendorTransforms(typ.RuleFlags{})
+	got := RulePreVendorTransforms(typ.RuleFlags{})
 	if got != nil {
 		t.Errorf("expected nil for zero-value flags, got %d transforms", len(got))
 	}
 }
 
 func TestRulePreVendorTransforms_UseMaxCompletionTokens(t *testing.T) {
-	got := rulePreVendorTransforms(typ.RuleFlags{UseMaxCompletionTokens: true})
+	got := RulePreVendorTransforms(typ.RuleFlags{UseMaxCompletionTokens: true})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -182,7 +182,7 @@ func TestRulePreVendorTransforms_UseMaxCompletionTokens(t *testing.T) {
 }
 
 func TestRulePreVendorTransforms_UseMaxTokens(t *testing.T) {
-	got := rulePreVendorTransforms(typ.RuleFlags{UseMaxTokens: true})
+	got := RulePreVendorTransforms(typ.RuleFlags{UseMaxTokens: true})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -193,7 +193,7 @@ func TestRulePreVendorTransforms_UseMaxTokens(t *testing.T) {
 }
 
 func TestRulePreVendorTransforms_ThinkingEffort(t *testing.T) {
-	got := rulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
+	got := RulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -207,7 +207,7 @@ func TestRulePreVendorTransforms_ThinkingEffort(t *testing.T) {
 }
 
 func TestRulePreVendorTransforms_ThinkingEffortEmpty_NoTransform(t *testing.T) {
-	got := rulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault})
+	got := RulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault})
 	if got != nil {
 		t.Errorf("empty thinking effort should add no transform, got %d", len(got))
 	}
@@ -218,7 +218,7 @@ func TestRulePreVendorTransforms_CursorCompatAlone_NoTransform(t *testing.T) {
 	// list. This is the safety net for the rule-flag-to-transform migration: if
 	// anyone wires cursor_compat into rulePreVendorTransforms by mistake, this
 	// test goes red.
-	got := rulePreVendorTransforms(typ.RuleFlags{
+	got := RulePreVendorTransforms(typ.RuleFlags{
 		CursorCompat:    true,
 		SkipUsage:       true,
 		CustomUserAgent: "Foo/1.0",
@@ -282,9 +282,9 @@ func TestAutoSetCleanHeaderFlag(t *testing.T) {
 	tests := []struct {
 		name            string
 		flags           typ.RuleFlags
-		sourceAPI      protocol.APIType
-		targetAPI      protocol.APIType
-		scenario       typ.RuleScenario
+		sourceAPI       protocol.APIType
+		targetAPI       protocol.APIType
+		scenario        typ.RuleScenario
 		wantCleanHeader bool
 	}{
 		{
@@ -334,30 +334,30 @@ func TestAutoSetCleanHeaderFlag(t *testing.T) {
 // TestRulePreBaseTransformsWithCleanHeader verifies the transform building
 func TestRulePreBaseTransformsWithCleanHeader(t *testing.T) {
 	tests := []struct {
-		name            string
-		flags           typ.RuleFlags
+		name           string
+		flags          typ.RuleFlags
 		wantCleanCount int
 	}{
 		{
-			name:            "CleanHeader flag adds transform",
-			flags:           typ.RuleFlags{CleanHeader: true},
+			name:           "CleanHeader flag adds transform",
+			flags:          typ.RuleFlags{CleanHeader: true},
 			wantCleanCount: 1,
 		},
 		{
-			name:            "No CleanHeader flag, no transform",
-			flags:           typ.RuleFlags{CleanHeader: false},
+			name:           "No CleanHeader flag, no transform",
+			flags:          typ.RuleFlags{CleanHeader: false},
 			wantCleanCount: 0,
 		},
 		{
-			name:            "CursorCompat + CleanHeader both added",
-			flags:           typ.RuleFlags{CursorCompat: true, CleanHeader: true},
+			name:           "CursorCompat + CleanHeader both added",
+			flags:          typ.RuleFlags{CursorCompat: true, CleanHeader: true},
 			wantCleanCount: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			transforms := rulePreBaseTransforms(tt.flags)
+			transforms := RulePreBaseTransforms(tt.flags)
 
 			cleanCount := 0
 			for _, transform := range transforms {
@@ -377,40 +377,40 @@ func TestRulePreBaseTransformsWithCleanHeader(t *testing.T) {
 // merging logic ensures rule-level flags take priority over scenario defaults.
 func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 	tests := []struct {
-		name                 string
-		ruleFlags           typ.RuleFlags
-		scenarioFlags       typ.ScenarioFlags
-		wantThinkingEffort  typ.ThinkingEffortLevel
+		name               string
+		ruleFlags          typ.RuleFlags
+		scenarioFlags      typ.ScenarioFlags
+		wantThinkingEffort typ.ThinkingEffortLevel
 	}{
 		{
-			name: "Rule explicit setting preserved over scenario default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortOff},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
-			wantThinkingEffort:  typ.ThinkingEffortOff,
+			name:               "Rule explicit setting preserved over scenario default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortOff},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
+			wantThinkingEffort: typ.ThinkingEffortOff,
 		},
 		{
-			name: "Rule explicit level preserved over scenario different level",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortLow},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortMedium},
-			wantThinkingEffort:  typ.ThinkingEffortLow,
+			name:               "Rule explicit level preserved over scenario different level",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortLow},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortMedium},
+			wantThinkingEffort: typ.ThinkingEffortLow,
 		},
 		{
-			name: "Scenario default injected when rule is default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
-			wantThinkingEffort:  typ.ThinkingEffortHigh,
+			name:               "Scenario default injected when rule is default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
+			wantThinkingEffort: typ.ThinkingEffortHigh,
 		},
 		{
-			name: "Both default remains default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			wantThinkingEffort:  typ.ThinkingEffortDefault,
+			name:               "Both default remains default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			wantThinkingEffort: typ.ThinkingEffortDefault,
 		},
 		{
-			name: "Rule explicit level preserved when scenario is default",
-			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortMedium},
-			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
-			wantThinkingEffort:  typ.ThinkingEffortMedium,
+			name:               "Rule explicit level preserved when scenario is default",
+			ruleFlags:          typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortMedium},
+			scenarioFlags:      typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			wantThinkingEffort: typ.ThinkingEffortMedium,
 		},
 	}
 
@@ -420,7 +420,7 @@ func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 			rule := &typ.Rule{Flags: tt.ruleFlags}
 			scenarioConfig := &typ.ScenarioConfig{Flags: tt.scenarioFlags}
 
-			result := resolveRuleFlagsWithScenario(
+			result := ResolveRuleFlagsWithScenario(
 				c,
 				rule,
 				typ.ScenarioClaudeCode,
@@ -476,7 +476,7 @@ func TestResolveRuleFlagsWithScenario_CustomUserAgent(t *testing.T) {
 			rule := &typ.Rule{Flags: tt.ruleFlags}
 			scenarioConfig := &typ.ScenarioConfig{Flags: tt.scenarioFlags}
 
-			result := resolveRuleFlagsWithScenario(
+			result := ResolveRuleFlagsWithScenario(
 				c,
 				rule,
 				typ.ScenarioClaudeCode,
@@ -505,21 +505,21 @@ func TestResolveRuleFlagsWithScenario_CleanHeaderSuppressedForClaudeOAuth(t *tes
 	scenarioConfig := &typ.ScenarioConfig{}
 
 	// CleanHeader should be suppressed for Claude OAuth provider.
-	got := resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
+	got := ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
 		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
 	if got.CleanHeader {
 		t.Error("CleanHeader should be suppressed for Claude OAuth provider")
 	}
 
 	// CleanHeader should be preserved for any other provider type.
-	got = resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
+	got = ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
 		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, otherProvider)
 	if !got.CleanHeader {
 		t.Error("CleanHeader should be preserved for non-OAuth provider")
 	}
 
 	// nil provider: no suppression.
-	got = resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
+	got = ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
 		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
 	if !got.CleanHeader {
 		t.Error("CleanHeader should be preserved when provider is nil")

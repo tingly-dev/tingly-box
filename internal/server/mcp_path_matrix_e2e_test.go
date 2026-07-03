@@ -16,12 +16,13 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/require"
+
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -287,7 +288,7 @@ func runDispatch(
 	c.Request = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("{}"))
 	SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, streaming)
 
-	s.dispatchChainResult(c, reqCtx, rule, provider, streaming, nil)
+	s.aiHandler.DispatchChainResult(c, reqCtx, rule, provider, streaming, nil)
 	return w.Code, w.Header(), w.Body.String()
 }
 
@@ -329,7 +330,6 @@ func buildOpenAIReq(streaming bool) *openai.ChatCompletionNewParams {
 	}
 }
 
-
 func newMCPDisabledTestServer(t *testing.T) *Server {
 	t.Helper()
 
@@ -343,7 +343,13 @@ func newMCPDisabledTestServer(t *testing.T) *Server {
 	require.NoError(t, err)
 	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", false))
 
-	return &Server{clientPool: cp, mcpRuntime: rt, config: conf}
+	s := &Server{clientPool: cp, mcpRuntime: rt, config: conf}
+	s.aiHandler = NewHandler(AIHandlerDeps{
+		Config:     conf,
+		ClientPool: cp,
+		MCPRuntime: rt,
+	})
+	return s
 }
 
 func TestMCPPathMatrixE2E(t *testing.T) {

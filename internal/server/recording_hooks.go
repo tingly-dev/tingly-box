@@ -15,7 +15,7 @@ import (
 // streamRecorder is published for protocol-layer code to feed events into.
 const streamRecorderContextKey = "stream_event_recorder"
 
-// streamRecorder couples a ProtocolRecorder with a stream assembler so that
+// StreamRecorder couples a ProtocolRecorder with a stream assembler so that
 // raw SSE events emitted during protocol conversion are mirrored into both
 // the recorder's chunk log and an assembler that synthesises the final
 // response body once the stream ends.
@@ -23,8 +23,10 @@ const streamRecorderContextKey = "stream_event_recorder"
 // It backs the gin-context StreamEventRecorder path used by the
 // Responses→Anthropic conversion handlers. Native Anthropic streams instead
 // use AttachRecorderHooks, which relies on the assembler that protocol's
-// HandleContext now owns.
-type streamRecorder struct {
+// HandleContext now owns. Exported (moved from unexported streamRecorder)
+// because root's protocol_cross.go (Step 7 territory) still constructs one
+// directly via NewStreamRecorder and calls its methods.
+type StreamRecorder struct {
 	recorder        *ProtocolRecorder
 	assembler       *assembler.AnthropicStreamAssembler
 	inputTokens     int
@@ -33,12 +35,17 @@ type streamRecorder struct {
 	hasUsage        bool
 }
 
-func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
+// NewStreamRecorder is the exported constructor for StreamRecorder.
+func NewStreamRecorder(recorder *ProtocolRecorder) *StreamRecorder {
+	return newStreamRecorder(recorder)
+}
+
+func newStreamRecorder(recorder *ProtocolRecorder) *StreamRecorder {
 	if recorder == nil {
 		return nil
 	}
 	recorder.EnableStreaming()
-	return &streamRecorder{
+	return &StreamRecorder{
 		recorder:  recorder,
 		assembler: assembler.NewAnthropicStreamAssembler(),
 	}
@@ -48,7 +55,7 @@ func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
 // recorded response has the full shape (input/output + cache_read).
 // When usage is nil or empty, any in-stream usage harvested via
 // RecordRawMapEvent is used as a fallback.
-func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage) {
+func (sr *StreamRecorder) Finish(model string, usage *protocol.TokenUsage) {
 	if sr == nil {
 		return
 	}
@@ -85,14 +92,14 @@ func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage) {
 	logrus.Debugf("obs: streamRecorder using fallback response, chunks=%d", len(sr.recorder.streamChunks))
 }
 
-func (sr *streamRecorder) RecordError(err error) {
+func (sr *StreamRecorder) RecordError(err error) {
 	if sr == nil {
 		return
 	}
 	sr.recorder.RecordError(err)
 }
 
-func (sr *streamRecorder) RecordResponse(provider *typ.Provider, model string) {
+func (sr *StreamRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil {
 		return
 	}
@@ -102,7 +109,7 @@ func (sr *streamRecorder) RecordResponse(provider *typ.Provider, model string) {
 // RecordRawMapEvent feeds a generic map-encoded SSE event into both the
 // assembler (best-effort) and the recorder's chunk log. Updates the usage
 // counters from message_delta events.
-func (sr *streamRecorder) RecordRawMapEvent(eventType string, event map[string]interface{}) {
+func (sr *StreamRecorder) RecordRawMapEvent(eventType string, event map[string]interface{}) {
 	if sr == nil {
 		return
 	}
@@ -142,7 +149,7 @@ func mapInt(m map[string]interface{}, key string) (int, bool) {
 	return 0, false
 }
 
-func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context) {
+func (sr *StreamRecorder) SetupStreamRecorderInContext(c *gin.Context) {
 	if sr == nil {
 		return
 	}
