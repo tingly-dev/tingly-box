@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/server/affinity"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -47,7 +48,7 @@ func TestRepro_NoServiceAvailable_SingleServiceRateLimited(t *testing.T) {
 	healthFilter := typ.NewHealthFilter(healthMonitor)
 	lb := server.NewLoadBalancer(cfg, healthFilter)
 	defer lb.Stop()
-	affinityStore := server.NewAffinityStore(0)
+	affinityStore := affinity.NewAffinityStore(0)
 	selector := routing.NewServiceSelector(cfg, affinityStore, lb)
 
 	// A single-service rule, no smart routing / affinity -> no-affinity pipeline.

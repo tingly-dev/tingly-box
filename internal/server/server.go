@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/affinity"
 
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/ai/quota"
@@ -127,7 +128,7 @@ type Server struct {
 	scenarioRecordSinksMu sync.RWMutex
 
 	// affinity store for smart routing session-model locking
-	affinityStore *AffinityStore
+	affinityStore *affinity.AffinityStore
 
 	// routing selector for service selection pipeline
 	routingSelector *routing.SimpleSelector
@@ -326,7 +327,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
 	// Initialize affinity store for smart routing
-	affinityStore := NewAffinityStore(0) // 0 = use default TTL
+	affinityStore := affinity.NewAffinityStore(0) // 0 = use default TTL
 
 	// Initialize routing selector with pipeline. Pass multiLogger so smart
 	// routing stages emit per-request evaluation traces to the smart_routing

@@ -1,4 +1,4 @@
-package server
+package affinity
 
 import (
 	"sync"
