@@ -70,7 +70,7 @@ func convertLogrusEntry(entry *logrus.Entry) LogEntry {
 //   - limit: maximum number of entries to return (default: 100)
 //   - level: filter by log level (debug, info, warn, error)
 //   - since: RFC3339 timestamp to filter entries after this time
-func (h *WebUIHandler) GetLogs(c *gin.Context) {
+func (h *WebHandler) GetLogs(c *gin.Context) {
 	if h.deps.MemoryLogMW == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Memory log middleware not available",
@@ -134,7 +134,7 @@ func (h *WebUIHandler) GetLogs(c *gin.Context) {
 }
 
 // ClearLogs clears all log entries
-func (h *WebUIHandler) ClearLogs(c *gin.Context) {
+func (h *WebHandler) ClearLogs(c *gin.Context) {
 	if h.deps.MemoryLogMW == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Memory log middleware not available",
@@ -149,7 +149,7 @@ func (h *WebUIHandler) ClearLogs(c *gin.Context) {
 }
 
 // GetLogStats returns statistics about the logs
-func (h *WebUIHandler) GetLogStats(c *gin.Context) {
+func (h *WebHandler) GetLogStats(c *gin.Context) {
 	if h.deps.MemoryLogMW == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Memory log middleware not available",
@@ -190,7 +190,7 @@ type SystemLogsResponse struct {
 // GetSystemLogs retrieves system logs with optional filtering
 // Query parameters:
 //   - limit: maximum number of recent entries to return (default: 100, max: 1000)
-func (h *WebUIHandler) GetSystemLogs(c *gin.Context) {
+func (h *WebHandler) GetSystemLogs(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "System logger not available",
@@ -239,7 +239,7 @@ func (h *WebUIHandler) GetSystemLogs(c *gin.Context) {
 }
 
 // GetSystemLogStats returns statistics about the system logs
-func (h *WebUIHandler) GetSystemLogStats(c *gin.Context) {
+func (h *WebHandler) GetSystemLogStats(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "System logger not available",
@@ -274,7 +274,7 @@ func (h *WebUIHandler) GetSystemLogStats(c *gin.Context) {
 }
 
 // GetSystemLogLevel returns the current system log level
-func (h *WebUIHandler) GetSystemLogLevel(c *gin.Context) {
+func (h *WebHandler) GetSystemLogLevel(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "System logger not available",
@@ -294,7 +294,7 @@ type SystemLogLevelRequest struct {
 }
 
 // SetSystemLogLevel sets the minimum log level for system logs
-func (h *WebUIHandler) SetSystemLogLevel(c *gin.Context) {
+func (h *WebHandler) SetSystemLogLevel(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "System logger not available",
@@ -347,7 +347,7 @@ type ActionHistoryResponse struct {
 // GetActionHistory retrieves user action history from memory
 // Query parameters:
 //   - limit: maximum number of recent entries to return (default: 100, max: 1000)
-func (h *WebUIHandler) GetActionHistory(c *gin.Context) {
+func (h *WebHandler) GetActionHistory(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Logger not available",
@@ -400,7 +400,7 @@ func (h *WebUIHandler) GetActionHistory(c *gin.Context) {
 }
 
 // GetActionStats returns statistics about user actions
-func (h *WebUIHandler) GetActionStats(c *gin.Context) {
+func (h *WebHandler) GetActionStats(c *gin.Context) {
 	if h.deps.MultiLogger == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Logger not available",

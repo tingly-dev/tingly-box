@@ -33,7 +33,7 @@ type ServerActionResponse struct {
 }
 
 // GetStatus returns server status and statistics.
-func (h *WebUIHandler) GetStatus(c *gin.Context) {
+func (h *WebHandler) GetStatus(c *gin.Context) {
 	providers := h.deps.Config.ListProviders()
 	enabledCount := 0
 	for _, p := range providers {
@@ -55,7 +55,7 @@ func (h *WebUIHandler) GetStatus(c *gin.Context) {
 }
 
 // GetHistory returns request history from the action log.
-func (h *WebUIHandler) GetHistory(c *gin.Context) {
+func (h *WebHandler) GetHistory(c *gin.Context) {
 	response := HistoryResponse{
 		Success: true,
 	}
@@ -74,7 +74,7 @@ func (h *WebUIHandler) GetHistory(c *gin.Context) {
 // StartServer is a placeholder: starting the server via the web UI is not
 // supported — the server itself must already be running to serve this
 // request, so start would be a no-op even if implemented.
-func (h *WebUIHandler) StartServer(c *gin.Context) {
+func (h *WebHandler) StartServer(c *gin.Context) {
 	response := ServerActionResponse{
 		Success: false,
 		Message: "Start server via web UI not supported. Please use CLI: tingly start",
@@ -83,7 +83,7 @@ func (h *WebUIHandler) StartServer(c *gin.Context) {
 }
 
 // RestartServer is a placeholder: restarting via the web UI is not supported.
-func (h *WebUIHandler) RestartServer(c *gin.Context) {
+func (h *WebHandler) RestartServer(c *gin.Context) {
 	response := ServerActionResponse{
 		Success: false,
 		Message: "Restart server via web UI not supported. Please use CLI: tingly restart",

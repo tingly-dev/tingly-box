@@ -14,7 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-func newModelRequestTestServer(t *testing.T) *WebUIHandler {
+func newModelRequestTestServer(t *testing.T) *WebHandler {
 	t.Helper()
 	cfg := &obs.MultiLoggerConfig{
 		TextLogPath: "",
@@ -27,14 +27,14 @@ func newModelRequestTestServer(t *testing.T) *WebUIHandler {
 	}
 	ml, err := obs.NewMultiLogger(cfg)
 	assert.NoError(t, err)
-	return NewControlHandler(WebUIDeps{MultiLogger: ml})
+	return NewWebHandler(WebDeps{MultiLogger: ml})
 }
 
-func emitHTTP(h *WebUIHandler, fields logrus.Fields) {
+func emitHTTP(h *WebHandler, fields logrus.Fields) {
 	h.deps.MultiLogger.GetLogrusLogger(obs.LogSourceHTTP).WithFields(fields).Info("http")
 }
 
-func emitModelStage(h *WebUIHandler, id, stage string, level logrus.Level) {
+func emitModelStage(h *WebHandler, id, stage string, level logrus.Level) {
 	h.deps.MultiLogger.GetLogrusLogger(obs.LogSourceModelRequest).
 		WithFields(logrus.Fields{"request_id": id, "stage": stage}).Log(level, "stage")
 }

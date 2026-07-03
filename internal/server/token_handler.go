@@ -25,7 +25,7 @@ type tokenErrorDetail struct {
 }
 
 // GenerateToken handles token generation requests
-func (h *WebUIHandler) GenerateToken(c *gin.Context) {
+func (h *WebHandler) GenerateToken(c *gin.Context) {
 	var req struct {
 		ClientID string `json:"client_id" binding:"required"`
 	}
@@ -75,7 +75,7 @@ func (h *WebUIHandler) GenerateToken(c *gin.Context) {
 }
 
 // GetToken handles token retrieval requests - generates a token if it doesn't exist
-func (h *WebUIHandler) GetToken(c *gin.Context) {
+func (h *WebHandler) GetToken(c *gin.Context) {
 	globalConfig := h.deps.Config
 
 	// Check if token already exists

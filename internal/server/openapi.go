@@ -32,7 +32,7 @@ func GenerateOpenAPI(cfg *config.Config) (string, error) {
 		// controlHandler/guardrailsHandler need no live logger/token-manager
 		// wiring for schema generation — their handlers are only referenced
 		// (never invoked) here.
-		controlHandler: NewControlHandler(WebUIDeps{Config: cfg}),
+		controlHandler: NewWebHandler(WebDeps{Config: cfg}),
 	}
 	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
 		Config:             cfg,

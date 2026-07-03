@@ -181,7 +181,7 @@ type Server struct {
 	// NewServer, after every field it depends on (memoryLogMW, multiLogger,
 	// config, jwtManager, ...) has already been set — do not move this
 	// construction earlier without checking every field it reads.
-	controlHandler *WebUIHandler
+	controlHandler *WebHandler
 
 	// guardrailsHandler is the WebUI Management API's guardrails admin
 	// handler (internal/server/webui.GuardrailsHandler). Same construction
@@ -462,7 +462,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Construct the WebUI Management API's control handler. This MUST be the
 	// last step before setupMiddleware/setupRoutes — every field it reads
 	// (memoryLogMW, multiLogger, jwtManager, config) needs to already be set.
-	server.controlHandler = NewControlHandler(WebUIDeps{
+	server.controlHandler = NewWebHandler(WebDeps{
 		MemoryLogMW: server.memoryLogMW,
 		MultiLogger: server.multiLogger,
 		Config:      server.config,
