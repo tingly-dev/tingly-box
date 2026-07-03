@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -27,7 +28,7 @@ func (ah *AIHandler) NonstreamAnthropicV1(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	actualModel := reqCtx.RequestModel
@@ -109,7 +110,7 @@ func (ah *AIHandler) StreamAnthropicV1(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	actualModel := reqCtx.RequestModel
@@ -138,7 +139,7 @@ func (ah *AIHandler) StreamAnthropicV1(
 	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if available
-	AttachRecorderHooks(hc, recorder, actualModel, provider)
+	recording.AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
@@ -180,11 +181,11 @@ func (ah *AIHandler) StreamAnthropicV1(
 // StreamAnthropicBeta processes the Anthropic beta streaming
 // response. The resolved model is passed in as actualModel rather than read from
 // the request, so the handler no longer depends on req.Model.
-func (ah *AIHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if recorder is available
-	AttachRecorderHooks(hc, recorder, actualModel, provider)
+	recording.AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// response guardrails
 	scenario := GetTrackingContextScenario(c)
@@ -317,7 +318,7 @@ func (ah *AIHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provider, or
 }
 
 // nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)
-func (ah *AIHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 
 	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
@@ -346,7 +347,7 @@ func (ah *AIHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.
 
 // streamOpenAIResponses handles Responses API passthrough (streaming)
 // Moved from openai_responses.go:421-456
-func (ah *AIHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 

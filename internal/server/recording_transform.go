@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 )
 
 // TransformStage selects which side of the transform pipeline the recorder
@@ -24,13 +25,13 @@ const (
 // TransformRecorder is a transform.Transform that snapshots the request body
 // at a given stage and stores it on a ProtocolRecorder.
 type TransformRecorder struct {
-	recorder *ProtocolRecorder
+	recorder *recording.ProtocolRecorder
 	c        *gin.Context
 	stage    TransformStage
 }
 
 // NewTransformRecorder builds a recorder transform for the given stage.
-func NewTransformRecorder(c *gin.Context, recorder *ProtocolRecorder, stage TransformStage) *TransformRecorder {
+func NewTransformRecorder(c *gin.Context, recorder *recording.ProtocolRecorder, stage TransformStage) *TransformRecorder {
 	return &TransformRecorder{
 		recorder: recorder,
 		c:        c,

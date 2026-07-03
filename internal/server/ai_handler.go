@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
@@ -23,6 +24,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -260,4 +262,36 @@ func (ah *AIHandler) determineRuleWithScenario(ctx *gin.Context, scenario typ.Ru
 	}
 
 	return nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+}
+
+// EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,
+// reusing any recorder already stored in the gin context. Returns nil when
+// recording is disabled (no sink) or the request body cannot be read.
+//
+// GetOrCreateScenarioSink is a AIHandlerDeps callback rather than a direct call
+// because scenario sink lifecycle (creation, mutex, recordDir) still lives on
+// root *Server — see AIHandlerDeps.
+func (ah *AIHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
+	if rec, ok := recording.GetRecorderFromContext(c); ok {
+		rec.BindProvider(provider, model, mode)
+		return rec
+	}
+
+	if ah.deps.GetOrCreateScenarioSink == nil {
+		return nil
+	}
+	scenarioType := typ.RuleScenario(scenario)
+	sink := ah.deps.GetOrCreateScenarioSink(scenarioType)
+	if sink == nil {
+		return nil
+	}
+
+	rec, err := recording.NewProtocolRecorder(c, sink, scenario, mode, bs)
+	if err != nil {
+		logrus.Debugf("obs: failed to build ProtocolRecorder: %v", err)
+		return nil
+	}
+	rec.BindProvider(provider, model, mode)
+	c.Set(recording.RecorderContextKey, rec)
+	return rec
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
@@ -208,6 +209,6 @@ func (s *Server) GetScenarioRecordMode(scenario typ.RuleScenario) obs.RecordMode
 // EnsureProtocolRecorder delegates to the AI Model API handler, which owns
 // the ProtocolRecorder type. Kept as a thin root wrapper since callers
 // (anthropic_message.go and its tests) have not moved to aimodel yet.
-func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *ProtocolRecorder {
+func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
 	return s.aiHandler.EnsureProtocolRecorder(c, scenario, provider, model, mode, bs)
 }

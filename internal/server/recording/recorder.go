@@ -1,4 +1,4 @@
-package server
+package recording
 
 import (
 	"encoding/json"
@@ -16,9 +16,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// recorderContextKey is the gin context key under which the active
+// RecorderContextKey is the gin context key under which the active
 // ProtocolRecorder is stored so later handler stages can reuse it.
-const recorderContextKey = "protocol_recorder"
+const RecorderContextKey = "protocol_recorder"
 
 // ProtocolRecorder captures a single client→tingly-box→provider cycle.
 //
@@ -60,59 +60,7 @@ type ProtocolRecorder struct {
 	mode          obs.RecordMode
 }
 
-// SetActiveService re-binds the recorder to a new provider/model. The
-// failover orchestrator calls this between attempts so a subsequent
-// RecordError attributes the failure to the right service rather than
-// to whichever service the recorder was last bound to.
-func (sr *ProtocolRecorder) SetActiveService(provider *typ.Provider, model string) {
-	if sr == nil {
-		return
-	}
-	sr.bindProvider(provider, model, "")
-}
-
-// breakerServiceID returns the loadbalance service identifier for the
-// active provider+model, or "" if either is unknown.
-func (sr *ProtocolRecorder) breakerServiceID() string {
-	if sr == nil || sr.providerUUID == "" || sr.model == "" {
-		return ""
-	}
-	return loadbalance.FormatServiceID(sr.providerUUID, sr.model)
-}
-
-// EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,
-// reusing any recorder already stored in the gin context. Returns nil when
-// recording is disabled (no sink) or the request body cannot be read.
-//
-// GetOrCreateScenarioSink is a AIHandlerDeps callback rather than a direct call
-// because scenario sink lifecycle (creation, mutex, recordDir) still lives on
-// root *Server — see AIHandlerDeps.
-func (ah *AIHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *ProtocolRecorder {
-	if rec, ok := getRecorderFromContext(c); ok {
-		rec.bindProvider(provider, model, mode)
-		return rec
-	}
-
-	if ah.deps.GetOrCreateScenarioSink == nil {
-		return nil
-	}
-	scenarioType := typ.RuleScenario(scenario)
-	sink := ah.deps.GetOrCreateScenarioSink(scenarioType)
-	if sink == nil {
-		return nil
-	}
-
-	rec, err := newProtocolRecorder(c, sink, scenario, mode, bs)
-	if err != nil {
-		logrus.Debugf("obs: failed to build ProtocolRecorder: %v", err)
-		return nil
-	}
-	rec.bindProvider(provider, model, mode)
-	c.Set(recorderContextKey, rec)
-	return rec
-}
-
-func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode, body []byte) (*ProtocolRecorder, error) {
+func NewProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode, body []byte) (*ProtocolRecorder, error) {
 
 	var bodyJSON map[string]interface{}
 	if err := json.Unmarshal(body, &bodyJSON); err != nil {
@@ -141,6 +89,26 @@ func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 	}, nil
 }
 
+// SetActiveService re-binds the recorder to a new provider/model. The
+// failover orchestrator calls this between attempts so a subsequent
+// RecordError attributes the failure to the right service rather than
+// to whichever service the recorder was last bound to.
+func (sr *ProtocolRecorder) SetActiveService(provider *typ.Provider, model string) {
+	if sr == nil {
+		return
+	}
+	sr.BindProvider(provider, model, "")
+}
+
+// breakerServiceID returns the loadbalance service identifier for the
+// active provider+model, or "" if either is unknown.
+func (sr *ProtocolRecorder) breakerServiceID() string {
+	if sr == nil || sr.providerUUID == "" || sr.model == "" {
+		return ""
+	}
+	return loadbalance.FormatServiceID(sr.providerUUID, sr.model)
+}
+
 // GetRecorderFromContext returns the ProtocolRecorder stashed in c by
 // EnsureProtocolRecorder, if any. Exported for root callers
 // (failover_dispatch.go, protocol_cross.go — both still Step 7-9 territory)
@@ -150,7 +118,7 @@ func GetRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
 }
 
 func getRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
-	v, exists := c.Get(recorderContextKey)
+	v, exists := c.Get(RecorderContextKey)
 	if !exists {
 		return nil, false
 	}
@@ -158,7 +126,7 @@ func getRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
 	return rec, ok
 }
 
-func (sr *ProtocolRecorder) bindProvider(provider *typ.Provider, model string, mode obs.RecordMode) {
+func (sr *ProtocolRecorder) BindProvider(provider *typ.Provider, model string, mode obs.RecordMode) {
 	if sr == nil {
 		return
 	}
@@ -275,7 +243,7 @@ func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string)
 	if sr == nil {
 		return
 	}
-	sr.bindProvider(provider, model, "")
+	sr.BindProvider(provider, model, "")
 	if sr.finalResponse == nil {
 		sr.finalResponse = sr.synthesizeFinalResponse()
 	}

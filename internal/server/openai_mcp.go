@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -19,7 +20,7 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 	req *openai.ChatCompletionNewParams,
 	actualModel string,
 	responseModel string,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	for round := 0; round < 3; round++ {
 		wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
@@ -68,9 +69,9 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 	req *openai.ChatCompletionNewParams,
 	actualModel string,
 	responseModel string,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
-	streamRec := newStreamRecorder(recorder)
+	streamRec := recording.NewStreamRecorder(recorder)
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c)
 	}

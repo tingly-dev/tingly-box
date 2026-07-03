@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -37,7 +38,7 @@ func extractAnthropicV1Messages(messages []anthropic.MessageParam) []map[string]
 
 // respondMCPError writes a JSON error response for non-streaming MCP tool call failures.
 // This consolidates the ~10-line error block repeated across dispatch paths.
-func respondMCPError(h *AIHandler, c *gin.Context, recorder *ProtocolRecorder, err error, msg string) {
+func respondMCPError(h *AIHandler, c *gin.Context, recorder *recording.ProtocolRecorder, err error, msg string) {
 	h.trackUsageFromContext(c, 0, 0, err)
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
@@ -51,7 +52,7 @@ func respondMCPError(h *AIHandler, c *gin.Context, recorder *ProtocolRecorder, e
 }
 
 // recordMCPForwardingError handles MCP errors in non-streaming forward paths.
-func recordMCPForwardingError(h *AIHandler, c *gin.Context, err error, recorder *ProtocolRecorder) {
+func recordMCPForwardingError(h *AIHandler, c *gin.Context, err error, recorder *recording.ProtocolRecorder) {
 	h.trackUsageFromContext(c, 0, 0, err)
 	stream.SendForwardingError(c, err)
 	if recorder != nil {
@@ -98,7 +99,7 @@ func ShouldUseGenericMCPForProvider(cfg *config.Config, provider *typ.Provider) 
 func (ah *AIHandler) DispatchChainResult(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *ProtocolRecorder,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
 ) {
 	defer func() {
 		reqCtx.Release()
@@ -273,7 +274,7 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 func (ah *AIHandler) dispatchAnthropicBetaToOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *ProtocolRecorder,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
@@ -390,7 +391,7 @@ func (ah *AIHandler) dispatchAnthropicBetaToOpenAIChat(
 func (ah *AIHandler) passthroughAnthropicBeta(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *ProtocolRecorder,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
 ) {
 	useGeneric := ah.mcpEnabled() && ah.shouldUseGenericMCPForProvider(provider)
 
@@ -492,7 +493,7 @@ func (ah *AIHandler) passthroughAnthropicBeta(
 func (ah *AIHandler) dispatchGoogle(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *ProtocolRecorder,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	googleReq := reqCtx.Request.(*protocol.GoogleRequest)
@@ -584,7 +585,7 @@ func (ah *AIHandler) dispatchGoogle(
 func (ah *AIHandler) dispatchOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
-	isStreaming bool, recorder *ProtocolRecorder,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 

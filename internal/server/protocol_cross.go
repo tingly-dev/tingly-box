@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -24,7 +25,7 @@ import (
 // nonstreamResponsesToAnthropicBeta handles non-streaming Responses API request
 func (ah *AIHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get protocol recorder if exists
-	recorder, _ := GetRecorderFromContext(c)
+	recorder, _ := recording.GetRecorderFromContext(c)
 
 	// Get rule from context for affinity
 	var rule *typ.Rule
@@ -73,8 +74,8 @@ func (ah *AIHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyMode
 // streamResponsesToAnthropicBeta handles streaming Responses API request
 func (ah *AIHandler) streamResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
-	recorder, _ := GetRecorderFromContext(c)
-	streamRec := NewStreamRecorder(recorder)
+	recorder, _ := recording.GetRecorderFromContext(c)
+	streamRec := recording.NewStreamRecorder(recorder)
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c)
 	}
@@ -124,8 +125,8 @@ func (ah *AIHandler) streamResponsesToAnthropicBeta(c *gin.Context, proxyModel s
 // streamResponsesToAnthropicBeta handles streaming Responses API request
 func (ah *AIHandler) assembleResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
-	recorder, _ := GetRecorderFromContext(c)
-	streamRec := NewStreamRecorder(recorder)
+	recorder, _ := recording.GetRecorderFromContext(c)
+	streamRec := recording.NewStreamRecorder(recorder)
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c)
 	}
@@ -172,7 +173,7 @@ func (ah *AIHandler) assembleResponsesToAnthropicBeta(c *gin.Context, proxyModel
 }
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
-func (ah *AIHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
@@ -194,7 +195,7 @@ func (ah *AIHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *tran
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
 // Extracted from openai_responses.go:202-216
-func (ah *AIHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
@@ -220,7 +221,7 @@ func (ah *AIHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transfo
 // nonstreamAnthropicBetaToResponses handles a Responses-shaped client
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (non-streaming).
-func (ah *AIHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
@@ -247,7 +248,7 @@ func (ah *AIHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *t
 // streamAnthropicBetaToResponses handles a Responses-shaped client
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (streaming).
-func (ah *AIHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
@@ -273,7 +274,7 @@ func (ah *AIHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *tran
 	ah.trackUsageWithTokenUsage(c, usage, err)
 }
 
-func (ah *AIHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
@@ -303,7 +304,7 @@ func (ah *AIHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.Tra
 	}
 }
 
-func (ah *AIHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+func (ah *AIHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	actualModel := reqCtx.RequestModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
@@ -336,7 +337,7 @@ func (ah *AIHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
 func (ah *AIHandler) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get protocol recorder if exists
-	recorder, _ := GetRecorderFromContext(c)
+	recorder, _ := recording.GetRecorderFromContext(c)
 
 	var response *responses.Response
 	var err error
@@ -387,8 +388,8 @@ func (ah *AIHandler) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel st
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
 func (ah *AIHandler) streamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
-	recorder, _ := GetRecorderFromContext(c)
-	streamRec := NewStreamRecorder(recorder)
+	recorder, _ := recording.GetRecorderFromContext(c)
+	streamRec := recording.NewStreamRecorder(recorder)
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c)
 	}
@@ -445,8 +446,8 @@ func (ah *AIHandler) streamResponsesToAnthropic(c *gin.Context, proxyModel strin
 // streamResponsesToAnthropic handles streaming Responses API request
 func (ah *AIHandler) assembleResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
-	recorder, _ := GetRecorderFromContext(c)
-	streamRec := NewStreamRecorder(recorder)
+	recorder, _ := recording.GetRecorderFromContext(c)
+	streamRec := recording.NewStreamRecorder(recorder)
 	if streamRec != nil {
 		streamRec.SetupStreamRecorderInContext(c)
 	}

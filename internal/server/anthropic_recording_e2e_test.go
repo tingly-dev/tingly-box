@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -51,11 +52,11 @@ func (f *fakeDecoder) Err() error             { return nil }
 func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
 
-	h, sink, mem := newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
+	h, sink, mem := recording.newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
 
 	// Gin context with CloseNotify-capable writer (gin.Context.Stream needs it).
 	gin.SetMode(gin.TestMode)
-	w := newStreamableRecorder()
+	w := recording.newStreamableRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages?beta=true", nil)
 
@@ -85,7 +86,7 @@ func TestAnthropicV1BetaStream_Recorded(t *testing.T) {
 	// (assembled body in FinalResponse) would fail.
 	h.StreamAnthropicBeta(c, req, streamResp, string(req.Model), "proxy-stream-model", provider, recorder)
 
-	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
+	require.NoError(t, sink.ForceFlush(recording.ctxWithTimeout(t)))
 
 	records := mem.snapshot()
 	require.Len(t, records, 1, "exactly one recording must be emitted by the streaming handler")

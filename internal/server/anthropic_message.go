@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -177,7 +178,7 @@ func (ah *AIHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Anthropic
 	// Get or create the recorder for dual-stage recording. The body is the
 	// pristine request as received (post-vision-proxy, pre-pre-chain); the
 	// winning attempt's provider/model is re-bound per attempt via SetActiveService.
-	var recorder *ProtocolRecorder
+	var recorder *recording.ProtocolRecorder
 	if scenarioConfig.IsRecordingEnable() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
@@ -220,7 +221,7 @@ func (ah *AIHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Anthropic
 // pre-transform chain and guardrails, resolve the target API for this provider's
 // style, transform, and dispatch. Setup failures route through failAttemptSetup
 // so the orchestrator can advance to the next candidate.
-func (ah *AIHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *ProtocolRecorder) {
+func (ah *AIHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *recording.ProtocolRecorder) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
@@ -307,7 +308,7 @@ func (ah *AIHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthr
 	SetTrackingContext(c, rule, provider, requestModel, responseModel, isStreaming)
 
 	// Get or create the recorder for dual-stage recording (pristine request body).
-	var recorder *ProtocolRecorder
+	var recorder *recording.ProtocolRecorder
 	if scenarioConfig.IsRecordingEnable() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
@@ -346,7 +347,7 @@ func (ah *AIHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthr
 
 // runAnthropicBetaAttempt executes the provider-dependent half of an Anthropic
 // beta request for one failover attempt. See runAnthropicV1Attempt.
-func (ah *AIHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *ProtocolRecorder) {
+func (ah *AIHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *recording.ProtocolRecorder) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)

@@ -1,4 +1,4 @@
-package server
+package recording
 
 import (
 	"encoding/json"
@@ -37,10 +37,6 @@ type StreamRecorder struct {
 
 // NewStreamRecorder is the exported constructor for StreamRecorder.
 func NewStreamRecorder(recorder *ProtocolRecorder) *StreamRecorder {
-	return newStreamRecorder(recorder)
-}
-
-func newStreamRecorder(recorder *ProtocolRecorder) *StreamRecorder {
 	if recorder == nil {
 		return nil
 	}

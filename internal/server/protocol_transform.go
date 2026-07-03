@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -12,7 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (ah *AIHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
+func (ah *AIHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *recording.ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
@@ -75,7 +76,7 @@ func (ah *AIHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.Anthro
 	return finalCtx, nil
 }
 
-func (ah *AIHandler) TransformAnthropicV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
+func (ah *AIHandler) TransformAnthropicV1(c *gin.Context, req *protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *recording.ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
 	chain, err := ah.buildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, preVendorTransforms)
@@ -138,7 +139,7 @@ func (ah *AIHandler) TransformAnthropicV1(c *gin.Context, req *protocol.Anthropi
 	return finalCtx, nil
 }
 
-func (ah *AIHandler) TransformOpenAIChat(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
+func (ah *AIHandler) TransformOpenAIChat(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *recording.ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
 	chain, err := ah.buildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, preVendorTransforms)
@@ -193,7 +194,7 @@ func (ah *AIHandler) TransformOpenAIChat(c *gin.Context, req *protocol.OpenAICha
 	return finalCtx, nil
 }
 
-func (ah *AIHandler) TransformOpenAIResponses(c *gin.Context, req *protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
+func (ah *AIHandler) TransformOpenAIResponses(c *gin.Context, req *protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *recording.ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 	// Build transform chain with recording support. The rule-driven pre-Base and
 	// preVendor transforms are slotted into their canonical positions by the builder.
 	chain, err := ah.buildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, preVendorTransforms)
@@ -260,7 +261,7 @@ func (ah *AIHandler) TransformOpenAIResponses(c *gin.Context, req *protocol.Resp
 // the provider and must be the last mutation, so the preVendor transforms are
 // inserted after Consistency but BEFORE Vendor — this also means the StagePost
 // recording captures the truly-final, dispatched request.
-func (ah *AIHandler) buildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioType typ.RuleScenario, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
+func (ah *AIHandler) buildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioType typ.RuleScenario, scenarioFlags *typ.ScenarioFlags, recorder *recording.ProtocolRecorder, preBase []transform.Transform, preVendor []transform.Transform) (*transform.TransformChain, error) {
 
 	recordMode := ah.getScenarioRecordMode(scenarioType)
 	shouldRecord := recorder != nil

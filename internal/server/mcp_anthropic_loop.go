@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -79,7 +80,7 @@ func HasDeclaredMCPAnthropicBetaTools(req *anthropic.BetaMessageNewParams) bool 
 // recordMCPError sends a streaming error response for streaming MCP tool call
 // failures. Exported as RecordMCPError for root callers (protocol_passthrough.go)
 // that have not moved to aimodel yet.
-func recordMCPError(h *AIHandler, c *gin.Context, err error, recorder *ProtocolRecorder) {
+func recordMCPError(h *AIHandler, c *gin.Context, err error, recorder *recording.ProtocolRecorder) {
 	h.trackUsageFromContext(c, 0, 0, err)
 	stream.SendStreamingError(c, err)
 	if recorder != nil {
@@ -88,6 +89,6 @@ func recordMCPError(h *AIHandler, c *gin.Context, err error, recorder *ProtocolR
 }
 
 // RecordMCPError is the exported variant of recordMCPError for root callers.
-func RecordMCPError(h *AIHandler, c *gin.Context, err error, recorder *ProtocolRecorder) {
+func RecordMCPError(h *AIHandler, c *gin.Context, err error, recorder *recording.ProtocolRecorder) {
 	recordMCPError(h, c, err, recorder)
 }

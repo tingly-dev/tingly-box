@@ -25,6 +25,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -372,7 +373,7 @@ func (ah *AIHandler) DispatchWithPriorityFailover(
 
 	// Keep the recorder's bound service in sync per attempt so the
 	// breaker store gets fed the right serviceID on failure.
-	rec, _ := GetRecorderFromContext(c)
+	rec, _ := recording.GetRecorderFromContext(c)
 
 	for i := 0; i < len(activeServices); i++ {
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)

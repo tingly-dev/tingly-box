@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -25,11 +26,11 @@ import (
 // serverOpsAdapter implements mcp.ServerOps by wrapping AIHandler
 type serverOpsAdapter struct {
 	handler    *AIHandler
-	recorder   *ProtocolRecorder
+	recorder   *recording.ProtocolRecorder
 	advisorCtx *coretool.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
 }
 
-func newServerOpsAdapter(handler *AIHandler, recorder *ProtocolRecorder) *serverOpsAdapter {
+func newServerOpsAdapter(handler *AIHandler, recorder *recording.ProtocolRecorder) *serverOpsAdapter {
 	return &serverOpsAdapter{
 		handler:  handler,
 		recorder: recorder,
@@ -81,7 +82,7 @@ func (a *serverOpsAdapter) GetRecorder() mcp.ProtocolRecorder {
 
 // protocolRecorderAdapter implements mcp.ProtocolRecorder by wrapping ProtocolRecorder
 type protocolRecorderAdapter struct {
-	recorder *ProtocolRecorder
+	recorder *recording.ProtocolRecorder
 }
 
 func (a *protocolRecorderAdapter) RecordError(err error) {
@@ -120,7 +121,7 @@ func (ah *AIHandler) RunGenericOpenAIChatNonStream(
 	ctx context.Context,
 	provider *typ.Provider,
 	req *openai.ChatCompletionNewParams,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) (*openai.ChatCompletion, *mcp.TokenUsage, error) {
 	adapter := mcp.NewOpenAIChatAdapter()
 	forwarder := mcp.NewOpenAIChatForwarder(ah.deps.ClientPool, &forwardContextProvider{})
@@ -167,7 +168,7 @@ func (ah *AIHandler) RunGenericAnthropicV1NonStream(
 	ctx context.Context,
 	provider *typ.Provider,
 	req *anthropic.MessageNewParams,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) (*anthropic.Message, *mcp.TokenUsage, error) {
 	adapter := mcp.NewAnthropicV1Adapter()
 	forwarder := mcp.NewAnthropicV1Forwarder(ah.deps.ClientPool, &forwardContextProvider{})
@@ -214,7 +215,7 @@ func (ah *AIHandler) RunGenericAnthropicBetaNonStream(
 	ctx context.Context,
 	provider *typ.Provider,
 	req *anthropic.BetaMessageNewParams,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) (*anthropic.BetaMessage, *mcp.TokenUsage, error) {
 
 	adapter := mcp.NewAnthropicBetaAdapter()
@@ -264,7 +265,7 @@ func (ah *AIHandler) DispatchGenericOpenAIChatNonStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
@@ -292,7 +293,7 @@ func (ah *AIHandler) DispatchGenericOpenAIChatStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
 	actualModel := reqCtx.RequestModel
@@ -321,7 +322,7 @@ func (ah *AIHandler) DispatchGenericOpenAIChatStream(
 	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if available
-	AttachRecorderHooks(hc, recorder, actualModel, provider)
+	recording.AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Create and run generic interceptor
 	interceptor := mcp.NewGenericStreamInterceptor(
@@ -348,7 +349,7 @@ func (ah *AIHandler) DispatchGenericAnthropicBetaNonStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 	actualModel := reqCtx.RequestModel
@@ -383,7 +384,7 @@ func (ah *AIHandler) DispatchGenericAnthropicBetaStream(
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
 	provider *typ.Provider,
-	recorder *ProtocolRecorder,
+	recorder *recording.ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 	actualModel := reqCtx.RequestModel
@@ -412,7 +413,7 @@ func (ah *AIHandler) DispatchGenericAnthropicBetaStream(
 	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if available
-	AttachRecorderHooks(hc, recorder, actualModel, provider)
+	recording.AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
