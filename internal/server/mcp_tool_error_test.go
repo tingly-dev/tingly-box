@@ -18,42 +18,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// testAdvisorProvider/testAdvisorSource are a minimal local copy of root's
-// advisor_test_helpers_test.go — duplicated rather than exported since this
-// is test-only fixture data and root's copy still serves 2 other root-only
-// test files (advisor_integration_test.go, mcp_response_hook_integration_test.go).
-func testAdvisorProvider(url, key string, style protocol.APIStyle) func(string) (*typ.Provider, error) {
-	return func(string) (*typ.Provider, error) {
-		return &typ.Provider{
-			Name:     "test-advisor",
-			APIBase:  url,
-			Token:    key,
-			APIStyle: style,
-			Enabled:  true,
-		}, nil
-	}
-}
-
-func testAdvisorConfig(url, key, model string, style protocol.APIStyle, maxUses int) *typ.AdvisorConfig {
-	return &typ.AdvisorConfig{
-		ProviderUUID:      "test",
-		ProviderResolver:  testAdvisorProvider(url, key, style),
-		Model:             model,
-		MaxUsesPerRequest: maxUses,
-	}
-}
-
-func testAdvisorSource(url, key, model string, style protocol.APIStyle, maxUses int) typ.MCPSourceConfig {
-	return typ.MCPSourceConfig{
-		ID:         "advisor",
-		Transport:  "advisor",
-		Enabled:    typ.BoolPtr(true),
-		Visibility: typ.ToolVisibilityServer,
-		Tools:      []string{"advisor"},
-		Advisor:    testAdvisorConfig(url, key, model, style, maxUses),
-	}
-}
-
 func TestCallMCPToolWithGuard_DisabledToolReturnsCallingDisabledTools(t *testing.T) {
 	h := NewHandler(ProtocolHandlerDeps{
 		MCPRuntime: mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
