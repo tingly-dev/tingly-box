@@ -55,7 +55,7 @@ func testAdvisorSource(url, key, model string, style protocol.APIStyle, maxUses 
 }
 
 func TestCallMCPToolWithGuard_DisabledToolReturnsCallingDisabledTools(t *testing.T) {
-	h := NewHandler(AIHandlerDeps{
+	h := NewHandler(ProtocolHandlerDeps{
 		MCPRuntime: mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
 			// No enabled server tools => any MCP tool name should be treated as disabled.
 			return &typ.MCPRuntimeConfig{}
@@ -138,7 +138,7 @@ func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testin
 
 	pipeline := servertool.NewPipeline()
 	pipeline.Register(advisortool.NewProvider(*cfg.Sources[0].Advisor, cp, rt.SessionStore()))
-	h := NewHandler(AIHandlerDeps{MCPRuntime: rt, GetServertoolPipeline: func() *servertool.Pipeline { return pipeline }})
+	h := NewHandler(ProtocolHandlerDeps{MCPRuntime: rt, GetServertoolPipeline: func() *servertool.Pipeline { return pipeline }})
 	msgs := []map[string]any{{"role": "user", "content": "please advise"}}
 
 	_, result, err := h.CallMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{}`, msgs)
@@ -205,7 +205,7 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 
 	t.Cleanup(rt.Close)
 
-	h := NewHandler(AIHandlerDeps{MCPRuntime: rt})
+	h := NewHandler(ProtocolHandlerDeps{MCPRuntime: rt})
 
 	toolName := "tingly_box_mcp__advisor__advisor"
 	msgs := []map[string]any{{"role": "user", "content": "hello"}}
@@ -255,7 +255,7 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 	}
 	t.Cleanup(rt.Close)
 
-	h := NewHandler(AIHandlerDeps{MCPRuntime: rt})
+	h := NewHandler(ProtocolHandlerDeps{MCPRuntime: rt})
 
 	uses := 3
 	// Pre-set depth to 2 to simulate a loopback (advisor calling itself).

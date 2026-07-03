@@ -20,7 +20,7 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("writes image and prompt under configDir/image", func(t *testing.T) {
 		tmp := t.TempDir()
-		h := &ProtocolHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
+		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		req := &openai.ImageGenerateParams{
 			Prompt: "a red bicycle",
@@ -61,7 +61,7 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("writes multiple images with indexed filenames", func(t *testing.T) {
 		tmp := t.TempDir()
-		h := &ProtocolHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
+		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		resp := &openai.ImagesResponse{Data: []openai.Image{{B64JSON: b64}, {B64JSON: b64}}}
 		h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
@@ -83,7 +83,7 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("skips images without base64 data", func(t *testing.T) {
 		tmp := t.TempDir()
-		h := &ProtocolHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
+		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		resp := &openai.ImagesResponse{Data: []openai.Image{{URL: "https://example.com/x.png"}}}
 		h.persistImageGeneration(&openai.ImageGenerateParams{Prompt: "x"}, resp)
@@ -94,7 +94,7 @@ func TestPersistImageGeneration(t *testing.T) {
 
 	t.Run("no-op for empty response", func(t *testing.T) {
 		tmp := t.TempDir()
-		h := &ProtocolHandler{deps: AIHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
+		h := &ProtocolHandler{deps: ProtocolHandlerDeps{Config: &config.Config{ConfigDir: tmp}}}
 
 		h.persistImageGeneration(&openai.ImageGenerateParams{}, &openai.ImagesResponse{})
 

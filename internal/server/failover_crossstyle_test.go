@@ -47,7 +47,7 @@ func TestSelectFallbackService_SpansAPIStyles(t *testing.T) {
 	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{ProbeEnabled: false})
 	hf := typ.NewHealthFilter(hm)
 	lb := NewLoadBalancer(cfg, hf)
-	h := NewHandler(AIHandlerDeps{Config: cfg, LoadBalancer: lb, HealthMonitor: hm})
+	h := NewHandler(ProtocolHandlerDeps{Config: cfg, LoadBalancer: lb, HealthMonitor: hm})
 
 	rule := &typ.Rule{
 		UUID: "cross-style-rule",

@@ -73,7 +73,7 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 		mcpRuntime: rt,
 		config:     conf,
 	}
-	server.aiHandler = NewHandler(AIHandlerDeps{
+	server.aiHandler = NewHandler(ProtocolHandlerDeps{
 		Config:                conf,
 		ClientPool:            cp,
 		MCPRuntime:            rt,

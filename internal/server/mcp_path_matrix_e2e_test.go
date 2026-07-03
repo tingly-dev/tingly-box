@@ -344,7 +344,7 @@ func newMCPDisabledTestServer(t *testing.T) *Server {
 	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", false))
 
 	s := &Server{clientPool: cp, mcpRuntime: rt, config: conf}
-	s.aiHandler = NewHandler(AIHandlerDeps{
+	s.aiHandler = NewHandler(ProtocolHandlerDeps{
 		Config:     conf,
 		ClientPool: cp,
 		MCPRuntime: rt,

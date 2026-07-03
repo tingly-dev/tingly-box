@@ -387,7 +387,7 @@ func newVisionTestGinCtx() *gin.Context {
 // Extensions, with a stub vision processor that echoes the model used.
 func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *ProtocolHandler {
 	return &ProtocolHandler{
-		deps: AIHandlerDeps{
+		deps: ProtocolHandlerDeps{
 			Config: &config.Config{
 				Scenarios: []typ.ScenarioConfig{
 					{Scenario: scenario, Extensions: ext},

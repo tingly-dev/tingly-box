@@ -91,7 +91,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 
 	hm := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
 	hf := typ.NewHealthFilter(hm)
-	h := NewHandler(AIHandlerDeps{
+	h := NewHandler(ProtocolHandlerDeps{
 		Config:        cfg,
 		LoadBalancer:  NewLoadBalancer(cfg, hf),
 		HealthMonitor: hm,

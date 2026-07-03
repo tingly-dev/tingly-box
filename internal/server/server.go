@@ -482,7 +482,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// constraint as controlHandler above. The callback fields reach back into
 	// root state that has not moved to aimodel yet (usage tracking, affinity
 	// store, recording sinks, guardrails runtime) — see aimodel.Deps.
-	server.aiHandler = NewHandler(AIHandlerDeps{
+	server.aiHandler = NewHandler(ProtocolHandlerDeps{
 		Config:                   server.config,
 		TokenTracker:             server.tokenTracker,
 		HealthMonitor:            server.healthMonitor,

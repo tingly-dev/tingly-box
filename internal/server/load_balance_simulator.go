@@ -168,7 +168,7 @@ func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, 
 	cleanups = append(cleanups, restoreClock)
 
 	simServer := &Server{config: cfg, loadBalancer: lb, healthMonitor: hm}
-	simServer.aiHandler = NewHandler(AIHandlerDeps{
+	simServer.aiHandler = NewHandler(ProtocolHandlerDeps{
 		Config:                cfg,
 		LoadBalancer:          lb,
 		HealthMonitor:         hm,

@@ -6,7 +6,7 @@
 // usage/token tracking.
 //
 // This package intentionally does not depend on *server.Server. Handlers are
-// built from the narrow AIHandlerDeps struct below, following the same pattern
+// built from the narrow ProtocolHandlerDeps struct below, following the same pattern
 // already used by internal/server/module/* (see module/scenario/handler.go).
 package server
 
@@ -32,13 +32,13 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
-// AIHandlerDeps declares exactly what the AI Model API handlers need from the host
+// ProtocolHandlerDeps declares exactly what the AI Model API handlers need from the host
 // server. It is populated and passed in once, from server.NewServer, after
 // all of *Server's fields have been constructed.
 //
 // This grows as each subsequent migration step moves a file in and wires up
 // the fields/methods it actually touches on *Server today.
-type AIHandlerDeps struct {
+type ProtocolHandlerDeps struct {
 	Config *config.Config
 
 	// TokenTracker records usage to the OTel meter pipeline (may be nil if
@@ -105,11 +105,11 @@ type AIHandlerDeps struct {
 // files (openai_*.go, anthropic_*.go, protocol_*.go, etc.) will be moved
 // here in later steps and become methods on *ProtocolHandler.
 type ProtocolHandler struct {
-	deps AIHandlerDeps
+	deps ProtocolHandlerDeps
 }
 
 // NewHandler constructs the AI Model API handler from its dependencies.
-func NewHandler(deps AIHandlerDeps) *ProtocolHandler {
+func NewHandler(deps ProtocolHandlerDeps) *ProtocolHandler {
 	return &ProtocolHandler{deps: deps}
 }
 
@@ -268,9 +268,9 @@ func (ph *ProtocolHandler) determineRuleWithScenario(ctx *gin.Context, scenario 
 // reusing any recorder already stored in the gin context. Returns nil when
 // recording is disabled (no sink) or the request body cannot be read.
 //
-// GetOrCreateScenarioSink is a AIHandlerDeps callback rather than a direct call
+// GetOrCreateScenarioSink is a ProtocolHandlerDeps callback rather than a direct call
 // because scenario sink lifecycle (creation, mutex, recordDir) still lives on
-// root *Server — see AIHandlerDeps.
+// root *Server — see ProtocolHandlerDeps.
 func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
 	if rec, ok := recording.GetRecorderFromContext(c); ok {
 		rec.BindProvider(provider, model, mode)

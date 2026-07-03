@@ -75,7 +75,7 @@ func newRecordingTestHandler(t *testing.T, scenario typ.RuleScenario, mode obs.R
 	sink := obs.NewSink("", mode, obs.WithExporters(mem))
 	require.NotNil(t, sink, "obs.NewSink must succeed with WithExporters")
 
-	h := server.NewHandler(server.AIHandlerDeps{
+	h := server.NewHandler(server.ProtocolHandlerDeps{
 		GetOrCreateScenarioSink: func(s typ.RuleScenario) *obs.Sink {
 			if s == scenario {
 				return sink
