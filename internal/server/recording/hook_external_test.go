@@ -1,14 +1,10 @@
-package recording
+package recording_test
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -16,7 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
+	"github.com/tingly-dev/tingly-box/internal/server/recordingtest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -25,77 +22,17 @@ import (
 // These tests prove that AttachRecorderHooks + ProtocolRecorder + obs.Sink
 // together produce the expected record without spinning up HTTP. The seam
 // is an in-memory RecordExporter installed via obs.WithExporters.
-
-// memExporter captures Records emitted by the BatchProcessor for inspection.
-// The mutex is mandatory: BatchProcessor exports on its own goroutine.
-type memExporter struct {
-	mu      sync.Mutex
-	records []*obs.Record
-}
-
-func (m *memExporter) Export(_ context.Context, rs []*obs.Record) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.records = append(m.records, rs...)
-	return nil
-}
-
-func (m *memExporter) Shutdown(context.Context) error { return nil }
-
-func (m *memExporter) snapshot() []*obs.Record {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]*obs.Record, len(m.records))
-	copy(out, m.records)
-	return out
-}
-
-// streamableRecorder adds CloseNotifier to httptest.ResponseRecorder so
-// gin.Context.Stream (which ProcessStream calls) doesn't panic.
-type streamableRecorder struct {
-	*httptest.ResponseRecorder
-	closeCh chan bool
-}
-
-func newStreamableRecorder() *streamableRecorder {
-	return &streamableRecorder{
-		ResponseRecorder: httptest.NewRecorder(),
-		closeCh:          make(chan bool, 1),
-	}
-}
-
-func (s *streamableRecorder) CloseNotify() <-chan bool { return s.closeCh }
-
-// newRecordingTestHandler builds a AIHandler whose GetOrCreateScenarioSink
-// callback always returns the same in-memory-backed sink for scenario,
-// mirroring what root's *Server does via its scenarioRecordSinks map.
-func newRecordingTestHandler(t *testing.T, scenario typ.RuleScenario, mode obs.RecordMode) (*server.ProtocolHandler, *obs.Sink, *memExporter) {
-	t.Helper()
-	mem := &memExporter{}
-	sink := obs.NewSink("", mode, obs.WithExporters(mem))
-	require.NotNil(t, sink, "obs.NewSink must succeed with WithExporters")
-
-	h := server.NewHandler(server.ProtocolHandlerDeps{
-		GetOrCreateScenarioSink: func(s typ.RuleScenario) *obs.Sink {
-			if s == scenario {
-				return sink
-			}
-			return nil
-		},
-	})
-	t.Cleanup(func() { sink.Close() })
-	return h, sink, mem
-}
-
-func newRecordingTestContext(t *testing.T, body []byte) (*gin.Context, *streamableRecorder) {
-	t.Helper()
-	gin.SetMode(gin.TestMode)
-	w := newStreamableRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	return c, w
-}
+//
+// This file lives in the external recording_test package (not recording)
+// because recordingtest.NewRecordingTestHandler needs to build a
+// *server.ProtocolHandler, and internal/server imports
+// internal/server/recording in production code — a same-package (internal)
+// test file importing internal/server here would be a real import cycle.
+// The shared test helpers themselves live in internal/server/recordingtest
+// (a plain, non-_test.go package) so that internal/server's own e2e test
+// (anthropic_recording_e2e_test.go) can reuse them too — Go test files,
+// even in an external _test package, are never importable from another
+// package.
 
 // driveBetaStream runs a v1beta event sequence through hc.ProcessStream with
 // a no-op handleFunc.
@@ -116,15 +53,15 @@ func driveBetaStream(hc *protocol.HandleContext, events []*anthropic.BetaRawMess
 
 func TestAttachRecorderHooks_HappyPath_V1Beta(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
-	h, sink, mem := newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
-	c, _ := newRecordingTestContext(t, []byte(`{"model":"client-model"}`))
+	h, sink, mem := recordingtest.NewRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
+	c, _ := recordingtest.NewRecordingTestContext(t, []byte(`{"model":"client-model"}`))
 
 	provider := &typ.Provider{Name: "anthropic-prov"}
 	recorder := h.EnsureProtocolRecorder(c, string(scenario), provider, "actual-model", obs.RecordModeStagedRequestResponse, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "proxy-model")
-	AttachRecorderHooks(hc, recorder, "actual-model", provider)
+	recording.AttachRecorderHooks(hc, recorder, "actual-model", provider)
 
 	events := []*anthropic.BetaRawMessageStreamEventUnion{
 		{Type: "message_start", Message: anthropic.BetaMessage{ID: "msg_hp", Type: "message", Role: "assistant"}},
@@ -136,9 +73,9 @@ func TestAttachRecorderHooks_HappyPath_V1Beta(t *testing.T) {
 	}
 	require.NoError(t, driveBetaStream(hc, events))
 
-	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
+	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
 
-	records := mem.snapshot()
+	records := mem.Snapshot()
 	require.Len(t, records, 1, "exactly one obs.Record should be emitted")
 	rec := records[0]
 	require.NotNil(t, rec.FinalResponse, "FinalResponse must be set after successful stream")
@@ -159,15 +96,15 @@ func TestAttachRecorderHooks_HappyPath_V1Beta(t *testing.T) {
 
 func TestAttachRecorderHooks_StreamChunksRecorded(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
-	h, sink, mem := newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
-	c, _ := newRecordingTestContext(t, []byte(`{}`))
+	h, sink, mem := recordingtest.NewRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
+	c, _ := recordingtest.NewRecordingTestContext(t, []byte(`{}`))
 
 	provider := &typ.Provider{Name: "p"}
 	recorder := h.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeStagedRequestResponse, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "rm")
-	AttachRecorderHooks(hc, recorder, "m", provider)
+	recording.AttachRecorderHooks(hc, recorder, "m", provider)
 
 	events := []*anthropic.BetaRawMessageStreamEventUnion{
 		{Type: "message_start", Message: anthropic.BetaMessage{ID: "msg_chunks"}},
@@ -178,9 +115,9 @@ func TestAttachRecorderHooks_StreamChunksRecorded(t *testing.T) {
 	}
 	require.NoError(t, driveBetaStream(hc, events))
 
-	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
+	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
 
-	records := mem.snapshot()
+	records := mem.Snapshot()
 	require.Len(t, records, 1)
 	require.NotNil(t, records[0].FinalResponse)
 	// All chunks must be captured (synthesizeFinalResponse is the path that
@@ -191,15 +128,15 @@ func TestAttachRecorderHooks_StreamChunksRecorded(t *testing.T) {
 
 func TestAttachRecorderHooks_ModelOverride(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
-	h, sink, mem := newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
-	c, _ := newRecordingTestContext(t, []byte(`{}`))
+	h, sink, mem := recordingtest.NewRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
+	c, _ := recordingtest.NewRecordingTestContext(t, []byte(`{}`))
 
 	provider := &typ.Provider{Name: "p"}
 	recorder := h.EnsureProtocolRecorder(c, string(scenario), provider, "actual-X", obs.RecordModeStagedRequestResponse, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "proxy-Y")
-	AttachRecorderHooks(hc, recorder, "actual-X", provider)
+	recording.AttachRecorderHooks(hc, recorder, "actual-X", provider)
 
 	events := []*anthropic.BetaRawMessageStreamEventUnion{
 		{Type: "message_start", Message: anthropic.BetaMessage{ID: "msg_mo"}},
@@ -209,9 +146,9 @@ func TestAttachRecorderHooks_ModelOverride(t *testing.T) {
 		{Type: "message_stop"},
 	}
 	require.NoError(t, driveBetaStream(hc, events))
-	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
+	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
 
-	records := mem.snapshot()
+	records := mem.Snapshot()
 	require.Len(t, records, 1)
 	require.NotNil(t, records[0].FinalResponse)
 	assert.Equal(t, "actual-X", records[0].FinalResponse.Body["model"],
@@ -220,15 +157,15 @@ func TestAttachRecorderHooks_ModelOverride(t *testing.T) {
 
 func TestAttachRecorderHooks_ErrorPath(t *testing.T) {
 	const scenario = typ.RuleScenario("test")
-	h, sink, mem := newRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
-	c, _ := newRecordingTestContext(t, []byte(`{}`))
+	h, sink, mem := recordingtest.NewRecordingTestHandler(t, scenario, obs.RecordModeStagedRequestResponse)
+	c, _ := recordingtest.NewRecordingTestContext(t, []byte(`{}`))
 
 	provider := &typ.Provider{Name: "p"}
 	recorder := h.EnsureProtocolRecorder(c, string(scenario), provider, "m", obs.RecordModeStagedRequestResponse, nil)
 	require.NotNil(t, recorder)
 
 	hc := protocol.NewHandleContext(c, "rm")
-	AttachRecorderHooks(hc, recorder, "m", provider)
+	recording.AttachRecorderHooks(hc, recorder, "m", provider)
 
 	streamErr := errors.New("upstream broke")
 	i := 0
@@ -244,9 +181,9 @@ func TestAttachRecorderHooks_ErrorPath(t *testing.T) {
 	)
 	assert.ErrorIs(t, err, streamErr)
 
-	require.NoError(t, sink.ForceFlush(ctxWithTimeout(t)))
+	require.NoError(t, sink.ForceFlush(recordingtest.CtxWithTimeout(t)))
 
-	records := mem.snapshot()
+	records := mem.Snapshot()
 	require.Len(t, records, 1, "exactly one error record must be emitted")
 	assert.NotEmpty(t, records[0].Err, "record.Err must be populated on stream error")
 	assert.Nil(t, records[0].FinalResponse, "no FinalResponse on error path")
@@ -254,12 +191,12 @@ func TestAttachRecorderHooks_ErrorPath(t *testing.T) {
 
 func TestAttachRecorderHooks_NilRecorder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	w := newStreamableRecorder()
+	w := recordingtest.NewStreamableRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
 	hc := protocol.NewHandleContext(c, "rm")
-	AttachRecorderHooks(hc, nil, "m", &typ.Provider{Name: "p"})
+	recording.AttachRecorderHooks(hc, nil, "m", &typ.Provider{Name: "p"})
 
 	assert.Empty(t, hc.OnStreamEventHooks)
 	assert.Empty(t, hc.OnStreamCompleteHooks)
@@ -271,11 +208,4 @@ func TestAttachRecorderHooks_NilRecorder(t *testing.T) {
 		{Type: "message_stop"},
 	}
 	require.NoError(t, driveBetaStream(hc, events))
-}
-
-func ctxWithTimeout(t *testing.T) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(cancel)
-	return ctx
 }
