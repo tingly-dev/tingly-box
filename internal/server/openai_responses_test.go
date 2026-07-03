@@ -189,7 +189,7 @@ func TestConvertToResponsesParams_Simple(t *testing.T) {
 		"input": "Hello world"
 	}`)
 
-	h := &AIHandler{} // Minimal handler for testing
+	h := &ProtocolHandler{} // Minimal handler for testing
 	params, err := h.convertToResponsesParams(body, "gpt-4")
 	if err != nil {
 		t.Fatalf("Failed to convert params: %v", err)
@@ -210,7 +210,7 @@ func TestConvertToResponsesParams_Complex(t *testing.T) {
 		"instructions": "Be concise"
 	}`)
 
-	h := &AIHandler{}
+	h := &ProtocolHandler{}
 	params, err := h.convertToResponsesParams(body, "gpt-4")
 	if err != nil {
 		t.Fatalf("Failed to convert params: %v", err)
@@ -371,7 +371,7 @@ func mustMarshalResponsesBody(t *testing.T, body map[string]any) []byte {
 
 // visionTestPNG re-exports visionproxytest.PNG for tests in this package
 // (e.g. openai_responses_vision_test.go) that need a real applyVisionProxy
-// call through *AIHandler rather than visionproxy.Service in isolation.
+// call through *ProtocolHandler rather than visionproxy.Service in isolation.
 // Logic-level coverage for the plugin itself lives in
 // internal/server/module/visionproxy.
 const visionTestPNG = visionproxytest.PNG
@@ -383,10 +383,10 @@ func newVisionTestGinCtx() *gin.Context {
 	return c
 }
 
-// visionTestServer builds a AIHandler whose scenario config carries the given
+// visionTestServer builds a ProtocolHandler whose scenario config carries the given
 // Extensions, with a stub vision processor that echoes the model used.
-func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *AIHandler {
-	return &AIHandler{
+func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *ProtocolHandler {
+	return &ProtocolHandler{
 		deps: AIHandlerDeps{
 			Config: &config.Config{
 				Scenarios: []typ.ScenarioConfig{

@@ -17,7 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (ah *AIHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
+func (ph *ProtocolHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
 	c *gin.Context,
 	provider *typ.Provider,
 	req *anthropic.BetaMessageNewParams,
@@ -27,7 +27,7 @@ func (ah *AIHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
 	recorder *recording.ProtocolRecorder,
 ) {
 	for round := 0; round < 3; round++ {
-		wrapper := ah.deps.ClientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
+		wrapper := ph.deps.ClientPool.GetAnthropicClient(c.Request.Context(), provider, actualModel)
 		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 		streamResp, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
 		if cancel != nil {
@@ -41,14 +41,14 @@ func (ah *AIHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
 			return
 		}
 
-		hooks := ah.buildAnthropicToOpenAIMCPHooks(c.Request.Context(), req)
+		hooks := ph.buildAnthropicToOpenAIMCPHooks(c.Request.Context(), req)
 		hc := protocol.NewHandleContext(c, responseModel)
 		usage, err := stream.AnthropicToOpenAIStreamWithMCPHooks(hc, req, streamResp, responseModel, disableStreamUsage, hooks)
 		if errors.Is(err, stream.ErrMCPStreamContinue) {
 			continue
 		}
 		if err != nil {
-			ah.trackUsageWithTokenUsage(c, usage, err)
+			ph.trackUsageWithTokenUsage(c, usage, err)
 			stream.SendInternalError(c, err.Error())
 			if recorder != nil {
 				recorder.RecordError(err)
@@ -56,7 +56,7 @@ func (ah *AIHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
 			return
 		}
 
-		ah.trackUsageWithTokenUsage(c, usage, nil)
+		ph.trackUsageWithTokenUsage(c, usage, nil)
 		return
 	}
 	stream.SendInternalError(c, "MCP stream continuation exceeded max rounds")
@@ -65,11 +65,11 @@ func (ah *AIHandler) StreamAnthropicBetaToOpenAIChatWithMCP(
 	}
 }
 
-func (ah *AIHandler) buildAnthropicToOpenAIMCPHooks(ctx context.Context, req *anthropic.BetaMessageNewParams) *stream.AnthropicToOpenAIMCPHooks {
-	if ah == nil || ah.deps.MCPRuntime == nil || req == nil {
+func (ph *ProtocolHandler) buildAnthropicToOpenAIMCPHooks(ctx context.Context, req *anthropic.BetaMessageNewParams) *stream.AnthropicToOpenAIMCPHooks {
+	if ph == nil || ph.deps.MCPRuntime == nil || req == nil {
 		return nil
 	}
-	registry := ah.deps.MCPRuntime.VirtualRegistry()
+	registry := ph.deps.MCPRuntime.VirtualRegistry()
 	hookMessages := ExtractAnthropicBetaMessages(req.Messages)
 	return &stream.AnthropicToOpenAIMCPHooks{
 		ShouldSuppressTool: func(name string) bool {
@@ -90,7 +90,7 @@ func (ah *AIHandler) buildAnthropicToOpenAIMCPHooks(ctx context.Context, req *an
 				}
 				var toolResult coretool.ToolResult
 				var err error
-				ctx, toolResult, err = ah.CallMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
+				ctx, toolResult, err = ph.CallMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				virtualResults = append(virtualResults, mcp.ToolExecutionResult{ToolUseID: tc.ID, Contents: toolResult.Contents, IsError: err != nil})
 			}
 			appendAnthropicBetaToolContinuation(req, calls, virtualResults)

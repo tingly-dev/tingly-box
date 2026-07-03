@@ -23,7 +23,7 @@ import (
 )
 
 // NonstreamAnthropicV1 handles A→A non-streaming with generic processor
-func (ah *AIHandler) NonstreamAnthropicV1(
+func (ph *ProtocolHandler) NonstreamAnthropicV1(
 	c *gin.Context,
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
@@ -39,13 +39,13 @@ func (ah *AIHandler) NonstreamAnthropicV1(
 	adapter := mcp.NewAnthropicV1Adapter()
 
 	// Create forwarder
-	forwarder := mcp.NewAnthropicV1Forwarder(ah.deps.ClientPool, &forwardContextProvider{})
+	forwarder := mcp.NewAnthropicV1Forwarder(ph.deps.ClientPool, &forwardContextProvider{})
 
 	// Get virtual registry
-	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
+	virtualRegistry := ph.deps.MCPRuntime.VirtualRegistry()
 
 	// Create tool executor
-	serverOps := newServerOpsAdapter(ah, recorder)
+	serverOps := newServerOpsAdapter(ph, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
@@ -71,7 +71,7 @@ func (ah *AIHandler) NonstreamAnthropicV1(
 	// Run processor
 	response, err := processor.Run(req)
 	if err != nil {
-		recordMCPError(ah, c, err, recorder)
+		recordMCPError(ph, c, err, recorder)
 		return
 	}
 
@@ -84,14 +84,14 @@ func (ah *AIHandler) NonstreamAnthropicV1(
 	// Update affinity and get typed message
 	var anthropicMsg *anthropic.Message
 	if msg, ok := response.(*anthropic.Message); ok {
-		ah.updateAffinityMessageID(c, rule, string(msg.ID))
+		ph.updateAffinityMessageID(c, rule, string(msg.ID))
 		anthropicMsg = msg
 	}
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
-	if anthropicMsg != nil && ah.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1NonStreamResponse(c, ah.currentGuardrailsRuntime(), req, actualModel, provider, anthropicMsg)
+	if anthropicMsg != nil && ph.guardrailsEnabledForScenario(scenario) {
+		ApplyGuardrailsToAnthropicV1NonStreamResponse(c, ph.currentGuardrailsRuntime(), req, actualModel, provider, anthropicMsg)
 	}
 
 	// Record response if not already recorded
@@ -105,7 +105,7 @@ func (ah *AIHandler) NonstreamAnthropicV1(
 }
 
 // StreamAnthropicV1 handles A→A streaming with generic interceptor
-func (ah *AIHandler) StreamAnthropicV1(
+func (ph *ProtocolHandler) StreamAnthropicV1(
 	c *gin.Context,
 	reqCtx *transform.TransformContext,
 	rule *typ.Rule,
@@ -120,13 +120,13 @@ func (ah *AIHandler) StreamAnthropicV1(
 	adapter := mcp.NewAnthropicV1Adapter()
 
 	// Create forwarder
-	forwarder := mcp.NewAnthropicV1Forwarder(ah.deps.ClientPool, &forwardContextProvider{})
+	forwarder := mcp.NewAnthropicV1Forwarder(ph.deps.ClientPool, &forwardContextProvider{})
 
 	// Get virtual registry
-	virtualRegistry := ah.deps.MCPRuntime.VirtualRegistry()
+	virtualRegistry := ph.deps.MCPRuntime.VirtualRegistry()
 
 	// Create server ops adapter
-	serverOps := newServerOpsAdapter(ah, recorder)
+	serverOps := newServerOpsAdapter(ph, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
@@ -143,14 +143,14 @@ func (ah *AIHandler) StreamAnthropicV1(
 
 	// Response guardrails
 	scenario := GetTrackingContextScenario(c)
-	guardrailsEnabled := ah.guardrailsEnabledForScenario(scenario)
+	guardrailsEnabled := ph.guardrailsEnabledForScenario(scenario)
 	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
 	if guardrailsEnabled {
 		hc.EnsureGuardrails().Enabled = true
 		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
 		baseEventHooks := len(hc.OnStreamEventHooks)
 		baseErrorHooks := len(hc.OnStreamErrorHooks)
-		runtime := ah.currentGuardrailsRuntime()
+		runtime := ph.currentGuardrailsRuntime()
 		AttachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages)
 		interceptorCfg.OnBeforeRound = func(round int) error {
 			ReattachGuardrailsHooks(c, runtime, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
@@ -173,7 +173,7 @@ func (ah *AIHandler) StreamAnthropicV1(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(ah, c, err, recorder)
+		recordMCPError(ph, c, err, recorder)
 		return
 	}
 }
@@ -181,7 +181,7 @@ func (ah *AIHandler) StreamAnthropicV1(
 // StreamAnthropicBeta processes the Anthropic beta streaming
 // response. The resolved model is passed in as actualModel rather than read from
 // the request, so the handler no longer depends on req.Model.
-func (ah *AIHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], actualModel string, responseModel string, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, responseModel)
 
 	// Add recorder hooks if recorder is available
@@ -189,27 +189,27 @@ func (ah *AIHandler) StreamAnthropicBeta(c *gin.Context, req *anthropic.BetaMess
 
 	// response guardrails
 	scenario := GetTrackingContextScenario(c)
-	if ah.guardrailsEnabledForScenario(scenario) {
+	if ph.guardrailsEnabledForScenario(scenario) {
 		hc.EnsureGuardrails().Enabled = true
-		AttachGuardrailsHooks(c, ah.currentGuardrailsRuntime(), hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
+		AttachGuardrailsHooks(c, ph.currentGuardrailsRuntime(), hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
 	}
 
 	usageStat, err := stream.HandleAnthropicBeta(hc, streamResp)
-	ah.trackUsageWithTokenUsage(c, usageStat, err)
+	ph.trackUsageWithTokenUsage(c, usageStat, err)
 }
 
 // nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.
-func (ah *AIHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
 	req := originalReq
 
 	// Forward request to provider
-	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
+	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		ah.trackUsageWithTokenUsage(c, usage, err)
+		ph.trackUsageWithTokenUsage(c, usage, err)
 		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
@@ -226,7 +226,7 @@ func (ah *AIHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider,
 
 	// Track usage
 	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-	ah.trackUsageWithTokenUsage(c, usage, nil)
+	ph.trackUsageWithTokenUsage(c, usage, nil)
 
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(response)
@@ -280,14 +280,14 @@ func (ah *AIHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider,
 }
 
 // streamOpenAIChat handles streaming chat completion requests.
-func (ah *AIHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := originalReq
 
 	// Estimate input tokens up front and hand the scalar to the stream handler,
 	// so it depends on the estimate rather than the request for the usage fallback.
 	estimatedInputTokens := token.EstimateInputTokensSimple(req)
 
-	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
+	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {
@@ -296,7 +296,7 @@ func (ah *AIHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provider, or
 	if err != nil {
 		// Track error with no usage
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		ah.trackUsageWithTokenUsage(c, usage, err)
+		ph.trackUsageWithTokenUsage(c, usage, err)
 		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to create streaming request: " + err.Error(),
@@ -314,21 +314,21 @@ func (ah *AIHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provider, or
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp)
 
 	// Track usage from stream handler
-	ah.trackUsageWithTokenUsage(c, usage, err)
+	ph.trackUsageWithTokenUsage(c, usage, err)
 }
 
 // nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)
-func (ah *AIHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 
-	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
+	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	response, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, *params)
 	if cancel != nil {
 		defer cancel()
 	}
 	if err != nil {
-		ah.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
+		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 		SendErrorResponse(c, err, "Failed to forward request")
 		if recorder != nil {
 			recorder.RecordError(err)
@@ -338,7 +338,7 @@ func (ah *AIHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
 	tokenUsage, _ := nonstream.HandleOpenAIResponsesPassthroughNonStream(hc, response)
-	ah.trackUsageWithTokenUsage(c, tokenUsage, nil)
+	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {
 		recorder.SetAssembledResponse(response)
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
@@ -347,25 +347,25 @@ func (ah *AIHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.
 
 // streamOpenAIResponses handles Responses API passthrough (streaming)
 // Moved from openai_responses.go:421-456
-func (ah *AIHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	params := reqCtx.Request.(*responses.ResponseNewParams)
 
 	// Create streaming request with request context for proper cancellation
-	wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, params.Model)
+	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, params.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	respStream, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, *params)
 	if cancel != nil {
 		defer cancel()
 	}
 	if err != nil {
-		ah.handlePreStreamFailure(c, err, recorder)
+		ph.handlePreStreamFailure(c, err, recorder)
 		return
 	}
 
 	primedStream, primeErr := stream.PrimeResponsesStream(respStream)
 	if primeErr != nil {
-		ah.handlePreStreamFailure(c, primeErr, recorder)
+		ph.handlePreStreamFailure(c, primeErr, recorder)
 		return
 	}
 
@@ -374,5 +374,5 @@ func (ah *AIHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Tra
 	usage, err := stream.HandleOpenAIResponsesStream(hc, primedStream, responseModel)
 
 	// Track usage from stream handler
-	ah.trackUsageWithTokenUsage(c, usage, err)
+	ph.trackUsageWithTokenUsage(c, usage, err)
 }

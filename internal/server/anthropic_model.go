@@ -86,17 +86,17 @@ type (
 )
 
 // HandleAnthropicListModels handles Anthropic v1 models endpoint
-func (ah *AIHandler) HandleAnthropicListModels(c *gin.Context) {
-	ah.anthropicListModelsWithScenario(c, nil)
+func (ph *ProtocolHandler) HandleAnthropicListModels(c *gin.Context) {
+	ph.anthropicListModelsWithScenario(c, nil)
 }
 
 // AnthropicListModelsForScenario handles scenario-scoped model listing for Anthropic format
-func (ah *AIHandler) AnthropicListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
-	ah.anthropicListModelsWithScenario(c, &scenario)
+func (ph *ProtocolHandler) AnthropicListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
+	ph.anthropicListModelsWithScenario(c, &scenario)
 }
 
-func (ah *AIHandler) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
-	cfg := ah.deps.Config
+func (ph *ProtocolHandler) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
+	cfg := ph.deps.Config
 	if cfg == nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{

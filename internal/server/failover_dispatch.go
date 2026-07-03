@@ -44,8 +44,8 @@ type preStreamErrorRecorder interface {
 // pre-stream" response: status 500 + JSON error, captured by the
 // buffered failover writer so the orchestrator can retry the next
 // priority tier.
-func (ah *AIHandler) handlePreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
-	ah.trackUsageFromContext(c, 0, 0, err)
+func (ph *ProtocolHandler) handlePreStreamFailure(c *gin.Context, err error, recorder preStreamErrorRecorder) {
+	ph.trackUsageFromContext(c, 0, 0, err)
 	stream.SendStreamingError(c, err)
 	if recorder != nil {
 		recorder.RecordError(err)
@@ -60,7 +60,7 @@ func (ah *AIHandler) handlePreStreamFailure(c *gin.Context, err error, recorder 
 // the whole request on one misconfigured provider. Genuine client errors are
 // rejected in the prologue, before the gate is installed, so they remain
 // non-retryable and reach the client unchanged.
-func (ah *AIHandler) FailAttemptSetup(c *gin.Context, err error) {
+func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, ErrorResponse{
 		Error: ErrorDetail{
 			Message: err.Error(),
@@ -280,7 +280,7 @@ func (g *firstChunkGate) Discard() {
 // (Anthropic/OpenAI/Google) and failover can rotate freely across providers.
 //
 // Returns (nil, nil, nil) when no compatible candidate remains.
-func (ah *AIHandler) selectFallbackService(
+func (ph *ProtocolHandler) selectFallbackService(
 	rule *typ.Rule,
 	excluded map[string]bool,
 	requireAPIStyle protocol.APIStyle,
@@ -291,7 +291,7 @@ func (ah *AIHandler) selectFallbackService(
 		if excluded[svc.ServiceID()] {
 			continue
 		}
-		p, err := ah.deps.Config.GetProviderByUUID(svc.Provider)
+		p, err := ph.deps.Config.GetProviderByUUID(svc.Provider)
 		if err != nil || p == nil {
 			continue
 		}
@@ -324,7 +324,7 @@ func (ah *AIHandler) selectFallbackService(
 	}
 
 	// For non-tier tactics, use the load balancer
-	svc, err := ah.deps.LoadBalancer.SelectService(&tempRule)
+	svc, err := ph.deps.LoadBalancer.SelectService(&tempRule)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -346,7 +346,7 @@ type dispatchAttempt func(provider *typ.Provider, model string)
 //
 // Single-service requests bypass the gate entirely: with no fallback
 // tier, failover is impossible and there is no reason to buffer.
-func (ah *AIHandler) DispatchWithPriorityFailover(
+func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 	c *gin.Context,
 	rule *typ.Rule,
 	initialProvider *typ.Provider,
@@ -428,7 +428,7 @@ func (ah *AIHandler) DispatchWithPriorityFailover(
 		// Pass "" so the candidate pool spans all API styles: each attempt
 		// re-transforms the request for the selected provider's style, so
 		// heterogeneous failover (e.g. Anthropic → OpenAI) is supported.
-		nextProvider, nextService, err := ah.selectFallbackService(rule, tried, "")
+		nextProvider, nextService, err := ph.selectFallbackService(rule, tried, "")
 		if err != nil {
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 				"stage":          "failover_error",

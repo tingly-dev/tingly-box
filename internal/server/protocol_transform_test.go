@@ -13,11 +13,11 @@ import (
 )
 
 // chainNames runs the (zero-config) chain builder and returns the ordered
-// transform names. A bare AIHandler has nil deps, so recording and MCP are off —
+// transform names. A bare ProtocolHandler has nil deps, so recording and MCP are off —
 // leaving the canonical base order plus whatever rule transforms are slotted in.
 func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string {
 	t.Helper()
-	h := &AIHandler{}
+	h := &ProtocolHandler{}
 	chain, err := h.buildTransformChain(
 		nil, // gin.Context only used by the (disabled) recorder
 		protocol.TypeOpenAIChat,

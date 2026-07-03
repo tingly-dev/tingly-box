@@ -101,16 +101,16 @@ type AIHandlerDeps struct {
 	GetScenarioRecordMode func(scenario typ.RuleScenario) obs.RecordMode
 }
 
-// AIHandler is the aggregate handler for the AI Model API. Individual method
+// ProtocolHandler is the aggregate handler for the AI Model API. Individual method
 // files (openai_*.go, anthropic_*.go, protocol_*.go, etc.) will be moved
-// here in later steps and become methods on *AIHandler.
-type AIHandler struct {
+// here in later steps and become methods on *ProtocolHandler.
+type ProtocolHandler struct {
 	deps AIHandlerDeps
 }
 
 // NewHandler constructs the AI Model API handler from its dependencies.
-func NewHandler(deps AIHandlerDeps) *AIHandler {
-	return &AIHandler{deps: deps}
+func NewHandler(deps AIHandlerDeps) *ProtocolHandler {
+	return &ProtocolHandler{deps: deps}
 }
 
 // The methods below are thin wrappers wiring the Deps callbacks to the
@@ -119,61 +119,61 @@ func NewHandler(deps AIHandlerDeps) *AIHandler {
 // corresponding Deps field may be unset in tests that construct a bare
 // Handler.
 
-func (ah *AIHandler) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenUsage, err error) {
-	if ah.deps.TrackUsageWithTokenUsage == nil {
+func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenUsage, err error) {
+	if ph.deps.TrackUsageWithTokenUsage == nil {
 		return
 	}
-	ah.deps.TrackUsageWithTokenUsage(c, usage, err)
+	ph.deps.TrackUsageWithTokenUsage(c, usage, err)
 }
 
-func (ah *AIHandler) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens int, err error) {
-	if ah.deps.TrackUsageFromContext == nil {
+func (ph *ProtocolHandler) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens int, err error) {
+	if ph.deps.TrackUsageFromContext == nil {
 		return
 	}
-	ah.deps.TrackUsageFromContext(c, inputTokens, outputTokens, err)
+	ph.deps.TrackUsageFromContext(c, inputTokens, outputTokens, err)
 }
 
-func (ah *AIHandler) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, messageID string) {
-	if ah.deps.UpdateAffinityMessageID == nil {
+func (ph *ProtocolHandler) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, messageID string) {
+	if ph.deps.UpdateAffinityMessageID == nil {
 		return
 	}
-	ah.deps.UpdateAffinityMessageID(c, rule, messageID)
+	ph.deps.UpdateAffinityMessageID(c, rule, messageID)
 }
 
-func (ah *AIHandler) currentGuardrailsRuntime() *guardrails.Guardrails {
-	if ah.deps.CurrentGuardrailsRuntime == nil {
+func (ph *ProtocolHandler) currentGuardrailsRuntime() *guardrails.Guardrails {
+	if ph.deps.CurrentGuardrailsRuntime == nil {
 		return nil
 	}
-	return ah.deps.CurrentGuardrailsRuntime()
+	return ph.deps.CurrentGuardrailsRuntime()
 }
 
-func (ah *AIHandler) guardrailsEnabledForScenario(scenario string) bool {
-	return GuardrailsEnabledForScenario(ah.deps.Config, ah.currentGuardrailsRuntime(), scenario)
+func (ph *ProtocolHandler) guardrailsEnabledForScenario(scenario string) bool {
+	return GuardrailsEnabledForScenario(ph.deps.Config, ph.currentGuardrailsRuntime(), scenario)
 }
 
-func (ah *AIHandler) mcpEnabled() bool {
-	return MCPEnabled(ah.deps.Config)
+func (ph *ProtocolHandler) mcpEnabled() bool {
+	return MCPEnabled(ph.deps.Config)
 }
 
 // mcpStripDisabledToolsEnabled returns whether dangerous disabled MCP strip
 // is enabled. Pure function of Config, mirrors root's (now-removed)
 // s.mcpStripDisabledToolsEnabled.
-func (ah *AIHandler) mcpStripDisabledToolsEnabled() bool {
-	if ah.deps.Config == nil {
+func (ph *ProtocolHandler) mcpStripDisabledToolsEnabled() bool {
+	if ph.deps.Config == nil {
 		return false
 	}
-	cfg := ah.deps.Config.GetMCPRuntimeConfig()
+	cfg := ph.deps.Config.GetMCPRuntimeConfig()
 	if cfg == nil {
 		return false
 	}
 	return cfg.StripDisabledMCPTools
 }
 
-func (ah *AIHandler) getScenarioRecordMode(scenario typ.RuleScenario) obs.RecordMode {
-	if ah.deps.GetScenarioRecordMode == nil {
+func (ph *ProtocolHandler) getScenarioRecordMode(scenario typ.RuleScenario) obs.RecordMode {
+	if ph.deps.GetScenarioRecordMode == nil {
 		return ""
 	}
-	return ah.deps.GetScenarioRecordMode(scenario)
+	return ph.deps.GetScenarioRecordMode(scenario)
 }
 
 // MCPEnabled centralizes the MCP feature-flag check so gateway handlers do
@@ -191,11 +191,11 @@ func MCPEnabled(cfg *config.Config) bool {
 // service selection (after the rule is resolved). Delegates to
 // visionproxy.Service — see internal/server/module/visionproxy and
 // .design/vision-proxy.md for the design.
-func (ah *AIHandler) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
-	if ah.deps.VisionProxyService == nil {
+func (ph *ProtocolHandler) applyVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, rule *typ.Rule, typedRequest any) {
+	if ph.deps.VisionProxyService == nil {
 		return
 	}
-	ah.deps.VisionProxyService.Apply(c.Request.Context(), ah.deps.Config, scenarioType, rule, typedRequest)
+	ph.deps.VisionProxyService.Apply(c.Request.Context(), ph.deps.Config, scenarioType, rule, typedRequest)
 }
 
 // isEnterpriseContextPresent reports whether the request carries an
@@ -215,8 +215,8 @@ func resolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 // determineRuleWithScenario resolves the active *typ.Rule for a scenario +
 // request model name, honoring the probe headers used by service-target
 // probes (X-Tingly-Probe-Rule / X-Tingly-Probe-Service).
-func (ah *AIHandler) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
-	cfg := ah.deps.Config
+func (ph *ProtocolHandler) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
+	cfg := ph.deps.Config
 
 	// X-Tingly-Probe-Rule: load a specific rule by UUID (for applying its flags
 	// while service selection is overridden by X-Tingly-Probe-Service).
@@ -271,17 +271,17 @@ func (ah *AIHandler) determineRuleWithScenario(ctx *gin.Context, scenario typ.Ru
 // GetOrCreateScenarioSink is a AIHandlerDeps callback rather than a direct call
 // because scenario sink lifecycle (creation, mutex, recordDir) still lives on
 // root *Server — see AIHandlerDeps.
-func (ah *AIHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
+func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
 	if rec, ok := recording.GetRecorderFromContext(c); ok {
 		rec.BindProvider(provider, model, mode)
 		return rec
 	}
 
-	if ah.deps.GetOrCreateScenarioSink == nil {
+	if ph.deps.GetOrCreateScenarioSink == nil {
 		return nil
 	}
 	scenarioType := typ.RuleScenario(scenario)
-	sink := ah.deps.GetOrCreateScenarioSink(scenarioType)
+	sink := ph.deps.GetOrCreateScenarioSink(scenarioType)
 	if sink == nil {
 		return nil
 	}

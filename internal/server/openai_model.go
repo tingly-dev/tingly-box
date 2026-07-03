@@ -35,17 +35,17 @@ type OpenAIModelsResponse struct {
 }
 
 // HandleOpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
-func (ah *AIHandler) HandleOpenAIListModels(c *gin.Context) {
-	ah.openAIListModelsWithScenario(c, nil)
+func (ph *ProtocolHandler) HandleOpenAIListModels(c *gin.Context) {
+	ph.openAIListModelsWithScenario(c, nil)
 }
 
 // OpenAIListModelsForScenario handles scenario-scoped model listing for OpenAI format
-func (ah *AIHandler) OpenAIListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
-	ah.openAIListModelsWithScenario(c, &scenario)
+func (ph *ProtocolHandler) OpenAIListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
+	ph.openAIListModelsWithScenario(c, &scenario)
 }
 
-func (ah *AIHandler) openAIListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
-	cfg := ah.deps.Config
+func (ph *ProtocolHandler) openAIListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
+	cfg := ph.deps.Config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -149,7 +149,7 @@ func (ah *AIHandler) openAIListModelsWithScenario(c *gin.Context, scenario *typ.
 }
 
 // ListModelsByScenario handles the /v1/models endpoint for scenario-based routing
-func (ah *AIHandler) ListModelsByScenario(c *gin.Context) {
+func (ph *ProtocolHandler) ListModelsByScenario(c *gin.Context) {
 	scenario := c.Param("scenario")
 
 	// Convert string to RuleScenario and validate
@@ -167,9 +167,9 @@ func (ah *AIHandler) ListModelsByScenario(c *gin.Context) {
 	// Route to appropriate handler based on scenario
 	switch scenarioType.Base() {
 	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
-		ah.AnthropicListModelsForScenario(c, scenarioType)
+		ph.AnthropicListModelsForScenario(c, scenarioType)
 	default:
 		// OpenAI is the default
-		ah.OpenAIListModelsForScenario(c, scenarioType)
+		ph.OpenAIListModelsForScenario(c, scenarioType)
 	}
 }

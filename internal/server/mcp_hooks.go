@@ -20,16 +20,16 @@ import (
 // upstream. Moved here (from root's protocol_dispatch.go, still Step 8
 // territory) alongside its sole caller, openai_mcp.go — it depends only on
 // h.deps.MCPRuntime and h.CallMCPToolWithHooks, both already available here.
-func (ah *AIHandler) buildOpenAIToAnthropicMCPHooks(
+func (ph *ProtocolHandler) buildOpenAIToAnthropicMCPHooks(
 	ctx context.Context,
 	providerUUID string,
 	req *openai.ChatCompletionNewParams,
 ) *stream.OpenAIToAnthropicMCPHooks {
-	if ah == nil || ah.deps.MCPRuntime == nil || req == nil {
+	if ph == nil || ph.deps.MCPRuntime == nil || req == nil {
 		return nil
 	}
 
-	registry := ah.deps.MCPRuntime.VirtualRegistry()
+	registry := ph.deps.MCPRuntime.VirtualRegistry()
 	hookMessages := ExtractOpenAIMessages(req.Messages)
 	return &stream.OpenAIToAnthropicMCPHooks{
 		ShouldSuppressTool: func(name string) bool {
@@ -58,7 +58,7 @@ func (ah *AIHandler) buildOpenAIToAnthropicMCPHooks(
 				// CallMCPToolWithHooks updates context (e.g., advisor quota), so we must propagate it
 				var toolResult coretool.ToolResult
 				var err error
-				ctx, toolResult, err = ah.CallMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
+				ctx, toolResult, err = ph.CallMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				if err != nil {
 					logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tc.Name, arguments)
 				}

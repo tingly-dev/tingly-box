@@ -193,7 +193,7 @@ type Server struct {
 	// recording, and (eventually) protocol dispatch/transform/passthrough.
 	// Same last-step construction constraint as controlHandler above — every
 	// field/callback in aimodel.Deps must already be set.
-	aiHandler *AIHandler
+	aiHandler *ProtocolHandler
 }
 
 // NewServer creates a new HTTP server instance with functional options

@@ -14,7 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (ah *AIHandler) StreamOpenAIChatToAnthropicV1WithMCP(
+func (ph *ProtocolHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 	c *gin.Context,
 	provider *typ.Provider,
 	req *openai.ChatCompletionNewParams,
@@ -23,7 +23,7 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 	recorder *recording.ProtocolRecorder,
 ) {
 	for round := 0; round < 3; round++ {
-		wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
+		wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 		streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 		if cancel != nil {
@@ -38,8 +38,8 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 		}
 
 		var hooks *stream.OpenAIToAnthropicMCPHooks
-		if HasDeclaredMCPTools(req) && ah.mcpEnabled() {
-			hooks = ah.buildOpenAIToAnthropicMCPHooks(c.Request.Context(), provider.UUID, req)
+		if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
+			hooks = ph.buildOpenAIToAnthropicMCPHooks(c.Request.Context(), provider.UUID, req)
 		}
 		hc := protocol.NewHandleContext(c, responseModel)
 		usage, err := stream.HandleOpenAIToAnthropicStreamResponseWithMCPHooks(hc, req, streamResp, responseModel, hooks)
@@ -47,14 +47,14 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 			continue
 		}
 		if err != nil {
-			ah.trackUsageWithTokenUsage(c, usage, err)
+			ph.trackUsageWithTokenUsage(c, usage, err)
 			stream.SendInternalError(c, err.Error())
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
 			return
 		}
-		ah.trackUsageWithTokenUsage(c, usage, nil)
+		ph.trackUsageWithTokenUsage(c, usage, nil)
 		return
 	}
 	stream.SendInternalError(c, "MCP stream continuation exceeded max rounds")
@@ -63,7 +63,7 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 	}
 }
 
-func (ah *AIHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
+func (ph *ProtocolHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 	c *gin.Context,
 	provider *typ.Provider,
 	req *openai.ChatCompletionNewParams,
@@ -77,7 +77,7 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 	}
 
 	for round := 0; round < 3; round++ {
-		wrapper := ah.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
+		wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
 		fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 		streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 		if cancel != nil {
@@ -92,8 +92,8 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 		}
 
 		var hooks *stream.OpenAIToAnthropicMCPHooks
-		if HasDeclaredMCPTools(req) && ah.mcpEnabled() {
-			hooks = ah.buildOpenAIToAnthropicMCPHooks(c.Request.Context(), provider.UUID, req)
+		if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
+			hooks = ph.buildOpenAIToAnthropicMCPHooks(c.Request.Context(), provider.UUID, req)
 		}
 		hc := protocol.NewHandleContext(c, responseModel)
 		usage, err := stream.HandleOpenAIToAnthropicBetaStreamWithMCPHooks(hc, req, streamResp, responseModel, hooks)
@@ -101,14 +101,14 @@ func (ah *AIHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 			continue
 		}
 		if err != nil {
-			ah.trackUsageWithTokenUsage(c, usage, err)
+			ph.trackUsageWithTokenUsage(c, usage, err)
 			stream.SendInternalError(c, err.Error())
 			if streamRec != nil {
 				streamRec.RecordError(err)
 			}
 			return
 		}
-		ah.trackUsageWithTokenUsage(c, usage, nil)
+		ph.trackUsageWithTokenUsage(c, usage, nil)
 		if streamRec != nil {
 			streamRec.Finish(responseModel, usage)
 			streamRec.RecordResponse(provider, actualModel)

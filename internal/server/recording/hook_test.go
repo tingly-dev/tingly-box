@@ -69,7 +69,7 @@ func (s *streamableRecorder) CloseNotify() <-chan bool { return s.closeCh }
 // newRecordingTestHandler builds a AIHandler whose GetOrCreateScenarioSink
 // callback always returns the same in-memory-backed sink for scenario,
 // mirroring what root's *Server does via its scenarioRecordSinks map.
-func newRecordingTestHandler(t *testing.T, scenario typ.RuleScenario, mode obs.RecordMode) (*server.AIHandler, *obs.Sink, *memExporter) {
+func newRecordingTestHandler(t *testing.T, scenario typ.RuleScenario, mode obs.RecordMode) (*server.ProtocolHandler, *obs.Sink, *memExporter) {
 	t.Helper()
 	mem := &memExporter{}
 	sink := obs.NewSink("", mode, obs.WithExporters(mem))
