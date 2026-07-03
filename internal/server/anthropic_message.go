@@ -160,7 +160,7 @@ func (ah *AIHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Anthropic
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
 	// (Mutates the shared rule only, so it must run before any attempt.)
-	detectAndApplyContext1MFromIncomingRequest(c, rule)
+	applyContextOneM(c, rule)
 
 	scenarioType := rule.GetScenario()
 	isStreaming := req.Stream
@@ -292,7 +292,7 @@ func (ah *AIHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol.Anthr
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
 	// (Mutates the shared rule only, so it must run before any attempt.)
-	detectAndApplyContext1MFromIncomingRequest(c, rule)
+	applyContextOneM(c, rule)
 
 	scenarioType := rule.GetScenario()
 	isStreaming := req.Stream

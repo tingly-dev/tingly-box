@@ -159,7 +159,7 @@ func (ah *AIHandler) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenar
 	// ── One-time prologue (provider-independent) ──
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
-	detectAndApplyContext1MFromIncomingRequest(c, rule)
+	applyContextOneM(c, rule)
 
 	isStreaming := req.Stream
 	scenarioConfig := ah.deps.Config.GetScenarioConfig(scenarioType)

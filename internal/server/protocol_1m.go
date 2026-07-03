@@ -10,7 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// detectAndApplyContext1MFromIncomingRequest checks if the incoming request
+// applyContextOneM checks if the incoming request
 // contains the context-1m beta header and updates the matched rule copy
 // accordingly. This handles Claude Code/Desktop automatically triggering 1M
 // context mode.
@@ -25,7 +25,7 @@ import (
 //
 // For Codex scenario:
 // - Only sets the flag (no name suffix); Codex manages model names independently
-func detectAndApplyContext1MFromIncomingRequest(c *gin.Context, rule *typ.Rule) {
+func applyContextOneM(c *gin.Context, rule *typ.Rule) {
 	if rule == nil {
 		return
 	}

@@ -136,7 +136,7 @@ func (ah *AIHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.OpenAICh
 	// ── One-time prologue (provider-independent) ──
 
 	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex.
-	detectAndApplyContext1MFromIncomingRequest(c, rule)
+	applyContextOneM(c, rule)
 
 	isStreaming := req.Stream
 	actualModel := req.Model
