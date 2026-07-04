@@ -10,6 +10,7 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -29,10 +30,7 @@ type chatToResponsesConverter struct {
 	pendingToolCalls  map[int]*pendingToolCallResponse
 	accumulatedText   strings.Builder
 	promptTokensTotal int64
-	inputTokens       int64
-	outputTokens      int64
-	cacheTokens       int64
-	reasoningTokens   int64
+	usage             *protocol.TokenUsage
 	hasSentCreated    bool
 	hasUsage          bool
 	completedSent     bool
@@ -60,6 +58,7 @@ func NewChatToResponsesConverter(stream *openaistream.Stream[openai.ChatCompleti
 		responseID:       fmt.Sprintf("resp_%d", time.Now().Unix()),
 		createdAt:        time.Now().Unix(),
 		textItemID:       fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		usage:            protocol.ZeroTokenUsage(),
 		pendingToolCalls: make(map[int]*pendingToolCallResponse),
 	}
 }
@@ -102,7 +101,7 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 }
 
 func (c *chatToResponsesConverter) Usage() *protocol.TokenUsage {
-	return protocol.NewTokenUsageFull(int(c.inputTokens), int(c.outputTokens), int(c.cacheTokens), int(c.reasoningTokens))
+	return c.usage
 }
 
 // processChunk handles a single upstream ChatCompletionChunk and appends
@@ -119,24 +118,12 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 	}
 
 	// Track usage
-	if chunk.Usage.PromptTokens != 0 {
-		c.promptTokensTotal = int64(chunk.Usage.PromptTokens)
+	if chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 ||
+		chunk.Usage.PromptTokensDetails.CachedTokens != 0 ||
+		chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
+		c.usage = protocolusage.FromOpenAIChatCompletion(chunk.Usage)
+		c.promptTokensTotal = int64(c.usage.InputTokens + c.usage.CacheInputTokens)
 		c.hasUsage = true
-	}
-	if chunk.Usage.CompletionTokens != 0 {
-		c.outputTokens = int64(chunk.Usage.CompletionTokens)
-		c.hasUsage = true
-	}
-	if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
-		c.cacheTokens = int64(chunk.Usage.PromptTokensDetails.CachedTokens)
-		c.hasUsage = true
-	}
-	if chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
-		c.reasoningTokens = int64(chunk.Usage.CompletionTokensDetails.ReasoningTokens)
-		c.hasUsage = true
-	}
-	if c.promptTokensTotal > 0 {
-		c.inputTokens = c.promptTokensTotal - c.cacheTokens
 	}
 
 	if len(chunk.Choices) == 0 {
@@ -216,11 +203,12 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 	if choice.FinishReason != "" {
 		c.finishReason = string(choice.FinishReason)
 
-		if !c.hasUsage && c.outputTokens == 0 {
-			c.outputTokens = int64(c.accumulatedText.Len() / 4)
+		if !c.hasUsage && c.usage.OutputTokens == 0 {
+			outputTokens := int64(c.accumulatedText.Len() / 4)
 			for _, ptc := range c.pendingToolCalls {
-				c.outputTokens += int64(ptc.arguments.Len() / 4)
+				outputTokens += int64(ptc.arguments.Len() / 4)
 			}
+			c.usage = protocol.NewTokenUsageFull(c.usage.InputTokens, int(outputTokens), c.usage.CacheInputTokens, c.usage.ReasoningTokens)
 		}
 
 		c.emitCompletionEvents()
@@ -374,18 +362,8 @@ func (c *chatToResponsesConverter) wireResponse(status string, output []wire.Res
 		CreatedAt: c.createdAt,
 		Status:    status,
 		Output:    output,
-		Usage: &wire.ResponsesUsageWire{
-			InputTokens:  c.inputTokens,
-			OutputTokens: c.outputTokens,
-			TotalTokens:  c.inputTokens + c.outputTokens,
-			InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
-				CachedTokens: c.cacheTokens,
-			},
-			OutputTokensDetails: wire.ResponsesOutputTokensDetailsWire{
-				ReasoningTokens: c.reasoningTokens,
-			},
-		},
-		Model: c.responseModel,
+		Usage:     responsesUsageWire(c.Usage()),
+		Model:     c.responseModel,
 	}
 }
 

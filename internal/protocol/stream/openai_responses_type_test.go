@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -14,10 +15,7 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 	conv := NewChatToResponsesConverter(nil, "")
 	conv.responseID = "resp_test"
 	conv.createdAt = 123
-	conv.inputTokens = 10
-	conv.outputTokens = 5
-	conv.cacheTokens = 3
-	conv.reasoningTokens = 2
+	conv.usage = protocol.NewTokenUsageFull(10, 5, 3, 2)
 
 	wireEvent := wire.ResponsesCreatedEvent{
 		Type:           "response.created",

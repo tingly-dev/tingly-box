@@ -78,9 +78,7 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, _
 	OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
 }
 
-// toResponsesUsageWire converts normalized TokenUsage to the Responses API wire
-// usage struct. InputTokens on the wire = total (uncached + cached).
-func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
+func responsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 	totalInput := int64(u.InputTokens + u.CacheInputTokens)
 	return &wire.ResponsesUsageWire{
 		InputTokens:  totalInput,
@@ -89,7 +87,16 @@ func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 		InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
 			CachedTokens: int64(u.CacheInputTokens),
 		},
+		OutputTokensDetails: wire.ResponsesOutputTokensDetailsWire{
+			ReasoningTokens: int64(u.ReasoningTokens),
+		},
 	}
+}
+
+// toResponsesUsageWire converts normalized TokenUsage to the Responses API wire
+// usage struct. InputTokens on the wire = total (uncached + cached).
+func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
+	return responsesUsageWire(u)
 }
 
 // responsesConverterState and newResponsesWireResponseFromState are kept for

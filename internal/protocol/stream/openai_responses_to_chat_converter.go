@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -22,10 +23,7 @@ type responsesToChatConverter struct {
 	chatID          string
 	createdAt       int64
 	accumulated     strings.Builder
-	inputTokens     int64
-	outputTokens    int64
-	cacheTokens     int64
-	reasoningTokens int64
+	usage           *protocol.TokenUsage
 	totalTokens     int64
 	hasSentCreated  bool
 	hasToolCalls    bool
@@ -53,6 +51,7 @@ func NewResponsesToChatConverter(stream ResponsesStreamIter, responseModel strin
 		disableUsage:    disableUsage,
 		chatID:          fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
 		createdAt:       time.Now().Unix(),
+		usage:           protocol.ZeroTokenUsage(),
 		toolCallIndexes: make(map[string]int),
 		toolCalls:       make(map[int]*responsesToChatToolCall),
 	}
@@ -95,7 +94,7 @@ func (c *responsesToChatConverter) Next() (interface{}, bool, error) {
 }
 
 func (c *responsesToChatConverter) Usage() *protocol.TokenUsage {
-	return protocol.NewTokenUsageFull(int(c.inputTokens), int(c.outputTokens), int(c.cacheTokens), int(c.reasoningTokens))
+	return c.usage
 }
 
 // processEvent handles a single upstream event and appends resulting chunks to c.pending.
@@ -187,14 +186,11 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		// assistant output and final usage. Treat it identically to
 		// response.completed so the terminal chunk preserves output + usage
 		// rather than falling through to the post-loop usage=0 fallback.
-		c.cacheTokens = evt.Response.Usage.InputTokensDetails.CachedTokens
-		c.inputTokens = evt.Response.Usage.InputTokens - c.cacheTokens
-		c.outputTokens = evt.Response.Usage.OutputTokens
-		c.reasoningTokens = evt.Response.Usage.OutputTokensDetails.ReasoningTokens
+		c.usage = protocolusage.FromOpenAIResponses(evt.Response.Usage)
 		if evt.Response.Usage.TotalTokens != 0 {
 			c.totalTokens = evt.Response.Usage.TotalTokens
 		} else {
-			c.totalTokens = c.inputTokens + c.outputTokens
+			c.totalTokens = int64(c.usage.InputTokens + c.usage.CacheInputTokens + c.usage.OutputTokens)
 		}
 		c.emitCompletedOutput(evt.Response.Output)
 		finishReason := responsesToChatFinishReason(&evt.Response, c.hasToolCalls)
@@ -314,21 +310,22 @@ func (c *responsesToChatConverter) toolCallDeltaChunk(index int, delta string) w
 func (c *responsesToChatConverter) finalChunk(finishReason string) wire.ChatStreamChunk {
 	chunk := c.newChunk(wire.ChatStreamDelta{}, &finishReason)
 	if !c.disableUsage {
-		totalInput := c.inputTokens + c.cacheTokens
+		u := c.Usage()
+		totalInput := int64(u.InputTokens + u.CacheInputTokens)
 		total := c.totalTokens
 		if total == 0 {
-			total = totalInput + c.outputTokens
+			total = totalInput + int64(u.OutputTokens)
 		}
 		usage := &wire.ChatStreamUsage{
 			PromptTokens:     totalInput,
-			CompletionTokens: c.outputTokens,
+			CompletionTokens: int64(u.OutputTokens),
 			TotalTokens:      total,
 		}
-		if c.cacheTokens != 0 {
-			usage.PromptTokensDetails = &wire.ChatStreamPromptTokenDetails{CachedTokens: c.cacheTokens}
+		if u.CacheInputTokens != 0 {
+			usage.PromptTokensDetails = &wire.ChatStreamPromptTokenDetails{CachedTokens: int64(u.CacheInputTokens)}
 		}
-		if c.reasoningTokens != 0 {
-			usage.CompletionTokensDetails = &wire.ChatStreamOutputTokenDetails{ReasoningTokens: c.reasoningTokens}
+		if u.ReasoningTokens != 0 {
+			usage.CompletionTokensDetails = &wire.ChatStreamOutputTokenDetails{ReasoningTokens: int64(u.ReasoningTokens)}
 		}
 		chunk.Usage = usage
 	}

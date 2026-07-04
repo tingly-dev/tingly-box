@@ -35,6 +35,7 @@ type openAIToAnthropicConverter struct {
 	messageStarted       bool
 	tokenCounter         *token.StreamTokenCounter
 	state                *streamState
+	usage                *protocol.TokenUsage
 	pendingFinishReason  string
 	finishSeen           bool
 	hookErr              error
@@ -57,6 +58,7 @@ func newOpenAIToAnthropicConverter(
 		mapFinishReason: mapFinishReason,
 		messageID:       fmt.Sprintf("msg_%d", time.Now().Unix()),
 		state:           newStreamState(),
+		usage:           protocol.ZeroTokenUsage(),
 	}
 	// Initialize token counter; continue without it on error
 	if tc, err := token.NewStreamTokenCounter(); err == nil {
@@ -116,12 +118,7 @@ func (c *openAIToAnthropicConverter) Next() (interface{}, bool, error) {
 }
 
 func (c *openAIToAnthropicConverter) Usage() *protocol.TokenUsage {
-	return protocol.NewTokenUsageFull(
-		int(c.state.inputTokens),
-		int(c.state.outputTokens),
-		int(c.state.cacheTokens),
-		int(c.state.reasoningTokens),
-	)
+	return c.usage
 }
 
 func (c *openAIToAnthropicConverter) HookErr() error {
@@ -295,19 +292,13 @@ func (c *openAIToAnthropicConverter) consumeTokenCounter(chunk *openai.ChatCompl
 func (c *openAIToAnthropicConverter) emitTerminalEvents() {
 	if c.tokenCounter != nil {
 		inputTokens, outputTokens := c.tokenCounter.GetCounts()
-		c.state.inputTokens = int64(inputTokens)
-		c.state.outputTokens = int64(outputTokens)
 		cacheTokens, reasoningTokens := c.tokenCounter.GetUpstreamDetails()
-		if cacheTokens > 0 {
-			c.state.cacheTokens = int64(cacheTokens)
-		}
-		if reasoningTokens > 0 {
-			c.state.reasoningTokens = int64(reasoningTokens)
-		}
+		c.usage = protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens)
 	}
+	usage := c.Usage()
 	logrus.Debugf("OpenAI->Anthropic stream usage: model=%s in=%d out=%d cache=%d reasoning=%d stop=%s",
-		c.responseModel, c.state.inputTokens, c.state.outputTokens,
-		c.state.cacheTokens, c.state.reasoningTokens, c.pendingFinishReason)
+		c.responseModel, usage.InputTokens, usage.OutputTokens,
+		usage.CacheInputTokens, usage.ReasoningTokens, c.pendingFinishReason)
 	c.emitEnsureMessageStart()
 	c.emitStopEvents()
 	stopReason := c.mapFinishReason(c.pendingFinishReason)
@@ -452,12 +443,7 @@ func (c *openAIToAnthropicConverter) emitMessageDelta(stopReason string) {
 	for k, v := range c.state.deltaExtras {
 		deltaMap[k] = v
 	}
-	usageMap := map[string]interface{}{
-		"output_tokens": c.state.outputTokens,
-	}
-	if c.state.cacheTokens > 0 {
-		usageMap["cache_read_input_tokens"] = c.state.cacheTokens
-	}
+	usageMap := c.Usage().ToAnthropicMessageDeltaUsageMap()
 	c.emitAnthropic(eventTypeMessageDelta, map[string]interface{}{
 		"type":  eventTypeMessageDelta,
 		"delta": deltaMap,

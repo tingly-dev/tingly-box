@@ -246,8 +246,7 @@ func TestChatToResponsesConverter_ToolCall(t *testing.T) {
 func TestChatToResponsesConverter_CompletedEvent(t *testing.T) {
 	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
 	conv.hasSentCreated = true
-	conv.inputTokens = 10
-	conv.outputTokens = 20
+	conv.usage = protocol.NewTokenUsage(10, 20)
 	conv.hasUsage = true
 
 	conv.processChunk(&openai.ChatCompletionChunk{
@@ -274,10 +273,7 @@ func TestChatToResponsesConverter_CompletedEvent(t *testing.T) {
 func TestChatToResponsesConverter_WithReasoningTokens(t *testing.T) {
 	conv := NewChatToResponsesConverter(nil, "o3-mini")
 	conv.hasSentCreated = true
-	conv.inputTokens = 50
-	conv.outputTokens = 30
-	conv.cacheTokens = 5
-	conv.reasoningTokens = 12
+	conv.usage = protocol.NewTokenUsageFull(45, 30, 5, 12)
 	conv.hasUsage = true
 
 	conv.processChunk(&openai.ChatCompletionChunk{
