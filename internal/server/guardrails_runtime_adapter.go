@@ -5,7 +5,7 @@ import "github.com/tingly-dev/tingly-box/internal/guardrails"
 // The exported methods below adapt *Server's unexported guardrails-runtime
 // accessors (guardrails_runtime.go) to the webui.GuardrailsRuntime interface,
 // so the WebUI Management API's guardrails admin handler
-// (internal/server/webui.GuardrailsHandler) can drive the runtime without
+// (internal/server.GuardrailsHandler) can drive the runtime without
 // root server depending on webui's types.
 
 // CurrentGuardrailsRuntime returns the active guardrails runtime snapshot.

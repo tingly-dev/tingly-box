@@ -1,7 +1,7 @@
 // Package guardrailspath holds filesystem-layout helpers for the guardrails
 // config/storage directory. It is a dedicated leaf package (rather than
 // living in root server or webui) because both the WebUI Management API's
-// admin handlers (internal/server/webui) and the AI Model API's runtime
+// admin handlers (internal/server) and the AI Model API's runtime
 // evaluation (internal/server/aimodel, root server today) need it, and those
 // two cannot import each other.
 package config
