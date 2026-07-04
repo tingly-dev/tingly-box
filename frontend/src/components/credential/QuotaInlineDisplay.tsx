@@ -38,73 +38,57 @@ export function QuotaInlineDisplay({
   const hiddenWindows = windows.slice(maxInlineItems);
 
   // Compute resource-type items from breakdowns (e.g., reset credits, entitlements)
-  // Each breakdown group becomes a synthetic bar with per-item hover detail.
+  // Each non-"model" breakdown group is aggregated into one compact bar with count.
   const resourceItems: Array<{ key: string; window: UsageWindow; countLabel: string; tooltipContent: React.ReactNode }> = (() => {
     if (!quota) return [];
+
+    // Group all breakdowns by group name
     const groups = new Map<string, typeof quota.breakdowns>();
     for (const bd of quota.breakdowns ?? []) {
-      // Skip standard breakdown groups rendered elsewhere (e.g., per-model)
-      if (bd.group === 'model') continue;
       const list = groups.get(bd.group) ?? [];
       list.push(bd);
       groups.set(bd.group, list);
     }
 
-    const STATUS_COLORS: Record<string, string> = {
-      available: '#22c55e',
-      used: '#94a3b8',
-      expired: '#ef4444',
-    };
-
     return Array.from(groups.entries())
       .filter((entry): entry is [string, NonNullable<typeof quota.breakdowns>] => entry[1] !== undefined)
       .map(([group, items]) => {
-      const available = items.filter(bd => bd.windows[0]?.label === 'available').length;
-      const total = items.length;
-      // Derive display label from group name: "reset_credit" → "Reset Credits"
-      const label = group
-        .split('_')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
+        const total = items.length;
+        const label = group
+          .split('_')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
 
-      const tooltipContent = (
-        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
-            {label} ({available} / {total} available)
-          </Typography>
-          {items.map((bd) => {
-            const win = bd.windows[0];
-            if (!win) return null;
-            const status = win.label || 'unknown';
-            const color = STATUS_COLORS[status] || STATUS_COLORS.used;
-            const expiresAt = win.resets_at ? new Date(win.resets_at) : null;
-            return (
-              <Stack key={bd.key} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-                <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.3 }}>
-                  {status === 'available' ? 'Available' : status.charAt(0).toUpperCase() + status.slice(1)}
-                  {expiresAt && ` · Expires ${expiresAt.toLocaleDateString()}`}
+        const tooltipContent = (
+          <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+              {label} ({total})
+            </Typography>
+            {items.map((bd) => {
+              const win = bd.windows[0];
+              if (!win) return null;
+              return (
+                <Typography key={bd.key} variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.3, lineHeight: 1.4 }}>
+                  {(bd.label || bd.key)}{win.description ? `: ${win.description}` : ''}
                 </Typography>
-              </Stack>
-            );
-          })}
-        </Box>
-      );
+              );
+            })}
+          </Box>
+        );
 
-      return {
-        key: group,
-        window: {
-          label,
-          used: total - available,
-          limit: total,
-          used_percent: 100,
-          unit: 'percent' as const,
-          description: `${available} available, ${total} total`,
-        } as UsageWindow,
-        countLabel: `${available}/${total}`,
-        tooltipContent,
-      };
-    });
+        return {
+          key: group,
+          window: {
+            label,
+            used: 0,
+            limit: total,
+            used_percent: 100,
+            unit: 'percent' as const,
+          } as UsageWindow,
+          countLabel: `${total}`,
+          tooltipContent,
+        };
+      });
   })();
 
   // Show nothing if there's no data at all
