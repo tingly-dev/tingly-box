@@ -168,7 +168,7 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quo
 		breakdowns = append(breakdowns, &quota.UsageBreakdown{
 			Key:     m.ModelName,
 			Label:   m.ModelName,
-			Group:   "model",
+			Group:   "resource",
 			Windows: modelWindows,
 		})
 	}

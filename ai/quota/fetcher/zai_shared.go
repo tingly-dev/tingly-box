@@ -271,7 +271,7 @@ func addZaiUsageDetails(usage *quota.ProviderUsage, lim zaiQuotaLimit, windowTyp
 			usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
 				Key:     detail.ModelCode,
 				Label:   detail.ModelCode,
-				Group:   "model",
+				Group:   "resource",
 				Windows: []*quota.UsageWindow{modelWindow},
 			})
 		}

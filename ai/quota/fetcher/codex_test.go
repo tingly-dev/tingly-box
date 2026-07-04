@@ -150,8 +150,8 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	if len(usage.Breakdowns) != 3 {
 		t.Fatalf("Expected 3 reset credit breakdowns, got %d", len(usage.Breakdowns))
 	}
-	if usage.Breakdowns[0].Group != "reset_credit" {
-		t.Errorf("Breakdown[0].Group = %q, want 'reset_credit'", usage.Breakdowns[0].Group)
+	if usage.Breakdowns[0].Group != "resource" {
+		t.Errorf("Breakdown[0].Group = %q, want 'resource'", usage.Breakdowns[0].Group)
 	}
 	if usage.Breakdowns[0].Windows[0].Label != "available" {
 		t.Errorf("Breakdown[0] status = %q, want 'available'", usage.Breakdowns[0].Windows[0].Label)

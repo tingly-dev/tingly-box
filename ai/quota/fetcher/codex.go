@@ -303,7 +303,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 				usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
 					Key:   c.ID,
 					Label: fmt.Sprintf("Credit %s", c.ID),
-					Group: "reset_credit",
+					Group: "resource",
 					Windows: []*quota.UsageWindow{{
 						Type:        quota.WindowTypeBalance,
 						Used:        usedVal,

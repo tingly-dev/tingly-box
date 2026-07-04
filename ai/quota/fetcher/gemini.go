@@ -118,7 +118,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		breakdowns = append(breakdowns, &quota.UsageBreakdown{
 			Key:     bucket.ModelID,
 			Label:   bucket.ModelID,
-			Group:   "model",
+			Group:   "resource",
 			Windows: []*quota.UsageWindow{window},
 		})
 	}
