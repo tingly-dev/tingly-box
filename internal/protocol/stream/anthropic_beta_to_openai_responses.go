@@ -93,12 +93,6 @@ func responsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 	}
 }
 
-// toResponsesUsageWire converts normalized TokenUsage to the Responses API wire
-// usage struct. InputTokens on the wire = total (uncached + cached).
-func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
-	return responsesUsageWire(u)
-}
-
 // responsesConverterState and newResponsesWireResponseFromState are kept for
 // any callers outside this file that still use them.
 type responsesConverterState struct {
@@ -181,7 +175,7 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 			Status:      "completed",
 			CompletedAt: state.createdAt,
 			Output:      output,
-			Usage:       toResponsesUsageWire(u),
+			Usage:       responsesUsageWire(u),
 		},
 	}
 	sendResponsesEvent(c, doneEvent, flusher)

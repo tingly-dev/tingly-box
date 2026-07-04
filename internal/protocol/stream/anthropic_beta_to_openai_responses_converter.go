@@ -342,7 +342,7 @@ func (c *anthropicBetaToResponsesConverter) emitCompletionEvents() {
 		CreatedAt:   c.createdAt,
 		CompletedAt: c.createdAt,
 		Output:      output,
-		Usage:       toResponsesUsageWire(u),
+		Usage:       responsesUsageWire(u),
 	}
 
 	if isIncomplete {
