@@ -68,13 +68,17 @@ type TokenUsage struct {
 	// OutputTokens is the number of output/completion tokens consumed
 	OutputTokens int `json:"output_tokens"`
 
-	// CacheInputTokens is the number of cache-related tokens consumed
-	// (includes both cache creation and cache read operations)
+	// CacheInputTokens is the number of cache-read-hit tokens consumed.
+	// Cache-write cost is tracked separately in CacheWriteTokens.
+	// Note: Anthropic normalization folds CacheWriteTokens into InputTokens
+	// (InputTokens += cache_creation), so InputTokens already covers write cost.
+	// Total prompt cost = InputTokens + CacheInputTokens.
 	CacheInputTokens int `json:"cache_input_tokens,omitempty"`
 
-	// Both cache read and write are part of cache input, but write means an extra cost than general read
-	// for all cases, prompt = input + cache_input
-	// and we just store the read and write for details
+	// CacheReadTokens and CacheWriteTokens provide detail for billing.
+	// CacheReadTokens  = cache-read hits (same as CacheInputTokens).
+	// CacheWriteTokens = cache writes; folded into InputTokens in Anthropic
+	// normalization; zero for OpenAI (no wire-level write concept).
 	CacheReadTokens  int `json:"cache_read_tokens,omitempty"`
 	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
 
