@@ -98,6 +98,78 @@ func (u *TokenUsage) HasCacheUsage() bool {
 	return u.CacheInputTokens > 0
 }
 
+// ToAnthropicUsageMap converts canonical usage into Anthropic message usage shape.
+func (u *TokenUsage) ToAnthropicUsageMap() map[string]interface{} {
+	usage := map[string]interface{}{
+		"input_tokens":  u.InputTokens,
+		"output_tokens": u.OutputTokens,
+	}
+	if u.CacheInputTokens > 0 {
+		usage["cache_read_input_tokens"] = u.CacheInputTokens
+	}
+	return usage
+}
+
+// ToAnthropicMessageDeltaUsageMap converts canonical usage into Anthropic stream
+// message_delta usage shape for protocol conversion. Native Anthropic streams put
+// input usage on message_start, but converters such as OpenAI→Anthropic only get
+// authoritative input usage at the terminal upstream event, so the final
+// message_delta carries the complete normalized usage.
+func (u *TokenUsage) ToAnthropicMessageDeltaUsageMap() map[string]interface{} {
+	usage := map[string]interface{}{
+		"input_tokens":  u.InputTokens,
+		"output_tokens": u.OutputTokens,
+	}
+	if u.CacheInputTokens > 0 {
+		usage["cache_read_input_tokens"] = u.CacheInputTokens
+	}
+	return usage
+}
+
+// ToOpenAIChatUsageMap converts canonical usage into OpenAI Chat Completions
+// usage shape. Prompt/input tokens on the wire include cached tokens.
+func (u *TokenUsage) ToOpenAIChatUsageMap() map[string]interface{} {
+	inputTokens := u.InputTokens + u.CacheInputTokens
+	usage := map[string]interface{}{
+		"prompt_tokens":     inputTokens,
+		"completion_tokens": u.OutputTokens,
+		"total_tokens":      inputTokens + u.OutputTokens,
+	}
+	if u.CacheInputTokens > 0 {
+		usage["prompt_tokens_details"] = map[string]interface{}{
+			"cached_tokens": u.CacheInputTokens,
+		}
+	}
+	if u.ReasoningTokens > 0 {
+		usage["completion_tokens_details"] = map[string]interface{}{
+			"reasoning_tokens": u.ReasoningTokens,
+		}
+	}
+	return usage
+}
+
+// ToOpenAIResponsesUsageMap converts canonical usage into OpenAI Responses API
+// usage shape. Input tokens on the wire include cached tokens.
+func (u *TokenUsage) ToOpenAIResponsesUsageMap() map[string]interface{} {
+	inputTokens := u.InputTokens + u.CacheInputTokens
+	usage := map[string]interface{}{
+		"input_tokens":  inputTokens,
+		"output_tokens": u.OutputTokens,
+		"total_tokens":  inputTokens + u.OutputTokens,
+	}
+	if u.CacheInputTokens > 0 {
+		usage["input_tokens_details"] = map[string]interface{}{
+			"cached_tokens": u.CacheInputTokens,
+		}
+	}
+	if u.ReasoningTokens > 0 {
+		usage["output_tokens_details"] = map[string]interface{}{
+			"reasoning_tokens": u.ReasoningTokens,
+		}
+	}
+	return usage
+}
+
 // NewTokenUsage creates a new TokenUsage with the given token counts.
 func NewTokenUsage(inputTokens, outputTokens int) *TokenUsage {
 	return &TokenUsage{

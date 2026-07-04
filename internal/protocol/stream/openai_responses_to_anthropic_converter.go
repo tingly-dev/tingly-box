@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // responsesToAnthropicToolCall tracks a Responses API tool call being assembled from stream events.
@@ -139,6 +140,7 @@ func (r *responsesToAnthropicConverter) emitMessageStart() {
 			"model":         r.responseModel,
 			"stop_reason":   nil,
 			"stop_sequence": nil,
+			// MENTION: placeholder only
 			"usage": map[string]interface{}{
 				"input_tokens":  0,
 				"output_tokens": 0,
@@ -218,12 +220,7 @@ func (r *responsesToAnthropicConverter) emitMessageDelta(stopReason string) {
 	for k, v := range r.state.deltaExtras {
 		deltaMap[k] = v
 	}
-	usageMap := map[string]interface{}{
-		"output_tokens": r.state.outputTokens,
-	}
-	if r.state.cacheTokens > 0 {
-		usageMap["cache_read_input_tokens"] = r.state.cacheTokens
-	}
+	usageMap := r.Usage().ToAnthropicMessageDeltaUsageMap()
 	r.emitAnthropic(eventTypeMessageDelta, map[string]interface{}{
 		"type":  eventTypeMessageDelta,
 		"delta": deltaMap,
@@ -591,13 +588,9 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 // from the streamed content (tool_use vs end_turn); otherwise the override is
 // used (e.g. max_tokens for an incomplete response).
 func (r *responsesToAnthropicConverter) finalize(resp *responses.Response, stopReasonOverride string) {
-	r.state.cacheTokens = resp.Usage.InputTokensDetails.CachedTokens
-	r.state.inputTokens = resp.Usage.InputTokens - r.state.cacheTokens
-	r.state.outputTokens = resp.Usage.OutputTokens
-	r.state.reasoningTokens = resp.Usage.OutputTokensDetails.ReasoningTokens
-	r.usage = protocol.NewTokenUsageFull(int(r.state.inputTokens), int(r.state.outputTokens), int(r.state.cacheTokens), int(r.state.reasoningTokens))
+	r.usage = usage.FromOpenAIResponses(resp.Usage)
 
-	logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Finalize: input_tokens=%d, output_tokens=%d", r.state.inputTokens, r.state.outputTokens)
+	logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Finalize: input_tokens=%d, output_tokens=%d", r.usage.InputTokens, r.usage.OutputTokens)
 
 	// Handle non-streamed tool calls from the final output array.
 	for _, outputItem := range resp.Output {
