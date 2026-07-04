@@ -37,62 +37,78 @@ export function QuotaInlineDisplay({
   const visibleWindows = windows.slice(0, maxInlineItems);
   const hiddenWindows = windows.slice(maxInlineItems);
 
-  // Compute reset credits synthetic window from breakdowns
-  const resetCreditsWindow: { key: string; window: UsageWindow; countLabel: string; tooltipContent: React.ReactNode } | null = (() => {
-    if (!quota) return null;
-    const credits = (quota.breakdowns ?? []).filter(bd => bd.group === 'reset_credit');
-    if (credits.length === 0) return null;
-    const available = credits.filter(bd => bd.windows[0]?.label === 'available').length;
-    const total = credits.length;
-    const used = total - available;
+  // Compute resource-type items from breakdowns (e.g., reset credits, entitlements)
+  // Each breakdown group becomes a synthetic bar with per-item hover detail.
+  const resourceItems: Array<{ key: string; window: UsageWindow; countLabel: string; tooltipContent: React.ReactNode }> = (() => {
+    if (!quota) return [];
+    const groups = new Map<string, typeof quota.breakdowns>();
+    for (const bd of quota.breakdowns ?? []) {
+      // Skip standard breakdown groups rendered elsewhere (e.g., per-model)
+      if (bd.group === 'model') continue;
+      const list = groups.get(bd.group) ?? [];
+      list.push(bd);
+      groups.set(bd.group, list);
+    }
 
-    // Build per-credit detail tooltip
     const STATUS_COLORS: Record<string, string> = {
       available: '#22c55e',
       used: '#94a3b8',
       expired: '#ef4444',
     };
-    const tooltipContent = (
-      <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
-        <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
-          Reset Credits ({available} / {total} available)
-        </Typography>
-        {credits.map((bd) => {
-          const win = bd.windows[0];
-          if (!win) return null;
-          const status = win.label || 'unknown';
-          const color = STATUS_COLORS[status] || STATUS_COLORS.used;
-          const expiresAt = win.resets_at ? new Date(win.resets_at) : null;
-          return (
-            <Stack key={bd.key} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-              <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.3 }}>
-                {status === 'available' ? 'Available' : status.charAt(0).toUpperCase() + status.slice(1)}
-                {expiresAt && ` · Expires ${expiresAt.toLocaleDateString()}`}
-              </Typography>
-            </Stack>
-          );
-        })}
-      </Box>
-    );
 
-    return {
-      window: {
-        label: 'Reset Credits',
-        used: used,
-        limit: total,
-        used_percent: 100,
-        unit: 'percent' as const,
-        description: `${available} available, ${total} total`,
-      } as UsageWindow,
-      key: 'reset_credits',
-      countLabel: `${available}/${total}`,
-      tooltipContent,
-    };
+    return Array.from(groups.entries())
+      .filter((entry): entry is [string, NonNullable<typeof quota.breakdowns>] => entry[1] !== undefined)
+      .map(([group, items]) => {
+      const available = items.filter(bd => bd.windows[0]?.label === 'available').length;
+      const total = items.length;
+      // Derive display label from group name: "reset_credit" → "Reset Credits"
+      const label = group
+        .split('_')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+
+      const tooltipContent = (
+        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+            {label} ({available} / {total} available)
+          </Typography>
+          {items.map((bd) => {
+            const win = bd.windows[0];
+            if (!win) return null;
+            const status = win.label || 'unknown';
+            const color = STATUS_COLORS[status] || STATUS_COLORS.used;
+            const expiresAt = win.resets_at ? new Date(win.resets_at) : null;
+            return (
+              <Stack key={bd.key} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.3 }}>
+                  {status === 'available' ? 'Available' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  {expiresAt && ` · Expires ${expiresAt.toLocaleDateString()}`}
+                </Typography>
+              </Stack>
+            );
+          })}
+        </Box>
+      );
+
+      return {
+        key: group,
+        window: {
+          label,
+          used: total - available,
+          limit: total,
+          used_percent: 100,
+          unit: 'percent' as const,
+          description: `${available} available, ${total} total`,
+        } as UsageWindow,
+        countLabel: `${available}/${total}`,
+        tooltipContent,
+      };
+    });
   })();
 
   // Show nothing if there's no data at all
-  if (!hasQuota && !resetCreditsWindow) {
+  if (!hasQuota && resourceItems.length === 0) {
     return null;
   }
 
@@ -234,9 +250,9 @@ export function QuotaInlineDisplay({
         {visibleWindows.map(({ key, window }) => (
           <QuotaBarItem key={key} window={window} />
         ))}
-        {resetCreditsWindow && (
-          <QuotaBarItem key={resetCreditsWindow.key} window={resetCreditsWindow.window} percentLabel={resetCreditsWindow.countLabel} barColor="#22c55e" tooltipContent={resetCreditsWindow.tooltipContent} />
-        )}
+        {resourceItems.map(item => (
+          <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor="#22c55e" tooltipContent={item.tooltipContent} />
+        ))}
       </Stack>
     </Box>
   );
