@@ -302,7 +302,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 
 				usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
 					Key:   c.ID,
-					Label: fmt.Sprintf("Credit %s", c.ID),
+					Label: fmt.Sprintf("Reset Credit"),
 					Group: "resource",
 					Windows: []*quota.UsageWindow{{
 						Type:        quota.WindowTypeBalance,
@@ -311,7 +311,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 						Unit:        quota.UsageUnitCredits,
 						ResetsAt:    &expiresAt,
 						Label:       c.Status,
-						Description: fmt.Sprintf("%s · Acquired %s", c.Status, grantedAt.Format("2006-01-02")),
+						Description: fmt.Sprintf("Granted %s · Expire %s", grantedAt.Format("2006-01-02"), expiresAt.Format("2006-01-02")),
 					}},
 				})
 			}
