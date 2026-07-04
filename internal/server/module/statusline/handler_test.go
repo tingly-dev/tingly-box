@@ -3,6 +3,7 @@ package statusline
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -142,6 +143,79 @@ func TestGetClaudeCodeStatusLine_Success(t *testing.T) {
 	}
 }
 
+func TestGetClaudeCodeStatus_IncludesCacheUsage(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	body := `{
+		"model": {
+			"id": "claude-sonnet-4-6",
+			"display_name": "Claude Sonnet 4.6"
+		},
+		"context_window": {
+			"current_usage": {
+				"input_tokens": 1500,
+				"output_tokens": 500,
+				"cache_read": 10000,
+				"cache_write": 2000
+			}
+		},
+		"session_id": "test-session-123"
+	}`
+
+	req, _ := http.NewRequest("POST", "/status/claude_code", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	respBody := w.Body.String()
+	assert.Contains(t, respBody, `"cc_cache_read_tokens":10000`)
+	assert.Contains(t, respBody, `"cc_cache_write_tokens":2000`)
+	assert.Contains(t, respBody, `"cc_cache_hit_pct":86`)
+}
+
+func TestGetClaudeCodeStatusLine_IncludesCacheUsage(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	body := `{
+		"model": {
+			"id": "claude-sonnet-4-6",
+			"display_name": "Claude Sonnet 4.6"
+		},
+		"context_window": {
+			"used_percentage": 10.0,
+			"current_usage": {
+				"input_tokens": 1500,
+				"cache_read": 10000,
+				"cache_write": 2000
+			}
+		},
+		"cost": {
+			"total_cost_usd": 0.05
+		},
+		"session_id": "test-session-123"
+	}`
+
+	req, _ := http.NewRequest("POST", "/statusline/claude_code", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	respBody := w.Body.String()
+	assert.Contains(t, respBody, "Cache: 86%")
+	assert.NotContains(t, respBody, "read")
+	assert.NotContains(t, respBody, "write")
+}
+
 func TestCacheOperations(t *testing.T) {
 	cache := NewCache()
 
@@ -170,6 +244,14 @@ func TestCacheOperations(t *testing.T) {
 		Cost: Cost{
 			TotalCostUSD: 0.10,
 		},
+		ContextWindow: ContextWindow{
+			CurrentUsage: CurrentUsage{
+				InputTokens:  1500,
+				OutputTokens: 500,
+				CacheRead:    10000,
+				CacheWrite:   2000,
+			},
+		},
 	}
 	cache.Update(input2)
 
@@ -187,6 +269,12 @@ func TestCacheOperations(t *testing.T) {
 	}
 	if result3.Cost.TotalCostUSD != 0.10 {
 		t.Errorf("expected cost 0.10, got %f", result3.Cost.TotalCostUSD)
+	}
+	if result3.ContextWindow.CurrentUsage.CacheRead != 10000 {
+		t.Errorf("expected cache read 10000, got %d", result3.ContextWindow.CurrentUsage.CacheRead)
+	}
+	if result3.ContextWindow.CurrentUsage.CacheWrite != 2000 {
+		t.Errorf("expected cache write 2000, got %d", result3.ContextWindow.CurrentUsage.CacheWrite)
 	}
 }
 
@@ -257,6 +345,9 @@ func TestCombinedStatusStructure(t *testing.T) {
 		CCLinesRemoved:      50,
 		CCSessionID:         "session-123",
 		CCExceeds200kTokens: false,
+		CCCacheReadTokens:   10000,
+		CCCacheWriteTokens:  2000,
+		CCCacheHitPct:       86,
 		TBProviderName:      "openai",
 		TBProviderUUID:      "uuid-1234",
 		TBModel:             "gpt-4",
@@ -279,6 +370,10 @@ func TestCombinedStatusStructure(t *testing.T) {
 
 	if response.Data.CCUsedPct != 10 {
 		t.Errorf("expected CCUsedPct 10, got %d", response.Data.CCUsedPct)
+	}
+
+	if response.Data.CCCacheHitPct != 86 {
+		t.Errorf("expected CCCacheHitPct 86, got %d", response.Data.CCCacheHitPct)
 	}
 
 	if response.Data.TBProviderName != "openai" {
@@ -348,6 +443,45 @@ func TestContextWindowStructure(t *testing.T) {
 
 	if contextWindow.CurrentUsage.InputTokens != 1500 {
 		t.Errorf("expected InputTokens 1500, got %d", contextWindow.CurrentUsage.InputTokens)
+	}
+}
+
+func TestCacheHitPct(t *testing.T) {
+	tests := []struct {
+		name  string
+		usage CurrentUsage
+		want  int
+	}{
+		{
+			name: "cache read with fresh input",
+			usage: CurrentUsage{
+				InputTokens: 1500,
+				CacheRead:   10000,
+			},
+			want: 86,
+		},
+		{
+			name: "cache read only",
+			usage: CurrentUsage{
+				CacheRead: 10000,
+			},
+			want: 100,
+		},
+		{
+			name: "no cache read",
+			usage: CurrentUsage{
+				InputTokens: 1500,
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cacheHitPct(tt.usage); got != tt.want {
+				t.Errorf("expected %d, got %d", tt.want, got)
+			}
+		})
 	}
 }
 

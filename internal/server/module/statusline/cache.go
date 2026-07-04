@@ -73,6 +73,10 @@ func mergeStatusInput(input, cached *StatusInput) *StatusInput {
 	merged.ContextWindow.ContextWindowSize = mergeIfZero(merged.ContextWindow.ContextWindowSize, cached.ContextWindow.ContextWindowSize)
 	merged.ContextWindow.TotalInputTokens = mergeIfZero(merged.ContextWindow.TotalInputTokens, cached.ContextWindow.TotalInputTokens)
 	merged.ContextWindow.TotalOutputTokens = mergeIfZero(merged.ContextWindow.TotalOutputTokens, cached.ContextWindow.TotalOutputTokens)
+	merged.ContextWindow.CurrentUsage.InputTokens = mergeIfZero(merged.ContextWindow.CurrentUsage.InputTokens, cached.ContextWindow.CurrentUsage.InputTokens)
+	merged.ContextWindow.CurrentUsage.OutputTokens = mergeIfZero(merged.ContextWindow.CurrentUsage.OutputTokens, cached.ContextWindow.CurrentUsage.OutputTokens)
+	merged.ContextWindow.CurrentUsage.CacheRead = mergeIfZero(merged.ContextWindow.CurrentUsage.CacheRead, cached.ContextWindow.CurrentUsage.CacheRead)
+	merged.ContextWindow.CurrentUsage.CacheWrite = mergeIfZero(merged.ContextWindow.CurrentUsage.CacheWrite, cached.ContextWindow.CurrentUsage.CacheWrite)
 
 	merged.Cost.TotalCostUSD = mergeIfZero(merged.Cost.TotalCostUSD, cached.Cost.TotalCostUSD)
 	merged.Cost.TotalDurationMs = mergeIfZero(merged.Cost.TotalDurationMs, cached.Cost.TotalDurationMs)

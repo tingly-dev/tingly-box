@@ -74,6 +74,9 @@ func (h *Handler) GetClaudeCodeStatus(c *gin.Context) {
 		CCLinesRemoved:      merged.Cost.TotalLinesRemoved,
 		CCSessionID:         merged.SessionID,
 		CCExceeds200kTokens: merged.Exceeds200kTokens,
+		CCCacheReadTokens:   merged.ContextWindow.CurrentUsage.CacheRead,
+		CCCacheWriteTokens:  merged.ContextWindow.CurrentUsage.CacheWrite,
+		CCCacheHitPct:       cacheHitPct(merged.ContextWindow.CurrentUsage),
 	}
 
 	// Query Tingly Box model mapping
@@ -164,6 +167,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 		output += fmt.Sprintf(" → %s @ %s", mapping.model, mapping.providerName)
 	}
 	output += fmt.Sprintf(" | %s %d%% | $%.2f", bar, usedPct, cost)
+	output += buildCacheInline(merged.ContextWindow.CurrentUsage)
 
 	// Add quota info to the same line if available
 	quotaInfo := h.buildQuotaInline(mapping)
@@ -172,6 +176,28 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	}
 
 	c.String(http.StatusOK, output)
+}
+
+func cacheHitPct(usage CurrentUsage) int {
+	if usage.CacheRead <= 0 {
+		return 0
+	}
+
+	denominator := usage.InputTokens + usage.CacheRead
+	if denominator <= 0 {
+		return 0
+	}
+
+	return usage.CacheRead * 100 / denominator
+}
+
+func buildCacheInline(usage CurrentUsage) string {
+	pct := cacheHitPct(usage)
+	if pct <= 0 {
+		return ""
+	}
+
+	return fmt.Sprintf(" | Cache: %d%%", pct)
 }
 
 // tbModelMappingResult contains the result of model mapping lookup
