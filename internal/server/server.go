@@ -177,22 +177,22 @@ type Server struct {
 
 	version string
 
-	// controlHandler is the WebUI Management API's aggregate handler
-	// (internal/server/webui.ControlHandler). Constructed as the LAST step of
+	// webHandler is the WebUI Management API's aggregate handler
+	// (internal/server.webHandler). Constructed as the LAST step of
 	// NewServer, after every field it depends on (memoryLogMW, multiLogger,
 	// config, jwtManager, ...) has already been set — do not move this
 	// construction earlier without checking every field it reads.
-	controlHandler *WebHandler
+	webHandler *WebHandler
 
 	// guardrailsHandler is the WebUI Management API's guardrails admin
-	// handler (internal/server/webui.GuardrailsHandler). Same construction
-	// constraint as controlHandler above.
+	// handler (internal/server.GuardrailsHandler). Same construction
+	// constraint as webHandler above.
 	guardrailsHandler *GuardrailsHandler
 
 	// aiHandler is the AI Model API's aggregate handler
 	// (internal/server/aimodel.AIHandler), covering MCP-in-gateway dispatch,
 	// recording, and (eventually) protocol dispatch/transform/passthrough.
-	// Same last-step construction constraint as controlHandler above — every
+	// Same last-step construction constraint as webHandler above — every
 	// field/callback in aimodel.Deps must already be set.
 	aiHandler *ProtocolHandler
 }
@@ -463,7 +463,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Construct the WebUI Management API's control handler. This MUST be the
 	// last step before setupMiddleware/setupRoutes — every field it reads
 	// (memoryLogMW, multiLogger, jwtManager, config) needs to already be set.
-	server.controlHandler = NewWebHandler(WebDeps{
+	server.webHandler = NewWebHandler(WebDeps{
 		MemoryLogMW: server.memoryLogMW,
 		MultiLogger: server.multiLogger,
 		Config:      server.config,
@@ -471,7 +471,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	})
 
 	// Construct the WebUI Management API's guardrails admin handler. Same
-	// last-step constraint as controlHandler above — Runtime is *Server
+	// last-step constraint as webHandler above — Runtime is *Server
 	// itself via the exported adapter methods in guardrails_runtime_adapter.go.
 	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
 		Config:             server.config,
@@ -480,7 +480,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	})
 
 	// Construct the AI Model API's aggregate handler. Same last-step
-	// constraint as controlHandler above. The callback fields reach back into
+	// constraint as webHandler above. The callback fields reach back into
 	// root state that has not moved to aimodel yet (usage tracking, affinity
 	// store, recording sinks, guardrails runtime) — see aimodel.Deps.
 	server.aiHandler = NewHandler(ProtocolHandlerDeps{

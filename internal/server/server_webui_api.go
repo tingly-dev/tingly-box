@@ -92,58 +92,58 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV2.Router.Use(s.getUserAuthMiddleware())
 
 	// Log API routes (HTTP request logs from memory)
-	apiV1.GET("/log", s.controlHandler.GetLogs,
+	apiV1.GET("/log", s.webHandler.GetLogs,
 		swagger.WithDescription("Get HTTP request logs with optional filtering"),
 		swagger.WithTags("logs"),
 		swagger.WithResponseModel(LogsResponse{}),
 	)
-	apiV1.GET("/log/stats", s.controlHandler.GetLogStats,
+	apiV1.GET("/log/stats", s.webHandler.GetLogStats,
 		swagger.WithDescription("Get HTTP request log statistics"),
 		swagger.WithTags("logs"),
 	)
-	apiV1.DELETE("/log", s.controlHandler.ClearLogs,
+	apiV1.DELETE("/log", s.webHandler.ClearLogs,
 		swagger.WithDescription("Clear all HTTP request logs"),
 		swagger.WithTags("logs"),
 	)
 
 	// System Log API routes (application logs from JSON file)
-	apiV1.GET("/system/logs", s.controlHandler.GetSystemLogs,
+	apiV1.GET("/system/logs", s.webHandler.GetSystemLogs,
 		swagger.WithDescription("Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return."),
 		swagger.WithTags("system-logs"),
 		swagger.WithResponseModel(SystemLogsResponse{}),
 	)
-	apiV1.GET("/system/logs/stats", s.controlHandler.GetSystemLogStats,
+	apiV1.GET("/system/logs/stats", s.webHandler.GetSystemLogStats,
 		swagger.WithDescription("Get system log statistics"),
 		swagger.WithTags("system-logs"),
 	)
-	apiV1.GET("/system/logs/level", s.controlHandler.GetSystemLogLevel,
+	apiV1.GET("/system/logs/level", s.webHandler.GetSystemLogLevel,
 		swagger.WithDescription("Get the current system log level"),
 		swagger.WithTags("system-logs"),
 	)
-	apiV1.POST("/system/logs/level", s.controlHandler.SetSystemLogLevel,
+	apiV1.POST("/system/logs/level", s.webHandler.SetSystemLogLevel,
 		swagger.WithDescription("Set the minimum log level for system logs"),
 		swagger.WithTags("system-logs"),
 	)
 
 	// Model Request routes (correlated per-request traces across pipeline stages)
-	apiV1.GET("/requests", s.controlHandler.GetModelRequests,
+	apiV1.GET("/requests", s.webHandler.GetModelRequests,
 		swagger.WithDescription("List recent model requests, one row per correlation id, joining the HTTP access log, model-request stage logs and smart-routing traces. Supports 'limit', 'scenario', 'provider' and 'status' filters."),
 		swagger.WithTags("requests"),
 		swagger.WithResponseModel(ModelRequestsResponse{}),
 	)
-	apiV1.GET("/requests/:id", s.controlHandler.GetModelRequestDetail,
+	apiV1.GET("/requests/:id", s.webHandler.GetModelRequestDetail,
 		swagger.WithDescription("Get the full, time-ordered event timeline for a single model request by correlation id."),
 		swagger.WithTags("requests"),
 		swagger.WithResponseModel(ModelRequestDetail{}),
 	)
 
 	// Action History API routes (user operations/audit log)
-	apiV1.GET("/actions/history", s.controlHandler.GetActionHistory,
+	apiV1.GET("/actions/history", s.webHandler.GetActionHistory,
 		swagger.WithDescription("Get user action history from memory (recent operations)"),
 		swagger.WithTags("actions"),
 		swagger.WithResponseModel(ActionHistoryResponse{}),
 	)
-	apiV1.GET("/actions/stats", s.controlHandler.GetActionStats,
+	apiV1.GET("/actions/stats", s.webHandler.GetActionStats,
 		swagger.WithDescription("Get statistics about user actions"),
 		swagger.WithTags("actions"),
 	)
@@ -195,13 +195,13 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	}
 
 	// Server Management
-	apiV1.GET("/status", s.controlHandler.GetStatus,
+	apiV1.GET("/status", s.webHandler.GetStatus,
 		swagger.WithDescription("Get server status and statistics"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(StatusResponse{}),
 	)
 
-	apiV1.POST("/server/start", s.controlHandler.StartServer,
+	apiV1.POST("/server/start", s.webHandler.StartServer,
 		swagger.WithDescription("Start the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
@@ -213,7 +213,7 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	apiV1.POST("/server/restart", s.controlHandler.RestartServer,
+	apiV1.POST("/server/restart", s.webHandler.RestartServer,
 		swagger.WithDescription("Restart the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
@@ -314,7 +314,7 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	)
 
 	// History
-	apiV1.GET("/history", s.controlHandler.GetHistory,
+	apiV1.GET("/history", s.webHandler.GetHistory,
 		swagger.WithDescription("Get request history"),
 		swagger.WithTags("history"),
 		swagger.WithResponseModel(HistoryResponse{}),
@@ -329,14 +329,14 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeE2EService, s.probeLightweight))
 
 	// Token Management
-	apiV1.POST("/token", s.controlHandler.GenerateToken,
+	apiV1.POST("/token", s.webHandler.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),
 		swagger.WithTags("token"),
 		swagger.WithRequestModel(GenerateTokenRequest{}),
 		swagger.WithResponseModel(TokenResponse{}),
 	)
 
-	apiV1.GET("/token", s.controlHandler.GetToken,
+	apiV1.GET("/token", s.webHandler.GetToken,
 		swagger.WithDescription("Get existing API token or generate new one"),
 		swagger.WithTags("token"),
 		swagger.WithResponseModel(TokenResponse{}),

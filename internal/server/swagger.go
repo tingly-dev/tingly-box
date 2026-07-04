@@ -29,10 +29,10 @@ func GenerateOpenAPI(cfg *config.Config) (string, error) {
 	server := &Server{
 		engine: engine,
 		config: cfg,
-		// controlHandler/guardrailsHandler need no live logger/token-manager
+		// webHandler/guardrailsHandler need no live logger/token-manager
 		// wiring for schema generation — their handlers are only referenced
 		// (never invoked) here.
-		controlHandler: NewWebHandler(WebDeps{Config: cfg}),
+		webHandler: NewWebHandler(WebDeps{Config: cfg}),
 	}
 	server.guardrailsHandler = NewGuardrailsHandler(GuardrailsDeps{
 		Config:             cfg,
