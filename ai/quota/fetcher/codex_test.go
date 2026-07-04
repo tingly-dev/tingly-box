@@ -52,27 +52,27 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 			json.NewEncoder(w).Encode(resp)
 
 		case "/backend-api/wham/rate-limit-reset-credits":
-			createdAt := time.Now().Add(-30 * 24 * time.Hour).Unix()
+			grantedAt := time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339)
 			resp := map[string]interface{}{
 				"available_count": 1,
 				"credits": []interface{}{
 					map[string]interface{}{
 						"id":         "credit-001",
 						"status":     "available",
-						"created_at": createdAt,
-						"expires_at": resetAt,
+						"granted_at": grantedAt,
+						"expires_at": time.Unix(resetAt, 0).Format(time.RFC3339),
 					},
 					map[string]interface{}{
 						"id":         "credit-002",
 						"status":     "used",
-						"created_at": createdAt,
-						"expires_at": time.Now().Add(-24 * time.Hour).Unix(),
+						"granted_at": grantedAt,
+						"expires_at": time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
 					},
 					map[string]interface{}{
 						"id":         "credit-003",
 						"status":     "used",
-						"created_at": createdAt,
-						"expires_at": time.Now().Add(-48 * time.Hour).Unix(),
+						"granted_at": grantedAt,
+						"expires_at": time.Now().Add(-48 * time.Hour).Format(time.RFC3339),
 					},
 				},
 			}
