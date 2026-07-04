@@ -4,8 +4,9 @@ import { AccessTime as AccessTimeIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
-import type { ProviderQuota, UsageWindow } from '@/types/quota';
-import { formatQuotaUsage, quotaToWindows } from '@/types/quota';
+import { QuotaBarRow, useQuotaBars } from './QuotaBarRow';
+import type { ProviderQuota } from '@/types/quota';
+import { formatQuotaUsage } from '@/types/quota';
 
 interface QuotaInlineDisplayProps {
   quota: ProviderQuota | undefined;
@@ -21,7 +22,7 @@ interface QuotaInlineDisplayProps {
 
 /**
  * Horizontal inline display of quota information.
- * Shows quota items side by side with refresh button.
+ * Shows quota bars with refresh/info actions.
  * Hidden items accessible via info icon tooltip.
  */
 export function QuotaInlineDisplay({
@@ -30,69 +31,14 @@ export function QuotaInlineDisplay({
   onRefresh,
   maxInlineItems = 3,
 }: QuotaInlineDisplayProps) {
-  const windows = quotaToWindows(quota);
+  const { windows, resourceItems, hasAny } = useQuotaBars(quota);
 
-  const hasQuota = windows.length > 0;
   const hasHiddenItems = windows.length > maxInlineItems;
   const visibleWindows = windows.slice(0, maxInlineItems);
   const hiddenWindows = windows.slice(maxInlineItems);
 
-  // Compute resource-type items from breakdowns (e.g., reset credits, entitlements)
-  // Each non-"model" breakdown group is aggregated into one compact bar with count.
-  const resourceItems: Array<{ key: string; window: UsageWindow; countLabel: string; tooltipContent: React.ReactNode }> = (() => {
-    if (!quota) return [];
-
-    // Group all breakdowns by group name
-    const groups = new Map<string, typeof quota.breakdowns>();
-    for (const bd of quota.breakdowns ?? []) {
-      const list = groups.get(bd.group) ?? [];
-      list.push(bd);
-      groups.set(bd.group, list);
-    }
-
-    return Array.from(groups.entries())
-      .filter((entry): entry is [string, NonNullable<typeof quota.breakdowns>] => entry[1] !== undefined)
-      .map(([group, items]) => {
-        const total = items.length;
-        const label = group
-          .split('_')
-          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-
-        const tooltipContent = (
-          <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
-              {label} ({total})
-            </Typography>
-            {items.map((bd) => {
-              const win = bd.windows[0];
-              if (!win) return null;
-              return (
-                <Typography key={bd.key} variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.3, lineHeight: 1.4 }}>
-                  {(bd.label || bd.key)}{win.description ? `: ${win.description}` : ''}
-                </Typography>
-              );
-            })}
-          </Box>
-        );
-
-        return {
-          key: group,
-          window: {
-            label,
-            used: 0,
-            limit: total,
-            used_percent: 100,
-            unit: 'percent' as const,
-          } as UsageWindow,
-          countLabel: `${total}`,
-          tooltipContent,
-        };
-      });
-  })();
-
   // Show nothing if there's no data at all
-  if (!hasQuota && resourceItems.length === 0) {
+  if (!hasAny) {
     return null;
   }
 
@@ -217,20 +163,8 @@ export function QuotaInlineDisplay({
         )}
       </Stack>
 
-      {/* Quota items */}
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{
-          overflowX: 'auto',
-          // Hide scrollbar but keep functionality
-          '&::-webkit-scrollbar': {
-            display: 'none',
-          },
-          msOverflowStyle: 'none',
-          scrollbarWidth: 'none',
-        }}
-      >
+      {/* Quota bar row — visible windows + resource items */}
+      <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
         {visibleWindows.map(({ key, window }) => (
           <QuotaBarItem key={key} window={window} />
         ))}

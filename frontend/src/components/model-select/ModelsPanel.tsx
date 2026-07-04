@@ -18,9 +18,9 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
-import { quotaToWindows } from '@/types/quota';
-import type { ProviderQuota, UsageWindow } from '@/types/quota';
+import type { ProviderQuota } from '@/types/quota';
 import { QuotaBarItem } from '@/components/credential/QuotaBarItem';
+import { useQuotaBars } from '@/components/credential/QuotaBarRow';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
 import { useProviderModels } from '@/hooks/useProviderModels';
@@ -118,42 +118,7 @@ export function ModelsPanel({
         );
     }, [providerModels, provider.uuid, provider.name, provider.api_style]);
 
-    const quotaWindows = useMemo(() => quotaToWindows(providerQuota), [providerQuota]);
-
-    // Compute resource items from breakdowns (unified resource display)
-    const resourceItems = useMemo(() => {
-        const breakdowns = providerQuota?.breakdowns;
-        if (!breakdowns?.length) return [];
-        const groups = new Map<string, typeof breakdowns>();
-        for (const bd of breakdowns) {
-            const list = groups.get(bd.group) ?? [];
-            list.push(bd);
-            groups.set(bd.group, list);
-        }
-        return Array.from(groups.entries()).map(([group, items]) => {
-            const total = items.length;
-            const label = group.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            const tooltipContent = (
-                <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>{label} ({total})</Typography>
-                    {items.map((bd: any) => {
-                        const win = bd.windows?.[0];
-                        return win ? (
-                            <Typography key={bd.key} variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.3, lineHeight: 1.4 }}>
-                                {(bd.label || bd.key)}{win.description ? `: ${win.description}` : ''}
-                            </Typography>
-                        ) : null;
-                    })}
-                </Box>
-            );
-            return {
-                key: group,
-                window: { label, used: 0, limit: total, used_percent: 100, unit: 'percent' as const } as UsageWindow,
-                countLabel: `${total}`,
-                tooltipContent,
-            };
-        });
-    }, [providerQuota]);
+    const { windows: quotaWindows, resourceItems } = useQuotaBars(providerQuota);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
