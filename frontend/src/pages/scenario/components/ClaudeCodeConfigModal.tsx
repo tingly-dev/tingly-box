@@ -2,6 +2,7 @@ import { Alert, AlertTitle, Box, Button, Checkbox, CircularProgress, Dialog, Dia
 import { Close as CloseIcon } from '@/components/icons';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { VisibilityOutlined as VisibilityOutlinedIcon } from '@/components/icons';
+import { RestartAlt as RestartAltIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from '@/components/CodeBlock';
@@ -42,6 +43,7 @@ const MODAL_TEXT = {
         tabQuick: '自动配置',
         tabManual: '手动',
         previewButton: '预览生成的 env',
+        resetTooltip: '重置为 tb 推荐默认值',
         previewTitle: '预览 — 将写入 ~/.claude/settings.json 的 env 段',
         applySuccess: '配置已写入',
         applyFailure: '应用失败',
@@ -53,6 +55,7 @@ const MODAL_TEXT = {
         tabQuick: 'Auto Config',
         tabManual: 'Manual',
         previewButton: 'Preview generated env',
+        resetTooltip: 'Reset to tb-recommended defaults',
         previewTitle: 'Preview — env block written to ~/.claude/settings.json',
         applySuccess: 'Configuration applied',
         applyFailure: 'Apply failed',
@@ -289,6 +292,11 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
         setApplyResult(result);
     };
 
+    const handleResetDefaults = React.useCallback(() => {
+        setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }));
+        setDefaultModeAndClearResult('acceptEdits');
+    }, [configMode, rules, setDefaultModeAndClearResult, setPrefsAndClearResult]);
+
     const canApply = isFullEdition && !!onApplyWithPrefs;
 
     return (
@@ -305,12 +313,21 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 PaperProps={{ sx: { borderRadius: 3, maxHeight: '90vh' } }}
             >
                 <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="h6" fontWeight={600}>
-                        {t('claudeCode.modal.title')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {t('claudeCode.modal.subtitle')}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="h6" fontWeight={600}>
+                                {t('claudeCode.modal.title')}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                {t('claudeCode.modal.subtitle')}
+                            </Typography>
+                        </Box>
+                        <Tooltip title={modalText.resetTooltip} arrow>
+                            <IconButton size="small" onClick={handleResetDefaults} sx={{ mt: 0.25 }}>
+                                <RestartAltIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                     <Tabs
                         value={mainTab}
                         onChange={(_, v) => setMainTab(v)}
@@ -378,10 +395,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             setPrefs={setPrefsAndClearResult}
                             defaultMode={defaultMode}
                             setDefaultMode={setDefaultModeAndClearResult}
-                            onResetDefaults={() => {
-                                setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }));
-                                setDefaultModeAndClearResult('acceptEdits');
-                            }}
                         />
                     )}
 

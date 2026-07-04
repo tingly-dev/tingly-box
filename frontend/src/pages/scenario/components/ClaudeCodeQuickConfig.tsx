@@ -14,7 +14,6 @@ import {
     Typography,
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
-import { RestartAlt as RestartAltIcon } from '@/components/icons';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -477,19 +476,16 @@ const SECTION_TEXT_EN: SectionTextMap = {
 
 interface UIText {
     panelHeader: string;
-    resetTooltip: string;
     oneMTooltip: string;
 }
 
 const UI_TEXT_ZH: UIText = {
     panelHeader: '每行对应一个 Claude Code 环境变量。hover 信息图标查看含义；留空 / 关闭 = 不写入。',
-    resetTooltip: '重置为 tb 推荐默认值',
     oneMTooltip: '启用 1M 上下文窗口（在模型 ID 末尾追加 [1m]，需路由的目标模型支持）',
 };
 
 const UI_TEXT_EN: UIText = {
     panelHeader: 'Each row is one Claude Code env var. Hover the info icon for details. Blank / off = the env is not written.',
-    resetTooltip: 'Reset to tb-recommended defaults',
     oneMTooltip: 'Enable the 1M context window (appends [1m] to the model ID; the routed target model must support it).',
 };
 
@@ -782,7 +778,6 @@ interface QuickConfigPanelProps {
     setPrefs: (p: ClaudeCodePrefs) => void;
     defaultMode: ClaudeCodeDefaultMode;
     setDefaultMode: (mode: ClaudeCodeDefaultMode) => void;
-    onResetDefaults: () => void;
 }
 
 const DefaultModeSection: React.FC<{
@@ -792,7 +787,7 @@ const DefaultModeSection: React.FC<{
 }> = ({ lang, defaultMode, setDefaultMode }) => {
     const meta = DEFAULT_MODE_SECTION_TEXT[lang];
     const text = DEFAULT_MODE_TEXT[lang];
-    const selected = text[defaultMode];
+    const selectedText = text[defaultMode];
 
     return (
         <Box>
@@ -803,8 +798,8 @@ const DefaultModeSection: React.FC<{
             <Divider />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 52 }}>
                 <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                    <Typography variant="body2" fontWeight={500} noWrap>{selected.label}</Typography>
-                    <Tooltip placement="top" arrow title={selected.description}>
+                    <Typography variant="body2" fontWeight={500} noWrap>Default Mode</Typography>
+                    <Tooltip placement="top" arrow title={`${selectedText.label}: ${selectedText.description}`}>
                         <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                     </Tooltip>
                 </Box>
@@ -875,21 +870,13 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
     setPrefs,
     defaultMode,
     setDefaultMode,
-    onResetDefaults,
 }) => {
     const lang = useLang();
     const uiText = UI_TEXT[lang];
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2" color="text.secondary">{uiText.panelHeader}</Typography>
-                <Tooltip title={uiText.resetTooltip} arrow>
-                    <IconButton size="small" onClick={onResetDefaults}>
-                        <RestartAltIcon fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-            </Box>
+            <Typography variant="body2" color="text.secondary">{uiText.panelHeader}</Typography>
 
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
