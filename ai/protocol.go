@@ -72,6 +72,12 @@ type TokenUsage struct {
 	// (includes both cache creation and cache read operations)
 	CacheInputTokens int `json:"cache_input_tokens,omitempty"`
 
+	// Both cache read and write are part of cache input, but write means an extra cost than general read
+	// for all cases, prompt = input + cache_input
+	// and we just store the read and write for details
+	CacheReadTokens  int `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
+
 	// ReasoningTokens is the number of tokens used for internal reasoning
 	// (e.g. o1/o3 reasoning models). These are a subset of OutputTokens.
 	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
@@ -104,8 +110,11 @@ func (u *TokenUsage) ToAnthropicUsageMap() map[string]interface{} {
 		"input_tokens":  u.InputTokens,
 		"output_tokens": u.OutputTokens,
 	}
-	if u.CacheInputTokens > 0 {
-		usage["cache_read_input_tokens"] = u.CacheInputTokens
+	if u.CacheReadTokens > 0 {
+		usage["cache_read_input_tokens"] = u.CacheReadTokens
+	}
+	if u.CacheWriteTokens > 0 {
+		usage["cache_creation_input_tokens"] = u.CacheWriteTokens
 	}
 	return usage
 }
@@ -116,14 +125,7 @@ func (u *TokenUsage) ToAnthropicUsageMap() map[string]interface{} {
 // authoritative input usage at the terminal upstream event, so the final
 // message_delta carries the complete normalized usage.
 func (u *TokenUsage) ToAnthropicMessageDeltaUsageMap() map[string]interface{} {
-	usage := map[string]interface{}{
-		"input_tokens":  u.InputTokens,
-		"output_tokens": u.OutputTokens,
-	}
-	if u.CacheInputTokens > 0 {
-		usage["cache_read_input_tokens"] = u.CacheInputTokens
-	}
-	return usage
+	return u.ToAnthropicUsageMap()
 }
 
 // ToOpenAIChatUsageMap converts canonical usage into OpenAI Chat Completions
@@ -180,21 +182,25 @@ func NewTokenUsage(inputTokens, outputTokens int) *TokenUsage {
 
 // NewTokenUsageWithCache creates a new TokenUsage with cache token count.
 func NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens int) *TokenUsage {
+	return NewTokenUsageWithCacheDetails(inputTokens, outputTokens, cacheTokens, 0)
+}
+
+// NewTokenUsageWithCacheDetails creates a TokenUsage with cache read/write detail counts.
+func NewTokenUsageWithCacheDetails(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) *TokenUsage {
 	return &TokenUsage{
 		InputTokens:      inputTokens,
 		OutputTokens:     outputTokens,
-		CacheInputTokens: cacheTokens,
+		CacheInputTokens: cacheReadTokens,
+		CacheReadTokens:  cacheReadTokens,
+		CacheWriteTokens: cacheWriteTokens,
 	}
 }
 
 // NewTokenUsageFull creates a TokenUsage with cache and reasoning token counts.
 func NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens int) *TokenUsage {
-	return &TokenUsage{
-		InputTokens:      inputTokens,
-		OutputTokens:     outputTokens,
-		CacheInputTokens: cacheTokens,
-		ReasoningTokens:  reasoningTokens,
-	}
+	usage := NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
+	usage.ReasoningTokens = reasoningTokens
+	return usage
 }
 
 // ZeroTokenUsage returns a TokenUsage with zero values.
