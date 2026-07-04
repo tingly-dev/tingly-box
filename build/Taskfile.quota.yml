@@ -189,15 +189,17 @@ tasks:
             ]
           },
           "spend_control": {
-            "reached": false
+            "reached": false,
+            "individual_limit": null
           },
           "rate_limit_reached_type": null,
+          "rate_limit_reset_credits": null,
           "promo": null,
           "referral_beacon": null
         }
         EOF
       - |
-        echo "example"
+        echo "example (rate limited)"
         cat << EOF
         {
           "user_id": "user-I9Ki---jrzi2",
@@ -205,39 +207,71 @@ tasks:
           "email": "@gmail.com",
           "plan_type": "free",
           "rate_limit": {
-            "allowed": true,
-            "limit_reached": false,
+            "allowed": false,
+            "limit_reached": true,
             "primary_window": {
-              "used_percent": 0,
+              "used_percent": 100,
               "limit_window_seconds": 604800,
-              "reset_after_seconds": 208892,
-              "reset_at": 1775310144
+              "reset_after_seconds": 943,
+              "reset_at": 1783148508
             },
-            "secondary_window": null
-          },
-          "code_review_rate_limit": {
-            "allowed": true,
-            "limit_reached": false,
-            "primary_window": {
-              "used_percent": 0,
+            "secondary_window": {
+              "used_percent": 87,
               "limit_window_seconds": 604800,
-              "reset_after_seconds": 604800,
-              "reset_at": 1775706052
-            },
-            "secondary_window": null
+              "reset_after_seconds": 244631,
+              "reset_at": 1783392195
+            }
           },
-          "additional_rate_limits": null,
+          "code_review_rate_limit": null,
+          "additional_rate_limits": [
+            {
+              "limit_name": "GPT-5.3-Codex-Spark",
+              "metered_feature": "codex_bengalfox",
+              "rate_limit": {
+                "allowed": true,
+                "limit_reached": false,
+                "primary_window": {
+                  "used_percent": 0,
+                  "limit_window_seconds": 18000,
+                  "reset_after_seconds": 18000,
+                  "reset_at": 1783165565
+                },
+                "secondary_window": {
+                  "used_percent": 0,
+                  "limit_window_seconds": 604800,
+                  "reset_after_seconds": 604800,
+                  "reset_at": 1783752365
+                }
+              }
+            }
+          ],
           "credits": {
             "has_credits": false,
             "unlimited": false,
-            "balance": null,
-            "approx_local_messages": null,
-            "approx_cloud_messages": null
+            "overage_limit_reached": false,
+            "balance": "0",
+            "approx_local_messages": [
+              0,
+              0
+            ],
+            "approx_cloud_messages": [
+              0,
+              0
+            ]
           },
           "spend_control": {
-            "reached": false
+            "reached": false,
+            "individual_limit": null
           },
-          "promo": null
+          "rate_limit_reached_type": {
+            "type": "rate_limit_reached",
+            "details": "default"
+          },
+          "rate_limit_reset_credits": {
+            "available_count": 4
+          },
+          "promo": null,
+          "referral_beacon": null
         }
         EOF
       - |

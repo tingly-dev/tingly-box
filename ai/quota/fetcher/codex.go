@@ -75,11 +75,9 @@ func (b *codexBalance) UnmarshalJSON(data []byte) error {
 
 // codexUsageResponse from GET /backend-api/wham/usage
 type codexUsageResponse struct {
-	PlanType  string `json:"plan_type"` // guest, free, go, plus, pro, team, business, enterprise
-	RateLimit *struct {
-		PrimaryWindow   *codexWindow `json:"primary_window"`
-		SecondaryWindow *codexWindow `json:"secondary_window"`
-	} `json:"rate_limit"`
+	PlanType  string          `json:"plan_type"` // guest, free, go, plus, pro, team, business, enterprise
+	RateLimit *codexRateLimit `json:"rate_limit"`
+
 	CodeReviewRateLimit  *codexRateLimit            `json:"code_review_rate_limit"`
 	AdditionalRateLimits []codexAdditionalRateLimit `json:"additional_rate_limits"`
 	Credits              *struct {
@@ -91,14 +89,18 @@ type codexUsageResponse struct {
 		ApproxCloudMessages []int         `json:"approx_cloud_messages"`
 	} `json:"credits"`
 	SpendControl *struct {
-		Reached bool `json:"reached"`
+		Reached         bool     `json:"reached"`
+		IndividualLimit *float64 `json:"individual_limit"`
 	} `json:"spend_control"`
-	RateLimitReachedType *string     `json:"rate_limit_reached_type"`
-	Promo                interface{} `json:"promo"`
-	ReferralBeacon       interface{} `json:"referral_beacon"`
-	Email                string      `json:"email"`
-	UserID               string      `json:"user_id"`
-	AccountID            string      `json:"account_id"`
+	RateLimitReachedType  interface{} `json:"rate_limit_reached_type"`
+	RateLimitResetCredits *struct {
+		AvailableCount int `json:"available_count"`
+	} `json:"rate_limit_reset_credits"`
+	Promo          interface{} `json:"promo"`
+	ReferralBeacon interface{} `json:"referral_beacon"`
+	Email          string      `json:"email"`
+	UserID         string      `json:"user_id"`
+	AccountID      string      `json:"account_id"`
 }
 
 type codexWindow struct {
