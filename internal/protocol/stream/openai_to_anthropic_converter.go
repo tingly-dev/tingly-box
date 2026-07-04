@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // anthropicStreamEvent wraps a single Anthropic SSE event for the converter pipeline.
@@ -276,16 +277,25 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 }
 
 func (c *openAIToAnthropicConverter) consumeTokenCounter(chunk *openai.ChatCompletionChunk) {
-	if c.tokenCounter == nil {
+	if c.tokenCounter != nil {
+		_, _, _ = c.tokenCounter.ConsumeOpenAIChunk(chunk)
+		inputTokens, outputTokens := c.tokenCounter.GetCounts()
+		if inputTokens > 0 {
+			c.state.inputTokens = int64(inputTokens)
+		}
+		if outputTokens > 0 {
+			c.state.outputTokens = int64(outputTokens)
+		}
 		return
 	}
-	_, _, _ = c.tokenCounter.ConsumeOpenAIChunk(chunk)
-	inputTokens, outputTokens := c.tokenCounter.GetCounts()
-	if inputTokens > 0 {
-		c.state.inputTokens = int64(inputTokens)
-	}
-	if outputTokens > 0 {
-		c.state.outputTokens = int64(outputTokens)
+
+	// Fallback: extract usage directly from the chunk when token counter is
+	// unavailable (e.g. constructor failure).  This mirrors the approach used
+	// in openai_passthrough.go for the terminal usage-only chunk.
+	if chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 ||
+		chunk.Usage.PromptTokensDetails.CachedTokens != 0 ||
+		chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
+		c.usage = protocolusage.FromOpenAIChatCompletion(chunk.Usage)
 	}
 }
 
