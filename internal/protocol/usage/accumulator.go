@@ -18,15 +18,13 @@ import (
 // (BetaRawMessageStreamEventUnion) streams are supported via Consume and
 // ConsumeBeta respectively.
 type AnthropicAccumulator struct {
-	inputTokens  int
-	outputTokens int
-	cacheTokens  int
-	hasUsage     bool
+	usage    *protocol.TokenUsage
+	hasUsage bool
 }
 
 // NewAnthropicAccumulator returns a zeroed accumulator ready to consume events.
 func NewAnthropicAccumulator() *AnthropicAccumulator {
-	return &AnthropicAccumulator{}
+	return &AnthropicAccumulator{usage: protocol.ZeroTokenUsage()}
 }
 
 // Consume updates the accumulator from a non-beta streaming event.
@@ -85,61 +83,72 @@ func (a *AnthropicAccumulator) consumeRaw(
 	msgStartCacheReadRaw, deltaCacheReadRaw int64,
 	msgStartCacheCreation, deltaCacheCreation int64,
 ) {
+	if a.usage == nil {
+		a.usage = protocol.ZeroTokenUsage()
+	}
+
 	// Input tokens — prefer message_start, fall back to message_delta
 	switch {
 	case msgStartInput > 0:
-		a.inputTokens = int(msgStartInput)
+		a.usage.InputTokens = int(msgStartInput)
 		a.hasUsage = true
 	case msgStartInputRaw > 0:
-		a.inputTokens = int(msgStartInputRaw)
+		a.usage.InputTokens = int(msgStartInputRaw)
 		a.hasUsage = true
 	case deltaInput > 0:
-		a.inputTokens = int(deltaInput)
+		a.usage.InputTokens = int(deltaInput)
 		a.hasUsage = true
 	case deltaInputRaw > 0:
-		a.inputTokens = int(deltaInputRaw)
+		a.usage.InputTokens = int(deltaInputRaw)
 		a.hasUsage = true
 	}
 
 	// Output tokens
 	switch {
 	case deltaOutput > 0:
-		a.outputTokens = int(deltaOutput)
+		a.usage.OutputTokens = int(deltaOutput)
 		a.hasUsage = true
 	case deltaOutputRaw > 0:
-		a.outputTokens = int(deltaOutputRaw)
+		a.usage.OutputTokens = int(deltaOutputRaw)
 		a.hasUsage = true
 	}
 
-	// Cache read tokens — stored separately as cacheTokens
+	// Cache read tokens — stored separately as cache read details
 	switch {
 	case msgStartCacheRead > 0:
-		a.cacheTokens = int(msgStartCacheRead)
+		a.usage.CacheReadTokens = int(msgStartCacheRead)
 		a.hasUsage = true
 	case deltaCacheRead > 0:
-		a.cacheTokens = int(deltaCacheRead)
+		a.usage.CacheReadTokens = int(deltaCacheRead)
 		a.hasUsage = true
 	case msgStartCacheReadRaw > 0:
-		a.cacheTokens = int(msgStartCacheReadRaw)
+		a.usage.CacheReadTokens = int(msgStartCacheReadRaw)
 		a.hasUsage = true
 	case deltaCacheReadRaw > 0:
-		a.cacheTokens = int(deltaCacheReadRaw)
+		a.usage.CacheReadTokens = int(deltaCacheReadRaw)
 		a.hasUsage = true
 	}
 
 	// Normalize: add cache_creation to inputTokens so denominator =
-	// input (uncached) + creation (write cost). Cache reads stay in cacheTokens.
+	// input (uncached) + creation (write cost). Cache reads stay in cache details.
 	switch {
 	case msgStartCacheCreation > 0:
-		a.inputTokens += int(msgStartCacheCreation)
+		a.usage.CacheWriteTokens = int(msgStartCacheCreation)
+		a.usage.InputTokens += int(msgStartCacheCreation)
 	case deltaCacheCreation > 0:
-		a.inputTokens += int(deltaCacheCreation)
+		a.usage.CacheWriteTokens = int(deltaCacheCreation)
+		a.usage.InputTokens += int(deltaCacheCreation)
 	}
 }
 
 // Result returns the normalized TokenUsage built from accumulated events.
 func (a *AnthropicAccumulator) Result() *protocol.TokenUsage {
-	return protocol.NewTokenUsageWithCache(a.inputTokens, a.outputTokens, a.cacheTokens)
+	if a.usage == nil {
+		return protocol.ZeroTokenUsage()
+	}
+	result := *a.usage
+	result.CacheInputTokens = result.CacheReadTokens
+	return &result
 }
 
 // HasUsage reports whether any non-zero usage was observed.

@@ -51,20 +51,22 @@ func FromOpenAIResponses(u responses.ResponseUsage) *protocol.TokenUsage {
 // (non-beta) Message usage block. CacheCreationInputTokens is added to
 // InputTokens so the denominator covers all non-cache-read prompt cost.
 func FromAnthropicMessage(u anthropic.Usage) *protocol.TokenUsage {
-	return protocol.NewTokenUsageWithCache(
+	return protocol.NewTokenUsageWithCacheDetails(
 		int(u.InputTokens)+int(u.CacheCreationInputTokens),
 		int(u.OutputTokens),
 		int(u.CacheReadInputTokens),
+		int(u.CacheCreationInputTokens),
 	)
 }
 
 // FromAnthropicBetaMessage extracts normalized TokenUsage from an Anthropic
 // beta BetaMessage usage block. Same normalization as the non-beta path.
 func FromAnthropicBetaMessage(u anthropic.BetaUsage) *protocol.TokenUsage {
-	return protocol.NewTokenUsageWithCache(
+	return protocol.NewTokenUsageWithCacheDetails(
 		int(u.InputTokens)+int(u.CacheCreationInputTokens),
 		int(u.OutputTokens),
 		int(u.CacheReadInputTokens),
+		int(u.CacheCreationInputTokens),
 	)
 }
 

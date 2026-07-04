@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // handleResponsesToAnthropicStream is the shared implementation for both v1 and beta
@@ -103,6 +104,16 @@ type OpenAIToAnthropicMCPHooks struct {
 }
 
 var ErrMCPStreamContinue = errors.New("mcp stream should continue")
+
+func applyTokenUsageToStreamState(state *streamState, usage *protocol.TokenUsage) {
+	if state == nil || usage == nil {
+		return
+	}
+	state.inputTokens = int64(usage.InputTokens)
+	state.outputTokens = int64(usage.OutputTokens)
+	state.cacheTokens = int64(usage.CacheInputTokens)
+	state.reasoningTokens = int64(usage.ReasoningTokens)
+}
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
@@ -249,6 +260,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 
 	// Initialize streaming state
 	state := newStreamState()
+	usage := protocol.ZeroTokenUsage()
 
 	// Track tool calls by item ID for Responses API
 	type pendingToolCall struct {
@@ -519,10 +531,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 
 		case "response.completed":
 			completed := currentEvent.AsResponseCompleted()
-			state.cacheTokens = completed.Response.Usage.InputTokensDetails.CachedTokens
-			state.inputTokens = completed.Response.Usage.InputTokens - state.cacheTokens
-			state.outputTokens = completed.Response.Usage.OutputTokens
-			state.reasoningTokens = completed.Response.Usage.OutputTokensDetails.ReasoningTokens
+			usage = protocolusage.FromOpenAIResponses(completed.Response.Usage)
+			applyTokenUsageToStreamState(state, usage)
 
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
@@ -596,7 +606,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
-			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+			return usage, nil
 
 		case "response.output_text.annotation.added":
 			// Per-annotation event; pass through silently.
@@ -707,10 +717,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 			// content_filter), not a transport error. Preserve the partial output
 			// and map to Anthropic's max_tokens stop reason.
 			incomplete := currentEvent.AsResponseIncomplete()
-			state.cacheTokens = incomplete.Response.Usage.InputTokensDetails.CachedTokens
-			state.inputTokens = incomplete.Response.Usage.InputTokens - state.cacheTokens
-			state.outputTokens = incomplete.Response.Usage.OutputTokens
-			state.reasoningTokens = incomplete.Response.Usage.OutputTokensDetails.ReasoningTokens
+			usage = protocolusage.FromOpenAIResponses(incomplete.Response.Usage)
+			applyTokenUsageToStreamState(state, usage)
 
 			senders.SendStopEvents(state, flusher)
 
@@ -723,7 +731,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Incomplete response: reason=%s, stop_reason=%s", incomplete.Response.IncompleteDetails.Reason, stopReason)
-			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+			return usage, nil
 
 		case "error", "response.failed":
 			logrus.WithContext(c.Request.Context()).Errorf("Responses API error event: %v", currentEvent)
@@ -735,7 +743,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 				},
 			}
 			senders.SendErrorEvent(errorEvent, flusher)
-			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
+			return usage, fmt.Errorf("Responses API error: %v", currentEvent)
 
 		default:
 			logrus.WithContext(c.Request.Context()).Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
@@ -753,10 +761,10 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 			},
 		}
 		senders.SendErrorEvent(errorEvent, flusher)
-		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
+		return usage, err
 	}
 
-	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+	return usage, nil
 }
 
 func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {

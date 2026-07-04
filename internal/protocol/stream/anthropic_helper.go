@@ -378,8 +378,21 @@ func sendAnthropicV1ContentBlockStop(c *gin.Context, flusher http.Flusher) {
 	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, event, flusher)
 }
 
-// sendAnthropicV1MessageStop sends a message_stop event.
-func sendAnthropicV1MessageStop(c *gin.Context, inputTokens, outputTokens int, flusher http.Flusher) {
+// sendAnthropicV1MessageStop sends a message_delta usage event followed by message_stop.
+func sendAnthropicV1MessageStop(c *gin.Context, usage *protocol.TokenUsage, flusher http.Flusher) {
+	if usage == nil {
+		usage = protocol.ZeroTokenUsage()
+	}
+	deltaEvent := map[string]interface{}{
+		"type": eventTypeMessageDelta,
+		"delta": map[string]interface{}{
+			"stop_reason":   anthropicStopReasonEndTurn,
+			"stop_sequence": nil,
+		},
+		"usage": usage.ToAnthropicMessageDeltaUsageMap(),
+	}
+	sendAnthropicStreamEvent(c, eventTypeMessageDelta, deltaEvent, flusher)
+
 	event := map[string]interface{}{
 		"type": eventTypeMessageStop,
 	}
