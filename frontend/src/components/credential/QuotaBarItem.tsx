@@ -1,3 +1,4 @@
+import React from 'react';
 import { Box, Stack, Tooltip, Typography, tooltipClasses } from '@mui/material';
 import type { UsageWindow } from '@/types/quota';
 import { formatQuotaPercent, formatQuotaUsage } from '@/types/quota';
@@ -11,6 +12,21 @@ interface QuotaBarItemProps {
    * @default false
    */
   showDetails?: boolean;
+  /**
+   * Override the percentage text (e.g., "1/3" for resource items)
+   * When set, the percent text is replaced by this value.
+   */
+  percentLabel?: string;
+  /**
+   * Force a specific bar color. When set, bypasses the default percent-based color logic.
+   */
+  barColor?: string;
+  /**
+   * Custom tooltip content. When set, replaces the default tooltip entirely.
+   * Used for resource-type items (e.g., reset credits) that need per-item detail in hover.
+   * The default tooltip shows usage stats and reset time.
+   */
+  tooltipContent?: React.ReactNode;
 }
 
 function formatCompactNumber(num: number) {
@@ -23,14 +39,14 @@ function formatCompactNumber(num: number) {
  * Compact inline display of a single quota window.
  * Shows: Label + Bar + Percent, with details in tooltip.
  */
-export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps) {
+export function QuotaBarItem({ window, showDetails = false, percentLabel, barColor: forcedBarColor, tooltipContent: customTooltip }: QuotaBarItemProps) {
   const getColor = (percent: number) => {
     if (percent >= 80) return QUOTA_COLORS.error;
     if (percent >= 50) return QUOTA_COLORS.warning;
     return QUOTA_COLORS.success;
   };
 
-  const barColor = getColor(window.used_percent);
+  const barColor = forcedBarColor ?? getColor(window.used_percent);
 
   // Format reset time
   const formatResetTime = () => {
@@ -85,7 +101,7 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
 
   return (
     <Tooltip
-      title={tooltipContent}
+      title={customTooltip ?? tooltipContent}
       arrow
       disableInteractive
       componentsProps={{
@@ -104,7 +120,7 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
       <Stack
         direction="row"
         alignItems="center"
-        spacing={1}
+        spacing={0.5}
         sx={{
           flexShrink: 0,
         }}
@@ -113,7 +129,7 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
         <Typography
           variant="body2"
           color="text.secondary"
-          sx={{ minWidth: 45 }}
+          sx={{ fontSize: '12px', whiteSpace: 'nowrap' }}
         >
           {window.label}:
         </Typography>
@@ -122,7 +138,7 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
         <Box
           sx={{
             position: 'relative',
-            width: 60,
+            width: 40,
             height: 8,
             cursor: 'pointer',
           }}
@@ -150,15 +166,16 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
           </Box>
         </Box>
 
-        {/* Percent */}
+        {/* Percent / count label */}
         <Typography
           variant="body2"
           sx={{
-            color: barColor,
-            minWidth: 35,
+            color: percentLabel ? 'text.secondary' : barColor,
+            fontSize: '12px',
+            whiteSpace: 'nowrap',
           }}
         >
-          {formatQuotaPercent(window)}
+          {percentLabel ?? formatQuotaPercent(window)}
         </Typography>
 
         {/* Optional details inline */}
