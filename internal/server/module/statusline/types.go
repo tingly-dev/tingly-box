@@ -49,8 +49,8 @@ type ContextWindow struct {
 type CurrentUsage struct {
 	InputTokens  int `json:"input_tokens" example:"1500"`
 	OutputTokens int `json:"output_tokens" example:"500"`
-	CacheRead    int `json:"cache_read" example:"10000"`
-	CacheWrite   int `json:"cache_write" example:"2000"`
+	CacheRead    int `json:"cache_read_input_tokens" example:"10000"`
+	CacheWrite   int `json:"cache_creation_input_tokens" example:"2000"`
 }
 
 // Cost represents cost information
