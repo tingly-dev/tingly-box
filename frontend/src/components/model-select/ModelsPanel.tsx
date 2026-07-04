@@ -18,8 +18,9 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';
-import type { ProviderQuota } from '@/types/quota';
 import { quotaToWindows } from '@/types/quota';
+import type { ProviderQuota, UsageWindow } from '@/types/quota';
+import { QuotaBarItem } from '@/components/credential/QuotaBarItem';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { useCustomModels } from '@/hooks/useCustomModels';
 import { useProviderModels } from '@/hooks/useProviderModels';
@@ -32,7 +33,6 @@ import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
-import { QuotaBar } from './QuotaBar';
 
 async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> {
     const basePath = window.location.origin;
@@ -119,6 +119,41 @@ export function ModelsPanel({
     }, [providerModels, provider.uuid, provider.name, provider.api_style]);
 
     const quotaWindows = useMemo(() => quotaToWindows(providerQuota), [providerQuota]);
+
+    // Compute resource items from breakdowns (unified resource display)
+    const resourceItems = useMemo(() => {
+        const breakdowns = providerQuota?.breakdowns;
+        if (!breakdowns?.length) return [];
+        const groups = new Map<string, typeof breakdowns>();
+        for (const bd of breakdowns) {
+            const list = groups.get(bd.group) ?? [];
+            list.push(bd);
+            groups.set(bd.group, list);
+        }
+        return Array.from(groups.entries()).map(([group, items]) => {
+            const total = items.length;
+            const label = group.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const tooltipContent = (
+                <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>{label} ({total})</Typography>
+                    {items.map((bd: any) => {
+                        const win = bd.windows?.[0];
+                        return win ? (
+                            <Typography key={bd.key} variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.3, lineHeight: 1.4 }}>
+                                {(bd.label || bd.key)}{win.description ? `: ${win.description}` : ''}
+                            </Typography>
+                        ) : null;
+                    })}
+                </Box>
+            );
+            return {
+                key: group,
+                window: { label, used: 0, limit: total, used_percent: 100, unit: 'percent' as const } as UsageWindow,
+                countLabel: `${total}`,
+                tooltipContent,
+            };
+        });
+    }, [providerQuota]);
 
     // Re-fetch provider models when refresh trigger changes (e.g., after custom model deletion)
     useEffect(() => {
@@ -461,14 +496,12 @@ export function ModelsPanel({
                             />
                         </IconButton>
                     </Stack>
-                    <Stack spacing={1.5}>
-                        {quotaWindows.map(({ key, label, window }) => (
-                            <Box key={key}>
-                                <Typography variant="caption" sx={{ mb: 0.5, display: 'block', color: '#64748b' }}>
-                                    {label}
-                                </Typography>
-                                <QuotaBar quota={providerQuota!} window={window} />
-                            </Box>
+                    <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+                        {quotaWindows.map(({ key, window }) => (
+                            <QuotaBarItem key={key} window={window} />
+                        ))}
+                        {resourceItems.map(item => (
+                            <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor="#22c55e" tooltipContent={item.tooltipContent} />
                         ))}
                     </Stack>
                 </Box>
