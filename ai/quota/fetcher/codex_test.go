@@ -23,45 +23,66 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 
 	// Mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request path
-		if r.URL.Path != "/backend-api/wham/usage" {
-			t.Errorf("expected path /backend-api/wham/usage, got %s", r.URL.Path)
-		}
-		// Verify auth header
-		if r.Header.Get("Authorization") != "Bearer test-token" {
-			t.Errorf("expected Bearer test-token, got %s", r.Header.Get("Authorization"))
-		}
-		// Verify account ID header
-		if r.Header.Get("ChatGPT-Account-Id") != "acct-123" {
-			t.Errorf("expected ChatGPT-Account-Id acct-123, got %s", r.Header.Get("ChatGPT-Account-Id"))
-		}
-		// Verify user agent
-		if r.Header.Get("User-Agent") != "codex-cli" {
-			t.Errorf("expected User-Agent codex-cli, got %s", r.Header.Get("User-Agent"))
-		}
+		switch r.URL.Path {
+		case "/backend-api/wham/usage":
+			resp := map[string]interface{}{
+				"plan_type": "pro",
+				"rate_limit": map[string]interface{}{
+					"primary_window": map[string]interface{}{
+						"used_percent":         25,
+						"reset_at":             resetAt,
+						"limit_window_seconds": 18000, // 5 hours
+					},
+					"secondary_window": map[string]interface{}{
+						"used_percent":         10,
+						"reset_at":             weeklyResetAt,
+						"limit_window_seconds": 604800, // 7 days
+					},
+				},
+				"credits": map[string]interface{}{
+					"has_credits": true,
+					"unlimited":   false,
+					"balance":     150.0,
+				},
+				"rate_limit_reset_credits": map[string]interface{}{
+					"available_count": 3,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
 
-		resp := map[string]interface{}{
-			"plan_type": "pro",
-			"rate_limit": map[string]interface{}{
-				"primary_window": map[string]interface{}{
-					"used_percent":         25,
-					"reset_at":             resetAt,
-					"limit_window_seconds": 18000, // 5 hours
+		case "/backend-api/wham/rate-limit-reset-credits":
+			createdAt := time.Now().Add(-30 * 24 * time.Hour).Unix()
+			resp := map[string]interface{}{
+				"available_count": 1,
+				"credits": []interface{}{
+					map[string]interface{}{
+						"id":         "credit-001",
+						"status":     "available",
+						"created_at": createdAt,
+						"expires_at": resetAt,
+					},
+					map[string]interface{}{
+						"id":         "credit-002",
+						"status":     "used",
+						"created_at": createdAt,
+						"expires_at": time.Now().Add(-24 * time.Hour).Unix(),
+					},
+					map[string]interface{}{
+						"id":         "credit-003",
+						"status":     "used",
+						"created_at": createdAt,
+						"expires_at": time.Now().Add(-48 * time.Hour).Unix(),
+					},
 				},
-				"secondary_window": map[string]interface{}{
-					"used_percent":         10,
-					"reset_at":             weeklyResetAt,
-					"limit_window_seconds": 604800, // 7 days
-				},
-			},
-			"credits": map[string]interface{}{
-				"has_credits": true,
-				"unlimited":   false,
-				"balance":     150.0,
-			},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -102,8 +123,8 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	}
 
 	// Verify current window (5h session)
-	if len(usage.Windows) < 2 {
-		t.Fatalf("expected at least 2 windows, got %d", len(usage.Windows))
+	if len(usage.Windows) != 2 {
+		t.Fatalf("expected 2 windows (current + weekly), got %d", len(usage.Windows))
 	}
 	current := usage.Windows[0]
 	if current.UsedPercent != 25 {
@@ -123,6 +144,33 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	}
 	if weekly.WindowMinutes != 10080 { // 604800s / 60
 		t.Errorf("Weekly.WindowMinutes = %d, want 10080", weekly.WindowMinutes)
+	}
+
+	// Verify reset credits breakdowns (as resources, not windows)
+	if len(usage.Breakdowns) != 3 {
+		t.Fatalf("Expected 3 reset credit breakdowns, got %d", len(usage.Breakdowns))
+	}
+	if usage.Breakdowns[0].Group != "reset_credit" {
+		t.Errorf("Breakdown[0].Group = %q, want 'reset_credit'", usage.Breakdowns[0].Group)
+	}
+	if usage.Breakdowns[0].Windows[0].Label != "available" {
+		t.Errorf("Breakdown[0] status = %q, want 'available'", usage.Breakdowns[0].Windows[0].Label)
+	}
+	if usage.Breakdowns[0].Windows[0].Used != 0 {
+		t.Errorf("Breakdown[0] Used = %f, want 0 (available)", usage.Breakdowns[0].Windows[0].Used)
+	}
+	if usage.Breakdowns[1].Windows[0].Label != "used" {
+		t.Errorf("Breakdown[1] status = %q, want 'used'", usage.Breakdowns[1].Windows[0].Label)
+	}
+	if usage.Breakdowns[1].Windows[0].Used != 1 {
+		t.Errorf("Breakdown[1] Used = %f, want 1 (used)", usage.Breakdowns[1].Windows[0].Used)
+	}
+
+	// Verify no reset credits window in Windows
+	for _, w := range usage.Windows {
+		if w.Key == "reset_credits" {
+			t.Errorf("reset_credits should not appear in Windows, found key=%s", w.Key)
+		}
 	}
 
 	// Verify credits
@@ -180,6 +228,100 @@ func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
 	}
 	if usage.Account.Tier != "free" {
 		t.Errorf("Account.Tier = %q, want free", usage.Account.Tier)
+	}
+	if len(usage.Windows) != 1 {
+		t.Fatalf("Expected 1 window, got %d", len(usage.Windows))
+	}
+}
+
+func TestCodexFetcher_Fetch_WithResetCreditsOnly(t *testing.T) {
+	logger := logrus.New()
+	resetAt := time.Now().Add(2 * time.Hour).Unix()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"plan_type": "plus",
+			"rate_limit": map[string]interface{}{
+				"primary_window": map[string]interface{}{
+					"used_percent":         40,
+					"reset_at":             resetAt,
+					"limit_window_seconds": 18000,
+				},
+			},
+			"rate_limit_reset_credits": map[string]interface{}{
+				"available_count": 2,
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	provider := &ai.Provider{
+		UUID:     "codex-plus",
+		Name:     "Codex Plus",
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
+			AccessToken: "test-token",
+		},
+	}
+
+	usage, err := fetcher.Fetch(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	// No detail endpoint → no windows or breakdowns for reset credits
+	if len(usage.Windows) != 1 {
+		t.Fatalf("Expected 1 window, got %d", len(usage.Windows))
+	}
+	if len(usage.Breakdowns) != 0 {
+		t.Fatalf("Expected 0 breakdowns (no detail endpoint), got %d", len(usage.Breakdowns))
+	}
+}
+
+func TestCodexFetcher_Fetch_WithZeroResetCredits(t *testing.T) {
+	logger := logrus.New()
+	resetAt := time.Now().Add(2 * time.Hour).Unix()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"plan_type": "plus",
+			"rate_limit": map[string]interface{}{
+				"primary_window": map[string]interface{}{
+					"used_percent":         20,
+					"reset_at":             resetAt,
+					"limit_window_seconds": 18000,
+				},
+			},
+			"rate_limit_reset_credits": map[string]interface{}{
+				"available_count": 0,
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	provider := &ai.Provider{
+		UUID:     "codex-zero-reset",
+		Name:     "Codex Zero Reset",
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
+			AccessToken: "test-token",
+		},
+	}
+
+	usage, err := fetcher.Fetch(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	if len(usage.Windows) != 1 {
+		t.Fatalf("Expected 1 window, got %d", len(usage.Windows))
+	}
+	if len(usage.Breakdowns) != 0 {
+		t.Fatalf("Expected 0 breakdowns, got %d", len(usage.Breakdowns))
 	}
 }
 

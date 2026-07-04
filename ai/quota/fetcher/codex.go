@@ -123,6 +123,28 @@ type codexAdditionalRateLimit struct {
 	RateLimit      codexRateLimit `json:"rate_limit"`
 }
 
+// ── Reset credits detail endpoint ─────────────────────────
+
+// codexResetCreditsResponse from GET /backend-api/wham/rate-limit-reset-credits
+type codexResetCreditsResponse struct {
+	Credits        []codexResetCredit `json:"credits"`
+	AvailableCount int                `json:"available_count,omitempty"`
+}
+
+type codexResetCredit struct {
+	ID              string  `json:"id"`
+	ResetType       string  `json:"reset_type"`
+	Status          string  `json:"status"`
+	GrantedAt       string  `json:"granted_at"`        // ISO8601时间字符串
+	ExpiresAt       string  `json:"expires_at"`        // ISO8601时间字符串
+	RedeemStartedAt *string `json:"redeem_started_at"` // 可能为null
+	RedeemedAt      *string `json:"redeemed_at"`       // 可能为null
+	ProfileImageURL string  `json:"profile_image_url"`
+	ProfileUserID   string  `json:"profile_user_id"`
+	Title           string  `json:"title"`
+	Description     string  `json:"description"`
+}
+
 // ── Fetch ──────────────────────────────────────────────
 
 func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
@@ -259,6 +281,43 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		})
 	}
 
+	// Handle reset credits — show each credit as a resource in breakdowns
+	if apiResp.RateLimitResetCredits != nil {
+		detail, err := f.fetchResetCreditsDetail(ctx, client, token, accountID)
+		if err == nil && detail != nil && len(detail.Credits) > 0 {
+			for _, c := range detail.Credits {
+				var usedVal float64
+				if c.Status != "available" {
+					usedVal = 1
+				}
+
+				expiresAt, err := time.Parse(time.RFC3339, c.ExpiresAt)
+				if err != nil {
+					logrus.Error(err)
+				}
+				grantedAt, err := time.Parse(time.RFC3339, c.GrantedAt)
+				if err != nil {
+					logrus.Error(err)
+				}
+
+				usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
+					Key:   c.ID,
+					Label: fmt.Sprintf("Credit %s", c.ID),
+					Group: "reset_credit",
+					Windows: []*quota.UsageWindow{{
+						Type:        quota.WindowTypeBalance,
+						Used:        usedVal,
+						Limit:       1,
+						Unit:        quota.UsageUnitCredits,
+						ResetsAt:    &expiresAt,
+						Label:       c.Status,
+						Description: fmt.Sprintf("%s · Acquired %s", c.Status, grantedAt.Format("2006-01-02")),
+					}},
+				})
+			}
+		}
+	}
+
 	// Handle credits (balance is now a pointer)
 	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
 		usage.Cost = &quota.UsageCost{
@@ -278,4 +337,46 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	}
 
 	return usage, nil
+}
+
+// fetchResetCreditsDetail calls the detail endpoint for per-credit reset info.
+// GET /backend-api/wham/rate-limit-reset-credits
+func (f *CodexFetcher) fetchResetCreditsDetail(ctx context.Context, client *http.Client, token, accountID string) (*codexResetCreditsResponse, error) {
+	apiBase := "https://chatgpt.com"
+	if f.baseURL != "" {
+		apiBase = f.baseURL
+	}
+	url := apiBase + "/backend-api/wham/rate-limit-reset-credits"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "codex-cli")
+	if accountID != "" {
+		req.Header.Set("ChatGPT-Account-Id", accountID)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var result codexResetCreditsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &result, nil
 }
