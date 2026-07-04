@@ -14,6 +14,27 @@ import (
 type ApplyClaudeConfigRequest struct {
 	InstallStatusLine bool                   `json:"installStatusLine"`
 	Preferences       *agent.ClaudeCodePrefs `json:"preferences"`
+	DefaultMode       string                 `json:"defaultMode,omitempty"`
+}
+
+const DefaultClaudeCodeDefaultMode = "acceptEdits"
+
+var validClaudeCodeDefaultModes = map[string]struct{}{
+	"acceptEdits":       {},
+	"bypassPermissions": {},
+	"default":           {},
+	"delegate":          {},
+	"dontAsk":           {},
+	"plan":              {},
+	"auto":              {},
+}
+
+func normalizeClaudeCodeDefaultMode(mode string) (string, bool) {
+	if mode == "" {
+		return DefaultClaudeCodeDefaultMode, true
+	}
+	_, ok := validClaudeCodeDefaultModes[mode]
+	return mode, ok
 }
 
 // ApplyConfigResponse is the response for ApplyClaudeConfig

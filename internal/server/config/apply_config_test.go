@@ -11,6 +11,32 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+func TestApplyClaudeSettings_DefaultMode(t *testing.T) {
+	targetPath := filepath.Join(t.TempDir(), "settings.json")
+
+	result, err := ApplyClaudeSettingsToPath(targetPath, map[string]string{
+		"ANTHROPIC_MODEL": "test-model",
+	}, WithDefaultMode("acceptEdits"), WithBackup(false))
+	if err != nil {
+		t.Fatalf("ApplyClaudeSettingsToPath failed: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success, got: %s", result.Message)
+	}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("read settings: %v", err)
+	}
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("unmarshal settings: %v", err)
+	}
+	if settings["defaultMode"] != "acceptEdits" {
+		t.Fatalf("defaultMode = %v, want acceptEdits", settings["defaultMode"])
+	}
+}
+
 func TestApplyClaudeSettings_NewFile(t *testing.T) {
 	// Create a temporary directory
 	tempDir, err := os.MkdirTemp("", "tingly-test")

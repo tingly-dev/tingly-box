@@ -2,6 +2,9 @@ import {
     Box,
     Collapse,
     Divider,
+    FormControl,
+    MenuItem,
+    Select,
     IconButton,
     InputAdornment,
     Stack,
@@ -52,7 +55,8 @@ export interface ClaudeCodePrefs {
 }
 
 type PrefsKey = keyof ClaudeCodePrefs;
-type Group = 'model' | 'limits' | 'switches' | 'network';
+export type ClaudeCodeDefaultMode = 'acceptEdits' | 'bypassPermissions' | 'default' | 'delegate' | 'dontAsk' | 'plan' | 'auto';
+type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
 type Kind = 'model' | 'int' | 'text' | 'bool';
 type Lang = 'zh' | 'en';
 
@@ -388,7 +392,51 @@ const FIELDS_TEXT_EN: FieldTextMap = {
 interface SectionText { title: string; hint: string }
 type SectionTextMap = Record<Group, SectionText>;
 
+interface DefaultModeOptionText {
+    label: string;
+    description: string;
+}
+
+const DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
+
+const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
+    acceptEdits: { label: '接受编辑（推荐）', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
+    default: { label: '默认', description: '使用 Claude Code 官方默认权限行为。' },
+    plan: { label: '计划模式', description: '默认进入 plan mode，先规划再执行。' },
+    auto: { label: '自动', description: '由 Claude Code 自动选择权限行为。' },
+    delegate: { label: '委托', description: '把权限决策委托给 Claude Code 支持的外部流程。' },
+    dontAsk: { label: '不询问', description: '避免交互式询问；适合无人值守场景。' },
+    bypassPermissions: { label: '绕过权限', description: '跳过权限检查；仅在完全可信环境中使用。' },
+};
+
+const DEFAULT_MODE_TEXT_EN: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
+    acceptEdits: { label: 'Accept edits (recommended)', description: 'Automatically accepts file edits while leaving riskier actions to Claude Code rules.' },
+    default: { label: 'Default', description: 'Use Claude Code\'s built-in default permission behavior.' },
+    plan: { label: 'Plan mode', description: 'Start in plan mode by default before implementation.' },
+    auto: { label: 'Auto', description: 'Let Claude Code choose the permission behavior automatically.' },
+    delegate: { label: 'Delegate', description: 'Delegate permission decisions to Claude Code\'s supported external flow.' },
+    dontAsk: { label: 'Don\'t ask', description: 'Avoid interactive prompts; useful for unattended setups.' },
+    bypassPermissions: { label: 'Bypass permissions', description: 'Skip permission checks; use only in fully trusted environments.' },
+};
+
+const DEFAULT_MODE_TEXT: Record<Lang, Record<ClaudeCodeDefaultMode, DefaultModeOptionText>> = {
+    zh: DEFAULT_MODE_TEXT_ZH,
+    en: DEFAULT_MODE_TEXT_EN,
+};
+
+const DEFAULT_MODE_SECTION_TEXT: Record<Lang, SectionText> = {
+    zh: {
+        title: '默认权限模式',
+        hint: '写入 settings.json 的 defaultMode；tb 推荐 acceptEdits。',
+    },
+    en: {
+        title: 'Default permission mode',
+        hint: 'Writes defaultMode in settings.json; tb recommends acceptEdits.',
+    },
+};
+
 const SECTION_TEXT_ZH: SectionTextMap = {
+    behavior: DEFAULT_MODE_SECTION_TEXT.zh,
     model: {
         title: '模型路由',
         hint: '每个槽位对应 Claude Code 内部一个用途。只用一个模型时把 5 个槽位填成同一个值即可。',
@@ -408,6 +456,7 @@ const SECTION_TEXT_ZH: SectionTextMap = {
 };
 
 const SECTION_TEXT_EN: SectionTextMap = {
+    behavior: DEFAULT_MODE_SECTION_TEXT.en,
     model: {
         title: 'Model routing',
         hint: 'Each slot maps to one of Claude Code\'s internal uses. To use a single model, fill all 5 slots with the same value.',
@@ -731,12 +780,101 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
 interface QuickConfigPanelProps {
     prefs: ClaudeCodePrefs;
     setPrefs: (p: ClaudeCodePrefs) => void;
+    defaultMode: ClaudeCodeDefaultMode;
+    setDefaultMode: (mode: ClaudeCodeDefaultMode) => void;
     onResetDefaults: () => void;
 }
+
+const DefaultModeSection: React.FC<{
+    lang: Lang;
+    defaultMode: ClaudeCodeDefaultMode;
+    setDefaultMode: (mode: ClaudeCodeDefaultMode) => void;
+}> = ({ lang, defaultMode, setDefaultMode }) => {
+    const meta = DEFAULT_MODE_SECTION_TEXT[lang];
+    const text = DEFAULT_MODE_TEXT[lang];
+    const selected = text[defaultMode];
+
+    return (
+        <Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
+                <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+            </Box>
+            <Divider />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 52 }}>
+                <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={500} noWrap>{selected.label}</Typography>
+                    <Tooltip placement="top" arrow title={selected.description}>
+                        <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
+                    </Tooltip>
+                </Box>
+                <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
+                    <Box
+                        component="span"
+                        sx={{
+                            px: 0.75,
+                            py: 0.25,
+                            borderRadius: 0.75,
+                            bgcolor: 'action.hover',
+                            fontFamily: 'monospace',
+                            fontSize: '0.72rem',
+                            color: 'text.secondary',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        defaultMode
+                    </Box>
+                </Box>
+                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <FormControl size="small" sx={{ width: 360 }}>
+                        <Select
+                            value={defaultMode}
+                            onChange={(e) => setDefaultMode(e.target.value as ClaudeCodeDefaultMode)}
+                            renderValue={(value) => {
+                                const mode = value as ClaudeCodeDefaultMode;
+                                return (
+                                    <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
+                                        <Typography component="span" variant="body2">{text[mode].label}</Typography>
+                                        <Typography component="span" variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{mode}</Typography>
+                                    </Box>
+                                );
+                            }}
+                            MenuProps={{
+                                PaperProps: { sx: { maxHeight: 320, width: 360 } },
+                                MenuListProps: { sx: { py: 0.5 } },
+                            }}
+                            sx={{
+                                height: 40,
+                                '& .MuiSelect-select': {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    py: 1,
+                                },
+                            }}
+                        >
+                            {DEFAULT_MODE_OPTIONS.map((mode) => (
+                                <MenuItem key={mode} value={mode} sx={{ minHeight: 40, py: 1 }}>
+                                    <Tooltip title={text[mode].description} arrow placement="left">
+                                        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
+                                            <Typography variant="body2">{text[mode].label}</Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{mode}</Typography>
+                                        </Box>
+                                    </Tooltip>
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Box>
+            </Box>
+        </Box>
+    );
+};
 
 const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
     prefs,
     setPrefs,
+    defaultMode,
+    setDefaultMode,
     onResetDefaults,
 }) => {
     const lang = useLang();
@@ -753,6 +891,7 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
                 </Tooltip>
             </Box>
 
+            <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="switches" lang={lang} prefs={prefs} setPrefs={setPrefs} />

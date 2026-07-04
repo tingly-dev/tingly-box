@@ -141,6 +141,14 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		})
 		return
 	}
+	defaultMode, ok := normalizeClaudeCodeDefaultMode(req.DefaultMode)
+	if !ok {
+		c.JSON(http.StatusBadRequest, config.ApplyResult{
+			Success: false,
+			Message: "Invalid defaultMode: " + req.DefaultMode,
+		})
+		return
+	}
 
 	// Get base URL from the user's request (respects reverse proxy headers)
 	port := h.config.ServerPort
@@ -173,6 +181,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	var statusLinePath string
 
 	var opts []config.ApplyOption
+	opts = append(opts, config.WithDefaultMode(defaultMode))
 	if req.InstallStatusLine {
 		var scriptCreated bool
 		statusLinePath, scriptCreated, err = config.InstallStatusLineScript()

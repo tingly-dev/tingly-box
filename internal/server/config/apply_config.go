@@ -283,9 +283,10 @@ func ensureDir(path string) error {
 type ApplyOption func(*applyOptions)
 
 type applyOptions struct {
-	backup    bool
-	retention int
-	extras    map[string]any
+	backup      bool
+	retention   int
+	extras      map[string]any
+	defaultMode string
 }
 
 // WithBackup enables or disables backup when applying settings.
@@ -301,6 +302,13 @@ func WithBackup(enable bool) ApplyOption {
 func WithBackupRetention(n int) ApplyOption {
 	return func(opts *applyOptions) {
 		opts.retention = n
+	}
+}
+
+// WithDefaultMode sets the Claude Code defaultMode value in settings.json.
+func WithDefaultMode(mode string) ApplyOption {
+	return func(opts *applyOptions) {
+		opts.defaultMode = mode
 	}
 }
 
@@ -376,6 +384,9 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, opts ..
 	}
 
 	existingConfig["env"] = envInterface
+	if applyOpts.defaultMode != "" {
+		existingConfig["defaultMode"] = applyOpts.defaultMode
+	}
 	// Apply extras from options
 	for k, v := range applyOpts.extras {
 		existingConfig[k] = v

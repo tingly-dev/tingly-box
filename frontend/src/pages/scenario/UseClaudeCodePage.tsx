@@ -3,6 +3,7 @@ import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModel
 import ClaudeCodeConfigModal from './components/ClaudeCodeConfigModal';
 import ConnectProviderFlow from '@/components/ConnectProviderFlow';
 import { derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
+import type { ClaudeCodeDefaultMode } from './components/ClaudeCodeQuickConfig';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import TemplatePage from './components/TemplatePage.tsx';
@@ -176,10 +177,11 @@ const UseClaudeCodePageContent: React.FC = () => {
     const applyPrefs = async (
         prefs: Record<string, string>,
         installStatusLine: boolean,
+        defaultMode: ClaudeCodeDefaultMode = 'acceptEdits',
     ): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
-            const result = await api.applyClaudeConfig(prefs, installStatusLine);
+            const result = await api.applyClaudeConfig(prefs, installStatusLine, defaultMode);
             if (result?.success) {
                 const created = result.createdFiles || [];
                 const updated = result.updatedFiles || [];
@@ -323,8 +325,8 @@ const UseClaudeCodePageContent: React.FC = () => {
                     baseUrl={baseUrl}
                     rules={rules}
                     copyToClipboard={copyToClipboard}
-                    onApplyWithPrefs={(prefs, installStatusLine) =>
-                        applyPrefs(prefs as Record<string, string>, installStatusLine)
+                    onApplyWithPrefs={(prefs, installStatusLine, defaultMode) =>
+                        applyPrefs(prefs as Record<string, string>, installStatusLine, defaultMode)
                     }
                     isApplyLoading={isApplyLoading}
                     pendingContext1MChange={pendingContext1MChange}

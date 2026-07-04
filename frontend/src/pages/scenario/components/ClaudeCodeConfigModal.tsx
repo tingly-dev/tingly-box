@@ -8,7 +8,7 @@ import CodeBlock from '@/components/CodeBlock';
 import { isFullEdition } from '@/utils/edition';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
-import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
+import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 
@@ -25,7 +25,7 @@ interface ClaudeCodeConfigModalProps {
     // this callback is what writes them to ~/.claude/settings.json. The
     // returned AgentApplyResult is rendered in-modal so the user sees
     // which files were touched and where the backup landed.
-    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<AgentApplyResult>;
+    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean, defaultMode: ClaudeCodeDefaultMode) => Promise<AgentApplyResult>;
     isApplyLoading?: boolean;
     // Pending 1M context change (scoped to the toggled rule) to preview in the modal
     pendingContext1MChange?: { enabled: boolean; ruleUuid?: string } | null;
@@ -63,7 +63,7 @@ const MODAL_TEXT = {
 } as const;
 
 // Helper to generate common Node.js script for writing config files
-const generateNodeScript = (settingsPath: string, envConfig: Record<string, any>) => {
+const generateNodeScript = (settingsPath: string, configPayload: Record<string, any>) => {
     return `const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -77,7 +77,7 @@ if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
 }
 
-const config = ${JSON.stringify(envConfig, null, 4)};
+const config = ${JSON.stringify(configPayload, null, 4)};
 
 let existing = {};
 if (fs.existsSync(targetPath)) {
@@ -86,7 +86,7 @@ if (fs.existsSync(targetPath)) {
 }
 
 const merged = settingsPath.includes("settings.json")
-    ? { ...existing, env: config }
+    ? { ...existing, ...config }
     : { ...existing, ...config };
 
 fs.writeFileSync(targetPath, JSON.stringify(merged, null, 2));
@@ -114,6 +114,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
     const [installStatusLine, setInstallStatusLine] = React.useState(true);
+    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
 
     // Prefs is the single source of truth for both tabs. Re-seed when the
     // modal isn't open so we never clobber the user's unsaved edits.
@@ -123,6 +124,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     React.useEffect(() => {
         if (!open) {
             setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
+            setDefaultMode('acceptEdits');
             setApplyResult(null);
         }
     }, [open, configMode, rules]);
@@ -155,6 +157,11 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         setApplyResult(null);
     }, []);
 
+    const setDefaultModeAndClearResult = React.useCallback((next: ClaudeCodeDefaultMode) => {
+        setDefaultMode(next);
+        setApplyResult(null);
+    }, []);
+
     const claudeJsonConfig = { hasCompletedOnboarding: true };
 
     // Env map for both the manual tab (display/copy) and the preview dialog.
@@ -164,23 +171,28 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         [prefs, baseUrl, token],
     );
 
+    const settingsConfig = React.useMemo(
+        () => ({ env: envConfig, defaultMode }),
+        [envConfig, defaultMode],
+    );
+
     const generateSettingsConfig = React.useCallback(() => {
-        return JSON.stringify({ env: envConfig }, null, 2);
-    }, [envConfig]);
+        return JSON.stringify(settingsConfig, null, 2);
+    }, [settingsConfig]);
 
     const generateSettingsScriptWindows = React.useCallback(() => {
-        const nodeCode = generateNodeScript('.claude/settings.json', envConfig);
+        const nodeCode = generateNodeScript('.claude/settings.json', settingsConfig);
         return `# PowerShell - Run in PowerShell
 @"
 ${nodeCode}
 "@ | node`;
-    }, [envConfig]);
+    }, [settingsConfig]);
 
     const generateSettingsScriptUnix = React.useCallback(() => {
-        const nodeCode = generateNodeScript('.claude/settings.json', envConfig);
+        const nodeCode = generateNodeScript('.claude/settings.json', settingsConfig);
         return `# Bash - Run in terminal
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
-    }, [envConfig]);
+    }, [settingsConfig]);
 
     const generateClaudeJsonConfig = React.useCallback(() => {
         return JSON.stringify(claudeJsonConfig, null, 2);
@@ -273,7 +285,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const handleApply = async (installStatusLine: boolean) => {
         if (!onApplyWithPrefs) return;
-        const result = await onApplyWithPrefs(prefs, installStatusLine);
+        const result = await onApplyWithPrefs(prefs, installStatusLine, defaultMode);
         setApplyResult(result);
     };
 
@@ -364,7 +376,12 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         <ClaudeCodeQuickConfig
                             prefs={prefs}
                             setPrefs={setPrefsAndClearResult}
-                            onResetDefaults={() => setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }))}
+                            defaultMode={defaultMode}
+                            setDefaultMode={setDefaultModeAndClearResult}
+                            onResetDefaults={() => {
+                                setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }));
+                                setDefaultModeAndClearResult('acceptEdits');
+                            }}
                         />
                     )}
 

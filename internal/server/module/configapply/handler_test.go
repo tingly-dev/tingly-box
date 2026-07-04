@@ -140,8 +140,9 @@ func TestApplyClaudeConfig_MalformedBodyReturns400(t *testing.T) {
 // JSON keys; the handler binds them into the typed struct.
 func TestApplyClaudeConfigRequest_JSONShape(t *testing.T) {
 	wire := []byte(`{
-		"installStatusLine": true,
-		"preferences": {
+			"installStatusLine": true,
+			"defaultMode": "delegate",
+			"preferences": {
 			"ANTHROPIC_MODEL": "tingly/cc-default",
 			"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc-sonnet[1m]",
 			"API_TIMEOUT_MS": "3000000",
@@ -155,6 +156,9 @@ func TestApplyClaudeConfigRequest_JSONShape(t *testing.T) {
 	}
 	if !req.InstallStatusLine {
 		t.Error("InstallStatusLine = false, want true")
+	}
+	if req.DefaultMode != "delegate" {
+		t.Errorf("DefaultMode = %q", req.DefaultMode)
 	}
 	if req.Preferences == nil {
 		t.Fatal("Preferences = nil, want populated")

@@ -1093,10 +1093,10 @@ export const api = {
     // `preferences` is the source of truth: each key is a Claude Code env
     // var name (e.g. ANTHROPIC_MODEL), and the backend writes them straight
     // into ~/.claude/settings.json under "env".
-    applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean): Promise<any> => {
+    applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean, defaultMode: string = 'acceptEdits'): Promise<any> => {
         return uiAPI('/config/apply/claude', {
             method: 'POST',
-            body: JSON.stringify({preferences, installStatusLine}),
+            body: JSON.stringify({preferences, installStatusLine, defaultMode}),
         });
     },
 
