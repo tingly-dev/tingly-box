@@ -49,8 +49,8 @@ type ContextWindow struct {
 type CurrentUsage struct {
 	InputTokens  int `json:"input_tokens" example:"1500"`
 	OutputTokens int `json:"output_tokens" example:"500"`
-	CacheRead    int `json:"cache_read" example:"10000"`
-	CacheWrite   int `json:"cache_write" example:"2000"`
+	CacheRead    int `json:"cache_read_input_tokens" example:"10000"`
+	CacheWrite   int `json:"cache_creation_input_tokens" example:"2000"`
 }
 
 // Cost represents cost information
@@ -97,6 +97,9 @@ type CombinedStatusData struct {
 	CCLinesRemoved      int     `json:"cc_lines_removed" example:"50"`
 	CCSessionID         string  `json:"cc_session_id" example:"session-123"`
 	CCExceeds200kTokens bool    `json:"cc_exceeds_200k_tokens"`
+	CCCacheReadTokens   int     `json:"cc_cache_read_tokens,omitempty" example:"10000"`
+	CCCacheWriteTokens  int     `json:"cc_cache_write_tokens,omitempty" example:"2000"`
+	CCCacheHitPct       int     `json:"cc_cache_hit_pct,omitempty" example:"87"`
 	// Tingly Box model mapping info
 	TBProviderName string `json:"tb_provider_name,omitempty" example:"openai"`
 	TBProviderUUID string `json:"tb_provider_uuid,omitempty" example:"uuid-1234"`
