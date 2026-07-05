@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useNotify } from '@/hooks/useNotify';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
 
-const APITokensPage = () => {
+const SharingKeysPage = () => {
     const { t } = useTranslation();
     const notify = useNotify();
     const [tokens, setTokens] = useState<SharingKey[]>([]);
@@ -203,4 +203,4 @@ const APITokensPage = () => {
     );
 };
 
-export default APITokensPage;
+export default SharingKeysPage;

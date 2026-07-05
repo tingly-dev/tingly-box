@@ -20,7 +20,7 @@ import createAppTheme from './theme';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import { api } from './services/api';
-import APITokensPage from './pages/APITokensPage';
+import SharingKeysPage from './pages/SharingKeysPage.tsx';
 import VirtualModelsPage from './pages/VirtualModelsPage';
 import UseOpenAIPage from './pages/scenario/UseOpenAIPage';
 import UseAnthropicPage from './pages/scenario/UseAnthropicPage';
@@ -213,7 +213,7 @@ function AppContent() {
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/access-control" element={<AccessControl />} />
-                    <Route path="/tingly-box-token" element={<APITokensPage />} />
+                    <Route path="/tingly-box-token" element={<SharingKeysPage />} />
                     <Route path="/system/logs" element={<LogsPage />} />
                     <Route path="/system/experimental" element={<ExperimentalPage />} />
                     {/* Dashboard routes with time range */}
