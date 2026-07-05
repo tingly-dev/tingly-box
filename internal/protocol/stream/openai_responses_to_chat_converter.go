@@ -42,9 +42,9 @@ type responsesToChatToolCall struct {
 	arguments strings.Builder
 }
 
-// NewResponsesToChatConverter creates a converter that reads from a Responses
+// newResponsesToChatConverter creates a converter that reads from a Responses
 // API stream and yields OpenAI Chat Completions wire chunks.
-func NewResponsesToChatConverter(stream ResponsesStreamIter, responseModel string, disableUsage bool) *responsesToChatConverter {
+func newResponsesToChatConverter(stream ResponsesStreamIter, responseModel string, disableUsage bool) *responsesToChatConverter {
 	return &responsesToChatConverter{
 		stream:          stream,
 		responseModel:   responseModel,

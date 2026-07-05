@@ -87,7 +87,7 @@ func TestResponsesToChatConverter_GoldenSequence(t *testing.T) {
 				"output": []any{
 					map[string]any{
 						"id": "msg_1", "type": "message", "role": "assistant",
-						"status": "completed",
+						"status":  "completed",
 						"content": []any{map[string]any{"type": "output_text", "text": "Hello, World!"}},
 					},
 					map[string]any{
@@ -104,7 +104,7 @@ func TestResponsesToChatConverter_GoldenSequence(t *testing.T) {
 		},
 	}
 
-	conv := NewResponsesToChatConverter(newResponsesIterFromEvents(events), "gpt-4o-mini", false)
+	conv := newResponsesToChatConverter(newResponsesIterFromEvents(events), "gpt-4o-mini", false)
 
 	var got []wire.ChatStreamChunk
 	for {

@@ -118,7 +118,7 @@ func TestAnthropicBetaToResponsesConverter_GoldenSequence(t *testing.T) {
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
 		newFakeAnthropicDecoder(events), nil,
 	)
-	conv := NewAnthropicBetaToResponsesConverter(stream, "claude-3-5-sonnet-20241022")
+	conv := newAnthropicBetaToResponsesConverter(stream, "claude-3-5-sonnet-20241022")
 
 	var got []wire.ResponsesEvent
 	for {
@@ -136,10 +136,10 @@ func TestAnthropicBetaToResponsesConverter_GoldenSequence(t *testing.T) {
 	want := []string{
 		"response.created",
 		"response.in_progress",
-		"response.output_item.added",             // message item
+		"response.output_item.added", // message item
 		"response.content_part.added",
-		"response.output_text.delta",             // "Hello"
-		"response.output_text.delta",             // ", World!"
+		"response.output_text.delta", // "Hello"
+		"response.output_text.delta", // ", World!"
 		"response.output_text.done",
 		"response.content_part.done",
 		"response.output_item.done",              // message item done
@@ -147,7 +147,7 @@ func TestAnthropicBetaToResponsesConverter_GoldenSequence(t *testing.T) {
 		"response.function_call_arguments.delta", // {"city":
 		"response.function_call_arguments.delta", // "Paris"}
 		"response.function_call_arguments.done",
-		"response.output_item.done",              // function_call item done
+		"response.output_item.done", // function_call item done
 		"response.completed",
 	}
 	gotTypes := make([]string, len(got))

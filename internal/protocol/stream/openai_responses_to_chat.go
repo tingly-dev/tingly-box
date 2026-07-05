@@ -23,7 +23,7 @@ func HandleResponsesToOpenAIChatStream(
 		}
 	}()
 
-	conv := NewResponsesToChatConverter(stream, responseModel, hc.DisableStreamUsage)
+	conv := newResponsesToChatConverter(stream, responseModel, hc.DisableStreamUsage)
 
 	usage, err := RunConverter(hc, conv, openaiChatSSEWriter(c))
 

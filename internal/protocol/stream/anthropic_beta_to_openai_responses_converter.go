@@ -43,9 +43,9 @@ type pendingResponseToolCall struct {
 	arguments strings.Builder
 }
 
-// NewAnthropicBetaToResponsesConverter creates a converter that reads from an
+// newAnthropicBetaToResponsesConverter creates a converter that reads from an
 // Anthropic Beta stream and yields Responses API wire events.
-func NewAnthropicBetaToResponsesConverter(
+func newAnthropicBetaToResponsesConverter(
 	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
 	responseModel string,
 ) *anthropicBetaToResponsesConverter {

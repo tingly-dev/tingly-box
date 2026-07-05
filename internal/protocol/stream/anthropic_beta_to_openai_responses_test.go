@@ -3,7 +3,6 @@ package stream
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
@@ -11,30 +10,6 @@ import (
 
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
-
-// TestNewResponsesConverterState tests the state initialization
-func TestNewResponsesConverterState(t *testing.T) {
-	timestamp := int64(1234567890)
-	state := newResponsesConverterState(timestamp)
-
-	assert.Equal(t, "resp_1234567890", state.responseID)
-	assert.Equal(t, "item_1234567890", state.itemID)
-	assert.Equal(t, 0, state.outputIndex)
-	assert.Equal(t, "", state.accumulatedText)
-	assert.False(t, state.finished)
-}
-
-// TestResponsesConverterState_AccumulatedText tests text accumulation
-func TestResponsesConverterState_AccumulatedText(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
-
-	// Simulate text accumulation
-	state.accumulatedText = "Hello"
-	state.accumulatedText += " "
-	state.accumulatedText += "World!"
-
-	assert.Equal(t, "Hello World!", state.accumulatedText)
-}
 
 // TestResponsesEventJSON tests that generated events are valid JSON
 func TestResponsesEventJSON(t *testing.T) {
@@ -117,18 +92,6 @@ func TestResponsesEventJSON(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestResponsesConverterState_MultipleDeltas tests accumulating multiple deltas
-func TestResponsesConverterState_MultipleDeltas(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
-
-	deltas := []string{"Hello", " ", "World", "!"}
-	for _, delta := range deltas {
-		state.accumulatedText += delta
-	}
-
-	assert.Equal(t, "Hello World!", state.accumulatedText)
 }
 
 // TestResponsesConverterState_UsageAccumulation tests that the accumulator produces correct usage
