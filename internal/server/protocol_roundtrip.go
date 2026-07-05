@@ -20,7 +20,7 @@ func ShouldRoundtripResponse(c *gin.Context, target string) bool {
 }
 
 func RoundtripOpenAIResponseViaAnthropic(openaiResp *openai.ChatCompletion, responseModel string, provider *typ.Provider, actualModel string) (map[string]interface{}, error) {
-	anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(openaiResp, responseModel)
+	anthropicResp := nonstream.HandleOpenAIChatToAnthropic(openaiResp, responseModel)
 	return ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel), nil
 }
 
@@ -46,7 +46,7 @@ func RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp *anthropic.BetaMessag
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, err
 	}
-	roundtrip := nonstream.ConvertOpenAIToAnthropicResponse(&parsed, responseModel)
+	roundtrip := nonstream.HandleOpenAIChatToAnthropic(&parsed, responseModel)
 	return roundtrip, nil
 }
 
@@ -54,6 +54,6 @@ func RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp *anthropic.BetaMessag
 // and applies provider-specific transformations to the response
 func ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp *anthropic.BetaMessage, responseModel string, provider *typ.Provider, model string) map[string]interface{} {
 	// Convert to typed wire struct, then to map for runtime transform compatibility.
-	openaiResp := nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel).ToMap()
+	openaiResp := nonstream.HandleAnthropicBetaToOpenAIResponse(anthropicResp, responseModel).ToMap()
 	return ops.ApplyResponseTransforms(openaiResp, provider.APIBase, model)
 }

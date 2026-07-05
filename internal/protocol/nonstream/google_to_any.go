@@ -9,8 +9,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// ConvertGoogleToOpenAIResponse converts Google GenerateContentResponse to OpenAI format
-func ConvertGoogleToOpenAIResponse(googleResp *genai.GenerateContentResponse, responseModel string) map[string]interface{} {
+// HandleGoogleToOpenAI converts Google GenerateContentResponse to OpenAI format
+func HandleGoogleToOpenAI(googleResp *genai.GenerateContentResponse, responseModel string) map[string]interface{} {
 	if googleResp == nil {
 		return nil
 	}
@@ -117,8 +117,8 @@ func MapGoogleFinishReasonToOpenAI(reason genai.FinishReason) string {
 	}
 }
 
-// ConvertGoogleToAnthropicResponse converts Google GenerateContentResponse to Anthropic format
-func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse, responseModel string) *anthropic.BetaMessage {
+// HandleGoogleToAnthropic converts Google GenerateContentResponse to Anthropic format
+func HandleGoogleToAnthropic(googleResp *genai.GenerateContentResponse, responseModel string) *anthropic.BetaMessage {
 	if googleResp == nil {
 		return &anthropic.BetaMessage{}
 	}
@@ -211,8 +211,8 @@ func MapGoogleFinishReasonToAnthropic(reason genai.FinishReason) string {
 	}
 }
 
-// ConvertGoogleToAnthropicBetaResponse converts Google GenerateContentResponse to Anthropic beta format
-func ConvertGoogleToAnthropicBetaResponse(googleResp *genai.GenerateContentResponse, responseModel string) anthropic.BetaMessage {
+// HandleGoogleToAnthropicBeta converts Google GenerateContentResponse to Anthropic beta format
+func HandleGoogleToAnthropicBeta(googleResp *genai.GenerateContentResponse, responseModel string) anthropic.BetaMessage {
 	if googleResp == nil {
 		return anthropic.BetaMessage{}
 	}

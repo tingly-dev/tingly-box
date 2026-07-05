@@ -57,7 +57,7 @@ func (ph *ProtocolHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, pro
 
 	ph.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
 
-	anthropicResp := nonstream.ConvertResponsesToAnthropicBetaResponse(response, proxyModel)
+	anthropicResp := nonstream.HandleResponsesToAnthropicBeta(response, proxyModel)
 
 	// Update affinity entry with message ID
 	ph.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
@@ -189,7 +189,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleOpenAIChatToResponsesNonStream(hc, chatResp, reqCtx.RequestModel)
+	tokenUsage, _ := nonstream.HandleOpenAIChatToResponses(hc, chatResp, reqCtx.RequestModel)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 }
 
@@ -241,7 +241,7 @@ func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, req
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleAnthropicBetaToResponsesNonStream(hc, anthropicResp, reqCtx.RequestModel)
+	tokenUsage, _ := nonstream.HandleAnthropicBetaToResponses(hc, anthropicResp, reqCtx.RequestModel)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 }
 
@@ -325,10 +325,10 @@ func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *tran
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleResponsesToOpenAIChatNonStream(hc, responsesResp)
+	tokenUsage, _ := nonstream.HandleResponsesToOpenAIChat(hc, responsesResp)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {
-		recorder.SetAssembledResponse(nonstream.OpenAIResponsesToChat(responsesResp, reqCtx.ResponseModel))
+		recorder.SetAssembledResponse(nonstream.HandleOpenAIResponsesToChat(responsesResp, reqCtx.ResponseModel))
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
 }
@@ -364,7 +364,7 @@ func (ph *ProtocolHandler) nonstreamResponsesToAnthropic(c *gin.Context, proxyMo
 	ph.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
 
 	// Convert Responses API response back to Anthropic v1 format
-	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
+	anthropicResp := nonstream.HandleResponsesToAnthropicV1(response, proxyModel)
 
 	// TODO: require anthropic <-> anthropic beta
 	//if ShouldRoundtripResponse(c, "openai") {

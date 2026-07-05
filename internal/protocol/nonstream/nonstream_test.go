@@ -13,7 +13,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
+func TestHandleAnthropicToOpenAI(t *testing.T) {
 	tests := []struct {
 		name          string
 		anthropicResp *anthropic.BetaMessage
@@ -75,7 +75,7 @@ func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertAnthropicToOpenAIResponse(tt.anthropicResp, tt.responseModel)
+			result := HandleAnthropicBetaToOpenAIResponse(tt.anthropicResp, tt.responseModel)
 
 			assert.Equal(t, tt.anthropicResp.ID, result.ID)
 			assert.Equal(t, "chat.completion", result.Object)
@@ -111,7 +111,7 @@ func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
 	}
 }
 
-func TestConvertOpenAIToAnthropicResponse(t *testing.T) {
+func TestHandleOpenAIToAnthropic(t *testing.T) {
 	tests := []struct {
 		name       string
 		openaiResp *openai.ChatCompletion
@@ -142,7 +142,7 @@ func TestConvertOpenAIToAnthropicResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertOpenAIToAnthropicResponse(tt.openaiResp, tt.model)
+			result := HandleOpenAIChatToAnthropic(tt.openaiResp, tt.model)
 
 			// Basic structure checks
 			assert.NotEmpty(t, result.ID)
@@ -159,8 +159,8 @@ func TestConvertOpenAIToAnthropicResponse(t *testing.T) {
 	}
 }
 
-// TestConvertOpenAIToGoogleResponse tests converting OpenAI response to Google format
-func TestConvertOpenAIToGoogleResponse(t *testing.T) {
+// TestHandleOpenAIToGoogle tests converting OpenAI response to Google format
+func TestHandleOpenAIToGoogle(t *testing.T) {
 	t.Run("text only response", func(t *testing.T) {
 		resp := &openai.ChatCompletion{
 			Choices: []openai.ChatCompletionChoice{
@@ -179,7 +179,7 @@ func TestConvertOpenAIToGoogleResponse(t *testing.T) {
 			},
 		}
 
-		googleResp := ConvertOpenAIToGoogleResponse(resp)
+		googleResp := HandleOpenAIToGoogle(resp)
 
 		if len(googleResp.Candidates) != 1 {
 			t.Errorf("expected 1 candidate, got %d", len(googleResp.Candidates))
@@ -216,7 +216,7 @@ func TestConvertOpenAIToGoogleResponse(t *testing.T) {
 			},
 		}
 
-		googleResp := ConvertOpenAIToGoogleResponse(resp)
+		googleResp := HandleOpenAIToGoogle(resp)
 
 		if len(googleResp.Candidates) != 1 {
 			t.Errorf("expected 1 candidate, got %d", len(googleResp.Candidates))
@@ -227,8 +227,8 @@ func TestConvertOpenAIToGoogleResponse(t *testing.T) {
 	})
 }
 
-// TestConvertAnthropicToGoogleResponse tests converting Anthropic response to Google format
-func TestConvertAnthropicToGoogleResponse(t *testing.T) {
+// TestHandleAnthropicToGoogle tests converting Anthropic response to Google format
+func TestHandleAnthropicToGoogle(t *testing.T) {
 	t.Run("text only response", func(t *testing.T) {
 		resp := &anthropic.Message{
 			ID:   "msg_123",
@@ -244,7 +244,7 @@ func TestConvertAnthropicToGoogleResponse(t *testing.T) {
 			},
 		}
 
-		googleResp := ConvertAnthropicToGoogleResponse(resp)
+		googleResp := HandleAnthropicToGoogle(resp)
 
 		if len(googleResp.Candidates) != 1 {
 			t.Errorf("expected 1 candidate, got %d", len(googleResp.Candidates))
@@ -277,7 +277,7 @@ func TestConvertAnthropicToGoogleResponse(t *testing.T) {
 			},
 		}
 
-		googleResp := ConvertAnthropicToGoogleResponse(resp)
+		googleResp := HandleAnthropicToGoogle(resp)
 
 		if googleResp.Candidates[0].Content.Parts[0].FunctionCall == nil {
 			t.Error("expected function call")

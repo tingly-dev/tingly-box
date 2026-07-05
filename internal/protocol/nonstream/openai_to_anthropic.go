@@ -12,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model string) *anthropic.BetaMessage {
+func HandleOpenAIChatToAnthropic(chat *openai.ChatCompletion, model string) *anthropic.BetaMessage {
 	wire := wire.AnthropicMsgWire{
 		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
 		Type:         "message",
@@ -23,21 +23,21 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
 		Usage: wire.AnthropicUsageWire{
-			InputTokens:          openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
-			OutputTokens:         openaiResp.Usage.CompletionTokens,
-			CacheReadInputTokens: openaiResp.Usage.PromptTokensDetails.CachedTokens,
+			InputTokens:          chat.Usage.PromptTokens - chat.Usage.PromptTokensDetails.CachedTokens,
+			OutputTokens:         chat.Usage.CompletionTokens,
+			CacheReadInputTokens: chat.Usage.PromptTokensDetails.CachedTokens,
 		},
 	}
 
 	// Preserve server_tool_use from ExtraFields if present
-	if openaiResp.JSON.ExtraFields != nil {
-		if serverToolUse, exists := openaiResp.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
+	if chat.JSON.ExtraFields != nil {
+		if serverToolUse, exists := chat.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
 			wire.ServerToolUse = json.RawMessage(serverToolUse.Raw())
 		}
 	}
 
 	var contentBlocks []anthropic.ContentBlockParamUnion
-	for _, choice := range openaiResp.Choices {
+	for _, choice := range chat.Choices {
 		if choice.Message.Refusal != "" {
 			contentBlocks = append(contentBlocks, anthropic.NewTextBlock(choice.Message.Refusal))
 		}
@@ -69,8 +69,8 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 	return &msg
 }
 
-// ConvertOpenAIToAnthropicBetaResponse converts OpenAI response to Anthropic beta format
-func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, model string) anthropic.BetaMessage {
+// HandleOpenAIChatToAnthropicBeta converts OpenAI response to Anthropic beta format
+func HandleOpenAIChatToAnthropicBeta(chat *openai.ChatCompletion, model string) anthropic.BetaMessage {
 	wire := wire.AnthropicMsgWire{
 		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
 		Type:         "message",
@@ -81,20 +81,20 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
 		Usage: wire.AnthropicUsageWire{
-			InputTokens:          openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
-			OutputTokens:         openaiResp.Usage.CompletionTokens,
-			CacheReadInputTokens: openaiResp.Usage.PromptTokensDetails.CachedTokens,
+			InputTokens:          chat.Usage.PromptTokens - chat.Usage.PromptTokensDetails.CachedTokens,
+			OutputTokens:         chat.Usage.CompletionTokens,
+			CacheReadInputTokens: chat.Usage.PromptTokensDetails.CachedTokens,
 		},
 	}
 
-	if openaiResp.JSON.ExtraFields != nil {
-		if serverToolUse, exists := openaiResp.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
+	if chat.JSON.ExtraFields != nil {
+		if serverToolUse, exists := chat.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
 			wire.ServerToolUse = json.RawMessage(serverToolUse.Raw())
 		}
 	}
 
 	var contentBlocks []anthropic.BetaContentBlockParamUnion
-	for _, choice := range openaiResp.Choices {
+	for _, choice := range chat.Choices {
 		if choice.Message.Refusal != "" {
 			contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(choice.Message.Refusal))
 		}
@@ -126,10 +126,10 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 	return msg
 }
 
-// ConvertResponsesToAnthropicBetaResponse converts OpenAI Responses API response to Anthropic beta format
-func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, model string) anthropic.BetaMessage {
+// HandleResponsesToAnthropicBeta converts OpenAI Responses API response to Anthropic beta format
+func HandleResponsesToAnthropicBeta(rs *responses.Response, model string) anthropic.BetaMessage {
 	wire := wire.AnthropicMsgWire{
-		ID:           responsesResp.ID,
+		ID:           rs.ID,
 		Type:         "message",
 		Role:         "assistant",
 		Content:      []interface{}{},
@@ -138,22 +138,22 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
 		Usage: wire.AnthropicUsageWire{
-			InputTokens:          responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
-			OutputTokens:         responsesResp.Usage.OutputTokens,
-			CacheReadInputTokens: responsesResp.Usage.InputTokensDetails.CachedTokens,
+			InputTokens:          rs.Usage.InputTokens - rs.Usage.InputTokensDetails.CachedTokens,
+			OutputTokens:         rs.Usage.OutputTokens,
+			CacheReadInputTokens: rs.Usage.InputTokensDetails.CachedTokens,
 		},
 	}
 
 	var contentBlocks []anthropic.BetaContentBlockParamUnion
 
-	for _, output := range responsesResp.Output {
+	for _, output := range rs.Output {
 		for _, content := range output.Content {
 			if content.Type == "output_text" {
 				contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(content.Text))
 			}
 		}
 		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
-			argsStr := resolveResponsesArguments(responsesResp, output)
+			argsStr := resolveResponsesArguments(rs, output)
 			var arguments map[string]interface{}
 			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
 				arguments = make(map[string]interface{})
@@ -163,7 +163,7 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 		}
 	}
 
-	for _, output := range responsesResp.Output {
+	for _, output := range rs.Output {
 		for _, content := range output.Content {
 			if content.Type == "reasoning_text" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
@@ -171,7 +171,7 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 		}
 	}
 
-	for _, output := range responsesResp.Output {
+	for _, output := range rs.Output {
 		for _, content := range output.Content {
 			if content.Type == "refusal" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(content.Text))
@@ -188,10 +188,10 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 	return msg
 }
 
-// ConvertResponsesToAnthropicV1Response converts OpenAI Responses API response to Anthropic v1 format
-func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, model string) anthropic.Message {
+// HandleResponsesToAnthropicV1 converts OpenAI Responses API response to Anthropic v1 format
+func HandleResponsesToAnthropicV1(rs *responses.Response, model string) anthropic.Message {
 	wire := wire.AnthropicMsgWire{
-		ID:           responsesResp.ID,
+		ID:           rs.ID,
 		Type:         "message",
 		Role:         "assistant",
 		Content:      []interface{}{},
@@ -200,22 +200,22 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
 		Usage: wire.AnthropicUsageWire{
-			InputTokens:          responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
-			OutputTokens:         responsesResp.Usage.OutputTokens,
-			CacheReadInputTokens: responsesResp.Usage.InputTokensDetails.CachedTokens,
+			InputTokens:          rs.Usage.InputTokens - rs.Usage.InputTokensDetails.CachedTokens,
+			OutputTokens:         rs.Usage.OutputTokens,
+			CacheReadInputTokens: rs.Usage.InputTokensDetails.CachedTokens,
 		},
 	}
 
 	var contentBlocks []anthropic.ContentBlockParamUnion
 
-	for _, output := range responsesResp.Output {
+	for _, output := range rs.Output {
 		for _, content := range output.Content {
 			if content.Type == "output_text" {
 				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
 			}
 		}
 		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
-			argsStr := resolveResponsesArguments(responsesResp, output)
+			argsStr := resolveResponsesArguments(rs, output)
 			var arguments map[string]interface{}
 			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
 				arguments = make(map[string]interface{})
@@ -225,7 +225,7 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 		}
 	}
 
-	for _, output := range responsesResp.Output {
+	for _, output := range rs.Output {
 		for _, content := range output.Content {
 			if content.Type == "reasoning_text" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
@@ -233,7 +233,7 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 		}
 	}
 
-	for _, output := range responsesResp.Output {
+	for _, output := range rs.Output {
 		for _, content := range output.Content {
 			if content.Type == "refusal" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
@@ -251,7 +251,7 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 }
 
 // resolveResponsesArguments extracts the arguments string from a Responses API output item.
-func resolveResponsesArguments(responsesResp *responses.Response, output responses.ResponseOutputItemUnion) string {
+func resolveResponsesArguments(rs *responses.Response, output responses.ResponseOutputItemUnion) string {
 	if output.Arguments.OfString != "" {
 		return output.Arguments.OfString
 	}

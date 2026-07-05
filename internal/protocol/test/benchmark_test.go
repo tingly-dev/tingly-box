@@ -40,7 +40,7 @@ func BenchmarkConvertAnthropicResponseToOpenAI(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, "claude-3-sonnet")
+		nonstream.HandleAnthropicBetaToOpenAIResponse(anthropicResp, "claude-3-sonnet")
 	}
 }
 

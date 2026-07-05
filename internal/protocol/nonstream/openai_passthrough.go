@@ -10,10 +10,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
-// HandleOpenAIResponsesPassthroughNonStream handles Responses API passthrough (non-streaming),
+// HandleOpenAIResponses handles Responses API passthrough (non-streaming),
 // overriding the model field in the response when responseModel differs from the request model.
 // Corresponds to stream.HandleOpenAIResponsesStream.
-func HandleOpenAIResponsesPassthroughNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
+func HandleOpenAIResponses(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
 	// Prefer the upstream's actual body: re-marshaling the SDK struct emits
 	// every union field with its zero value (e.g. output[].phase: "",
 	// content[].annotations: null), which strict clients like the AI SDK's
@@ -37,9 +37,9 @@ func HandleOpenAIResponsesPassthroughNonStream(hc *protocol.HandleContext, resp 
 	return usage.FromOpenAIResponses(resp.Usage), nil
 }
 
-// HandleOpenAIChatNonStream handles OpenAI chat non-streaming response.
+// HandleOpenAIChat handles OpenAI chat non-streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {
+func HandleOpenAIChat(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
@@ -58,11 +58,4 @@ func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatComp
 
 	hc.GinContext.JSON(http.StatusOK, responseMap)
 	return usage.FromOpenAIChatCompletion(resp.Usage), nil
-}
-
-// HandleOpenAIResponsesNonStream handles OpenAI Responses API non-streaming response.
-// Returns (UsageStat, error)
-func HandleOpenAIResponsesNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
-	hc.GinContext.JSON(http.StatusOK, resp)
-	return usage.FromOpenAIResponses(resp.Usage), nil
 }

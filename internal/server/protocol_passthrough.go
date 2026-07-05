@@ -337,7 +337,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *tran
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleOpenAIResponsesPassthroughNonStream(hc, response)
+	tokenUsage, _ := nonstream.HandleOpenAIResponses(hc, response)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {
 		recorder.SetAssembledResponse(response)

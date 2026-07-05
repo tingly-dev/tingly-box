@@ -8,8 +8,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// ConvertOpenAIToGoogleResponse converts OpenAI ChatCompletion to Google format
-func ConvertOpenAIToGoogleResponse(openaiResp *openai.ChatCompletion) *genai.GenerateContentResponse {
+// HandleOpenAIToGoogle converts OpenAI ChatCompletion to Google format
+func HandleOpenAIToGoogle(openaiResp *openai.ChatCompletion) *genai.GenerateContentResponse {
 	if openaiResp == nil {
 		return nil
 	}
@@ -80,8 +80,8 @@ func MapOpenAIFinishReasonToGoogle(reason string) genai.FinishReason {
 	}
 }
 
-// ConvertAnthropicToGoogleResponse converts Anthropic Message to Google format
-func ConvertAnthropicToGoogleResponse(anthropicResp *anthropic.Message) *genai.GenerateContentResponse {
+// HandleAnthropicToGoogle converts Anthropic Message to Google format
+func HandleAnthropicToGoogle(anthropicResp *anthropic.Message) *genai.GenerateContentResponse {
 	if anthropicResp == nil {
 		return nil
 	}

@@ -12,6 +12,30 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
+// HandleResponsesToOpenAIChat writes a Responses API response as OpenAI Chat format.
+// Corresponds to stream.HandleResponsesToOpenAIChatStream.
+func HandleResponsesToOpenAIChat(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
+	chatResp := HandleOpenAIResponsesToChat(resp, hc.ResponseModel)
+	hc.GinContext.JSON(http.StatusOK, chatResp)
+	return usage.FromOpenAIResponses(resp.Usage), nil
+}
+
+// HandleOpenAIChatToResponses writes an OpenAI Chat response as Responses API format.
+// Corresponds to stream.HandleOpenAIChatToResponsesStream.
+func HandleOpenAIChatToResponses(hc *protocol.HandleContext, resp *openai.ChatCompletion, requestModel string) (*protocol.TokenUsage, error) {
+	payload := BuildResponsesPayloadFromChat(resp, hc.ResponseModel, requestModel)
+	hc.GinContext.JSON(http.StatusOK, payload)
+	return usage.FromOpenAIChatCompletion(resp.Usage), nil
+}
+
+// HandleAnthropicBetaToResponses writes an Anthropic Beta response as Responses API format.
+// Corresponds to stream.HandleAnthropicBetaToOpenAIResponsesStream.
+func HandleAnthropicBetaToResponses(hc *protocol.HandleContext, resp *anthropic.BetaMessage, requestModel string) (*protocol.TokenUsage, error) {
+	payload := BuildResponsesPayloadFromAnthropicBeta(resp, hc.ResponseModel, requestModel)
+	hc.GinContext.JSON(http.StatusOK, payload)
+	return usage.FromAnthropicBetaMessage(resp.Usage), nil
+}
+
 // BuildResponsesPayloadFromChat converts a Chat completion response to Responses API format.
 func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, actualModel string) map[string]any {
 	model := responseModel
@@ -174,28 +198,4 @@ func anthropicStopReasonToResponsesStatus(stopReason string) (string, map[string
 	default:
 		return "completed", nil
 	}
-}
-
-// HandleResponsesToOpenAIChatNonStream writes a Responses API response as OpenAI Chat format.
-// Corresponds to stream.HandleResponsesToOpenAIChatStream.
-func HandleResponsesToOpenAIChatNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
-	chatResp := OpenAIResponsesToChat(resp, hc.ResponseModel)
-	hc.GinContext.JSON(http.StatusOK, chatResp)
-	return usage.FromOpenAIResponses(resp.Usage), nil
-}
-
-// HandleOpenAIChatToResponsesNonStream writes an OpenAI Chat response as Responses API format.
-// Corresponds to stream.HandleOpenAIChatToResponsesStream.
-func HandleOpenAIChatToResponsesNonStream(hc *protocol.HandleContext, resp *openai.ChatCompletion, requestModel string) (*protocol.TokenUsage, error) {
-	payload := BuildResponsesPayloadFromChat(resp, hc.ResponseModel, requestModel)
-	hc.GinContext.JSON(http.StatusOK, payload)
-	return usage.FromOpenAIChatCompletion(resp.Usage), nil
-}
-
-// HandleAnthropicBetaToResponsesNonStream writes an Anthropic Beta response as Responses API format.
-// Corresponds to stream.HandleAnthropicBetaToOpenAIResponsesStream.
-func HandleAnthropicBetaToResponsesNonStream(hc *protocol.HandleContext, resp *anthropic.BetaMessage, requestModel string) (*protocol.TokenUsage, error) {
-	payload := BuildResponsesPayloadFromAnthropicBeta(resp, hc.ResponseModel, requestModel)
-	hc.GinContext.JSON(http.StatusOK, payload)
-	return usage.FromAnthropicBetaMessage(resp.Usage), nil
 }

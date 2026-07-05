@@ -674,7 +674,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 
 		switch reqCtx.SourceAPI {
 		case protocol.TypeAnthropicV1:
-			anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(resp, responseModel)
+			anthropicResp := nonstream.HandleOpenAIChatToAnthropic(resp, responseModel)
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
@@ -690,7 +690,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			}
 			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		case protocol.TypeAnthropicBeta:
-			anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
+			anthropicResp := nonstream.HandleOpenAIChatToAnthropicBeta(resp, responseModel)
 			ph.updateAffinityMessageID(c, rule, anthropicResp.ID)
 			if recorder != nil {
 				recorder.SetAssembledResponse(anthropicResp)

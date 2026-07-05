@@ -45,7 +45,7 @@ func TestOpenAIResponsesToChatToolCalls(t *testing.T) {
 	var resp responses.Response
 	require.NoError(t, json.Unmarshal(raw, &resp))
 
-	result := OpenAIResponsesToChat(&resp, "proxy-model")
+	result := HandleOpenAIResponsesToChat(&resp, "proxy-model")
 	choices := result["choices"].([]map[string]any)
 	message := choices[0]["message"].(map[string]any)
 	toolCalls := message["tool_calls"].([]map[string]any)
@@ -104,7 +104,7 @@ func TestOpenAIResponsesToChatIncompleteReasons(t *testing.T) {
 			var resp responses.Response
 			require.NoError(t, json.Unmarshal(raw, &resp))
 
-			result := OpenAIResponsesToChat(&resp, "proxy-model")
+			result := HandleOpenAIResponsesToChat(&resp, "proxy-model")
 			choices := result["choices"].([]map[string]any)
 			assert.Equal(t, tt.expectedStop, choices[0]["finish_reason"])
 		})

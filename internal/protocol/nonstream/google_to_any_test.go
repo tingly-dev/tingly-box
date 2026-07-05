@@ -48,7 +48,7 @@ func TestConvertGoogleToOpenAIResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		result := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		// Check basic structure
 		assert.Equal(t, "gemini-pro", result["model"])
@@ -118,7 +118,7 @@ func TestConvertGoogleToOpenAIResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		result := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		choices := result["choices"].([]map[string]interface{})
 		message := choices[0]["message"].(map[string]interface{})
@@ -153,7 +153,7 @@ func TestConvertGoogleToOpenAIResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		result := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		choices := result["choices"].([]map[string]interface{})
 		assert.Equal(t, "length", choices[0]["finish_reason"])
@@ -172,14 +172,14 @@ func TestConvertGoogleToOpenAIResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		result := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		choices := result["choices"].([]map[string]interface{})
 		assert.Equal(t, "content_filter", choices[0]["finish_reason"])
 	})
 
 	t.Run("nil response", func(t *testing.T) {
-		result := ConvertGoogleToOpenAIResponse(nil, "gemini-pro")
+		result := HandleGoogleToOpenAI(nil, "gemini-pro")
 		assert.Nil(t, result)
 	})
 
@@ -188,7 +188,7 @@ func TestConvertGoogleToOpenAIResponseComplex(t *testing.T) {
 			Candidates: []*genai.Candidate{},
 		}
 
-		result := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		result := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		// Should still return a valid response structure
 		assert.NotNil(t, result)
@@ -231,7 +231,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		result := HandleGoogleToAnthropic(resp, "gemini-pro")
 
 		// Check basic structure - convert typed fields to strings for comparison
 		assert.Equal(t, "assistant", string(result.Role))
@@ -300,7 +300,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		result := HandleGoogleToAnthropic(resp, "gemini-pro")
 
 		assert.Len(t, result.Content, 3)
 
@@ -325,7 +325,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		result := HandleGoogleToAnthropic(resp, "gemini-pro")
 		assert.Equal(t, "max_tokens", string(result.StopReason))
 	})
 
@@ -342,7 +342,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		result := HandleGoogleToAnthropic(resp, "gemini-pro")
 		assert.Equal(t, "content_filter", string(result.StopReason))
 	})
 
@@ -385,7 +385,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		result := HandleGoogleToAnthropic(resp, "gemini-pro")
 
 		require.Len(t, result.Content, 1)
 		block := result.Content[0]
@@ -408,7 +408,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 	})
 
 	t.Run("nil response", func(t *testing.T) {
-		result := ConvertGoogleToAnthropicResponse(nil, "gemini-pro")
+		result := HandleGoogleToAnthropic(nil, "gemini-pro")
 		assert.Equal(t, &anthropic.BetaMessage{}, result)
 	})
 }
@@ -445,7 +445,7 @@ func TestConvertGoogleToAnthropicBetaResponseComplex(t *testing.T) {
 			},
 		}
 
-		result := ConvertGoogleToAnthropicBetaResponse(resp, "gemini-pro")
+		result := HandleGoogleToAnthropicBeta(resp, "gemini-pro")
 
 		// Check basic structure - convert typed fields to strings for comparison
 		assert.Equal(t, "assistant", string(result.Role))
@@ -492,7 +492,7 @@ func TestConvertGoogleToAnthropicBetaResponseComplex(t *testing.T) {
 					},
 				}
 
-				result := ConvertGoogleToAnthropicBetaResponse(resp, "gemini-pro")
+				result := HandleGoogleToAnthropicBeta(resp, "gemini-pro")
 				assert.Equal(t, tt.expected, string(result.StopReason))
 			})
 		}
@@ -562,8 +562,8 @@ func TestGoogleFinishReasonMapping(t *testing.T) {
 	})
 }
 
-// TestConvertGoogleToOpenAIResponse tests converting Google response to OpenAI format
-func TestConvertGoogleToOpenAIResponse(t *testing.T) {
+// TestHandleGoogleToOpenAI tests converting Google response to OpenAI format
+func TestHandleGoogleToOpenAI(t *testing.T) {
 	t.Run("text only response", func(t *testing.T) {
 		resp := &genai.GenerateContentResponse{
 			Candidates: []*genai.Candidate{
@@ -584,7 +584,7 @@ func TestConvertGoogleToOpenAIResponse(t *testing.T) {
 			},
 		}
 
-		openaiResp := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		openaiResp := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		if openaiResp["model"] != "gemini-pro" {
 			t.Errorf("expected model 'gemini-pro', got '%v'", openaiResp["model"])
@@ -619,7 +619,7 @@ func TestConvertGoogleToOpenAIResponse(t *testing.T) {
 			},
 		}
 
-		openaiResp := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+		openaiResp := HandleGoogleToOpenAI(resp, "gemini-pro")
 
 		choices := openaiResp["choices"].([]map[string]interface{})
 		toolCalls := choices[0]["message"].(map[string]interface{})["tool_calls"].([]map[string]interface{})
@@ -632,8 +632,8 @@ func TestConvertGoogleToOpenAIResponse(t *testing.T) {
 	})
 }
 
-// TestConvertGoogleToAnthropicResponse tests converting Google response to Anthropic format
-func TestConvertGoogleToAnthropicResponse(t *testing.T) {
+// TestHandleGoogleToAnthropic tests converting Google response to Anthropic format
+func TestHandleGoogleToAnthropic(t *testing.T) {
 	t.Run("text only response", func(t *testing.T) {
 		resp := &genai.GenerateContentResponse{
 			Candidates: []*genai.Candidate{
@@ -653,7 +653,7 @@ func TestConvertGoogleToAnthropicResponse(t *testing.T) {
 			},
 		}
 
-		anthropicResp := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		anthropicResp := HandleGoogleToAnthropic(resp, "gemini-pro")
 
 		if anthropicResp.Role != "assistant" {
 			t.Errorf("expected role 'assistant', got '%s'", anthropicResp.Role)
@@ -687,7 +687,7 @@ func TestConvertGoogleToAnthropicResponse(t *testing.T) {
 			},
 		}
 
-		anthropicResp := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		anthropicResp := HandleGoogleToAnthropic(resp, "gemini-pro")
 
 		// Gemini cached-content tokens must surface as Anthropic cache-read in the
 		// client-facing response body, not be dropped to 0.
@@ -720,7 +720,7 @@ func TestConvertGoogleToAnthropicResponse(t *testing.T) {
 			},
 		}
 
-		anthropicResp := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+		anthropicResp := HandleGoogleToAnthropic(resp, "gemini-pro")
 
 		if len(anthropicResp.Content) != 1 {
 			t.Errorf("expected 1 content block, got %d", len(anthropicResp.Content))
