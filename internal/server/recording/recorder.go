@@ -190,7 +190,7 @@ func (sr *ProtocolRecorder) RecordStreamChunk(eventType string, chunk interface{
 }
 
 // SetAssembledResponse stores the final assembled (post-stream) response.
-// Accepts map, []byte, or any JSON-marshallable value.
+// Accepts map, []byte, or any JSON-marshall-able value.
 func (sr *ProtocolRecorder) SetAssembledResponse(response any) {
 	if sr == nil {
 		return

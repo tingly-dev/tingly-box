@@ -2,11 +2,14 @@ package nonstream
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 func TestOpenAIResponsesToChatToolCalls(t *testing.T) {
@@ -45,7 +48,9 @@ func TestOpenAIResponsesToChatToolCalls(t *testing.T) {
 	var resp responses.Response
 	require.NoError(t, json.Unmarshal(raw, &resp))
 
-	result := HandleOpenAIResponsesToChat(&resp, "proxy-model")
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	result, _, err := HandleResponsesToOpenAIChat(protocol.NewHandleContext(c, "proxy-model"), &resp)
+	require.NoError(t, err)
 	choices := result["choices"].([]map[string]any)
 	message := choices[0]["message"].(map[string]any)
 	toolCalls := message["tool_calls"].([]map[string]any)
@@ -104,7 +109,9 @@ func TestOpenAIResponsesToChatIncompleteReasons(t *testing.T) {
 			var resp responses.Response
 			require.NoError(t, json.Unmarshal(raw, &resp))
 
-			result := HandleOpenAIResponsesToChat(&resp, "proxy-model")
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			result, _, err := HandleResponsesToOpenAIChat(protocol.NewHandleContext(c, "proxy-model"), &resp)
+			require.NoError(t, err)
 			choices := result["choices"].([]map[string]any)
 			assert.Equal(t, tt.expectedStop, choices[0]["finish_reason"])
 		})

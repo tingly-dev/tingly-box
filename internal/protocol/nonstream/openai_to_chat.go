@@ -1,10 +1,12 @@
 package nonstream
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/openai/openai-go/v3/responses"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
@@ -14,9 +16,9 @@ type responsesToChatNonStreamState struct {
 	toolCalls []map[string]any
 }
 
-// HandleOpenAIResponsesToChat converts a Responses API response to Chat Completions format.
-// This is used when the client expects Chat format but the provider uses Responses API.
-func HandleOpenAIResponsesToChat(rs *responses.Response, responseModel string) map[string]any {
+// HandleResponsesToOpenAIChat writes a Responses API response as OpenAI Chat format.
+// Corresponds to stream.HandleResponsesToOpenAIChatStream.
+func HandleResponsesToOpenAIChat(hc *protocol.HandleContext, rs *responses.Response) (map[string]any, *protocol.TokenUsage, error) {
 	state := buildResponsesToChatNonStreamState(rs)
 	message := state.message()
 
@@ -50,14 +52,16 @@ func HandleOpenAIResponsesToChat(rs *responses.Response, responseModel string) m
 		}
 	}
 
-	return map[string]any{
+	chatResp := map[string]any{
 		"id":      rs.ID,
 		"object":  "chat.completion",
 		"created": int64(rs.CreatedAt),
-		"model":   responseModel,
+		"model":   hc.ResponseModel,
 		"choices": choices,
 		"usage":   usage,
 	}
+	hc.GinContext.JSON(http.StatusOK, chatResp)
+	return chatResp, usageconv.FromOpenAIResponses(rs.Usage), nil
 }
 
 func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChatNonStreamState {

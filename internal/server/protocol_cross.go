@@ -325,10 +325,10 @@ func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *tran
 	}
 
 	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
-	tokenUsage, _ := nonstream.HandleResponsesToOpenAIChat(hc, responsesResp)
+	chatResp, tokenUsage, _ := nonstream.HandleResponsesToOpenAIChat(hc, responsesResp)
 	ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {
-		recorder.SetAssembledResponse(nonstream.HandleOpenAIResponsesToChat(responsesResp, reqCtx.ResponseModel))
+		recorder.SetAssembledResponse(chatResp)
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
 }
