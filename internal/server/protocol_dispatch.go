@@ -555,7 +555,7 @@ func (ph *ProtocolHandler) dispatchGoogle(
 
 		switch reqCtx.SourceAPI {
 		case protocol.TypeAnthropicV1:
-			anthropicResp := nonstream.ConvertGoogleToAnthropicResponse(resp, responseModel)
+			anthropicResp := nonstream.HandleGoogleToAnthropic(resp, responseModel)
 			if ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp, responseModel, provider, actualModel)
 				if err != nil {
@@ -571,7 +571,7 @@ func (ph *ProtocolHandler) dispatchGoogle(
 			}
 			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		case protocol.TypeAnthropicBeta:
-			anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, responseModel)
+			anthropicResp := nonstream.HandleGoogleToAnthropicBeta(resp, responseModel)
 			ph.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
 			if recorder != nil {
 				recorder.SetAssembledResponse(anthropicResp)
