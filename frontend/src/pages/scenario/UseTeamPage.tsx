@@ -34,7 +34,8 @@ const UseTeamPageContent: React.FC = () => {
                     size="full"
                     rightAction={
                         <Button
-                            variant="outlined"
+                            variant="contained"
+                            size="small"
                             startIcon={<IconKey sx={{ fontSize: 18 }} />}
                             onClick={() => setSharingKeysOpen(true)}
                         >
