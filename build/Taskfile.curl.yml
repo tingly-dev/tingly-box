@@ -152,7 +152,7 @@ tasks:
   anthropic-stream:
     cmds:
       - |
-        curl -X POST http://localhost:12580/tingly/openai/v1/messages \
+        curl -X POST http://localhost:12580/tingly/claude_code/v1/messages \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
         -d '{
@@ -160,7 +160,7 @@ tasks:
         			"role": "user",
         			"content": "请帮我计算 3+5，并告诉我北京天气"
         		}],
-        		"model": "tingly-qwen",
+        		"model": "cc",
         		"stream": true,
         		"tools": [{
                   "name": "add_numbers",
