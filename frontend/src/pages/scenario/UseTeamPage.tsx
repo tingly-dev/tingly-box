@@ -1,12 +1,17 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box } from '@mui/material';
+import { Box, Button } from '@mui/material';
+import { Key as IconKey } from '@/components/icons';
+import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
+import SharingKeysDialog from './components/SharingKeysDialog.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+
 const scenario = "team";
+
 const UseTeamPageContent: React.FC = () => {
     const {
         isLoading,
@@ -14,6 +19,9 @@ const UseTeamPageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
     } = useScenarioPageInternal(scenario);
+
+    const [sharingKeysOpen, setSharingKeysOpen] = useState(false);
+
     return (
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
@@ -24,6 +32,15 @@ const UseTeamPageContent: React.FC = () => {
                         </Box>
                     }
                     size="full"
+                    rightAction={
+                        <Button
+                            variant="outlined"
+                            startIcon={<IconKey sx={{ fontSize: 18 }} />}
+                            onClick={() => setSharingKeysOpen(true)}
+                        >
+                            Sharing Keys
+                        </Button>
+                    }
                 >
                     <ProviderConfigCard
                         title="Team"
@@ -40,9 +57,15 @@ const UseTeamPageContent: React.FC = () => {
                     allowDeleteRule={true}
                 />
             </CardGrid>
+
+            <SharingKeysDialog
+                open={sharingKeysOpen}
+                onClose={() => setSharingKeysOpen(false)}
+            />
         </PageLayout>
     );
 };
+
 const UseTeamPage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
@@ -50,4 +73,5 @@ const UseTeamPage: React.FC = () => {
         </ScenarioPageModalProvider>
     );
 };
+
 export default UseTeamPage;
