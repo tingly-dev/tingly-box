@@ -36,39 +36,103 @@
       "base_url_anthropic": null,
       "models": [
         {
-          "id": "gpt-3.5-turbo",
-          "context": 16385,
-          "max_output": 4096
+          "id": "gpt-5.5",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-04",
+          "recommended": true
         },
         {
-          "id": "gpt-4",
-          "context": 8192,
-          "max_output": 8192
+          "id": "gpt-5.5-pro",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-04",
+          "note": "API availability/pricing listed by OpenAI; higher-accuracy/pro variant"
         },
         {
-          "id": "gpt-4-turbo",
-          "context": 128000,
-          "max_output": 4096
+          "id": "gpt-5.4",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-03"
+        },
+        {
+          "id": "gpt-5.4-pro",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-03",
+          "note": "pro variant listed on pricing page"
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "context": 400000,
+          "max_output": 128000,
+          "created": "2026-03"
+        },
+        {
+          "id": "gpt-5.4-nano",
+          "context": 400000,
+          "max_output": 128000,
+          "created": "2026-03"
+        },
+        {
+          "id": "gpt-4.1",
+          "context": 1047576,
+          "max_output": 32768,
+          "created": "2025-04",
+          "legacy": true
+        },
+        {
+          "id": "gpt-4.1-mini",
+          "context": 1047576,
+          "max_output": 32768,
+          "created": "2025-04",
+          "legacy": true
+        },
+        {
+          "id": "gpt-4.1-nano",
+          "context": 1047576,
+          "max_output": 32768,
+          "created": "2025-04",
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.4-nano"
         },
         {
           "id": "gpt-4o",
           "context": 128000,
-          "max_output": 16384
+          "max_output": 16384,
+          "created": "2024-05",
+          "legacy": true
         },
         {
           "id": "gpt-4o-mini",
           "context": 128000,
-          "max_output": 16384
+          "max_output": 16384,
+          "created": "2024-07",
+          "legacy": true
         },
         {
-          "id": "o1",
-          "context": 200000,
-          "max_output": 100000
+          "id": "gpt-4",
+          "context": 8192,
+          "max_output": 8192,
+          "created": "2023-03",
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.5"
         },
         {
-          "id": "o1-mini",
+          "id": "gpt-4-turbo",
           "context": 128000,
-          "max_output": 65536
+          "max_output": 4096,
+          "created": "2024-04",
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.5"
+        },
+        {
+          "id": "gpt-3.5-turbo",
+          "context": 16385,
+          "max_output": 4096,
+          "created": "2023-11",
+          "deprecated": "shutdown scheduled 2026-10-23",
+          "note": "replaced by gpt-5.4-mini"
         },
         {
           "id": "o3",
@@ -79,6 +143,16 @@
           "id": "o3-mini",
           "context": 200000,
           "max_output": 100000
+        },
+        {
+          "id": "o1",
+          "context": 200000,
+          "max_output": 100000
+        },
+        {
+          "id": "o1-mini",
+          "context": 128000,
+          "max_output": 65536
         }
       ],
       "supports_models_endpoint": true,
