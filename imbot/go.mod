@@ -7,13 +7,13 @@ go 1.25.6
 require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-telegram/bot v1.20.0
-	github.com/larksuite/oapi-sdk-go/v3 v3.7.5
+	github.com/larksuite/oapi-sdk-go/v3 v3.9.7
 	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
 	github.com/slack-go/slack v0.19.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tingly-dev/weixin v0.2.0
 	github.com/yuin/goldmark v1.7.16
-	golang.org/x/net v0.53.0
+	golang.org/x/net v0.56.0
 )
 
 require (
@@ -25,9 +25,9 @@ require (
 	github.com/mdp/qrterminal/v3 v3.2.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/qr v0.2.0 // indirect
