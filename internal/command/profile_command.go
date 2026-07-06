@@ -21,18 +21,18 @@ import (
 //
 //	tingly-box profile                    → list profiles (interactive on TTY, select to launch)
 //	tingly-box profile p1                 → launch Claude Code with profile p1
-//	tingly-box profile p1 --port 12580    → launch Claude Code with profile p1 on port 12580
-//	tingly-box profile p1 -- --model opus → launch with profile p1, passing --model opus to Claude
-//	tingly-box profile p1 -- -p hi        → launch with profile p1, using Claude's print mode
+//	tingly-box profile --port 12580 p1    → launch Claude Code with profile p1 on port 12580
+//	tingly-box profile p1 --model opus    → launch with profile p1, passing --model opus to Claude
+//	tingly-box profile p1 -p hi           → launch with profile p1, using Claude's print mode
 //
-// Note: Use '--' to separate tingly-box options from Claude arguments, especially
-// when passing flags that might conflict (e.g., -p for Claude's print mode).
+// Put tingly-box flags before the profile name; after the profile name, flags are
+// treated as Claude Code arguments. A literal '--' still works for compatibility.
 type ProfileCmdKong struct {
 	List      bool     `kong:"flag,name='list',help='List all profiles (non-interactive)'"`
 	Show      bool     `kong:"flag,name='show',help='Show profile details instead of launching'"`
 	Port      int      `kong:"flag,name='port',help='Connect to tingly-box on the specified port (default: from config)'"`
 	ProfileID string   `kong:"arg,optional,help='Profile name or ID to launch Claude Code with'"`
-	Args      []string `kong:"arg,optional,help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
+	Args      []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
 
 func (p *ProfileCmdKong) Run(appManager *AppManager) error {

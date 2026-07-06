@@ -15,13 +15,13 @@ import (
 
 // ============== Kong Command Structures ==============
 
-// CCmdKong launches Claude Code with tingly-box-specific flags
-// Accepts --profile, --port/--tingly-port, and --help flags.
-// All other arguments are passed to Claude Code.
+// CCmdKong launches Claude Code with tingly-box-specific flags.
+// Put tingly-box flags before Claude Code args; unknown flags are passed through
+// to Claude Code so users do not need to insert a literal '--'.
 type CCmdKong struct {
 	Profile string   `kong:"flag,name='profile',help='Claude Code profile to use'"`
 	Port    int      `kong:"flag,name='port',help='Tingly-Box server port (default: from config or 12580)'"`
-	Args    []string `kong:"arg,optional"`
+	Args    []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
 
 func (c *CCmdKong) Run(appManager *AppManager) error {

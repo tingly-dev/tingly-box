@@ -122,12 +122,13 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         }
     };
 
-    // Load rules for this profile
+    // Profile quick start command. Keep the old `cc --profile` form compatible
+    // in the CLI, but surface the new direct `profile <name>` form in the UI.
     const ccCommand = React.useMemo(() => {
         if (commandMode === 'npx' && appVersion) {
-            return `npx -y tingly-box@${appVersion} cc --profile ${profileId}`;
+            return `npx -y tingly-box@${appVersion} profile ${profileId}`;
         }
-        return `tingly-box cc --profile ${profileId}`;
+        return `tingly-box profile ${profileId}`;
     }, [commandMode, appVersion, profileId]);
 
     return (
