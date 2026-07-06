@@ -306,10 +306,10 @@ const UseClaudeCodePageContent: React.FC = () => {
                         </Typography>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                        <Button onClick={cancelModeChange} color="inherit">
+                        <Button onClick={cancelModeChange} color="inherit" size="small">
                             Cancel
                         </Button>
-                        <Button onClick={confirmModeChange} variant="contained">
+                        <Button onClick={confirmModeChange} variant="contained" size="small">
                             Confirm
                         </Button>
                     </DialogActions>
