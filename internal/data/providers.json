@@ -277,24 +277,6 @@
       "base_url_anthropic": null,
       "models": [
         {
-          "id": "gpt-5-codex"
-        },
-        {
-          "id": "gpt-5.1-codex"
-        },
-        {
-          "id": "gpt-5.1-codex-max"
-        },
-        {
-          "id": "gpt-5.1-codex-mini"
-        },
-        {
-          "id": "gpt-5.2-codex"
-        },
-        {
-          "id": "gpt-5.3-codex"
-        },
-        {
           "id": "gpt-5.4",
           "context": 272000
         },
