@@ -5,10 +5,8 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"os"
-	"strings"
-
 	_ "net/http/pprof"
+	"os"
 	_ "time/tzdata" // Embed timezone data for static builds
 
 	"github.com/alecthomas/kong"
@@ -100,14 +98,6 @@ func main() {
 			// Print default Kong help
 			if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
 				return err
-			}
-			// Append passthrough help for cc and profile commands
-			c := ctx.Command()
-			switch {
-			case strings.HasPrefix(c, "cc"):
-				command.PrintCCPassthroughHelp("cc")
-			case strings.HasPrefix(c, "profile"):
-				command.PrintCCPassthroughHelp("profile")
 			}
 			return nil
 		}),
