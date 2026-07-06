@@ -15,6 +15,8 @@
 package stream
 
 import (
+	"fmt"
+
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 )
@@ -61,19 +63,19 @@ func (p *firstEventReplayStream) Close() error { return p.inner.Close() }
 // lazy HTTP request and surface pre-stream upstream errors. Returns:
 //
 //   - (iter, nil)   primed; iter replays the read event first, then
-//                   delegates to the SDK stream.
-//   - (iter, nil)   degenerate "no events, no error" — iter is the SDK
-//                   stream itself (which immediately reports Next()=false).
-//   - (nil, err)    pre-stream failure — caller retries next priority tier.
+//     delegates to the SDK stream.
+//   - (nil, err)    pre-stream failure, including a degenerate stream with
+//     zero events and no SDK error — caller retries next
+//     priority tier before any Anthropic SSE bytes are written.
 func PrimeResponsesStream(stream *openaistream.Stream[responses.ResponseStreamEventUnion]) (ResponsesStreamIter, error) {
 	if stream == nil {
-		return nil, nil
+		return nil, fmt.Errorf("upstream returned nil responses stream")
 	}
 	if !stream.Next() {
 		if err := stream.Err(); err != nil {
 			return nil, err
 		}
-		return stream, nil
+		return nil, fmt.Errorf("upstream returned empty responses stream")
 	}
 	return &firstEventReplayStream{
 		first: stream.Current(),

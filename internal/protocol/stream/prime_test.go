@@ -9,7 +9,10 @@ package stream
 import (
 	"testing"
 
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // stubStream mimics the small slice of *openaistream.Stream that
@@ -55,4 +58,28 @@ func TestFirstEventReplayStream_CurrentBeforeNextIsZero(t *testing.T) {
 	if p.nextCount != 0 {
 		t.Fatalf("fresh wrapper nextCount = %d, want 0", p.nextCount)
 	}
+}
+
+func TestPrimeResponsesStream_EmptyStreamReturnsError(t *testing.T) {
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](newFakeResponsesDecoder(nil), nil)
+
+	primed, err := PrimeResponsesStream(stream)
+
+	require.Error(t, err)
+	assert.Nil(t, primed)
+	assert.Contains(t, err.Error(), "empty responses stream")
+}
+
+func TestPrimeResponsesStream_ReplaysFirstEvent(t *testing.T) {
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](newFakeResponsesDecoder([]string{
+		buildResponsesCompletedJSON(t, 3, 5, 0, 0),
+	}), nil)
+
+	primed, err := PrimeResponsesStream(stream)
+	require.NoError(t, err)
+	require.NotNil(t, primed)
+
+	require.True(t, primed.Next())
+	assert.Equal(t, "response.completed", primed.Current().Type)
+	assert.False(t, primed.Next())
 }
