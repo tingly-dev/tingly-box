@@ -12,13 +12,6 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// ApplyCodexTransform applies Codex-specific transformations to a Responses API request.
-// This is a backward-compatible wrapper for the server-level call.
-// Deprecated: Use ApplyCodexResponsesTransform with TransformContext instead.
-func ApplyCodexTransform(anthropicReq *anthropic.BetaMessageNewParams, responsesReq *responses.ResponseNewParams) *responses.ResponseNewParams {
-	return ApplyCodexResponsesTransform(responsesReq, anthropicReq)
-}
-
 // ApplyCodexResponsesTransform applies Codex-specific transformations to a Responses API request.
 // This is called from VendorTransform for Codex backend providers.
 //
