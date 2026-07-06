@@ -1,10 +1,13 @@
 package client
 
 import (
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
 
@@ -171,4 +174,43 @@ func TestCodexInputItemIDRequired(t *testing.T) {
 	for _, typ := range optional {
 		assert.False(t, codexInputItemIDRequired(typ), "type %q should not require id", typ)
 	}
+}
+
+func TestValidateCodexStreamResponse_AllowsSSE(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{"Content-Type": []string{"text/event-stream; charset=utf-8"}},
+		Body:   io.NopCloser(strings.NewReader("data: {}\n\n")),
+	}
+
+	require.NoError(t, validateCodexStreamResponse(resp))
+}
+
+func TestValidateCodexStreamResponse_AllowsMissingContentType(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(strings.NewReader("data: {}\n\n")),
+	}
+
+	require.NoError(t, validateCodexStreamResponse(resp))
+}
+
+func TestValidateCodexStreamResponse_RejectsJSON200(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{"Content-Type": []string{"application/json"}},
+		Body:   io.NopCloser(strings.NewReader(`{"error":"maintenance"}`)),
+	}
+
+	err := validateCodexStreamResponse(resp)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "non-SSE 200 response")
+	assert.Contains(t, err.Error(), "maintenance")
+}
+
+func TestValidateCodexStreamResponse_AllowsAmbiguousNonSSEContentType(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{"Content-Type": []string{"text/plain"}},
+		Body:   io.NopCloser(strings.NewReader("data: {}\n\n")),
+	}
+
+	require.NoError(t, validateCodexStreamResponse(resp))
 }

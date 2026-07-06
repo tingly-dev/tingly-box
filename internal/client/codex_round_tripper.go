@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 
@@ -84,10 +85,43 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, fmt.Errorf("request failed with status %s: %s", resp.Status, string(errorBody))
 	}
 
+	if err := validateCodexStreamResponse(resp); err != nil {
+		return nil, err
+	}
+
 	resp.Header.Set("Content-Type", "text/event-stream")
 	logrus.WithContext(req.Context()).Debugf("[Codex] Must use stream: %s", resp.Status)
 
 	return resp, nil
+}
+
+func validateCodexStreamResponse(resp *http.Response) error {
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		return nil
+	}
+
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = strings.TrimSpace(strings.ToLower(strings.Split(contentType, ";")[0]))
+	}
+	if mediaType == "" || mediaType == "text/event-stream" {
+		return nil
+	}
+	if !isClearlyNonSSEMediaType(mediaType) {
+		return nil
+	}
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	_ = resp.Body.Close()
+	return fmt.Errorf("codex returned non-SSE 200 response content-type %q: %s", contentType, strings.TrimSpace(string(body)))
+}
+
+func isClearlyNonSSEMediaType(mediaType string) bool {
+	if mediaType == "application/json" || mediaType == "application/problem+json" || mediaType == "text/html" {
+		return true
+	}
+	return strings.HasSuffix(mediaType, "+json")
 }
 
 func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
