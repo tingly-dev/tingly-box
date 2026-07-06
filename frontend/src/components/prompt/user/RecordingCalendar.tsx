@@ -1,10 +1,9 @@
 import { ArrowBackIosNew, ArrowForwardIos } from '@/components/icons';
 import { Box, Button, ButtonGroup, IconButton, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { DateCalendar, LocalizationProvider } from '@mui/x-date-pickers';
+import { DateCalendar, LocalizationProvider, PickerDay } from '@mui/x-date-pickers';
+import type { PickerDayProps } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import type { PickersDayProps } from '@mui/x-date-pickers/PickersDay';
-import { PickersDay } from '@mui/x-date-pickers/PickersDay';
 import { useState } from 'react';
 
 interface RecordingCalendarProps {
@@ -62,13 +61,13 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     };
 
     // Custom PickersDay with activity color
-    const CustomDay = (props: PickersDayProps<Date>) => {
+    const CustomDay = (props: PickerDayProps) => {
         const { day, outsideCurrentMonth, ...other } = props;
-        const dateKey = formatDateKey(day);
+        const dateKey = formatDateKey(day as Date);
         const count = recordingCounts.get(dateKey) || 0;
         const level = getActivityLevel(count);
-        const isSelected = isSameDay(day, selectedDate);
-        const inRange = isInRange(day);
+        const isSelected = isSameDay(day as Date, selectedDate);
+        const inRange = isInRange(day as Date);
 
         // Color mapping
         const getBgColor = () => {
@@ -102,7 +101,7 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                 }
                 arrow
             >
-                <PickersDay
+                <PickerDay
                     {...other}
                     day={day}
                     outsideCurrentMonth={outsideCurrentMonth}
@@ -115,8 +114,8 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                         },
                     }}
                 >
-                    {day.getDate()}
-                </PickersDay>
+                    {(day as Date).getDate()}
+                </PickerDay>
             </Tooltip>
         );
     };
@@ -208,7 +207,7 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                         }}
                         views={['day']}
                         openTo="day"
-                        defaultCalendarMonth={viewDate}
+                        referenceDate={viewDate}
                         onMonthChange={(newDate) => {
                             setViewDate(newDate);
                             onMonthChange(newDate);
