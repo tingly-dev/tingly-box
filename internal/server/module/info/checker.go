@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -123,27 +124,47 @@ func (c *Checker) fetchFromRegistry(url, registryName string) (version, releaseU
 
 // CompareVersions compares two version strings.
 // Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
-// Handles semver, date-based (YYMMDD.HHMM), and mixed formats.
+// Handles semver prerelease precedence, date-based (YYMMDD.HHMM), and mixed formats.
 func CompareVersions(v1, v2 string) int {
-	v1 = strings.TrimPrefix(v1, "v")
-	v2 = strings.TrimPrefix(v2, "v")
+	core1, prerelease1 := splitVersion(v1)
+	core2, prerelease2 := splitVersion(v2)
 
-	split := func(v string) []string {
-		return strings.FieldsFunc(v, func(r rune) bool {
-			return r == '.' || r == '-' || r == '_'
-		})
+	if result := compareVersionParts(core1, core2); result != 0 {
+		return result
 	}
 
-	parts1 := split(v1)
-	parts2 := split(v2)
+	return comparePrerelease(prerelease1, prerelease2)
+}
 
+func splitVersion(v string) (core []string, prerelease []string) {
+	v = strings.TrimPrefix(v, "v")
+	if buildIndex := strings.IndexByte(v, '+'); buildIndex >= 0 {
+		v = v[:buildIndex]
+	}
+
+	coreText := v
+	prereleaseText := ""
+	if prereleaseIndex := strings.IndexAny(v, "-_"); prereleaseIndex >= 0 {
+		coreText = v[:prereleaseIndex]
+		prereleaseText = v[prereleaseIndex+1:]
+	}
+
+	core = strings.FieldsFunc(coreText, func(r rune) bool { return r == '.' })
+	if prereleaseText != "" {
+		prerelease = strings.FieldsFunc(prereleaseText, func(r rune) bool { return r == '.' || r == '-' || r == '_' })
+	}
+	return core, prerelease
+}
+
+func compareVersionParts(parts1, parts2 []string) int {
 	maxLen := len(parts1)
 	if len(parts2) > maxLen {
 		maxLen = len(parts2)
 	}
 
 	for i := 0; i < maxLen; i++ {
-		var p1, p2 string
+		p1 := "0"
+		p2 := "0"
 		if i < len(parts1) {
 			p1 = parts1[i]
 		}
@@ -151,34 +172,63 @@ func CompareVersions(v1, v2 string) int {
 			p2 = parts2[i]
 		}
 
-		if isNumeric(p1) && isNumeric(p2) {
-			// Zero-pad to equal length for lexicographic numeric comparison.
-			if len(p1) < len(p2) {
-				p1 = strings.Repeat("0", len(p2)-len(p1)) + p1
-			} else if len(p2) < len(p1) {
-				p2 = strings.Repeat("0", len(p1)-len(p2)) + p2
-			}
-		}
-
-		if p1 < p2 {
-			return -1
-		} else if p1 > p2 {
-			return 1
+		if result := compareVersionPart(p1, p2); result != 0 {
+			return result
 		}
 	}
 
 	return 0
 }
 
-// isNumeric reports whether s consists entirely of ASCII digits.
-func isNumeric(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
+func compareVersionPart(p1, p2 string) int {
+	// Numeric identifiers compare as integers (avoid string allocation from zero-padding).
+	if n1, err := strconv.Atoi(p1); err == nil {
+		if n2, err := strconv.Atoi(p2); err == nil {
+			if n1 < n2 {
+				return -1
+			} else if n1 > n2 {
+				return 1
+			}
+			return 0
 		}
 	}
-	return true
+	// Mixed or non-numeric — ASCII ordering happens to match semver rules
+	// (numeric identifiers have lower precedence than non-numeric ones).
+	if p1 < p2 {
+		return -1
+	} else if p1 > p2 {
+		return 1
+	}
+	return 0
+}
+
+func comparePrerelease(parts1, parts2 []string) int {
+	if len(parts1) == 0 && len(parts2) == 0 {
+		return 0
+	}
+	if len(parts1) == 0 {
+		return 1
+	}
+	if len(parts2) == 0 {
+		return -1
+	}
+
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		if i >= len(parts1) {
+			return -1
+		}
+		if i >= len(parts2) {
+			return 1
+		}
+		if result := compareVersionPart(parts1[i], parts2[i]); result != 0 {
+			return result
+		}
+	}
+
+	return 0
 }

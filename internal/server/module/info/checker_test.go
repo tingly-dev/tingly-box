@@ -25,6 +25,11 @@ func TestCompareVersions(t *testing.T) {
 		{name: "Different length numbers", v1: "260130.1200", v2: "260130.900", expected: 1},
 		{name: "Same major, different minor", v1: "1.2.0", v2: "1.1.9", expected: 1},
 		{name: "Complex version string", v1: "v20241207.1430", v2: "v20241207.1200", expected: 1},
+		{name: "Equal rc versions", v1: "0.260709.0-rc1", v2: "v0.260709.0-rc1", expected: 0},
+		{name: "Release greater than rc", v1: "0.260709.0", v2: "0.260709.0-rc1", expected: 1},
+		{name: "RC less than release", v1: "0.260709.0-rc1", v2: "0.260709.0", expected: -1},
+		{name: "RC number ordering", v1: "0.260709.0-rc2", v2: "0.260709.0-rc1", expected: 1},
+		{name: "Build metadata ignored", v1: "0.260709.0+build.2", v2: "0.260709.0+build.1", expected: 0},
 	}
 
 	t.Logf("Running version comparison tests with %d test cases", len(tests))
@@ -35,35 +40,6 @@ func TestCompareVersions(t *testing.T) {
 			t.Logf("Comparing: v1=%s, v2=%s, result=%d, expected=%d", tt.v1, tt.v2, result, tt.expected)
 			if result != tt.expected {
 				t.Errorf("CompareVersions(%q, %q) = %d, expected %d", tt.v1, tt.v2, result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestIsNumeric tests the numeric string validation.
-func TestIsNumeric(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected bool
-	}{
-		{"Empty string", "", false},
-		{"Numeric", "12345", true},
-		{"Numeric with leading zeros", "00123", true},
-		{"With letters", "123abc", false},
-		{"With special chars", "123-456", false},
-		{"Only letters", "abcde", false},
-		{"With spaces", "12 34", false},
-	}
-
-	t.Logf("Running numeric validation tests with %d test cases", len(tests))
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isNumeric(tt.input)
-			t.Logf("Input: %q, Result: %v, Expected: %v", tt.input, result, tt.expected)
-			if result != tt.expected {
-				t.Errorf("isNumeric(%q) = %v, expected %v", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -175,34 +151,29 @@ func TestCheckLatestVersion_Integration(t *testing.T) {
 	}
 }
 
-// TestDevVersionDetection tests that dev/prerelease versions are flagged for update.
-func TestDevVersionDetection(t *testing.T) {
+// TestPrereleaseUpdateDetection tests that prerelease versions only update when
+// the registry version is actually newer.
+func TestPrereleaseUpdateDetection(t *testing.T) {
 	tests := []struct {
 		name           string
 		currentVersion string
 		latestVersion  string
 		expectUpdate   bool
 	}{
-		{"Dev version with +dev suffix", "0.260604.2+dev", "0.260604.2", true},
-		{"Dev version with -dev suffix", "0.260604.2-dev", "0.260604.2", true},
-		{"Pure dev version", "dev", "0.260604.2", true},
-		{"Alpha version", "0.260604.2-alpha", "0.260604.2", true},
-		{"Beta version", "0.260604.2-beta", "0.260604.2", true},
-		{"RC version", "0.260604.2-rc1", "0.260604.2", true},
+		{"Dev version behind release", "0.260604.2+dev", "0.260604.3", true},
+		{"Alpha version behind release", "0.260604.2-alpha", "0.260604.2", true},
+		{"Beta version behind release", "0.260604.2-beta", "0.260604.2", true},
+		{"RC version behind release", "0.260604.2-rc1", "0.260604.2", true},
 		{"Same release version", "0.260604.2", "0.260604.2", false},
+		{"Same RC version", "v0.260709.0-rc1", "0.260709.0-rc1", false},
 		{"Older version", "0.260600.0", "0.260604.2", true},
 	}
 
-	t.Log("Testing dev/prerelease version detection logic")
+	t.Log("Testing prerelease version update detection logic")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isDevVersion := strings.Contains(tt.currentVersion, "dev") ||
-				strings.Contains(tt.currentVersion, "alpha") ||
-				strings.Contains(tt.currentVersion, "beta") ||
-				strings.Contains(tt.currentVersion, "rc")
-
-			hasUpdate := isDevVersion || CompareVersions(tt.latestVersion, tt.currentVersion) > 0
+			hasUpdate := CompareVersions(tt.latestVersion, tt.currentVersion) > 0
 
 			if hasUpdate != tt.expectUpdate {
 				t.Errorf("hasUpdate = %v, expected %v (current=%s, latest=%s)",

@@ -5,7 +5,6 @@ package info
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -70,12 +69,7 @@ func (h *Handler) GetLatestVersion(c *gin.Context) {
 	}
 
 	current := h.version
-	// Treat dev/prerelease builds as always outdated so users are nudged to upgrade.
-	isDevVersion := strings.Contains(current, "dev") ||
-		strings.Contains(current, "alpha") ||
-		strings.Contains(current, "beta") ||
-		strings.Contains(current, "rc")
-	hasUpdate := isDevVersion || CompareVersions(latestVersion, current) > 0
+	hasUpdate := CompareVersions(latestVersion, current) > 0
 
 	c.JSON(http.StatusOK, LatestVersionResponse{
 		Success: true,
