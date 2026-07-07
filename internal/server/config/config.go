@@ -1752,30 +1752,44 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 	}
 }
 
+// findOrCreateScenarioConfigLocked returns the scenario config to mutate for a
+// Set*Flag call. If an exact-match entry doesn't exist yet, seeds a new one:
+// for a profiled scenario (e.g. "claude_code:p1") it copies Flags/Extensions
+// from the resolved base config (via scenarioConfigLocked's fallback) so the
+// profile starts as a fork of its base rather than silently losing flags that
+// were previously inherited from the base scenario on first write. For a
+// non-profiled (or otherwise unresolvable) scenario it creates a blank entry
+// as before. Callers must hold the write lock.
+func (c *Config) findOrCreateScenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioConfig {
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			return &c.Scenarios[i]
+		}
+	}
+
+	newConfig := typ.ScenarioConfig{
+		Scenario:   scenario,
+		Flags:      typ.ScenarioFlags{},
+		Extensions: make(map[string]interface{}),
+	}
+	if seed := c.scenarioConfigLocked(scenario); seed != nil {
+		newConfig.Flags = seed.Flags
+		newConfig.Extensions = make(map[string]interface{}, len(seed.Extensions))
+		for k, v := range seed.Extensions {
+			newConfig.Extensions[k] = v
+		}
+	}
+	c.Scenarios = append(c.Scenarios, newConfig)
+	return &c.Scenarios[len(c.Scenarios)-1]
+}
+
 // SetScenarioFlag sets a specific flag value for a scenario
 func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, value bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Find or create scenario config
-	var config *typ.ScenarioConfig
-	for i := range c.Scenarios {
-		if c.Scenarios[i].Scenario == scenario {
-			config = &c.Scenarios[i]
-			break
-		}
-	}
-
-	if config == nil {
-		// Create new scenario config
-		newConfig := typ.ScenarioConfig{
-			Scenario:   scenario,
-			Flags:      typ.ScenarioFlags{},
-			Extensions: make(map[string]interface{}),
-		}
-		c.Scenarios = append(c.Scenarios, newConfig)
-		config = &c.Scenarios[len(c.Scenarios)-1]
-	}
+	// Find or create scenario config (seeded from base config for profiles)
+	config := c.findOrCreateScenarioConfigLocked(scenario)
 
 	// Set the specific flag
 	switch flagName {
@@ -1848,25 +1862,8 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Find or create scenario config
-	var config *typ.ScenarioConfig
-	for i := range c.Scenarios {
-		if c.Scenarios[i].Scenario == scenario {
-			config = &c.Scenarios[i]
-			break
-		}
-	}
-
-	if config == nil {
-		// Create new scenario config
-		newConfig := typ.ScenarioConfig{
-			Scenario:   scenario,
-			Flags:      typ.ScenarioFlags{},
-			Extensions: make(map[string]interface{}),
-		}
-		c.Scenarios = append(c.Scenarios, newConfig)
-		config = &c.Scenarios[len(c.Scenarios)-1]
-	}
+	// Find or create scenario config (seeded from base config for profiles)
+	config := c.findOrCreateScenarioConfigLocked(scenario)
 
 	// Set the specific flag
 	switch flagName {
@@ -1914,28 +1911,10 @@ func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Find or create scenario config
-	var config *typ.ScenarioConfig
-	for i := range c.Scenarios {
-		if c.Scenarios[i].Scenario == scenario {
-			config = &c.Scenarios[i]
-			break
-		}
-	}
-
-	if config == nil {
-		newConfig := typ.ScenarioConfig{
-			Scenario:   scenario,
-			Flags:      typ.ScenarioFlags{},
-			Extensions: make(map[string]interface{}),
-		}
-		c.Scenarios = append(c.Scenarios, newConfig)
-		config = &c.Scenarios[len(c.Scenarios)-1]
-	}
-
 	switch flagName {
 	// No scenario-level int flags currently registered; add cases here, e.g.
 	//   case FlagFoo:
+	//       config := c.findOrCreateScenarioConfigLocked(scenario)
 	//       config.Flags.Foo = value
 	//       return c.Save()
 	default:
@@ -1978,23 +1957,8 @@ func (c *Config) SetScenarioExtensions(scenario typ.RuleScenario, values map[str
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var config *typ.ScenarioConfig
-	for i := range c.Scenarios {
-		if c.Scenarios[i].Scenario == scenario {
-			config = &c.Scenarios[i]
-			break
-		}
-	}
-
-	if config == nil {
-		newConfig := typ.ScenarioConfig{
-			Scenario:   scenario,
-			Flags:      typ.ScenarioFlags{},
-			Extensions: make(map[string]interface{}),
-		}
-		c.Scenarios = append(c.Scenarios, newConfig)
-		config = &c.Scenarios[len(c.Scenarios)-1]
-	}
+	// Find or create scenario config (seeded from base config for profiles)
+	config := c.findOrCreateScenarioConfigLocked(scenario)
 
 	if config.Extensions == nil {
 		config.Extensions = make(map[string]interface{})
