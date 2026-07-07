@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -76,6 +78,10 @@ func TestTierRouting_EndToEnd(t *testing.T) {
 	// 2. Trip the primary's breaker via the package-level store — this
 	//    is the same store the recorder writes into on real failures.
 	store := loadbalance.DefaultBreakerStore()
+	base := time.Unix(2_000_000_000, 0)
+	restoreClock := clock.SetClock(func() time.Time { return base })
+	defer restoreClock()
+
 	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
 		store.RecordFailure(primaryID)
 	}
@@ -90,9 +96,28 @@ func TestTierRouting_EndToEnd(t *testing.T) {
 		t.Fatalf("after-trip pick = %s, want fallback %s", got.ServiceID(), fallbackID)
 	}
 
-	// 3. Mark the primary healthy again (mirrors what RecordResponse →
-	//    RecordServiceSuccess does at the end of a good request).
-	store.RecordSuccess(primaryID)
+	// 3. Recovery now requires consecutive probe successes (hysteresis).
+	//    Advance past the open window so SelectService's internal Allow()
+	//    flips the breaker Open → HalfOpen and re-admits the primary, then
+	//    mark the probe successful so it closes (mirrors RecordResponse →
+	//    RecordServiceSuccess on a good request). RecoveryThreshold is set
+	//    to 1 so this test stays focused on the tier-return contract; the
+	//    multi-success streak is covered in breaker_test.go.
+	pb := store.Get(primaryID)
+	prevThreshold := pb.RecoveryThreshold
+	pb.RecoveryThreshold = 1
+	defer func() { pb.RecoveryThreshold = prevThreshold }()
+
+	clock.SetClock(func() time.Time { return base.Add(loadbalance.DefaultBreakerOpenDuration + time.Second) })
+
+	got, err = lb.SelectService(&rule)
+	if err != nil {
+		t.Fatalf("half-open SelectService: %v", err)
+	}
+	if got.ServiceID() != primaryID {
+		t.Fatalf("half-open pick = %s, want primary %s", got.ServiceID(), primaryID)
+	}
+	store.RecordSuccess(primaryID) // HalfOpen → Closed
 
 	got, err = lb.SelectService(&rule)
 	if err != nil {

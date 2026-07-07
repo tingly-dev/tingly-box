@@ -2,7 +2,9 @@ package typ
 
 import (
 	"testing"
+	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
@@ -59,6 +61,9 @@ func TestTierFallsBackWhenBreakerOpen(t *testing.T) {
 }
 
 func TestTierReturnsToHigherWhenBreakerCloses(t *testing.T) {
+	restore := clock.SetClock(func() time.Time { return time.Unix(2_000_000_000, 0) })
+	defer restore()
+
 	primary := mkService("recover-p1", "recover-m1", 0)
 	backup := mkService("recover-p2", "recover-m1", 1)
 	rule := mkTierRule(primary, backup)
@@ -71,6 +76,25 @@ func TestTierReturnsToHigherWhenBreakerCloses(t *testing.T) {
 	if got := tactic.SelectService(rule); got != backup {
 		t.Fatalf("expected fallback to T1 backup, got %v", got)
 	}
+
+	// Recovery now requires consecutive probe successes (hysteresis: a single
+	// success no longer closes the breaker). Keep this test focused on tier
+	// return by requiring just one successful probe; the streak itself is
+	// covered in breaker_test.go.
+	b := store.Get(primary.ServiceID())
+	prevThreshold := b.RecoveryThreshold
+	b.RecoveryThreshold = 1
+	defer func() { b.RecoveryThreshold = prevThreshold }()
+
+	// Advance past the open window so SelectService's internal Allow() flips
+	// the breaker Open → HalfOpen and admits the primary again.
+	now := func() time.Time { return time.Unix(2_000_000_000, 0).Add(loadbalance.DefaultBreakerOpenDuration + time.Second) }
+	clock.SetClock(now)
+	got := tactic.SelectService(rule)
+	if got != primary {
+		t.Fatalf("expected half-open probe to pick T0 primary, got %v", got)
+	}
+	// The probe succeeded → mark it so the breaker closes for good.
 	store.RecordSuccess(primary.ServiceID())
 	if got := tactic.SelectService(rule); got != primary {
 		t.Fatalf("expected return to T0 primary after recovery, got %v", got)

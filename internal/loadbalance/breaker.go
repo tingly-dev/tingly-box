@@ -18,34 +18,39 @@ const (
 
 // Default circuit breaker tunables.
 const (
-	DefaultBreakerFailureThreshold = 3
-	DefaultBreakerOpenDuration     = 30 * time.Second
+	DefaultBreakerFailureThreshold  = 3
+	DefaultBreakerOpenDuration      = 30 * time.Second
+	DefaultBreakerRecoveryThreshold = 3 // consecutive half-open successes required to close
 )
 
-// Breaker is a simple three-state circuit breaker for a single service.
+// Breaker is a three-state circuit breaker for a single service, with
+// hysteresis on recovery to avoid tier oscillation.
 //
-// State transitions:
 //   - Closed → Open when consecutive failures hit FailureThreshold.
 //   - Open → HalfOpen lazily, once OpenDuration has elapsed since the trip.
-//     The next Allow() call observes the elapsed time and flips state.
-//   - HalfOpen → Closed on RecordSuccess.
-//   - HalfOpen → Open on RecordFailure (open timer restarts).
+//   - HalfOpen → Closed only after RecoveryThreshold consecutive probe
+//     successes. A single success is not enough — it just releases the probe
+//     slot so the next probe can go through.
+//   - HalfOpen → Open on any probe failure (timer restarts from scratch).
 //
-// While HalfOpen, Allow() returns true for the first caller and false for
-// concurrent callers, so exactly one probe request goes through at a time.
+// While HalfOpen, Allow() returns true for at most one caller at a time, so
+// exactly one probe request goes through per probe round.
 type Breaker struct {
 	mu               sync.Mutex
 	state            BreakerState
 	consecFails      int
 	openedAt         time.Time
 	halfOpenInFlight bool
+	halfOpenSuccess  int // consecutive successes in the current HalfOpen run
 
-	FailureThreshold int
-	OpenDuration     time.Duration
+	FailureThreshold  int
+	OpenDuration      time.Duration
+	RecoveryThreshold int // N_up: consecutive successes to recover
 }
 
 // NewBreaker creates a breaker with the supplied thresholds. Zero values
-// fall back to defaults.
+// fall back to defaults. RecoveryThreshold defaults to
+// DefaultBreakerRecoveryThreshold.
 func NewBreaker(failureThreshold int, openDuration time.Duration) *Breaker {
 	if failureThreshold <= 0 {
 		failureThreshold = DefaultBreakerFailureThreshold
@@ -54,9 +59,10 @@ func NewBreaker(failureThreshold int, openDuration time.Duration) *Breaker {
 		openDuration = DefaultBreakerOpenDuration
 	}
 	return &Breaker{
-		state:            BreakerClosed,
-		FailureThreshold: failureThreshold,
-		OpenDuration:     openDuration,
+		state:             BreakerClosed,
+		FailureThreshold:  failureThreshold,
+		OpenDuration:      openDuration,
+		RecoveryThreshold: DefaultBreakerRecoveryThreshold,
 	}
 }
 
@@ -74,6 +80,7 @@ func (b *Breaker) Allow() bool {
 		if clock.Now().Sub(b.openedAt) >= b.OpenDuration {
 			b.state = BreakerHalfOpen
 			b.halfOpenInFlight = true
+			b.halfOpenSuccess = 0
 			return true
 		}
 		return false
@@ -87,32 +94,58 @@ func (b *Breaker) Allow() bool {
 	return true
 }
 
-// RecordSuccess closes the breaker and resets failure tracking.
+// recoveryThreshold guards against a misconfigured zero value.
+func (b *Breaker) recoveryThreshold() int {
+	if b.RecoveryThreshold <= 0 {
+		return DefaultBreakerRecoveryThreshold
+	}
+	return b.RecoveryThreshold
+}
+
+// RecordSuccess closes the breaker once RecoveryThreshold consecutive probe
+// successes have been observed in HalfOpen. Before the threshold is reached it
+// merely releases the probe slot so the next probe can go through. A success
+// from a Closed breaker resets failure tracking.
 func (b *Breaker) RecordSuccess() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.state = BreakerClosed
+
+	if b.state == BreakerHalfOpen {
+		b.halfOpenSuccess++
+		b.halfOpenInFlight = false
+		if b.halfOpenSuccess >= b.recoveryThreshold() {
+			b.state = BreakerClosed
+			b.consecFails = 0
+			b.halfOpenSuccess = 0
+		}
+		return
+	}
 	b.consecFails = 0
-	b.halfOpenInFlight = false
 }
 
-// RecordFailure increments failure tracking and trips the breaker when
-// the threshold is reached. A failure during HalfOpen immediately re-opens.
+// RecordFailure increments failure tracking and trips the breaker when the
+// threshold is reached. A failure during HalfOpen immediately re-opens and
+// restarts the open timer from scratch.
 func (b *Breaker) RecordFailure() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	if b.state == BreakerHalfOpen {
-		b.state = BreakerOpen
-		b.openedAt = clock.Now()
+		b.openLocked()
 		b.halfOpenInFlight = false
 		return
 	}
 	b.consecFails++
-	if b.consecFails >= b.FailureThreshold {
-		b.state = BreakerOpen
-		b.openedAt = clock.Now()
+	if b.state == BreakerClosed && b.consecFails >= b.FailureThreshold {
+		b.openLocked()
 	}
+}
+
+// openLocked transitions to Open and stamps the open time. Caller holds b.mu.
+func (b *Breaker) openLocked() {
+	b.state = BreakerOpen
+	b.openedAt = clock.Now()
+	b.halfOpenSuccess = 0
 }
 
 // State returns the current breaker state. Intended for introspection / UI.

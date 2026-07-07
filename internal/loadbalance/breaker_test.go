@@ -4,6 +4,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/clock"
 )
 
 func TestBreakerOpensAfterThreshold(t *testing.T) {
@@ -24,6 +26,7 @@ func TestBreakerOpensAfterThreshold(t *testing.T) {
 
 func TestBreakerHalfOpenAfterDuration(t *testing.T) {
 	b := NewBreaker(2, 20*time.Millisecond)
+	b.RecoveryThreshold = 1 // keep this test focused on the open/half-open path, not hysteresis
 	b.RecordFailure()
 	b.RecordFailure()
 	if b.Allow() {
@@ -52,6 +55,7 @@ func TestBreakerHalfOpenAfterDuration(t *testing.T) {
 
 func TestBreakerHalfOpenFailureReopens(t *testing.T) {
 	b := NewBreaker(1, 10*time.Millisecond)
+	b.RecoveryThreshold = 1
 	b.RecordFailure() // → open
 	time.Sleep(15 * time.Millisecond)
 	b.Allow() // → half-open
@@ -130,5 +134,103 @@ func TestBreakerStoreConcurrent(t *testing.T) {
 	// Just need to ensure no panic / race; state is now Open.
 	if store.Get("svc:concurrent").State() != BreakerOpen {
 		t.Fatal("after many failures the breaker should be open")
+	}
+}
+
+// fakeClock is a controllable time source for deterministic breaker tests.
+type fakeClock struct {
+	now time.Time
+}
+
+func (f *fakeClock) advance(d time.Duration) { f.now = f.now.Add(d) }
+
+// withFakeClock installs a controllable clock and returns the clock, a restore
+// function, and a helper to advance it. The breaker reads time via clock.Now.
+func withFakeClock(t *testing.T) (*fakeClock, func()) {
+	t.Helper()
+	fc := &fakeClock{now: time.Unix(1_700_000_000, 0)}
+	restore := clock.SetClock(func() time.Time { return fc.now })
+	return fc, restore
+}
+
+// TestBreakerHysteresisRequiresConsecutiveSuccesses verifies that a single
+// half-open probe success no longer closes the breaker — the core anti-
+// oscillation change. RecoveryThreshold (default 3) consecutive successes
+// are required.
+func TestBreakerHysteresisRequiresConsecutiveSuccesses(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
+	b := NewBreaker(3, time.Second)
+	b.RecordFailure()
+	b.RecordFailure()
+	b.RecordFailure() // → Open
+	if b.State() != BreakerOpen {
+		t.Fatalf("state = %v, want open", b.State())
+	}
+
+	// Open window elapses → HalfOpen. First probe succeeds but must NOT close.
+	fc.advance(time.Second)
+	if !b.Allow() {
+		t.Fatal("first probe after open window should be allowed")
+	}
+	b.RecordSuccess()
+	if b.State() != BreakerHalfOpen {
+		t.Fatalf("after 1 success state = %v, want half_open (not closed)", b.State())
+	}
+
+	// Second probe: Allow again (previous success released the slot), succeed, still not closed.
+	if !b.Allow() {
+		t.Fatal("second probe should be allowed")
+	}
+	b.RecordSuccess()
+	if b.State() != BreakerHalfOpen {
+		t.Fatalf("after 2 successes state = %v, want half_open", b.State())
+	}
+
+	// Third consecutive success → Closed.
+	if !b.Allow() {
+		t.Fatal("third probe should be allowed")
+	}
+	b.RecordSuccess()
+	if b.State() != BreakerClosed {
+		t.Fatalf("after 3 successes state = %v, want closed", b.State())
+	}
+}
+
+// TestBreakerHysteresisResetsOnFailure verifies that a probe failure during
+// the recovery streak resets the success counter and re-opens, requiring a
+// fresh full streak afterwards.
+func TestBreakerHysteresisResetsOnFailure(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
+	b := NewBreaker(2, time.Second)
+	b.RecordFailure()
+	b.RecordFailure() // → Open
+
+	// Two successes (below the default threshold of 3).
+	fc.advance(time.Second)
+	b.Allow()
+	b.RecordSuccess()
+	b.Allow()
+	b.RecordSuccess()
+	if b.State() != BreakerHalfOpen {
+		t.Fatalf("state = %v, want half_open after 2 successes", b.State())
+	}
+
+	// A failure now resets the streak and re-opens, restarting the open timer.
+	b.Allow()
+	b.RecordFailure()
+	if b.State() != BreakerOpen {
+		t.Fatalf("state = %v, want open after failure reset the streak", b.State())
+	}
+
+	// After the open window (base duration), a single success is not enough.
+	fc.advance(time.Second)
+	b.Allow()
+	b.RecordSuccess()
+	if b.State() != BreakerHalfOpen {
+		t.Fatalf("state = %v, want half_open (streak was reset)", b.State())
 	}
 }
