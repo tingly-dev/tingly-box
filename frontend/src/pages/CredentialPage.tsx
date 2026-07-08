@@ -228,7 +228,7 @@ const CredentialPage = () => {
             nextParams.delete('style');
             setSearchParams(nextParams, { replace: true });
             if (style === 'oauth') {
-                setOAuthDialogOpen(true);
+                setConnectOpen(true);
             } else {
                 const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
                 setApiKeyDialogMode('add');
