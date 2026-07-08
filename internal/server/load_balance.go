@@ -220,12 +220,47 @@ func (lb *LoadBalancer) GetAllServiceStats() map[string]*loadbalance.ServiceStat
 	return result
 }
 
-// ClearServiceStats clears statistics for a specific service
+// ClearServiceStats clears statistics for a specific provider:model — both
+// the persisted stats store and the in-memory ServiceStats on every active
+// rule service that matches (stats are global per provider:model, shared
+// across rules). The previous implementation only touched an internal map
+// that was never populated, so the clear was a no-op.
 func (lb *LoadBalancer) ClearServiceStats(provider, model string) {
-	// Clear from internal stats map
-	serviceID := fmt.Sprintf("%s:%s", provider, model)
-	if stats, exists := lb.stats[serviceID]; exists {
-		stats.ResetWindow()
+	// 1. Persisted stats store.
+	if lb.config != nil {
+		if sm := lb.config.StoreManager(); sm != nil {
+			if store := sm.Stats(); store != nil {
+				if err := store.ClearService(provider, model); err != nil {
+					logrus.Warnf("[load_balancer] failed to clear persisted stats for %s/%s: %v", provider, model, err)
+				}
+			}
+		}
+	}
+
+	// 2. In-memory ServiceStats on matching active services across all rules.
+	// Reset the same field set as ClearAllStats (cumulative + window), so a
+	// single-service clear matches the all-clear scope service-by-service.
+	if lb.config != nil {
+		rules := lb.config.GetRequestConfigs()
+		for ruleIdx, rule := range rules {
+			if !rule.Active {
+				continue
+			}
+			for i := range rule.Services {
+				svc := rule.Services[i]
+				if svc.Active && svc.Provider == provider && svc.Model == model {
+					stats := &svc.Stats
+					stats.RequestCount = 0
+					stats.WindowRequestCount = 0
+					stats.WindowTokensConsumed = 0
+					stats.WindowInputTokens = 0
+					stats.WindowOutputTokens = 0
+					stats.WindowStart = time.Now()
+					stats.LastUsed = time.Time{}
+				}
+			}
+			rules[ruleIdx] = rule
+		}
 	}
 }
 
