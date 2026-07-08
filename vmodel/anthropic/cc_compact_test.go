@@ -116,8 +116,11 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 	}
 }
 
-// TestClaudeCodeCompact_NoCompressionWithoutTools tests that compression doesn't happen without tools.
-func TestClaudeCodeCompact_NoCompressionWithoutTools(t *testing.T) {
+// TestClaudeCodeCompact_CompressesWithoutTools tests that compression STILL
+// happens when tools are absent, as long as the last user message contains
+// "compact". The "must have Tools" gate was removed so long text-only
+// conversations can also be compacted.
+func TestClaudeCodeCompact_CompressesWithoutTools(t *testing.T) {
 	vm := NewTransformModel(&TransformModelConfig{
 		ID:    "claude-code-compact",
 		Chain: transform.NewTransformChain([]transform.Transform{smart_compact.NewXMLCompactTransform()}),
@@ -140,9 +143,10 @@ func TestClaudeCodeCompact_NoCompressionWithoutTools(t *testing.T) {
 		t.Fatalf("HandleAnthropic failed: %v", err)
 	}
 
-	if len(req.Messages) != len(originalMessages) {
-		t.Logf("Without tools, message count changed from %d to %d (compression may still occur depending on implementation)",
-			len(originalMessages), len(req.Messages))
+	// No tools, but compact command present → still compresses to one message.
+	if len(req.Messages) >= len(originalMessages) {
+		t.Errorf("Expected compression without tools (%d < %d), got %d",
+			len(req.Messages), len(originalMessages), len(req.Messages))
 	}
 }
 

@@ -10,9 +10,10 @@ import (
 )
 
 // ClaudeCodeCompactTransform conditionally applies XML compression for Claude Code.
-// Only activates when:
-// 1. Last user message contains "compact" (case-insensitive)
-// 2. Request has tool definitions
+// Only activates when the last user message contains "compact" (case-insensitive).
+//
+// Note: there is intentionally NO "request must carry tool definitions" gate —
+// a long text-only conversation that issues /compact should still be compressed.
 type ClaudeCodeCompactTransform struct {
 	inner *smart_compact.XMLCompactTransform
 }
@@ -54,16 +55,10 @@ func (t *ClaudeCodeCompactTransform) Apply(ctx *transform.TransformContext) erro
 }
 
 func (t *ClaudeCodeCompactTransform) shouldApplyV1(req *sdk.MessageNewParams) bool {
-	if len(req.Tools) == 0 {
-		return false
-	}
 	return lastUserMessageContainsCompact(req.Messages)
 }
 
 func (t *ClaudeCodeCompactTransform) shouldApplyV1Beta(req *sdk.BetaMessageNewParams) bool {
-	if len(req.Tools) == 0 {
-		return false
-	}
 	return lastUserMessageContainsCompactBeta(req.Messages)
 }
 
