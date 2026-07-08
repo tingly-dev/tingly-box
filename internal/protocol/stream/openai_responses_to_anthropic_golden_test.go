@@ -95,45 +95,57 @@ func TestResponsesToAnthropicConverter_GoldenSequence(t *testing.T) {
 	}
 	require.Equal(t, want, gotTypes, "ordered Anthropic event sequence")
 
-	// 2. Spot-check key payload fields (data maps are built directly in Go,
-	// so field values are Go native types — no JSON float64 conversions).
+	// 2. Spot-check key payload fields on the wire shapes. Events are typed
+	// structs (or maps for message_delta); normalize through JSON so the
+	// assertions check exactly what a client would receive.
 
 	// message_start carries role="assistant"
-	msgData := got[0].data["message"].(map[string]interface{})
+	msgData := eventDataAsMap(t, got[0].data)["message"].(map[string]interface{})
 	assert.Equal(t, "assistant", msgData["role"])
 
 	// text content_block_start
-	textBlockStart := got[1].data
-	assert.Equal(t, 0, textBlockStart["index"])
+	textBlockStart := eventDataAsMap(t, got[1].data)
+	assert.Equal(t, float64(0), textBlockStart["index"])
 	assert.Equal(t, "text", textBlockStart["content_block"].(map[string]interface{})["type"])
 
 	// text deltas
-	delta1 := got[2].data["delta"].(map[string]interface{})
+	delta1 := eventDataAsMap(t, got[2].data)["delta"].(map[string]interface{})
 	assert.Equal(t, "text_delta", delta1["type"])
 	assert.Equal(t, "Hello", delta1["text"])
 
-	delta2 := got[3].data["delta"].(map[string]interface{})
+	delta2 := eventDataAsMap(t, got[3].data)["delta"].(map[string]interface{})
 	assert.Equal(t, ", World!", delta2["text"])
 
 	// tool_use content_block_start
-	toolBlockStart := got[5].data
+	toolBlockStart := eventDataAsMap(t, got[5].data)
 	toolBlock := toolBlockStart["content_block"].(map[string]interface{})
 	assert.Equal(t, "tool_use", toolBlock["type"])
 	assert.Equal(t, "get_weather", toolBlock["name"])
 
 	// args delta
-	argsDelta := got[6].data["delta"].(map[string]interface{})
+	argsDelta := eventDataAsMap(t, got[6].data)["delta"].(map[string]interface{})
 	assert.Equal(t, "input_json_delta", argsDelta["type"])
 	assert.Equal(t, `{"city":`, argsDelta["partial_json"])
 
 	// message_delta carries stop_reason=tool_use
-	msgDelta := got[9].data["delta"].(map[string]interface{})
+	msgDelta := eventDataAsMap(t, got[9].data)["delta"].(map[string]interface{})
 	assert.Equal(t, "tool_use", msgDelta["stop_reason"])
 
 	// 3. Usage from response.completed.
 	usage := conv.Usage()
 	assert.Equal(t, 10, usage.InputTokens)
 	assert.Equal(t, 5, usage.OutputTokens)
+}
+
+// eventDataAsMap normalizes an event payload (typed wire struct or map) to a
+// generic map through JSON, mirroring what reaches the client.
+func eventDataAsMap(t *testing.T, data any) map[string]interface{} {
+	t.Helper()
+	raw, err := json.Marshal(data)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &m))
+	return m
 }
 
 // eventsToStrings marshals a slice of event maps to JSON strings.

@@ -27,6 +27,7 @@ const (
 	deltaTypeTextDelta      = "text_delta"
 	deltaTypeThinkingDelta  = "thinking_delta"
 	deltaTypeInputJSONDelta = "input_json_delta"
+	deltaTypeSignatureDelta = "signature_delta"
 )
 
 // isAnthropicContentDeltaEvent reports whether an Anthropic SSE event carries

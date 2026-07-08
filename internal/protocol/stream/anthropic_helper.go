@@ -117,38 +117,18 @@ func setAnthropicSSEHeaders(c *gin.Context) {
 }
 
 // sendMessageStart emits the message_start SSE event with the given id/model.
-func sendMessageStart(
-	c *gin.Context,
-	flusher http.Flusher,
-	model string,
-	eventType string,
-	sendEvent func(*gin.Context, string, map[string]interface{}, http.Flusher),
-	inputTokens int64,
-) {
-	event := map[string]interface{}{
-		"type": eventType,
-		"message": map[string]interface{}{
-			"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         model,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  inputTokens,
-				"output_tokens": 0,
-			},
-		},
-	}
-	sendEvent(c, eventType, event, flusher)
+func sendMessageStart(c *gin.Context, flusher http.Flusher, model string, inputTokens int64) {
+	event := newAnthropicMessageStartEvent(fmt.Sprintf("msg_%d", time.Now().Unix()), model, inputTokens)
+	sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 }
 
 // sendAnthropicStreamEvent sends one Anthropic SSE event and optionally records it
 // via StreamEventRecorder if one is stored in the Gin context.
+// eventData may be a map or one of the typed wire event structs from
+// anthropic_wire_events.go; both marshal to the same wire shapes.
 // It also marks TTFT on the first content_block_delta event; MarkFirstToken is
 // idempotent.
-func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
+func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData any, flusher http.Flusher) {
 	if isAnthropicContentDeltaEvent(eventType) {
 		protocol.MarkFirstToken(c)
 	}
@@ -165,7 +145,16 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 
 	if recorder, exists := c.Get("stream_event_recorder"); exists {
 		if r, ok := recorder.(StreamEventRecorder); ok {
-			r.RecordRawMapEvent(eventType, eventData)
+			if m, ok := eventData.(map[string]interface{}); ok {
+				r.RecordRawMapEvent(eventType, m)
+			} else {
+				// Typed wire event: recording is a debug/replay mode, so the
+				// map conversion cost is acceptable here and only here.
+				var m map[string]interface{}
+				if err := json.Unmarshal(eventJSON, &m); err == nil {
+					r.RecordRawMapEvent(eventType, m)
+				}
+			}
 		}
 	}
 }
@@ -174,16 +163,7 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 // Anthropic extended thinking requires a signature before content_block_stop.
 func sendThinkingSignature(c *gin.Context, index int, flusher http.Flusher) {
 	// Generate a minimal placeholder signature (base64-encoded random bytes)
-	sig := GenerateObfuscationString()
-	event := map[string]interface{}{
-		"type":  eventTypeContentBlockDelta,
-		"index": index,
-		"delta": map[string]interface{}{
-			"type":      "signature_delta",
-			"signature": sig,
-		},
-	}
-	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, event, flusher)
+	sendContentBlockDelta(c, index, anthropicSignatureDelta(GenerateObfuscationString()), flusher)
 }
 
 // closeOpenBlock closes any currently open content block, emitting signature_delta first for
@@ -279,44 +259,34 @@ func sendMessageDelta(c *gin.Context, state *streamState, stopReason string, flu
 
 // sendMessageStop sends message_stop event
 func sendMessageStop(c *gin.Context, messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type": eventTypeMessageStop,
-	}
-	sendAnthropicStreamEvent(c, eventTypeMessageStop, event, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop}, flusher)
 }
 
 // sendContentBlockStart sends a content_block_start event
-func sendContentBlockStart(c *gin.Context, index int, blockType string, initialContent map[string]interface{}, flusher http.Flusher) {
-	contentBlock := map[string]interface{}{
-		"type": blockType,
-	}
-	for k, v := range initialContent {
-		contentBlock[k] = v
-	}
-
-	event := map[string]interface{}{
-		"type":          eventTypeContentBlockStart,
-		"index":         index,
-		"content_block": contentBlock,
+func sendContentBlockStart(c *gin.Context, index int, block anthropicWireContentBlock, flusher http.Flusher) {
+	event := anthropicContentBlockStartEvent{
+		Type:         eventTypeContentBlockStart,
+		Index:        index,
+		ContentBlock: block,
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockStart, event, flusher)
 }
 
 // sendContentBlockDelta sends a content_block_delta event
-func sendContentBlockDelta(c *gin.Context, index int, content map[string]interface{}, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":  eventTypeContentBlockDelta,
-		"index": index,
-		"delta": content,
+func sendContentBlockDelta(c *gin.Context, index int, delta anthropicWireDelta, flusher http.Flusher) {
+	event := anthropicContentBlockDeltaEvent{
+		Type:  eventTypeContentBlockDelta,
+		Index: index,
+		Delta: delta,
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, event, flusher)
 }
 
 // sendContentBlockStop sends a content_block_stop event and marks the block as stopped
 func sendContentBlockStop(c *gin.Context, state *streamState, index int, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":  eventTypeContentBlockStop,
-		"index": index,
+	event := anthropicContentBlockStopEvent{
+		Type:  eventTypeContentBlockStop,
+		Index: index,
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, event, flusher)
 	state.stoppedBlocks[index] = true
@@ -324,56 +294,35 @@ func sendContentBlockStop(c *gin.Context, state *streamState, index int, flusher
 
 // sendAnthropicV1MessageStart sends a message_start event for a simple single-text-block response.
 func sendAnthropicV1MessageStart(c *gin.Context, messageID, model string, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type": eventTypeMessageStart,
-		"message": map[string]interface{}{
-			"id":            messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         model,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  0,
-				"output_tokens": 0,
-			},
-		},
-	}
+	event := newAnthropicMessageStartEvent(messageID, model, 0)
 	sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 }
 
 // sendAnthropicV1ContentBlockStart sends a content_block_start event at index 0 with an empty text block.
 func sendAnthropicV1ContentBlockStart(c *gin.Context, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":  eventTypeContentBlockStart,
-		"index": 0,
-		"content_block": map[string]interface{}{
-			"type": blockTypeText,
-			"text": "",
-		},
+	event := anthropicContentBlockStartEvent{
+		Type:         eventTypeContentBlockStart,
+		Index:        0,
+		ContentBlock: anthropicTextBlockStart(),
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockStart, event, flusher)
 }
 
 // sendAnthropicV1ContentBlockDelta sends a text_delta content_block_delta event at index 0.
 func sendAnthropicV1ContentBlockDelta(c *gin.Context, text string, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":  eventTypeContentBlockDelta,
-		"index": 0,
-		"delta": map[string]interface{}{
-			"type": deltaTypeTextDelta,
-			"text": text,
-		},
+	event := anthropicContentBlockDeltaEvent{
+		Type:  eventTypeContentBlockDelta,
+		Index: 0,
+		Delta: anthropicTextDelta(text),
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, event, flusher)
 }
 
 // sendAnthropicV1ContentBlockStop sends a content_block_stop event at index 0.
 func sendAnthropicV1ContentBlockStop(c *gin.Context, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":  eventTypeContentBlockStop,
-		"index": 0,
+	event := anthropicContentBlockStopEvent{
+		Type:  eventTypeContentBlockStop,
+		Index: 0,
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, event, flusher)
 }
@@ -393,8 +342,5 @@ func sendAnthropicV1MessageStop(c *gin.Context, usage *protocol.TokenUsage, flus
 	}
 	sendAnthropicStreamEvent(c, eventTypeMessageDelta, deltaEvent, flusher)
 
-	event := map[string]interface{}{
-		"type": eventTypeMessageStop,
-	}
-	sendAnthropicStreamEvent(c, eventTypeMessageStop, event, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop}, flusher)
 }

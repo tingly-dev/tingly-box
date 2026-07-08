@@ -240,27 +240,11 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		usage          = protocol.ZeroTokenUsage()
 	)
 
-	// Send message_start event first
-	messageStartEvent := map[string]interface{}{
-		"type": "message_start",
-		"message": map[string]interface{}{
-			"id":            messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         responseModel,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  0,
-				"output_tokens": 0,
-			},
-		},
-	}
+	// Send message_start event first.
 	// First SSE byte for this stream — open the failover gate so buffered
 	// output flushes and subsequent writes pass straight through.
 	protocol.CommitFirstChunk(c)
-	sendAnthropicStreamEvent(c, "message_start", messageStartEvent, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStart, newAnthropicMessageStartEvent(messageID, responseModel, 0), flusher)
 
 	// Process the stream
 	for googleResp, err := range stream {
@@ -303,51 +287,36 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 						// Send content_block_start for text on first occurrence
 						if textBlockIndex == -1 {
 							textBlockIndex = 0
-							contentBlockStartEvent := map[string]interface{}{
-								"type":  "content_block_start",
-								"index": textBlockIndex,
-								"content_block": map[string]interface{}{
-									"type": "text",
-									"text": "",
-								},
-							}
-							sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+							sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
+								Type:         eventTypeContentBlockStart,
+								Index:        textBlockIndex,
+								ContentBlock: anthropicTextBlockStart(),
+							}, flusher)
 						}
 
 						// Send content_block_delta with text
-						deltaEvent := map[string]interface{}{
-							"type":  "content_block_delta",
-							"index": textBlockIndex,
-							"delta": map[string]interface{}{
-								"type": "text_delta",
-								"text": part.Text,
-							},
-						}
-						sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, anthropicContentBlockDeltaEvent{
+							Type:  eventTypeContentBlockDelta,
+							Index: textBlockIndex,
+							Delta: anthropicTextDelta(part.Text),
+						}, flusher)
 					}
 
 					// Handle function calls
 					if part.FunctionCall != nil {
 						toolBlockIndex++
 						// Send content_block_start for tool_use
-						contentBlockStartEvent := map[string]interface{}{
-							"type":  "content_block_start",
-							"index": toolBlockIndex,
-							"content_block": map[string]interface{}{
-								"type":  "tool_use",
-								"id":    part.FunctionCall.ID,
-								"name":  part.FunctionCall.Name,
-								"input": part.FunctionCall.Args,
-							},
-						}
-						sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
+							Type:         eventTypeContentBlockStart,
+							Index:        toolBlockIndex,
+							ContentBlock: anthropicToolUseBlockStartWithInput(part.FunctionCall.ID, part.FunctionCall.Name, part.FunctionCall.Args),
+						}, flusher)
 
 						// Send content_block_stop for this tool block
-						contentBlockStopEvent := map[string]interface{}{
-							"type":  "content_block_stop",
-							"index": toolBlockIndex,
-						}
-						sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
+							Type:  eventTypeContentBlockStop,
+							Index: toolBlockIndex,
+						}, flusher)
 					}
 				}
 			}
@@ -358,11 +327,10 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 				// Send content_block_stop for text if applicable
 				if textBlockIndex != -1 {
-					contentBlockStopEvent := map[string]interface{}{
-						"type":  "content_block_stop",
-						"index": textBlockIndex,
-					}
-					sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
+					sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
+						Type:  eventTypeContentBlockStop,
+						Index: textBlockIndex,
+					}, flusher)
 				}
 
 				// Collect usage info
@@ -386,10 +354,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
 
 				// Send message_stop
-				messageStopEvent := map[string]interface{}{
-					"type": "message_stop",
-				}
-				sendAnthropicStreamEvent(c, "message_stop", messageStopEvent, flusher)
+				sendAnthropicStreamEvent(c, eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop}, flusher)
 				return usage, nil
 			}
 		}
@@ -446,27 +411,11 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		usage          = protocol.ZeroTokenUsage()
 	)
 
-	// Send message_start event first
-	messageStartEvent := map[string]interface{}{
-		"type": eventTypeMessageStart,
-		"message": map[string]interface{}{
-			"id":            messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         responseModel,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  0,
-				"output_tokens": 0,
-			},
-		},
-	}
+	// Send message_start event first.
 	// First SSE byte for this stream — open the failover gate so buffered
 	// output flushes and subsequent writes pass straight through.
 	protocol.CommitFirstChunk(c)
-	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStart, newAnthropicMessageStartEvent(messageID, responseModel, 0), flusher)
 
 	// Process the stream
 	for googleResp, err := range stream {
@@ -509,51 +458,36 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 						// Send content_block_start for text on first occurrence
 						if textBlockIndex == -1 {
 							textBlockIndex = 0
-							contentBlockStartEvent := map[string]interface{}{
-								"type":  eventTypeContentBlockStart,
-								"index": textBlockIndex,
-								"content_block": map[string]interface{}{
-									"type": "text",
-									"text": "",
-								},
-							}
-							sendAnthropicStreamEvent(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
+							sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
+								Type:         eventTypeContentBlockStart,
+								Index:        textBlockIndex,
+								ContentBlock: anthropicTextBlockStart(),
+							}, flusher)
 						}
 
 						// Send content_block_delta with text
-						deltaEvent := map[string]interface{}{
-							"type":  eventTypeContentBlockDelta,
-							"index": textBlockIndex,
-							"delta": map[string]interface{}{
-								"type": "text_delta",
-								"text": part.Text,
-							},
-						}
-						sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, deltaEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, anthropicContentBlockDeltaEvent{
+							Type:  eventTypeContentBlockDelta,
+							Index: textBlockIndex,
+							Delta: anthropicTextDelta(part.Text),
+						}, flusher)
 					}
 
 					// Handle function calls
 					if part.FunctionCall != nil {
 						toolBlockIndex++
 						// Send content_block_start for tool_use
-						contentBlockStartEvent := map[string]interface{}{
-							"type":  eventTypeContentBlockStart,
-							"index": toolBlockIndex,
-							"content_block": map[string]interface{}{
-								"type":  "tool_use",
-								"id":    part.FunctionCall.ID,
-								"name":  part.FunctionCall.Name,
-								"input": part.FunctionCall.Args,
-							},
-						}
-						sendAnthropicStreamEvent(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
+							Type:         eventTypeContentBlockStart,
+							Index:        toolBlockIndex,
+							ContentBlock: anthropicToolUseBlockStartWithInput(part.FunctionCall.ID, part.FunctionCall.Name, part.FunctionCall.Args),
+						}, flusher)
 
 						// Send content_block_stop for this tool block
-						contentBlockStopEvent := map[string]interface{}{
-							"type":  eventTypeContentBlockStop,
-							"index": toolBlockIndex,
-						}
-						sendAnthropicStreamEvent(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
+						sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
+							Type:  eventTypeContentBlockStop,
+							Index: toolBlockIndex,
+						}, flusher)
 					}
 				}
 			}
@@ -564,11 +498,10 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 
 				// Send content_block_stop for text if applicable
 				if textBlockIndex != -1 {
-					contentBlockStopEvent := map[string]interface{}{
-						"type":  eventTypeContentBlockStop,
-						"index": textBlockIndex,
-					}
-					sendAnthropicStreamEvent(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
+					sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
+						Type:  eventTypeContentBlockStop,
+						Index: textBlockIndex,
+					}, flusher)
 				}
 
 				// Collect usage info

@@ -16,9 +16,11 @@ import (
 )
 
 // anthropicStreamEvent wraps a single Anthropic SSE event for the converter pipeline.
+// data is either a typed wire event (anthropic_wire_events.go) or a map for
+// the low-frequency shapes (message_delta with provider extras, errors).
 type anthropicStreamEvent struct {
 	eventType string
-	data      map[string]interface{}
+	data      any
 }
 
 // openAIToAnthropicConverter is a stateful iterator that reads OpenAI Chat Completion
@@ -157,14 +159,11 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 					c.state.nextBlockIndex++
 					c.state.thinkingBlocks[c.state.thinkingBlockIndex] = true
 					c.emitEnsureMessageStart()
-					c.emitContentBlockStart(c.state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""})
+					c.emitContentBlockStart(c.state.thinkingBlockIndex, anthropicThinkingBlockStart())
 				}
 				if thinkingText := extractString(v); thinkingText != "" {
 					c.emitEnsureMessageStart()
-					c.emitContentBlockDelta(c.state.thinkingBlockIndex, map[string]interface{}{
-						"type":     deltaTypeThinkingDelta,
-						"thinking": thinkingText,
-					})
+					c.emitContentBlockDelta(c.state.thinkingBlockIndex, anthropicThinkingDelta(thinkingText))
 				}
 				continue
 			}
@@ -179,14 +178,11 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 			c.state.textBlockIndex = c.state.nextBlockIndex
 			c.state.nextBlockIndex++
 			c.emitEnsureMessageStart()
-			c.emitContentBlockStart(c.state.textBlockIndex, blockTypeText, map[string]interface{}{"text": ""})
+			c.emitContentBlockStart(c.state.textBlockIndex, anthropicTextBlockStart())
 		}
 		c.state.hasTextContent = true
 		c.emitEnsureMessageStart()
-		c.emitContentBlockDelta(c.state.textBlockIndex, map[string]interface{}{
-			"type": deltaTypeTextDelta,
-			"text": delta.Refusal,
-		})
+		c.emitContentBlockDelta(c.state.textBlockIndex, anthropicTextDelta(delta.Refusal))
 	}
 
 	// Handle content delta
@@ -197,13 +193,10 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 			c.state.textBlockIndex = c.state.nextBlockIndex
 			c.state.nextBlockIndex++
 			c.emitEnsureMessageStart()
-			c.emitContentBlockStart(c.state.textBlockIndex, blockTypeText, map[string]interface{}{"text": ""})
+			c.emitContentBlockStart(c.state.textBlockIndex, anthropicTextBlockStart())
 		}
 		c.emitEnsureMessageStart()
-		c.emitContentBlockDelta(c.state.textBlockIndex, map[string]interface{}{
-			"type": deltaTypeTextDelta,
-			"text": delta.Content,
-		})
+		c.emitContentBlockDelta(c.state.textBlockIndex, anthropicTextDelta(delta.Content))
 	}
 
 	// Handle tool_calls delta
@@ -223,11 +216,7 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 			c.emitCloseOpenBlock()
 			if c.state.pendingToolCalls[anthropicIndex].emit {
 				c.emitEnsureMessageStart()
-				c.emitContentBlockStart(anthropicIndex, blockTypeToolUse, map[string]interface{}{
-					"id":    truncatedID,
-					"name":  toolCall.Function.Name,
-					"input": map[string]interface{}{},
-				})
+				c.emitContentBlockStart(anthropicIndex, anthropicToolUseBlockStart(truncatedID, toolCall.Function.Name))
 			}
 		}
 		if toolCall.ID != "" {
@@ -240,10 +229,7 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 			c.state.pendingToolCalls[anthropicIndex].input += toolCall.Function.Arguments
 			if c.state.pendingToolCalls[anthropicIndex].emit {
 				c.emitEnsureMessageStart()
-				c.emitContentBlockDelta(anthropicIndex, map[string]interface{}{
-					"type":         deltaTypeInputJSONDelta,
-					"partial_json": toolCall.Function.Arguments,
-				})
+				c.emitContentBlockDelta(anthropicIndex, anthropicInputJSONDelta(toolCall.Function.Arguments))
 			}
 		}
 	}
@@ -326,7 +312,7 @@ func (c *openAIToAnthropicConverter) emitTruncatedError() {
 	})
 }
 
-func (c *openAIToAnthropicConverter) emitAnthropic(eventType string, data map[string]interface{}) {
+func (c *openAIToAnthropicConverter) emitAnthropic(eventType string, data any) {
 	c.pending = append(c.pending, anthropicStreamEvent{eventType: eventType, data: data})
 }
 
@@ -334,58 +320,36 @@ func (c *openAIToAnthropicConverter) emitEnsureMessageStart() {
 	if c.messageStarted {
 		return
 	}
-	c.emitAnthropic(eventTypeMessageStart, map[string]interface{}{
-		"type": eventTypeMessageStart,
-		"message": map[string]interface{}{
-			"id":            c.messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         c.responseModel,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  c.estimatedInputTokens,
-				"output_tokens": 0,
-			},
-		},
-	})
+	c.emitAnthropic(eventTypeMessageStart, newAnthropicMessageStartEvent(c.messageID, c.responseModel, int64(c.estimatedInputTokens)))
 	c.messageStarted = true
 }
 
-func (c *openAIToAnthropicConverter) emitContentBlockStart(index int, blockType string, initialContent map[string]interface{}) {
-	contentBlock := map[string]interface{}{"type": blockType}
-	for k, v := range initialContent {
-		contentBlock[k] = v
-	}
-	c.emitAnthropic(eventTypeContentBlockStart, map[string]interface{}{
-		"type":          eventTypeContentBlockStart,
-		"index":         index,
-		"content_block": contentBlock,
+func (c *openAIToAnthropicConverter) emitContentBlockStart(index int, block anthropicWireContentBlock) {
+	c.emitAnthropic(eventTypeContentBlockStart, anthropicContentBlockStartEvent{
+		Type:         eventTypeContentBlockStart,
+		Index:        index,
+		ContentBlock: block,
 	})
 }
 
-func (c *openAIToAnthropicConverter) emitContentBlockDelta(index int, content map[string]interface{}) {
-	c.emitAnthropic(eventTypeContentBlockDelta, map[string]interface{}{
-		"type":  eventTypeContentBlockDelta,
-		"index": index,
-		"delta": content,
+func (c *openAIToAnthropicConverter) emitContentBlockDelta(index int, delta anthropicWireDelta) {
+	c.emitAnthropic(eventTypeContentBlockDelta, anthropicContentBlockDeltaEvent{
+		Type:  eventTypeContentBlockDelta,
+		Index: index,
+		Delta: delta,
 	})
 }
 
 func (c *openAIToAnthropicConverter) emitContentBlockStop(index int) {
-	c.emitAnthropic(eventTypeContentBlockStop, map[string]interface{}{
-		"type":  eventTypeContentBlockStop,
-		"index": index,
+	c.emitAnthropic(eventTypeContentBlockStop, anthropicContentBlockStopEvent{
+		Type:  eventTypeContentBlockStop,
+		Index: index,
 	})
 	c.state.stoppedBlocks[index] = true
 }
 
 func (c *openAIToAnthropicConverter) emitThinkingSignature(index int) {
-	c.emitContentBlockDelta(index, map[string]interface{}{
-		"type":      "signature_delta",
-		"signature": GenerateObfuscationString(),
-	})
+	c.emitContentBlockDelta(index, anthropicSignatureDelta(GenerateObfuscationString()))
 }
 
 func (c *openAIToAnthropicConverter) emitCloseOpenBlock() {
@@ -458,9 +422,7 @@ func (c *openAIToAnthropicConverter) emitMessageDelta(stopReason string) {
 }
 
 func (c *openAIToAnthropicConverter) emitMessageStop() {
-	c.emitAnthropic(eventTypeMessageStop, map[string]interface{}{
-		"type": eventTypeMessageStop,
-	})
+	c.emitAnthropic(eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop})
 }
 
 // anthropicSSEWriter returns a writer that sends Anthropic SSE events using

@@ -29,41 +29,28 @@ func AnthropicSingleMessage(c *gin.Context, resp *anthropic.Message, responseMod
 	}
 
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
-	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicStreamEvent, state.inputTokens)
+	sendMessageStart(c, flusher, model, state.inputTokens)
 
 	hasToolUse := false
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
 		case anthropic.TextBlock:
-			sendContentBlockStart(c, idx, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+			sendContentBlockStart(c, idx, anthropicTextBlockStart(), flusher)
 			if v.Text != "" {
-				sendContentBlockDelta(c, idx, map[string]interface{}{
-					"type": deltaTypeTextDelta,
-					"text": v.Text,
-				}, flusher)
+				sendContentBlockDelta(c, idx, anthropicTextDelta(v.Text), flusher)
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.ThinkingBlock:
-			sendContentBlockStart(c, idx, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
+			sendContentBlockStart(c, idx, anthropicThinkingBlockStart(), flusher)
 			if v.Thinking != "" {
-				sendContentBlockDelta(c, idx, map[string]interface{}{
-					"type":     deltaTypeThinkingDelta,
-					"thinking": v.Thinking,
-				}, flusher)
+				sendContentBlockDelta(c, idx, anthropicThinkingDelta(v.Thinking), flusher)
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.ToolUseBlock:
 			hasToolUse = true
-			sendContentBlockStart(c, idx, blockTypeToolUse, map[string]interface{}{
-				"id":    v.ID,
-				"name":  v.Name,
-				"input": map[string]any{},
-			}, flusher)
+			sendContentBlockStart(c, idx, anthropicToolUseBlockStart(v.ID, v.Name), flusher)
 			if inputBytes, err := json.Marshal(v.Input); err == nil {
-				sendContentBlockDelta(c, idx, map[string]interface{}{
-					"type":         deltaTypeInputJSONDelta,
-					"partial_json": string(inputBytes),
-				}, flusher)
+				sendContentBlockDelta(c, idx, anthropicInputJSONDelta(string(inputBytes)), flusher)
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		}
@@ -96,41 +83,28 @@ func AnthropicSingleBetaMessage(c *gin.Context, resp *anthropic.BetaMessage, res
 	}
 
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
-	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicStreamEvent, state.inputTokens)
+	sendMessageStart(c, flusher, model, state.inputTokens)
 
 	hasToolUse := false
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
 		case anthropic.BetaTextBlock:
-			sendContentBlockStart(c, idx, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+			sendContentBlockStart(c, idx, anthropicTextBlockStart(), flusher)
 			if v.Text != "" {
-				sendContentBlockDelta(c, idx, map[string]interface{}{
-					"type": deltaTypeTextDelta,
-					"text": v.Text,
-				}, flusher)
+				sendContentBlockDelta(c, idx, anthropicTextDelta(v.Text), flusher)
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.BetaThinkingBlock:
-			sendContentBlockStart(c, idx, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
+			sendContentBlockStart(c, idx, anthropicThinkingBlockStart(), flusher)
 			if v.Thinking != "" {
-				sendContentBlockDelta(c, idx, map[string]interface{}{
-					"type":     deltaTypeThinkingDelta,
-					"thinking": v.Thinking,
-				}, flusher)
+				sendContentBlockDelta(c, idx, anthropicThinkingDelta(v.Thinking), flusher)
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.BetaToolUseBlock:
 			hasToolUse = true
-			sendContentBlockStart(c, idx, blockTypeToolUse, map[string]interface{}{
-				"id":    v.ID,
-				"name":  v.Name,
-				"input": map[string]any{},
-			}, flusher)
+			sendContentBlockStart(c, idx, anthropicToolUseBlockStart(v.ID, v.Name), flusher)
 			if inputBytes, err := json.Marshal(v.Input); err == nil {
-				sendContentBlockDelta(c, idx, map[string]interface{}{
-					"type":         deltaTypeInputJSONDelta,
-					"partial_json": string(inputBytes),
-				}, flusher)
+				sendContentBlockDelta(c, idx, anthropicInputJSONDelta(string(inputBytes)), flusher)
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		}
