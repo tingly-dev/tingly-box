@@ -103,21 +103,26 @@ export default function CustomModelCard({
                     {loading ? (
                         <CircularProgress size={20} />
                     ) : (
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 500,
-                                fontSize: '0.8rem',
-                                lineHeight: 1.2,
-                                wordBreak: 'break-word',
-                                textAlign: 'center',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            {model}
-                        </Typography>
+                        <Tooltip title={model} arrow disableInteractive>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    fontWeight: 500,
+                                    fontSize: '0.8rem',
+                                    lineHeight: 1.2,
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 3,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    wordBreak: 'break-word',
+                                    textAlign: 'center',
+                                    maxWidth: '100%',
+                                }}
+                            >
+                                {model}
+                            </Typography>
+                        </Tooltip>
                     )}
                 </Box>
 
