@@ -38,7 +38,7 @@ func (ph *ProtocolHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.
 
 	opts := []transform.TransformOption{
 		transform.WithContext(c.Request.Context()),
-		transform.WithProviderURL(provider.APIBase),
+		transform.WithProvider(provider),
 		transform.WithScenarioFlags(scenarioFlags),
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(ph.deps.Config.ClaudeCodeDeviceID),
@@ -47,11 +47,6 @@ func (ph *ProtocolHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.
 	// Advisor loopback requests carry X-Tingly-Advisor-Depth >= 1; skip MCP tool injection for them
 	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
-	}
-
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
-		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -99,7 +94,7 @@ func (ph *ProtocolHandler) TransformAnthropicV1(c *gin.Context, req *protocol.An
 	}
 
 	opts := []transform.TransformOption{
-		transform.WithProviderURL(provider.APIBase),
+		transform.WithProvider(provider),
 		transform.WithScenarioFlags(scenarioFlags),
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(ph.deps.Config.ClaudeCodeDeviceID),
@@ -108,11 +103,6 @@ func (ph *ProtocolHandler) TransformAnthropicV1(c *gin.Context, req *protocol.An
 	// Check if this is an advisor request
 	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
-	}
-
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
-		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -154,7 +144,7 @@ func (ph *ProtocolHandler) TransformOpenAIChat(c *gin.Context, req *protocol.Ope
 	}
 
 	opts := []transform.TransformOption{
-		transform.WithProviderURL(provider.APIBase),
+		transform.WithProvider(provider),
 		transform.WithScenarioFlags(scenarioFlags),
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(ph.deps.Config.ClaudeCodeDeviceID),
@@ -163,11 +153,6 @@ func (ph *ProtocolHandler) TransformOpenAIChat(c *gin.Context, req *protocol.Ope
 	// Check if this is an advisor request
 	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
-	}
-
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
-		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -209,15 +194,11 @@ func (ph *ProtocolHandler) TransformOpenAIResponses(c *gin.Context, req *protoco
 	}
 
 	opts := []transform.TransformOption{
-		transform.WithProviderURL(provider.APIBase),
+		transform.WithProvider(provider),
 		transform.WithScenarioFlags(scenarioFlags),
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(ph.deps.Config.ClaudeCodeDeviceID),
 		transform.WithMaxTokens(int64(maxAllowed)),
-	}
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
-		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(

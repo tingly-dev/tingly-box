@@ -11,6 +11,7 @@ import (
 	shared "github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -175,6 +176,28 @@ func TestTransformChain_ContextPreservation(t *testing.T) {
 			},
 			verifyCtx: func(t *testing.T, result *TransformContext) {
 				assert.Equal(t, "api.deepseek.com", result.ProviderURL)
+			},
+		},
+		{
+			name: "Provider option populates canonical and derived provider context",
+			setupCtx: func() *TransformContext {
+				return NewTransformContext(
+					&openai.ChatCompletionNewParams{},
+					WithProvider(&typ.Provider{
+						APIBase:  "https://chatgpt.com/backend-api",
+						AuthType: typ.AuthTypeOAuth,
+						OAuthDetail: &typ.OAuthDetail{
+							Issuer: ai.IssuerCodex,
+							UserID: "user-123",
+						},
+					}),
+				)
+			},
+			verifyCtx: func(t *testing.T, result *TransformContext) {
+				require.NotNil(t, result.Provider)
+				assert.Equal(t, "https://chatgpt.com/backend-api", result.ProviderURL)
+				assert.Equal(t, string(ai.IssuerCodex), result.ProviderType)
+				assert.Equal(t, "user-123", result.Config.UserID)
 			},
 		},
 		{

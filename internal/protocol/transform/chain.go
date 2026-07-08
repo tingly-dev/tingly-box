@@ -48,6 +48,22 @@ func WithProviderURL(url string) TransformOption {
 	return func(ctx *TransformContext) { ctx.ProviderURL = url }
 }
 
+// WithProvider sets the provider as the canonical upstream/provider context and
+// fills legacy derived fields used by older transforms.
+func WithProvider(provider *typ.Provider) TransformOption {
+	return func(ctx *TransformContext) {
+		ctx.Provider = provider
+		if provider == nil {
+			return
+		}
+		ctx.ProviderURL = provider.APIBase
+		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+			ctx.ProviderType = string(provider.OAuthDetail.GetIssuer())
+			ctx.Config.UserID = provider.OAuthDetail.UserID
+		}
+	}
+}
+
 // WithIssuer sets the provider type (e.g., "claude_code", "codex") in the transform context.
 func WithIssuer(issuer string) TransformOption {
 	return func(ctx *TransformContext) { ctx.ProviderType = issuer }
@@ -150,6 +166,11 @@ type TransformContext struct {
 	// Config holds structured, type-safe configuration for the transform chain.
 	Config TransformConfig
 
+	// Provider is the canonical provider configuration for transforms that need
+	// provider-aware behavior. ProviderURL and ProviderType are legacy derived
+	// fields kept for compatibility with existing transforms and tests.
+	Provider *typ.Provider
+
 	// Extra allows transforms to pass arbitrary data through the chain
 	Extra map[string]interface{}
 }
@@ -205,6 +226,7 @@ func (ctx *TransformContext) Release() {
 	ctx.Request = nil
 	ctx.OriginalRequest = nil
 	ctx.TransformSteps = nil
+	ctx.Provider = nil
 	ctx.Extra = nil
 }
 
