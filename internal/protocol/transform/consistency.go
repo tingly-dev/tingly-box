@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -161,57 +160,10 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 	t.alignToolMessages(req)
 
 	for i := range req.Messages {
-		// Check if this is a tool message
-		if req.Messages[i].OfTool != nil {
-			// Convert to map to access tool_call_id
-			msgMap := req.Messages[i].ExtraFields()
-			if msgMap == nil {
-				// Try to unmarshal the message to get tool_call_id
-				if msgBytes, err := json.Marshal(req.Messages[i]); err == nil {
-					var toolMsg map[string]interface{}
-					if err := json.Unmarshal(msgBytes, &toolMsg); err == nil {
-						if toolCallID, ok := toolMsg["tool_call_id"].(string); ok {
-							// Truncate tool_call_id if needed
-							if len(toolCallID) > maxToolCallIDLength {
-								truncatedID := toolCallID[:maxToolCallIDLength]
-								toolMsg["tool_call_id"] = truncatedID
-
-								// Re-marshal and unmarshal to update message
-								if newBytes, err := json.Marshal(toolMsg); err == nil {
-									var updatedMsg openai.ChatCompletionMessageParamUnion
-									if err := json.Unmarshal(newBytes, &updatedMsg); err == nil {
-										req.Messages[i] = updatedMsg
-									}
-								}
-							}
-						}
-					}
-				}
-			} else {
-				// tool_call_id should be in the message structure, not ExtraFields
-				// For OpenAI ChatCompletionMessageParamUnion.OfTool, tool_call_id is a direct field
-				// We need to handle this differently - let's check the actual structure
-
-				// Re-marshal and inspect the message
-				if msgBytes, err := json.Marshal(req.Messages[i]); err == nil {
-					var toolMsg map[string]interface{}
-					if err := json.Unmarshal(msgBytes, &toolMsg); err == nil {
-						if toolCallID, ok := toolMsg["tool_call_id"].(string); ok {
-							if len(toolCallID) > maxToolCallIDLength {
-								truncatedID := toolCallID[:maxToolCallIDLength]
-								toolMsg["tool_call_id"] = truncatedID
-
-								if newBytes, err := json.Marshal(toolMsg); err == nil {
-									var updatedMsg openai.ChatCompletionMessageParamUnion
-									if err := json.Unmarshal(newBytes, &updatedMsg); err == nil {
-										req.Messages[i] = updatedMsg
-									}
-								}
-							}
-						}
-					}
-				}
-			}
+		// tool_call_id is a direct struct field on tool messages; truncate it
+		// in place without any JSON round-trip.
+		if tool := req.Messages[i].OfTool; tool != nil && len(tool.ToolCallID) > maxToolCallIDLength {
+			tool.ToolCallID = tool.ToolCallID[:maxToolCallIDLength]
 		}
 	}
 }

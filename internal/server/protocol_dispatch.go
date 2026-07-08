@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -25,16 +24,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-func extractAnthropicV1Messages(messages []anthropic.MessageParam) []map[string]any {
-	if len(messages) == 0 {
-		return nil
-	}
-	b, _ := json.Marshal(messages)
-	var out []map[string]any
-	_ = json.Unmarshal(b, &out)
-	return out
-}
 
 // respondMCPError writes a JSON error response for non-streaming MCP tool call failures.
 // This consolidates the ~10-line error block repeated across dispatch paths.

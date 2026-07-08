@@ -6,9 +6,12 @@ import (
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
+
+const jsonContentType = "application/json; charset=utf-8"
 
 // HandleOpenAIResponses handles Responses API passthrough (non-streaming),
 // overriding the model field in the response when responseModel differs from the request model.
@@ -27,35 +30,33 @@ func HandleOpenAIResponses(hc *protocol.HandleContext, resp *responses.Response)
 			return protocol.ZeroTokenUsage(), err
 		}
 	}
-	var responseMap map[string]any
-	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
-		hc.SendError(err, "api_error", "unmarshal_failed")
+	// Rewrite the single model scalar on the raw bytes instead of decoding
+	// the whole (potentially large) body into a map and re-encoding it.
+	modified, err := sjson.SetBytes(responseJSON, "model", hc.ResponseModel)
+	if err != nil {
+		hc.SendError(err, "api_error", "marshal_failed")
 		return protocol.ZeroTokenUsage(), err
 	}
-	responseMap["model"] = hc.ResponseModel
-	hc.GinContext.JSON(http.StatusOK, responseMap)
+	hc.GinContext.Data(http.StatusOK, jsonContentType, modified)
 	return usage.FromOpenAIResponses(resp.Usage), nil
 }
 
 // HandleOpenAIChat handles OpenAI chat non-streaming response.
 // Returns (UsageStat, error)
 func HandleOpenAIChat(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {
-	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
 		hc.SendError(err, "api_error", "marshal_failed")
 		return protocol.ZeroTokenUsage(), err
 	}
 
-	var responseMap map[string]interface{}
-	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
-		hc.SendError(err, "api_error", "unmarshal_failed")
+	// Rewrite the single model scalar on the raw bytes instead of decoding
+	// the whole body into a map and re-encoding it.
+	modified, err := sjson.SetBytes(responseJSON, "model", hc.ResponseModel)
+	if err != nil {
+		hc.SendError(err, "api_error", "marshal_failed")
 		return protocol.ZeroTokenUsage(), err
 	}
-
-	// Update response model
-	responseMap["model"] = hc.ResponseModel
-
-	hc.GinContext.JSON(http.StatusOK, responseMap)
+	hc.GinContext.Data(http.StatusOK, jsonContentType, modified)
 	return usage.FromOpenAIChatCompletion(resp.Usage), nil
 }

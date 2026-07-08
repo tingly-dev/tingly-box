@@ -5,6 +5,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // Use official Anthropic SDK types directly
@@ -20,45 +21,29 @@ type (
 )
 
 func (r *AnthropicMessagesRequest) MarshalJSON() ([]byte, error) {
-	var m map[string]any
-
-	if r.MessageNewParams != nil {
-		b, err := json.Marshal(r.MessageNewParams)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil, err
-		}
-	} else {
-		m = make(map[string]any)
+	if r.MessageNewParams == nil {
+		return json.Marshal(map[string]any{"stream": r.Stream})
 	}
-
-	m["stream"] = r.Stream
-
-	return json.Marshal(m)
+	b, err := json.Marshal(r.MessageNewParams)
+	if err != nil {
+		return nil, err
+	}
+	// Splice the stream flag onto the marshalled bytes instead of decoding
+	// the whole request (messages, tool schemas, ...) into a generic map.
+	return sjson.SetBytes(b, "stream", r.Stream)
 }
 
 func (r *AnthropicBetaMessagesRequest) MarshalJSON() ([]byte, error) {
-	var m map[string]any
-
-	if r.BetaMessageNewParams != nil {
-		b, err := json.Marshal(r.BetaMessageNewParams)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil, err
-		}
-	} else {
-		m = make(map[string]any)
+	if r.BetaMessageNewParams == nil {
+		return json.Marshal(map[string]any{"stream": r.Stream})
 	}
-
-	m["stream"] = r.Stream
-
-	return json.Marshal(m)
+	b, err := json.Marshal(r.BetaMessageNewParams)
+	if err != nil {
+		return nil, err
+	}
+	// Splice the stream flag onto the marshalled bytes instead of decoding
+	// the whole request (messages, tool schemas, ...) into a generic map.
+	return sjson.SetBytes(b, "stream", r.Stream)
 }
 
 func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {

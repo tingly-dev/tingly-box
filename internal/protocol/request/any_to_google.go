@@ -81,25 +81,18 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 	}
 
 	// Convert messages
-	var systemInstructions string
+	var systemInstructions strings.Builder
 	for _, msg := range req.Messages {
-		// Use JSON serialization to extract message content
-		raw, _ := json.Marshal(msg)
-		var m map[string]interface{}
-		if err := json.Unmarshal(raw, &m); err != nil {
-			continue
-		}
-
-		role, _ := m["role"].(string)
-
-		switch role {
-		case "system":
+		// Read the typed union fields directly — no JSON round-trip needed.
+		switch {
+		case msg.OfSystem != nil:
 			// System message → system_instruction
-			if content, ok := m["content"].(string); ok && content != "" {
-				systemInstructions += content + "\n"
+			if content := msg.OfSystem.Content.OfString.Value; content != "" {
+				systemInstructions.WriteString(content)
+				systemInstructions.WriteString("\n")
 			}
 
-		case "user":
+		case msg.OfUser != nil:
 			// User message
 			content := &genai.Content{
 				Role:  "user",
@@ -107,37 +100,16 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 			}
 
 			// Handle text content
-			if textContent, ok := m["content"].(string); ok && textContent != "" {
+			if textContent := msg.OfUser.Content.OfString.Value; textContent != "" {
 				// Simple text content
 				content.Parts = append(content.Parts, genai.NewPartFromText(textContent))
-			} else if contentParts, ok := m["content"].([]interface{}); ok {
+			} else {
 				// Array of content parts (multimodal)
-				for _, part := range contentParts {
-					if partMap, ok := part.(map[string]interface{}); ok {
-						if text, ok := partMap["text"].(string); ok {
-							content.Parts = append(content.Parts, genai.NewPartFromText(text))
-						}
-						// Handle images or other content types if needed
+				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+					if part.OfText != nil {
+						content.Parts = append(content.Parts, genai.NewPartFromText(part.OfText.Text))
 					}
-				}
-			}
-
-			// Handle tool result messages (from tool role in OpenAI, converted to user content in Google)
-			if toolCallID, ok := m["tool_call_id"].(string); ok {
-				if toolContent, ok := m["content"].(string); ok {
-					// Convert to function_response
-					content.Parts = append(content.Parts, &genai.Part{
-						FunctionResponse: &genai.FunctionResponse{
-							Name: toolCallID, // Use tool_call_id as reference name
-							Parts: []*genai.FunctionResponsePart{
-								{
-									InlineData: &genai.FunctionResponseBlob{
-										Data: []byte(toolContent),
-									},
-								},
-							},
-						},
-					})
+					// Handle images or other content types if needed
 				}
 			}
 
@@ -145,7 +117,7 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 				contents = append(contents, content)
 			}
 
-		case "assistant":
+		case msg.OfAssistant != nil:
 			// Assistant message
 			content := &genai.Content{
 				Role:  "model",
@@ -153,54 +125,45 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 			}
 
 			// Add text content if present
-			if textContent, ok := m["content"].(string); ok && textContent != "" {
+			if textContent := msg.OfAssistant.Content.OfString.Value; textContent != "" {
 				content.Parts = append(content.Parts, genai.NewPartFromText(textContent))
 			}
 
 			// Convert tool_calls to function_call parts
-			if toolCalls, ok := m["tool_calls"].([]interface{}); ok {
-				for _, tc := range toolCalls {
-					if call, ok := tc.(map[string]interface{}); ok {
-						if fn, ok := call["function"].(map[string]interface{}); ok {
-							id, _ := call["id"].(string)
-							name, _ := fn["name"].(string)
-
-							var argsInput map[string]interface{}
-							if argsStr, ok := fn["arguments"].(string); ok {
-								_ = json.Unmarshal([]byte(argsStr), &argsInput)
-							}
-
-							content.Parts = append(content.Parts, &genai.Part{
-								FunctionCall: &genai.FunctionCall{
-									ID:   id,
-									Name: name,
-									Args: argsInput,
-								},
-							})
-						}
-					}
+			for _, tc := range msg.OfAssistant.ToolCalls {
+				fn := tc.OfFunction
+				if fn == nil {
+					continue
 				}
+				var argsInput map[string]interface{}
+				if fn.Function.Arguments != "" {
+					_ = json.Unmarshal([]byte(fn.Function.Arguments), &argsInput)
+				}
+				content.Parts = append(content.Parts, &genai.Part{
+					FunctionCall: &genai.FunctionCall{
+						ID:   fn.ID,
+						Name: fn.Function.Name,
+						Args: argsInput,
+					},
+				})
 			}
 
 			if len(content.Parts) > 0 {
 				contents = append(contents, content)
 			}
 
-		case "tool":
+		case msg.OfTool != nil:
 			// Tool result message → function_response in user content
-			toolCallID, _ := m["tool_call_id"].(string)
-			content, _ := m["content"].(string)
-
 			toolContent := &genai.Content{
 				Role: "user",
 				Parts: []*genai.Part{
 					{
 						FunctionResponse: &genai.FunctionResponse{
-							Name: toolCallID,
+							Name: msg.OfTool.ToolCallID,
 							Parts: []*genai.FunctionResponsePart{
 								{
 									InlineData: &genai.FunctionResponseBlob{
-										Data: []byte(content),
+										Data: []byte(msg.OfTool.Content.OfString.Value),
 									},
 								},
 							},
@@ -213,10 +176,10 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 	}
 
 	// Set system instruction if we have one
-	if systemInstructions != "" {
+	if systemInstructions.Len() > 0 {
 		config.SystemInstruction = &genai.Content{
 			Role:  "system",
-			Parts: []*genai.Part{genai.NewPartFromText(systemInstructions)},
+			Parts: []*genai.Part{genai.NewPartFromText(systemInstructions.String())},
 		}
 	}
 
@@ -325,19 +288,6 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 		config.SystemInstruction = &genai.Content{
 			Role:  "system",
 			Parts: []*genai.Part{genai.NewPartFromText(systemText)},
-		}
-	}
-
-	// Build a map of tool_use ID to function name for proper function_response conversion
-	// This is needed because tool_result only contains ToolUseID, not the function name
-	toolUseIDToFunctionName := make(map[string]string)
-	for _, msg := range anthropicReq.Messages {
-		if string(msg.Role) == "assistant" {
-			for _, block := range msg.Content {
-				if block.OfToolUse != nil {
-					toolUseIDToFunctionName[block.OfToolUse.ID] = block.OfToolUse.Name
-				}
-			}
 		}
 	}
 
@@ -536,19 +486,6 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 		config.SystemInstruction = &genai.Content{
 			Role:  "system",
 			Parts: []*genai.Part{genai.NewPartFromText(systemText)},
-		}
-	}
-
-	// Build a map of tool_use ID to function name for proper function_response conversion
-	// This is needed because tool_result only contains ToolUseID, not the function name
-	toolUseIDToFunctionName := make(map[string]string)
-	for _, msg := range anthropicReq.Messages {
-		if string(msg.Role) == "assistant" {
-			for _, block := range msg.Content {
-				if block.OfToolUse != nil {
-					toolUseIDToFunctionName[block.OfToolUse.ID] = block.OfToolUse.Name
-				}
-			}
 		}
 	}
 

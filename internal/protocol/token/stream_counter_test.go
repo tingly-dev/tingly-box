@@ -27,11 +27,11 @@ func TestStreamTokenCounter_ConsumeOpenAIChunk(t *testing.T) {
 		},
 	}
 
-	inputTokens, outputTokens, err := counter.ConsumeOpenAIChunk(chunk)
-	if err != nil {
+	if err := counter.ConsumeOpenAIChunk(chunk); err != nil {
 		t.Fatalf("failed to consume chunk: %v", err)
 	}
 
+	inputTokens, outputTokens := counter.GetCounts()
 	if inputTokens != 100 {
 		t.Errorf("expected input tokens 100, got %d", inputTokens)
 	}
@@ -73,11 +73,11 @@ func TestStreamTokenCounter_ToolCall(t *testing.T) {
 		},
 	}
 
-	_, outputTokens, err := counter.ConsumeOpenAIChunk(chunk)
-	if err != nil {
+	if err := counter.ConsumeOpenAIChunk(chunk); err != nil {
 		t.Fatalf("failed to consume chunk: %v", err)
 	}
 
+	_, outputTokens := counter.GetCounts()
 	if outputTokens == 0 {
 		t.Error("expected output tokens > 0 for tool call")
 	}
@@ -110,16 +110,67 @@ func TestStreamTokenCounter_Usage(t *testing.T) {
 		t.Fatalf("failed to unmarshal chunk: %v", err)
 	}
 
-	inputTokens, outputTokens, err := counter.ConsumeOpenAIChunk(&chunk)
-	if err != nil {
+	if err := counter.ConsumeOpenAIChunk(&chunk); err != nil {
 		t.Fatalf("failed to consume chunk: %v", err)
 	}
 
+	inputTokens, outputTokens := counter.GetCounts()
 	if inputTokens != 50 {
 		t.Errorf("expected input tokens 50, got %d", inputTokens)
 	}
 	if outputTokens != 25 {
 		t.Errorf("expected output tokens 25, got %d", outputTokens)
+	}
+}
+
+func TestStreamTokenCounter_UsageSupersedesDeltas(t *testing.T) {
+	counter, err := NewStreamTokenCounter()
+	if err != nil {
+		t.Fatalf("failed to create counter: %v", err)
+	}
+
+	// Content deltas first, then a trailing usage chunk: the upstream usage
+	// must win and the buffered local estimate must be discarded.
+	contentChunk := &openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{
+				Index: int64(0),
+				Delta: openai.ChatCompletionChunkChoiceDelta{
+					Content: "some streamed content that would tokenize to several tokens",
+				},
+			},
+		},
+	}
+	if err := counter.ConsumeOpenAIChunk(contentChunk); err != nil {
+		t.Fatalf("failed to consume content chunk: %v", err)
+	}
+
+	usageJSON := `{
+		"id": "test",
+		"object": "chat.completion.chunk",
+		"created": 1234567890,
+		"model": "gpt-4",
+		"choices": [],
+		"usage": {
+			"prompt_tokens": 50,
+			"completion_tokens": 25,
+			"total_tokens": 75
+		}
+	}`
+	var usageChunk openai.ChatCompletionChunk
+	if err := usageChunk.UnmarshalJSON([]byte(usageJSON)); err != nil {
+		t.Fatalf("failed to unmarshal usage chunk: %v", err)
+	}
+	if err := counter.ConsumeOpenAIChunk(&usageChunk); err != nil {
+		t.Fatalf("failed to consume usage chunk: %v", err)
+	}
+
+	inputTokens, outputTokens := counter.GetCounts()
+	if inputTokens != 50 {
+		t.Errorf("expected input tokens 50, got %d", inputTokens)
+	}
+	if outputTokens != 25 {
+		t.Errorf("expected output tokens 25 (upstream usage), got %d", outputTokens)
 	}
 }
 
@@ -143,11 +194,11 @@ func TestStreamTokenCounter_ReasoningContent(t *testing.T) {
 		},
 	}
 
-	_, outputTokens, err := counter.ConsumeOpenAIChunk(chunk)
-	if err != nil {
+	if err := counter.ConsumeOpenAIChunk(chunk); err != nil {
 		t.Fatalf("failed to consume chunk: %v", err)
 	}
 
+	_, outputTokens := counter.GetCounts()
 	if outputTokens == 0 {
 		t.Error("expected output tokens > 0 for reasoning content")
 	}
@@ -273,11 +324,11 @@ func TestStreamTokenCounter_ToolCallWithID(t *testing.T) {
 		},
 	}
 
-	_, outputTokens, err := counter.ConsumeOpenAIChunk(chunk)
-	if err != nil {
+	if err := counter.ConsumeOpenAIChunk(chunk); err != nil {
 		t.Fatalf("failed to consume chunk: %v", err)
 	}
 
+	_, outputTokens := counter.GetCounts()
 	if outputTokens == 0 {
 		t.Error("expected output tokens > 0 for tool call with ID")
 	}
@@ -301,11 +352,11 @@ func TestStreamTokenCounter_EmptyChunk(t *testing.T) {
 		},
 	}
 
-	inputTokens, outputTokens, err := counter.ConsumeOpenAIChunk(chunk)
-	if err != nil {
+	if err := counter.ConsumeOpenAIChunk(chunk); err != nil {
 		t.Fatalf("failed to consume empty chunk: %v", err)
 	}
 
+	inputTokens, outputTokens := counter.GetCounts()
 	if inputTokens != 0 || outputTokens != 0 {
 		t.Errorf("expected zero tokens for empty chunk, got input=%d output=%d", inputTokens, outputTokens)
 	}

@@ -20,9 +20,9 @@ type ResponsesAssembler struct {
 	itemID          string
 	outputIndex     int
 	contentIndex    int
-	accumulatedText string
-	currentText     string
-	currentRefusal  string
+	accumulatedText strings.Builder
+	currentText     strings.Builder
+	currentRefusal  strings.Builder
 	status          string
 	sequenceNumber  int
 	createdAt       int64
@@ -92,8 +92,8 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 
 	// Output text delta events
 	case "response.output_text.delta":
-		a.currentText += event.Delta
-		a.accumulatedText += event.Delta
+		a.currentText.WriteString(event.Delta)
+		a.accumulatedText.WriteString(event.Delta)
 		return true
 
 	case "response.output_text.done":
@@ -154,12 +154,12 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 
 	case "response.content_part.done":
 		a.contentIndex = 0
-		a.currentText = ""
+		a.currentText.Reset()
 		return true
 
 	// Refusal events
 	case "response.refusal.delta":
-		a.currentRefusal += event.Delta
+		a.currentRefusal.WriteString(event.Delta)
 		return true
 
 	case "response.refusal.done":
@@ -256,7 +256,7 @@ func (a *ResponsesAssembler) OutputText() string {
 	if a == nil {
 		return ""
 	}
-	return a.accumulatedText
+	return a.accumulatedText.String()
 }
 
 // CurrentText returns the text being accumulated for the current part.
@@ -264,7 +264,7 @@ func (a *ResponsesAssembler) CurrentText() string {
 	if a == nil {
 		return ""
 	}
-	return a.currentText
+	return a.currentText.String()
 }
 
 // CurrentRefusal returns the refusal text if the model refused to respond.
@@ -272,7 +272,7 @@ func (a *ResponsesAssembler) CurrentRefusal() string {
 	if a == nil {
 		return ""
 	}
-	return a.currentRefusal
+	return a.currentRefusal.String()
 }
 
 // ResponseID returns the response ID.
@@ -360,7 +360,7 @@ func (a *ResponsesAssembler) Finish() *responses.Response {
 	// full response object. Return a best-effort incomplete response rather than
 	// discarding the already streamed assistant message; callers can still see
 	// Status()=="incomplete" and decide whether to continue/retry.
-	if a.IsIncomplete() && (a.accumulatedText != "" || a.currentRefusal != "") {
+	if a.IsIncomplete() && (a.accumulatedText.Len() > 0 || a.currentRefusal.Len() > 0) {
 		resp := a.syntheticResponse("incomplete")
 		a.response = resp
 		return resp
@@ -381,7 +381,7 @@ func (a *ResponsesAssembler) ensureResponseHasAccumulatedOutput(resp *responses.
 	if resp == nil || len(resp.Output) > 0 {
 		return
 	}
-	if a.accumulatedText == "" && a.currentRefusal == "" {
+	if a.accumulatedText.Len() == 0 && a.currentRefusal.Len() == 0 {
 		return
 	}
 	resp.Output = a.syntheticOutputItems(resp.Status)
@@ -402,16 +402,16 @@ func (a *ResponsesAssembler) syntheticOutputItems(status responses.ResponseStatu
 		itemStatus = "incomplete"
 	}
 	content := make([]responses.ResponseOutputMessageContentUnion, 0, 2)
-	if a.accumulatedText != "" {
+	if a.accumulatedText.Len() > 0 {
 		content = append(content, responses.ResponseOutputMessageContentUnion{
 			Type: "output_text",
-			Text: a.accumulatedText,
+			Text: a.accumulatedText.String(),
 		})
 	}
-	if a.currentRefusal != "" {
+	if a.currentRefusal.Len() > 0 {
 		content = append(content, responses.ResponseOutputMessageContentUnion{
 			Type:    "refusal",
-			Refusal: a.currentRefusal,
+			Refusal: a.currentRefusal.String(),
 		})
 	}
 	return []responses.ResponseOutputItemUnion{{

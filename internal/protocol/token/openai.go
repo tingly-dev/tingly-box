@@ -11,7 +11,7 @@ import (
 
 // EstimateInputTokens estimates input tokens from OpenAI request using tiktoken
 func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
-	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	enc, err := getCodec(tokenizer.O200kBase)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
@@ -136,7 +136,7 @@ func EstimateMessageTokens(msg openai.ChatCompletionMessageParamUnion) int64 {
 
 // EstimateOutputTokens estimates output tokens from accumulated content
 func EstimateOutputTokens(content string) int {
-	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	enc, err := getCodec(tokenizer.O200kBase)
 	if err != nil {
 		return len(content) / 4
 	}

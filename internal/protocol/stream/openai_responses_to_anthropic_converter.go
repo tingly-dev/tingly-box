@@ -19,7 +19,6 @@ type responsesToAnthropicToolCall struct {
 	itemID      string
 	truncatedID string
 	name        string
-	arguments   string
 	completed   bool
 }
 
@@ -393,7 +392,6 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 	case "response.function_call_arguments.delta":
 		argsDelta := currentEvent.AsResponseFunctionCallArgumentsDelta()
 		if tc, ok := r.toolCalls[argsDelta.ItemID]; ok {
-			tc.arguments += argsDelta.Delta
 			r.emitContentBlockDelta(tc.blockIndex, map[string]interface{}{
 				"type":         deltaTypeInputJSONDelta,
 				"partial_json": argsDelta.Delta,
@@ -413,7 +411,6 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 	case "response.custom_tool_call_input.delta":
 		customDelta := currentEvent.AsResponseCustomToolCallInputDelta()
 		if tc, ok := r.toolCalls[customDelta.ItemID]; ok {
-			tc.arguments += customDelta.Delta
 			r.emitContentBlockDelta(tc.blockIndex, map[string]interface{}{
 				"type":         deltaTypeInputJSONDelta,
 				"partial_json": customDelta.Delta,
@@ -430,7 +427,6 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 	case "response.mcp_call_arguments.delta":
 		mcpDelta := currentEvent.AsResponseMcpCallArgumentsDelta()
 		if tc, ok := r.toolCalls[mcpDelta.ItemID]; ok {
-			tc.arguments += mcpDelta.Delta
 			r.emitContentBlockDelta(tc.blockIndex, map[string]interface{}{
 				"type":         deltaTypeInputJSONDelta,
 				"partial_json": mcpDelta.Delta,

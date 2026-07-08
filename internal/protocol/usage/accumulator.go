@@ -31,18 +31,26 @@ func NewAnthropicAccumulator() *AnthropicAccumulator {
 // It is safe to call on every event in the stream; only usage-carrying
 // events (message_start, message_delta) have any effect.
 func (a *AnthropicAccumulator) Consume(evt *anthropic.MessageStreamEventUnion) {
-	raw := strings.Clone(evt.RawJSON())
+	// Only message_start and message_delta carry usage. Returning early keeps
+	// the per-event cost of the high-frequency content_block_delta events at a
+	// single string comparison instead of a raw-JSON clone plus re-parse.
+	if evt.Type != "message_start" && evt.Type != "message_delta" {
+		return
+	}
+	// Parse the event once; the gjson fallback covers providers whose
+	// non-standard serialisation leaves the SDK's typed fields at zero.
+	parsed := gjson.Parse(strings.Clone(evt.RawJSON()))
 	a.consumeRaw(
 		evt.Message.Usage.InputTokens,
-		gjson.Get(raw, "message.usage.input_tokens").Int(),
+		parsed.Get("message.usage.input_tokens").Int(),
 		evt.Usage.InputTokens,
-		gjson.Get(raw, "usage.input_tokens").Int(),
+		parsed.Get("usage.input_tokens").Int(),
 		evt.Usage.OutputTokens,
-		gjson.Get(raw, "usage.output_tokens").Int(),
+		parsed.Get("usage.output_tokens").Int(),
 		evt.Message.Usage.CacheReadInputTokens,
 		evt.Usage.CacheReadInputTokens,
-		gjson.Get(raw, "message.usage.cache_read_input_tokens").Int(),
-		gjson.Get(raw, "usage.cache_read_input_tokens").Int(),
+		parsed.Get("message.usage.cache_read_input_tokens").Int(),
+		parsed.Get("usage.cache_read_input_tokens").Int(),
 		evt.Message.Usage.CacheCreationInputTokens,
 		evt.Usage.CacheCreationInputTokens,
 	)

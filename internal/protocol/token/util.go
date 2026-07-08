@@ -1,5 +1,7 @@
 package token
 
+import "strings"
+
 func EstimateTokensString(s string) int64 {
 	if len(s) == 0 {
 		return 0
@@ -11,32 +13,34 @@ func StringPtr(s string) *string {
 	return &s
 }
 
-// SplitIntoChunks splits content into word-based chunks for streaming
+// SplitIntoChunks splits content into word-based chunks for streaming.
+// Words and chunks are sliced out of the input by byte offset, so no
+// per-rune or per-word string concatenation happens.
 func SplitIntoChunks(content string) []string {
 	words := []string{}
-	currentWord := ""
-	for _, ch := range content {
+	wordStart := -1
+	for i, ch := range content {
 		if ch == ' ' || ch == '\n' || ch == '\t' {
-			if currentWord != "" {
-				words = append(words, currentWord)
-				currentWord = ""
+			if wordStart >= 0 {
+				words = append(words, content[wordStart:i])
+				wordStart = -1
 			}
-			words = append(words, string(ch))
-		} else {
-			currentWord += string(ch)
+			words = append(words, content[i:i+1])
+		} else if wordStart < 0 {
+			wordStart = i
 		}
 	}
-	if currentWord != "" {
-		words = append(words, currentWord)
+	if wordStart >= 0 {
+		words = append(words, content[wordStart:])
 	}
 	// Add some grouping to make chunks more realistic
 	chunks := []string{}
-	currentChunk := ""
+	var sb strings.Builder
 	for i, word := range words {
-		currentChunk += word
+		sb.WriteString(word)
 		if (i+1)%3 == 0 || i == len(words)-1 {
-			chunks = append(chunks, currentChunk)
-			currentChunk = ""
+			chunks = append(chunks, sb.String())
+			sb.Reset()
 		}
 	}
 	if len(chunks) == 0 {

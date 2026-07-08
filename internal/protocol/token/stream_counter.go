@@ -2,6 +2,7 @@ package token
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/openai/openai-go/v3"
@@ -9,7 +10,11 @@ import (
 )
 
 // StreamTokenCounter maintains token count state for streaming responses.
-// It uses incremental counting strategy, tokenizing each delta immediately.
+//
+// Delta text is buffered and only tokenized when counts are actually read,
+// and only if the upstream never reported authoritative usage — so streams
+// where the provider sends a usage chunk (the common case) pay no BPE cost
+// at all.
 //
 // Usage example:
 //
@@ -20,10 +25,14 @@ import (
 //	}
 //	input, output := counter.GetCounts()
 type StreamTokenCounter struct {
-	mu                   sync.Mutex
-	encoder              tokenizer.Codec
-	inputTokens          int
-	outputTokens         int
+	mu           sync.Mutex
+	encoder      tokenizer.Codec
+	inputTokens  int
+	outputTokens int
+	// pendingOutput buffers streamed delta text that has not been tokenized
+	// yet. It is flushed (tokenized in one pass) the first time counts are
+	// read, and discarded outright when upstream usage arrives.
+	pendingOutput        strings.Builder
 	upstreamInputTokens  int64
 	upstreamOutputTokens int64
 	upstreamCacheTokens  int64 // prompt_tokens_details.cached_tokens
@@ -32,7 +41,7 @@ type StreamTokenCounter struct {
 
 // NewStreamTokenCounter creates a new streaming token counter.
 func NewStreamTokenCounter() (*StreamTokenCounter, error) {
-	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	enc, err := getCodec(tokenizer.O200kBase)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
@@ -43,7 +52,7 @@ func NewStreamTokenCounter() (*StreamTokenCounter, error) {
 
 // NewStreamTokenCounterWithEncoding creates a new streaming token counter with a specific encoding.
 func NewStreamTokenCounterWithEncoding(encoding string) (*StreamTokenCounter, error) {
-	enc, err := tokenizer.Get(tokenizer.Encoding(encoding))
+	enc, err := getCodec(tokenizer.Encoding(encoding))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tokenizer %s: %w", encoding, err)
 	}
@@ -52,7 +61,7 @@ func NewStreamTokenCounterWithEncoding(encoding string) (*StreamTokenCounter, er
 	}, nil
 }
 
-// countTokens counts tokens for a text string using incremental strategy.
+// countTokens counts tokens for a text string.
 func (c *StreamTokenCounter) countTokens(text string) int {
 	if text == "" {
 		return 0
@@ -65,15 +74,28 @@ func (c *StreamTokenCounter) countTokens(text string) int {
 	return count
 }
 
+// flushPendingLocked tokenizes buffered delta text into outputTokens.
+// When upstream usage has been seen the local estimate is dead weight, so the
+// buffer is discarded without tokenizing. Callers must hold c.mu.
+func (c *StreamTokenCounter) flushPendingLocked() {
+	if c.pendingOutput.Len() == 0 {
+		return
+	}
+	if c.upstreamOutputTokens == 0 {
+		c.outputTokens += c.countTokens(c.pendingOutput.String())
+	}
+	c.pendingOutput.Reset()
+}
+
 // ConsumeOpenAIChunk processes an OpenAI streaming chunk and updates token counts.
-// Returns the current (inputTokens, outputTokens) after processing this chunk.
+// Delta text is buffered, not tokenized inline; read GetCounts for totals.
 //
 // The function handles:
 //   - Content deltas (text responses)
 //   - Refusal deltas (refusal messages)
 //   - Tool call deltas (function names and arguments)
 //   - Usage information (typically in the final chunk when stream_options.include_usage is set)
-func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChunk) (inputTokens, outputTokens int, err error) {
+func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChunk) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -101,53 +123,54 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 		if chunk.Usage.CompletionTokensDetails.ReasoningTokens > 0 {
 			c.upstreamReasoning = chunk.Usage.CompletionTokensDetails.ReasoningTokens
 		}
-		return int(c.upstreamInputTokens - c.upstreamCacheTokens), int(c.upstreamOutputTokens), nil
+		// Upstream counts supersede any buffered local estimate.
+		if c.upstreamOutputTokens > 0 {
+			c.pendingOutput.Reset()
+		}
+		return nil
 	}
 
-	// Incremental counting for each delta in choices
+	// Upstream already reported authoritative output usage: buffering further
+	// delta text would be wasted work.
+	if c.upstreamOutputTokens > 0 {
+		return nil
+	}
+
+	// Buffer each delta's text for lazy one-pass tokenization.
 	for _, choice := range chunk.Choices {
-		// Count content delta
 		if choice.Delta.Content != "" {
-			c.outputTokens += c.countTokens(choice.Delta.Content)
+			c.pendingOutput.WriteString(choice.Delta.Content)
 		}
-
-		// Count refusal delta
 		if choice.Delta.Refusal != "" {
-			c.outputTokens += c.countTokens(choice.Delta.Refusal)
+			c.pendingOutput.WriteString(choice.Delta.Refusal)
 		}
-
-		// Count tool call deltas
 		for _, toolCall := range choice.Delta.ToolCalls {
-			// Count tool call ID
 			if toolCall.ID != "" {
-				c.outputTokens += c.countTokens(toolCall.ID)
+				c.pendingOutput.WriteString(toolCall.ID)
 			}
-			// Count function name
 			if toolCall.Function.Name != "" {
-				c.outputTokens += c.countTokens(toolCall.Function.Name)
+				c.pendingOutput.WriteString(toolCall.Function.Name)
 			}
-			// Count function arguments (partial JSON string)
 			if toolCall.Function.Arguments != "" {
-				c.outputTokens += c.countTokens(toolCall.Function.Arguments)
+				c.pendingOutput.WriteString(toolCall.Function.Arguments)
 			}
 		}
-
-		// Count deprecated function call
 		if choice.Delta.FunctionCall.Name != "" {
-			c.outputTokens += c.countTokens(choice.Delta.FunctionCall.Name)
+			c.pendingOutput.WriteString(choice.Delta.FunctionCall.Name)
 		}
 		if choice.Delta.FunctionCall.Arguments != "" {
-			c.outputTokens += c.countTokens(choice.Delta.FunctionCall.Arguments)
+			c.pendingOutput.WriteString(choice.Delta.FunctionCall.Arguments)
 		}
 	}
 
-	return c.inputTokens, c.outputTokens, nil
+	return nil
 }
 
 // GetCounts returns the current token counts (inputTokens, outputTokens).
 func (c *StreamTokenCounter) GetCounts() (inputTokens, outputTokens int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.flushPendingLocked()
 
 	i, o := c.inputTokens, c.outputTokens
 	if c.upstreamInputTokens > 0 {
@@ -176,10 +199,12 @@ func (c *StreamTokenCounter) SetInputTokens(tokens int) {
 	c.inputTokens = tokens
 }
 
-// SetOutputTokens sets the output token count.
+// SetOutputTokens sets the output token count, discarding any buffered
+// not-yet-counted delta text.
 func (c *StreamTokenCounter) SetOutputTokens(tokens int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.pendingOutput.Reset()
 	c.outputTokens = tokens
 }
 
@@ -196,12 +221,14 @@ func (c *StreamTokenCounter) Reset() {
 	defer c.mu.Unlock()
 	c.inputTokens = 0
 	c.outputTokens = 0
+	c.pendingOutput.Reset()
 }
 
 // TotalTokens returns the sum of input and output tokens.
 func (c *StreamTokenCounter) TotalTokens() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.flushPendingLocked()
 	return c.inputTokens + c.outputTokens
 }
 
@@ -244,5 +271,6 @@ func (c *StreamTokenCounter) InputTokens() int {
 func (c *StreamTokenCounter) OutputTokens() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.flushPendingLocked()
 	return c.outputTokens
 }

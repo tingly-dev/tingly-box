@@ -13,49 +13,31 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 	var systemParts []string
 
 	for _, msg := range req.Messages {
-		// For Union types, we need to use JSON serialization/deserialization
-		// to properly extract the content and role
-		raw, _ := json.Marshal(msg)
-		var m map[string]interface{}
-		if err := json.Unmarshal(raw, &m); err != nil {
-			continue
-		}
-
-		role, _ := m["role"].(string)
-
-		switch role {
-		case "system":
+		// Read the typed union fields directly — no JSON round-trip needed.
+		switch {
+		case msg.OfSystem != nil:
 			// System message → params.System
-			if content, ok := m["content"].(string); ok && content != "" {
+			if content := msg.OfSystem.Content.OfString.Value; content != "" {
 				systemParts = append(systemParts, content)
 			}
 
-		case "user":
+		case msg.OfUser != nil:
 			// User message
 			var blocks []anthropic.BetaContentBlockParamUnion
 
-			if content, ok := m["content"].(string); ok && content != "" {
+			if content := msg.OfUser.Content.OfString.Value; content != "" {
 				// Simple text content
 				blocks = append(blocks, anthropic.NewBetaTextBlock(content))
-			} else if contentParts, ok := m["content"].([]interface{}); ok {
+			} else {
 				// Array of content parts (multimodal)
-				for _, part := range contentParts {
-					partMap, ok := part.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					switch partMap["type"] {
-					case "text":
-						if text, ok := partMap["text"].(string); ok {
-							blocks = append(blocks, anthropic.NewBetaTextBlock(text))
+				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+					switch {
+					case part.OfText != nil:
+						if part.OfText.Text != "" {
+							blocks = append(blocks, anthropic.NewBetaTextBlock(part.OfText.Text))
 						}
-					case "image_url":
-						imageURL, _ := partMap["image_url"].(map[string]interface{})
-						if imageURL == nil {
-							continue
-						}
-						url, _ := imageURL["url"].(string)
-						if block, ok := openAIImageURLToAnthropicBetaBlock(url); ok {
+					case part.OfImageURL != nil:
+						if block, ok := openAIImageURLToAnthropicBetaBlock(part.OfImageURL.ImageURL.URL); ok {
 							blocks = append(blocks, block)
 						}
 					}
@@ -66,34 +48,28 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 				messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
 			}
 
-		case "assistant":
+		case msg.OfAssistant != nil:
 			// Assistant message
 			var blocks []anthropic.BetaContentBlockParamUnion
 
 			// Add text content if present
-			if content, ok := m["content"].(string); ok && content != "" {
+			if content := msg.OfAssistant.Content.OfString.Value; content != "" {
 				blocks = append(blocks, anthropic.NewBetaTextBlock(content))
 			}
 
 			// Convert tool calls to tool_use blocks
-			if toolCalls, ok := m["tool_calls"].([]interface{}); ok {
-				for _, tc := range toolCalls {
-					if call, ok := tc.(map[string]interface{}); ok {
-						if fn, ok := call["function"].(map[string]interface{}); ok {
-							id, _ := call["id"].(string)
-							name, _ := fn["name"].(string)
-
-							var argsInput interface{}
-							if argsStr, ok := fn["arguments"].(string); ok {
-								_ = json.Unmarshal([]byte(argsStr), &argsInput)
-							}
-
-							blocks = append(blocks,
-								anthropic.NewBetaToolUseBlock(id, argsInput, name),
-							)
-						}
-					}
+			for _, tc := range msg.OfAssistant.ToolCalls {
+				fn := tc.OfFunction
+				if fn == nil {
+					continue
 				}
+				var argsInput interface{}
+				if fn.Function.Arguments != "" {
+					_ = json.Unmarshal([]byte(fn.Function.Arguments), &argsInput)
+				}
+				blocks = append(blocks,
+					anthropic.NewBetaToolUseBlock(fn.ID, argsInput, fn.Function.Name),
+				)
 			}
 
 			if len(blocks) > 0 {
@@ -103,13 +79,10 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 				})
 			}
 
-		case "tool":
+		case msg.OfTool != nil:
 			// Tool result message → tool_result block (must be USER role)
-			toolCallID, _ := m["tool_call_id"].(string)
-			content, _ := m["content"].(string)
-
 			blocks := []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaToolResultBlock(toolCallID, content, false),
+				anthropic.NewBetaToolResultBlock(msg.OfTool.ToolCallID, msg.OfTool.Content.OfString.Value, false),
 			}
 			messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
 		}
@@ -176,46 +149,30 @@ func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) 
 
 	for _, t := range tools {
 		fn := t.GetFunction()
-		if fn == nil {
+		if fn == nil || fn.Parameters == nil {
 			continue
 		}
 
-		// Convert OpenAI function schema to Anthropic input schema
-		var inputSchema map[string]interface{}
-		if fn.Parameters != nil {
-			if bytes, err := json.Marshal(fn.Parameters); err == nil {
-				if err := json.Unmarshal(bytes, &inputSchema); err == nil {
-					// Create tool with input schema
-					var tool anthropic.BetaToolUnionParam
-					if inputSchema != nil {
-						// Convert map[string]interface{} to the proper structure
-						if schemaBytes, err := json.Marshal(inputSchema); err == nil {
-							var schemaParam anthropic.BetaToolInputSchemaParam
-							if err := json.Unmarshal(schemaBytes, &schemaParam); err == nil {
-								tool = anthropic.BetaToolUnionParam{
-									OfTool: &anthropic.BetaToolParam{
-										Name:        fn.Name,
-										InputSchema: schemaParam,
-									},
-								}
-							}
-						}
-					} else {
-						tool = anthropic.BetaToolUnionParam{
-							OfTool: &anthropic.BetaToolParam{
-								Name: fn.Name,
-							},
-						}
-					}
-
-					// Set description if available
-					if fn.Description.Value != "" && tool.OfTool != nil {
-						tool.OfTool.Description = anthropic.Opt(fn.Description.Value)
-					}
-					out = append(out, tool)
-				}
-			}
+		// Convert OpenAI function schema to Anthropic input schema with a
+		// single marshal/unmarshal pass.
+		schemaBytes, err := json.Marshal(fn.Parameters)
+		if err != nil {
+			continue
 		}
+		var schemaParam anthropic.BetaToolInputSchemaParam
+		if err := json.Unmarshal(schemaBytes, &schemaParam); err != nil {
+			continue
+		}
+		tool := anthropic.BetaToolUnionParam{
+			OfTool: &anthropic.BetaToolParam{
+				Name:        fn.Name,
+				InputSchema: schemaParam,
+			},
+		}
+		if fn.Description.Value != "" {
+			tool.OfTool.Description = anthropic.Opt(fn.Description.Value)
+		}
+		out = append(out, tool)
 	}
 
 	return out

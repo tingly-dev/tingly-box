@@ -229,82 +229,47 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 // This handles both text content and tool_use blocks
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
-	var textContent string
-	var toolCalls []map[string]interface{}
+	var textContent strings.Builder
+	var toolCalls []openai.ChatCompletionMessageToolCallUnionParam
 	var thinking string
 
 	// Process content blocks
 	for _, block := range msg.Content {
 		if block.OfText != nil {
-			textContent += block.OfText.Text
+			textContent.WriteString(block.OfText.Text)
 		} else if block.OfToolUse != nil {
-			// Convert tool_use block to OpenAI tool_call format
-			toolCall := map[string]interface{}{
-				"id":   block.OfToolUse.ID,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name": block.OfToolUse.Name,
-				},
-			}
-			// Marshal input to JSON string for OpenAI
+			// Convert tool_use block to OpenAI tool_call format;
+			// marshal input to a JSON string for OpenAI
+			var args string
 			if argsBytes, err := json.Marshal(block.OfToolUse.Input); err == nil {
-				toolCall["function"].(map[string]interface{})["arguments"] = string(argsBytes)
+				args = string(argsBytes)
 			}
-			toolCalls = append(toolCalls, toolCall)
+			toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCallUnionParam{
+				OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+					ID: block.OfToolUse.ID,
+					Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+						Name:      block.OfToolUse.Name,
+						Arguments: args,
+					},
+				},
+			})
 		} else if block.OfThinking != nil {
 			thinking = block.OfThinking.Thinking
 		}
 	}
 
-	// Build the message based on what we have
-	if len(toolCalls) > 0 {
-		// Use JSON marshaling to create a message with tool_calls
-		msgMap := map[string]interface{}{
-			"role":    "assistant",
-			"content": textContent,
-		}
-		msgMap["tool_calls"] = toolCalls
-
-		msgBytes, _ := json.Marshal(msgMap)
-		var result openai.ChatCompletionMessageParamUnion
-		_ = json.Unmarshal(msgBytes, &result)
-
-		// Preserve x_thinking in ExtraFields for provider transforms (e.g., DeepSeek/Moonshot)
-		// Must set on OfAssistant (variant level), not on union level, because
-		// MarshalUnion only serializes the active variant — union-level ExtraFields are dropped.
-		if result.OfAssistant != nil {
-			extraFields := result.OfAssistant.ExtraFields()
-			if extraFields == nil {
-				extraFields = map[string]any{}
-			}
-			extraFields["x_thinking"] = thinking
-			result.OfAssistant.SetExtraFields(extraFields)
-		}
-
-		return result
+	// Build the message directly from typed params — no JSON round-trip.
+	assistant := &openai.ChatCompletionAssistantMessageParam{
+		ToolCalls: toolCalls,
 	}
+	assistant.Content.OfString = openai.Opt(textContent.String())
 
-	// Simple text message
-	msgMap := map[string]interface{}{
-		"role":    "assistant",
-		"content": textContent,
-	}
-	msgBytes, _ := json.Marshal(msgMap)
-	var result openai.ChatCompletionMessageParamUnion
-	_ = json.Unmarshal(msgBytes, &result)
+	// Preserve x_thinking in ExtraFields for provider transforms (e.g., DeepSeek/Moonshot)
+	// Must set on OfAssistant (variant level), not on union level, because
+	// MarshalUnion only serializes the active variant — union-level ExtraFields are dropped.
+	assistant.SetExtraFields(map[string]any{"x_thinking": thinking})
 
-	// Preserve x_thinking in ExtraFields for provider transforms
-	// Must set on OfAssistant (variant level), not on union level.
-	if result.OfAssistant != nil {
-		extraFields := result.OfAssistant.ExtraFields()
-		if extraFields == nil {
-			extraFields = map[string]any{}
-		}
-		extraFields["x_thinking"] = thinking
-		result.OfAssistant.SetExtraFields(extraFields)
-	}
-
-	return result
+	return openai.ChatCompletionMessageParamUnion{OfAssistant: assistant}
 }
 
 // convertAnthropicUserMessageToOpenAI converts Anthropic user message to OpenAI format

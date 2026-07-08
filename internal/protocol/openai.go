@@ -2,11 +2,14 @@ package protocol
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // =============================================
@@ -105,68 +108,101 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 // It performs two preprocessing steps:
 // 1. Adds "type": "message" to input items that don't have a type field
 // 2. Flattens output_text content blocks into single strings
+//
+// Items are inspected with gjson and only the ones that actually need a
+// rewrite are re-serialized; untouched requests are returned as-is instead of
+// being decoded and re-encoded item by item.
 func PreprocessInputData(data []byte) ([]byte, error) {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+	if !gjson.ValidBytes(data) {
+		return nil, fmt.Errorf("invalid JSON in request body")
 	}
-
-	inputRaw, ok := raw["input"]
-	if !ok {
+	input := gjson.GetBytes(data, "input")
+	if !input.Exists() || !input.IsArray() {
+		// No input, or input is not an array (might be a string): return as-is.
 		return data, nil
 	}
 
-	// Check if input is an array
-	var inputArray []json.RawMessage
-	if err := json.Unmarshal(inputRaw, &inputArray); err != nil {
-		// Input is not an array (might be a string), return as-is
-		return data, nil
-	}
+	items := input.Array()
+	var modified map[int]string
 
-	// Process each input item
-	for i, item := range inputArray {
-		var itemObj map[string]any
-		if err := json.Unmarshal(item, &itemObj); err != nil {
+	for i, item := range items {
+		if !item.IsObject() {
 			continue
 		}
 
 		// Step 1: Infer missing union discriminator for input items.
 		// Some clients replay prior Responses history without `type`, but the SDK
 		// needs it to deserialize union items and preserve function arguments.
-		if _, hasType := itemObj["type"]; !hasType {
+		itemType := item.Get("type").Str
+		inferredType := ""
+		if !item.Get("type").Exists() {
 			switch {
-			case hasKey(itemObj, "role"):
-				itemObj["type"] = "message"
-			case hasKey(itemObj, "call_id") && hasKey(itemObj, "arguments"):
-				itemObj["type"] = "function_call"
-			case hasKey(itemObj, "call_id") && hasKey(itemObj, "output"):
-				itemObj["type"] = "function_call_output"
+			case item.Get("role").Exists():
+				inferredType = "message"
+			case item.Get("call_id").Exists() && item.Get("arguments").Exists():
+				inferredType = "function_call"
+			case item.Get("call_id").Exists() && item.Get("output").Exists():
+				inferredType = "function_call_output"
+			}
+			if inferredType != "" {
+				itemType = inferredType
 			}
 		}
 
 		// Step 2: Flatten output_text content blocks
-		if itemType, _ := itemObj["type"].(string); itemType == "message" {
-			if content, hasContent := itemObj["content"]; hasContent {
-				if flattened, ok := flattenOutputTextContent(content); ok {
-					itemObj["content"] = flattened
-				}
+		flattened, needsFlatten := "", false
+		if itemType == "message" {
+			if content := item.Get("content"); content.IsArray() {
+				flattened, needsFlatten = flattenOutputTextContent(content)
 			}
 		}
 
-		modified, err := json.Marshal(itemObj)
-		if err != nil {
+		if inferredType == "" && !needsFlatten {
 			continue
 		}
-		inputArray[i] = modified
+
+		itemRaw := item.Raw
+		var err error
+		if inferredType != "" {
+			if itemRaw, err = sjson.Set(itemRaw, "type", inferredType); err != nil {
+				continue
+			}
+		}
+		if needsFlatten {
+			if itemRaw, err = sjson.Set(itemRaw, "content", flattened); err != nil {
+				continue
+			}
+		}
+		if modified == nil {
+			modified = make(map[int]string)
+		}
+		modified[i] = itemRaw
 	}
 
-	modifiedInput, err := json.Marshal(inputArray)
-	if err != nil {
+	if len(modified) == 0 {
 		return data, nil
 	}
 
-	raw["input"] = modifiedInput
-	return json.Marshal(raw)
+	// Rebuild the input array once, splicing in the rewritten items.
+	var buf strings.Builder
+	buf.WriteByte('[')
+	for i, item := range items {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		if m, ok := modified[i]; ok {
+			buf.WriteString(m)
+		} else {
+			buf.WriteString(item.Raw)
+		}
+	}
+	buf.WriteByte(']')
+
+	out, err := sjson.SetRawBytes(data, "input", []byte(buf.String()))
+	if err != nil {
+		return data, nil
+	}
+	return out, nil
 }
 
 // flattenOutputTextContent flattens output_text blocks into a single string.
@@ -174,22 +210,16 @@ func PreprocessInputData(data []byte) ([]byte, error) {
 // The Responses API returns output_text in responses, but when using those
 // responses as history in subsequent requests, we need to flatten them to
 // strings for SDK compatibility.
-func flattenOutputTextContent(content any) (string, bool) {
-	items, ok := asSlice(content)
-	if !ok {
-		return "", false
-	}
-
+func flattenOutputTextContent(content gjson.Result) (string, bool) {
 	var parts []string
-	for _, item := range items {
-		m, ok := item.(map[string]any)
-		if !ok {
+	for _, item := range content.Array() {
+		if !item.IsObject() {
 			continue
 		}
-		if m["type"] != "output_text" {
+		if item.Get("type").Str != "output_text" {
 			continue
 		}
-		if text, ok := m["text"].(string); ok && text != "" {
+		if text := item.Get("text").Str; text != "" {
 			parts = append(parts, text)
 		}
 	}
@@ -198,22 +228,6 @@ func flattenOutputTextContent(content any) (string, bool) {
 		return "", false
 	}
 	return strings.Join(parts, "\n"), true
-}
-
-// asSlice converts content to []any, handling both []any and []interface{}
-func asSlice(v any) ([]any, bool) {
-	if items, ok := v.([]any); ok {
-		return items, true
-	}
-	if items, ok := v.([]interface{}); ok {
-		return items, true
-	}
-	return nil, false
-}
-
-func hasKey(m map[string]any, key string) bool {
-	_, ok := m[key]
-	return ok
 }
 
 // =============================================

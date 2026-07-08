@@ -23,7 +23,11 @@ type AnthropicStreamAssembler struct {
 	// Block-level tracking - store ContentBlockUnion by index
 	blocks map[int]anthropic.ContentBlockUnion
 
-	// tool_use block input accumulation: blockIndex -> partial JSON string
+	// Per-block delta accumulation, appended per event and materialized once
+	// in Finish. Appending to byte buffers keeps per-delta cost linear;
+	// rebuilding the block's string on every delta would be quadratic.
+	textBuf      map[int][]byte
+	thinkingBuf  map[int][]byte
 	toolInputBuf map[int][]byte
 }
 
@@ -31,6 +35,8 @@ type AnthropicStreamAssembler struct {
 func NewAnthropicStreamAssembler() *AnthropicStreamAssembler {
 	return &AnthropicStreamAssembler{
 		blocks:       make(map[int]anthropic.ContentBlockUnion),
+		textBuf:      make(map[int][]byte),
+		thinkingBuf:  make(map[int][]byte),
 		toolInputBuf: make(map[int][]byte),
 	}
 }
@@ -142,46 +148,42 @@ func (a *AnthropicStreamAssembler) handleContentBlockStartBeta(blockIndex int, b
 
 // handleContentBlockDelta handles content_block_delta for v1 events
 func (a *AnthropicStreamAssembler) handleContentBlockDelta(blockIndex int, delta anthropic.MessageStreamEventUnionDelta) {
-	block, exists := a.blocks[blockIndex]
-	if !exists {
+	if _, exists := a.blocks[blockIndex]; !exists {
 		return
 	}
 
 	switch delta.Type {
 	case "text_delta":
-		block.Text += delta.Text
+		a.textBuf[blockIndex] = append(a.textBuf[blockIndex], delta.Text...)
 	case "thinking_delta":
-		block.Thinking += delta.Thinking
+		a.thinkingBuf[blockIndex] = append(a.thinkingBuf[blockIndex], delta.Thinking...)
 	case "signature_delta":
+		block := a.blocks[blockIndex]
 		block.Signature = delta.Signature
+		a.blocks[blockIndex] = block
 	case "input_json_delta":
 		a.toolInputBuf[blockIndex] = append(a.toolInputBuf[blockIndex], delta.PartialJSON...)
-		block.Input = json.RawMessage(a.toolInputBuf[blockIndex])
 	}
-
-	a.blocks[blockIndex] = block
 }
 
 // handleContentBlockDeltaBeta handles content_block_delta for v1beta events
 func (a *AnthropicStreamAssembler) handleContentBlockDeltaBeta(blockIndex int, delta anthropic.BetaRawMessageStreamEventUnionDelta) {
-	block, exists := a.blocks[blockIndex]
-	if !exists {
+	if _, exists := a.blocks[blockIndex]; !exists {
 		return
 	}
 
 	switch delta.Type {
 	case "text_delta":
-		block.Text += delta.Text
+		a.textBuf[blockIndex] = append(a.textBuf[blockIndex], delta.Text...)
 	case "thinking_delta":
-		block.Thinking += delta.Thinking
+		a.thinkingBuf[blockIndex] = append(a.thinkingBuf[blockIndex], delta.Thinking...)
 	case "signature_delta":
+		block := a.blocks[blockIndex]
 		block.Signature = delta.Signature
+		a.blocks[blockIndex] = block
 	case "input_json_delta":
 		a.toolInputBuf[blockIndex] = append(a.toolInputBuf[blockIndex], delta.PartialJSON...)
-		block.Input = json.RawMessage(a.toolInputBuf[blockIndex])
 	}
-
-	a.blocks[blockIndex] = block
 }
 
 // SetUsage sets the usage data from raw input/output counts.
@@ -240,10 +242,19 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		}
 	}
 
-	// Collect blocks in order
+	// Collect blocks in order, materializing accumulated delta buffers
 	content := make([]anthropic.ContentBlockUnion, 0, len(a.blocks))
 	for i := 0; i < len(a.blocks); i++ {
 		if block, exists := a.blocks[i]; exists {
+			if buf := a.textBuf[i]; len(buf) > 0 {
+				block.Text = string(buf)
+			}
+			if buf := a.thinkingBuf[i]; len(buf) > 0 {
+				block.Thinking = string(buf)
+			}
+			if buf := a.toolInputBuf[i]; len(buf) > 0 {
+				block.Input = json.RawMessage(buf)
+			}
 			content = append(content, block)
 		}
 	}

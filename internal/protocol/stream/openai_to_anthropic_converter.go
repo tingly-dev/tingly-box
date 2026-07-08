@@ -278,14 +278,10 @@ func (c *openAIToAnthropicConverter) processChunk(chunk *openai.ChatCompletionCh
 
 func (c *openAIToAnthropicConverter) consumeTokenCounter(chunk *openai.ChatCompletionChunk) {
 	if c.tokenCounter != nil {
-		_, _, _ = c.tokenCounter.ConsumeOpenAIChunk(chunk)
-		inputTokens, outputTokens := c.tokenCounter.GetCounts()
-		if inputTokens > 0 {
-			c.state.inputTokens = int64(inputTokens)
-		}
-		if outputTokens > 0 {
-			c.state.outputTokens = int64(outputTokens)
-		}
+		// Deltas are buffered inside the counter; totals are resolved once in
+		// emitTerminalEvents via GetCounts, so no per-chunk tokenization or
+		// count read happens here.
+		_ = c.tokenCounter.ConsumeOpenAIChunk(chunk)
 		return
 	}
 

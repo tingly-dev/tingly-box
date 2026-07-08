@@ -69,9 +69,6 @@ func applyAnthropicV1ThinkingFilter(req *anthropic.MessageNewParams) *anthropic.
 		req.OutputConfig = anthropic.OutputConfigParam{}
 	}
 
-	// Also check messages for thinking blocks
-	req.Messages = filterThinkingBlocksInMessages(req.Messages)
-
 	return req
 }
 
@@ -92,9 +89,6 @@ func applyAnthropicBetaThinkingFilter(req *anthropic.BetaMessageNewParams) *anth
 	if req.Thinking.OfEnabled == nil {
 		req.OutputConfig = anthropic.BetaOutputConfigParam{}
 	}
-
-	// Also check messages for thinking blocks
-	req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
 
 	return req
 }
@@ -336,7 +330,6 @@ func extractFirstUserMessageText(messages []anthropic.MessageParam) string {
 		if msg.Role == "user" {
 			for _, block := range msg.Content {
 				if block.OfText != nil {
-					fmt.Printf("Block ofText: %s", block.OfText.Text)
 					return block.OfText.Text
 				}
 			}

@@ -43,12 +43,10 @@ func ConvertGoogleToOpenAIRequest(model string, contents []*genai.Content, confi
 				openaiReq.Messages = append([]openai.ChatCompletionMessageParamUnion{sysMsg}, openaiReq.Messages...)
 			}
 		} else {
-			openaiMsg := convertGoogleContentToOpenAI(content)
-			// Check if conversion succeeded by trying to use the result
-			msgBytes, _ := json.Marshal(openaiMsg)
-			if len(msgBytes) > 0 && string(msgBytes) != "null" {
-				openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
-			}
+			// convertGoogleContentToOpenAI always returns a constructed
+			// message (falling back to an empty user message), so no
+			// marshal-based validity check is needed.
+			openaiReq.Messages = append(openaiReq.Messages, convertGoogleContentToOpenAI(content))
 		}
 	}
 
@@ -72,7 +70,7 @@ func ConvertGoogleToOpenAIRequest(model string, contents []*genai.Content, confi
 // convertGoogleContentToOpenAI converts a Google Content to OpenAI message format
 func convertGoogleContentToOpenAI(content *genai.Content) openai.ChatCompletionMessageParamUnion {
 	var textContent string
-	var toolCalls []map[string]interface{}
+	var toolCalls []openai.ChatCompletionMessageToolCallUnionParam
 
 	for _, part := range content.Parts {
 		// Handle text parts
@@ -82,18 +80,20 @@ func convertGoogleContentToOpenAI(content *genai.Content) openai.ChatCompletionM
 
 		// Handle function calls
 		if part.FunctionCall != nil {
-			toolCall := map[string]interface{}{
-				"id":   part.FunctionCall.ID,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name": part.FunctionCall.Name,
-				},
-			}
 			// Marshal args to JSON string for OpenAI
+			var args string
 			if argsBytes, err := json.Marshal(part.FunctionCall.Args); err == nil {
-				toolCall["function"].(map[string]interface{})["arguments"] = string(argsBytes)
+				args = string(argsBytes)
 			}
-			toolCalls = append(toolCalls, toolCall)
+			toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCallUnionParam{
+				OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+					ID: part.FunctionCall.ID,
+					Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+						Name:      part.FunctionCall.Name,
+						Arguments: args,
+					},
+				},
+			})
 		}
 
 		// Handle function responses (tool results)
@@ -121,15 +121,7 @@ func convertGoogleContentToOpenAI(content *genai.Content) openai.ChatCompletionM
 				}
 			}
 
-			toolMsg := map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": part.FunctionResponse.Name,
-				"content":      resultText,
-			}
-			msgBytes, _ := json.Marshal(toolMsg)
-			var toolResultMsg openai.ChatCompletionMessageParamUnion
-			_ = json.Unmarshal(msgBytes, &toolResultMsg)
-			return toolResultMsg
+			return openai.ToolMessage(resultText, part.FunctionResponse.Name)
 		}
 	}
 
@@ -142,17 +134,11 @@ func convertGoogleContentToOpenAI(content *genai.Content) openai.ChatCompletionM
 	} else if content.Role == "model" {
 		// Model (assistant) message
 		if len(toolCalls) > 0 || textContent != "" {
-			msgMap := map[string]interface{}{
-				"role":    "assistant",
-				"content": textContent,
+			assistant := openai.ChatCompletionAssistantMessageParam{
+				ToolCalls: toolCalls,
 			}
-			if len(toolCalls) > 0 {
-				msgMap["tool_calls"] = toolCalls
-			}
-			msgBytes, _ := json.Marshal(msgMap)
-			var result openai.ChatCompletionMessageParamUnion
-			_ = json.Unmarshal(msgBytes, &result)
-			return result
+			assistant.Content.OfString = openai.Opt(textContent)
+			return openai.ChatCompletionMessageParamUnion{OfAssistant: &assistant}
 		}
 	}
 
@@ -289,12 +275,10 @@ func ConvertGoogleToAnthropicRequest(model string, contents []*genai.Content, co
 				systemParts = append(systemParts, systemText)
 			}
 		} else {
-			anthropicMsg := convertGoogleContentToAnthropic(content)
-			// Check if conversion succeeded
-			msgBytes, _ := json.Marshal(anthropicMsg)
-			if len(msgBytes) > 0 && string(msgBytes) != "null" {
-				params.Messages = append(params.Messages, anthropicMsg)
-			}
+			// convertGoogleContentToAnthropic always returns a constructed
+			// message (falling back to an empty user message), so no
+			// marshal-based validity check is needed.
+			params.Messages = append(params.Messages, convertGoogleContentToAnthropic(content))
 		}
 	}
 

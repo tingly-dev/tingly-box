@@ -268,7 +268,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 		itemID      string // original item ID (used as map key)
 		truncatedID string // truncated ID for OpenAI compatibility (sent to client)
 		name        string
-		arguments   string
 		completed   bool // true when content_block_stop has been sent
 	}
 	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
@@ -456,7 +455,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 					itemID:      itemID,
 					truncatedID: truncatedID,
 					name:        toolName,
-					arguments:   "",
 				}
 				lastOutputItemType = "function_call"
 
@@ -472,7 +470,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 		case "response.function_call_arguments.delta":
 			argsDelta := currentEvent.AsResponseFunctionCallArgumentsDelta()
 			if toolCall, exists := pendingToolCalls[argsDelta.ItemID]; exists {
-				toolCall.arguments += argsDelta.Delta
 				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
 					"type":         deltaTypeInputJSONDelta,
 					"partial_json": argsDelta.Delta,
@@ -493,7 +490,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 		case "response.custom_tool_call_input.delta":
 			customDelta := currentEvent.AsResponseCustomToolCallInputDelta()
 			if toolCall, exists := pendingToolCalls[customDelta.ItemID]; exists {
-				toolCall.arguments += customDelta.Delta
 				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
 					"type":         deltaTypeInputJSONDelta,
 					"partial_json": customDelta.Delta,
@@ -511,7 +507,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 		case "response.mcp_call_arguments.delta":
 			mcpDelta := currentEvent.AsResponseMcpCallArgumentsDelta()
 			if toolCall, exists := pendingToolCalls[mcpDelta.ItemID]; exists {
-				toolCall.arguments += mcpDelta.Delta
 				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
 					"type":         deltaTypeInputJSONDelta,
 					"partial_json": mcpDelta.Delta,

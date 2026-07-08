@@ -44,6 +44,9 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	var hasUsage bool
 	var contentBuilder strings.Builder
 	var firstChunkID string
+	// Obfuscation padding is cosmetic; generate at most one value per stream
+	// (lazily) instead of one crypto/rand read per chunk.
+	var obfuscationValue string
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
@@ -126,47 +129,33 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				// This matches OpenAI's actual streaming format where only the first chunk has name
 				cleanedToolCalls := make([]map[string]interface{}, 0, len(choice.Delta.ToolCalls))
 				for _, tc := range choice.Delta.ToolCalls {
-					// Parse the raw JSON to get the actual fields
-					var rawTc map[string]interface{}
-					if err := json.Unmarshal([]byte(tc.RawJSON()), &rawTc); err == nil {
-						cleanedTc := make(map[string]interface{})
-						// Always include index
-						if idx, ok := rawTc["index"]; ok {
-							cleanedTc["index"] = idx
-						}
-						// Include id only if non-empty (first chunk has id, subsequent don't)
-						if id, ok := rawTc["id"]; ok && id != "" {
-							cleanedTc["id"] = id
-						}
-						// Include type only if id is present (first chunk only)
+					cleanedTc := map[string]interface{}{
+						"index": tc.Index,
+					}
+					// Include id only if non-empty (first chunk has id, subsequent don't)
+					if tc.ID != "" {
+						cleanedTc["id"] = tc.ID
+						// Include type only alongside id (first chunk only)
 						// DeepSeek format: type only in first chunk, not in subsequent chunks
-						if _, hasID := rawTc["id"]; hasID {
-							if typ, ok := rawTc["type"]; ok {
-								cleanedTc["type"] = typ
-							}
+						if tc.Type != "" {
+							cleanedTc["type"] = tc.Type
 						}
-						// Handle function field - clean up empty name
-						if fn, ok := rawTc["function"].(map[string]interface{}); ok {
-							cleanedFn := make(map[string]interface{})
-							// Only include name if non-empty (first chunk has name, subsequent don't)
-							if name, ok := fn["name"]; ok && name != "" {
-								cleanedFn["name"] = name
-							}
-							// Always include arguments if present
-							if args, ok := fn["arguments"]; ok && args != "" {
-								cleanedFn["arguments"] = args
-							}
-							if len(cleanedFn) > 0 {
-								cleanedTc["function"] = cleanedFn
-							}
-						}
-						// Only add if we have meaningful content
-						if len(cleanedTc) > 1 { // At least index + one other field
-							cleanedToolCalls = append(cleanedToolCalls, cleanedTc)
-						}
-					} else {
-						// Fallback to raw value if parsing fails
-						cleanedToolCalls = append(cleanedToolCalls, rawTc)
+					}
+					cleanedFn := make(map[string]interface{})
+					// Only include name if non-empty (first chunk has name, subsequent don't)
+					if tc.Function.Name != "" {
+						cleanedFn["name"] = tc.Function.Name
+					}
+					// Always include arguments if present
+					if tc.Function.Arguments != "" {
+						cleanedFn["arguments"] = tc.Function.Arguments
+					}
+					if len(cleanedFn) > 0 {
+						cleanedTc["function"] = cleanedFn
+					}
+					// Only add if we have meaningful content
+					if len(cleanedTc) > 1 { // At least index + one other field
+						cleanedToolCalls = append(cleanedToolCalls, cleanedTc)
 					}
 				}
 				if len(cleanedToolCalls) > 0 {
@@ -213,15 +202,16 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			}
 
 			// Add obfuscation if present in extra fields, otherwise use generated value
-			obfuscationValue := GenerateObfuscationString() // Generate obfuscation value once per stream
+			var upstreamObfuscation string
 			if obfuscationField, ok := chunk.JSON.ExtraFields["obfuscation"]; ok && obfuscationField.Valid() {
-				var upstreamObfuscation string
-				if err := json.Unmarshal([]byte(obfuscationField.Raw()), &upstreamObfuscation); err == nil {
-					chunkMap["obfuscation"] = upstreamObfuscation
-				} else {
-					chunkMap["obfuscation"] = obfuscationValue
-				}
+				_ = json.Unmarshal([]byte(obfuscationField.Raw()), &upstreamObfuscation)
+			}
+			if upstreamObfuscation != "" {
+				chunkMap["obfuscation"] = upstreamObfuscation
 			} else {
+				if obfuscationValue == "" {
+					obfuscationValue = GenerateObfuscationString()
+				}
 				chunkMap["obfuscation"] = obfuscationValue
 			}
 
@@ -338,56 +328,61 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		eventRaw := strings.Clone(evt.RawJSON())
 		eventType := evt.Type
 
-		// Accumulate usage from the raw JSON (SDK struct fields may be zero for
-		// providers that use custom serialisation or in unit-test fake decoders).
-		promptTokensTotal := int64(0)
-		outputTokens := int64(0)
-		cacheTokens := int64(0)
-		reasoningTokens := int64(0)
-		if it := gjson.Get(eventRaw, "response.usage.input_tokens"); it.Exists() && it.Int() > 0 {
-			promptTokensTotal = it.Int()
-		}
-		if ot := gjson.Get(eventRaw, "response.usage.output_tokens"); ot.Exists() && ot.Int() > 0 {
-			outputTokens = ot.Int()
-		}
+		// Usage extraction and model rewriting only apply to events that carry
+		// a "response" object (created/in_progress/completed/...). The
+		// high-frequency *.delta events don't, so they pay a single top-level
+		// scan here instead of half a dozen full gjson re-parses.
+		if resp := gjson.Get(eventRaw, "response"); resp.Exists() {
+			// Accumulate usage from the raw JSON (SDK struct fields may be zero for
+			// providers that use custom serialisation or in unit-test fake decoders).
+			promptTokensTotal := int64(0)
+			outputTokens := int64(0)
+			cacheTokens := int64(0)
+			reasoningTokens := int64(0)
+			respUsage := resp.Get("usage")
+			if it := respUsage.Get("input_tokens"); it.Exists() && it.Int() > 0 {
+				promptTokensTotal = it.Int()
+			}
+			if ot := respUsage.Get("output_tokens"); ot.Exists() && ot.Int() > 0 {
+				outputTokens = ot.Int()
+			}
 
-		// Note: Responses API may include cache tokens in usage details
-		// Check if available in the raw JSON
-		if gjson.Get(eventRaw, "response.usage.input_tokens_details").Exists() {
-			if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
-				cacheTokens = cachedTokens.Int()
-				logrus.WithContext(c.Request.Context()).Debugf("cached tokens: %v", cacheTokens)
-			} else {
-				// set raw use "0" as 0
-				if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
-					eventRaw = modified
+			// Note: Responses API may include cache tokens in usage details
+			// Check if available in the raw JSON
+			if respUsage.Get("input_tokens_details").Exists() {
+				if cachedTokens := respUsage.Get("input_tokens_details.cached_tokens"); cachedTokens.Exists() {
+					cacheTokens = cachedTokens.Int()
+					logrus.WithContext(c.Request.Context()).Debugf("cached tokens: %v", cacheTokens)
 				} else {
-					logrus.WithContext(c.Request.Context()).WithError(err).Error("Failed to set cached tokens")
+					// set raw use "0" as 0
+					if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
+						eventRaw = modified
+					} else {
+						logrus.WithContext(c.Request.Context()).WithError(err).Error("Failed to set cached tokens")
+					}
 				}
 			}
-		}
 
-		// Codex CLI's ResponseCompleted decoder rejects events whose
-		// output_tokens_details lacks reasoning_tokens. Backfill 0 when the
-		// upstream provider (e.g. DeepSeek) omits it.
-		if gjson.Get(eventRaw, "response.usage").Exists() {
-			if rt := gjson.Get(eventRaw, "response.usage.output_tokens_details.reasoning_tokens"); rt.Exists() {
-				reasoningTokens = rt.Int()
-			} else {
-				if modified, err := sjson.SetRaw(eventRaw, "response.usage.output_tokens_details.reasoning_tokens", "0"); err == nil {
-					eventRaw = modified
+			// Codex CLI's ResponseCompleted decoder rejects events whose
+			// output_tokens_details lacks reasoning_tokens. Backfill 0 when the
+			// upstream provider (e.g. DeepSeek) omits it.
+			if respUsage.Exists() {
+				if rt := respUsage.Get("output_tokens_details.reasoning_tokens"); rt.Exists() {
+					reasoningTokens = rt.Int()
 				} else {
-					logrus.WithContext(c.Request.Context()).WithError(err).Error("Failed to set reasoning tokens")
+					if modified, err := sjson.SetRaw(eventRaw, "response.usage.output_tokens_details.reasoning_tokens", "0"); err == nil {
+						eventRaw = modified
+					} else {
+						logrus.WithContext(c.Request.Context()).WithError(err).Error("Failed to set reasoning tokens")
+					}
 				}
 			}
-		}
 
-		if promptTokensTotal > 0 || outputTokens > 0 || cacheTokens > 0 || reasoningTokens > 0 {
-			usage = protocol.NewTokenUsageFull(int(promptTokensTotal-cacheTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens))
-		}
+			if promptTokensTotal > 0 || outputTokens > 0 || cacheTokens > 0 || reasoningTokens > 0 {
+				usage = protocol.NewTokenUsageFull(int(promptTokensTotal-cacheTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens))
+			}
 
-		if len(eventRaw) > 0 {
-			if model := gjson.Get(eventRaw, "response.model"); model.Exists() && model.String() != "" {
+			if model := resp.Get("model"); model.Exists() && model.String() != "" {
 				if modified, err := sjson.Set(eventRaw, "response.model", responseModel); err == nil {
 					eventRaw = modified
 				}

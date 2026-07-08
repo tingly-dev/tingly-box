@@ -50,7 +50,7 @@ func EstimateAnthropicBetaMessagesTokens(messages []anthropic.BetaMessageParam) 
 
 // CountTokensViaTiktoken approximates token count for OpenAI-style providers using tiktoken
 func CountTokensViaTiktoken(req *anthropic.MessageCountTokensParams) (int, error) {
-	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	enc, err := getCodec(tokenizer.O200kBase)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
@@ -123,8 +123,7 @@ func CountTokensViaTiktoken(req *anthropic.MessageCountTokensParams) (int, error
 
 // CountBetaTokensViaTiktoken approximates token count for OpenAI-style providers using tiktoken
 func CountBetaTokensViaTiktoken(req *anthropic.BetaMessageCountTokensParams) (int, error) {
-
-	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	enc, err := getCodec(tokenizer.O200kBase)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
