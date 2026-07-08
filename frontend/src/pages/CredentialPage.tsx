@@ -1,16 +1,16 @@
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
-import ConnectProviderDialog, { type ConnectSelection } from '@/components/ConnectProviderDialog';
+import ConnectProviderDialog from '@/components/ConnectProviderDialog';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import ImportModal from '@/components/ImportModal';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
 import PageHeader from '@/components/PageHeader';
 import { PageLayout } from '@/components/PageLayout';
-import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
+import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
-import { buildProviderFormData } from '@/hooks/useProviderDialog';
+import { useProviderDialog } from '@/hooks/useProviderDialog';
 import { Add, ListAlt, Upload, VpnKey } from '@/components/icons';
 import {
     Alert,
@@ -28,28 +28,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
 
-type ProviderFormData = EnhancedProviderFormData;
-
 const CredentialPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
 
-    // API Key Dialog state
-    const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
-    const [apiKeyDialogMode, setApiKeyDialogMode] = useState<'add' | 'edit'>('add');
-    const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
-        uuid: undefined, name: '', apiBase: '', apiStyle: undefined, token: '', enabled: true,
-    });
-
-    // Unified "Connect Provider" picker state
-    const [connectOpen, setConnectOpen] = useState(false);
-
-    const [isLocalProvider, setIsLocalProvider] = useState(false);
-    const [fromConnectPicker, setFromConnectPicker] = useState(false);
-
-    // OAuth Dialog state
+    // OAuth Dialog state (page-local: needs reauth/refresh handling the shared
+    // add-form hook doesn't cover)
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
     const [oauthReauthUuid, setOAuthReauthUuid] = useState<string | null>(null);
@@ -68,39 +54,32 @@ const CredentialPage = () => {
 
     const { quotaData, refreshing, refreshQuota } = useProviderQuota(providers, { fetchOnMount: true });
 
-    const showNotification = (message: string, severity: 'success' | 'error') => {
+    const showNotification = useCallback((message: string, severity: 'success' | 'error') => {
         notify[severity](message);
-    };
+    }, [notify]);
 
-    const handleAddApiKey = () => {
-        setApiKeyDialogMode('add');
-        setProviderFormData({
-            uuid: undefined, name: '', apiBase: '', apiStyle: undefined, token: '',
-            enabled: true, noKeyRequired: false, proxyUrl: '', userAgent: '',
-        } as any);
-        setApiKeyDialogOpen(true);
-    };
-
-    const handleConnectSelect = (selection: ConnectSelection) => {
-        setConnectOpen(false);
-
-        if (selection.kind === 'oauth') {
-            setOAuthAutoStartId(selection.providerId);
+    // Standard "Connect AI" add flow: picker + form (add/force-add/import/oauth routing).
+    const {
+        providerDialogOpen,
+        providerFormData,
+        handleProviderSubmit,
+        handleProviderForceAdd,
+        handleCloseDialog,
+        handleFieldChange,
+        connectDialogOpen,
+        handleConnectAIClick,
+        handleConnectSelect,
+        handleCloseConnect,
+        fromConnectPicker,
+        optionalEditableToken,
+    } = useProviderDialog(showNotification, {
+        onProviderAdded: () => loadProviders(),
+        onImport: () => setShowImportModal(true),
+        onOAuth: (providerId) => {
+            setOAuthAutoStartId(providerId);
             setOAuthDialogOpen(true);
-            return;
-        }
-        if (selection.kind === 'import') {
-            setShowImportModal(true);
-            return;
-        }
-
-        const built = buildProviderFormData(selection)!;
-        setIsLocalProvider(selection.kind === 'local');
-        setFromConnectPicker(true);
-        setApiKeyDialogMode('add');
-        setProviderFormData(built.formData);
-        setApiKeyDialogOpen(true);
-    };
+        },
+    });
 
     const loadProviders = async () => {
         setLoading(true);
@@ -114,87 +93,6 @@ const CredentialPage = () => {
         showNotification,
         onUpdated: loadProviders,
     });
-
-    // Build the body for an add request. Always produces exactly 1 provider record.
-    const buildAddProviderPayload = (override?: Partial<ProviderFormData>): any => {
-        const fd: any = { ...providerFormData, ...(override || {}) };
-        return {
-            name: fd.name,
-            api_base: fd.apiBase,
-            api_style: fd.apiStyle,
-            api_base_openai: fd.apiBaseOpenAI || '',
-            api_base_anthropic: fd.apiBaseAnthropic || '',
-            token: fd.token,
-            no_key_required: fd.noKeyRequired || false,
-            enabled: true,
-            proxy_url: fd.proxyUrl ?? '',
-            user_agent: fd.userAgent ?? '',
-            auth_type: 'api_key',
-        };
-    };
-
-    const buildEditProviderPayload = (override?: Partial<ProviderFormData>) => {
-        const fd: any = { ...providerFormData, ...(override || {}) };
-        return {
-            name: fd.name,
-            api_base: fd.apiBase,
-            api_style: fd.apiStyle,
-            token: fd.token || undefined,
-            no_key_required: fd.noKeyRequired || false,
-            enabled: fd.enabled,
-            proxy_url: fd.proxyUrl ?? '',
-            user_agent: fd.userAgent ?? '',
-            api_base_openai: fd.apiBaseOpenAI ?? '',
-            api_base_anthropic: fd.apiBaseAnthropic ?? '',
-        };
-    };
-
-    const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<ProviderFormData>) => {
-        e.preventDefault();
-        if (apiKeyDialogMode === 'edit') {
-            const providerData = buildEditProviderPayload(resolved);
-            const result = await api.updateProvider(providerFormData.uuid!, providerData);
-            if (result.success) {
-                showNotification('Provider updated successfully!', 'success');
-                setApiKeyDialogOpen(false);
-                loadProviders();
-            } else {
-                showNotification(`Failed to update provider: ${result.error}`, 'error');
-            }
-        } else {
-            const result = await api.addProvider(buildAddProviderPayload(resolved));
-            if (result.success) {
-                showNotification('Provider added successfully!', 'success');
-                setApiKeyDialogOpen(false);
-                loadProviders();
-            } else {
-                showNotification(`Failed to add provider: ${result.error}`, 'error');
-            }
-        }
-    };
-
-    const handleProviderForceAdd = async () => {
-        if (apiKeyDialogMode === 'edit') {
-            const providerData = buildEditProviderPayload();
-            const result = await api.updateProvider(providerFormData.uuid!, providerData);
-            if (result.success) {
-                showNotification('Provider updated successfully!', 'success');
-                setApiKeyDialogOpen(false);
-                loadProviders();
-            } else {
-                showNotification(`Failed to update provider: ${result.error}`, 'error');
-            }
-        } else {
-            const result = await api.addProvider(buildAddProviderPayload(), true);
-            if (result.success) {
-                showNotification('Provider added successfully!', 'success');
-                setApiKeyDialogOpen(false);
-                loadProviders();
-            } else {
-                showNotification(`Failed to add provider: ${result.error}`, 'error');
-            }
-        }
-    };
 
     const handleDeleteProvider = async (uuid: string) => {
         const result = await api.deleteProvider(uuid);
@@ -221,25 +119,15 @@ const CredentialPage = () => {
         }
 
         const dialog = searchParams.get('dialog');
-        const style = searchParams.get('style') as 'openai' | 'anthropic' | 'oauth' | null;
         if (dialog === 'add') {
             const nextParams = new URLSearchParams(searchParams);
             nextParams.delete('dialog');
             nextParams.delete('style');
             setSearchParams(nextParams, { replace: true });
-            if (style === 'oauth') {
-                setConnectOpen(true);
-            } else {
-                const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
-                setApiKeyDialogMode('add');
-                setProviderFormData({
-                    uuid: undefined, name: '', apiBase: '', apiStyle: apiStyle, token: '',
-                    enabled: true, noKeyRequired: false, proxyUrl: '', userAgent: '',
-                } as any);
-                setApiKeyDialogOpen(true);
-            }
+            // All "add credential" entry points funnel through the unified Connect AI picker.
+            handleConnectAIClick();
         }
-    }, [searchParams, setSearchParams]);
+    }, [searchParams, setSearchParams, handleConnectAIClick]);
 
     // OAuth handlers
     const handleOAuthSuccess = () => {
@@ -296,10 +184,6 @@ const CredentialPage = () => {
         finally { setImporting(false); }
     };
 
-    const handleProviderFormChange = useCallback((field: keyof ProviderFormData, value: any) => {
-        setProviderFormData(prev => ({ ...prev, [field]: value }));
-    }, []);
-
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
         const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth' && p.auth_type !== 'vmodel');
         const oauth = providers.filter((p: any) => p.auth_type === 'oauth');
@@ -316,7 +200,7 @@ const CredentialPage = () => {
                         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
                             <Button component={Link} to="/onboarding" variant="outlined" startIcon={<ListAlt />} size="small" sx={{ minWidth: 130 }}>Providers</Button>
                             <Button variant="outlined" startIcon={<Upload />} onClick={handleImportClick} size="small" sx={{ minWidth: 110 }}>Import</Button>
-                            <Button variant="contained" startIcon={<Add />} onClick={() => setConnectOpen(true)} size="small" sx={{ minWidth: 150 }}>Connect AI</Button>
+                            <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>Connect AI</Button>
                         </Stack>
                     }
                 />
@@ -330,7 +214,7 @@ const CredentialPage = () => {
                     {credentialCounts.oauth > 0 ? (
                         <OAuthTable providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
                     ) : (
-                        <EmptyStateGuide title="No OAuth Providers Configured" description="Connect AI providers like Claude Code, Gemini CLI, Qwen, etc. via OAuth sign-in." showHeroIcon={false} primaryButtonLabel="Connect AI" onAddApiKeyClick={() => setConnectOpen(true)}/>
+                        <EmptyStateGuide title="No OAuth Providers Configured" description="Connect AI providers like Claude Code, Gemini CLI, Qwen, etc. via OAuth sign-in." showHeroIcon={false} primaryButtonLabel="Connect AI" onAddApiKeyClick={handleConnectAIClick}/>
                     )}
                 </Surface>
 
@@ -343,26 +227,26 @@ const CredentialPage = () => {
                     {credentialCounts.apiKeys > 0 ? (
                         <ApiKeyTable providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
                     ) : (
-                        <EmptyStateGuide title="No API Keys Configured" description="Configure API keys to access AI services like OpenAI, Anthropic, etc." showHeroIcon={false} primaryButtonLabel="Connect AI" onAddApiKeyClick={handleAddApiKey}/>
+                        <EmptyStateGuide title="No API Keys Configured" description="Connect AI providers like OpenAI, Anthropic, etc. via API key." showHeroIcon={false} primaryButtonLabel="Connect AI" onAddApiKeyClick={handleConnectAIClick}/>
                     )}
                 </Surface>
             </Stack>
 
-            {/* API Key Provider Dialog — unified, no mode flags */}
+            {/* API Key Provider Dialog — unified add flow (edit goes through useProviderEditDialog) */}
             <ProviderFormDialog
-                open={apiKeyDialogOpen}
-                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); }}
-                onBack={fromConnectPicker ? () => setConnectOpen(true) : undefined}
+                open={providerDialogOpen}
+                onClose={handleCloseDialog}
+                onBack={fromConnectPicker ? () => { handleCloseDialog(); handleConnectAIClick(); } : undefined}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
-                onChange={handleProviderFormChange}
-                mode={apiKeyDialogMode}
-                optionalEditableToken={isLocalProvider}
+                onChange={handleFieldChange}
+                mode="add"
+                optionalEditableToken={optionalEditableToken}
             />
 
             {/* Unified provider picker */}
-            <ConnectProviderDialog open={connectOpen} onClose={() => setConnectOpen(false)} onSelect={handleConnectSelect}/>
+            <ConnectProviderDialog open={connectDialogOpen} onClose={handleCloseConnect} onSelect={handleConnectSelect}/>
 
             {/* OAuth Add Dialog */}
             <OAuthDialog open={oauthDialogOpen} autoStartProviderId={oauthAutoStartId} reauthProviderUuid={oauthReauthUuid} onClose={() => { setOAuthDialogOpen(false); setOAuthAutoStartId(null); setOAuthReauthUuid(null); }} onSuccess={handleOAuthSuccess}/>

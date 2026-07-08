@@ -7,6 +7,8 @@ interface UseProviderDialogOptions {
     defaultApiStyle?: 'openai' | 'anthropic' | undefined;
     onProviderAdded?: () => void;
     onImport?: () => void;
+    /** Invoked when the user picks an OAuth sign-in provider. */
+    onOAuth?: (providerId: string) => void;
 }
 
 // ── Shared: ConnectSelection → form data ────────────────────────────
@@ -79,22 +81,26 @@ interface UseProviderDialogReturn {
     handleConnectSelect: (selection: ConnectSelection) => void;
     handleCloseConnect: () => void;
     fromConnectPicker: boolean;
+    /** Self-hosted / local providers: token is optional but editable. */
+    optionalEditableToken: boolean;
 }
 
 export const useProviderDialog = (
     showNotification: (message: string, severity: 'success' | 'error') => void,
     options: UseProviderDialogOptions = {}
 ): UseProviderDialogReturn => {
-    const { defaultApiStyle, onProviderAdded, onImport } = options;
+    const { defaultApiStyle, onProviderAdded, onImport, onOAuth } = options;
 
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
     const [connectDialogOpen, setConnectDialogOpen] = useState(false);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
+    const [optionalEditableToken, setOptionalEditableToken] = useState(false);
     const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>(emptyForm(defaultApiStyle));
 
     const handleAddProviderClick = () => {
         setProviderFormData(emptyForm(defaultApiStyle));
         setFromConnectPicker(false);
+        setOptionalEditableToken(false);
         setProviderDialogOpen(true);
     };
 
@@ -113,13 +119,15 @@ export const useProviderDialog = (
         const built = buildProviderFormData(selection);
         if (!built) {
             // oauth / import — handled by caller via other dialogs
+            if (selection.kind === 'oauth') onOAuth?.(selection.providerId);
             if (selection.kind === 'import') onImport?.();
             return;
         }
 
         setProviderFormData(built.formData);
+        setOptionalEditableToken(built.optionalEditableToken);
         setProviderDialogOpen(true);
-    }, [defaultApiStyle, onImport]);
+    }, [defaultApiStyle, onImport, onOAuth]);
 
     const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();
@@ -177,6 +185,7 @@ export const useProviderDialog = (
     const handleCloseDialog = () => {
         setProviderDialogOpen(false);
         setFromConnectPicker(false);
+        setOptionalEditableToken(false);
     };
 
     const handleFieldChange = (field: keyof EnhancedProviderFormData, value: any) => {
@@ -196,5 +205,6 @@ export const useProviderDialog = (
         handleConnectSelect,
         handleCloseConnect,
         fromConnectPicker,
+        optionalEditableToken,
     };
 };
