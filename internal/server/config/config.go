@@ -2021,47 +2021,22 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	var models []string
 	var apiErr error
 
-	var lister client.ModelLister
-	if strings.Contains(strings.ToLower(strings.TrimSpace(provider.APIBase)), "api.deepseek.com") {
-		providerForModels := *provider
-		providerForModels.APIBase = "https://api.deepseek.com"
-		oClient, err := client.NewOpenAIClient(&providerForModels, "", typ.SessionID{})
-		if err == nil {
-			defer oClient.Close()
-			lister = oClient
-		}
+	lister, closer, err := c.newModelLister(provider)
+	if err != nil {
 		apiErr = err
-	} else {
-		switch provider.APIStyle {
-		case protocol.APIStyleAnthropic:
-			aClient, err := client.NewAnthropicClient(provider, "", typ.SessionID{})
-			if err == nil {
-				defer aClient.Close()
-				lister = aClient
-			}
-			apiErr = err
-		case protocol.APIStyleGoogle:
-			gClient, err := client.NewGoogleClient(provider, "", typ.SessionID{})
-			if err == nil {
-				defer gClient.Close()
-				lister = gClient
-			}
-			apiErr = err
-		case protocol.APIStyleOpenAI:
-			fallthrough
-		default:
-			oClient, err := client.NewOpenAIClient(provider, "", typ.SessionID{})
-			if err == nil {
-				defer oClient.Close()
-				lister = oClient
-			}
-			apiErr = err
-		}
+	}
+	if closer != nil {
+		defer closer()
 	}
 
 	if lister != nil {
 		models, apiErr = lister.ListModels(ctx)
 		if apiErr == nil && len(models) > 0 {
+			// OpenRouter tags free models with a ":free" suffix. Promote them to
+			// the front of the list so they surface first in the model picker.
+			if isOpenRouterProvider(provider) {
+				sortOpenRouterFreeModelsFirst(models)
+			}
 			return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
 		}
 		if client.IsModelsEndpointNotSupported(apiErr) {
@@ -2087,6 +2062,83 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", apiErr)
 	}
 	return fmt.Errorf("failed to fetch models (template fallback: not available)")
+}
+
+// newModelLister builds the client used to list models for a provider.
+//
+// It returns a ModelLister, an optional closer the caller must defer, and any
+// construction error. Two special cases sit alongside the default APIStyle
+// dispatch:
+//
+//   - DeepSeek exposes its model list only on the bare host (no /v1 path), so
+//     we override APIBase to https://api.deepseek.com before constructing the
+//     OpenAI client.
+//
+// The closer is non-nil whenever the lister is, so the caller can defer it
+// without checking the lister separately.
+func (c *Config) newModelLister(provider *typ.Provider) (client.ModelLister, func() error, error) {
+	if strings.Contains(strings.ToLower(strings.TrimSpace(provider.APIBase)), "api.deepseek.com") {
+		providerForModels := *provider
+		providerForModels.APIBase = "https://api.deepseek.com"
+		oClient, err := client.NewOpenAIClient(&providerForModels, "", typ.SessionID{})
+		if err != nil {
+			return nil, nil, err
+		}
+		return oClient, oClient.Close, nil
+	}
+
+	switch provider.APIStyle {
+	case protocol.APIStyleAnthropic:
+		aClient, err := client.NewAnthropicClient(provider, "", typ.SessionID{})
+		if err != nil {
+			return nil, nil, err
+		}
+		return aClient, aClient.Close, nil
+	case protocol.APIStyleGoogle:
+		gClient, err := client.NewGoogleClient(provider, "", typ.SessionID{})
+		if err != nil {
+			return nil, nil, err
+		}
+		return gClient, gClient.Close, nil
+	case protocol.APIStyleOpenAI:
+		fallthrough
+	default:
+		oClient, err := client.NewOpenAIClient(provider, "", typ.SessionID{})
+		if err != nil {
+			return nil, nil, err
+		}
+		return oClient, oClient.Close, nil
+	}
+}
+
+// isOpenRouterProvider reports whether the provider routes to OpenRouter.
+// OpenRouter's canonical host is openrouter.ai; the base_url templates embed it
+// as https://openrouter.ai/api/v1 (OpenAI) and https://openrouter.ai/api (Anthropic).
+func isOpenRouterProvider(provider *typ.Provider) bool {
+	for _, base := range []string{provider.APIBase, provider.APIBaseOpenAI, provider.APIBaseAnthropic} {
+		if strings.Contains(strings.ToLower(base), "openrouter.ai") {
+			return true
+		}
+	}
+	return false
+}
+
+// sortOpenRouterFreeModelsFirst reorders models in place so that any id ending
+// in ":free" sorts before non-free ids, preserving the relative order within
+// each group (stable sort).
+func sortOpenRouterFreeModelsFirst(models []string) {
+	slices.SortStableFunc(models, func(a, b string) int {
+		aFree := strings.HasSuffix(a, ":free")
+		bFree := strings.HasSuffix(b, ":free")
+		switch {
+		case aFree && !bFree:
+			return -1
+		case !aFree && bFree:
+			return 1
+		default:
+			return 0
+		}
+	})
 }
 
 func (c *Config) GetModelManager() *data.ModelListManager {
