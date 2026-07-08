@@ -189,10 +189,9 @@ func TestFullChain_AnthropicBeta_To_Codex_AdaptiveThinking(t *testing.T) {
 	resp, ok := result.Request.(*responses.ResponseNewParams)
 	require.True(t, ok, "expected *responses.ResponseNewParams, got %T", result.Request)
 
-	// Codex sets store=false and includes reasoning.encrypted_content
-	require.Len(t, resp.Include, 1)
-	assert.Equal(t, responses.ResponseIncludable("reasoning.encrypted_content"), resp.Include[0],
-		"Codex must include reasoning.encrypted_content")
+	// Codex backend defaults are applied by the Codex client, not by the
+	// protocol transform chain.
+	assert.Empty(t, resp.Include)
 }
 
 func TestFullChain_AnthropicBeta_To_Codex_EnabledThinking(t *testing.T) {
@@ -216,10 +215,9 @@ func TestFullChain_AnthropicBeta_To_Codex_EnabledThinking(t *testing.T) {
 	resp, ok := result.Request.(*responses.ResponseNewParams)
 	require.True(t, ok)
 
-	// Budget 10000 → effort "medium" per convertBudgetToEffort
-	// Reasoning config should be set
-	require.Len(t, resp.Include, 1)
-	assert.Equal(t, responses.ResponseIncludable("reasoning.encrypted_content"), resp.Include[0])
+	// Codex backend defaults are applied by the Codex client, not by the
+	// protocol transform chain.
+	assert.Empty(t, resp.Include)
 
 	// Model preserved through the chain
 	assert.Contains(t, string(resp.Model), "claude-sonnet-4-6")
