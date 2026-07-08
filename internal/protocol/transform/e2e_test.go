@@ -81,7 +81,6 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 
 				ctx := &TransformContext{
 					Request:     sourceReq.request,
-					ProviderURL: "api.example.com",
 					IsStreaming: false,
 				}
 
@@ -149,12 +148,11 @@ func TestE2E_FullChain(t *testing.T) {
 		chain := NewTransformChain([]Transform{
 			NewBaseTransform(protocol.TypeOpenAIChat),
 			NewConsistencyTransform(protocol.TypeOpenAIChat),
-			NewVendorTransform("api.openai.com"),
+			NewVendorTransform(),
 		})
 
 		ctx := &TransformContext{
 			Request:     sourceReq,
-			ProviderURL: "api.openai.com",
 			IsStreaming: false,
 		}
 
@@ -190,7 +188,6 @@ func TestE2E_FullChain(t *testing.T) {
 
 		ctx := &TransformContext{
 			Request:     sourceReq,
-			ProviderURL: "generativelanguage.googleapis.com",
 			IsStreaming: false,
 		}
 
@@ -226,12 +223,11 @@ func TestE2E_FullChain(t *testing.T) {
 		chain := NewTransformChain([]Transform{
 			NewBaseTransform(protocol.TypeOpenAIResponses),
 			NewConsistencyTransform(protocol.TypeOpenAIResponses),
-			NewVendorTransform("api.openai.com"),
+			NewVendorTransform(),
 		})
 
 		ctx := &TransformContext{
 			Request:     sourceReq,
-			ProviderURL: "api.openai.com",
 			IsStreaming: false,
 		}
 
@@ -267,7 +263,6 @@ func TestE2E_PointerTypeValidation(t *testing.T) {
 
 	ctx := &TransformContext{
 		Request:     valueReq, // Value type, not pointer
-		ProviderURL: "api.anthropic.com",
 		IsStreaming: false,
 	}
 
@@ -289,12 +284,11 @@ func TestE2E_TransformStepsRecorded(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeOpenAIChat),
 		NewConsistencyTransform(protocol.TypeOpenAIChat),
-		NewVendorTransform("api.openai.com"),
+		NewVendorTransform(),
 	})
 
 	ctx := &TransformContext{
 		Request:     sourceReq,
-		ProviderURL: "api.openai.com",
 		IsStreaming: false,
 	}
 

@@ -17,7 +17,7 @@ func newFullChainContext(request interface{}, providerURL string, extra map[stri
 	return &TransformContext{
 		Request:         request,
 		OriginalRequest: request,
-		ProviderURL:     providerURL,
+		Provider:        &typ.Provider{APIBase: providerURL},
 		IsStreaming:     true,
 		ScenarioFlags:   &typ.ScenarioFlags{},
 		TransformSteps:  []string{},
@@ -41,7 +41,7 @@ func TestFullChain_AnthropicV1_To_AnthropicV1_Passthrough(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -95,7 +95,7 @@ func TestFullChain_AnthropicV1_Haiku_AdaptiveStripped(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -135,7 +135,7 @@ func TestFullChain_AnthropicBeta_To_AnthropicBeta_Passthrough(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicBeta),
 		NewConsistencyTransform(protocol.TypeAnthropicBeta),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := newBetaRequest("claude-sonnet-4-6-20250514", anthropic.BetaThinkingConfigParamUnion{
@@ -172,7 +172,7 @@ func TestFullChain_AnthropicBeta_To_Codex_AdaptiveThinking(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeOpenAIResponses),
 		NewConsistencyTransform(protocol.TypeOpenAIResponses),
-		NewVendorTransform(protocol.CodexAPIBase),
+		NewVendorTransform(),
 	})
 
 	req := newBetaRequest("claude-sonnet-4-6-20250514", anthropic.BetaThinkingConfigParamUnion{
@@ -199,7 +199,7 @@ func TestFullChain_AnthropicBeta_To_Codex_EnabledThinking(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeOpenAIResponses),
 		NewConsistencyTransform(protocol.TypeOpenAIResponses),
-		NewVendorTransform(protocol.CodexAPIBase),
+		NewVendorTransform(),
 	})
 
 	req := newBetaRequest("claude-sonnet-4-6-20250514", anthropic.BetaThinkingConfigParamUnion{
@@ -235,7 +235,7 @@ func TestFullChain_AnthropicV1_To_Responses_ProtocolConversion(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeOpenAIResponses),
 		NewConsistencyTransform(protocol.TypeOpenAIResponses),
-		NewVendorTransform(protocol.CodexAPIBase),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -273,7 +273,7 @@ func TestFullChain_AnthropicV1_NonAnthropicProvider_NoVendorTransform(t *testing
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.openai.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -311,7 +311,7 @@ func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksFiltered(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -365,14 +365,14 @@ func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksFiltered(t *testing.T) {
 }
 
 // =============================================
-// Full Chain: Anthropic v1 → Anthropic v1 (Claude AI provider URL)
+// Full Chain: Anthropic v1 → Anthropic v1 (Claude AI provider)
 // =============================================
 
-func TestFullChain_AnthropicV1_ClaudeAI_ProviderURL(t *testing.T) {
+func TestFullChain_AnthropicV1_ClaudeAI_Provider(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("https://claude.ai/api/v1/messages"),
+		NewVendorTransform(),
 	})
 
 	req := newAnthropicV1Request("claude-opus-4-6-20250514", 16384)
@@ -399,7 +399,7 @@ func TestFullChain_AnthropicV1_EmptyModel_ValidationFails(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -426,7 +426,7 @@ func TestFullChain_AnthropicV1_ExistingBillingHeader_Replaced(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -466,7 +466,7 @@ func TestFullChain_AnthropicV1_Haiku_ExplicitThinkingPreserved(t *testing.T) {
 	chain := NewTransformChain([]Transform{
 		NewBaseTransform(protocol.TypeAnthropicV1),
 		NewConsistencyTransform(protocol.TypeAnthropicV1),
-		NewVendorTransform("api.anthropic.com"),
+		NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -511,7 +511,7 @@ func TestFullChain_AnthropicV1_SupportedModels(t *testing.T) {
 			chain := NewTransformChain([]Transform{
 				NewBaseTransform(protocol.TypeAnthropicV1),
 				NewConsistencyTransform(protocol.TypeAnthropicV1),
-				NewVendorTransform("api.anthropic.com"),
+				NewVendorTransform(),
 			})
 
 			req := &anthropic.MessageNewParams{
@@ -560,7 +560,7 @@ func TestFullChain_AnthropicV1_UnsupportedModels(t *testing.T) {
 			chain := NewTransformChain([]Transform{
 				NewBaseTransform(protocol.TypeAnthropicV1),
 				NewConsistencyTransform(protocol.TypeAnthropicV1),
-				NewVendorTransform("api.anthropic.com"),
+				NewVendorTransform(),
 			})
 
 			req := &anthropic.MessageNewParams{
@@ -630,7 +630,7 @@ func TestFullChain_Steps_Order(t *testing.T) {
 			chain := NewTransformChain([]Transform{
 				NewBaseTransform(tt.targetType),
 				NewConsistencyTransform(tt.targetType),
-				NewVendorTransform(tt.provider),
+				NewVendorTransform(),
 			})
 
 			var req interface{}

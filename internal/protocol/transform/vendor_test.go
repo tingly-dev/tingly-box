@@ -10,20 +10,25 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func withProvider(ctx *TransformContext, providerURL string) *TransformContext {
+	ctx.Provider = &typ.Provider{APIBase: providerURL}
+	return ctx
+}
+
 func TestNewVendorTransform(t *testing.T) {
-	vt := NewVendorTransform("api.openai.com")
+	vt := NewVendorTransform()
 	assert.Equal(t, "vendor_adjust", vt.Name())
-	assert.Equal(t, "api.openai.com", vt.ProviderURL)
 }
 
 func TestVendorTransform_Apply_Success(t *testing.T) {
-	vt := NewVendorTransform("api.openai.com")
+	vt := NewVendorTransform()
 
 	ctx := &TransformContext{
-		Request:     newOpenAIRequest("gpt-4", 1024),
-		ProviderURL: "api.openai.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  newOpenAIRequest("gpt-4", 1024),
 		Extra: map[string]interface{}{
 			"openaiConfig": &protocol.OpenAIConfig{HasThinking: false, ReasoningEffort: "none"},
 		},
@@ -36,12 +41,12 @@ func TestVendorTransform_Apply_Success(t *testing.T) {
 }
 
 func TestVendorTransform_Apply_MissingOpenAIConfig(t *testing.T) {
-	vt := NewVendorTransform("api.openai.com")
+	vt := NewVendorTransform()
 
 	ctx := &TransformContext{
-		Request:     newOpenAIRequest("gpt-4", 1024),
-		ProviderURL: "api.openai.com",
-		Extra:       map[string]interface{}{},
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  newOpenAIRequest("gpt-4", 1024),
+		Extra:    map[string]interface{}{},
 	}
 
 	err := vt.Apply(ctx)
@@ -53,12 +58,12 @@ func TestVendorTransform_Apply_MissingOpenAIConfig(t *testing.T) {
 // Transform in the chain) rather than returning a ValidationError.
 
 func TestVendorTransform_Apply_NilRequest(t *testing.T) {
-	vt := NewVendorTransform("api.openai.com")
+	vt := NewVendorTransform()
 
 	ctx := &TransformContext{
-		Request:     nil,
-		ProviderURL: "api.openai.com",
-		Extra:       map[string]interface{}{},
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  nil,
+		Extra:    map[string]interface{}{},
 	}
 
 	// Nil request is a silent no-op now (same contract as every other
@@ -82,12 +87,12 @@ func TestVendorTransform_Protocols(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform(tt.providerURL)
+			vt := NewVendorTransform()
 
 			ctx := &TransformContext{
-				Request:     newOpenAIRequest(tt.model, tt.maxTokens),
-				ProviderURL: tt.providerURL,
-				Extra:       map[string]interface{}{"openaiConfig": &protocol.OpenAIConfig{}},
+				Provider: &typ.Provider{APIBase: tt.providerURL},
+				Request:  newOpenAIRequest(tt.model, tt.maxTokens),
+				Extra:    map[string]interface{}{"openaiConfig": &protocol.OpenAIConfig{}},
 			}
 
 			err := vt.Apply(ctx)
@@ -96,7 +101,7 @@ func TestVendorTransform_Protocols(t *testing.T) {
 	}
 }
 
-// TestNormalizeProviderURL removed alongside the helper itself: vendor
+// TestNormalizeProvider removed alongside the helper itself: vendor
 // dispatch now uses strings.Contains on the raw lowercased URL, no
 // separate parse step.
 
@@ -111,11 +116,11 @@ func TestVendorTransform_TransformerIntegration(t *testing.T) {
 	assert.NotNil(t, transformed)
 
 	// Through VendorTransform
-	vt := NewVendorTransform(providerURL)
+	vt := NewVendorTransform()
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: providerURL,
-		Extra:       map[string]interface{}{"openaiConfig": config},
+		Provider: &typ.Provider{APIBase: providerURL},
+		Request:  req,
+		Extra:    map[string]interface{}{"openaiConfig": config},
 	}
 
 	err := vt.Apply(ctx)
@@ -155,7 +160,7 @@ func assertBetaMetadata(t *testing.T, result *anthropic.BetaMessageNewParams, de
 	assert.Contains(t, uid, "session_id", "user_id should contain session_id")
 }
 
-func TestVendorTransform_AnthropicV1_ProviderURLMatching(t *testing.T) {
+func TestVendorTransform_AnthropicV1_ProviderMatching(t *testing.T) {
 	tests := []struct {
 		name        string
 		providerURL string
@@ -172,7 +177,7 @@ func TestVendorTransform_AnthropicV1_ProviderURLMatching(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform(tt.providerURL)
+			vt := NewVendorTransform()
 			req := &anthropic.MessageNewParams{
 				Model:     anthropic.Model("claude-3-5-haiku-20241022"),
 				MaxTokens: 4096,
@@ -188,9 +193,9 @@ func TestVendorTransform_AnthropicV1_ProviderURLMatching(t *testing.T) {
 			extra := map[string]interface{}{"device": "test-device", "user_id": "test-account"}
 
 			ctx := &TransformContext{
-				Request:     req,
-				ProviderURL: tt.providerURL,
-				Extra:       extra,
+				Provider: &typ.Provider{APIBase: tt.providerURL},
+				Request:  req,
+				Extra:    extra,
 			}
 
 			err := vt.Apply(ctx)
@@ -213,7 +218,7 @@ func TestVendorTransform_AnthropicV1_ProviderURLMatching(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicV1_EmptyModel(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 	req := &anthropic.MessageNewParams{
 		Model:     "",
 		MaxTokens: 4096,
@@ -223,9 +228,9 @@ func TestVendorTransform_AnthropicV1_EmptyModel(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
-		Extra:       map[string]interface{}{"device": "test-device", "user_id": "test-account"},
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
+		Extra:    map[string]interface{}{"device": "test-device", "user_id": "test-account"},
 	}
 
 	err := vt.Apply(ctx)
@@ -248,7 +253,7 @@ func TestVendorTransform_AnthropicV1_SupportedModel_AdaptivePreserved(t *testing
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform("api.anthropic.com")
+			vt := NewVendorTransform()
 			req := &anthropic.MessageNewParams{
 				Model:     anthropic.Model(tt.model),
 				MaxTokens: 4096,
@@ -261,8 +266,8 @@ func TestVendorTransform_AnthropicV1_SupportedModel_AdaptivePreserved(t *testing
 			}
 
 			ctx := &TransformContext{
-				Request:     req,
-				ProviderURL: "api.anthropic.com",
+				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
 					"user_id": "test-account-uuid",
@@ -304,7 +309,7 @@ func TestVendorTransform_AnthropicV1_UnsupportedModel_AdaptiveDisabled(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform("api.anthropic.com")
+			vt := NewVendorTransform()
 			req := &anthropic.MessageNewParams{
 				Model:     anthropic.Model(tt.model),
 				MaxTokens: 4096,
@@ -317,8 +322,8 @@ func TestVendorTransform_AnthropicV1_UnsupportedModel_AdaptiveDisabled(t *testin
 			}
 
 			ctx := &TransformContext{
-				Request:     req,
-				ProviderURL: "api.anthropic.com",
+				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
 					"user_id": "test-account-uuid",
@@ -349,7 +354,7 @@ func TestVendorTransform_AnthropicV1_UnsupportedModel_AdaptiveDisabled(t *testin
 }
 
 func TestVendorTransform_AnthropicV1_BillingHeaderPrepend(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	// Request with existing system prompt (no billing header)
 	req := &anthropic.MessageNewParams{
@@ -364,8 +369,8 @@ func TestVendorTransform_AnthropicV1_BillingHeaderPrepend(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -387,7 +392,7 @@ func TestVendorTransform_AnthropicV1_BillingHeaderPrepend(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicV1_BillingHeaderReplace(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	// Request with existing billing header in system prompt
 	req := &anthropic.MessageNewParams{
@@ -403,8 +408,8 @@ func TestVendorTransform_AnthropicV1_BillingHeaderReplace(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -425,7 +430,7 @@ func TestVendorTransform_AnthropicV1_BillingHeaderReplace(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicV1_NoSystemPrompt(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := &anthropic.MessageNewParams{
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
@@ -437,8 +442,8 @@ func TestVendorTransform_AnthropicV1_NoSystemPrompt(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -457,7 +462,7 @@ func TestVendorTransform_AnthropicV1_NoSystemPrompt(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicV1_EnabledThinkingPreserved(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	// Enabled thinking should be preserved even on unsupported models
 	req := &anthropic.MessageNewParams{
@@ -472,8 +477,8 @@ func TestVendorTransform_AnthropicV1_EnabledThinkingPreserved(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -506,7 +511,7 @@ func newBetaRequest(model string, thinking anthropic.BetaThinkingConfigParamUnio
 	}
 }
 
-func TestVendorTransform_AnthropicBeta_ProviderURLMatching(t *testing.T) {
+func TestVendorTransform_AnthropicBeta_ProviderMatching(t *testing.T) {
 	tests := []struct {
 		name        string
 		providerURL string
@@ -519,7 +524,7 @@ func TestVendorTransform_AnthropicBeta_ProviderURLMatching(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform(tt.providerURL)
+			vt := NewVendorTransform()
 			req := newBetaRequest("claude-3-5-haiku-20241022", anthropic.BetaThinkingConfigParamUnion{
 				OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 			})
@@ -528,9 +533,9 @@ func TestVendorTransform_AnthropicBeta_ProviderURLMatching(t *testing.T) {
 			extra := map[string]interface{}{"device": "test-device", "user_id": "test-account"}
 
 			ctx := &TransformContext{
-				Request:     req,
-				ProviderURL: tt.providerURL,
-				Extra:       extra,
+				Provider: &typ.Provider{APIBase: tt.providerURL},
+				Request:  req,
+				Extra:    extra,
 			}
 
 			err := vt.Apply(ctx)
@@ -551,7 +556,7 @@ func TestVendorTransform_AnthropicBeta_ProviderURLMatching(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicBeta_EmptyModel(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 	req := &anthropic.BetaMessageNewParams{
 		Model:     "",
 		MaxTokens: 4096,
@@ -561,9 +566,9 @@ func TestVendorTransform_AnthropicBeta_EmptyModel(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
-		Extra:       map[string]interface{}{"device": "test-device", "user_id": "test-account"},
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
+		Extra:    map[string]interface{}{"device": "test-device", "user_id": "test-account"},
 	}
 
 	err := vt.Apply(ctx)
@@ -585,14 +590,14 @@ func TestVendorTransform_AnthropicBeta_SupportedModel_AdaptivePreserved(t *testi
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform("api.anthropic.com")
+			vt := NewVendorTransform()
 			req := newBetaRequest(tt.model, anthropic.BetaThinkingConfigParamUnion{
 				OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 			})
 
 			ctx := &TransformContext{
-				Request:     req,
-				ProviderURL: "api.anthropic.com",
+				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
 					"user_id": "test-account-uuid",
@@ -632,14 +637,14 @@ func TestVendorTransform_AnthropicBeta_UnsupportedModel_AdaptiveDisabled(t *test
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vt := NewVendorTransform("api.anthropic.com")
+			vt := NewVendorTransform()
 			req := newBetaRequest(tt.model, anthropic.BetaThinkingConfigParamUnion{
 				OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 			})
 
 			ctx := &TransformContext{
-				Request:     req,
-				ProviderURL: "api.anthropic.com",
+				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
 					"user_id": "test-account-uuid",
@@ -662,7 +667,7 @@ func TestVendorTransform_AnthropicBeta_UnsupportedModel_AdaptiveDisabled(t *test
 }
 
 func TestVendorTransform_AnthropicBeta_BillingHeaderPrepend(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := &anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
@@ -676,8 +681,8 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderPrepend(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -696,7 +701,7 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderPrepend(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicBeta_BillingHeaderReplace(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := &anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
@@ -711,8 +716,8 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderReplace(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -732,7 +737,7 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderReplace(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicBeta_NoSystemPrompt(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := &anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
@@ -743,8 +748,8 @@ func TestVendorTransform_AnthropicBeta_NoSystemPrompt(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -762,15 +767,15 @@ func TestVendorTransform_AnthropicBeta_NoSystemPrompt(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicBeta_EnabledThinkingPreserved(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := newBetaRequest("claude-3-5-haiku-20241022", anthropic.BetaThinkingConfigParamUnion{
 		OfEnabled: &anthropic.BetaThinkingConfigEnabledParam{},
 	})
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -788,7 +793,7 @@ func TestVendorTransform_AnthropicBeta_EnabledThinkingPreserved(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicBeta_ThinkingBlocksFiltered(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	// Assistant message with thinking + text blocks
 	req := &anthropic.BetaMessageNewParams{
@@ -808,8 +813,8 @@ func TestVendorTransform_AnthropicBeta_ThinkingBlocksFiltered(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",
@@ -846,15 +851,15 @@ func TestVendorTransform_AnthropicBeta_ThinkingBlocksFiltered(t *testing.T) {
 
 func TestVendorTransform_AnthropicBeta_FullChain(t *testing.T) {
 	// End-to-end test: model transform + metadata transform together
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := newBetaRequest("claude-3-5-haiku-20241022", anthropic.BetaThinkingConfigParamUnion{
 		OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 	})
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":   "my-device-abc",
 			"user_id":  "my-account-uuid",
@@ -888,7 +893,7 @@ func TestVendorTransform_AnthropicBeta_FullChain(t *testing.T) {
 }
 
 func TestVendorTransform_AnthropicV1_ThinkingBlocksFiltered(t *testing.T) {
-	vt := NewVendorTransform("api.anthropic.com")
+	vt := NewVendorTransform()
 
 	req := &anthropic.MessageNewParams{
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
@@ -907,8 +912,8 @@ func TestVendorTransform_AnthropicV1_ThinkingBlocksFiltered(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Request:     req,
-		ProviderURL: "api.anthropic.com",
+		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
 			"user_id": "account-uuid",

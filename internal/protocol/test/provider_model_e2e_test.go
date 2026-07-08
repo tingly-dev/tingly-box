@@ -27,7 +27,7 @@ func TestProviderModels_DeepSeek_AnthropicV1(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicV1),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-		transform.NewVendorTransform("api.deepseek.com"),
+		transform.NewVendorTransform(),
 	})
 
 	tests := []struct {
@@ -75,7 +75,7 @@ func TestProviderModels_DeepSeek_AnthropicV1_WithThinking(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicV1),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-		transform.NewVendorTransform("api.deepseek.com"),
+		transform.NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -108,7 +108,7 @@ func TestProviderModels_DeepSeek_AnthropicV1_WithThinking_Disable(t *testing.T) 
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicV1),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-		transform.NewVendorTransform("api.deepseek.com"),
+		transform.NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -147,7 +147,7 @@ func TestProviderModels_DeepSeek_OpenAIChat(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeOpenAIChat),
 		transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
-		transform.NewVendorTransform("api.deepseek.com"),
+		transform.NewVendorTransform(),
 	})
 
 	tests := []struct {
@@ -189,7 +189,7 @@ func TestProviderModels_Anthropic_Official(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicV1),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-		transform.NewVendorTransform("api.anthropic.com"),
+		transform.NewVendorTransform(),
 	})
 
 	tests := []struct {
@@ -254,7 +254,7 @@ func TestProviderModels_Anthropic_Beta(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicBeta),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicBeta),
-		transform.NewVendorTransform("api.anthropic.com"),
+		transform.NewVendorTransform(),
 	})
 
 	tests := []struct {
@@ -303,7 +303,7 @@ func TestProviderModels_OpenAI_Official(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeOpenAIChat),
 		transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
-		transform.NewVendorTransform("api.openai.com"),
+		transform.NewVendorTransform(),
 	})
 
 	tests := []struct {
@@ -349,7 +349,7 @@ func TestProviderModels_CrossProtocol_OpenAI_To_Anthropic(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicBeta),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicBeta),
-		transform.NewVendorTransform("api.anthropic.com"),
+		transform.NewVendorTransform(),
 	})
 
 	req := &openai.ChatCompletionNewParams{
@@ -379,7 +379,7 @@ func TestProviderModels_CrossProtocol_Anthropic_To_OpenAI(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeOpenAIChat),
 		transform.NewConsistencyTransform(protocol.TypeOpenAIChat),
-		transform.NewVendorTransform("api.openai.com"),
+		transform.NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -424,7 +424,7 @@ func TestProviderModels_StreamingBehavior(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			var req interface{}
@@ -479,7 +479,7 @@ func TestProviderModels_ErrorMessageHandling(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			var req interface{}
@@ -516,7 +516,7 @@ func TestProviderModels_MultiTurnConversation(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicV1),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-		transform.NewVendorTransform("api.anthropic.com"),
+		transform.NewVendorTransform(),
 	})
 
 	req := &anthropic.MessageNewParams{
@@ -582,7 +582,7 @@ func TestProviderModels_ToolUseSupport(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			var req interface{}
@@ -638,7 +638,7 @@ func TestProviderModels_MaxTokensHandling(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			var req interface{}
@@ -698,7 +698,7 @@ func TestProviderModels_SystemPromptHandling(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			var req interface{}
@@ -768,7 +768,7 @@ func TestProviderModels_ReasoningModels(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			req := &openai.ChatCompletionNewParams{
@@ -813,7 +813,7 @@ func TestProviderModels_AdaptiveThinkingModels(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(protocol.TypeAnthropicV1),
 				transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-				transform.NewVendorTransform("api.anthropic.com"),
+				transform.NewVendorTransform(),
 			})
 
 			req := &anthropic.MessageNewParams{
@@ -863,7 +863,7 @@ func TestProviderModels_EnabledThinkingModels(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(protocol.TypeAnthropicV1),
 				transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-				transform.NewVendorTransform("api.anthropic.com"),
+				transform.NewVendorTransform(),
 			})
 
 			req := &anthropic.MessageNewParams{
@@ -914,7 +914,7 @@ func TestProviderModels_TransformChainOrdering(t *testing.T) {
 			chain := transform.NewTransformChain([]transform.Transform{
 				transform.NewBaseTransform(tt.targetType),
 				transform.NewConsistencyTransform(tt.targetType),
-				transform.NewVendorTransform(tt.provider),
+				transform.NewVendorTransform(),
 			})
 
 			var req interface{}
@@ -954,7 +954,7 @@ func TestProviderModels_ContextPreservation(t *testing.T) {
 	chain := transform.NewTransformChain([]transform.Transform{
 		transform.NewBaseTransform(protocol.TypeAnthropicV1),
 		transform.NewConsistencyTransform(protocol.TypeAnthropicV1),
-		transform.NewVendorTransform("api.anthropic.com"),
+		transform.NewVendorTransform(),
 	})
 
 	originalReq := &anthropic.MessageNewParams{
@@ -973,8 +973,9 @@ func TestProviderModels_ContextPreservation(t *testing.T) {
 	// Original request should be preserved
 	assert.Equal(t, originalReq, result.OriginalRequest, "original request should be preserved in context")
 
-	// Provider URL should be preserved
-	assert.Equal(t, "api.anthropic.com", result.ProviderURL, "provider URL should be preserved")
+	// Provider should be preserved
+	require.NotNil(t, result.Provider, "provider should be preserved")
+	assert.Equal(t, "api.anthropic.com", result.Provider.APIBase, "provider API base should be preserved")
 
 	// Streaming flag should be preserved
 	assert.True(t, result.IsStreaming, "streaming flag should be preserved")
@@ -992,7 +993,7 @@ func newFullChainContext(request interface{}, providerURL string, extra map[stri
 	return &transform.TransformContext{
 		Request:         request,
 		OriginalRequest: request,
-		ProviderURL:     providerURL,
+		Provider:        &typ.Provider{APIBase: providerURL},
 		IsStreaming:     true,
 		ScenarioFlags:   &typ.ScenarioFlags{},
 		TransformSteps:  []string{},

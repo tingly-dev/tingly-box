@@ -12,24 +12,24 @@ import (
 
 // VendorTransform applies provider-specific request adjustments. Per-shape
 // dispatch is a flat strings.Contains chain — uniform across all request
-// shapes so new vendors land in one place per shape.
-type VendorTransform struct {
-	ProviderURL string
-}
+// shapes so new vendors land in one place per shape. Provider data is read from
+// TransformContext so this transform remains stateless and reusable.
+type VendorTransform struct{}
 
-// NewVendorTransform creates a new vendor transform for the given provider URL.
-func NewVendorTransform(providerURL string) *VendorTransform {
-	return &VendorTransform{ProviderURL: providerURL}
+// NewVendorTransform creates a new vendor transform.
+func NewVendorTransform() *VendorTransform {
+	return &VendorTransform{}
 }
 
 func (t *VendorTransform) Name() string { return "vendor_adjust" }
 
 // Apply dispatches to the per-shape vendor logic. Unknown shapes are a no-op.
 func (t *VendorTransform) Apply(ctx *TransformContext) error {
-	url := strings.ToLower(t.ProviderURL)
+	providerURL := t.providerURL(ctx)
+	url := strings.ToLower(providerURL)
 	switch req := ctx.Request.(type) {
 	case *openai.ChatCompletionNewParams:
-		ctx.Request = t.applyChat(ctx, req)
+		ctx.Request = t.applyChat(ctx, req, providerURL)
 	case *responses.ResponseNewParams:
 		ctx.Request = t.applyResponses(ctx, req)
 	case *anthropic.MessageNewParams:
@@ -40,12 +40,19 @@ func (t *VendorTransform) Apply(ctx *TransformContext) error {
 	return nil
 }
 
-func (t *VendorTransform) applyChat(ctx *TransformContext, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+func (t *VendorTransform) providerURL(ctx *TransformContext) string {
+	if ctx != nil && ctx.Provider != nil {
+		return ctx.Provider.APIBase
+	}
+	return ""
+}
+
+func (t *VendorTransform) applyChat(ctx *TransformContext, req *openai.ChatCompletionNewParams, providerURL string) *openai.ChatCompletionNewParams {
 	config := ctx.Config.OpenAIConfig
 	if config == nil {
 		config = &protocol.OpenAIConfig{}
 	}
-	return ops.ApplyProviderTransforms(req, t.ProviderURL, string(req.Model), config)
+	return ops.ApplyProviderTransforms(req, providerURL, string(req.Model), config)
 }
 
 func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.ResponseNewParams) *responses.ResponseNewParams {
@@ -53,7 +60,7 @@ func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.R
 		return req
 	}
 	// MENTION: no need to do transform here, the codex client will handle this
-	//if t.ProviderURL == protocol.CodexAPIBase {
+	//if t.providerURL(ctx) == protocol.CodexAPIBase {
 	//	return ops.ApplyCodexResponsesTransform(req, ctx.OriginalRequest)
 	//}
 	return req

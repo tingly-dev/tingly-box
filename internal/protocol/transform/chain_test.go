@@ -167,19 +167,7 @@ func TestTransformChain_ContextPreservation(t *testing.T) {
 		wantEmptySteps bool
 	}{
 		{
-			name: "ProviderURL preserved",
-			setupCtx: func() *TransformContext {
-				return &TransformContext{
-					Request:     &openai.ChatCompletionNewParams{},
-					ProviderURL: "api.deepseek.com",
-				}
-			},
-			verifyCtx: func(t *testing.T, result *TransformContext) {
-				assert.Equal(t, "api.deepseek.com", result.ProviderURL)
-			},
-		},
-		{
-			name: "Provider option populates canonical and derived provider context",
+			name: "Provider option preserves canonical provider context",
 			setupCtx: func() *TransformContext {
 				return NewTransformContext(
 					&openai.ChatCompletionNewParams{},
@@ -195,8 +183,8 @@ func TestTransformChain_ContextPreservation(t *testing.T) {
 			},
 			verifyCtx: func(t *testing.T, result *TransformContext) {
 				require.NotNil(t, result.Provider)
-				assert.Equal(t, "https://chatgpt.com/backend-api", result.ProviderURL)
-				assert.Equal(t, string(ai.IssuerCodex), result.ProviderType)
+				assert.Equal(t, "https://chatgpt.com/backend-api", result.Provider.APIBase)
+				assert.True(t, result.Provider.IsCodexProvider())
 				assert.Equal(t, "user-123", result.Config.UserID)
 			},
 		},
@@ -303,13 +291,12 @@ func TestTransformChain_Length(t *testing.T) {
 // Integration tests with real transforms
 func TestTransformChain_Integration_RealTransforms(t *testing.T) {
 	baseTransform := NewBaseTransform(protocol.TypeOpenAIChat)
-	vendorTransform := NewVendorTransform("api.openai.com")
+	vendorTransform := NewVendorTransform()
 
 	chain := NewTransformChain([]Transform{baseTransform, vendorTransform})
 
 	ctx := &TransformContext{
 		Request:        newOpenAIRequest("gpt-4", 1024),
-		ProviderURL:    "api.openai.com",
 		ScenarioFlags:  &typ.ScenarioFlags{},
 		IsStreaming:    false,
 		TransformSteps: []string{},
@@ -356,7 +343,7 @@ func TestTransformChain_Integration_WithScenarioFlags(t *testing.T) {
 func TestTransformChain_Integration_FullChain(t *testing.T) {
 	baseTransform := NewBaseTransform(protocol.TypeOpenAIChat)
 	consistencyTransform := NewConsistencyTransform(protocol.TypeOpenAIChat)
-	vendorTransform := NewVendorTransform("api.openai.com")
+	vendorTransform := NewVendorTransform()
 
 	chain := NewTransformChain([]Transform{
 		baseTransform,
@@ -369,7 +356,6 @@ func TestTransformChain_Integration_FullChain(t *testing.T) {
 
 	ctx := &TransformContext{
 		Request:        req,
-		ProviderURL:    "api.openai.com",
 		IsStreaming:    false,
 		ScenarioFlags:  &typ.ScenarioFlags{},
 		TransformSteps: []string{},
@@ -388,7 +374,7 @@ func TestTransformChain_Integration_FullChain(t *testing.T) {
 func TestTransformChain_Integration_WithTools(t *testing.T) {
 	baseTransform := NewBaseTransform(protocol.TypeOpenAIChat)
 	consistencyTransform := NewConsistencyTransform(protocol.TypeOpenAIChat)
-	vendorTransform := NewVendorTransform("api.openai.com")
+	vendorTransform := NewVendorTransform()
 
 	chain := NewTransformChain([]Transform{baseTransform, consistencyTransform, vendorTransform})
 
@@ -408,7 +394,6 @@ func TestTransformChain_Integration_WithTools(t *testing.T) {
 
 	ctx := &TransformContext{
 		Request:        req,
-		ProviderURL:    "api.openai.com",
 		IsStreaming:    false,
 		ScenarioFlags:  &typ.ScenarioFlags{},
 		TransformSteps: []string{},
@@ -425,7 +410,7 @@ func TestTransformChain_Integration_WithTools(t *testing.T) {
 
 func TestTransformChain_Integration_ResponsesAPI(t *testing.T) {
 	baseTransform := NewBaseTransform(protocol.TypeOpenAIResponses)
-	vendorTransform := NewVendorTransform("api.openai.com")
+	vendorTransform := NewVendorTransform()
 
 	chain := NewTransformChain([]Transform{baseTransform, vendorTransform})
 
@@ -437,7 +422,6 @@ func TestTransformChain_Integration_ResponsesAPI(t *testing.T) {
 
 	ctx := &TransformContext{
 		Request:        &responsesReq,
-		ProviderURL:    "api.openai.com",
 		IsStreaming:    false,
 		ScenarioFlags:  &typ.ScenarioFlags{},
 		TransformSteps: []string{},

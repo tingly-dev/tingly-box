@@ -18,16 +18,7 @@ import (
 func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string {
 	t.Helper()
 	h := &ProtocolHandler{}
-	chain, err := h.buildTransformChain(
-		nil, // gin.Context only used by the (disabled) recorder
-		protocol.TypeOpenAIChat,
-		"https://api.example.com",
-		typ.ScenarioGlobal,
-		nil,
-		nil, // no recorder
-		preBase,
-		preVendor,
-	)
+	chain, err := h.buildTransformChain(nil, protocol.TypeOpenAIChat, typ.ScenarioGlobal, nil, preBase, preVendor)
 	require.NoError(t, err)
 
 	var names []string
