@@ -14,6 +14,8 @@ import (
 //     user geolocation (look-alike Unicode apostrophes and date separators),
 //     both in the system field and inside <system-reminder> blocks in the
 //     first message of the messages array.
+//  3. For Anthropic-to-Codex Responses conversion only, stripping Claude Code
+//     identity/capability preambles that otherwise pollute Codex instructions.
 //
 // Used by Claude Code scenarios to ensure system text is clean before forwarding
 // to third-party providers. Only added to the chain when CleanHeader flag is true.
@@ -27,15 +29,20 @@ func NewCleanHeaderTransform() *CleanHeaderTransform {
 func (t *CleanHeaderTransform) Name() string { return "clean_header" }
 
 func (t *CleanHeaderTransform) Apply(ctx *protocoltransform.TransformContext) error {
+	stripClaudeCodePreamble := shouldStripClaudeCodeSystemPreamble(ctx)
 	switch req := ctx.Request.(type) {
 	case *anthropic.MessageNewParams:
-		req.System = CleanSystemMessages(req.System)
+		req.System = cleanSystemMessages(req.System, stripClaudeCodePreamble)
 		req.Messages = CleanMessages(req.Messages)
 	case *anthropic.BetaMessageNewParams:
-		req.System = CleanBetaSystemMessages(req.System)
+		req.System = cleanBetaSystemMessages(req.System, stripClaudeCodePreamble)
 		req.Messages = CleanBetaMessages(req.Messages)
 	}
 	return nil
+}
+
+func shouldStripClaudeCodeSystemPreamble(ctx *protocoltransform.TransformContext) bool {
+	return ctx != nil && ctx.Provider != nil && ctx.Provider.IsCodexProvider()
 }
 
 // dateSlashRe matches date patterns like "2026/06/30" for steganography countermeasures.
@@ -50,6 +57,11 @@ var dateSlashRe = regexp.MustCompile(`(\d{4})/(\d{2})/(\d{2})`)
 //   - U+02BC MODIFIER LETTER APOSTROPHE
 //   - U+2018 LEFT SINGLE QUOTATION MARK
 var todayApostropheRe = regexp.MustCompile(`Today[’ʼ‘]s`)
+
+var claudeCodeSystemPreambles = []string{
+	"You are Claude Code, Anthropic's official CLI for Claude.",
+	"You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.",
+}
 
 // NormalizeSteganographyText removes Anthropic's steganographic markers embedded
 // in system prompt text that silently encode user geolocation.
@@ -85,10 +97,27 @@ func NormalizeSteganographyText(text string) string {
 	return text
 }
 
+func StripClaudeCodeSystemPreamble(text string) string {
+	trimmed := strings.TrimLeft(text, " \t\r\n")
+	for _, preamble := range claudeCodeSystemPreambles {
+		if !strings.HasPrefix(trimmed, preamble) {
+			continue
+		}
+		trimmed = strings.TrimLeft(trimmed[len(preamble):], " \t\r\n")
+		text = trimmed
+		break
+	}
+	return text
+}
+
 // CleanSystemMessages removes billing header messages from system blocks
 // and normalizes steganographic markers in surviving blocks.
 // This is used for Claude Code scenario to filter out injected billing headers.
 func CleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBlockParam {
+	return cleanSystemMessages(blocks, false)
+}
+
+func cleanSystemMessages(blocks []anthropic.TextBlockParam, stripClaudeCodePreamble bool) []anthropic.TextBlockParam {
 	if len(blocks) == 0 {
 		return blocks
 	}
@@ -98,6 +127,14 @@ func CleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBloc
 		if strings.HasPrefix(strings.TrimSpace(block.Text), "x-anthropic-billing-header:") {
 			continue
 		}
+
+		if stripClaudeCodePreamble {
+			block.Text = StripClaudeCodeSystemPreamble(block.Text)
+			if strings.TrimSpace(block.Text) == "" {
+				continue
+			}
+		}
+
 		// Normalize steganographic markers in all surviving blocks
 		block.Text = NormalizeSteganographyText(block.Text)
 		result = append(result, block)
@@ -108,6 +145,10 @@ func CleanSystemMessages(blocks []anthropic.TextBlockParam) []anthropic.TextBloc
 // CleanBetaSystemMessages removes billing header messages from beta system blocks
 // and normalizes steganographic markers in surviving blocks.
 func CleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam) []anthropic.BetaTextBlockParam {
+	return cleanBetaSystemMessages(blocks, false)
+}
+
+func cleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam, stripClaudeCodePreamble bool) []anthropic.BetaTextBlockParam {
 	if len(blocks) == 0 {
 		return blocks
 	}
@@ -117,6 +158,14 @@ func CleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam) []anthropic.
 		if strings.HasPrefix(strings.TrimSpace(block.Text), "x-anthropic-billing-header:") {
 			continue
 		}
+
+		if stripClaudeCodePreamble {
+			block.Text = StripClaudeCodeSystemPreamble(block.Text)
+			if strings.TrimSpace(block.Text) == "" {
+				continue
+			}
+		}
+
 		// Normalize steganographic markers in all surviving blocks
 		block.Text = NormalizeSteganographyText(block.Text)
 		result = append(result, block)

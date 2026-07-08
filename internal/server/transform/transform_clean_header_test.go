@@ -4,7 +4,10 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // =============================================
@@ -199,6 +202,46 @@ func TestCleanSystemMessages_NormalTextPreserved(t *testing.T) {
 	}
 }
 
+func TestCleanSystemMessages_PreservesClaudeCodePreambleByDefault(t *testing.T) {
+	blocks := []anthropic.TextBlockParam{
+		{Text: "You are Claude Code, Anthropic's official CLI for Claude."},
+		{Text: "Project instructions must be preserved."},
+	}
+	result := CleanSystemMessages(blocks)
+	if len(result) != 2 {
+		t.Fatalf("CleanSystemMessages() returned %d blocks, want 2", len(result))
+	}
+	if result[0].Text != "You are Claude Code, Anthropic's official CLI for Claude." {
+		t.Errorf("CleanSystemMessages()[0] = %q, want %q", result[0].Text, "You are Claude Code, Anthropic's official CLI for Claude.")
+	}
+}
+
+func TestCleanSystemMessages_CodexModeStripsClaudeCodePreamblePrefix(t *testing.T) {
+	blocks := []anthropic.TextBlockParam{
+		{Text: "You are Claude Code, Anthropic's official CLI for Claude.\n\nFollow the repository conventions."},
+	}
+	result := cleanSystemMessages(blocks, true)
+	if len(result) != 1 {
+		t.Fatalf("CleanSystemMessages() returned %d blocks, want 1", len(result))
+	}
+	if result[0].Text != "Follow the repository conventions." {
+		t.Errorf("CleanSystemMessages()[0] = %q, want %q", result[0].Text, "Follow the repository conventions.")
+	}
+}
+
+func TestCleanSystemMessages_CodexModeRemovesClaudeCodeFileSearchPreamble(t *testing.T) {
+	blocks := []anthropic.TextBlockParam{
+		{Text: "You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.\n\nUse ripgrep first."},
+	}
+	result := cleanSystemMessages(blocks, true)
+	if len(result) != 1 {
+		t.Fatalf("CleanSystemMessages() returned %d blocks, want 1", len(result))
+	}
+	if result[0].Text != "Use ripgrep first." {
+		t.Errorf("CleanSystemMessages()[0] = %q, want %q", result[0].Text, "Use ripgrep first.")
+	}
+}
+
 // =============================================
 // CleanBetaSystemMessages tests
 // =============================================
@@ -240,6 +283,20 @@ func TestCleanBetaSystemMessages_EmptyBlocks(t *testing.T) {
 	result = CleanBetaSystemMessages([]anthropic.BetaTextBlockParam{})
 	if len(result) != 0 {
 		t.Errorf("CleanBetaSystemMessages(empty) = %v, want empty", result)
+	}
+}
+
+func TestCleanBetaSystemMessages_PreservesClaudeCodePreambleByDefault(t *testing.T) {
+	blocks := []anthropic.BetaTextBlockParam{
+		{Text: "You are Claude Code, Anthropic's official CLI for Claude."},
+		{Text: "Project instructions must be preserved."},
+	}
+	result := CleanBetaSystemMessages(blocks)
+	if len(result) != 2 {
+		t.Fatalf("CleanBetaSystemMessages() returned %d blocks, want 2", len(result))
+	}
+	if result[0].Text != "You are Claude Code, Anthropic's official CLI for Claude." {
+		t.Errorf("CleanBetaSystemMessages()[0] = %q, want %q", result[0].Text, "You are Claude Code, Anthropic's official CLI for Claude.")
 	}
 }
 
@@ -468,6 +525,59 @@ func TestCleanHeaderTransform_Apply_AnthropicV1(t *testing.T) {
 	wantMsg := "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>"
 	if req.Messages[0].Content[0].OfText.Text != wantMsg {
 		t.Errorf("CleanHeaderTransform.Apply() Messages = %q, want %q", req.Messages[0].Content[0].OfText.Text, wantMsg)
+	}
+}
+
+func TestCleanHeaderTransform_Apply_AnthropicV1CodexResponsesStripsClaudeCodePreamble(t *testing.T) {
+	tr := NewCleanHeaderTransform()
+	req := &anthropic.MessageNewParams{
+		System: []anthropic.TextBlockParam{
+			{Text: "You are Claude Code, Anthropic's official CLI for Claude."},
+			{Text: "You are Claude Code, Anthropic's official CLI for Claude.\n\nFollow the repository conventions."},
+		},
+	}
+	ctx := &protocoltransform.TransformContext{
+		Request:   req,
+		TargetAPI: protocol.TypeOpenAIResponses,
+		Provider: &typ.Provider{
+			AuthType:    typ.AuthTypeOAuth,
+			OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerCodex},
+		},
+	}
+	if err := tr.Apply(ctx); err != nil {
+		t.Fatalf("CleanHeaderTransform.Apply() error = %v", err)
+	}
+	if len(req.System) != 1 {
+		t.Fatalf("CleanHeaderTransform.Apply() System returned %d blocks, want 1", len(req.System))
+	}
+	if req.System[0].Text != "Follow the repository conventions." {
+		t.Errorf("CleanHeaderTransform.Apply() System = %q, want %q", req.System[0].Text, "Follow the repository conventions.")
+	}
+}
+
+func TestCleanHeaderTransform_Apply_AnthropicV1NonCodexPreservesClaudeCodePreamble(t *testing.T) {
+	tr := NewCleanHeaderTransform()
+	req := &anthropic.MessageNewParams{
+		System: []anthropic.TextBlockParam{
+			{Text: "You are Claude Code, Anthropic's official CLI for Claude."},
+		},
+	}
+	ctx := &protocoltransform.TransformContext{
+		Request:   req,
+		TargetAPI: protocol.TypeOpenAIResponses,
+		Provider: &typ.Provider{
+			AuthType:    typ.AuthTypeOAuth,
+			OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerOpenAI},
+		},
+	}
+	if err := tr.Apply(ctx); err != nil {
+		t.Fatalf("CleanHeaderTransform.Apply() error = %v", err)
+	}
+	if len(req.System) != 1 {
+		t.Fatalf("CleanHeaderTransform.Apply() System returned %d blocks, want 1", len(req.System))
+	}
+	if req.System[0].Text != "You are Claude Code, Anthropic's official CLI for Claude." {
+		t.Errorf("CleanHeaderTransform.Apply() System = %q, want %q", req.System[0].Text, "You are Claude Code, Anthropic's official CLI for Claude.")
 	}
 }
 

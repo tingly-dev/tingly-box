@@ -8,8 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -44,7 +44,6 @@ func TestMCPToolInjectionTransform_AdvisorNativeGuard(t *testing.T) {
 		ctx := &protocoltransform.TransformContext{
 			Context:          context.Background(),
 			Request:          req,
-			ProviderType:     "claude_code",
 			HasNativeAdvisor: true,
 		}
 
@@ -67,9 +66,8 @@ func TestMCPToolInjectionTransform_AdvisorNativeGuard(t *testing.T) {
 			},
 		}
 		ctx := &protocoltransform.TransformContext{
-			Context:      context.Background(),
-			Request:      req,
-			ProviderType: "claude_code",
+			Context: context.Background(),
+			Request: req,
 		}
 
 		if err := tr.Apply(ctx); err != nil {
