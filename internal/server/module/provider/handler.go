@@ -419,6 +419,11 @@ func (h *Handler) UpdateProviderModelsByUUID(c *gin.Context) {
 	modelManager := h.config.GetModelManager()
 	models := modelManager.GetModels(uid)
 
+	// Apply canonical ordering at the serving boundary (see GetProviderModelsByUUID).
+	if p, err := h.config.GetProviderByUUID(uid); err == nil {
+		config.SortProviderModels(p, models)
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"action":       obs.ActionFetchModels,
 		"success":      true,
@@ -504,6 +509,13 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 				}
 			}
 		}
+	}
+
+	// Apply canonical ordering at the serving boundary so the response order
+	// is authoritative regardless of cache source. The frontend relies on this
+	// order and no longer sorts client-side.
+	if p, err := h.config.GetProviderByUUID(uid); err == nil {
+		config.SortProviderModels(p, models)
 	}
 
 	providerModels := ProviderModelInfo{

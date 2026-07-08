@@ -216,12 +216,8 @@ export const api = {
                 params: {path: {uuid}}
             });
             const body = response.data;
-            if (body?.success && body?.data) {
-                // Sort models alphabetically by model name to reduce UI changes
-                body.data.models.sort((a: any, b: any) =>
-                    a.localeCompare(b)
-                );
-            }
+            // Model ordering is authoritative from the backend
+            // (config.SortProviderModels); do not re-sort here.
             return body;
         } catch (error: any) {
             return {success: false, error: error.message};
@@ -237,12 +233,8 @@ export const api = {
                 params: {path: {uuid}}
             });
             const body = response.data;
-            if (body?.success && body?.data) {
-                // Sort models alphabetically by model name to reduce UI changes
-                body.data.models.sort((a: any, b: any) =>
-                    a.localeCompare(b)
-                );
-            }
+            // Model ordering is authoritative from the backend
+            // (config.SortProviderModels); do not re-sort here.
             return body;
         } catch (error: any) {
             return {success: false, error: error.message};

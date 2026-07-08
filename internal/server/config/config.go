@@ -2032,11 +2032,9 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	if lister != nil {
 		models, apiErr = lister.ListModels(ctx)
 		if apiErr == nil && len(models) > 0 {
-			// OpenRouter tags free models with a ":free" suffix. Promote them to
-			// the front of the list so they surface first in the model picker.
-			if isOpenRouterProvider(provider) {
-				sortOpenRouterFreeModelsFirst(models)
-			}
+			// Apply canonical ordering before persisting; the same sort is
+			// reapplied at the serving boundary so cached order is irrelevant.
+			SortProviderModels(provider, models)
 			return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
 		}
 		if client.IsModelsEndpointNotSupported(apiErr) {
@@ -2111,6 +2109,34 @@ func (c *Config) newModelLister(provider *typ.Provider) (client.ModelLister, fun
 	}
 }
 
+// SortProviderModels applies the canonical display ordering to a provider's
+// model list in place. It is the single source of truth for model ordering
+// served to clients — callers (fetch + serving boundaries) invoke it instead
+// of relying on the frontend to sort.
+//
+// Default: alphabetical by model id. OpenRouter additionally tags free models
+// with a ":free" suffix; those are promoted to the front, sorted alphabetically
+// among themselves and ahead of the paid models (which are also alphabetical).
+func SortProviderModels(provider *typ.Provider, models []string) {
+	if provider == nil || len(models) < 2 {
+		return
+	}
+	promoteFree := isOpenRouterProvider(provider)
+	slices.SortStableFunc(models, func(a, b string) int {
+		if promoteFree {
+			aFree := strings.HasSuffix(a, ":free")
+			bFree := strings.HasSuffix(b, ":free")
+			if aFree != bFree {
+				if aFree {
+					return -1
+				}
+				return 1
+			}
+		}
+		return strings.Compare(a, b)
+	})
+}
+
 // isOpenRouterProvider reports whether the provider routes to OpenRouter.
 // OpenRouter's canonical host is openrouter.ai; the base_url templates embed it
 // as https://openrouter.ai/api/v1 (OpenAI) and https://openrouter.ai/api (Anthropic).
@@ -2121,24 +2147,6 @@ func isOpenRouterProvider(provider *typ.Provider) bool {
 		}
 	}
 	return false
-}
-
-// sortOpenRouterFreeModelsFirst reorders models in place so that any id ending
-// in ":free" sorts before non-free ids, preserving the relative order within
-// each group (stable sort).
-func sortOpenRouterFreeModelsFirst(models []string) {
-	slices.SortStableFunc(models, func(a, b string) int {
-		aFree := strings.HasSuffix(a, ":free")
-		bFree := strings.HasSuffix(b, ":free")
-		switch {
-		case aFree && !bFree:
-			return -1
-		case !aFree && bFree:
-			return 1
-		default:
-			return 0
-		}
-	})
 }
 
 func (c *Config) GetModelManager() *data.ModelListManager {
