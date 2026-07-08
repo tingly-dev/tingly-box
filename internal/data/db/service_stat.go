@@ -306,6 +306,16 @@ func (ss *StatsStore) ClearAll() error {
 	return ss.db.Exec("DELETE FROM service_stats").Error
 }
 
+// ClearService removes persisted stats for a single provider:model. No error
+// if no rows matched (the service simply had no recorded stats).
+func (ss *StatsStore) ClearService(provider, model string) error {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	return ss.db.Where("provider = ? AND model = ?", provider, model).
+		Delete(&ServiceStatsRecord{}).Error
+}
+
 // toServiceStats converts a ServiceStatsRecord to ServiceStats.
 func (r *ServiceStatsRecord) toServiceStats() loadbalance.ServiceStats {
 	return loadbalance.ServiceStats{
