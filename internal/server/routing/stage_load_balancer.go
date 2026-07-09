@@ -2,6 +2,8 @@ package routing
 
 import (
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 // LoadBalancerStage performs standard load balancing across all rule services.
@@ -28,6 +30,7 @@ func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	if state != nil {
 		tempRule.Services = state.candidateServices
 	}
+	logOpenBreakerSkips(ctx, &tempRule)
 
 	service, err := s.loadBalancer.SelectService(&tempRule)
 	if err != nil {
@@ -42,4 +45,32 @@ func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext, state *selectionStat
 
 	result := NewResult(service, "load_balancer")
 	return result, true
+}
+
+func logOpenBreakerSkips(ctx *SelectionContext, rule interface {
+	GetTacticType() loadbalance.TacticType
+	GetActiveServices() []*loadbalance.Service
+}) {
+	if ctx == nil || ctx.Rule == nil || rule == nil || rule.GetTacticType() != loadbalance.TacticTier {
+		return
+	}
+	store := loadbalance.DefaultBreakerStore()
+	for _, svc := range rule.GetActiveServices() {
+		if svc == nil {
+			continue
+		}
+		state := store.Get(ctx.Rule.UUID, svc.ServiceID()).State()
+		if state != loadbalance.BreakerOpen {
+			continue
+		}
+		logrus.WithContext(selectionLogContext(ctx)).WithFields(logrus.Fields{
+			"stage":         "routing_breaker_skipped",
+			"rule_uuid":     ctx.Rule.UUID,
+			"service":       svc.ServiceID(),
+			"provider_uuid": svc.Provider,
+			"model":         svc.Model,
+			"tier":          svc.Tier,
+			"breaker_state": state.String(),
+		}).Warnf("[routing] skipped %s because breaker is %s", svc.ServiceID(), state.String())
+	}
 }

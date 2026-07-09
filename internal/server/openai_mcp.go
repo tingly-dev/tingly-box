@@ -48,7 +48,9 @@ func (ph *ProtocolHandler) StreamOpenAIChatToAnthropicV1WithMCP(
 		}
 		if err != nil {
 			ph.trackUsageWithTokenUsage(c, usage, err)
-			stream.SendInternalError(c, err.Error())
+			if !c.Writer.Written() {
+				stream.SendStreamingError(c, err)
+			}
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -102,7 +104,9 @@ func (ph *ProtocolHandler) StreamOpenAIChatToAnthropicBetaWithMCP(
 		}
 		if err != nil {
 			ph.trackUsageWithTokenUsage(c, usage, err)
-			stream.SendInternalError(c, err.Error())
+			if !c.Writer.Written() {
+				stream.SendStreamingError(c, err)
+			}
 			if streamRec != nil {
 				streamRec.RecordError(err)
 			}
