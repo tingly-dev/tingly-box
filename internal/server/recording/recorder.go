@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -58,7 +57,6 @@ type ProtocolRecorder struct {
 	providerBase  string // Base URL
 	model         string
 	mode          obs.RecordMode
-	ruleUUID      string // rule whose breaker to attribute success/failure to (rule-scoped breaker)
 }
 
 func NewProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode obs.RecordMode, body []byte) (*ProtocolRecorder, error) {
@@ -91,35 +89,14 @@ func NewProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 }
 
 // SetActiveService re-binds the recorder to a new provider/model. The
-// failover orchestrator calls this between attempts so a subsequent
-// RecordError attributes the failure to the right service rather than
-// to whichever service the recorder was last bound to. The rule does not
-// change across failover attempts, so SetActiveService does not touch ruleUUID.
+// failover orchestrator calls this between attempts so records reflect the
+// service currently being attempted. Breaker accounting is owned by the
+// failover loop, not by recording.
 func (sr *ProtocolRecorder) SetActiveService(provider *typ.Provider, model string) {
 	if sr == nil {
 		return
 	}
 	sr.BindProvider(provider, model, "")
-}
-
-// BindRule binds the rule whose breaker should receive this recorder's
-// success/failure attributions. Called once at recorder creation
-// (EnsureProtocolRecorder); the rule is fixed for the whole request, including
-// across failover attempts.
-func (sr *ProtocolRecorder) BindRule(ruleUUID string) {
-	if sr == nil {
-		return
-	}
-	sr.ruleUUID = ruleUUID
-}
-
-// breakerServiceID returns the loadbalance service identifier for the
-// active provider+model, or "" if either is unknown.
-func (sr *ProtocolRecorder) breakerServiceID() string {
-	if sr == nil || sr.providerUUID == "" || sr.model == "" {
-		return ""
-	}
-	return loadbalance.FormatServiceID(sr.providerUUID, sr.model)
 }
 
 // GetRecorderFromContext returns the ProtocolRecorder stashed in c by
@@ -260,9 +237,6 @@ func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string)
 	if sr.finalResponse == nil {
 		sr.finalResponse = sr.synthesizeFinalResponse()
 	}
-	if id := sr.breakerServiceID(); id != "" && sr.ruleUUID != "" {
-		loadbalance.RecordServiceSuccess(sr.ruleUUID, id)
-	}
 	sr.emit(nil)
 }
 
@@ -270,11 +244,6 @@ func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string)
 func (sr *ProtocolRecorder) RecordError(err error) {
 	if sr == nil {
 		return
-	}
-	if err != nil {
-		if id := sr.breakerServiceID(); id != "" && sr.ruleUUID != "" {
-			loadbalance.RecordServiceFailure(sr.ruleUUID, id)
-		}
 	}
 	sr.emit(err)
 }

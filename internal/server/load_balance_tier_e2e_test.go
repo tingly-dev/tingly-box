@@ -99,10 +99,10 @@ func TestTierRouting_EndToEnd(t *testing.T) {
 	// 3. Recovery now requires consecutive probe successes (hysteresis).
 	//    Advance past the open window so SelectService's internal Allow()
 	//    flips the breaker Open → HalfOpen and re-admits the primary, then
-	//    mark the probe successful so it closes (mirrors RecordResponse →
-	//    RecordServiceSuccess on a good request). RecoveryThreshold is set
-	//    to 1 so this test stays focused on the tier-return contract; the
-	//    multi-success streak is covered in breaker_test.go.
+	//    mark the probe successful so it closes (mirrors failover's success
+	//    feedback on a good request). RecoveryThreshold is set to 1 so this
+	//    test stays focused on the tier-return contract; the multi-success
+	//    streak is covered in breaker_test.go.
 	pb := store.Get(rule.UUID, primaryID)
 	prevThreshold := pb.RecoveryThreshold
 	pb.RecoveryThreshold = 1

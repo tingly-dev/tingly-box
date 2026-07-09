@@ -276,16 +276,8 @@ func (ph *ProtocolHandler) determineRuleWithScenario(ctx *gin.Context, scenario 
 // because scenario sink lifecycle (creation, mutex, recordDir) still lives on
 // root *Server — see ProtocolHandlerDeps.
 func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
-	bindRule := func(rec *recording.ProtocolRecorder) {
-		if r, ok := c.Get(ContextKeyRule); ok {
-			if rule, ok := r.(*typ.Rule); ok {
-				rec.BindRule(rule.UUID)
-			}
-		}
-	}
 	if rec, ok := recording.GetRecorderFromContext(c); ok {
 		rec.BindProvider(provider, model, mode)
-		bindRule(rec)
 		return rec
 	}
 
@@ -304,7 +296,6 @@ func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario strin
 		return nil
 	}
 	rec.BindProvider(provider, model, mode)
-	bindRule(rec)
 	c.Set(recording.RecorderContextKey, rec)
 	return rec
 }

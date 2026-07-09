@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	internalobs "github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
@@ -179,4 +182,94 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 			t.Error("expected a failover give-up log entry, got none")
 		}
 	})
+}
+
+func TestFailoverRecordsBreakerFailureIndependentlyOfRecorder(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+
+	providerT0 := &typ.Provider{UUID: "breaker-prov-t0", Name: "ProviderAlpha", Enabled: true, APIStyle: "openai", APIBase: "https://api.example-alpha.com/v1"}
+	providerT1 := &typ.Provider{UUID: "breaker-prov-t1", Name: "ProviderBeta", Enabled: true, APIStyle: "openai", APIBase: "https://api.example-beta.com/v1"}
+	if err := cfg.AddProvider(providerT0); err != nil {
+		t.Fatalf("AddProvider T0: %v", err)
+	}
+	if err := cfg.AddProvider(providerT1); err != nil {
+		t.Fatalf("AddProvider T1: %v", err)
+	}
+
+	rule := &typ.Rule{
+		UUID: "breaker-recording-disabled-rule",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{
+			{Provider: providerT0.UUID, Model: "primary", Active: true, Tier: 0},
+			{Provider: providerT1.UUID, Model: "fallback", Active: true, Tier: 1},
+		},
+	}
+
+	hm := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
+	hf := typ.NewHealthFilter(hm)
+	h := NewHandler(ProtocolHandlerDeps{
+		Config:        cfg,
+		LoadBalancer:  NewLoadBalancer(cfg, hf),
+		HealthMonitor: hm,
+	})
+
+	for _, tc := range []struct {
+		name           string
+		attachRecorder bool
+	}{
+		{name: "recorder_disabled"},
+		{name: "recorder_attached", attachRecorder: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			loadbalance.DefaultBreakerStore().Reset()
+			defer loadbalance.DefaultBreakerStore().Reset()
+
+			for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+				rec := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(rec)
+				c.Request, _ = http.NewRequest("POST", "/v1/chat/completions", nil)
+				var protocolRecorder *recording.ProtocolRecorder
+				if tc.attachRecorder {
+					protocolRecorder, err = recording.NewProtocolRecorder(c, nil, "test", internalobs.RecordModeStagedRequestResponse, []byte(`{}`))
+					if err != nil {
+						t.Fatalf("NewProtocolRecorder: %v", err)
+					}
+					c.Set(recording.RecorderContextKey, protocolRecorder)
+				}
+
+				attempt := func(provider *typ.Provider, model string) {
+					if provider.UUID == providerT0.UUID {
+						c.Writer.WriteHeader(http.StatusTooManyRequests)
+						if protocolRecorder != nil {
+							protocolRecorder.RecordError(errors.New("upstream 429"))
+						}
+						return
+					}
+					c.Writer.WriteHeader(http.StatusOK)
+					if gate, ok := c.Writer.(*firstChunkGate); ok {
+						gate.CommitFirstChunk()
+					}
+				}
+
+				h.DispatchWithPriorityFailover(c, rule, providerT0, "primary", attempt)
+
+				id := loadbalance.FormatServiceID(providerT0.UUID, "primary")
+				state := loadbalance.DefaultBreakerStore().Get(rule.UUID, id).State()
+				if i < loadbalance.DefaultBreakerFailureThreshold-1 && state != loadbalance.BreakerClosed {
+					t.Fatalf("after %d failure(s), breaker state for %s = %s, want closed", i+1, id, state)
+				}
+			}
+
+			id := loadbalance.FormatServiceID(providerT0.UUID, "primary")
+			if got := loadbalance.DefaultBreakerStore().Get(rule.UUID, id).State(); got != loadbalance.BreakerOpen {
+				t.Fatalf("breaker state for %s = %s, want open", id, got)
+			}
+		})
+	}
 }

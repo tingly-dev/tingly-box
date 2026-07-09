@@ -401,6 +401,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		// A committed gate means the stream's first real chunk reached
 		// the wire — bytes have left the process, retry is impossible.
 		if gate.Committed() {
+			loadbalance.RecordServiceSuccess(rule.UUID, serviceID)
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 				"stage":          "failover_success",
 				"attempt":        i + 1,
@@ -424,6 +425,18 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			}).Warnf("[failover] attempt %d returned status %d with %s/%s", i+1, status, provider.UUID, model)
 			return
 		}
+
+		loadbalance.RecordServiceFailure(rule.UUID, serviceID)
+		state := loadbalance.DefaultBreakerStore().Get(rule.UUID, serviceID).State()
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"stage":         "breaker_failure_recorded",
+			"rule_uuid":     rule.UUID,
+			"service":       serviceID,
+			"provider":      provider.Name,
+			"model":         model,
+			"status":        status,
+			"breaker_state": state.String(),
+		}).Warnf("[breaker] recorded failure for %s; state=%s", serviceID, state.String())
 
 		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 			"stage":          "failover_attempt_failed",

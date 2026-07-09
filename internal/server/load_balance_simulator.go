@@ -224,20 +224,15 @@ func (s *LBSimulator) Request(session string) (LBTrace, error) {
 		tr.Statuses = append(tr.Statuses, status)
 		tr.FinalStatus = status
 
-		// Feed BOTH production feedback channels exactly as a real request would:
-		//   - breaker: binary success/failure (mirrors the recorder).
-		//   - health monitor: status-classified, via the production classifier
-		//     reportHealthStatus (429→rate-limit, 401/403→auth, 5xx/4xx/other→
-		//     error, 2xx→success). The synthesized message routes through its
-		//     substring matcher exactly.
+		// Feed the health-monitor production channel. Breaker feedback is now
+		// owned by the failover gate itself, matching real requests when scenario
+		// recording is disabled.
 		if status == http.StatusOK {
 			c.Writer.WriteHeader(http.StatusOK)
 			CommitFirstChunkIfGate(c.Writer) // simulate the stream's first real chunk
-			loadbalance.RecordServiceSuccess(s.rule.UUID, sid)
 			s.server.reportHealthStatus(provider, model, nil, "")
 		} else {
 			c.Writer.WriteHeader(status)
-			loadbalance.RecordServiceFailure(s.rule.UUID, sid)
 			s.server.reportHealthStatus(provider, model,
 				fmt.Errorf("upstream returned HTTP %d", status), "")
 		}
