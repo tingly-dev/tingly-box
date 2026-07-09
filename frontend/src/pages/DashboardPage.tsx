@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -160,24 +160,20 @@ export default function DashboardPage() {
         return params;
     }, []);
 
-    const loadData = useCallback(async (provider: string, model: string, user: string, range: TimeRange) => {
-        try {
-            const config = TIME_RANGE_CONFIG[range];
-            const params = buildTimeParams(provider, model, user, range);
+    // Monotonic sequence used to drop out-of-order responses when filters
+    // change faster than requests complete.
+    const requestSeq = useRef(0);
 
-            const [statsResult, timeSeriesResult, providersResult, tokensResult] = await Promise.all([
-                api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
-                api.getUsageTimeSeries({ ...params, interval: config.interval }),
+    // Providers and API tokens are filter metadata that doesn't depend on the
+    // selected time range or filters — fetch them once (and on manual
+    // refresh) instead of on every filter change / auto-refresh tick.
+    const loadFilterOptions = useCallback(async () => {
+        try {
+            const [providersResult, tokensResult] = await Promise.all([
                 api.getProviders(),
                 api.listAPITokens({ limit: 500 }),
             ]);
 
-            if (statsResult?.data) {
-                setStats(statsResult.data);
-            }
-            if (timeSeriesResult?.data) {
-                setTimeSeries(timeSeriesResult.data);
-            }
             if (providersResult?.success && providersResult?.data) {
                 setProviders(providersResult.data);
             }
@@ -190,14 +186,44 @@ export default function DashboardPage() {
                 )).sort((a, b) => a.localeCompare(b));
                 setSharingUsers(users);
             }
+        } catch (error) {
+            console.error('Failed to load dashboard filter options:', error);
+        }
+    }, []);
+
+    const loadData = useCallback(async (provider: string, model: string, user: string, range: TimeRange) => {
+        const seq = ++requestSeq.current;
+        try {
+            const config = TIME_RANGE_CONFIG[range];
+            const params = buildTimeParams(provider, model, user, range);
+
+            const [statsResult, timeSeriesResult] = await Promise.all([
+                api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
+                api.getUsageTimeSeries({ ...params, interval: config.interval }),
+            ]);
+
+            // A newer request was issued while this one was in flight —
+            // discard the stale response instead of overwriting fresh data.
+            if (seq !== requestSeq.current) {
+                return;
+            }
+
+            if (statsResult?.data) {
+                setStats(statsResult.data);
+            }
+            if (timeSeriesResult?.data) {
+                setTimeSeries(timeSeriesResult.data);
+            }
 
             // Store time params for records loading
             setRecordsTimeParams({ start_time: params.start_time, end_time: params.end_time });
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         } finally {
-            setLoading(false);
-            setRefreshing(false);
+            if (seq === requestSeq.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
     }, [buildTimeParams]);
 
@@ -234,6 +260,10 @@ export default function DashboardPage() {
             setRecordsLoading(false);
         }
     }, []);
+
+    useEffect(() => {
+        loadFilterOptions();
+    }, [loadFilterOptions]);
 
     useEffect(() => {
         loadData(selectedProvider, selectedModel, selectedUser, timeRange);
@@ -291,6 +321,7 @@ export default function DashboardPage() {
 
     const handleRefresh = () => {
         setRefreshing(true);
+        loadFilterOptions();
         loadData(selectedProvider, selectedModel, selectedUser, timeRange);
     };
 

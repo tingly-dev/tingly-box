@@ -51,22 +51,29 @@ func (UsageRecord) TableName() string {
 	return "usage_records"
 }
 
-// UsageDailyRecord is the GORM model for daily aggregated usage statistics
+// UsageDailyRecord is the GORM model for daily aggregated usage statistics.
+// One row per (UTC day, provider, model, user). Date uses the same day
+// boundary as SQLite's date(timestamp) so daily rows can substitute raw
+// usage_records scans for completed days.
 type UsageDailyRecord struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
-	Date         time.Time `gorm:"column:date;index:idx_date;index:idx_date_provider_model;not null"`
-	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_date_provider_model;not null"`
-	ProviderName string    `gorm:"column:provider_name;not null"`
-	Model        string    `gorm:"column:model;index:idx_date_provider_model;not null"`
-	RequestCount int64     `gorm:"column:request_count;not null"`
-	TotalTokens  int64     `gorm:"column:total_tokens;not null"`
-	InputTokens  int64     `gorm:"column:input_tokens;not null"`
-	OutputTokens int64     `gorm:"column:output_tokens;not null"`
+	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Date         string `gorm:"column:date;index:idx_date;uniqueIndex:uq_daily_dim,priority:1;not null"` // YYYY-MM-DD (UTC)
+	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_daily_dim,priority:2;not null"`
+	ProviderName string `gorm:"column:provider_name;not null"`
+	Model        string `gorm:"column:model;uniqueIndex:uq_daily_dim,priority:3;not null"`
+	UserID       string `gorm:"column:user_id;uniqueIndex:uq_daily_dim,priority:4;not null;default:''"`
+	RequestCount int64  `gorm:"column:request_count;not null"`
+	TotalTokens  int64  `gorm:"column:total_tokens;not null"`
+	InputTokens  int64  `gorm:"column:input_tokens;not null"`
+	OutputTokens int64  `gorm:"column:output_tokens;not null"`
 	// Cache tokens
 	CacheInputTokens int64 `gorm:"column:cache_input_tokens;default:0"`
 	// System tokens
-	SystemTokens int64 `gorm:"column:system_tokens;default:0"`
-	ErrorCount   int64 `gorm:"column:error_count;default:0"`
+	SystemTokens  int64 `gorm:"column:system_tokens;default:0"`
+	ErrorCount    int64 `gorm:"column:error_count;default:0"`
+	StreamedCount int64 `gorm:"column:streamed_count;default:0"`
+	// Sum of latency_ms across the day, so merged averages stay weighted
+	LatencySumMs int64 `gorm:"column:latency_sum_ms;default:0"`
 }
 
 // TableName specifies the table name for GORM
@@ -102,7 +109,15 @@ func (UsageMonthlyRecord) TableName() string {
 type UsageStore struct {
 	db     *gorm.DB
 	dbPath string
-	mu     sync.Mutex
+	// mu guards the database: writes take the write lock, queries the read
+	// lock (WAL mode supports concurrent readers), so dashboard queries do
+	// not serialize behind proxy usage writes or each other.
+	mu sync.RWMutex
+
+	// Daily pre-aggregation bookkeeping (see usage_daily.go)
+	aggMu          sync.Mutex
+	aggregatedDays map[string]bool
+	aggLoaded      bool
 }
 
 // NewUsageStore creates or loads a usage store using SQLite database.
@@ -129,6 +144,9 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	}
 
 	// Auto-migrate schema for all usage-related tables
+	if err := ensureUsageDailySchema(db); err != nil {
+		return nil, fmt.Errorf("failed to align usage daily schema: %w", err)
+	}
 	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage database: %w", err)
 	}
@@ -185,6 +203,19 @@ func ensureUsageRecordSchema(db *gorm.DB) error {
 		// Don't fail initialization for this migration, it's not critical
 	}
 
+	return nil
+}
+
+// ensureUsageDailySchema rebuilds the usage_daily table when it predates the
+// v2 layout (user_id dimension + streamed/latency sums). The table holds only
+// derived data and is repopulated lazily, so dropping it is safe.
+func ensureUsageDailySchema(db *gorm.DB) error {
+	m := db.Migrator()
+	if m.HasTable(&UsageDailyRecord{}) && !m.HasColumn(&UsageDailyRecord{}, "user_id") {
+		if err := m.DropTable(&UsageDailyRecord{}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -259,10 +290,76 @@ type AggregatedStat struct {
 	StreamedRate     float64 `json:"streamed_rate"`
 }
 
-// GetAggregatedStats returns aggregated statistics
+// GetAggregatedStats returns aggregated statistics. For queries spanning
+// several completed days it combines the usage_daily pre-aggregation table
+// with a raw scan of only the partial edge days (see usage_daily.go), so
+// dashboard loads stay fast regardless of how many raw records accumulate.
 func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedStat, error) {
-	us.mu.Lock()
-	defer us.mu.Unlock()
+	if stats, ok, err := us.aggregatedStatsFromDaily(query); ok {
+		return stats, err
+	}
+
+	buckets, err := us.rawAggBuckets(query, true)
+	if err != nil {
+		return nil, err
+	}
+	stats := make([]AggregatedStat, len(buckets))
+	for i, b := range buckets {
+		stats[i] = b.toAggregatedStat()
+	}
+	return stats, nil
+}
+
+// aggBucket carries additive aggregation sums so results from usage_daily and
+// raw usage_records scans can be merged before computing derived rates.
+type aggBucket struct {
+	Key              string
+	ProviderUUID     string
+	ProviderName     string
+	Model            string
+	Scenario         string
+	UserID           string
+	RequestCount     int64
+	TotalTokens      int64
+	InputTokens      int64
+	OutputTokens     int64
+	CacheInputTokens int64
+	SystemTokens     int64
+	ErrorCount       int64
+	StreamedCount    int64
+	LatencySum       int64
+}
+
+func (b aggBucket) toAggregatedStat() AggregatedStat {
+	return AggregatedStat{
+		Key:              b.Key,
+		ProviderUUID:     b.ProviderUUID,
+		ProviderName:     b.ProviderName,
+		Model:            b.Model,
+		Scenario:         b.Scenario,
+		UserID:           b.UserID,
+		RequestCount:     b.RequestCount,
+		TotalTokens:      b.TotalTokens,
+		InputTokens:      b.InputTokens,
+		OutputTokens:     b.OutputTokens,
+		CacheInputTokens: b.CacheInputTokens,
+		SystemTokens:     b.SystemTokens,
+		AvgInputTokens:   avgFloat(float64(b.InputTokens), b.RequestCount),
+		AvgOutputTokens:  avgFloat(float64(b.OutputTokens), b.RequestCount),
+		AvgLatencyMs:     avgFloat(float64(b.LatencySum), b.RequestCount),
+		ErrorCount:       b.ErrorCount,
+		ErrorRate:        rateFloat(b.ErrorCount, b.RequestCount),
+		StreamedCount:    b.StreamedCount,
+		StreamedRate:     rateFloat(b.StreamedCount, b.RequestCount),
+	}
+}
+
+// rawAggBuckets aggregates directly over usage_records. When applyLimit is
+// false, sorting/limiting is left to the caller (used for edge-day scans that
+// are merged with usage_daily results afterwards).
+func (us *UsageStore) rawAggBuckets(query UsageStatsQuery, applyLimit bool) ([]aggBucket, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
 	// Build the base query
 	db := us.db.Model(&UsageRecord{})
@@ -322,25 +419,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		keyField = "model"
 	}
 
-	type result struct {
-		Key              string
-		ProviderUUID     string
-		ProviderName     string
-		Model            string
-		Scenario         string
-		UserID           string
-		RequestCount     int64
-		TotalTokens      int64
-		InputTokens      int64
-		OutputTokens     int64
-		CacheInputTokens int64
-		SystemTokens     int64
-		ErrorCount       int64
-		StreamedCount    int64
-		AvgLatency       float64
-	}
-
-	var results []result
+	var results []aggBucket
 	selectClause := fmt.Sprintf(`
 		%s as key,
 		COALESCE(provider_uuid, '') as provider_uuid,
@@ -356,45 +435,18 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
 		COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0) as streamed_count,
-		COALESCE(AVG(latency_ms), 0) as avg_latency
+		COALESCE(SUM(latency_ms), 0) as latency_sum
 	`, keyField)
 
-	if err := db.
-		Select(selectClause).
-		Group(groupBy).
-		Order(buildOrderBy(query.SortBy, query.SortOrder)).
-		Limit(query.Limit).
-		Scan(&results).Error; err != nil {
+	db = db.Select(selectClause).Group(groupBy)
+	if applyLimit {
+		db = db.Order(buildOrderBy(query.SortBy, query.SortOrder)).Limit(query.Limit)
+	}
+	if err := db.Scan(&results).Error; err != nil {
 		return nil, err
 	}
 
-	// Convert to AggregatedStat
-	stats := make([]AggregatedStat, len(results))
-	for i, r := range results {
-		stats[i] = AggregatedStat{
-			Key:              r.Key,
-			ProviderUUID:     r.ProviderUUID,
-			ProviderName:     r.ProviderName,
-			Model:            r.Model,
-			Scenario:         r.Scenario,
-			UserID:           r.UserID,
-			RequestCount:     r.RequestCount,
-			TotalTokens:      r.TotalTokens,
-			InputTokens:      r.InputTokens,
-			OutputTokens:     r.OutputTokens,
-			CacheInputTokens: r.CacheInputTokens,
-			SystemTokens:     r.SystemTokens,
-			AvgInputTokens:   avgFloat(float64(r.InputTokens), r.RequestCount),
-			AvgOutputTokens:  avgFloat(float64(r.OutputTokens), r.RequestCount),
-			AvgLatencyMs:     r.AvgLatency,
-			ErrorCount:       r.ErrorCount,
-			ErrorRate:        rateFloat(r.ErrorCount, r.RequestCount),
-			StreamedCount:    r.StreamedCount,
-			StreamedRate:     rateFloat(r.StreamedCount, r.RequestCount),
-		}
-	}
-
-	return stats, nil
+	return results, nil
 }
 
 // TimeSeriesData represents a single time bucket in time series data
@@ -410,10 +462,20 @@ type TimeSeriesData struct {
 	AvgLatencyMs     float64 `json:"avg_latency_ms"`
 }
 
-// GetTimeSeries returns time-series data for usage
+// GetTimeSeries returns time-series data for usage. Day-interval queries
+// spanning several completed days are served from usage_daily with raw scans
+// only for the partial edge days (see usage_daily.go).
 func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
-	us.mu.Lock()
-	defer us.mu.Unlock()
+	if data, ok, err := us.timeSeriesFromDaily(interval, startTime, endTime, filters); ok {
+		return data, err
+	}
+	return us.rawTimeSeries(interval, startTime, endTime, filters)
+}
+
+// rawTimeSeries aggregates time buckets directly over usage_records.
+func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
 	var timeFormat string
 	switch interval {
@@ -498,36 +560,41 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 
 // GetRecords returns individual usage records (for debugging/audit)
 func (us *UsageStore) GetRecords(startTime, endTime time.Time, filters map[string]string, limit, offset int) ([]UsageRecord, int64, error) {
-	us.mu.Lock()
-	defer us.mu.Unlock()
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
-	db := us.db.Model(&UsageRecord{})
-
-	if !startTime.IsZero() {
-		db = db.Where("timestamp >= ?", startTime)
-	}
-	if !endTime.IsZero() {
-		db = db.Where("timestamp <= ?", endTime)
-	}
-
-	for key, value := range filters {
-		db = db.Where(key+" = ?", value)
-	}
-
-	// Get total count
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
+	base := func() *gorm.DB {
+		q := us.db.Model(&UsageRecord{})
+		if !startTime.IsZero() {
+			q = q.Where("timestamp >= ?", startTime)
+		}
+		if !endTime.IsZero() {
+			q = q.Where("timestamp <= ?", endTime)
+		}
+		for key, value := range filters {
+			q = q.Where(key+" = ?", value)
+		}
+		return q
 	}
 
 	// Get records with pagination
 	var records []UsageRecord
-	if err := db.
+	if err := base().
 		Order("timestamp DESC").
 		Limit(limit).
 		Offset(offset).
 		Find(&records).Error; err != nil {
 		return nil, 0, err
+	}
+
+	// The full COUNT(*) scan is only needed when the page might not contain
+	// everything; the common dashboard case (first page, under the limit)
+	// gets the total for free.
+	total := int64(offset + len(records))
+	if len(records) == limit {
+		if err := base().Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
 	}
 
 	return records, total, nil
@@ -536,8 +603,8 @@ func (us *UsageStore) GetRecords(startTime, endTime time.Time, filters map[strin
 // GetRecordsAfterID returns usage records with id greater than lastID.
 // On initial sync, startTime can be used to cap the historical backfill window.
 func (us *UsageStore) GetRecordsAfterID(lastID uint, startTime time.Time, limit int) ([]UsageRecord, error) {
-	us.mu.Lock()
-	defer us.mu.Unlock()
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
 	if limit <= 0 {
 		limit = 100
@@ -559,45 +626,33 @@ func (us *UsageStore) GetRecordsAfterID(lastID uint, startTime time.Time, limit 
 	return records, nil
 }
 
-// DeleteOlderThan deletes records older than the specified date
+// DeleteOlderThan deletes records older than the specified date, together
+// with the daily aggregates derived from them so both views stay consistent.
 func (us *UsageStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	us.mu.Lock()
-	defer us.mu.Unlock()
-
 	result := us.db.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
+	if result.Error == nil {
+		// Include the boundary day: its aggregate now over-counts deleted
+		// records and will be rebuilt from the remaining raw rows on the
+		// next query.
+		us.db.Where("date <= ?", cutoffDate.UTC().Format(dailyDateLayout)).Delete(&UsageDailyRecord{})
+	}
+	us.mu.Unlock()
+
+	// Aggregates for deleted days must be recomputed if queried again.
+	us.aggMu.Lock()
+	us.aggLoaded = false
+	us.aggregatedDays = nil
+	us.aggMu.Unlock()
+
 	return result.RowsAffected, result.Error
 }
 
-// AggregateToDaily aggregates records to daily summaries
+// AggregateToDaily (re)builds the usage_daily rows for the UTC day containing
+// the given time. It returns the number of aggregate rows written.
 func (us *UsageStore) AggregateToDaily(date time.Time) (int64, error) {
-	us.mu.Lock()
-	defer us.mu.Unlock()
-
-	// Aggregate usage records to daily summaries
-	result := us.db.Exec(`
-		INSERT OR REPLACE INTO usage_daily (date, provider_uuid, provider_name, model, request_count, total_tokens, input_tokens, output_tokens, cache_input_tokens, system_tokens, error_count)
-		SELECT
-			date(?) as date,
-			provider_uuid,
-			provider_name,
-			model,
-			COUNT(*) as request_count,
-			SUM(total_tokens) as total_tokens,
-			SUM(input_tokens) as input_tokens,
-			SUM(output_tokens) as output_tokens,
-			SUM(cache_input_tokens) as cache_input_tokens,
-			SUM(system_tokens) as system_tokens,
-			SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error_count
-		FROM usage_records
-		WHERE date(timestamp) = date(?)
-		GROUP BY provider_uuid, provider_name, model
-	`, date, date)
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	return result.RowsAffected, nil
+	day := utcDayStart(date)
+	return us.aggregateDay(day.Format(dailyDateLayout), day)
 }
 
 // Helper functions
@@ -610,7 +665,7 @@ func buildOrderBy(sortBy, sortOrder string) string {
 	case "request_count":
 		return fmt.Sprintf("request_count %s", sortOrder)
 	case "avg_latency":
-		return fmt.Sprintf("avg_latency %s", sortOrder)
+		return fmt.Sprintf("(latency_sum * 1.0 / request_count) %s", sortOrder)
 	default: // total_tokens
 		return fmt.Sprintf("total_tokens %s", sortOrder)
 	}
