@@ -123,9 +123,27 @@ export const barRadius: [number, number, number, number] = [4, 4, 0, 0];
 // Animation duration for chart transitions
 export const ANIMATION_DURATION = 600;
 
-// Format numbers (50K, 1M, etc.)
+// Format large numbers compactly (999, 50K, 1.5M, 20.4B, 1.1T).
+// Precision adapts to magnitude and trailing zeros are trimmed.
 export const formatNumber = (n: number): string => {
-    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
-    return n.toString();
+    const units = [
+        { size: 1_000_000_000_000, suffix: 'T' },
+        { size: 1_000_000_000, suffix: 'B' },
+        { size: 1_000_000, suffix: 'M' },
+        { size: 1_000, suffix: 'K' },
+    ];
+
+    for (const unit of units) {
+        if (n >= unit.size) {
+            const scaled = n / unit.size;
+            const precision = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+            const compact = scaled
+                .toFixed(precision)
+                .replace(/\.0+$/, '')
+                .replace(/(\.\d*[1-9])0+$/, '$1');
+            return `${compact}${unit.suffix}`;
+        }
+    }
+
+    return n.toLocaleString();
 };

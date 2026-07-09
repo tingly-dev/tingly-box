@@ -1,6 +1,7 @@
 // Shared utilities for TokenHistoryChart components
 
 import type { ChartDataPoint, TimeSeriesData } from './types';
+import { formatNumber } from '../chartStyles';
 
 export const formatTimeLabel = (timestamp: string, isDayMode: boolean): string => {
     if (!timestamp) return '';
@@ -82,17 +83,9 @@ export const calculateLabelInterval = (dataLength: number): number => {
     return Math.ceil(dataLength / 6);
 };
 
-export const formatYAxis = (value: number): string => {
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-    return value.toString();
-};
+export const formatYAxis = formatNumber;
 
-export const formatTooltipValue = (value: number): string => {
-    if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
-    return value.toLocaleString();
-};
+export const formatTooltipValue = formatNumber;
 
 /**
  * Aggregate minute-level time series data into 5-minute buckets.

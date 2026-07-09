@@ -1,6 +1,7 @@
 import { Box, Tooltip, Typography, tooltipClasses } from '@mui/material';
 import { useMemo } from 'react';
 import { format } from 'date-fns';
+import { formatNumber } from './chartStyles';
 
 // Green color scale for GitHub-style heatmap (like GitHub's contribution graph)
 const HEATMAP_COLORS = [
@@ -43,29 +44,7 @@ interface TokenHeatmapProps {
     title?: string;
 }
 
-// Format large numbers (T, B, M, K)
-const formatTokenTotal = (value: number): string => {
-    const units = [
-        { size: 1_000_000_000_000, suffix: 'T' },
-        { size: 1_000_000_000, suffix: 'B' },
-        { size: 1_000_000, suffix: 'M' },
-        { size: 1_000, suffix: 'K' },
-    ];
-
-    for (const unit of units) {
-        if (value >= unit.size) {
-            const scaled = value / unit.size;
-            const precision = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
-            const compact = scaled
-                .toFixed(precision)
-                .replace(/\.0+$/, '')
-                .replace(/(\.\d*[1-9])0+$/, '$1');
-            return `${compact}${unit.suffix}`;
-        }
-    }
-
-    return new Intl.NumberFormat('en-US').format(value);
-};
+const formatTokenTotal = formatNumber;
 
 // Calculate streaks
 const computeStreaks = (allDays: string[], valueByDate: Map<string, number>) => {

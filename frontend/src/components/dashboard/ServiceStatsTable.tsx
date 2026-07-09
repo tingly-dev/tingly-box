@@ -13,6 +13,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { useState } from 'react';
+import { formatNumber } from './chartStyles';
 
 export interface AggregatedStat {
     key: string;
@@ -48,11 +49,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
         return 'rgba(100, 116, 139, 0.1)';
     };
 
-    const formatTokens = (num: number): string => {
-        if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
-        if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
-        return num.toLocaleString();
-    };
+    const formatTokens = formatNumber;
 
     const formatRequests = (num: number): string => {
         return num.toLocaleString();

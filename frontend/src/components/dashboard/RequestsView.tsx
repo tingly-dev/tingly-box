@@ -30,7 +30,7 @@ import {
     ResponsiveContainer,
 } from 'recharts';
 import { WaveSine as StreamIcon } from '@/components/icons';
-import { getThemeChartStyles, TOKEN_COLORS } from './chartStyles';
+import { getThemeChartStyles, TOKEN_COLORS, formatNumber } from './chartStyles';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -71,11 +71,7 @@ const LATENCY_BUCKETS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fmtTokens = (n: number) => {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-    return n.toString();
-};
+const fmtTokens = formatNumber;
 
 const fmtLatency = (ms: number) => {
     if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;

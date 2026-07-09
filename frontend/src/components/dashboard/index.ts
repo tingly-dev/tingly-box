@@ -8,4 +8,5 @@ export type { DailyUsage, HeatmapMetrics } from './TokenHeatmap';
 export { default as AgentQuickNav } from './AgentQuickNav';
 export { default as RequestsView } from './RequestsView';
 export type { UsageRecord } from './RequestsView';
+export { formatNumber } from './chartStyles';
 

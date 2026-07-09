@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Stack, Tooltip, Typography, tooltipClasses } from '@mui/material';
 import type { UsageWindow } from '@/types/quota';
 import { formatQuotaPercent, formatQuotaUsage } from '@/types/quota';
-import { QUOTA_COLORS } from '../dashboard/chartStyles';
+import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
 
 interface QuotaBarItemProps {
   window: UsageWindow;
@@ -29,11 +29,7 @@ interface QuotaBarItemProps {
   tooltipContent?: React.ReactNode;
 }
 
-function formatCompactNumber(num: number) {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
-  return num.toString();
-}
+const formatCompactNumber = formatNumber;
 
 /**
  * Compact inline display of a single quota window.
