@@ -63,14 +63,13 @@ func logOpenBreakerSkips(ctx *SelectionContext, rule interface {
 		if state != loadbalance.BreakerOpen {
 			continue
 		}
-		logrus.WithContext(selectionLogContext(ctx)).WithFields(logrus.Fields{
-			"stage":         "routing_breaker_skipped",
-			"rule_uuid":     ctx.Rule.UUID,
-			"service":       svc.ServiceID(),
-			"provider_uuid": svc.Provider,
-			"model":         svc.Model,
-			"tier":          svc.Tier,
-			"breaker_state": state.String(),
-		}).Warnf("[routing] skipped %s because breaker is %s", svc.ServiceID(), state.String())
+		fields := selectionRuleLogFields(ctx)
+		fields["stage"] = "routing_breaker_skipped"
+		fields["service"] = svc.ServiceID()
+		fields["provider_uuid"] = svc.Provider
+		fields["attempt_model"] = svc.Model
+		fields["tier"] = svc.Tier
+		fields["breaker_state"] = state.String()
+		logrus.WithContext(selectionLogContext(ctx)).WithFields(fields).Warnf("[routing] skipped %s because breaker is %s", svc.ServiceID(), state.String())
 	}
 }

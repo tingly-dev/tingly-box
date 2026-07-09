@@ -379,18 +379,16 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		serviceID := loadbalance.FormatServiceID(provider.UUID, model)
 		tried[serviceID] = true
 
-		// Log each attempt with clear numbering
-		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-			"stage":          "failover_attempt",
-			"attempt":        i + 1,
-			"total_attempts": len(activeServices),
-			"service":        serviceID,
-			"provider":       provider.Name,
-			"model":          model,
-		}).Infof("[failover] attempt %d/%d: trying: %s/%s", i+1, len(activeServices), provider.UUID, model)
-
-		// Update context for logging/middleware to show current attempt
+		// Update context before logging/dispatch so request-scoped observability
+		// reflects the service currently being tried, and ultimately the last
+		// successful service when failover succeeds.
 		UpdateTrackingForFailover(c, provider, model)
+
+		fields := failoverLogFields(c, rule, provider, model, serviceID)
+		fields["stage"] = "failover_attempt"
+		fields["attempt"] = i + 1
+		fields["active_services"] = len(activeServices)
+		logrus.WithContext(c.Request.Context()).WithFields(fields).Infof("[failover] attempt %d: trying: %s/%s", i+1, provider.UUID, model)
 
 		if rec != nil {
 			rec.SetActiveService(provider, model)
@@ -402,52 +400,42 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		// the wire — bytes have left the process, retry is impossible.
 		if gate.Committed() {
 			loadbalance.RecordServiceSuccess(rule.UUID, serviceID)
-			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"stage":          "failover_success",
-				"attempt":        i + 1,
-				"total_attempts": len(activeServices),
-				"service":        serviceID,
-				"provider":       provider.Name,
-				"model":          model,
-			}).Infof("[failover] succeeded on attempt %d with %s/%s", i+1, provider.UUID, model)
+			fields := failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "failover_success"
+			fields["attempt"] = i + 1
+			fields["active_services"] = len(activeServices)
+			fields["routed_model"] = model
+			fields["routed_provider"] = provider.Name
+			logrus.WithContext(c.Request.Context()).WithFields(fields).Infof("[failover] succeeded on attempt %d with %s/%s", i+1, provider.UUID, model)
 			return
 		}
 		status := gate.Status()
 		if !isRetryableStatus(status) {
-			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"stage":          "failover_terminal",
-				"attempt":        i + 1,
-				"total_attempts": len(activeServices),
-				"service":        serviceID,
-				"provider":       provider.Name,
-				"model":          model,
-				"status":         status,
-			}).Warnf("[failover] attempt %d returned status %d with %s/%s", i+1, status, provider.UUID, model)
+			fields := failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "failover_terminal"
+			fields["attempt"] = i + 1
+			fields["active_services"] = len(activeServices)
+			fields["status"] = status
+			logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[failover] attempt %d returned status %d with %s/%s", i+1, status, provider.UUID, model)
 			return
 		}
 
 		loadbalance.RecordServiceFailure(rule.UUID, serviceID)
 		state := loadbalance.DefaultBreakerStore().Get(rule.UUID, serviceID).State()
-		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-			"stage":         "breaker_failure_recorded",
-			"rule_uuid":     rule.UUID,
-			"service":       serviceID,
-			"provider":      provider.Name,
-			"model":         model,
-			"status":        status,
-			"breaker_state": state.String(),
-		}).Warnf("[breaker] recorded failure for %s; state=%s", serviceID, state.String())
+		fields = failoverLogFields(c, rule, provider, model, serviceID)
+		fields["stage"] = "breaker_failure_recorded"
+		fields["rule_uuid"] = rule.UUID
+		fields["status"] = status
+		fields["breaker_state"] = state.String()
+		logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[breaker] recorded failure for %s; state=%s", serviceID, state.String())
 
-		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-			"stage":          "failover_attempt_failed",
-			"attempt":        i + 1,
-			"total_attempts": len(activeServices),
-			"service":        serviceID,
-			"provider":       provider.Name,
-			"model":          model,
-			"status":         status,
-			"retryable":      true,
-		}).Warnf("[failover] attempt %d failed with retryable status %d on %s/%s",
+		fields = failoverLogFields(c, rule, provider, model, serviceID)
+		fields["stage"] = "failover_attempt_failed"
+		fields["attempt"] = i + 1
+		fields["active_services"] = len(activeServices)
+		fields["status"] = status
+		fields["retryable"] = true
+		logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[failover] attempt %d failed with retryable status %d on %s/%s",
 			i+1, status, provider.UUID, model)
 
 		// Pass "" so the candidate pool spans all API styles: each attempt
@@ -455,40 +443,69 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		// heterogeneous failover (e.g. Anthropic → OpenAI) is supported.
 		nextProvider, nextService, err := ph.selectFallbackService(rule, tried, "")
 		if err != nil {
-			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"stage":          "failover_error",
-				"attempt":        i + 1,
-				"total_attempts": len(activeServices),
-				"status":         status,
-				"error":          err.Error(),
-			}).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
+			fields := failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "failover_error"
+			fields["attempt"] = i + 1
+			fields["active_services"] = len(activeServices)
+			fields["status"] = status
+			fields["error"] = err.Error()
+			logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
 			return
 		}
 		if nextProvider == nil || nextService == nil {
-			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"stage":          "failover_exhausted",
-				"attempt":        i + 1,
-				"total_attempts": len(activeServices),
-				"status":         status,
-			}).Warnf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
+			fields := failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "failover_exhausted"
+			fields["attempt"] = i + 1
+			fields["active_services"] = len(activeServices)
+			fields["status"] = status
+			logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
 			return
 		}
 
 		nextServiceID := loadbalance.FormatServiceID(nextProvider.UUID, nextService.Model)
-		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-			"stage":          "failover_retry",
-			"attempt":        i + 1,
-			"total_attempts": len(activeServices),
-			"status":         status,
-			"from_service":   serviceID,
-			"to_service":     nextServiceID,
-			"to_provider":    nextProvider.Name,
-			"to_model":       nextService.Model,
-		}).Warnf("[failover] attempt %d failed with %d, retrying with %s/%s",
+		fields = failoverLogFields(c, rule, provider, model, serviceID)
+		fields["stage"] = "failover_retry"
+		fields["attempt"] = i + 1
+		fields["active_services"] = len(activeServices)
+		fields["status"] = status
+		fields["from_service"] = serviceID
+		fields["to_service"] = nextServiceID
+		fields["to_provider"] = nextProvider.Name
+		fields["to_model"] = nextService.Model
+		logrus.WithContext(c.Request.Context()).WithFields(fields).Warnf("[failover] attempt %d failed with %d, retrying with %s/%s",
 			i+1, status, nextProvider.UUID, nextService.Model)
 
 		gate.Discard()
 		provider = nextProvider
 		model = nextService.Model
 	}
+}
+
+func failoverLogFields(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, serviceID string) logrus.Fields {
+	fields := logrus.Fields{
+		"service":       serviceID,
+		"attempt_model": model,
+	}
+	if provider != nil {
+		fields["provider"] = provider.Name
+		fields["provider_uuid"] = provider.UUID
+	}
+	if rule != nil {
+		fields["rule_uuid"] = rule.UUID
+		fields["request_model"] = rule.RequestModel
+		fields["scenario"] = string(rule.GetScenario())
+		fields["lb_tactic"] = rule.GetTacticType().String()
+	}
+	if c != nil {
+		if requestModel := c.GetString(ContextKeyRequestModel); requestModel != "" {
+			fields["request_model"] = requestModel
+		}
+		if scenario := c.GetString(ContextKeyScenario); scenario != "" {
+			fields["scenario"] = scenario
+		}
+		if tactic := c.GetString(ContextKeyLBTactic); tactic != "" {
+			fields["lb_tactic"] = tactic
+		}
+	}
+	return fields
 }

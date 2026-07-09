@@ -79,7 +79,9 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 	}
 
 	rule := &typ.Rule{
-		UUID: "test-rule",
+		UUID:         "test-rule",
+		Scenario:     typ.ScenarioClaudeCode,
+		RequestModel: "cc",
 		LBTactic: typ.Tactic{
 			Type: loadbalance.TacticTier,
 			Params: &typ.TierParams{
@@ -133,8 +135,19 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 
 		printCapturedLog(t, hook.entries)
 
-		var sawRetry bool
+		var sawRetry, sawSuccess bool
 		for _, e := range hook.entries {
+			if stage, _ := e.Data["stage"].(string); strings.HasPrefix(stage, "failover_") {
+				if e.Data["scenario"] != string(typ.ScenarioClaudeCode) {
+					t.Errorf("%s log scenario = %v, want %s", stage, e.Data["scenario"], typ.ScenarioClaudeCode)
+				}
+				if e.Data["request_model"] != "cc" {
+					t.Errorf("%s log request_model = %v, want cc", stage, e.Data["request_model"])
+				}
+				if e.Data["attempt_model"] == nil {
+					t.Errorf("%s log missing attempt_model", stage)
+				}
+			}
 			if e.Data["stage"] == "failover_retry" && e.Data["to_provider"] != nil {
 				sawRetry = true
 				for _, field := range []string{"attempt", "status", "from_service", "to_provider", "to_model"} {
@@ -143,9 +156,21 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 					}
 				}
 			}
+			if e.Data["stage"] == "failover_success" {
+				sawSuccess = true
+				if e.Data["routed_model"] != "gpt-4o-mini" {
+					t.Errorf("success routed_model = %v, want gpt-4o-mini", e.Data["routed_model"])
+				}
+			}
 		}
 		if !sawRetry {
 			t.Error("expected a failover retry log entry with to_provider field, got none")
+		}
+		if !sawSuccess {
+			t.Error("expected a failover success log entry, got none")
+		}
+		if got := c.GetString(ContextKeyModel); got != "gpt-4o-mini" {
+			t.Errorf("final tracking model = %q, want gpt-4o-mini", got)
 		}
 	})
 
