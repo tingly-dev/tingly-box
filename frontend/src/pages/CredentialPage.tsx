@@ -122,7 +122,6 @@ const CredentialPage = () => {
         if (dialog === 'add') {
             const nextParams = new URLSearchParams(searchParams);
             nextParams.delete('dialog');
-            nextParams.delete('style');
             setSearchParams(nextParams, { replace: true });
             // All "add credential" entry points funnel through the unified Connect AI picker.
             handleConnectAIClick();
