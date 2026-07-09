@@ -80,7 +80,8 @@ func (c *Config) EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, mode
 				},
 			},
 			LBTactic: typ.Tactic{
-				Type: loadbalance.TacticAdaptive,
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			Active:       true,
 			SmartEnabled: false,

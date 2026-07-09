@@ -1470,8 +1470,8 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 			RequestModel: requestModel,
 			Description:  description,
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			// Claude Code profiles inherit the built-in CC defaults: normalize the
 			// mid-conversation system role (ClaudeCodeCompat) so third-party
@@ -2177,9 +2177,17 @@ func IsTacticValid(tactic *typ.Tactic) bool {
 	switch p := tactic.Params.(type) {
 	case *typ.TokenBasedParams:
 		return p.TokenThreshold > 0
+	case typ.TokenBasedParams:
+		return p.TokenThreshold > 0
 	case *typ.RandomParams:
 		// Random params has no fields, always valid if not nil
 		return true
+	case typ.RandomParams:
+		return true
+	case *typ.TierParams:
+		return tactic.Type == loadbalance.TacticTier && p.WithinTierTactic != loadbalance.TacticTier
+	case typ.TierParams:
+		return tactic.Type == loadbalance.TacticTier && p.WithinTierTactic != loadbalance.TacticTier
 	default:
 		// Unknown params type, treat as invalid
 		return false

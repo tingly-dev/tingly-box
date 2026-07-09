@@ -98,6 +98,7 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	// Always instantiate tactic from rule's params to ensure correct parameters
 	// State is now stored globally (globalRoundRobinStreaks) so this is safe
 	actualTactic := rule.LBTactic.Instantiate()
+	logTierConfigIgnored(rule, activeServices, actualTactic.GetType())
 
 	// Create a temporary rule with only healthy services for the tactic
 	tempRule := &typ.Rule{
@@ -123,6 +124,28 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	}
 
 	return selectedService, nil
+}
+
+func logTierConfigIgnored(rule *typ.Rule, services []*loadbalance.Service, tacticType loadbalance.TacticType) {
+	if rule == nil || tacticType == loadbalance.TacticTier {
+		return
+	}
+	tiers := make(map[int]struct{})
+	for _, svc := range services {
+		if svc == nil || !svc.Active {
+			continue
+		}
+		tiers[svc.Tier] = struct{}{}
+		if len(tiers) > 1 {
+			logrus.WithFields(logrus.Fields{
+				"stage":     "tier_config_ignored",
+				"rule_uuid": rule.UUID,
+				"tactic":    tacticType.String(),
+			}).Warnf("[load_balancer] rule %s has multiple service tiers but lb_tactic=%s; tier priority is ignored",
+				rule.UUID, tacticType.String())
+			return
+		}
+	}
 }
 
 // getTactic retrieves a tactic by type

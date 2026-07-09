@@ -23,8 +23,8 @@ func init() {
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			Active: true,
 		},
@@ -36,8 +36,8 @@ func init() {
 			Description:   "Default proxy rule in tingly-box for agent",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			Active: true,
 		},
@@ -49,8 +49,8 @@ func init() {
 			Description:   "Built in model rule for agent - claw",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			Active: true,
 		},
@@ -62,8 +62,8 @@ func init() {
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			Active: true,
 		},
@@ -75,8 +75,8 @@ func init() {
 			Description:   "Default proxy rule for Codex",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			// 30-min session affinity improves cache hit rate for Codex sessions.
 			Flags:  typ.RuleFlags{SessionAffinity: defaultSessionAffinitySeconds},
@@ -96,8 +96,8 @@ func init() {
 			Description:   "Default proxy rule for OpenCode - AI coding assistant",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
+				Type:   loadbalance.TacticRandom,
+				Params: typ.DefaultRandomParams(),
 			},
 			Active: true,
 		},
@@ -109,7 +109,7 @@ func init() {
 }
 
 // cdRule builds a built-in Claude Desktop rule with the shared defaults: an empty
-// service list, the default adaptive load-balancing tactic, Active, and the
+// service list, the default random load-balancing tactic, Active, and the
 // clean_header + claude_code_compat + session_affinity flags on. Claude Desktop
 // injects x-anthropic-billing-header blocks into system messages (CleanHeader)
 // and sends mid-conversation system-role messages that third-party
@@ -123,8 +123,8 @@ func cdRule(uuid, requestModel, description string) typ.Rule {
 		Description:  description,
 		Services:     []*loadbalance.Service{},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
 		},
 		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
 		Active: true,
@@ -132,7 +132,7 @@ func cdRule(uuid, requestModel, description string) typ.Rule {
 }
 
 // ccRule builds a built-in Claude Code rule with the shared defaults: an empty
-// service list, the default adaptive load-balancing tactic, and the
+// service list, the default random load-balancing tactic, and the
 // claude_code_compat + clean_header + session_affinity flags on. Claude Code
 // emits mid-conversation system-role messages that third-party
 // Anthropic-compatible providers reject (ClaudeCodeCompat), and injects
@@ -147,8 +147,8 @@ func ccRule(uuid, requestModel, description string, active bool) typ.Rule {
 		Description:  description,
 		Services:     []*loadbalance.Service{},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
 		},
 		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
 		Active: active,

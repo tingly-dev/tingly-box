@@ -425,6 +425,18 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			return
 		}
 
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"stage":          "failover_attempt_failed",
+			"attempt":        i + 1,
+			"total_attempts": len(activeServices),
+			"service":        serviceID,
+			"provider":       provider.Name,
+			"model":          model,
+			"status":         status,
+			"retryable":      true,
+		}).Warnf("[failover] attempt %d failed with retryable status %d on %s/%s",
+			i+1, status, provider.UUID, model)
+
 		// Pass "" so the candidate pool spans all API styles: each attempt
 		// re-transforms the request for the selected provider's style, so
 		// heterogeneous failover (e.g. Anthropic → OpenAI) is supported.

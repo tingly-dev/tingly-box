@@ -141,8 +141,8 @@ func TestParseTacticType(t *testing.T) {
 		{"token_based", TacticTokenBased},
 		{"hybrid", TacticTokenBased}, // deprecated → token_based
 		{"random", TacticRandom},
-		{"invalid", TacticAdaptive}, // Default fallback
-		{"", TacticAdaptive},        // Empty string fallback
+		{"invalid", TacticRandom}, // Default fallback
+		{"", TacticRandom},        // Empty string fallback
 	}
 
 	for _, test := range tests {
@@ -264,8 +264,8 @@ func TestParseTacticType_LatencyBased(t *testing.T) {
 		expected TacticType
 	}{
 		{"latency_based", TacticLatencyBased},
-		{"LATENCY_BASED", TacticAdaptive}, // Case sensitive, falls back to default
-		{"invalid", TacticAdaptive},       // Default fallback
+		{"LATENCY_BASED", TacticRandom}, // Case sensitive, falls back to default
+		{"invalid", TacticRandom},       // Default fallback
 	}
 
 	for _, test := range tests {
@@ -357,8 +357,8 @@ func TestParseTacticType_SpeedBased(t *testing.T) {
 		expected TacticType
 	}{
 		{"speed_based", TacticSpeedBased},
-		{"SPEED_BASED", TacticAdaptive}, // Case sensitive, falls back to default
-		{"invalid", TacticAdaptive},     // Default fallback
+		{"SPEED_BASED", TacticRandom}, // Case sensitive, falls back to default
+		{"invalid", TacticRandom},     // Default fallback
 	}
 
 	for _, test := range tests {
@@ -374,14 +374,14 @@ func TestTacticType_String_SpeedBased(t *testing.T) {
 	}
 }
 
-func TestParseTacticType_Adaptive(t *testing.T) {
+func TestParseTacticType_AdaptiveLegacyMapsToRandom(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected TacticType
 	}{
-		{"adaptive", TacticAdaptive},
-		{"ADAPTIVE", TacticAdaptive}, // Case sensitive, falls back to default
-		{"invalid", TacticAdaptive},  // Default fallback
+		{"adaptive", TacticRandom},
+		{"ADAPTIVE", TacticRandom}, // Case sensitive, falls back to default
+		{"invalid", TacticRandom},  // Default fallback
 	}
 
 	for _, test := range tests {

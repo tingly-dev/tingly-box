@@ -527,8 +527,8 @@ func ParseTacticType(s string) TacticType {
 		return TacticLatencyBased
 	case "speed_based":
 		return TacticSpeedBased
-	case "adaptive":
-		return TacticAdaptive
+	case "adaptive": // legacy, map to random
+		return TacticRandom
 	case "capacity_based":
 		return TacticCapacityBased
 	case "tier":
@@ -536,6 +536,6 @@ func ParseTacticType(s string) TacticType {
 	case "priority": // backward-compat alias
 		return TacticTier
 	default:
-		return TacticAdaptive // default to adaptive
+		return TacticRandom // default to random
 	}
 }

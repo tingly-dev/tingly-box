@@ -31,12 +31,45 @@ func TestNormalizeLegacyConfigBaseline_RuleBasics(t *testing.T) {
 		t.Error("missing rule UUID should be generated")
 	}
 	for _, r := range c.Rules {
-		if r.LBTactic.Type != loadbalance.TacticAdaptive {
-			t.Errorf("rule %q tactic type = %q, want %q", r.UUID, r.LBTactic.Type, loadbalance.TacticAdaptive)
+		if r.LBTactic.Type != loadbalance.TacticRandom {
+			t.Errorf("rule %q tactic type = %q, want %q", r.UUID, r.LBTactic.Type, loadbalance.TacticRandom)
 		}
-		if _, ok := typ.AsAdaptiveParams(r.LBTactic.Params); !ok {
-			t.Errorf("rule %q tactic params should be adaptive: %+v", r.UUID, r.LBTactic.Params)
+		if _, ok := typ.AsRandomParams(r.LBTactic.Params); !ok {
+			t.Errorf("rule %q tactic params should be random: %+v", r.UUID, r.LBTactic.Params)
 		}
+	}
+}
+
+func TestNormalizeLegacyConfigBaseline_MultiTierRulesBecomeTierWithRandomWithinTier(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{
+				UUID:     "tier-rule",
+				Scenario: typ.ScenarioClaudeCode,
+				Services: []*loadbalance.Service{
+					{Provider: "p0", Model: "high", Active: true, Tier: 0},
+					{Provider: "p1", Model: "low", Active: true, Tier: 1},
+				},
+				LBTactic: typ.Tactic{
+					Type:   loadbalance.TacticAdaptive,
+					Params: typ.DefaultAdaptiveParams(),
+				},
+			},
+		},
+	}
+
+	normalizeLegacyConfigBaseline(c)
+
+	got := c.Rules[0].LBTactic
+	if got.Type != loadbalance.TacticTier {
+		t.Fatalf("multi-tier rule tactic = %q, want %q", got.Type, loadbalance.TacticTier)
+	}
+	params, ok := got.Params.(*typ.TierParams)
+	if !ok {
+		t.Fatalf("multi-tier params = %T, want *typ.TierParams", got.Params)
+	}
+	if params.WithinTierTactic != loadbalance.TacticRandom {
+		t.Fatalf("within tier tactic = %q, want random", params.WithinTierTactic)
 	}
 }
 

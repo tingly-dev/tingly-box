@@ -131,7 +131,8 @@ func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]int
 			tacticParams = DefaultTierParams()
 		}
 	default:
-		tacticParams = DefaultAdaptiveParams()
+		tacticType = loadbalance.TacticRandom
+		tacticParams = DefaultRandomParams()
 	}
 
 	return Tactic{
@@ -338,6 +339,9 @@ func AsTokenBasedParams(p TacticParams) (TokenBasedParams, bool) {
 }
 
 func AsRandomParams(p TacticParams) (RandomParams, bool) {
+	if rp, ok := p.(*RandomParams); ok {
+		return *rp, true
+	}
 	rp, ok := p.(RandomParams)
 	return rp, ok
 }

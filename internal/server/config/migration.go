@@ -225,11 +225,9 @@ func normalizeRuleBasics(c *Config) bool {
 				needsSave = true
 			}
 		}
-		if !IsTacticValid(&rule.LBTactic) {
-			rule.LBTactic = typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			}
+		normalizedTactic := normalizeRuleTactic(rule)
+		if rule.LBTactic.Type != normalizedTactic.Type || !IsTacticValid(&rule.LBTactic) {
+			rule.LBTactic = normalizedTactic
 			needsSave = true
 		}
 		valid = append(valid, rule)
@@ -239,6 +237,36 @@ func normalizeRuleBasics(c *Config) bool {
 	}
 	c.Rules = valid
 	return needsSave
+}
+
+func normalizeRuleTactic(rule typ.Rule) typ.Tactic {
+	if hasMultipleServiceTiers(rule.Services) {
+		return typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		}
+	}
+	if rule.LBTactic.Type == loadbalance.TacticTier && IsTacticValid(&rule.LBTactic) {
+		return rule.LBTactic
+	}
+	return typ.Tactic{
+		Type:   loadbalance.TacticRandom,
+		Params: typ.DefaultRandomParams(),
+	}
+}
+
+func hasMultipleServiceTiers(services []*loadbalance.Service) bool {
+	seen := make(map[int]struct{})
+	for _, svc := range services {
+		if svc == nil || !svc.Active {
+			continue
+		}
+		seen[svc.Tier] = struct{}{}
+		if len(seen) > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func legacyRuleScenario(uuid string) (typ.RuleScenario, bool) {
