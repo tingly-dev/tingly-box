@@ -130,15 +130,17 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                 data={providerFormData}
                 onChange={handleProviderFormChange}
                 mode="edit"
+                onNotification={showNotification}
             />
             <OAuthDetailDialog
                 open={oauthDetailDialogOpen}
                 provider={oauthDetailProvider}
                 onClose={closeOAuthDetailDialog}
                 onSubmit={handleOAuthSubmit}
+                onNotification={showNotification}
             />
         </>
-    ), [apiKeyDialogOpen, closeApiKeyDialog, closeOAuthDetailDialog, handleOAuthSubmit, handleProviderFormChange, handleProviderSubmit, oauthDetailDialogOpen, oauthDetailProvider, providerFormData]);
+    ), [apiKeyDialogOpen, closeApiKeyDialog, closeOAuthDetailDialog, handleOAuthSubmit, handleProviderFormChange, handleProviderSubmit, oauthDetailDialogOpen, oauthDetailProvider, providerFormData, showNotification]);
 
     return {
         editProvider,

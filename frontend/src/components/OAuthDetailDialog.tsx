@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import {type Provider } from '../types/provider';
+import ProviderExportButton from '@/components/ProviderExportButton';
 
 interface OAuthEditFormData {
     name: string;
@@ -30,9 +31,10 @@ interface OAuthDetailDialogProps {
     provider: Provider | null;
     onClose: () => void;
     onSubmit: (data: OAuthEditFormData) => Promise<void>;
+    onNotification?: (message: string, severity: 'success' | 'error') => void;
 }
 
-const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDialogProps) => {
+const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }: OAuthDetailDialogProps) => {
     const [formData, setFormData] = useState<OAuthEditFormData>({
         name: provider?.name || '',
         apiBase: provider?.api_base || '',
@@ -335,16 +337,20 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                         )}
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                    <Button onClick={onClose} color="inherit">Cancel</Button>
-                    <Button
-                        type="submit"
-                        variant="contained"
-                        size="small"
-                        disabled={submitting}
-                    >
-                        {submitting ? 'Saving...' : 'Save Changes'}
-                    </Button>
+                <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+                    <ProviderExportButton providerUuid={provider.uuid} onNotification={onNotification}/>
+                    <Box sx={{ml: 'auto'}}>
+                        <Button onClick={onClose} color="inherit">Cancel</Button>
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            size="small"
+                            disabled={submitting}
+                            sx={{ml: 1}}
+                        >
+                            {submitting ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </Box>
                 </DialogActions>
             </form>
         </Dialog>

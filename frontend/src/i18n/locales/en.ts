@@ -269,6 +269,12 @@ export default {
       "helperEdit": "Leave empty to keep current key"
     },
     "enabled": "Enabled",
+    "export": {
+      "action": "Copy Export",
+      "copying": "Copying...",
+      "base64": "Copy Base64",
+      "jsonl": "Copy JSONL"
+    },
     "advanced": {
       "title": "Advanced",
       "proxyUrl": {

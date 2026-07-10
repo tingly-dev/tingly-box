@@ -31,6 +31,7 @@ import VerificationResultPanel from '@/components/provider-form-dialog/Verificat
 import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
 import ProviderIcon from '@/components/ProviderIcon';
 import RegionBadge from '@/components/RegionBadge';
+import ProviderExportButton from '@/components/ProviderExportButton';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -67,6 +68,7 @@ interface PresetProviderFormDialogProps {
     isFirstProvider?: boolean;
     /** Pass true for local providers: token field stays editable but is not required. */
     optionalEditableToken?: boolean;
+    onNotification?: (message: string, severity: 'success' | 'error') => void;
 }
 
 /**
@@ -88,6 +90,7 @@ const ProviderFormDialog = ({
     submitText,
     isFirstProvider = false,
     optionalEditableToken = false,
+    onNotification,
 }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
     const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
@@ -707,6 +710,14 @@ const ProviderFormDialog = ({
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2}}>
+                    {mode === 'edit' && data.uuid && (
+                        <Box sx={{mr: 'auto'}}>
+                            <ProviderExportButton
+                                providerUuid={data.uuid}
+                                onNotification={onNotification}
+                            />
+                        </Box>
+                    )}
                     {onBack && (
                         <Button
                             type="button" variant="text" size="small"

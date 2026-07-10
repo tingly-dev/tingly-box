@@ -270,6 +270,12 @@ export default {
       "helperEdit": "留空以保留当前密钥"
     },
     "enabled": "已启用",
+    "export": {
+      "action": "复制导出",
+      "copying": "复制中...",
+      "base64": "复制 Base64",
+      "jsonl": "复制 JSONL"
+    },
     "advanced": {
       "title": "高级",
       "proxyUrl": {
