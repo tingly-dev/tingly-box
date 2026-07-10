@@ -4,7 +4,7 @@ Status: shipped (v1) on branch `claude/priority-service-routing-dIQfX`. Tracking
 
 ## Why
 
-Existing routing in tingly-box treats every service in a rule as an equal peer. `random`, `token_based`, `latency_based`, `speed_based`, `adaptive`, `capacity_based` — all of them spread load across services. That is the right default for "I have several equivalent providers, share the load".
+Existing routing in tingly-box treats every service in a rule as an equal peer. `random`, `token_based`, `latency_based`, `speed_based`, `capacity_based` (`adaptive` has since been removed — the name still parses and falls back to `random`) — all of them spread load across services. That is the right default for "I have several equivalent providers, share the load".
 
 It is the wrong default for the other very common shape:
 

@@ -51,8 +51,8 @@ func TestNormalizeLegacyConfigBaseline_MultiTierRulesBecomeTierWithRandomWithinT
 					{Provider: "p1", Model: "low", Active: true, Tier: 1},
 				},
 				LBTactic: typ.Tactic{
-					Type:   loadbalance.TacticAdaptive,
-					Params: typ.DefaultAdaptiveParams(),
+					Type:   loadbalance.TacticRandom,
+					Params: typ.NewRandomParams(),
 				},
 			},
 		},

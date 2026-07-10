@@ -187,7 +187,7 @@ func setupBothModeRoute(env *TestEnv, s Scenario, flags typ.RuleFlags) string {
 		Services: []*loadbalance.Service{
 			{Provider: providerName, Model: providerModel, Weight: 1, Active: true, TimeWindow: 300},
 		},
-		LBTactic: typ.Tactic{Type: loadbalance.TacticAdaptive, Params: typ.DefaultAdaptiveParams()},
+		LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
 		Active:   true,
 		Flags:    flags,
 	}
@@ -457,7 +457,7 @@ func ruleFlagCases() []flagCase {
 					{Provider: "aff-A", Model: "affinity-model", Weight: 1, Active: true, TimeWindow: 300},
 					{Provider: "aff-B", Model: "affinity-model", Weight: 1, Active: true, TimeWindow: 300},
 				},
-				LBTactic: typ.Tactic{Type: loadbalance.TacticAdaptive, Params: typ.DefaultAdaptiveParams()},
+				LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
 				Active:   true,
 				Flags:    typ.RuleFlags{SessionAffinity: 3600},
 			}
@@ -510,7 +510,7 @@ func ruleFlagCases() []flagCase {
 				Services: []*loadbalance.Service{
 					{Provider: providerName, Model: providerModel, Weight: 1, Active: true, TimeWindow: 300},
 				},
-				LBTactic: typ.Tactic{Type: loadbalance.TacticAdaptive, Params: typ.DefaultAdaptiveParams()},
+				LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
 				Active:   true,
 				Flags:    typ.RuleFlags{Context1M: true},
 			}

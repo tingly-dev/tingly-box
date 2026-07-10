@@ -452,7 +452,7 @@ const (
 	TacticRandom                          // Random selection with weighted probability
 	TacticLatencyBased                    // Route based on response latency
 	TacticSpeedBased                      // Route based on token generation speed
-	TacticAdaptive                        // Composite multi-dimensional routing
+	_                                     // 6: removed adaptive → random (slot reserved so persisted ints keep their meaning)
 	TacticCapacityBased                   // 7: capacity-based load balancing
 	TacticTier                            // 8: tier-based failover by Service.Tier (lower = tried first); ties share via sub-tactic
 )
@@ -489,8 +489,6 @@ func (tt TacticType) String() string {
 		return "latency_based"
 	case TacticSpeedBased:
 		return "speed_based"
-	case TacticAdaptive:
-		return "adaptive"
 	case TacticCapacityBased:
 		return "capacity_based"
 	case TacticTier:
@@ -518,7 +516,7 @@ func ParseTacticType(s string) TacticType {
 		return TacticLatencyBased
 	case "speed_based":
 		return TacticSpeedBased
-	case "adaptive": // legacy, map to random
+	case "adaptive": // removed tactic, map to random
 		return TacticRandom
 	case "capacity_based":
 		return TacticCapacityBased

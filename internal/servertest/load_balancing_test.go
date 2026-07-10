@@ -163,8 +163,8 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Active: true,
 	}
@@ -689,8 +689,8 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Active: true,
 	}
@@ -704,7 +704,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 		assert.NotNil(t, retrievedRule)
 		assert.Equal(t, "tingly", retrievedRule.RequestModel)
 		assert.Equal(t, 2, len(retrievedRule.GetServices()))
-		assert.Equal(t, "adaptive", retrievedRule.GetTacticType().String())
+		assert.Equal(t, "random", retrievedRule.GetTacticType().String())
 	})
 
 	// Test service selection through the load balancer

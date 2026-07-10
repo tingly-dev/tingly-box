@@ -33,8 +33,8 @@ func TestHealthFilter_BasicFiltering(t *testing.T) {
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -88,8 +88,8 @@ func TestHealthFilter_AllUnhealthy(t *testing.T) {
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -143,8 +143,8 @@ func TestHealthFilter_Recovery(t *testing.T) {
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -200,8 +200,8 @@ func TestHealthFilter_SuccessRecovery(t *testing.T) {
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -254,8 +254,8 @@ func TestHealthFilter_ConsecutiveErrors(t *testing.T) {
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -301,8 +301,8 @@ func TestHealthFilter_InactiveServices(t *testing.T) {
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{

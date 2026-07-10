@@ -41,8 +41,6 @@ func (tc *Tactic) UnmarshalJSON(data []byte) error {
 		tc.Params = &LatencyBasedParams{}
 	case loadbalance.TacticSpeedBased:
 		tc.Params = &SpeedBasedParams{}
-	case loadbalance.TacticAdaptive:
-		tc.Params = &AdaptiveParams{}
 	case loadbalance.TacticCapacityBased:
 		tc.Params = &CapacityBasedParams{}
 	case loadbalance.TacticTier:
@@ -103,21 +101,6 @@ func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]int
 			}
 		} else {
 			tacticParams = DefaultSpeedBasedParams()
-		}
-	case loadbalance.TacticAdaptive:
-		if params != nil {
-			tacticParams = &AdaptiveParams{
-				LatencyWeight: getFloatParamFromMap(params, "latency_weight", constant.DefaultLatencyWeight),
-				TokenWeight:   getFloatParamFromMap(params, "token_weight", constant.DefaultTokenWeight),
-				SpeedWeight:   getFloatParamFromMap(params, "speed_weight", constant.DefaultSpeedWeight),
-				HealthWeight:  getFloatParamFromMap(params, "health_weight", constant.DefaultHealthWeight),
-				MaxLatencyMs:  getIntParamFromMap(params, "max_latency_ms", constant.DefaultLatencyThresholdMs),
-				MaxTokenUsage: getIntParamFromMap(params, "max_token_usage", constant.DefaultTokenThreshold),
-				MinSpeedTps:   getFloatParamFromMap(params, "min_speed_tps", constant.DefaultSpeedThresholdTps),
-				ScoringMode:   getStringParamFromMap(params, "scoring_mode", constant.DefaultScoringMode),
-			}
-		} else {
-			tacticParams = DefaultAdaptiveParams()
 		}
 	case loadbalance.TacticCapacityBased:
 		tacticParams = DefaultCapacityBasedParams()
@@ -224,20 +207,6 @@ type SpeedBasedParams struct {
 
 func (s SpeedBasedParams) isTacticParams() {}
 
-// AdaptiveParams holds parameters for adaptive multi-dimensional tactic
-type AdaptiveParams struct {
-	LatencyWeight float64 `json:"latency_weight"`  // Weight for latency (0-1)
-	TokenWeight   float64 `json:"token_weight"`    // Weight for token usage (0-1)
-	SpeedWeight   float64 `json:"speed_weight"`    // Weight for token speed (0-1)
-	HealthWeight  float64 `json:"health_weight"`   // Weight for health status (0-1)
-	MaxLatencyMs  int64   `json:"max_latency_ms"`  // Maximum acceptable latency
-	MaxTokenUsage int64   `json:"max_token_usage"` // Maximum acceptable token usage
-	MinSpeedTps   float64 `json:"min_speed_tps"`   // Minimum acceptable tokens per second
-	ScoringMode   string  `json:"scoring_mode"`    // "weighted_sum", "multiplicative", "rank_based"
-}
-
-func (a AdaptiveParams) isTacticParams() {}
-
 // NewRandomParams creates parameters for the random tactic.
 func NewRandomParams() TacticParams {
 	return RandomParams{}
@@ -266,19 +235,6 @@ func DefaultSpeedBasedParams() TacticParams {
 		MinSamplesRequired: constant.DefaultMinSpeedSamples,
 		SpeedThresholdTps:  constant.DefaultSpeedThresholdTps,
 		SampleWindowSize:   constant.DefaultSpeedSampleWindow,
-	}
-}
-
-func DefaultAdaptiveParams() TacticParams {
-	return AdaptiveParams{
-		LatencyWeight: constant.DefaultLatencyWeight,
-		TokenWeight:   constant.DefaultTokenWeight,
-		SpeedWeight:   constant.DefaultSpeedWeight,
-		HealthWeight:  constant.DefaultHealthWeight,
-		MaxLatencyMs:  constant.DefaultLatencyThresholdMs,
-		MaxTokenUsage: constant.DefaultTokenThreshold,
-		MinSpeedTps:   constant.DefaultSpeedThresholdTps,
-		ScoringMode:   constant.DefaultScoringMode,
 	}
 }
 
@@ -311,16 +267,6 @@ func AsSpeedBasedParams(p TacticParams) (SpeedBasedParams, bool) {
 	// Try value type
 	sp, ok := p.(SpeedBasedParams)
 	return sp, ok
-}
-
-func AsAdaptiveParams(p TacticParams) (AdaptiveParams, bool) {
-	// Try pointer type first
-	if ap, ok := p.(*AdaptiveParams); ok {
-		return *ap, true
-	}
-	// Try value type
-	ap, ok := p.(AdaptiveParams)
-	return ap, ok
 }
 
 // LoadBalancingTactic defines the interface for load balancing strategies
@@ -663,189 +609,6 @@ func (st *SpeedBasedTactic) GetType() loadbalance.TacticType {
 	return loadbalance.TacticSpeedBased
 }
 
-// AdaptiveTactic implements composite multi-dimensional routing
-type AdaptiveTactic struct {
-	LatencyWeight float64 // Weight for latency (0-1)
-	TokenWeight   float64 // Weight for token usage (0-1)
-	SpeedWeight   float64 // Weight for token speed (0-1)
-	HealthWeight  float64 // Weight for health status (0-1)
-	MaxLatencyMs  int64   // Maximum acceptable latency for normalization
-	MaxTokenUsage int64   // Maximum acceptable token usage for normalization
-	MinSpeedTps   float64 // Minimum acceptable tokens per second for normalization
-	ScoringMode   string  // "weighted_sum", "multiplicative", "rank_based"
-}
-
-// NewAdaptiveTactic creates a new adaptive multi-dimensional tactic
-func NewAdaptiveTactic(latencyWeight, tokenWeight, speedWeight, healthWeight float64, maxLatencyMs int64, maxTokenUsage int64, minSpeedTps float64, scoringMode string) *AdaptiveTactic {
-	// Use defaults if not provided (0 or negative values)
-	if latencyWeight <= 0 {
-		latencyWeight = constant.DefaultLatencyWeight
-	}
-	if tokenWeight <= 0 {
-		tokenWeight = constant.DefaultTokenWeight
-	}
-	if speedWeight <= 0 {
-		speedWeight = constant.DefaultSpeedWeight
-	}
-	if healthWeight <= 0 {
-		healthWeight = constant.DefaultHealthWeight
-	}
-	if maxLatencyMs <= 0 {
-		maxLatencyMs = constant.DefaultLatencyThresholdMs
-	}
-	if maxTokenUsage <= 0 {
-		maxTokenUsage = constant.DefaultTokenThreshold
-	}
-	if minSpeedTps <= 0 {
-		minSpeedTps = constant.DefaultSpeedThresholdTps
-	}
-	if scoringMode == "" {
-		scoringMode = constant.DefaultScoringMode
-	}
-
-	return &AdaptiveTactic{
-		LatencyWeight: latencyWeight,
-		TokenWeight:   tokenWeight,
-		SpeedWeight:   speedWeight,
-		HealthWeight:  healthWeight,
-		MaxLatencyMs:  maxLatencyMs,
-		MaxTokenUsage: maxTokenUsage,
-		MinSpeedTps:   minSpeedTps,
-		ScoringMode:   scoringMode,
-	}
-}
-
-// calculateScore calculates a composite score for a service (higher is better)
-func (at *AdaptiveTactic) calculateScore(service *loadbalance.Service) float64 {
-	// Get metrics
-	avgLatency, _, _, _, latencySampleCount := service.Stats.GetLatencyStats()
-	avgSpeed, speedSampleCount := service.Stats.GetTokenSpeedStats()
-	_, tokensConsumed := service.GetWindowStats()
-
-	// Normalize metrics to 0-1 scale (higher is better)
-	// For latency: lower is better, so invert
-	var latencyScore float64
-	if latencySampleCount > 0 {
-		latencyScore = 1.0 - (avgLatency / float64(at.MaxLatencyMs))
-		if latencyScore < 0 {
-			latencyScore = 0
-		}
-	} else {
-		latencyScore = 0.5 // Neutral if no data
-	}
-
-	// For tokens: lower is better, so invert
-	var tokenScore float64
-	if at.MaxTokenUsage > 0 {
-		tokenScore = 1.0 - (float64(tokensConsumed) / float64(at.MaxTokenUsage))
-		if tokenScore < 0 {
-			tokenScore = 0
-		}
-	} else {
-		tokenScore = 0.5
-	}
-
-	// For speed: higher is better
-	var speedScore float64
-	if speedSampleCount > 0 {
-		speedScore = avgSpeed / (at.MinSpeedTps * 2) // Normalize against 2x minimum
-		if speedScore > 1 {
-			speedScore = 1
-		}
-	} else {
-		speedScore = 0.5 // Neutral if no data
-	}
-
-	// Health score: always 1 (health is checked separately before calling this tactic)
-	healthScore := 1.0
-
-	// Calculate composite score based on scoring mode
-	var compositeScore float64
-	switch at.ScoringMode {
-	case "multiplicative":
-		// Multiplicative scoring (all dimensions must be good)
-		compositeScore = latencyScore*at.LatencyWeight +
-			tokenScore*at.TokenWeight +
-			speedScore*at.SpeedWeight +
-			healthScore*at.HealthWeight
-	case "rank_based":
-		// For rank-based, we'll handle in SelectService
-		compositeScore = latencyScore*at.LatencyWeight +
-			tokenScore*at.TokenWeight +
-			speedScore*at.SpeedWeight +
-			healthScore*at.HealthWeight
-	case "weighted_sum":
-		fallthrough
-	default:
-		// Weighted sum (default)
-		compositeScore = latencyScore*at.LatencyWeight +
-			tokenScore*at.TokenWeight +
-			speedScore*at.SpeedWeight +
-			healthScore*at.HealthWeight
-	}
-
-	return compositeScore
-}
-
-// SelectService selects service based on composite multi-dimensional scoring
-func (at *AdaptiveTactic) SelectService(rule *Rule) *loadbalance.Service {
-	// Get active services
-	activeServices := rule.GetActiveServices()
-	if len(activeServices) == 0 {
-		return nil
-	}
-
-	// If only one service, return it directly
-	if len(activeServices) == 1 {
-		return activeServices[0]
-	}
-
-	// Calculate scores for all services
-	type serviceScore struct {
-		service *loadbalance.Service
-		score   float64
-	}
-	scores := make([]serviceScore, 0, len(activeServices))
-
-	for _, service := range activeServices {
-		score := at.calculateScore(service)
-		scores = append(scores, serviceScore{service: service, score: score})
-	}
-
-	// Find the highest score.
-	var highestScore float64 = -1
-	for _, ss := range scores {
-		if ss.score > highestScore {
-			highestScore = ss.score
-		}
-	}
-
-	// Collect every service whose score ties the best within a small epsilon and
-	// pick one at random. A strict argmax would always return the first service
-	// on a tie, which concentrates all traffic on one provider whenever the
-	// scoring signals are equal — notably once token scores saturate to 0 under
-	// sustained load. Randomizing among comparable services spreads the load.
-	const scoreEpsilon = 1e-6
-	best := make([]*loadbalance.Service, 0, len(scores))
-	for _, ss := range scores {
-		if ss.score >= highestScore-scoreEpsilon {
-			best = append(best, ss.service)
-		}
-	}
-	if len(best) == 1 {
-		return best[0]
-	}
-	return best[rand.Intn(len(best))]
-}
-
-func (at *AdaptiveTactic) GetName() string {
-	return "Adaptive"
-}
-
-func (at *AdaptiveTactic) GetType() loadbalance.TacticType {
-	return loadbalance.TacticAdaptive
-}
-
 // Pre-created singleton tactic instances
 var (
 	defaultTokenBasedTactic   = NewTokenBasedTactic(constant.DefaultTokenThreshold)
@@ -860,16 +623,6 @@ var (
 		constant.DefaultMinSpeedSamples,
 		constant.DefaultSpeedThresholdTps,
 		constant.DefaultSpeedSampleWindow,
-	)
-	defaultAdaptiveTactic = NewAdaptiveTactic(
-		constant.DefaultLatencyWeight,
-		constant.DefaultTokenWeight,
-		constant.DefaultSpeedWeight,
-		constant.DefaultHealthWeight,
-		constant.DefaultLatencyThresholdMs,
-		constant.DefaultTokenThreshold,
-		constant.DefaultSpeedThresholdTps,
-		constant.DefaultScoringMode,
 	)
 )
 
@@ -913,11 +666,6 @@ func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params Tacti
 			return NewSpeedBasedTactic(sp.MinSamplesRequired, sp.SpeedThresholdTps, sp.SampleWindowSize)
 		}
 		return defaultSpeedBasedTactic
-	case loadbalance.TacticAdaptive:
-		if ap, ok := params.(*AdaptiveParams); ok {
-			return NewAdaptiveTactic(ap.LatencyWeight, ap.TokenWeight, ap.SpeedWeight, ap.HealthWeight, ap.MaxLatencyMs, ap.MaxTokenUsage, ap.MinSpeedTps, ap.ScoringMode)
-		}
-		return defaultAdaptiveTactic
 	case loadbalance.TacticCapacityBased:
 		return GetCapacityBasedTactic()
 	case loadbalance.TacticTier:
@@ -940,8 +688,6 @@ func GetDefaultTactic(tType loadbalance.TacticType) LoadBalancingTactic {
 		return defaultLatencyBasedTactic
 	case loadbalance.TacticSpeedBased:
 		return defaultSpeedBasedTactic
-	case loadbalance.TacticAdaptive:
-		return defaultAdaptiveTactic
 	case loadbalance.TacticCapacityBased:
 		return GetCapacityBasedTactic()
 	case loadbalance.TacticTier:

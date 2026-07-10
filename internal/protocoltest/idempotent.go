@@ -141,8 +141,8 @@ func (env *TestEnv) setupChainHopRoute(source, target protocol.APIType, s Scenar
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Active: true,
 	}

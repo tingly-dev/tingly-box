@@ -391,9 +391,11 @@ func TestParseTacticType_AdaptiveLegacyMapsToRandom(t *testing.T) {
 	}
 }
 
-func TestTacticType_String_Adaptive(t *testing.T) {
-	if got := TacticAdaptive.String(); got != "adaptive" {
-		t.Errorf("TacticAdaptive.String() = %v, want %v", got, "adaptive")
+func TestTacticType_String_RemovedAdaptiveSlot(t *testing.T) {
+	// Slot 6 held the removed adaptive tactic; persisted ints decode to that
+	// value and must serialize as the random fallback, not "adaptive".
+	if got := TacticType(6).String(); got != "random" {
+		t.Errorf("TacticType(6).String() = %v, want %v", got, "random")
 	}
 }
 

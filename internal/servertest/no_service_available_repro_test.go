@@ -63,8 +63,8 @@ func TestRepro_NoServiceAvailable_SingleServiceRateLimited(t *testing.T) {
 		RequestModel: "tingly/cc-default",
 		UUID:         "built-in-cc-default",
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Services: []*loadbalance.Service{svc},
 		Active:   true,

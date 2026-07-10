@@ -288,8 +288,8 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 			},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.NewRandomParams(),
 		},
 		Active: true,
 	}

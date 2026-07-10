@@ -76,17 +76,6 @@ const (
 	DefaultCostWindowSize = 3600         // Default cost window in seconds (1 hour)
 )
 
-// Adaptive routing defaults (updated with new dimensions)
-const (
-	DefaultLatencyWeight = 0.25           // Weight for total latency in adaptive scoring
-	DefaultTTFTWeight    = 0.20           // Weight for TTFT in adaptive scoring
-	DefaultCacheWeight   = 0.15           // Weight for cache hit rate in adaptive scoring
-	DefaultSpeedWeight   = 0.15           // Weight for token speed in adaptive scoring
-	DefaultTokenWeight   = 0.15           // Weight for token usage in adaptive scoring
-	DefaultHealthWeight  = 0.10           // Weight for health status in adaptive scoring
-	DefaultScoringMode   = "weighted_sum" // Default scoring mode: "weighted_sum", "multiplicative", "rank_based"
-)
-
 const ConfigDirName = ".tingly-box"
 
 const DBDirName = "db"
