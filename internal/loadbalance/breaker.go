@@ -184,6 +184,23 @@ func (b *Breaker) ClosedSince() time.Time {
 	return b.closedSince
 }
 
+// RetryIn returns how long until an Open breaker lazily flips to HalfOpen
+// (its next recovery probe). It is zero for Closed/HalfOpen breakers and for
+// an Open breaker whose window has already elapsed. Intended for
+// introspection / UI ("retrying in Ns").
+func (b *Breaker) RetryIn() time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.state != BreakerOpen {
+		return 0
+	}
+	remaining := b.OpenDuration - clock.Now().Sub(b.openedAt)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
 // State returns the current breaker state. Intended for introspection / UI.
 func (b *Breaker) State() BreakerState {
 	b.mu.Lock()

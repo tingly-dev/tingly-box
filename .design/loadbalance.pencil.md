@@ -69,13 +69,16 @@ shared by stage 4, smart-routing subsets, failover re-selection, and the admin A
   │                                    │                                              │
   │  random    ┈┈► Service.Weight      │  bucket by Service.Tier ascending (T0 first) │
   │  token     ┈┈► window tokens       │  per bucket:                                 │
-  │  latency   ┈┈► latency percentiles │    candidates = IsAvailable(rule,svc) ┈┈►    │
+  │  latency   ┈┈► latency percentiles │    PickBreakerAvailable:                     │
   │  speed     ┈┈► tokens/sec          │    pick via within-tier sub-tactic ──────────┼──► horizontal
-  │  capacity  ┈┈► ModelCapacity       │    Allow-claim ONLY the picked one           │    (recursion,
-  │            (all read ServiceStats) │    claim fails (probe in flight) → re-pick   │     1 level)
-  │                                    │  all buckets tripped → degrade to T0         │
-  │  ⚠ G1 breaker-blind: a tripped    │  (client must see the real upstream error)   │
-  │  peer is still selectable here     │                                              │
+  │  capacity  ┈┈► ModelCapacity       │                                              │    (recursion,
+  │            (all read ServiceStats) │  all buckets tripped → degrade to T0         │     1 level)
+  │                                    │  (client must see the real upstream error)   │
+  │  breaker-aware via the same        │                                              │
+  │  PickBreakerAvailable walk;        │  shared walk (typ.PickBreakerAvailable):     │
+  │  none available → degrade to       │  IsAvailable filter (non-consuming) → pick   │
+  │  unfiltered pick                   │  → Allow-claim ONLY the pick → re-pick on    │
+  │                                    │  claim failure (probe already in flight)     │
   └────────────────────────────────────┴──────────────────────────────────────────────┘
 
   Config shapes (see tier-routing.md):  A single = 1×1 · B flat = 1×N (horizontal)
@@ -108,8 +111,8 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
   │        ┈┈► TierTactic     │        ┈┈► HealthStage (1) │        ┈┈► token/latency/ │
   │        ┈┈► IsAffinity-    │                            │            speed tactics  │
   │            Eligible (2)   │                            │        ┈┈► smart ops      │
-  │        ⚠ G1 not read by  │                            │            (ttft/capacity)│
-  │            horizontal (②) │                            │                           │
+  │        ┈┈► horizontal     │                            │            (ttft/capacity)│
+  │            pick (②)       │                            │                           │
   └───────────────────────────┴────────────────────────────┴───────────────────────────┘
 
   AffinityStore (rule-scoped, session → service pin, strict TTL — no sliding renewal)
@@ -126,7 +129,11 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
 ```
   REST  /api/v1/load-balancer/*      LoadBalancerAPI → LoadBalancerEngine (interface slice
         rules/stats/health/tactic     of LoadBalancer): summary, stats CRUD, current-service
-                                      preview, health view/reset
+                                      preview, health view/reset; rules/:id/health includes
+                                      per-service breaker_state + breaker_retry_in_seconds
+  REST  /api/v1/requests             Requests view: per-request summary now carries
+                                      failover_hops + failover_path ("A → B"), folded from
+                                      the failover loop's stage=failover_retry events
   CLI   harness lb --example …       LBSimulator: drives the REAL Select + failover loop
         (13 self-checking scenarios)  against scripted fake upstreams, one fake clock moves
                                       breaker + health + affinity TTL together
@@ -137,13 +144,11 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
 
 ## Known gaps
 
-- **G1 — horizontal tactics are breaker-blind** (② and ③). Correctness is covered by
-  per-request failover, but a slow-failing peer costs ~1/N of requests a full timeout
-  until failover, and affinity drops pins the selector can immediately re-create.
-  Agreed fix: breaker-availability filter (IsAvailable + degrade) at the
-  `LoadBalancer.SelectService` seam for non-tier tactics + Allow-claim on the pick,
-  reusing the tier two-phase helper. Regression test parked at
-  `TestLBScenario_B_Flat_DeadPeerSelection_KnownGap` (t.Skip).
+- ~~**G1 — horizontal tactics are breaker-blind**~~ **RESOLVED**: the
+  `LoadBalancer.SelectService` seam now runs `typ.PickBreakerAvailable` (IsAvailable
+  filter → pick → Allow-claim, degrade to unfiltered when nothing is available) for
+  non-tier tactics; TierTactic shares the same helper per bucket. Regression:
+  `TestLBScenario_B_Flat_DeadPeerExcludedAndSingleProbe`.
 - **G3 — affinity is global-scope**: pins are per rule, not per smart-routing subset
   (`selector.go` TODO; the `smart_rule` scope plumbing exists but the store keying doesn't).
 

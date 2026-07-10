@@ -256,12 +256,60 @@ func TestLBScenario_B_FlatStickiness(t *testing.T) {
 	}
 }
 
-func TestLBScenario_B_Flat_DeadPeerSelection_KnownGap(t *testing.T) {
-	t.Skip("G1: horizontal tactics are breaker-blind — LoadBalancer.SelectService " +
-		"does not exclude a breaker-open service for random/token/latency/… tactics, " +
-		"so a flat-shape dead peer can still be re-selected at the selection layer " +
-		"(per-request failover still masks it). Documented in .design/tier-routing.md; " +
-		"deferred. Affinity already drops the pin to a dead peer (see stage_affinity_test.go).")
+// Formerly TestLBScenario_B_Flat_DeadPeerSelection_KnownGap (G1, t.Skip).
+// Horizontal tactics are now breaker-aware: LoadBalancer.SelectService filters
+// to breaker-available services and claims the picked one's probe slot, so a
+// flat-shape dead peer is excluded at the selection layer and gets exactly one
+// probe per open-window while recovering.
+//
+// The discriminating phase is AFTER the recovery window: the simulator's
+// health monitor readmits the dead peer there (its window equals the
+// breaker's), so continued exclusion — and the single probe — can only come
+// from the breaker.
+func TestLBScenario_B_Flat_DeadPeerExcludedAndSingleProbe(t *testing.T) {
+	a := svc("anthropic", "claude-opus", 0, true)
+	b := svc("anthropic", "claude-sonnet", 0, true)
+	ida, idb := a.ServiceID(), b.ServiceID()
+	sim, cleanup, err := NewLBSimulator(randomTacticRule("rule-b-dead", 0, a, b), map[string][]int{
+		ida: {500}, // permanently failing peer
+		idb: {200},
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	// Phase 1: drive requests until A's breaker trips (3 recorded failures).
+	// Every request must still end 200 — failover masks the dead peer.
+	for i := 0; i < 30 && sim.BreakerStates()[ida] != "open"; i++ {
+		tr, err := sim.Request("")
+		require.NoError(t, err)
+		require.Equal(t, 200, tr.FinalStatus, "failover must mask the dead peer")
+	}
+	require.Equal(t, "open", sim.BreakerStates()[ida], "A must trip after sustained failures")
+
+	// Phase 2: while tripped, flat selection must not attempt A at all.
+	for i := 0; i < 5; i++ {
+		tr, err := sim.Request("")
+		require.NoError(t, err)
+		require.Equal(t, []string{idb}, tr.Attempts, "breaker-open peer must be excluded from selection")
+	}
+
+	// Phase 3: past the recovery window the health monitor readmits A, but the
+	// breaker is half-open — exactly ONE probe request may attempt A. The probe
+	// fails, A re-opens, and every other request goes straight to B.
+	sim.Advance(loadbalance.DefaultBreakerOpenDuration + time.Second)
+	probes := 0
+	for i := 0; i < 20; i++ {
+		tr, err := sim.Request("")
+		require.NoError(t, err)
+		require.Equal(t, 200, tr.FinalStatus, "failover must still mask the failed probe")
+		if tr.Attempts[0] == ida {
+			probes++
+		} else {
+			require.Equal(t, []string{idb}, tr.Attempts)
+		}
+	}
+	require.Equal(t, 1, probes, "a recovering flat peer must receive exactly one probe per open-window")
+	require.Equal(t, "open", sim.BreakerStates()[ida], "the failed probe re-opens A")
 }
 
 // ============ Scenario D: grid (many tiers, many services) ============

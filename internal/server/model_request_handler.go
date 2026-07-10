@@ -39,6 +39,14 @@ type ModelRequestSummary struct {
 	HasError     bool      `json:"has_error"`
 	MaxLevel     string    `json:"max_level,omitempty"`
 	EventCount   int       `json:"event_count"`
+
+	// Failover visibility: how many failover hops this request took and the
+	// service path it walked ("prov-a/model-a → prov-b/model-b"). Zero/empty
+	// when the first attempt served the request. Derived from the failover
+	// loop's stage=failover_retry events, so the list view can answer "did
+	// this request fail over, and to where" without opening the timeline.
+	FailoverHops int    `json:"failover_hops,omitempty"`
+	FailoverPath string `json:"failover_path,omitempty"`
 }
 
 // ModelRequestDetail is a summary plus the full, time-ordered event timeline.
@@ -269,6 +277,22 @@ func applyToSummary(g *requestGroup, source obs.LogSource, entry *logrus.Entry) 
 	}
 	if g.summary.Provider == "" {
 		g.summary.Provider = firstStringField(data, "provider", "selected_provider", "routed_provider")
+	}
+
+	// Fold failover hops into the summary. The failover loop emits one
+	// stage=failover_retry event per hop (with from_service/to_service), in
+	// order, so the path accumulates as "A → B → C".
+	if stringField(data, "stage") == "failover_retry" {
+		g.summary.FailoverHops++
+		if from := stringField(data, "from_service"); from != "" && g.summary.FailoverPath == "" {
+			g.summary.FailoverPath = from
+		}
+		if to := stringField(data, "to_service"); to != "" {
+			if g.summary.FailoverPath != "" {
+				g.summary.FailoverPath += " → "
+			}
+			g.summary.FailoverPath += to
+		}
 	}
 }
 

@@ -71,12 +71,44 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	}
 
 	// Always instantiate tactic from rule's params to ensure correct parameters
-	// State is now stored globally (globalRoundRobinStreaks) so this is safe
 	actualTactic := rule.LBTactic.Instantiate()
 	logTierConfigIgnored(rule, activeServices, actualTactic.GetType())
 
-	// Create a temporary rule with only healthy services for the tactic
-	tempRule := &typ.Rule{
+	// Breaker-aware pick for horizontal tactics: filter to breaker-available
+	// services (rule-scoped, non-consuming), pick within that subset, and
+	// claim the picked service's probe slot. This keeps a tripped peer out of
+	// flat-shape selection (previously only per-request failover masked it)
+	// and admits exactly one probe to a recovering peer. TierTactic is left
+	// alone — it owns the same walk per tier bucket with its own
+	// degrade-to-T0 semantics.
+	if actualTactic.GetType() != loadbalance.TacticTier {
+		chosen := typ.PickBreakerAvailable(rule.UUID, healthyServices, func(candidates []*loadbalance.Service) *loadbalance.Service {
+			return actualTactic.SelectService(ruleView(rule, candidates))
+		})
+		if chosen != nil {
+			return chosen, nil
+		}
+		// Every healthy service is breaker-open (or its probe is in flight) —
+		// degrade to the unfiltered pick below so the request reaches an
+		// upstream and the client sees the real upstream error.
+		logrus.Warnf("[load_balancer] all %d healthy services for rule %s are breaker-unavailable; "+
+			"degrading to unfiltered selection", len(healthyServices), rule.RequestModel)
+	}
+
+	// Select service using the tactic (tier walk, or horizontal degrade path).
+	selectedService := actualTactic.SelectService(ruleView(rule, healthyServices))
+	if selectedService == nil {
+		// Fallback to first healthy service
+		return healthyServices[0], nil
+	}
+
+	return selectedService, nil
+}
+
+// ruleView returns a shallow copy of rule narrowed to the given services, so
+// a tactic can select within a candidate subset without mutating the source.
+func ruleView(rule *typ.Rule, services []*loadbalance.Service) *typ.Rule {
+	return &typ.Rule{
 		UUID:             rule.UUID,
 		RequestModel:     rule.RequestModel,
 		ResponseModel:    rule.ResponseModel,
@@ -85,20 +117,8 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 		Active:           rule.Active,
 		SmartEnabled:     rule.SmartEnabled,
 		SmartRouting:     rule.SmartRouting,
+		Services:         services,
 	}
-	// Set healthy services on the temp rule
-	for _, svc := range healthyServices {
-		tempRule.Services = append(tempRule.Services, svc)
-	}
-
-	// Select service using the tactic
-	selectedService := actualTactic.SelectService(tempRule)
-	if selectedService == nil {
-		// Fallback to first healthy service
-		return healthyServices[0], nil
-	}
-
-	return selectedService, nil
 }
 
 func logTierConfigIgnored(rule *typ.Rule, services []*loadbalance.Service, tacticType loadbalance.TacticType) {

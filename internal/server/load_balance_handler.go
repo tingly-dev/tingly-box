@@ -286,6 +286,7 @@ func (api *LoadBalancerAPI) GetServicesHealth(c *gin.Context) {
 
 	services := rule.GetServices()
 	healthData := make(map[string]interface{})
+	breakers := loadbalance.DefaultBreakerStore()
 
 	for _, service := range services {
 		serviceID := service.ServiceID()
@@ -294,8 +295,18 @@ func (api *LoadBalancerAPI) GetServicesHealth(c *gin.Context) {
 			"provider":     service.Provider,
 			"model":        service.Model,
 			"active":       service.Active,
+			"tier":         service.Tier,
 			"health_known": false,
 		}
+
+		// Circuit-breaker state (rule-scoped): the second health channel, fed
+		// by 5xx/transport failures. This is what drives tier failover and
+		// breaker-aware selection, so surface it — "why is my traffic on the
+		// backup" is unanswerable without it. retry_in_seconds is the time
+		// until an open breaker admits its next recovery probe (0 otherwise).
+		breaker := breakers.Get(rule.UUID, serviceID)
+		serviceHealth["breaker_state"] = breaker.State().String()
+		serviceHealth["breaker_retry_in_seconds"] = int(breaker.RetryIn().Seconds())
 
 		// Get health from load balancer's health filter
 		healthFilter := api.loadBalancer.HealthFilter()

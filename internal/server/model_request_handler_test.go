@@ -139,3 +139,67 @@ func TestGetModelRequestDetail_TimelineOrdered(t *testing.T) {
 	h.GetModelRequestDetail(c2)
 	assert.Equal(t, http.StatusNotFound, w2.Code)
 }
+
+// TestGetModelRequests_FailoverSummary pins the list-level failover
+// visibility: stage=failover_retry events fold into FailoverHops and a
+// readable FailoverPath, so the Requests view can answer "did this request
+// fail over, and to where" without opening the event timeline.
+func TestGetModelRequests_FailoverSummary(t *testing.T) {
+	h := newModelRequestTestServer(t)
+
+	emitHTTP(h, logrus.Fields{
+		"request_id": "rf", "status": 200, "method": "POST", "path": "/anthropic/v1/messages",
+		"scenario": "anthropic", "request_model": "claude-req", "routed_provider": "prov-c",
+	})
+	ml := h.deps.MultiLogger.GetLogrusLogger(obs.LogSourceModelRequest)
+	ml.WithFields(logrus.Fields{
+		"request_id": "rf", "stage": "failover_retry",
+		"from_service": "prov-a/model-a", "to_service": "prov-b/model-b",
+	}).Warn("retry 1")
+	ml.WithFields(logrus.Fields{
+		"request_id": "rf", "stage": "failover_retry",
+		"from_service": "prov-b/model-b", "to_service": "prov-c/model-c",
+	}).Warn("retry 2")
+	ml.WithFields(logrus.Fields{
+		"request_id": "rf", "stage": "failover_success",
+	}).Info("succeeded")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/requests", nil)
+	h.GetModelRequests(c)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp ModelRequestsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	var rf *ModelRequestSummary
+	for i := range resp.Requests {
+		if resp.Requests[i].RequestID == "rf" {
+			rf = &resp.Requests[i]
+		}
+	}
+	if rf == nil {
+		t.Fatal("request rf missing from response")
+	}
+	assert.Equal(t, 2, rf.FailoverHops)
+	assert.Equal(t, "prov-a/model-a → prov-b/model-b → prov-c/model-c", rf.FailoverPath)
+
+	// A request without failover events reports zero hops and no path.
+	emitHTTP(h, logrus.Fields{
+		"request_id": "rn", "status": 200, "method": "POST", "path": "/anthropic/v1/messages",
+		"scenario": "anthropic", "request_model": "claude-req",
+	})
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/requests", nil)
+	h.GetModelRequests(c)
+	resp = ModelRequestsResponse{}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	for _, r := range resp.Requests {
+		if r.RequestID == "rn" {
+			assert.Equal(t, 0, r.FailoverHops)
+			assert.Equal(t, "", r.FailoverPath)
+		}
+	}
+}

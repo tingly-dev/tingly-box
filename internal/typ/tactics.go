@@ -858,36 +858,54 @@ func (pt *TierTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// permitted service. If every bucket is tripped we fall back to the
 	// highest-priority bucket regardless — better to surface a real
 	// upstream error than to reject the request locally.
-	store := loadbalance.DefaultBreakerStore()
 	var fallback []*loadbalance.Service
 	for _, group := range buckets {
 		if fallback == nil {
 			fallback = group.services
 		}
-		candidates := make([]*loadbalance.Service, 0, len(group.services))
-		for _, svc := range group.services {
-			if store.IsAvailable(rule.UUID, svc.ServiceID()) {
-				candidates = append(candidates, svc)
-			}
-		}
-		// Pick within the tier, then claim the breaker slot for the picked
-		// service only. A half-open service whose probe slot is already in
-		// flight fails the claim — drop it and re-pick among its peers.
-		for len(candidates) > 0 {
-			chosen := pt.pickWithinTier(rule, candidates)
-			if chosen == nil {
-				break
-			}
-			if store.Allow(rule.UUID, chosen.ServiceID()) {
-				return chosen
-			}
-			candidates = removeServiceByID(candidates, chosen.ServiceID())
+		chosen := PickBreakerAvailable(rule.UUID, group.services, func(candidates []*loadbalance.Service) *loadbalance.Service {
+			return pt.pickWithinTier(rule, candidates)
+		})
+		if chosen != nil {
+			return chosen
 		}
 	}
 	if len(fallback) > 0 {
 		return pt.pickWithinTier(rule, fallback)
 	}
 	return active[0]
+}
+
+// PickBreakerAvailable runs a two-phase, breaker-aware selection over
+// candidates: gather the breaker-available subset with the non-consuming
+// IsAvailable read (rule-scoped), let pick choose among that subset, then
+// claim the picked service's breaker slot via Allow. A pick whose claim
+// fails (its half-open probe is already in flight) is dropped and the
+// remainder re-picked, so exactly one probe reaches a recovering service.
+//
+// It returns nil when no candidate is breaker-available or claimable —
+// callers own the degrade decision (TierTactic moves to the next bucket;
+// the horizontal path in LoadBalancer.SelectService falls back to an
+// unfiltered pick so the client sees the real upstream error).
+func PickBreakerAvailable(ruleUUID string, candidates []*loadbalance.Service, pick func([]*loadbalance.Service) *loadbalance.Service) *loadbalance.Service {
+	store := loadbalance.DefaultBreakerStore()
+	avail := make([]*loadbalance.Service, 0, len(candidates))
+	for _, svc := range candidates {
+		if store.IsAvailable(ruleUUID, svc.ServiceID()) {
+			avail = append(avail, svc)
+		}
+	}
+	for len(avail) > 0 {
+		chosen := pick(avail)
+		if chosen == nil {
+			return nil
+		}
+		if store.Allow(ruleUUID, chosen.ServiceID()) {
+			return chosen
+		}
+		avail = removeServiceByID(avail, chosen.ServiceID())
+	}
+	return nil
 }
 
 // removeServiceByID returns services without the entry matching serviceID.
