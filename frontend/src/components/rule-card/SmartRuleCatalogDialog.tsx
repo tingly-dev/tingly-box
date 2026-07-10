@@ -24,11 +24,20 @@ import {
     Article as ArticleIcon,
     Speed as SpeedIcon,
     Bolt as BoltIcon,
+    Schedule as ScheduleIcon,
     HelpOutline as HelpOutlineIcon,
 } from '@/components/icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { SmartOp, SmartRouting } from '@/components/RoutingGraphTypes';
+import {
+    DEFAULT_TIME_RANGE,
+    formatTimeRange,
+    isValidTimeRange,
+    parseTimeRange,
+    serializeTimeRange,
+    timezoneOptions,
+} from './timeRange';
 
 interface PositionMeta {
     value: SmartOp['position'];
@@ -41,6 +50,7 @@ const POSITION_OPTIONS: PositionMeta[] = [
     { value: 'agent.claude_code', label: 'Agent: Claude Code', description: 'Claude Code request kind (main / subagent / compact)', category: 'agent' },
     { value: 'context_system', label: 'System Prompt', description: 'System prompt message in context', category: 'context' },
     { value: 'latest_user', label: 'Latest User Message', description: 'Latest user message', category: 'context' },
+    { value: 'time', label: 'Time range', description: 'Route requests during or outside a daily time range in the selected timezone.', category: 'time' },
     { value: 'thinking', label: 'Thinking', description: 'Thinking mode enabled / disable', category: 'request' },
     { value: 'token', label: 'Token Count', description: 'Token count', category: 'request' },
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)', category: 'service' },
@@ -55,7 +65,10 @@ const VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }> | un
     ],
 };
 
-const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; description: string; valueType: 'string' | 'int' | 'bool' }>> = {
+const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; description: string; valueType: 'string' | 'int' | 'bool' | 'time_range' }>> = {
+    time: [
+        { value: 'time_range', label: 'Time range', description: 'Match requests during or outside a daily time range.', valueType: 'time_range' },
+    ],
     model: [
         { value: 'contains', label: 'Contains', description: 'Model name contains the value', valueType: 'string' },
         { value: 'equals', label: 'Equals', description: 'Model name equals the value', valueType: 'string' },
@@ -106,10 +119,11 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     agent: { label: 'Agent', icon: <AutoAwesomeIcon fontSize="small" /> },
     context: { label: 'Context', icon: <ArticleIcon fontSize="small" /> },
     request: { label: 'Request', icon: <BoltIcon fontSize="small" /> },
+    time: { label: 'Time', icon: <ScheduleIcon fontSize="small" /> },
     service: { label: 'Service', icon: <SpeedIcon fontSize="small" /> },
 };
 
-const CATEGORY_ORDER = ['agent', 'context', 'request', 'service'];
+const CATEGORY_ORDER = ['agent', 'context', 'request', 'time', 'service'];
 
 const positionMeta = (value: string): PositionMeta | undefined =>
     POSITION_OPTIONS.find((p) => p.value === value);
@@ -129,6 +143,7 @@ const formatNumberWithCommas = (value: string): string => {
 const isOpValid = (op: SmartOp): boolean => {
     if (!op.position || !op.operation) return false;
     if (op.meta?.type === 'bool') return true;
+    if (op.meta?.type === 'time_range') return isValidTimeRange(parseTimeRange(op.value));
     return !!op.value && op.value.trim() !== '';
 };
 
@@ -138,7 +153,8 @@ const opSummary = (op: SmartOp): string => {
     const posLabel = pos?.label || op.position;
     if (!op.operation) return posLabel;
     if (op.meta?.type === 'bool') return `${posLabel} · ${op.operation}`;
-    return `${posLabel} · ${op.operation}${op.value ? ` · ${op.value}` : ''}`;
+    const value = op.meta?.type === 'time_range' ? formatTimeRange(op.value) || 'Invalid schedule' : op.value;
+    return `${posLabel} · ${op.operation}${value ? ` · ${value}` : ''}`;
 };
 
 export interface SmartRuleCatalogDialogProps {
@@ -183,6 +199,9 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
         if (opOpts?.length === 1) {
             newOp.operation = opOpts[0].value;
             newOp.meta = { description: opOpts[0].description, type: opOpts[0].valueType };
+            if (opOpts[0].valueType === 'time_range') {
+                newOp.value = serializeTimeRange(DEFAULT_TIME_RANGE);
+            }
         }
         setOps((prev) => [...prev, newOp]);
     };
@@ -200,7 +219,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     const opDef = OPERATION_OPTIONS[op.position]?.find((o) => o.value === updates.operation);
                     if (opDef) {
                         updated.meta = { description: opDef.description, type: opDef.valueType };
-                        updated.value = '';
+                        updated.value = opDef.valueType === 'time_range' ? serializeTimeRange(DEFAULT_TIME_RANGE) : '';
                     }
                 }
                 return updated;
@@ -225,6 +244,12 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
     };
 
     const allValid = ops.every(isOpValid);
+    const timezones = useMemo(timezoneOptions, []);
+
+    const updateTimeRange = (op: SmartOp, updates: Partial<typeof DEFAULT_TIME_RANGE>) => {
+        const range = parseTimeRange(op.value) || DEFAULT_TIME_RANGE;
+        updateOp(op.uuid, { value: serializeTimeRange({ ...range, ...updates }) });
+    };
 
     const countByCategory = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -489,7 +514,38 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                                 )}
 
                                                                 {/* Value input */}
-                                                                {op.meta?.type !== 'bool' && op.operation && (
+                                                                {op.meta?.type === 'time_range' && op.operation && (() => {
+                                                                    const range = parseTimeRange(op.value) || DEFAULT_TIME_RANGE;
+                                                                    return (
+                                                                        <Stack spacing={1} sx={{ maxWidth: 440 }}>
+                                                                            <Stack direction="row" spacing={1}>
+                                                                                <FormControl size="small" fullWidth>
+                                                                                    <InputLabel>Apply</InputLabel>
+                                                                                    <Select
+                                                                                        value={range.outside ? 'outside' : 'during'}
+                                                                                        label="Apply"
+                                                                                        onChange={(e) => updateTimeRange(op, { outside: e.target.value === 'outside' })}
+                                                                                    >
+                                                                                        <MenuItem value="during">During this window</MenuItem>
+                                                                                        <MenuItem value="outside">Outside this window</MenuItem>
+                                                                                    </Select>
+                                                                                </FormControl>
+                                                                                <TextField size="small" label="Start" type="time" value={range.start} onChange={(e) => updateTimeRange(op, { start: e.target.value })} InputLabelProps={{ shrink: true }} fullWidth />
+                                                                                <TextField size="small" label="End" type="time" value={range.end} onChange={(e) => updateTimeRange(op, { end: e.target.value })} InputLabelProps={{ shrink: true }} fullWidth />
+                                                                            </Stack>
+                                                                            <FormControl size="small" fullWidth>
+                                                                                <InputLabel>Timezone</InputLabel>
+                                                                                <Select value={range.timezone} label="Timezone" onChange={(e) => updateTimeRange(op, { timezone: e.target.value })}>
+                                                                                    {timezones.map((timezone) => <MenuItem key={timezone} value={timezone}>{timezone}</MenuItem>)}
+                                                                                </Select>
+                                                                            </FormControl>
+                                                                            <Typography variant="caption" color="text.secondary">
+                                                                                Routing converts the current UTC time into this timezone. Start is included, end is excluded; overnight windows work.
+                                                                            </Typography>
+                                                                        </Stack>
+                                                                    );
+                                                                })()}
+                                                                {op.meta?.type !== 'bool' && op.meta?.type !== 'time_range' && op.operation && (
                                                                     VALUE_OPTIONS[op.position] ? (
                                                                         <FormControl size="small" sx={{ minWidth: 160 }}>
                                                                             <InputLabel>Value</InputLabel>

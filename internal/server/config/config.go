@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
@@ -582,6 +583,9 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	if err := c.validateRuleServices(rule); err != nil {
 		return err
 	}
+	if err := validateSmartRoutingRules(rule); err != nil {
+		return err
+	}
 
 	// Guard name unique within same scenario
 	for _, rc := range c.Rules {
@@ -610,6 +614,9 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 
 	// Validate that all service provider UUIDs exist
 	if err := c.validateRuleServices(rule); err != nil {
+		return err
+	}
+	if err := validateSmartRoutingRules(rule); err != nil {
 		return err
 	}
 
@@ -2309,6 +2316,24 @@ func (c *Config) hasMigrationCompleted(name string) bool {
 // markMigrationCompleted records a one-time migration as done so it is skipped on future startups.
 func (c *Config) markMigrationCompleted(name string) {
 	c.MigrationsCompleted = append(c.MigrationsCompleted, name)
+}
+
+// validateSmartRoutingRules rejects invalid configured predicates before saving a rule.
+// Empty smart-routing blocks are editor drafts: the frontend creates one before
+// the user adds conditions and services, so full rule validation remains in
+// Router construction when the rule can actually be evaluated.
+func validateSmartRoutingRules(rule typ.Rule) error {
+	if !rule.SmartEnabled {
+		return nil
+	}
+	for i := range rule.SmartRouting {
+		for j := range rule.SmartRouting[i].Ops {
+			if err := smartrouting.ValidateSmartOp(&rule.SmartRouting[i].Ops[j]); err != nil {
+				return fmt.Errorf("invalid smart routing rule[%d] op[%d]: %w", i, j, err)
+			}
+		}
+	}
+	return nil
 }
 
 // validateRuleServices checks that all provider UUIDs referenced by services exist

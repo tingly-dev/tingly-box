@@ -18,12 +18,12 @@ export interface ConfigProvider {
 
 export interface SmartOp {
     uuid: string;
-    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'tool_use' | 'token' | 'service_ttft' | 'service_capacity' | 'agent.claude_code';
+    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'tool_use' | 'token' | 'service_ttft' | 'service_capacity' | 'agent.claude_code' | 'time';
     operation: string;
     value: string;
     meta?: {
         description?: string;
-        type?: 'string' | 'int' | 'bool' | 'float';
+        type?: 'string' | 'int' | 'bool' | 'float' | 'time_range';
     };
 }
 

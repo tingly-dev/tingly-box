@@ -4,6 +4,16 @@ package smartrouting
 // This registry defines all operations across all positions for documentation,
 // UI rendering, and future API integrations.
 var Operations = []SmartOp{
+	// Time operations
+	{
+		Position:  PositionTime,
+		Operation: OpTimeRange,
+		Meta: SmartOpMeta{
+			Description: "Current time is within a daily wall-clock interval",
+			Type:        ValueTypeTimeRange,
+		},
+	},
+
 	// Model operations
 	{
 		Position:  PositionModel,
@@ -245,9 +255,13 @@ const (
 	PositionServiceTTFT     SmartOpPosition = "service_ttft"      // Service TTFT characteristics
 	PositionServiceCapacity SmartOpPosition = "service_capacity"  // Service seat capacity (affinity utilization)
 	PositionAgentClaudeCode SmartOpPosition = "agent.claude_code" // Claude Code agent request kind (main / subagent / compact)
+	PositionTime            SmartOpPosition = "time"              // Current time in a configured timezone
 )
 
 const (
+	// Time operations
+	OpTimeRange SmartOpOperation = "time_range" // Daily wall-clock interval
+
 	// Model operations
 	OpModelContains SmartOpOperation = "contains" // Model name contains the value
 	OpModelGlob     SmartOpOperation = "glob"     // Model name matches glob pattern

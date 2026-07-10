@@ -15,6 +15,7 @@ import { alpha } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SmartRouting, SmartOp } from '../RoutingGraphTypes.ts';
+import { formatTimeRange } from '../rule-card/timeRange.ts';
 import {
     ActionButtonsBox,
     getRouteGraphActiveColor,
@@ -32,9 +33,13 @@ export interface SmartNodeProps {
     onMoveDown?: () => void;
 }
 
+const opValue = (op: SmartOp): string =>
+    op.meta?.type === 'time_range' ? formatTimeRange(op.value) || op.value : op.value;
+
 // Full tooltip text for a single op.
 const opTooltip = (op: SmartOp): string => {
-    const val = op.value ? `: ${op.value}` : '';
+    const value = opValue(op);
+    const val = value ? `: ${value}` : '';
     return `${op.position} · ${op.operation}${val}`;
 };
 
@@ -228,7 +233,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         · {op.operation}
                                     </Typography>
 
-                                    {/* value — primary, truncated */}
                                     {op.value && (
                                         <Typography
                                             component="span"
@@ -243,7 +247,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                                 lineHeight: 1,
                                             }}
                                         >
-                                            : {op.value}
+                                            : {opValue(op)}
                                         </Typography>
                                     )}
                                 </Box>

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/gobwas/glob"
 
@@ -116,6 +117,8 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 		return r.evaluateServiceCapacityOp(ctx, op)
 	case PositionAgentClaudeCode:
 		return r.evaluateAgentClaudeCodeOp(ctx, op)
+	case PositionTime:
+		return r.evaluateTimeRangeOp(op)
 	default:
 		res := newOpResult(op)
 		res.Reason = fmt.Sprintf("unknown position %q", op.Position)
@@ -132,6 +135,31 @@ func newOpResult(op *SmartOp) OpEvalResult {
 		Operation: string(op.Operation),
 		Value:     op.Value,
 	}
+}
+
+func (r *Router) evaluateTimeRangeOp(op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	if op.Operation != OpTimeRange {
+		res.Reason = fmt.Sprintf("unsupported time op %q", op.Operation)
+		return res
+	}
+
+	tr, err := parseTimeRange(op.Value)
+	if err != nil {
+		res.Reason = fmt.Sprintf("invalid time range: %v", err)
+		return res
+	}
+	utc := utcNow().UTC()
+	local := utc.In(tr.location)
+	inWindow := tr.includes(utc)
+	res.Matched = inWindow != tr.Outside
+	comparator := "during"
+	if tr.Outside {
+		comparator = "outside"
+	}
+	res.Actual = fmt.Sprintf("utc=%s local=%s timezone=%s", utc.Format(time.RFC3339), local.Format(time.RFC3339), tr.Timezone)
+	res.Reason = fmt.Sprintf("%s [%s, %s) in %s: %t", comparator, tr.Start, tr.End, tr.Timezone, res.Matched)
+	return res
 }
 
 // ValidateSmartRouting checks if the smart routing rule is valid
@@ -196,6 +224,9 @@ func validateOpValueType(op *SmartOp) error {
 		return err
 	case ValueTypeBool:
 		_, err := op.Bool()
+		return err
+	case ValueTypeTimeRange:
+		_, err := parseTimeRange(op.Value)
 		return err
 	default:
 		return fmt.Errorf("unknown type: %s", expectedType)

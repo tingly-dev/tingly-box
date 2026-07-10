@@ -17,10 +17,11 @@ type SmartOpOperation string
 type SmartOpValueType string
 
 const (
-	ValueTypeString SmartOpValueType = "string" // String value
-	ValueTypeInt    SmartOpValueType = "int"    // Integer value
-	ValueTypeBool   SmartOpValueType = "bool"   // Boolean value
-	ValueTypeFloat  SmartOpValueType = "float"  // Float value
+	ValueTypeString    SmartOpValueType = "string"     // String value
+	ValueTypeInt       SmartOpValueType = "int"        // Integer value
+	ValueTypeBool      SmartOpValueType = "bool"       // Boolean value
+	ValueTypeFloat     SmartOpValueType = "float"      // Float value
+	ValueTypeTimeRange SmartOpValueType = "time_range" // Daily wall-clock interval in an IANA timezone
 )
 
 // SmartOpMeta contains metadata for a smart routing operation
@@ -73,7 +74,7 @@ type SmartRouting struct {
 func (p SmartOpPosition) IsValid() bool {
 	switch p {
 	case PositionModel, PositionThinking, PositionContextSystem, PositionContextUser, PositionLatestUser, PositionToolUse, PositionToken,
-		PositionServiceTTFT, PositionServiceCapacity, PositionAgentClaudeCode:
+		PositionServiceTTFT, PositionServiceCapacity, PositionAgentClaudeCode, PositionTime:
 		return true
 	default:
 		return false
