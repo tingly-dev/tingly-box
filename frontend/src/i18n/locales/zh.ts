@@ -349,6 +349,9 @@ export default {
     "howRoutingWorks": "路由原理"
   },
   "probe": {
+    "quickTest": "快速测试（流式）",
+    "viewDetails": "查看详情",
+    "dismiss": "关闭",
     "testRule": "测试规则",
     "testProvider": "测试服务",
     "shape": "请求",

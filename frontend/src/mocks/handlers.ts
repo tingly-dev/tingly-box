@@ -1277,6 +1277,54 @@ export const handlers = [
         }
     }),
 
+    // Health + version — polled by HealthContext / the sidebar; without these
+    // the mock UI keeps popping the "Connection Lost" dialog.
+    http.get('/api/v1/info/health', () => HttpResponse.json({ health: true })),
+
+    http.get('/api/v1/info/version', () => HttpResponse.json({
+        success: true,
+        data: { version: 'mock-dev' },
+    })),
+
+    // Probe V2 (E2E) — used by the quick test button and the Probe dialog.
+    // Alternates success/failure so both pill states are previewable.
+    http.post('/api/v2/probe', async ({ request }) => {
+        const body = await request.json() as any
+        probeRequestCount++
+        const isSuccess = probeRequestCount % 3 !== 0
+        await new Promise((r) => setTimeout(r, 800))
+
+        if (!isSuccess) {
+            return HttpResponse.json({
+                success: false,
+                error: {
+                    message: 'Simulated upstream error: connection timeout',
+                    type: 'probe_error',
+                },
+            })
+        }
+
+        return HttpResponse.json({
+            success: true,
+            data: {
+                content: JSON.stringify([{ choices: [{ delta: { content: 'Hello! Mock streaming probe response.' } }] }]),
+                latency_ms: Math.floor(Math.random() * 2200) + 400,
+                request_url: 'http://localhost:12222/tingly/openai/chat/completions',
+                stream: body?.test_mode !== 'simple',
+                prompt_tokens: 21,
+                completion_tokens: 14,
+                total_tokens: 35,
+                selected_provider: 'Mock Provider',
+                selected_model: 'mock-model-mini',
+                routing_source: 'load_balancer',
+                upstream_api: 'openai_chat',
+                upstream_url: 'https://api.mock-provider.dev/v1/chat/completions',
+                matched_rule_desc: 'Mock Rule',
+                applied_flags: '',
+            },
+        })
+    }),
+
     http.get('/api/status', () => {
         return HttpResponse.json({
             success: true,

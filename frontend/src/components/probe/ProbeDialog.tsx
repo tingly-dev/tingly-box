@@ -29,38 +29,10 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
-import type { ProbeTestMode, ProbeTargetType } from '@/types/probe.ts';
+import type { ProbeResult, ProbeTestMode, ProbeTargetType } from '@/types/probe.ts';
+import { runProbe } from './runProbe';
 
 // ── Types ────────────────────────────────────────────────────────────────
-
-interface ProbeResultData {
-    content?: string;
-    latency_ms: number;
-    request_url?: string;
-    stream?: boolean;
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-    tool_calls?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
-    // Routing trace — populated for TB-loopback probes.
-    selected_provider?: string;
-    selected_provider_uuid?: string;
-    selected_model?: string;
-    routing_source?: string;
-    matched_smart_rule?: number;
-    // Execution-level facts (real upstream endpoint, matched rule, applied flags).
-    upstream_api?: string;
-    upstream_url?: string;
-    matched_rule?: string;
-    matched_rule_desc?: string;
-    applied_flags?: string;
-}
-
-interface ProbeResult {
-    success: boolean;
-    error?: { message: string; type: string };
-    data?: ProbeResultData;
-}
 
 interface ProbeDialogProps {
     open: boolean;
@@ -72,6 +44,8 @@ interface ProbeDialogProps {
     model?: string;
     /** Initial request shape; can be changed inside the dialog. Defaults to stream. */
     testMode?: ProbeTestMode;
+    /** Pre-computed result to show on open (e.g. from the quick test); re-run replaces it. */
+    initialResult?: ProbeResult;
 }
 
 // ── Constants / helpers ────────────────────────────────────────────────────
@@ -99,8 +73,6 @@ const UPSTREAM_API_LABELS: Record<string, string> = {
     anthropic_beta: 'Messages (beta)',
     google: 'GenerateContent',
 };
-
-const getUserAuthToken = (): string | null => localStorage.getItem('user_auth_token');
 
 const defaultMessage = (mode: ProbeTestMode): string =>
     mode === 'tool'
@@ -376,6 +348,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     scenario,
     model,
     testMode = 'streaming',
+    initialResult,
 }) => {
     const { t } = useTranslation();
     const [mode, setMode] = useState<ProbeTestMode>(testMode);
@@ -385,15 +358,16 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     const [result, setResult] = useState<ProbeResult | null>(null);
     const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
 
-    // Reset on open — do NOT auto-run; the user clicks 运行测试.
+    // Reset on open — do NOT auto-run; the user clicks 运行测试. When a quick
+    // test already produced a result, show it instead of the empty hint.
     useEffect(() => {
         if (open) {
             setMode(testMode);
             setDirect(false);
-            setResult(null);
+            setResult(initialResult ?? null);
             setIsLoading(false);
         }
-    }, [open, testMode]);
+    }, [open, testMode, initialResult]);
 
     const runTest = useCallback(async () => {
         setIsLoading(true);
@@ -408,33 +382,8 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             message: defaultMessage(mode),
         };
 
-        const token = getUserAuthToken();
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        try {
-            const response = await fetch('/api/v2/probe', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(body),
-            });
-            if (!response.ok) {
-                let message = `HTTP ${response.status}`;
-                try {
-                    const e = await response.json();
-                    message = e.error?.message || message;
-                } catch {
-                    /* ignore */
-                }
-                setResult({ success: false, error: { message, type: 'http_error' } });
-                return;
-            }
-            setResult(await response.json());
-        } catch (err: any) {
-            setResult({ success: false, error: { message: err?.message || 'Probe failed', type: 'client_error' } });
-        } finally {
-            setIsLoading(false);
-        }
+        setResult(await runProbe(body));
+        setIsLoading(false);
     }, [targetType, scenario, targetId, model, direct, mode]);
 
     const handleCopy = () => {

@@ -13,6 +13,8 @@ import { RuleCardDeleteDialog, RuleFlagEditDialog } from '@/components/rule-card
 import UnifiedRoutingGraph from '@/components/UnifiedRoutingGraph';
 import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialog';
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
+import { QuickProbeButton } from '@/components/probe';
+import { Box } from '@mui/material';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
@@ -291,23 +293,34 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         />
     );
 
-    // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
+    // Extra actions - quick streaming test + settings menu, shared between
+    // RoutingGraph and SmartRoutingGraph
     const extraActions = (
-        <GraphSettingsMenu
-            allowDeleteRule={allowDeleteRule}
-            active={configRecord.active}
-            allowToggleRule={allowToggleRule}
-            saving={saving}
-            onExportAsJsonlToClipboard={handleExportAsJsonlToClipboard}
-            onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
-            onDelete={handleDeleteButtonClick}
-            onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
-            onEditFlags={handleOpenFlagEditor}
-            ruleUuid={rule.uuid}
-            ruleName={formatModelNameWithContext1M(rule.request_model || rule.uuid, configRecord.flags)}
-            scenario={rule.scenario}
-            model={formatModelNameWithContext1M(rule.request_model, configRecord.flags)}
-        />
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+            {rule.uuid && (
+                <QuickProbeButton
+                    ruleUuid={rule.uuid}
+                    ruleName={formatModelNameWithContext1M(rule.request_model || rule.uuid, configRecord.flags)}
+                    scenario={rule.scenario}
+                    model={formatModelNameWithContext1M(rule.request_model, configRecord.flags)}
+                />
+            )}
+            <GraphSettingsMenu
+                allowDeleteRule={allowDeleteRule}
+                active={configRecord.active}
+                allowToggleRule={allowToggleRule}
+                saving={saving}
+                onExportAsJsonlToClipboard={handleExportAsJsonlToClipboard}
+                onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
+                onDelete={handleDeleteButtonClick}
+                onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
+                onEditFlags={handleOpenFlagEditor}
+                ruleUuid={rule.uuid}
+                ruleName={formatModelNameWithContext1M(rule.request_model || rule.uuid, configRecord.flags)}
+                scenario={rule.scenario}
+                model={formatModelNameWithContext1M(rule.request_model, configRecord.flags)}
+            />
+        </Box>
     );
 
     return (

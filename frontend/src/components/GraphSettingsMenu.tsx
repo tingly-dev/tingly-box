@@ -6,10 +6,6 @@ import {
     Edit as EditIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
-    UnfoldMore as ExportMenuIcon,
-    Speed as SpeedIcon,
-    Stream as StreamIcon,
-    Build as ToolIcon,
 } from '@/components/icons';
 import { IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
@@ -48,19 +44,9 @@ export const GraphSettingsMenu = ({
     model,
 }: GraphSettingsMenuProps) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
+    const [probeOpen, setProbeOpen] = useState(false);
 
     const closeMenu = () => setMenuAnchorEl(null);
-    const closeExportMenu = () => setExportMenuAnchorEl(null);
-    const closeAllMenus = () => {
-        setMenuAnchorEl(null);
-        setExportMenuAnchorEl(null);
-    };
-
-    const handleProbeClose = () => {
-        setProbeAnchorEl(null);
-    };
 
     return (
         <>
@@ -81,15 +67,26 @@ export const GraphSettingsMenu = ({
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-                <MenuItem onClick={(e) => { setProbeAnchorEl(e.currentTarget); closeMenu(); }}>
-                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Probe
-                    <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
-                </MenuItem>
+                {ruleUuid && (
+                    <MenuItem onClick={() => { closeMenu(); setProbeOpen(true); }}>
+                        <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Probe
+                    </MenuItem>
+                )}
 
-                <MenuItem onClick={(e) => { setExportMenuAnchorEl(e.currentTarget); closeMenu(); }}>
-                    <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy
-                    <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
-                </MenuItem>
+                {(onExportAsBase64ToClipboard || onExportAsJsonlToClipboard) && <Divider />}
+
+                {onExportAsBase64ToClipboard && (
+                    <MenuItem onClick={() => { closeMenu(); onExportAsBase64ToClipboard(); }}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64
+                    </MenuItem>
+                )}
+                {onExportAsJsonlToClipboard && (
+                    <MenuItem onClick={() => { closeMenu(); onExportAsJsonlToClipboard(); }}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy JSONL
+                    </MenuItem>
+                )}
+
+                <Divider />
 
                 <MenuItem
                     onClick={() => { closeMenu(); onToggleActive(); }}
@@ -120,30 +117,11 @@ export const GraphSettingsMenu = ({
                 )}
             </Menu>
 
-            <Menu
-                anchorEl={exportMenuAnchorEl}
-                open={Boolean(exportMenuAnchorEl)}
-                onClose={closeExportMenu}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-            >
-                {onExportAsBase64ToClipboard && (
-                    <MenuItem onClick={() => { closeAllMenus(); onExportAsBase64ToClipboard(); }}>
-                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy Base64
-                    </MenuItem>
-                )}
-                {onExportAsJsonlToClipboard && (
-                    <MenuItem onClick={() => { closeAllMenus(); onExportAsJsonlToClipboard(); }}>
-                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />Copy JSONL
-                    </MenuItem>
-                )}
-            </Menu>
-
-            {/* Probe Menu */}
+            {/* Probe Dialog */}
             {ruleUuid && (
                 <ProbeMenu
-                    open={Boolean(probeAnchorEl)}
-                    onClose={handleProbeClose}
+                    open={probeOpen}
+                    onClose={() => setProbeOpen(false)}
                     targetType="rule"
                     targetId={ruleUuid}
                     targetName={ruleName || ruleUuid}

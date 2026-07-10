@@ -348,6 +348,9 @@ export default {
     "howRoutingWorks": "How routing works"
   },
   "probe": {
+    "quickTest": "Quick test (stream)",
+    "viewDetails": "View details",
+    "dismiss": "Dismiss",
     "testRule": "Test Rule",
     "testProvider": "Test Service",
     "shape": "Request",

@@ -33,6 +33,37 @@ export interface ProbeToolCall {
     input: Record<string, unknown>;
 }
 
+// Result payload of POST /api/v2/probe (backend probe.ProbeResult).
+export interface ProbeResultData {
+    content?: string;
+    latency_ms: number;
+    request_url?: string;
+    stream?: boolean;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    tool_calls?: ProbeToolCall[];
+    // Routing trace — populated for TB-loopback probes.
+    selected_provider?: string;
+    selected_provider_uuid?: string;
+    selected_model?: string;
+    routing_source?: string;
+    matched_smart_rule?: number;
+    // Execution-level facts (real upstream endpoint, matched rule, applied flags).
+    upstream_api?: string;
+    upstream_url?: string;
+    matched_rule?: string;
+    matched_rule_desc?: string;
+    applied_flags?: string;
+}
+
+// Envelope of POST /api/v2/probe.
+export interface ProbeResult {
+    success: boolean;
+    error?: { message: string; type: string };
+    data?: ProbeResultData;
+}
+
 export interface ProbeResponse {
     success: boolean;
     error?: {
