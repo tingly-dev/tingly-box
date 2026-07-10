@@ -1,12 +1,17 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
     Alert,
     Button,
+    ButtonBase,
     Card,
     CardContent,
     CircularProgress,
+    Dialog,
+    DialogContent,
+    DialogTitle,
     FormControl,
+    IconButton,
     InputLabel,
     MenuItem,
     Select,
@@ -17,7 +22,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import { AutoAwesome, Photo } from '@/components/icons';
+import { AutoAwesome, Close, Photo, ZoomIn } from '@/components/icons';
 import { getOpenAIClient } from '@/services/openaiClient';
 
 const IMAGE_SCENARIO = 'imagegen';
@@ -36,6 +41,15 @@ interface GenerationRun {
     size: string;
     quality: Quality;
     images: ImageResult[];
+}
+
+interface SelectedImage {
+    src: string;
+    prompt: string;
+    model: string;
+    size: string;
+    quality: Quality;
+    index: number;
 }
 
 // Keep playground output while navigating between pages in the current app session.
@@ -69,6 +83,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [count, setCount] = useState(1);
     const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
     const [sending, setSending] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+    const historyTrackRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => {
+            const track = historyTrackRef.current;
+            if (track) track.scrollTo({ left: track.scrollWidth, behavior: 'smooth' });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [runs.length, sending]);
 
     const handleGenerate = useCallback(async () => {
         if (!prompt.trim() || !model) return;
@@ -88,14 +112,14 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             });
             const images = response.data ?? [];
             setRuns((currentRuns) => {
-                const nextRuns = [{
+                const nextRuns = [...currentRuns, {
                     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                     prompt: generationPrompt,
                     model: generationModel,
                     size: generationSize,
                     quality: generationQuality,
                     images,
-                }, ...currentRuns];
+                }];
                 imageGenSessionRuns = nextRuns;
                 return nextRuns;
             });
@@ -111,6 +135,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const noModels = models.length === 0;
 
     return (
+        <>
         <UnifiedCard
             size="full"
             title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
@@ -243,8 +268,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         display: 'flex',
                         alignItems: runs.length === 0 && !sending ? 'center' : 'stretch',
                         justifyContent: runs.length === 0 && !sending ? 'center' : 'flex-start',
-                        overflowY: runs.length === 0 && !sending ? 'hidden' : 'auto',
-                        overflowX: 'hidden',
+                        overflow: 'hidden',
                     }}
                 >
                     {runs.length === 0 && !sending ? (
@@ -258,7 +282,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Typography>
                         </Stack>
                     ) : (
-                        <Stack spacing={1.5} sx={{ width: '100%' }}>
+                        <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
                             <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
                                 <Typography variant="subtitle2">
                                     {t('playground.sessionOutputs', { defaultValue: 'Session outputs' })}
@@ -271,23 +295,60 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 </Typography>
                             </Box>
 
-                            {sending && (
-                                <Card variant="outlined" sx={{ borderStyle: 'dashed', bgcolor: 'background.paper' }}>
-                                    <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                        <Stack direction="row" spacing={1.5} alignItems="center">
-                                            <CircularProgress size={20} />
-                                            <Typography variant="body2" color="text.secondary">
-                                                {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
-                                            </Typography>
-                                        </Stack>
-                                    </CardContent>
-                                </Card>
-                            )}
+                            <Box
+                                ref={historyTrackRef}
+                                data-testid="imagegen-history-track"
+                                sx={{
+                                    display: 'flex',
+                                    gap: 1.5,
+                                    flex: 1,
+                                    minHeight: 0,
+                                    overflowX: 'auto',
+                                    overflowY: 'hidden',
+                                    pb: 0.5,
+                                    scrollSnapType: 'x proximity',
+                                    overflowAnchor: 'none',
+                                    scrollbarWidth: 'thin',
+                                    '&::-webkit-scrollbar': { height: 6 },
+                                    '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
+                                }}
+                            >
+                                {sending && (
+                                    <Card
+                                        variant="outlined"
+                                        sx={{
+                                            flex: '0 0 280px',
+                                            height: '100%',
+                                            borderStyle: 'dashed',
+                                            bgcolor: 'background.paper',
+                                            scrollSnapAlign: 'end',
+                                            order: 2,
+                                        }}
+                                    >
+                                        <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
+                                            <Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
+                                                <CircularProgress size={24} />
+                                                <Typography variant="body2" color="text.secondary">
+                                                    {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
+                                                </Typography>
+                                            </Stack>
+                                        </CardContent>
+                                    </Card>
+                                )}
 
-                            {runs.map((run) => (
-                                <Card key={run.id} variant="outlined" sx={{ bgcolor: 'background.paper' }}>
-                                    <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                                        <Stack spacing={1.25}>
+                                {runs.map((run) => (
+                                    <Card
+                                        key={run.id}
+                                        variant="outlined"
+                                        sx={{
+                                            flex: { xs: '0 0 min(82vw, 320px)', md: '0 0 clamp(280px, 46%, 360px)' },
+                                            height: '100%',
+                                            bgcolor: 'background.paper',
+                                            scrollSnapAlign: 'start',
+                                        }}
+                                    >
+                                    <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
+                                        <Stack spacing={1.25} sx={{ height: '100%' }}>
                                             <Box>
                                                 <Typography
                                                     variant="body2"
@@ -311,6 +372,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     gridTemplateColumns: run.images.length === 1
                                                         ? 'minmax(0, 1fr)'
                                                         : 'repeat(2, minmax(0, 1fr))',
+                                                    flex: 1,
+                                                    minHeight: 0,
                                                     gap: 1,
                                                 }}
                                             >
@@ -319,23 +382,82 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                         ? `data:image/png;base64,${image.b64_json}`
                                                         : '');
                                                     return src ? (
-                                                        <Box
+                                                        <ButtonBase
                                                             key={`${run.id}-${index}`}
-                                                            component="img"
-                                                            src={src}
-                                                            alt={t('playground.resultAlt', {
-                                                                defaultValue: 'Generated image {{number}}',
+                                                            onClick={() => setSelectedImage({
+                                                                src,
+                                                                prompt: run.prompt,
+                                                                model: run.model,
+                                                                size: run.size,
+                                                                quality: run.quality,
+                                                                index,
+                                                            })}
+                                                            aria-label={t('playground.openResult', {
+                                                                defaultValue: 'Open generated image {{number}}',
                                                                 number: index + 1,
                                                             })}
                                                             sx={{
+                                                                position: 'relative',
                                                                 width: '100%',
-                                                                maxHeight: 360,
-                                                                objectFit: 'contain',
-                                                                display: 'block',
+                                                                height: '100%',
                                                                 borderRadius: 1,
                                                                 bgcolor: 'action.hover',
+                                                                overflow: 'hidden',
+                                                                '&:hover .image-preview-overlay, &:focus-visible .image-preview-overlay': {
+                                                                    opacity: 1,
+                                                                },
                                                             }}
-                                                        />
+                                                        >
+                                                            <Box
+                                                                component="img"
+                                                                src={src}
+                                                                alt={t('playground.resultAlt', {
+                                                                    defaultValue: 'Generated image {{number}}',
+                                                                    number: index + 1,
+                                                                })}
+                                                                sx={{
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    maxHeight: '100%',
+                                                                    objectFit: 'contain',
+                                                                    display: 'block',
+                                                                }}
+                                                            />
+                                                            <Box
+                                                                className="image-preview-overlay"
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    inset: 0,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    color: 'common.white',
+                                                                    bgcolor: 'rgba(15, 23, 42, 0.38)',
+                                                                    opacity: 0,
+                                                                    transition: 'opacity 0.16s ease-out',
+                                                                }}
+                                                            >
+                                                                <ZoomIn sx={{ fontSize: 30 }} />
+                                                            </Box>
+                                                            <Box
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    top: 8,
+                                                                    right: 8,
+                                                                    width: 30,
+                                                                    height: 30,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    borderRadius: '50%',
+                                                                    color: 'common.white',
+                                                                    bgcolor: 'rgba(15, 23, 42, 0.58)',
+                                                                    backdropFilter: 'blur(4px)',
+                                                                }}
+                                                            >
+                                                                <ZoomIn fontSize="small" />
+                                                            </Box>
+                                                        </ButtonBase>
                                                     ) : (
                                                         <Typography key={`${run.id}-${index}`} variant="caption" color="text.secondary">
                                                             {t('playground.emptyResult', { defaultValue: 'No image returned' })}
@@ -345,13 +467,95 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             </Box>
                                         </Stack>
                                     </CardContent>
-                                </Card>
-                            ))}
+                                    </Card>
+                                ))}
+                            </Box>
                         </Stack>
                     )}
                 </Box>
             </Box>
         </UnifiedCard>
+        <Dialog
+            open={selectedImage !== null}
+            onClose={() => setSelectedImage(null)}
+            maxWidth={false}
+            fullWidth
+            PaperProps={{
+                sx: {
+                    width: 'calc(100vw - 48px)',
+                    height: 'calc(100vh - 48px)',
+                    maxWidth: 'none',
+                    borderRadius: 3,
+                    bgcolor: 'grey.900',
+                    color: 'common.white',
+                    overflow: 'hidden',
+                },
+            }}
+        >
+            <DialogTitle
+                sx={{
+                    py: 1.5,
+                    px: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    bgcolor: 'rgba(15, 23, 42, 0.96)',
+                    color: 'common.white',
+                }}
+            >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography
+                        component="span"
+                        variant="subtitle1"
+                        sx={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                        {selectedImage?.prompt}
+                    </Typography>
+                    <Typography component="span" variant="caption" sx={{ display: 'block', color: 'grey.400' }}>
+                        {selectedImage?.model} · {selectedImage?.size} · {selectedImage?.quality}
+                    </Typography>
+                </Box>
+                <IconButton
+                    onClick={() => setSelectedImage(null)}
+                    aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
+                    sx={{
+                        color: 'common.white',
+                        bgcolor: 'rgba(255, 255, 255, 0.08)',
+                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
+                    }}
+                >
+                    <Close />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent
+                sx={{
+                    p: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'common.black',
+                    overflow: 'hidden',
+                }}
+            >
+                {selectedImage && (
+                    <Box
+                        component="img"
+                        src={selectedImage.src}
+                        alt={t('playground.resultAlt', {
+                            defaultValue: 'Generated image {{number}}',
+                            number: selectedImage.index + 1,
+                        })}
+                        sx={{
+                            display: 'block',
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            objectFit: 'contain',
+                        }}
+                    />
+                )}
+            </DialogContent>
+        </Dialog>
+        </>
     );
 };
 

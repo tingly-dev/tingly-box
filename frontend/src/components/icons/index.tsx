@@ -139,6 +139,7 @@ import {
     IconCalendarEvent,
     IconFileText,
     IconDeviceRemote,
+    IconZoomIn,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -180,6 +181,7 @@ export const MoreVert = tablerMui(IconDotsVertical);
 export const MoreHoriz = tablerMui(IconDots);
 export const OpenInNew = tablerMui(IconExternalLink);
 export const Launch = tablerMui(IconExternalLink);
+export const ZoomIn = tablerMui(IconZoomIn);
 export const Link = tablerMui(IconLink);
 export const PlayArrow = tablerMui(IconPlayerPlay);
 export const Filter = tablerMui(IconFilter);
