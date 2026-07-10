@@ -102,8 +102,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         showNotification,
     });
 
-    // Export functionality
-    const { handleExportAsJsonlToClipboard, handleExportAsBase64ToClipboard } = useRuleExport({ rule, showNotification });
+    // Export functionality — disabled product-side for now. Kept wired so the
+    // Copy actions can return to the gear menu by destructuring the handlers
+    // and passing them to GraphSettingsMenu again.
+    useRuleExport({ rule, showNotification });
 
     // Smart routing handlers
     const { dialogState: smartDialogState, handlers: smartHandlers } = useSmartRoutingHandlers({
@@ -310,8 +312,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 active={configRecord.active}
                 allowToggleRule={allowToggleRule}
                 saving={saving}
-                onExportAsJsonlToClipboard={handleExportAsJsonlToClipboard}
-                onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
+                // Rule export is currently disabled product-side; omit the handlers
+                // to hide the Copy items (menu keeps supporting them for later).
                 onDelete={handleDeleteButtonClick}
                 onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
                 onEditFlags={handleOpenFlagEditor}
