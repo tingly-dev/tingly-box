@@ -64,6 +64,8 @@ export interface RuleCardProps {
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
     onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
+    /** Increment to trigger this rule's quick probe externally ("test all"). */
+    quickProbeSignal?: number;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -84,6 +86,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     allowToggleRule = true,
     onToggleExpanded,
     onContext1MToggle,
+    quickProbeSignal,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -305,6 +308,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     ruleName={formatModelNameWithContext1M(rule.request_model || rule.uuid, configRecord.flags)}
                     scenario={rule.scenario}
                     model={formatModelNameWithContext1M(rule.request_model, configRecord.flags)}
+                    // "Test all" only exercises active rules — an inactive rule
+                    // can't match its own traffic, so probing it would mislead.
+                    runSignal={configRecord.active ? quickProbeSignal : undefined}
                 />
             )}
             <GraphSettingsMenu

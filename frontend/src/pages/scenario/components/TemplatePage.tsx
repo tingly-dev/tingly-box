@@ -306,6 +306,13 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         setShowImportModal(true);
     }, []);
 
+    // "Test all rules": bump a signal consumed by each card's QuickProbeButton;
+    // every active rule runs its quick streaming probe and shows its own pill.
+    const [probeAllSignal, setProbeAllSignal] = useState(0);
+    const handleProbeAll = useCallback(() => {
+        setProbeAllSignal((s) => s + 1);
+    }, []);
+
     // Handle import data (from modal). Import is provider-only — no rule is
     // created or updated, so only the provider list needs refreshing.
     const handleImportData = useCallback(async (data: string) => {
@@ -385,6 +392,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         onToggleExpandAll={handleToggleExpandAll}
                         showExpandCollapseButton={showExpandCollapseButton}
                         onShowGuide={() => setShowGuide(true)}
+                        onProbeAll={rules.length > 0 ? handleProbeAll : undefined}
                     />
                 }
                 rightAction={rightAction}
@@ -427,6 +435,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             allowToggleRule={allowToggleRule}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                             onContext1MToggle={onContext1MToggle}
+                                            quickProbeSignal={probeAllSignal}
                                         />
                                     )}
                                 </div>

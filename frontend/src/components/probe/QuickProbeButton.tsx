@@ -18,13 +18,15 @@ interface QuickProbeButtonProps {
     ruleName: string;
     scenario?: string;
     model?: string;
+    /** Increment to trigger a run externally (e.g. the page-level "test all"). */
+    runSignal?: number;
 }
 
 // QuickProbeButton: one-click streaming probe for a rule, living in the rule
 // card header. No menu, no dialog up front — click the bolt, get a compact
 // verdict pill (status + latency) in place. Clicking the pill opens the full
 // ProbeDialog pre-loaded with this result for the journey/response details.
-export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ruleName, scenario, model }) => {
+export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ruleName, scenario, model, runSignal }) => {
     const { t } = useTranslation();
     const theme = useTheme();
     const [running, setRunning] = useState(false);
@@ -54,6 +56,15 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
         setResult(res);
         setRunning(false);
     }, [ruleUuid, scenario]);
+
+    // External trigger: run when the signal increments (skipped while already
+    // running — the signal is consumed either way so it can't re-fire late).
+    const lastSignal = useRef(runSignal ?? 0);
+    useEffect(() => {
+        if (runSignal === undefined || runSignal <= lastSignal.current) return;
+        lastSignal.current = runSignal;
+        if (!running) void run();
+    }, [runSignal, running, run]);
 
     const ok = result?.success === true;
     const pillColor = ok ? theme.palette.success.main : theme.palette.error.main;

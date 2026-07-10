@@ -349,6 +349,7 @@ export default {
   },
   "probe": {
     "quickTest": "Quick test (stream)",
+    "testAll": "Test all rules (stream)",
     "viewDetails": "View details",
     "dismiss": "Dismiss",
     "testRule": "Test Rule",

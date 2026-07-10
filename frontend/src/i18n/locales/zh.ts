@@ -350,6 +350,7 @@ export default {
   },
   "probe": {
     "quickTest": "快速测试（流式）",
+    "testAll": "测试全部规则（流式）",
     "viewDetails": "查看详情",
     "dismiss": "关闭",
     "testRule": "测试规则",
