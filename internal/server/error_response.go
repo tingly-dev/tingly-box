@@ -53,6 +53,22 @@ func (ph *ProtocolHandler) failForward(c *gin.Context, recorder *recording.Proto
 	}
 }
 
+// respondMCPError is the MCP-tool-call variant of failRequest: a fixed 500
+// "api_error" body (MCP loop failures are gateway-internal, so no upstream
+// status to propagate) with the message ordered as "desc: err".
+func (ph *ProtocolHandler) respondMCPError(c *gin.Context, recorder *recording.ProtocolRecorder, err error, msg string) {
+	ph.trackUsageFromContext(c, 0, 0, err)
+	c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error: ErrorDetail{
+			Message: msg + ": " + err.Error(),
+			Type:    "api_error",
+		},
+	})
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
 // SendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
 func SendErrorResponse(c *gin.Context, err error, desc string) {
 

@@ -21,6 +21,13 @@ import (
 // {nonstream, stream, assemble} — whose six entry points share two cores:
 // forwardResponsesNonstream and forwardResponsesStream. Only the final
 // format-conversion step differs per cell, injected as a closure.
+//
+// The remaining paths below (Responses→Chat, Chat→Responses,
+// AnthropicBeta→Responses) deliberately keep their own bodies: they carry
+// different recording semantics (the dispatch-level ProtocolRecorder rather
+// than a per-call StreamRecorder, no assembled-response capture on stream
+// paths) and their response writing is owned by the protocol/stream handlers,
+// so folding them into the cores would change observable recording behavior.
 
 // forwardResponsesNonstream forwards a Responses API request upstream
 // (non-streaming) and converts the response back to an Anthropic shape via
@@ -186,7 +193,7 @@ func (ph *ProtocolHandler) assembleResponsesToAnthropicBeta(c *gin.Context, prox
 }
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
-func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
@@ -203,7 +210,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx
 }
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
-func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
@@ -225,7 +232,7 @@ func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *t
 // nonstreamAnthropicBetaToResponses handles a Responses-shaped client
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (non-streaming).
-func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
@@ -248,7 +255,7 @@ func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, req
 // streamAnthropicBetaToResponses handles a Responses-shaped client
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (streaming).
-func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
@@ -270,7 +277,7 @@ func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx
 	ph.trackUsageWithTokenUsage(c, usage, err)
 }
 
-func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
@@ -300,7 +307,7 @@ func (ph *ProtocolHandler) streamResponsesToChat(c *gin.Context, reqCtx *transfo
 	}
 }
 
-func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	actualModel := reqCtx.RequestModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 

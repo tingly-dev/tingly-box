@@ -80,16 +80,13 @@ type transformSourceOptions struct {
 	// entry points use the raw ScenarioConfig.Flags pointer.
 	defaultScenarioFlags bool
 
-	// honorAdvisorHeader marks the request as an advisor loopback when
-	// X-Tingly-Advisor-Depth is present, so MCP tool injection is skipped.
-	// The Responses entry point never does this (advisor loopbacks are
-	// Anthropic/Chat-shaped).
-	honorAdvisorHeader bool
-
 	hasNativeAdvisor bool
 
-	// extraOpts are appended after the shared options (e.g. WithContext for
-	// the Beta path, WithMaxTokens for the Responses path).
+	// extraOpts are appended after the shared options: WithMaxTokens for the
+	// Responses path, and WithContext for the Beta path. The latter is
+	// preserved drift, not design — historically only the Beta entry point
+	// passed the request context into the transform chain (the MCP transforms
+	// fall back to context.Background() on the other paths).
 	extraOpts []transform.TransformOption
 }
 
@@ -130,8 +127,10 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 	}
 	opts = append(opts, src.extraOpts...)
 
-	// Advisor loopback requests carry X-Tingly-Advisor-Depth >= 1
-	if src.honorAdvisorHeader && c.GetHeader("X-Tingly-Advisor-Depth") != "" {
+	// Advisor loopback requests carry X-Tingly-Advisor-Depth >= 1; mark them
+	// so MCP tool injection is skipped. Advisor loopbacks are Anthropic/Chat
+	// shaped, so on the Responses path this is a no-op.
+	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
@@ -162,7 +161,6 @@ func (ph *ProtocolHandler) TransformAnthropicBeta(c *gin.Context, req *protocol.
 	return transformRequest(ph, c, req.BetaMessageNewParams, target, provider, isStreaming, protocolRecorder, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
 		source:               protocol.TypeAnthropicBeta,
 		defaultScenarioFlags: true,
-		honorAdvisorHeader:   true,
 		hasNativeAdvisor:     HasNativeAdvisorBeta(req),
 		extraOpts:            []transform.TransformOption{transform.WithContext(c.Request.Context())},
 	})
@@ -172,14 +170,12 @@ func (ph *ProtocolHandler) TransformAnthropicV1(c *gin.Context, req *protocol.An
 	return transformRequest(ph, c, req.MessageNewParams, target, provider, isStreaming, protocolRecorder, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
 		source:               protocol.TypeAnthropicV1,
 		defaultScenarioFlags: true,
-		honorAdvisorHeader:   true,
 	})
 }
 
 func (ph *ProtocolHandler) TransformOpenAIChat(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *recording.ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, preVendorTransforms []transform.Transform) (*transform.TransformContext, error) {
 	return transformRequest(ph, c, req.ChatCompletionNewParams, target, provider, isStreaming, protocolRecorder, scenarioType, preBaseTransforms, preVendorTransforms, transformSourceOptions{
-		source:             protocol.TypeOpenAIChat,
-		honorAdvisorHeader: true,
+		source: protocol.TypeOpenAIChat,
 	})
 }
 

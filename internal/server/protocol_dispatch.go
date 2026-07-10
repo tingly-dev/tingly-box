@@ -25,21 +25,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// respondMCPError writes a JSON error response for non-streaming MCP tool call failures.
-// This consolidates the ~10-line error block repeated across dispatch paths.
-func respondMCPError(h *ProtocolHandler, c *gin.Context, recorder *recording.ProtocolRecorder, err error, msg string) {
-	h.trackUsageFromContext(c, 0, 0, err)
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: msg + ": " + err.Error(),
-			Type:    "api_error",
-		},
-	})
-	if recorder != nil {
-		recorder.RecordError(err)
-	}
-}
-
 // shouldUseGenericMCPForProvider checks if the provider is allowed to use generic MCP path
 func (ph *ProtocolHandler) shouldUseGenericMCPForProvider(provider *typ.Provider) bool {
 	return ShouldUseGenericMCPForProvider(ph.deps.Config, provider)
@@ -128,9 +113,9 @@ func (ph *ProtocolHandler) dispatchAnthropicBeta(
 		ph.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeOpenAIResponses:
 		if isStreaming {
-			ph.streamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
+			ph.streamAnthropicBetaToResponses(c, reqCtx, provider, recorder)
 		} else {
-			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
+			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, provider, recorder)
 		}
 	default:
 		ph.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
@@ -171,16 +156,16 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 		// Client sent Responses API, but provider needs Chat format
 		// Forward as Chat, then convert response back to Responses format
 		if isStreaming {
-			ph.streamResponsesToChat(c, reqCtx, rule, provider, recorder)
+			ph.streamResponsesToChat(c, reqCtx, provider, recorder)
 		} else {
-			ph.nonstreamResponsesToChat(c, reqCtx, rule, provider, recorder)
+			ph.nonstreamResponsesToChat(c, reqCtx, provider, recorder)
 		}
 	case protocol.TypeOpenAIResponses:
 		// Responses API passthrough
 		if isStreaming {
-			ph.streamOpenAIResponses(c, reqCtx, rule, provider, recorder)
+			ph.streamOpenAIResponses(c, reqCtx, provider, recorder)
 		} else {
-			ph.nonstreamOpenAIResponses(c, reqCtx, rule, provider, recorder)
+			ph.nonstreamOpenAIResponses(c, reqCtx, provider, recorder)
 		}
 	}
 }
@@ -333,7 +318,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			var genericUsage *mcp.TokenUsage
 			anthropicResp, genericUsage, err = ph.RunGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
 			if err != nil {
-				respondMCPError(ph, c, recorder, err, "Failed to handle MCP tool calls")
+				ph.respondMCPError(c, recorder, err, "Failed to handle MCP tool calls")
 				return
 			}
 			if genericUsage != nil {
@@ -597,7 +582,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 
 			ph.streamOpenAIChat(c, provider, req, responseModel, disableStreamUsage)
 		case protocol.TypeOpenAIResponses:
-			ph.streamOpenAIChatToResponses(c, reqCtx, rule, provider, recorder)
+			ph.streamOpenAIChatToResponses(c, reqCtx, provider, recorder)
 		}
 	} else {
 		switch reqCtx.SourceAPI {
@@ -613,7 +598,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			ph.nonstreamOpenAIChat(c, provider, req, responseModel, stripUsage)
 			return
 		case protocol.TypeOpenAIResponses:
-			ph.nonstreamOpenAIChatToResponses(c, reqCtx, rule, provider, recorder)
+			ph.nonstreamOpenAIChatToResponses(c, reqCtx, provider, recorder)
 			return
 		default:
 			// Forward request to provider for format conversion

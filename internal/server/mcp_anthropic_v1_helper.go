@@ -271,7 +271,7 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatNonStream(
 
 	response, usage, err := ph.RunGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
-		recordMCPError(ph, c, err, recorder)
+		ph.handlePreStreamFailure(c, err, recorder)
 		return
 	}
 
@@ -339,7 +339,7 @@ func (ph *ProtocolHandler) DispatchGenericOpenAIChatStream(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(ph, c, err, recorder)
+		ph.handlePreStreamFailure(c, err, recorder)
 	}
 }
 
@@ -356,7 +356,7 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaNonStream(
 
 	response, usage, err := ph.RunGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
-		recordMCPError(ph, c, err, recorder)
+		ph.handlePreStreamFailure(c, err, recorder)
 		return
 	}
 
@@ -447,6 +447,6 @@ func (ph *ProtocolHandler) DispatchGenericAnthropicBetaStream(
 	)
 
 	if err := interceptor.Run(req); err != nil {
-		recordMCPError(ph, c, err, recorder)
+		ph.handlePreStreamFailure(c, err, recorder)
 	}
 }
