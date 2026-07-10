@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -37,7 +38,7 @@ func RegisterDefaults(r *Registry) {
 			ID:          "compact-thinking",
 			Name:        "Compact Thinking",
 			Description: "Removes thinking blocks from historical conversation rounds (10-20% compression)",
-			Chain:       transform.NewTransformChain([]transform.Transform{smart_compact.NewCompactTransform(2)}),
+			Chain:       transform.NewTransformChain([]transform.Transform{servertransform.NewThinkingCompactTransform(2)}),
 		},
 		{
 			ID:          "compact-round-only",

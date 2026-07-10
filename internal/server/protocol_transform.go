@@ -11,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
-	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -110,7 +109,7 @@ func transformRequest[T transform.RequestUnionConstraint](ph *ProtocolHandler, c
 			scenarioFlags = &flags
 			if flags.SmartCompact {
 				chain.SetTransforms(append(
-					[]transform.Transform{smart_compact.NewCompactTransform(2)},
+					[]transform.Transform{servertransform.NewThinkingCompactTransform(2)},
 					chain.GetTransforms()...,
 				))
 			}
