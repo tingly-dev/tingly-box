@@ -21,7 +21,7 @@ func NewLoadBalancerStage(lb LoadBalancer) *LoadBalancerStage {
 
 // Name returns the stage identifier
 func (s *LoadBalancerStage) Name() string {
-	return "load_balancer"
+	return SourceLoadBalancer
 }
 
 // Evaluate selects a service using load balancing
@@ -43,7 +43,7 @@ func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
-	result := NewResult(service, "load_balancer")
+	result := NewResult(service, SourceLoadBalancer)
 	return result, true
 }
 

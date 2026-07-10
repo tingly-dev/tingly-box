@@ -2,6 +2,7 @@ package routing
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 
@@ -35,7 +36,7 @@ func (s *SmartRoutingStage) SetMultiLogger(ml *pkgobs.MultiLogger) {
 
 // Name returns the stage identifier
 func (s *SmartRoutingStage) Name() string {
-	return "smart_routing"
+	return SourceSmartRouting
 }
 
 // requestHeadLen is intentionally small — the per-op trace already records a
@@ -90,18 +91,18 @@ func (s *SmartRoutingStage) emitTrace(
 ) {
 	matched := matchedRuleIndex >= 0
 	fields := logrus.Fields{
-		"rule_uuid":           ctx.Rule.UUID,
-		"scenario":            string(ctx.Scenario),
-		"request_model":       ctx.Rule.RequestModel,
-		"matched":             matched,
-		"matched_rule_index":  matchedRuleIndex,
-		"outcome":             outcome,
-		"reason":              reason,
-		"matched_services":    matchedServicesCount,
-		"final_active_count":  finalActiveCount,
-		"trace":               trace,
-		"request":             requestSnapshot(reqCtx),
-		"rules_total":         len(ctx.Rule.SmartRouting),
+		"rule_uuid":          ctx.Rule.UUID,
+		"scenario":           string(ctx.Scenario),
+		"request_model":      ctx.Rule.RequestModel,
+		"matched":            matched,
+		"matched_rule_index": matchedRuleIndex,
+		"outcome":            outcome,
+		"reason":             reason,
+		"matched_services":   matchedServicesCount,
+		"final_active_count": finalActiveCount,
+		"trace":              trace,
+		"request":            requestSnapshot(reqCtx),
+		"rules_total":        len(ctx.Rule.SmartRouting),
 	}
 	if matched && matchedRuleIndex < len(trace) {
 		fields["matched_rule_description"] = trace[matchedRuleIndex].Description
@@ -125,25 +126,9 @@ func (s *SmartRoutingStage) emitTrace(
 
 func formatTraceMessage(matched bool, idx int, model, outcome string) string {
 	if matched {
-		return "smart routing matched rule " + indexToString(idx) + " for " + model + " (" + outcome + ")"
+		return "smart routing matched rule " + strconv.Itoa(idx) + " for " + model + " (" + outcome + ")"
 	}
 	return "smart routing fell through for " + model + " (" + outcome + ")"
-}
-
-func indexToString(i int) string {
-	if i < 0 {
-		return "-1"
-	}
-	// avoid pulling strconv just for this
-	if i == 0 {
-		return "0"
-	}
-	digits := []byte{}
-	for i > 0 {
-		digits = append([]byte{byte('0' + i%10)}, digits...)
-		i /= 10
-	}
-	return string(digits)
 }
 
 // Evaluate evaluates smart routing rules and selects a service. When a
@@ -165,13 +150,8 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 
 	logrus.Debugf("[smart_routing] evaluating %d rules for model %s", len(rule.SmartRouting), rule.RequestModel)
 
-	// Extract request context
-	reqCtx, err := ExtractRequestContext(ctx.Request)
-	if err != nil {
-		logrus.Debugf("[smart_routing] failed to extract context: %v", err)
-		s.emitTrace(ctx, nil, nil, -1, 0, 0, nil, "extract_failed", err.Error())
-		return nil, false
-	}
+	// Extract request context (nil for request types smart routing can't inspect)
+	reqCtx := smartrouting.ExtractContext(ctx.Request)
 	if reqCtx == nil {
 		s.emitTrace(ctx, nil, nil, -1, 0, 0, nil, "no_context", "request type not supported for smart routing")
 		return nil, false
@@ -220,39 +200,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	// smart-routing rules against the mutated request — keeping the bypass
 	// strictly one-shot prevents post-processor inputs from triggering
 	// unintended matches downstream.
-	type collectedProc struct {
-		op   smartrouting.SmartOp
-		proc smartrouting.OpProcessor
-	}
-	var procs []collectedProc
-	for _, op := range matchedRule.Ops {
-		if p, ok := smartrouting.LookupProcessor(op.Position, op.Operation); ok {
-			procs = append(procs, collectedProc{op: op, proc: p})
-		}
-	}
-	if len(procs) > 0 {
-		processorCtx := context.Background()
-		if ctx.GinContext != nil && ctx.GinContext.Request != nil {
-			processorCtx = ctx.GinContext.Request.Context()
-		}
-		pctx := &smartrouting.ProcessorContext{
-			Ctx:       processorCtx,
-			Request:   ctx.Request,
-			ReqCtx:    reqCtx,
-			RuleIndex: matchedRuleIndex,
-			Services:  matchedServices,
-		}
-		for _, cp := range procs {
-			pctx.OpUUID = cp.op.UUID
-			if err := cp.proc.Process(pctx); err != nil {
-				logrus.Debugf("[smart_routing] processor %s/%s error: %v",
-					cp.op.Position, cp.op.Operation, err)
-			}
-		}
-		if ctx.BypassedSmartRules == nil {
-			ctx.BypassedSmartRules = make(map[int]struct{})
-		}
-		ctx.BypassedSmartRules[matchedRuleIndex] = struct{}{}
+	if s.runOpProcessors(ctx, reqCtx, matchedRule, matchedRuleIndex, matchedServices) {
 		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil,
 			"bypass_processor_run", "op-level processor ran; falling through to LoadBalancer")
 		return nil, false
@@ -286,7 +234,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 
 	// Single service? Return it directly
 	if len(activeServices) == 1 {
-		result := NewResult(activeServices[0], "smart_routing")
+		result := NewResult(activeServices[0], SourceSmartRouting)
 		result.MatchedSmartRuleIndex = matchedRuleIndex
 		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
 			activeServices[0], "selected", "single active service in matched set")
@@ -301,11 +249,61 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
-	result := NewResult(service, "smart_routing")
+	result := NewResult(service, SourceSmartRouting)
 	result.MatchedSmartRuleIndex = matchedRuleIndex
 	s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
 		service, "selected", "load balanced within matched set")
 	return result, true
+}
+
+// runOpProcessors runs the registered op-level processors of the matched rule
+// (they mutate ctx.Request in place) and marks the rule as bypassed. It
+// reports whether any processor ran — in which case the caller must fall
+// through to the LoadBalancer stage instead of selecting from the rule.
+func (s *SmartRoutingStage) runOpProcessors(
+	ctx *SelectionContext,
+	reqCtx *smartrouting.RequestContext,
+	matchedRule smartrouting.SmartRouting,
+	matchedRuleIndex int,
+	matchedServices []*loadbalance.Service,
+) bool {
+	type collectedProc struct {
+		op   smartrouting.SmartOp
+		proc smartrouting.OpProcessor
+	}
+	var procs []collectedProc
+	for _, op := range matchedRule.Ops {
+		if p, ok := smartrouting.LookupProcessor(op.Position, op.Operation); ok {
+			procs = append(procs, collectedProc{op: op, proc: p})
+		}
+	}
+	if len(procs) == 0 {
+		return false
+	}
+
+	processorCtx := context.Background()
+	if ctx.GinContext != nil && ctx.GinContext.Request != nil {
+		processorCtx = ctx.GinContext.Request.Context()
+	}
+	pctx := &smartrouting.ProcessorContext{
+		Ctx:       processorCtx,
+		Request:   ctx.Request,
+		ReqCtx:    reqCtx,
+		RuleIndex: matchedRuleIndex,
+		Services:  matchedServices,
+	}
+	for _, cp := range procs {
+		pctx.OpUUID = cp.op.UUID
+		if err := cp.proc.Process(pctx); err != nil {
+			logrus.Debugf("[smart_routing] processor %s/%s error: %v",
+				cp.op.Position, cp.op.Operation, err)
+		}
+	}
+	if ctx.BypassedSmartRules == nil {
+		ctx.BypassedSmartRules = make(map[int]struct{})
+	}
+	ctx.BypassedSmartRules[matchedRuleIndex] = struct{}{}
+	return true
 }
 
 // selectFromServices applies load balancing to select one service from the matched set

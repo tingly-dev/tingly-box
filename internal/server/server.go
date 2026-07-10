@@ -554,11 +554,6 @@ func (s *Server) UsageStore() *db.UsageStore {
 	return sm.Usage()
 }
 
-// GetRoutingSelector returns the server's routing selector for service selection.
-func (s *Server) GetRoutingSelector() *routing.SimpleSelector {
-	return s.routingSelector
-}
-
 func (s *Server) Context() context.Context {
 	return s.ctx
 }

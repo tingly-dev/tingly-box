@@ -43,13 +43,14 @@ const (
 // While HalfOpen, Allow() returns true for at most one caller at a time, so
 // exactly one probe request goes through per probe round.
 type Breaker struct {
-	mu               sync.Mutex
-	state            BreakerState
-	consecFails      int
-	openedAt         time.Time
-	halfOpenInFlight bool
-	halfOpenSuccess  int // consecutive successes in the current HalfOpen run
-	closedSince      time.Time // when recovery completed (HalfOpen→Closed); zero while never recovered or currently open
+	mu                sync.Mutex
+	state             BreakerState
+	consecFails       int
+	openedAt          time.Time
+	halfOpenInFlight  bool
+	halfOpenClaimedAt time.Time // when the current half-open probe slot was claimed
+	halfOpenSuccess   int       // consecutive successes in the current HalfOpen run
+	closedSince       time.Time // when recovery completed (HalfOpen→Closed); zero while never recovered or currently open
 
 	FailureThreshold  int
 	OpenDuration      time.Duration
@@ -87,19 +88,32 @@ func (b *Breaker) Allow() bool {
 	case BreakerOpen:
 		if clock.Now().Sub(b.openedAt) >= b.OpenDuration {
 			b.state = BreakerHalfOpen
-			b.halfOpenInFlight = true
+			b.claimProbeLocked()
 			b.halfOpenSuccess = 0
 			return true
 		}
 		return false
 	case BreakerHalfOpen:
 		if b.halfOpenInFlight {
-			return false
+			// Reclaim a stale probe slot: if the claimer never reported an
+			// outcome (e.g. it was selected but not dispatched), the slot
+			// would otherwise stay consumed forever and the service could
+			// never recover. After OpenDuration without an outcome, treat
+			// the probe as lost and hand the slot to this caller.
+			if clock.Now().Sub(b.halfOpenClaimedAt) < b.OpenDuration {
+				return false
+			}
 		}
-		b.halfOpenInFlight = true
+		b.claimProbeLocked()
 		return true
 	}
 	return true
+}
+
+// claimProbeLocked marks the half-open probe slot as taken. Caller holds b.mu.
+func (b *Breaker) claimProbeLocked() {
+	b.halfOpenInFlight = true
+	b.halfOpenClaimedAt = clock.Now()
 }
 
 // recoveryThreshold guards against a misconfigured zero value.

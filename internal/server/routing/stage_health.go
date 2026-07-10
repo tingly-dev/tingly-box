@@ -20,7 +20,7 @@ func NewHealthStage(filter *typ.HealthFilter) *HealthStage {
 }
 
 func (s *HealthStage) Name() string {
-	return "health"
+	return SourceHealth
 }
 
 func (s *HealthStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
@@ -30,7 +30,7 @@ func (s *HealthStage) Evaluate(ctx *SelectionContext, state *selectionState) (*S
 
 	// If no health filter configured, pass through unchanged
 	if s.filter == nil {
-		return NewFilterResult("health", state.candidateServices), false
+		return NewFilterResult(SourceHealth, state.candidateServices), false
 	}
 
 	before := len(state.candidateServices)
@@ -46,7 +46,7 @@ func (s *HealthStage) Evaluate(ctx *SelectionContext, state *selectionState) (*S
 			"rule_uuid":  selectionRuleUUID(ctx),
 			"candidates": before,
 		}).Warnf("[health] all %d candidates unhealthy; keeping the full set (degrade)", before)
-		return NewFilterResult("health", state.candidateServices), false
+		return NewFilterResult(SourceHealth, state.candidateServices), false
 	}
 
 	filteredCount := before - len(healthy)
@@ -77,7 +77,7 @@ func (s *HealthStage) Evaluate(ctx *SelectionContext, state *selectionState) (*S
 	}
 
 	// Continue pipeline (don't select, just filter)
-	return NewFilterResult("health", healthy), false
+	return NewFilterResult(SourceHealth, healthy), false
 }
 
 func selectionLogContext(ctx *SelectionContext) context.Context {

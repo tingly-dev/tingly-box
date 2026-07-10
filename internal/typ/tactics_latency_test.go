@@ -324,10 +324,10 @@ func TestAsLatencyBasedParams(t *testing.T) {
 	}
 
 	// Test with wrong type
-	rp := RoundRobinParams{}
+	rp := TokenBasedParams{}
 	_, ok = AsLatencyBasedParams(rp)
 	if ok {
-		t.Error("AsLatencyBasedParams() returned true for RoundRobinParams")
+		t.Error("AsLatencyBasedParams() returned true for TokenBasedParams")
 	}
 }
 

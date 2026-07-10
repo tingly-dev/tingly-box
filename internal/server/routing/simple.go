@@ -12,8 +12,11 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// SimpleSelector provides a simplified API that mimics the old interface
-// but uses the pipeline internally. This makes migration easier.
+// SimpleSelector is the production-facing facade over the ServiceSelector
+// pipeline. It adds the probe-pin bypass, gin session/observability plumbing,
+// and debug headers on top of the raw stage pipeline. Request handlers should
+// use it; only diagnostics (e.g. the LB simulator) drive ServiceSelector.Select
+// directly.
 type SimpleSelector struct {
 	selector *ServiceSelector
 }
@@ -23,20 +26,9 @@ func NewSimpleSelector(selector *ServiceSelector) *SimpleSelector {
 	return &SimpleSelector{selector: selector}
 }
 
-// SelectService is a drop-in replacement for DetermineProviderAndModelWithScenario.
-// It handles everything: session resolution, pipeline execution, provider validation.
-//
-// Migration is simple - just replace the method name:
-//
-// Before:
-//
-//	provider, service, err := s.DetermineProviderAndModelWithScenario(scenario, rule, req, sessionID)
-//
-// After:
-//
-//	provider, service, err := s.selector.SelectService(c, scenario, rule, req)
-//
-// sessionID is automatically resolved and stored in gin context.
+// SelectService resolves the session, runs the selection pipeline, validates
+// the provider, and records the decision (gin context keys, log line, debug
+// headers). The resolved session ID is stored in the gin context.
 func (s *SimpleSelector) SelectService(
 	c *gin.Context,
 	scenario typ.RuleScenario,
@@ -58,7 +50,7 @@ func (s *SimpleSelector) SelectService(
 			}
 			svc := &loadbalance.Service{Provider: providerUUID, Model: model, Active: true}
 			logrus.Debugf("[routing] probe service pin: provider=%s model=%s", provider.Name, model)
-			setRoutingDebugHeaders(c, provider.Name, provider.UUID, model, "probe_pin", -1)
+			setRoutingDebugHeaders(c, provider.Name, provider.UUID, model, SourceProbePin, -1)
 			return provider, svc, nil
 		}
 	}
@@ -83,11 +75,11 @@ func (s *SimpleSelector) SelectService(
 	c.Set("routing_source", result.Source)
 
 	// Store LB trajectory: which upstream was selected and via which tactic.
-	// "smart_routing" and "affinity" sources bypass the normal LB tactic, so
+	// SourceSmartRouting and SourceAffinity bypass the normal LB tactic, so
 	// label them explicitly; otherwise use the rule's configured tactic name.
 	c.Set(constant.CtxKeyLBServiceID, result.Service.ServiceID())
 	tacticName := result.Source
-	if result.Source != "smart_routing" && result.Source != "affinity" {
+	if result.Source != SourceSmartRouting && result.Source != SourceAffinity {
 		tacticName = rule.GetTacticType().String()
 	}
 	c.Set(constant.CtxKeyLBTactic, tacticName)

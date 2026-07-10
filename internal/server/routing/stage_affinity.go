@@ -24,7 +24,7 @@ func NewAffinityStage(store AffinityStore, scope string) *AffinityStage {
 
 // Name returns the stage identifier
 func (s *AffinityStage) Name() string {
-	return "affinity"
+	return SourceAffinity
 }
 
 // Evaluate checks for locked service affinity
@@ -88,7 +88,7 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 		return nil, false
 	}
 
-	result := NewResult(entry.Service, "affinity")
+	result := NewResult(entry.Service, SourceAffinity)
 	result.MatchedSmartRuleIndex = ctx.MatchedSmartRuleIndex
 	return result, true
 }

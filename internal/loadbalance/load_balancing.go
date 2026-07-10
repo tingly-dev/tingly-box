@@ -2,6 +2,7 @@ package loadbalance
 
 import (
 	"encoding/json"
+	"slices"
 	"sync"
 	"time"
 )
@@ -127,34 +128,36 @@ func (ss *ServiceStats) RecordUsage(inputTokens, outputTokens int) {
 
 // GetWindowStats returns current window statistics
 func (ss *ServiceStats) GetWindowStats() (requestCount int64, tokensConsumed int64) {
-	// Check if window has expired without locking first
-	if time.Since(ss.WindowStart) >= time.Duration(ss.TimeWindow)*time.Second {
-		// Reset the window when it expires - ResetWindow handles locking internally
-		ss.ResetWindow()
-		return 0, 0
-	}
-
-	// Now get the read lock for normal operation
 	ss.mutex.RLock()
-	defer ss.mutex.RUnlock()
+	if !ss.windowExpiredLocked() {
+		defer ss.mutex.RUnlock()
+		return ss.WindowRequestCount, ss.WindowTokensConsumed
+	}
+	ss.mutex.RUnlock()
 
-	return ss.WindowRequestCount, ss.WindowTokensConsumed
+	// Window expired — reset it (ResetWindow takes the write lock).
+	ss.ResetWindow()
+	return 0, 0
 }
 
 // GetWindowTokenDetails returns current window input and output token details
 func (ss *ServiceStats) GetWindowTokenDetails() (requestCount int64, inputTokens int64, outputTokens int64) {
-	// Check if window has expired without locking first
-	if time.Since(ss.WindowStart) >= time.Duration(ss.TimeWindow)*time.Second {
-		// Reset the window when it expires - ResetWindow handles locking internally
-		ss.ResetWindow()
-		return 0, 0, 0
-	}
-
-	// Now get the read lock for normal operation
 	ss.mutex.RLock()
-	defer ss.mutex.RUnlock()
+	if !ss.windowExpiredLocked() {
+		defer ss.mutex.RUnlock()
+		return ss.WindowRequestCount, ss.WindowInputTokens, ss.WindowOutputTokens
+	}
+	ss.mutex.RUnlock()
 
-	return ss.WindowRequestCount, ss.WindowInputTokens, ss.WindowOutputTokens
+	// Window expired — reset it (ResetWindow takes the write lock).
+	ss.ResetWindow()
+	return 0, 0, 0
+}
+
+// windowExpiredLocked reports whether the current window has expired.
+// Caller must hold at least the read lock.
+func (ss *ServiceStats) windowExpiredLocked() bool {
+	return time.Since(ss.WindowStart) >= time.Duration(ss.TimeWindow)*time.Second
 }
 
 // IsWindowExpired checks if the current time window has expired
@@ -162,7 +165,7 @@ func (ss *ServiceStats) IsWindowExpired() bool {
 	ss.mutex.RLock()
 	defer ss.mutex.RUnlock()
 
-	return time.Since(ss.WindowStart) >= time.Duration(ss.TimeWindow)*time.Second
+	return ss.windowExpiredLocked()
 }
 
 // ResetWindow resets the time window statistics
@@ -259,13 +262,7 @@ func (ss *ServiceStats) recalculateLatencyStats() {
 	// Sort for percentile calculation
 	sorted := make([]int64, len(ss.LatencySamples))
 	copy(sorted, ss.LatencySamples)
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[i] > sorted[j] {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
+	slices.Sort(sorted)
 
 	// Calculate percentiles
 	ss.P50LatencyMs = percentile(sorted, 0.50)
@@ -393,13 +390,7 @@ func (ss *ServiceStats) recalculateTTFTStats() {
 	// Sort for percentile calculation
 	sorted := make([]int64, len(ss.TTFTSamples))
 	copy(sorted, ss.TTFTSamples)
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[i] > sorted[j] {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
+	slices.Sort(sorted)
 
 	// Calculate percentiles (reuse existing percentile function)
 	ss.P50TTFTMs = percentile(sorted, 0.50)

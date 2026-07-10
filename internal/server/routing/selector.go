@@ -230,10 +230,10 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 }
 
 // postProcess handles post-selection logic like affinity locking.
-// Locks affinity whenever affinity is enabled and the source is not "affinity"
+// Locks affinity whenever affinity is enabled and the source is not SourceAffinity
 // (i.e., don't re-lock an already-locked entry).
 func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionResult) {
-	if result.Source == "affinity" || ctx.SessionID.IsEmpty() {
+	if result.Source == SourceAffinity || ctx.SessionID.IsEmpty() {
 		return
 	}
 

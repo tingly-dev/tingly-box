@@ -348,3 +348,31 @@ func TestBreakerStoreIsRuleScoped(t *testing.T) {
 		t.Fatal("ruleA should reject the service while its breaker is open")
 	}
 }
+
+func TestBreakerStaleHalfOpenProbeReclaimed(t *testing.T) {
+	base := time.Unix(2_000_000_000, 0)
+	now := base
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
+
+	b := NewBreaker(3, 30*time.Second)
+	for i := 0; i < 3; i++ {
+		b.RecordFailure()
+	}
+	now = now.Add(31 * time.Second)
+	if !b.Allow() {
+		t.Fatal("expected the half-open probe slot after the open window")
+	}
+	// The claimer never reports an outcome (e.g. selected but never
+	// dispatched). Within the window the slot stays held...
+	now = now.Add(10 * time.Second)
+	if b.Allow() {
+		t.Fatal("probe slot should still be held within the window")
+	}
+	// ...but after OpenDuration without an outcome it is reclaimed, so the
+	// service can still recover instead of being wedged forever.
+	now = now.Add(21 * time.Second)
+	if !b.Allow() {
+		t.Fatal("stale probe slot should be reclaimed after OpenDuration")
+	}
+}

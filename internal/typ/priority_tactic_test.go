@@ -250,3 +250,81 @@ func TestPromotionHoldNewSessionGoesToPrimary(t *testing.T) {
 		t.Fatalf("new session should adopt recovered T0 during hold, got %v", got)
 	}
 }
+
+// TestTierSelectionDoesNotLeakHalfOpenProbe pins the two-phase selection
+// contract: gathering candidates must not consume breaker probe slots; only
+// the picked service claims one. Before the fix, a half-open service that
+// shared a tier with a healthy peer had its probe slot consumed by Allow()
+// during candidate collection even when the peer was picked — with no
+// outcome ever reported, the slot stayed taken and the service could never
+// finish recovering.
+func TestTierSelectionDoesNotLeakHalfOpenProbe(t *testing.T) {
+	base := time.Unix(2_000_000_000, 0)
+	now := base
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
+
+	a := mkService("leak-a", "m1", 0)
+	b := mkService("leak-b", "m1", 0)
+	rule := mkTierRule(a, b)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
+	store := loadbalance.DefaultBreakerStore()
+
+	for iter := 0; iter < 20; iter++ {
+		// Trip A and advance past the open window so it is half-open-eligible.
+		for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+			store.RecordFailure(rule.UUID, a.ServiceID())
+		}
+		now = now.Add(loadbalance.DefaultBreakerOpenDuration + time.Second)
+
+		got := tactic.SelectService(rule)
+		switch got {
+		case b:
+			// A was not picked: its probe slot must remain claimable.
+			if !store.Allow(rule.UUID, a.ServiceID()) {
+				t.Fatalf("iter %d: probe slot of unpicked half-open service was leaked", iter)
+			}
+		case a:
+			// A claimed its own probe slot; a second claim must fail.
+			if store.Allow(rule.UUID, a.ServiceID()) {
+				t.Fatalf("iter %d: half-open probe slot was claimed twice", iter)
+			}
+		default:
+			t.Fatalf("iter %d: unexpected selection %v", iter, got)
+		}
+		// Report a probe failure for A so it re-opens cleanly for the next round.
+		store.RecordFailure(rule.UUID, a.ServiceID())
+	}
+}
+
+// TestTierHalfOpenProbeHeldFallsBackToPeer verifies that when the only
+// half-open service's probe slot is already in flight, selection re-picks
+// among tier peers instead of returning the blocked service.
+func TestTierHalfOpenProbeHeldFallsBackToPeer(t *testing.T) {
+	base := time.Unix(2_000_000_000, 0)
+	now := base
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
+
+	a := mkService("held-a", "m1", 0)
+	b := mkService("held-b", "m1", 0)
+	rule := mkTierRule(a, b)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
+	store := loadbalance.DefaultBreakerStore()
+
+	// Trip A, pass the open window, and claim its probe slot out-of-band
+	// (simulating another in-flight request holding the probe).
+	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+		store.RecordFailure(rule.UUID, a.ServiceID())
+	}
+	now = now.Add(loadbalance.DefaultBreakerOpenDuration + time.Second)
+	if !store.Allow(rule.UUID, a.ServiceID()) {
+		t.Fatal("setup: expected to claim A's probe slot")
+	}
+
+	for i := 0; i < 10; i++ {
+		if got := tactic.SelectService(rule); got != b {
+			t.Fatalf("expected peer B while A's probe is in flight, got %v", got)
+		}
+	}
+}

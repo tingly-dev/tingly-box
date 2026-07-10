@@ -225,10 +225,10 @@ func TestAsSpeedBasedParams(t *testing.T) {
 	}
 
 	// Test with wrong type
-	rp := RoundRobinParams{}
+	rp := TokenBasedParams{}
 	_, ok = AsSpeedBasedParams(rp)
 	if ok {
-		t.Error("AsSpeedBasedParams() returned true for RoundRobinParams")
+		t.Error("AsSpeedBasedParams() returned true for TokenBasedParams")
 	}
 }
 

@@ -47,7 +47,6 @@ func TestRepro_NoServiceAvailable_SingleServiceRateLimited(t *testing.T) {
 	healthMonitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
 	healthFilter := typ.NewHealthFilter(healthMonitor)
 	lb := server.NewLoadBalancer(cfg, healthFilter)
-	defer lb.Stop()
 	affinityStore := affinity.NewAffinityStore(0)
 	selector := routing.NewServiceSelector(cfg, affinityStore, lb)
 

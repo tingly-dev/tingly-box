@@ -5,6 +5,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// Selection sources: which stage produced a SelectionResult. Also used as the
+// stage names in EvaluatedStages and observability output.
+const (
+	SourceHealth       = "health"
+	SourceAffinity     = "affinity"
+	SourceSmartRouting = "smart_routing"
+	SourceLoadBalancer = "load_balancer"
+	// SourceProbePin marks the X-Tingly-Probe-Service bypass, which pins a
+	// specific service without running the pipeline.
+	SourceProbePin = "probe_pin"
+)
+
 // SelectionResult represents the output of service selection pipeline.
 // It includes the selected service, provider, and metadata about the selection.
 type SelectionResult struct {
@@ -18,8 +30,8 @@ type SelectionResult struct {
 	// Provider is the resolved provider for the service
 	Provider *typ.Provider
 
-	// Source indicates which stage selected this service
-	// Values: "affinity", "smart_routing", "load_balancer"
+	// Source indicates which stage selected this service (one of the
+	// Source* constants above).
 	Source string
 
 	// EvaluatedStages tracks which stages were evaluated (for observability)

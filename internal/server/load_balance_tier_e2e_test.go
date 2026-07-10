@@ -58,10 +58,7 @@ func TestTierRouting_EndToEnd(t *testing.T) {
 	// Build a load balancer with a no-op health filter so the only
 	// thing that can hide a service from the tactic is its breaker.
 	hf := typ.NewHealthFilter(nil)
-	lb := &LoadBalancer{
-		tactics:      make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
-		healthFilter: hf,
-	}
+	lb := &LoadBalancer{healthFilter: hf}
 
 	primaryID := "e2e-primary/gpt-4"
 	fallbackID := "e2e-fallback/gpt-4"

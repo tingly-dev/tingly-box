@@ -3,6 +3,7 @@ package typ
 import (
 	"encoding/json"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -237,65 +238,14 @@ type AdaptiveParams struct {
 
 func (a AdaptiveParams) isTacticParams() {}
 
-// Helper constructors for creating tactic parameters
-func NewTokenBasedParams(threshold int64) TacticParams {
-	return TokenBasedParams{TokenThreshold: threshold}
-}
-
-func NewHybridParams(requestThreshold, tokenThreshold int64) TacticParams {
-	return TokenBasedParams{TokenThreshold: tokenThreshold}
-}
-
+// NewRandomParams creates parameters for the random tactic.
 func NewRandomParams() TacticParams {
 	return RandomParams{}
 }
 
-func NewLatencyBasedParams(latencyThresholdMs int64, sampleWindowSize int, percentile float64, comparisonMode string) TacticParams {
-	return LatencyBasedParams{
-		LatencyThresholdMs: latencyThresholdMs,
-		SampleWindowSize:   sampleWindowSize,
-		Percentile:         percentile,
-		ComparisonMode:     comparisonMode,
-	}
-}
-
-func NewSpeedBasedParams(minSamplesRequired int, speedThresholdTps float64, sampleWindowSize int) TacticParams {
-	return SpeedBasedParams{
-		MinSamplesRequired: minSamplesRequired,
-		SpeedThresholdTps:  speedThresholdTps,
-		SampleWindowSize:   sampleWindowSize,
-	}
-}
-
-func NewAdaptiveParams(latencyWeight, tokenWeight, speedWeight, healthWeight float64, maxLatencyMs int64, maxTokenUsage int64, minSpeedTps float64, scoringMode string) TacticParams {
-	return AdaptiveParams{
-		LatencyWeight: latencyWeight,
-		TokenWeight:   tokenWeight,
-		SpeedWeight:   speedWeight,
-		HealthWeight:  healthWeight,
-		MaxLatencyMs:  maxLatencyMs,
-		MaxTokenUsage: maxTokenUsage,
-		MinSpeedTps:   minSpeedTps,
-		ScoringMode:   scoringMode,
-	}
-}
-
-// RoundRobinParams is an alias for TokenBasedParams (deprecated)
-type RoundRobinParams struct{}
-
-func (r RoundRobinParams) isTacticParams() {}
-
 // DefaultParams returns default parameters for each tactic type
-func DefaultRoundRobinParams() TacticParams {
-	return &RoundRobinParams{}
-}
-
 func DefaultTokenBasedParams() TacticParams {
 	return TokenBasedParams{TokenThreshold: constant.DefaultTokenThreshold}
-}
-
-func DefaultHybridParams() TacticParams {
-	return DefaultTokenBasedParams()
 }
 
 func DefaultRandomParams() TacticParams {
@@ -332,12 +282,9 @@ func DefaultAdaptiveParams() TacticParams {
 	}
 }
 
-// Type assertion helpers for TacticParams
-func AsTokenBasedParams(p TacticParams) (TokenBasedParams, bool) {
-	tp, ok := p.(TokenBasedParams)
-	return tp, ok
-}
-
+// Type assertion helpers for TacticParams. They accept both the pointer and
+// value forms because UnmarshalJSON / ParseTacticFromMap store pointers while
+// hand-built configs may use values.
 func AsRandomParams(p TacticParams) (RandomParams, bool) {
 	if rp, ok := p.(*RandomParams); ok {
 		return *rp, true
@@ -396,6 +343,24 @@ func NewTokenBasedTactic(tokenThreshold int64) *TokenBasedTactic {
 	return &TokenBasedTactic{TokenThreshold: tokenThreshold}
 }
 
+// resolveCurrentService returns the service matching rule.CurrentServiceID
+// among the given services, defaulting to the first when unset or not found.
+// Sticky tactics (token/latency) use it to keep serving from the current
+// service until a threshold forces a switch.
+func resolveCurrentService(rule *Rule, services []*loadbalance.Service) *loadbalance.Service {
+	if rule.CurrentServiceID != "" {
+		for _, svc := range services {
+			if svc.ServiceID() == rule.CurrentServiceID {
+				return svc
+			}
+		}
+	}
+	if len(services) > 0 {
+		return services[0]
+	}
+	return nil
+}
+
 // SelectService selects service based on token consumption thresholds
 func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Get active services once to avoid duplicate filtering
@@ -404,20 +369,7 @@ func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return nil
 	}
 
-	// Get current service by ID
-	var currentService *loadbalance.Service
-	if rule.CurrentServiceID != "" {
-		for _, svc := range activeServices {
-			if svc.ServiceID() == rule.CurrentServiceID {
-				currentService = svc
-				break
-			}
-		}
-	}
-	// Default to first service if not found
-	if currentService == nil && len(activeServices) > 0 {
-		currentService = activeServices[0]
-	}
+	currentService := resolveCurrentService(rule, activeServices)
 	if currentService == nil {
 		return nil
 	}
@@ -569,20 +521,7 @@ func (lt *LatencyBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return activeServices[0]
 	}
 
-	// Get current service by ID
-	var currentService *loadbalance.Service
-	if rule.CurrentServiceID != "" {
-		for _, svc := range activeServices {
-			if svc.ServiceID() == rule.CurrentServiceID {
-				currentService = svc
-				break
-			}
-		}
-	}
-	// Default to first service if not found
-	if currentService == nil && len(activeServices) > 0 {
-		currentService = activeServices[0]
-	}
+	currentService := resolveCurrentService(rule, activeServices)
 	if currentService == nil {
 		return nil
 	}
@@ -934,9 +873,11 @@ var (
 	)
 )
 
-// IsValidTactic checks if the given tactic string is valid
+// IsValidTactic checks if the given tactic string is valid.
+// Deprecated aliases are accepted and mapped by loadbalance.ParseTacticType:
+// round_robin/hybrid → token_based, priority → tier, and adaptive → random
+// (the adaptive scorer is legacy; configuring it by name selects random).
 func IsValidTactic(tacticStr string) bool {
-	// Map of valid tactic names (round_robin and hybrid are deprecated but accepted)
 	validTactics := map[string]bool{
 		"round_robin":   true, // deprecated → token_based
 		"token_based":   true,
@@ -944,7 +885,7 @@ func IsValidTactic(tacticStr string) bool {
 		"random":        true,
 		"latency_based": true,
 		"speed_based":   true,
-		"adaptive":      true,
+		"adaptive":      true, // legacy → random
 		"tier":          true,
 		"priority":      true, // deprecated → tier
 	}
@@ -1109,14 +1050,13 @@ func (cbt *CapacityBasedTactic) GetType() loadbalance.TacticType {
 	return loadbalance.TacticCapacityBased
 }
 
-// GetCapacityBasedTactic returns a singleton capacity-based tactic
-var capacityBasedTactic *CapacityBasedTactic
+// capacityBasedTactic is the pre-created singleton, matching the other
+// default tactics above. (It was previously lazy-initialized without
+// synchronization, racing on the concurrent selection path.)
+var capacityBasedTactic = NewCapacityBasedTactic()
 
 // GetCapacityBasedTactic returns the capacity-based tactic singleton
 func GetCapacityBasedTactic() *CapacityBasedTactic {
-	if capacityBasedTactic == nil {
-		capacityBasedTactic = NewCapacityBasedTactic()
-	}
 	return capacityBasedTactic
 }
 
@@ -1152,6 +1092,13 @@ func NewTierTactic(within loadbalance.TacticType) *TierTactic {
 // closed (or half-open and unclaimed). It returns nil when every active
 // service is currently tripped — callers should surface the original
 // upstream error in that case.
+//
+// Selection is two-phase per tier: candidates are gathered with the
+// non-consuming IsAvailable read, the sub-tactic picks one, and only the
+// picked service claims a breaker slot via Allow. Claiming for every
+// candidate up front would consume half-open probe slots of services that
+// are never dispatched; with no outcome ever reported, those slots stayed
+// taken and the service could never finish recovering.
 func (pt *TierTactic) SelectService(rule *Rule) *loadbalance.Service {
 	active := rule.GetActiveServices()
 	if len(active) == 0 {
@@ -1171,20 +1118,41 @@ func (pt *TierTactic) SelectService(rule *Rule) *loadbalance.Service {
 		if fallback == nil {
 			fallback = group.services
 		}
-		allowed := make([]*loadbalance.Service, 0, len(group.services))
+		candidates := make([]*loadbalance.Service, 0, len(group.services))
 		for _, svc := range group.services {
-			if store.Allow(rule.UUID, svc.ServiceID()) {
-				allowed = append(allowed, svc)
+			if store.IsAvailable(rule.UUID, svc.ServiceID()) {
+				candidates = append(candidates, svc)
 			}
 		}
-		if len(allowed) > 0 {
-			return pt.pickWithinTier(rule, allowed)
+		// Pick within the tier, then claim the breaker slot for the picked
+		// service only. A half-open service whose probe slot is already in
+		// flight fails the claim — drop it and re-pick among its peers.
+		for len(candidates) > 0 {
+			chosen := pt.pickWithinTier(rule, candidates)
+			if chosen == nil {
+				break
+			}
+			if store.Allow(rule.UUID, chosen.ServiceID()) {
+				return chosen
+			}
+			candidates = removeServiceByID(candidates, chosen.ServiceID())
 		}
 	}
 	if len(fallback) > 0 {
 		return pt.pickWithinTier(rule, fallback)
 	}
 	return active[0]
+}
+
+// removeServiceByID returns services without the entry matching serviceID.
+func removeServiceByID(services []*loadbalance.Service, serviceID string) []*loadbalance.Service {
+	out := make([]*loadbalance.Service, 0, len(services))
+	for _, svc := range services {
+		if svc.ServiceID() != serviceID {
+			out = append(out, svc)
+		}
+	}
+	return out
 }
 
 func (pt *TierTactic) pickWithinTier(rule *Rule, services []*loadbalance.Service) *loadbalance.Service {
@@ -1234,13 +1202,7 @@ func groupServicesByTier(services []*loadbalance.Service) []tierBucket {
 		keys = append(keys, k)
 	}
 	// Pure ascending: lower number = higher priority = tried first.
-	for i := 0; i < len(keys); i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[i] > keys[j] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	sort.Ints(keys)
 
 	out := make([]tierBucket, 0, len(keys))
 	for _, k := range keys {

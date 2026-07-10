@@ -113,7 +113,6 @@ func TestLB_VirtualValidation_EqualProviders(t *testing.T) {
 		rule := newTwoProviderRule(c.tactic)
 		counts := simulate(t, lb, rule, total)
 		report(t, c.name, counts, total)
-		lb.Stop()
 
 		p1, p2 := counts["provider1"], counts["provider2"]
 		maxShare := 100.0 * float64(max(p1, p2)) / float64(total)

@@ -296,10 +296,10 @@ func TestAsAdaptiveParams(t *testing.T) {
 	}
 
 	// Test with wrong type
-	rp := RoundRobinParams{}
+	rp := TokenBasedParams{}
 	_, ok = AsAdaptiveParams(rp)
 	if ok {
-		t.Error("AsAdaptiveParams() returned true for RoundRobinParams")
+		t.Error("AsAdaptiveParams() returned true for TokenBasedParams")
 	}
 }
 

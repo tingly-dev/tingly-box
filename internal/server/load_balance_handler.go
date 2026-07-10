@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,70 +14,6 @@ import (
 type ServiceHealthResponse struct {
 	Rule   string                 `json:"rule" example:"gpt-4"`
 	Health map[string]interface{} `json:"health"`
-}
-
-// UpdateRuleTacticRequest represents the request to update rule tactic
-type UpdateRuleTacticRequest struct {
-	Tactic string `json:"tactic" binding:"required,oneof=token_based random latency_based speed_based adaptive" description:"Load balancing tactic" example:"adaptive"`
-}
-
-// UpdateRuleTacticResponse represents the response for updating rule tactic
-type UpdateRuleTacticResponse struct {
-	Message string `json:"message" example:"Tactic updated successfully"`
-	Tactic  string `json:"tactic" example:"adaptive"`
-}
-
-// RuleStatsResponse represents the statistics response for a rule
-type RuleStatsResponse struct {
-	Rule  string                 `json:"rule" example:"gpt-4"`
-	Stats map[string]interface{} `json:"stats"`
-}
-
-// ServiceStatsResponse represents the statistics response for a service
-type ServiceStatsResponse struct {
-	ServiceID string                 `json:"service_id" example:"openai:gpt-4"`
-	Stats     map[string]interface{} `json:"stats,omitempty"`
-}
-
-// AllStatsResponse represents the response for all statistics
-type AllStatsResponse struct {
-	Stats map[string]interface{} `json:"stats"`
-}
-
-// CurrentServiceResponse represents the current service response
-type CurrentServiceResponse struct {
-	Rule      string                 `json:"rule" example:"gpt-4"`
-	Service   interface{}            `json:"service"`
-	ServiceID string                 `json:"service_id" example:"openai:gpt-4"`
-	Tactic    string                 `json:"tactic" example:"adaptive"`
-	Stats     map[string]interface{} `json:"stats,omitempty"`
-}
-
-// ServiceMetric represents a service metric entry
-type ServiceMetric struct {
-	ServiceID            string `json:"service_id" example:"openai:gpt-4"`
-	RequestCount         int64  `json:"request_count" example:"100"`
-	WindowRequestCount   int64  `json:"window_request_count" example:"50"`
-	WindowTokensConsumed int64  `json:"window_tokens_consumed" example:"25000"`
-	WindowInputTokens    int64  `json:"window_input_tokens" example:"15000"`
-	WindowOutputTokens   int64  `json:"window_output_tokens" example:"10000"`
-	LastUsed             string `json:"last_used" example:"2024-01-01T12:00:00Z"`
-}
-
-// MetricsResponse represents the metrics response
-type MetricsResponse struct {
-	Metrics       []ServiceMetric `json:"metrics"`
-	TotalServices int             `json:"total_services" example:"5"`
-}
-
-// ClearStatsResponse represents the response for clearing statistics
-type ClearStatsResponse struct {
-	Message string `json:"message" example:"Statistics cleared for rule: gpt-4"`
-}
-
-// RuleSummaryResponse represents a rule summary response
-type RuleSummaryResponse struct {
-	Summary interface{} `json:"summary"`
 }
 
 // LoadBalancerEngine is the narrow slice of the AI Model API's load-balancer
@@ -242,38 +177,36 @@ func (api *LoadBalancerAPI) ClearRuleStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Statistics cleared for rule: " + rule.RequestModel})
 }
 
+// findRuleService resolves a (ruleId, serviceId) pair to the matching service,
+// writing the appropriate 404 response and returning nil when either is missing.
+func (api *LoadBalancerAPI) findRuleService(c *gin.Context, ruleId, serviceId string) *loadbalance.Service {
+	rule := api.config.GetRuleByUUID(ruleId)
+	if rule == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		return nil
+	}
+
+	for _, service := range rule.GetServices() {
+		if service.ServiceID() == serviceId {
+			return service
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "Service not found in rule"})
+	return nil
+}
+
 // GetServiceStats returns statistics for a specific service
 func (api *LoadBalancerAPI) GetServiceStats(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 	serviceId := c.Param("serviceId")
 
-	// Validate that the service belongs to the rule
-	rule := api.config.GetRuleByUUID(ruleId)
-	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+	service := api.findRuleService(c, ruleId, serviceId)
+	if service == nil {
 		return
 	}
 
-	services := rule.GetServices()
-	var foundService *loadbalance.Service
-	for _, service := range services {
-		if service.ServiceID() == serviceId {
-			foundService = service
-			break
-		}
-	}
-
-	if foundService == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Service not found in rule"})
-		return
-	}
-
-	stats := api.loadBalancer.GetServiceStats(foundService.Provider, foundService.Model)
-	if stats == nil {
-		c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "service_id": serviceId, "stats": nil})
-		return
-	}
-
+	stats := api.loadBalancer.GetServiceStats(service.Provider, service.Model)
 	c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "service_id": serviceId, "stats": stats})
 }
 
@@ -282,28 +215,12 @@ func (api *LoadBalancerAPI) ClearServiceStats(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 	serviceId := c.Param("serviceId")
 
-	// Validate that the service belongs to the rule
-	rule := api.config.GetRuleByUUID(ruleId)
-	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+	service := api.findRuleService(c, ruleId, serviceId)
+	if service == nil {
 		return
 	}
 
-	services := rule.GetServices()
-	var foundService *loadbalance.Service
-	for _, service := range services {
-		if service.ServiceID() == serviceId {
-			foundService = service
-			break
-		}
-	}
-
-	if foundService == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Service not found in rule"})
-		return
-	}
-
-	api.loadBalancer.ClearServiceStats(foundService.Provider, foundService.Model)
+	api.loadBalancer.ClearServiceStats(service.Provider, service.Model)
 	c.JSON(http.StatusOK, gin.H{"message": "Statistics cleared for service: " + serviceId})
 }
 
@@ -355,84 +272,6 @@ func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// GetServiceHealth checks the health of all services in a rule
-func (api *LoadBalancerAPI) GetServiceHealth(c *gin.Context) {
-	ruleId := c.Param("ruleId")
-
-	rule := api.config.GetRuleByUUID(ruleId)
-	if rule == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
-		return
-	}
-
-	services := rule.GetServices()
-	health := make(map[string]interface{})
-
-	for _, service := range services {
-		serviceHealth := gin.H{
-			"active":     service.Active,
-			"service_id": service.ServiceID(),
-		}
-
-		stats := api.loadBalancer.GetServiceStats(service.Provider, service.Model)
-		if stats != nil {
-			serviceHealth["last_used"] = stats.LastUsed
-			serviceHealth["window_expired"] = stats.IsWindowExpired()
-			serviceHealth["request_count"] = stats.WindowRequestCount
-		}
-
-		health[service.ServiceID()] = serviceHealth
-	}
-
-	c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "rule_name": rule.RequestModel, "health": health})
-}
-
-// GetMetrics returns load balancing metrics
-func (api *LoadBalancerAPI) GetMetrics(c *gin.Context) {
-	// Query parameters
-	limitStr := c.DefaultQuery("limit", "100")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 100
-	}
-
-	allStats := api.loadBalancer.GetAllServiceStats()
-
-	// Sort by total tokens consumed (top services first)
-	type serviceMetric struct {
-		ServiceID            string `json:"service_id"`
-		RequestCount         int64  `json:"request_count"`
-		WindowRequestCount   int64  `json:"window_request_count"`
-		WindowTokensConsumed int64  `json:"window_tokens_consumed"`
-		WindowInputTokens    int64  `json:"window_input_tokens"`
-		WindowOutputTokens   int64  `json:"window_output_tokens"`
-		LastUsed             string `json:"last_used"`
-	}
-
-	var metrics []serviceMetric
-	for serviceID, stats := range allStats {
-		metrics = append(metrics, serviceMetric{
-			ServiceID:            serviceID,
-			RequestCount:         stats.RequestCount,
-			WindowRequestCount:   stats.WindowRequestCount,
-			WindowTokensConsumed: stats.WindowTokensConsumed,
-			WindowInputTokens:    stats.WindowInputTokens,
-			WindowOutputTokens:   stats.WindowOutputTokens,
-			LastUsed:             stats.LastUsed.Format("2006-01-02T15:04:05Z"),
-		})
-	}
-
-	// Return top services by limit
-	if len(metrics) > limit {
-		metrics = metrics[:limit]
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"metrics":        metrics,
-		"total_services": len(allStats),
-	})
 }
 
 // GetServicesHealth returns health status for all services in a rule

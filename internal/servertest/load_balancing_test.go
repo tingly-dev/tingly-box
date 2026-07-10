@@ -38,7 +38,6 @@ func TestLoadBalancer_TokenBased(t *testing.T) {
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
 
 	// Create test rule with multiple services using new LBTactic format
 	rule := &typ.Rule{
@@ -134,7 +133,6 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
 
 	// Create test rule with mixed enabled/disabled services
 	rule := &typ.Rule{
@@ -194,17 +192,6 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 }
 
 func TestLoadBalancer_RecordUsage(t *testing.T) {
-	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
-	require.NoError(t, err)
-
-	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
-
-	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
-
 	// Create a test service
 	testService := &loadbalance.Service{
 		Provider:   "test-provider",
@@ -234,72 +221,6 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 	}
 }
 
-func TestLoadBalancer_ValidateRule(t *testing.T) {
-	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
-	require.NoError(t, err)
-
-	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
-
-	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
-
-	// Test valid rule
-	validRule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "test",
-		UUID:         uuid.New().String(),
-		Services: []*loadbalance.Service{
-			{
-				Provider:   "provider1",
-				Model:      "model1",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		Active: true,
-	}
-
-	if err := lb.ValidateRule(validRule); err != nil {
-		t.Errorf("Valid rule validation failed: %v", err)
-	}
-
-	// Test rule with no services
-	invalidRule1 := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "test",
-		Services:     []*loadbalance.Service{},
-		Active:       true,
-	}
-
-	if err := lb.ValidateRule(invalidRule1); err == nil {
-		t.Error("Expected validation error for rule with no services")
-	}
-
-	// Test rule with no enabled services
-	invalidRule2 := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "test",
-		Services: []*loadbalance.Service{
-			{
-				Provider:   "provider1",
-				Model:      "model1",
-				Weight:     1,
-				Active:     false, // Disabled
-				TimeWindow: 300,
-			},
-		},
-		Active: true,
-	}
-
-	if err := lb.ValidateRule(invalidRule2); err == nil {
-		t.Error("Expected validation error for rule with no enabled services")
-	}
-}
-
 func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	// Create a minimal config for testing
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
@@ -310,7 +231,6 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
 
 	// Create test rule
 	rule := &typ.Rule{
@@ -835,7 +755,6 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 
 	// Create load balancer - it already has all default tactics
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
 
 	// Create test rule with weighted services using new LBTactic format
 	rule := &typ.Rule{
@@ -957,7 +876,6 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(ts.appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
 
 	// Test service selection
 	service, err := lb.SelectService(&rule)
@@ -996,7 +914,6 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-	defer lb.Stop()
 
 	// Create test rule with 3 services to make the rotation more interesting
 	rule := &typ.Rule{

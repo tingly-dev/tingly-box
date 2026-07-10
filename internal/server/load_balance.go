@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -12,45 +11,21 @@ import (
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// LoadBalancer manages load balancing across multiple services
+// LoadBalancer is the tactic-selection engine: it narrows a rule's services
+// to the healthy active set and delegates the final pick to the rule's
+// configured tactic (rule.LBTactic.Instantiate()). It also serves as the
+// stats/admin surface consumed by LoadBalancerAPI.
 type LoadBalancer struct {
-	tactics      map[loadbalance.TacticType]typ.LoadBalancingTactic
-	stats        map[string]*loadbalance.ServiceStats
 	config       *config.Config
 	healthFilter *typ.HealthFilter
-	mutex        sync.RWMutex
 }
 
 // NewLoadBalancer creates a new load balancer
 func NewLoadBalancer(cfg *config.Config, healthFilter *typ.HealthFilter) *LoadBalancer {
-	lb := &LoadBalancer{
-		tactics:      make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
-		stats:        make(map[string]*loadbalance.ServiceStats),
+	return &LoadBalancer{
 		config:       cfg,
 		healthFilter: healthFilter,
 	}
-
-	// Initialize default tactics
-	lb.initializeDefaultTactics()
-
-	return lb
-}
-
-// initializeDefaultTactics initializes default load balancing tactics
-func (lb *LoadBalancer) initializeDefaultTactics() {
-	lb.tactics[loadbalance.TacticTokenBased] = typ.NewTokenBasedTactic(10000)
-	lb.tactics[loadbalance.TacticRandom] = typ.NewRandomTactic()
-	lb.tactics[loadbalance.TacticLatencyBased] = typ.GetDefaultTactic(loadbalance.TacticLatencyBased)
-	lb.tactics[loadbalance.TacticSpeedBased] = typ.GetDefaultTactic(loadbalance.TacticSpeedBased)
-	lb.tactics[loadbalance.TacticAdaptive] = typ.GetDefaultTactic(loadbalance.TacticAdaptive)
-}
-
-// RegisterTactic registers a custom tactic
-func (lb *LoadBalancer) RegisterTactic(tacticType loadbalance.TacticType, tactic typ.LoadBalancingTactic) {
-	lb.mutex.Lock()
-	defer lb.mutex.Unlock()
-
-	lb.tactics[tacticType] = tactic
 }
 
 // SelectService selects the best service for a rule based on the configured tactic
@@ -148,15 +123,6 @@ func logTierConfigIgnored(rule *typ.Rule, services []*loadbalance.Service, tacti
 	}
 }
 
-// getTactic retrieves a tactic by type
-func (lb *LoadBalancer) getTactic(tacticType loadbalance.TacticType) (typ.LoadBalancingTactic, bool) {
-	lb.mutex.RLock()
-	defer lb.mutex.RUnlock()
-
-	tactic, exists := lb.tactics[tacticType]
-	return tactic, exists
-}
-
 // UpdateServiceIndex updates the current service ID for a rule
 func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *loadbalance.Service) {
 	if rule == nil || selectedService == nil {
@@ -165,18 +131,6 @@ func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *load
 
 	// Set the current service ID (provider:model format)
 	rule.CurrentServiceID = selectedService.ServiceID()
-}
-
-// RecordUsage records usage for a service
-// Deprecated: This method is no longer needed as usage is recorded directly in handlers
-func (lb *LoadBalancer) RecordUsage(provider, model string, inputTokens, outputTokens int) {
-	// No-op: usage is now recorded directly in handlers via trackUsageFromContext
-	// This method is kept for backward compatibility during the migration
-}
-
-// Stop stops the load balancer and cleanup resources
-func (lb *LoadBalancer) Stop() {
-	// No-op: no resources to cleanup
 }
 
 // GetServiceStats returns statistics for a specific service
@@ -289,11 +243,6 @@ func (lb *LoadBalancer) ClearServiceStats(provider, model string) {
 
 // ClearAllStats clears all statistics (both in-memory and persisted in config)
 func (lb *LoadBalancer) ClearAllStats() {
-	// Clear from internal stats map
-	for _, stats := range lb.stats {
-		stats.ResetWindow()
-	}
-
 	// Clear persisted stats from the dedicated stats store
 	if lb.config != nil {
 		if sm := lb.config.StoreManager(); sm != nil {
@@ -331,44 +280,6 @@ func (lb *LoadBalancer) ClearAllStats() {
 			}
 		}
 	}
-}
-
-// ValidateRule validates a rule configuration
-func (lb *LoadBalancer) ValidateRule(rule *typ.Rule) error {
-	if rule == nil {
-		return fmt.Errorf("rule is nil")
-	}
-
-	if rule.RequestModel == "" {
-		return fmt.Errorf("request_model is required")
-	}
-
-	services := rule.GetServices()
-	if len(services) == 0 {
-		return fmt.Errorf("no services configured")
-	}
-
-	// Check if at least one service is active
-	hasActiveService := false
-	for _, service := range services {
-		if service.Active {
-			hasActiveService = true
-			break
-		}
-	}
-
-	if !hasActiveService {
-		return fmt.Errorf("at least one service must be active")
-	}
-
-	// Validate tactic
-	tacticType := rule.GetTacticType()
-	_, exists := lb.getTactic(tacticType)
-	if !exists {
-		return fmt.Errorf("unsupported tactic: %s", tacticType.String())
-	}
-
-	return nil
 }
 
 // GetRuleSummary returns a summary of rule configuration and statistics
