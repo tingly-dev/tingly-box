@@ -349,7 +349,8 @@ export default {
   },
   "probe": {
     "quickTest": "Quick test (stream)",
-    "testAll": "Test all rules (stream)",
+    "testAll": "Test All",
+    "testAllHint": "Run a quick streaming test on every active rule",
     "viewDetails": "View details",
     "dismiss": "Dismiss",
     "testRule": "Test Rule",

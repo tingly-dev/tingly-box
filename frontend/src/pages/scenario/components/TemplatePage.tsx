@@ -354,6 +354,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
             onViewLogs={scenario ? () => setLogDialogOpen(true) : undefined}
+            onProbeAll={rules.length > 0 ? handleProbeAll : undefined}
             onShowGuide={() => setShowGuide(true)}
             scenario={scenario}
         />
@@ -392,7 +393,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         onToggleExpandAll={handleToggleExpandAll}
                         showExpandCollapseButton={showExpandCollapseButton}
                         onShowGuide={() => setShowGuide(true)}
-                        onProbeAll={rules.length > 0 ? handleProbeAll : undefined}
                     />
                 }
                 rightAction={rightAction}
