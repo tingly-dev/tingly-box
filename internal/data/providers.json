@@ -351,6 +351,27 @@
       "base_url_anthropic": null,
       "models": [
         {
+          "id": "gpt-5.6-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "note": "旗舰模型，能力最强，适合复杂编码、长程 Agent 和高难度推理"
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "note": "平衡能力与成本，适合常规开发任务"
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "note": "延迟和成本最低，适合高频、相对简单的任务"
+        },
+        {
           "id": "gpt-5.4",
           "context": 272000
         },
