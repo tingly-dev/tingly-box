@@ -4956,10 +4956,6 @@
       "AdvisorConfig": {
         "type": "object",
         "properties": {
-          "ProviderResolver": {
-            "type": "object",
-            "description": "Field ProviderResolver"
-          },
           "max_tokens": {
             "type": "integer",
             "format": "int64",
@@ -4983,10 +4979,7 @@
             "format": "int64",
             "description": "Field timeout_seconds"
           }
-        },
-        "required": [
-          "ProviderResolver"
-        ]
+        }
       },
       "AggregatedStat": {
         "type": "object",
@@ -5113,6 +5106,10 @@
       "ApplyClaudeConfigRequest": {
         "type": "object",
         "properties": {
+          "defaultMode": {
+            "type": "string",
+            "description": "Field defaultMode"
+          },
           "installStatusLine": {
             "type": "boolean",
             "description": "Field installStatusLine"
@@ -5234,12 +5231,30 @@
       "ApplyOpenCodeConfigResponse": {
         "type": "object",
         "properties": {
-          "ApplyResult": {
-            "$ref": "#/components/schemas/ApplyResult"
+          "backupPath": {
+            "type": "string",
+            "description": "Field backupPath"
+          },
+          "created": {
+            "type": "boolean",
+            "description": "Field created"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          },
+          "updated": {
+            "type": "boolean",
+            "description": "Field updated"
           }
         },
         "required": [
-          "ApplyResult"
+          "success",
+          "message"
         ]
       },
       "ApplyResult": {
@@ -5334,13 +5349,6 @@
             "type": "string",
             "description": "Field DISABLE_TELEMETRY"
           },
-          "Extra": {
-            "type": "object",
-            "description": "Field Extra",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
           "HTTPS_PROXY": {
             "type": "string",
             "description": "Field HTTPS_PROXY"
@@ -5373,10 +5381,7 @@
             "type": "string",
             "description": "Field USE_BUILTIN_RIPGREP"
           }
-        },
-        "required": [
-          "Extra"
-        ]
+        }
       },
       "CodexConfigPreviewResponse": {
         "type": "object",
@@ -5645,10 +5650,6 @@
       "CreateRuleRequest": {
         "type": "object",
         "properties": {
-          "CurrentServiceID": {
-            "type": "string",
-            "description": "Field CurrentServiceID"
-          },
           "active": {
             "type": "boolean",
             "description": "Field active"
@@ -5709,7 +5710,6 @@
           "response_model",
           "description",
           "services",
-          "CurrentServiceID",
           "lb_tactic",
           "active",
           "smart_enabled"
@@ -5966,11 +5966,13 @@
             "properties": {
               "data": {
                 "type": "string",
-                "description": "Base64 or JSONL encoded provider export data"
+                "description": "Base64 or JSONL encoded provider export data",
+                "example": "TGB64:1.0:..."
               },
               "format": {
                 "type": "string",
-                "description": "Field format"
+                "description": "Field format",
+                "example": "base64"
               }
             },
             "required": [
@@ -6536,18 +6538,20 @@
                 "type": "array",
                 "description": "Field providers",
                 "items": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProviderImportInfo"
                 }
               },
               "providers_created": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field providers_created"
+                "description": "Field providers_created",
+                "example": 1
               },
               "providers_used": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field providers_used"
+                "description": "Field providers_used",
+                "example": 0
               }
             },
             "required": [
@@ -7171,8 +7175,10 @@
       "ModelRequestDetail": {
         "type": "object",
         "properties": {
-          "ModelRequestSummary": {
-            "$ref": "#/components/schemas/ModelRequestSummary"
+          "event_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field event_count"
           },
           "events": {
             "type": "array",
@@ -7180,10 +7186,64 @@
             "items": {
               "$ref": "#/components/schemas/ModelRequestEvent"
             }
+          },
+          "has_error": {
+            "type": "boolean",
+            "description": "Field has_error"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field latency_ms"
+          },
+          "max_level": {
+            "type": "string",
+            "description": "Field max_level"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Field provider"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id"
+          },
+          "request_model": {
+            "type": "string",
+            "description": "Field request_model"
+          },
+          "routed_model": {
+            "type": "string",
+            "description": "Field routed_model"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field status"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field time"
           }
         },
         "required": [
-          "ModelRequestSummary",
+          "request_id",
+          "time",
+          "has_error",
+          "event_count",
           "events"
         ]
       },
@@ -7370,45 +7430,55 @@
             "properties": {
               "auth_url": {
                 "type": "string",
-                "description": "Field auth_url"
+                "description": "Field auth_url",
+                "example": "https://claude.ai/oauth/authorize?..."
               },
               "device_code": {
                 "type": "string",
-                "description": "Field device_code"
+                "description": "Field device_code",
+                "example": "MN-12345678-abcdef"
               },
               "expires_in": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field expires_in"
+                "description": "Field expires_in",
+                "example": 1800
               },
               "interval": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field interval"
+                "description": "Field interval",
+                "example": 5
               },
               "provider": {
                 "type": "string",
-                "description": "Field provider"
+                "description": "Field provider",
+                "example": "qwen_code"
               },
               "session_id": {
                 "type": "string",
-                "description": "Field session_id"
+                "description": "Field session_id",
+                "example": "abc123def456"
               },
               "state": {
                 "type": "string",
-                "description": "Field state"
+                "description": "Field state",
+                "example": "random_state_string"
               },
               "user_code": {
                 "type": "string",
-                "description": "Field user_code"
+                "description": "Field user_code",
+                "example": "ABCD-EFGH"
               },
               "verification_uri": {
                 "type": "string",
-                "description": "Field verification_uri"
+                "description": "Field verification_uri",
+                "example": "https://chat.qwen.ai/activate"
               },
               "verification_uri_complete": {
                 "type": "string",
-                "description": "Field verification_uri_complete"
+                "description": "Field verification_uri_complete",
+                "example": "https://chat.qwen.ai/activate?user_code=ABCD-EFGH"
               }
             }
           },
@@ -7608,27 +7678,33 @@
             "properties": {
               "access_token": {
                 "type": "string",
-                "description": "Field access_token"
+                "description": "Field access_token",
+                "example": "sk-ant-..."
               },
               "expires_at": {
                 "type": "string",
-                "description": "Field expires_at"
+                "description": "Field expires_at",
+                "example": "2024-01-01T12:00:00Z"
               },
               "provider_type": {
                 "type": "string",
-                "description": "Field provider_type"
+                "description": "Field provider_type",
+                "example": "claude_code"
               },
               "provider_uuid": {
                 "type": "string",
-                "description": "Field provider_uuid"
+                "description": "Field provider_uuid",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
               },
               "refresh_token": {
                 "type": "string",
-                "description": "Field refresh_token"
+                "description": "Field refresh_token",
+                "example": "refresh_..."
               },
               "token_type": {
                 "type": "string",
-                "description": "Field token_type"
+                "description": "Field token_type",
+                "example": "Bearer"
               }
             },
             "required": [
@@ -7663,19 +7739,23 @@
             "properties": {
               "error": {
                 "type": "string",
-                "description": "Field error"
+                "description": "Field error",
+                "example": "Authorization failed"
               },
               "provider_uuid": {
                 "type": "string",
-                "description": "Field provider_uuid"
+                "description": "Field provider_uuid",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
               },
               "session_id": {
                 "type": "string",
-                "description": "Field session_id"
+                "description": "Field session_id",
+                "example": "abc123def456"
               },
               "status": {
                 "type": "string",
-                "description": "Field status"
+                "description": "Field status",
+                "example": "success"
               }
             },
             "required": [
@@ -7703,27 +7783,33 @@
             "properties": {
               "access_token": {
                 "type": "string",
-                "description": "Field access_token"
+                "description": "Field access_token",
+                "example": "sk-ant-..."
               },
               "expires_at": {
                 "type": "string",
-                "description": "Field expires_at"
+                "description": "Field expires_at",
+                "example": "2024-01-01T12:00:00Z"
               },
               "provider": {
                 "type": "string",
-                "description": "Field provider"
+                "description": "Field provider",
+                "example": "anthropic"
               },
               "refresh_token": {
                 "type": "string",
-                "description": "Field refresh_token"
+                "description": "Field refresh_token",
+                "example": "refresh_..."
               },
               "token_type": {
                 "type": "string",
-                "description": "Field token_type"
+                "description": "Field token_type",
+                "example": "Bearer"
               },
               "valid": {
                 "type": "boolean",
-                "description": "Field valid"
+                "description": "Field valid",
+                "example": true
               }
             },
             "required": [
@@ -8116,6 +8202,31 @@
         "required": [
           "name",
           "unified"
+        ]
+      },
+      "ProviderImportInfo": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action",
+            "example": "created"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "openai"
+          },
+          "uuid": {
+            "type": "string",
+            "description": "Field uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "action"
         ]
       },
       "ProviderModelInfo": {
@@ -8706,10 +8817,6 @@
       "Rule": {
         "type": "object",
         "properties": {
-          "CurrentServiceID": {
-            "type": "string",
-            "description": "Field CurrentServiceID"
-          },
           "active": {
             "type": "boolean",
             "description": "Field active"
@@ -8770,7 +8877,6 @@
           "response_model",
           "description",
           "services",
-          "CurrentServiceID",
           "lb_tactic",
           "active",
           "smart_enabled"
@@ -9000,15 +9106,18 @@
             "properties": {
               "flag": {
                 "type": "string",
-                "description": "Field flag"
+                "description": "Field flag",
+                "example": "unified"
               },
               "scenario": {
                 "type": "string",
-                "description": "Field scenario"
+                "description": "Field scenario",
+                "example": "claude_code"
               },
               "value": {
                 "type": "boolean",
-                "description": "Field value"
+                "description": "Field value",
+                "example": true
               }
             },
             "required": [
@@ -9206,9 +9315,6 @@
       "Service": {
         "type": "object",
         "properties": {
-          "Stats": {
-            "$ref": "#/components/schemas/ServiceStats"
-          },
           "active": {
             "type": "boolean",
             "description": "Field active"
@@ -9247,191 +9353,7 @@
           "model",
           "weight",
           "active",
-          "time_window",
-          "Stats"
-        ]
-      },
-      "ServiceStats": {
-        "type": "object",
-        "properties": {
-          "LatencySamples": {
-            "type": "array",
-            "description": "Field LatencySamples",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          "SpeedSamples": {
-            "type": "array",
-            "description": "Field SpeedSamples",
-            "items": {
-              "type": "number",
-              "format": "double"
-            }
-          },
-          "TTFTSamples": {
-            "type": "array",
-            "description": "Field TTFTSamples",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          "avg_latency_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field avg_latency_ms"
-          },
-          "avg_token_speed": {
-            "type": "number",
-            "format": "double",
-            "description": "Field avg_token_speed"
-          },
-          "avg_ttft_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field avg_ttft_ms"
-          },
-          "cache_hit_rate": {
-            "type": "number",
-            "format": "double",
-            "description": "Field cache_hit_rate"
-          },
-          "last_latency_update": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field last_latency_update"
-          },
-          "last_speed_update": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field last_speed_update"
-          },
-          "last_ttft_update": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field last_ttft_update"
-          },
-          "last_used": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field last_used"
-          },
-          "p50_latency_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field p50_latency_ms"
-          },
-          "p50_ttft_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field p50_ttft_ms"
-          },
-          "p95_latency_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field p95_latency_ms"
-          },
-          "p95_ttft_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field p95_ttft_ms"
-          },
-          "p99_latency_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field p99_latency_ms"
-          },
-          "p99_ttft_ms": {
-            "type": "number",
-            "format": "double",
-            "description": "Field p99_ttft_ms"
-          },
-          "request_count": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field request_count"
-          },
-          "service_id": {
-            "type": "string",
-            "description": "Field service_id"
-          },
-          "time_window": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field time_window"
-          },
-          "window_cache_hits": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_cache_hits"
-          },
-          "window_cache_misses": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_cache_misses"
-          },
-          "window_cost_tokens": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_cost_tokens"
-          },
-          "window_input_tokens": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_input_tokens"
-          },
-          "window_output_tokens": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_output_tokens"
-          },
-          "window_request_count": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_request_count"
-          },
-          "window_start": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field window_start"
-          },
-          "window_tokens_consumed": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field window_tokens_consumed"
-          }
-        },
-        "required": [
-          "service_id",
-          "request_count",
-          "last_used",
-          "window_start",
-          "window_request_count",
-          "window_tokens_consumed",
-          "window_input_tokens",
-          "window_output_tokens",
-          "time_window",
-          "LatencySamples",
-          "avg_latency_ms",
-          "p50_latency_ms",
-          "p95_latency_ms",
-          "p99_latency_ms",
-          "last_latency_update",
-          "SpeedSamples",
-          "avg_token_speed",
-          "last_speed_update",
-          "TTFTSamples",
-          "avg_ttft_ms",
-          "p50_ttft_ms",
-          "p95_ttft_ms",
-          "p99_ttft_ms",
-          "last_ttft_update",
-          "window_cache_hits",
-          "window_cache_misses",
-          "cache_hit_rate",
-          "window_cost_tokens"
+          "time_window"
         ]
       },
       "Settings": {
@@ -9786,26 +9708,31 @@
               "port": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field port"
+                "description": "Field port",
+                "example": 12580
               },
               "providers_enabled": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field providers_enabled"
+                "description": "Field providers_enabled",
+                "example": 2
               },
               "providers_total": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field providers_total"
+                "description": "Field providers_total",
+                "example": 3
               },
               "request_count": {
                 "type": "integer",
                 "format": "int64",
-                "description": "Field request_count"
+                "description": "Field request_count",
+                "example": 100
               },
               "server_running": {
                 "type": "boolean",
-                "description": "Field server_running"
+                "description": "Field server_running",
+                "example": true
               }
             },
             "required": [
@@ -10038,7 +9965,8 @@
             "properties": {
               "enabled": {
                 "type": "boolean",
-                "description": "Field enabled"
+                "description": "Field enabled",
+                "example": true
               }
             },
             "required": [
@@ -10282,10 +10210,6 @@
       "UpdateRuleRequest": {
         "type": "object",
         "properties": {
-          "CurrentServiceID": {
-            "type": "string",
-            "description": "Field CurrentServiceID"
-          },
           "active": {
             "type": "boolean",
             "description": "Field active"
@@ -10346,7 +10270,6 @@
           "response_model",
           "description",
           "services",
-          "CurrentServiceID",
           "lb_tactic",
           "active",
           "smart_enabled"
@@ -10361,41 +10284,49 @@
             "properties": {
               "active": {
                 "type": "boolean",
-                "description": "Field active"
+                "description": "Field active",
+                "example": true
               },
               "default_model": {
                 "type": "string",
-                "description": "Field default_model"
+                "description": "Field default_model",
+                "example": "gpt-3.5-turbo"
               },
               "description": {
                 "type": "string",
-                "description": "Field description"
+                "description": "Field description",
+                "example": "My rule description"
               },
               "provider": {
                 "type": "string",
-                "description": "Field provider"
+                "description": "Field provider",
+                "example": "openai"
               },
               "request_model": {
                 "type": "string",
-                "description": "Field request_model"
+                "description": "Field request_model",
+                "example": "gpt-3.5-turbo"
               },
               "response_model": {
                 "type": "string",
-                "description": "Field response_model"
+                "description": "Field response_model",
+                "example": "gpt-3.5-turbo"
               },
               "scenario": {
                 "type": "string",
-                "description": "Field scenario"
+                "description": "Field scenario",
+                "example": "openai"
               },
               "smart_enabled": {
                 "type": "boolean",
-                "description": "Field smart_enabled"
+                "description": "Field smart_enabled",
+                "example": false
               },
               "smart_routing": {
                 "type": "array",
                 "description": "Field smart_routing",
                 "items": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SmartRouting"
                 }
               },
               "uuid": {
@@ -10921,36 +10852,24 @@
   },
   "tags": [
     {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
       "name": "actions",
       "description": "Operations related to actions"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "auth",
+      "description": "Operations related to auth"
     },
     {
       "name": "codex",
       "description": "Operations related to codex"
     },
     {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
+      "name": "config",
+      "description": "Operations related to config"
     },
     {
-      "name": "requests",
-      "description": "Operations related to requests"
+      "name": "feishu",
+      "description": "Operations related to feishu"
     },
     {
       "name": "guardrails",
@@ -10961,72 +10880,84 @@
       "description": "Operations related to history"
     },
     {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "feishu",
-      "description": "Operations related to feishu"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
+      "name": "imbot-admin",
+      "description": "Operations related to imbot-admin"
     },
     {
       "name": "imbot-settings",
       "description": "Operations related to imbot-settings"
     },
     {
-      "name": "imbot-admin",
-      "description": "Operations related to imbot-admin"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
-      "name": "weixin",
-      "description": "Operations related to weixin"
+      "name": "logs",
+      "description": "Operations related to logs"
     },
     {
       "name": "mcp",
       "description": "Operations related to mcp"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
     },
     {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "requests",
+      "description": "Operations related to requests"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
       "name": "scenarios",
       "description": "Operations related to scenarios"
     },
     {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
       "name": "token",
       "description": "Operations related to token"
     },
     {
-      "name": "auth",
-      "description": "Operations related to auth"
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
     }
   ]
 }
