@@ -524,7 +524,7 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 
 | Flag | 作用 |
 |------|------|
-| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/server/transform.ThinkingCompactTransform`，vmodel 的 `compact-thinking` 复用同一实现） |
+| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/server/transform.ThinkingCompactTransform`） |
 | `recording_v2` | 控制请求/响应录制模式（off / request / request_response / staged） |
 | `unified` / `separate` / `smart` | 路由模式开关 |
 

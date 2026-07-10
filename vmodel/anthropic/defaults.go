@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -12,8 +11,8 @@ import (
 // RegisterDefaults registers the default Anthropic-protocol virtual models
 // into r: the Anthropic-only "virtual-claude-3" mock, the shared mocks
 // ("echo-model", "ask-user-question", "ask-confirmation", "web-search-example"),
-// and the compact transform models ("compact-thinking", "compact-round-only",
-// "compact-round-files", "claude-code-compact", "claude-code-strategy").
+// and the compact transform models ("compact-round-only", "compact-round-files",
+// "claude-code-compact", "claude-code-strategy").
 func RegisterDefaults(r *Registry) {
 	_ = r.Register(NewMockModel(&MockModelConfig{
 		ID:      "virtual-claude-3",
@@ -34,12 +33,6 @@ func RegisterDefaults(r *Registry) {
 	}
 
 	compactModels := []TransformModelConfig{
-		{
-			ID:          "compact-thinking",
-			Name:        "Compact Thinking",
-			Description: "Removes thinking blocks from historical conversation rounds (10-20% compression)",
-			Chain:       transform.NewTransformChain([]transform.Transform{servertransform.NewThinkingCompactTransform(2)}),
-		},
 		{
 			ID:          "compact-round-only",
 			Name:        "Compact Round Only",

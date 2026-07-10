@@ -210,7 +210,7 @@ extension UI and registry consumers can group by behavior:
 | -------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `static` | Returns a fixed text response                                                                        | `virtual-claude-3`, `virtual-gpt-4`, `echo-model` |
 | `tool`   | Returns a `tool_use` / `tool_calls` block                                                           | `ask-user-question`, `ask-confirmation`, `web-search-example` |
-| `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-thinking`, `claude-code-compact`   |
+| `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-round-only`, `claude-code-compact`   |
 
 ## Error models
 
@@ -314,7 +314,6 @@ Examples:
 | `ask-user-question`     |         X          |        X        |
 | `ask-confirmation`      |         X          |        X        |
 | `web-search-example`    |         X          |        X        |
-| `compact-thinking`      |         X          |                 |
 | `compact-round-only`    |         X          |                 |
 | `compact-round-files`   |         X          |                 |
 | `claude-code-compact`   |         X          |                 |
@@ -482,5 +481,5 @@ See `benchmark/examples/` for runnable server and client programs.
   wire-format protocol testing. It does **not** inherit production defaults
   from `RegisterDefaults`; it owns its own registry of test fixtures.
 - `internal/protocol/transform` — Transform chain types used by
-  `anthropic.TransformModel` (e.g. compact-thinking).
+  `anthropic.TransformModel` (e.g. compact-round-only).
 - `internal/smart_compact` — Concrete transform implementations.

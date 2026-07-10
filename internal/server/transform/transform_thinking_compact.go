@@ -14,11 +14,10 @@ import (
 // not a general conversation compression.
 //
 // It is a server-domain transform: the flag path in internal/server prepends
-// it to the transform chain when a scenario enables SmartCompact, and the
-// "compact-thinking" virtual model builds the same transform. The
+// it to the transform chain when a scenario enables SmartCompact. The
 // vmodel-oriented compression strategies (round-only, round-files, replay,
-// dedup, ...) stay in internal/smart_compact — this transform intentionally
-// no longer lives there.
+// dedup, ...) live in internal/smart_compact — this transform intentionally
+// does not.
 type ThinkingCompactTransform struct {
 	rounder           *protocol.Grouper
 	keepLastNRounds   int // number of recent rounds whose thinking is preserved (min: 1)

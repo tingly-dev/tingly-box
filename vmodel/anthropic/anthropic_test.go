@@ -355,7 +355,7 @@ func TestRegistry_RegisterDefaults(t *testing.T) {
 	expected := []string{
 		"virtual-claude-3", "echo-model",
 		"ask-user-question", "ask-confirmation", "web-search-example",
-		"compact-thinking", "compact-round-only", "compact-round-files",
+		"compact-round-only", "compact-round-files",
 		"claude-code-compact", "claude-code-strategy",
 	}
 	for _, id := range expected {

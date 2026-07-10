@@ -416,16 +416,6 @@ func TestVirtualServer_VModel_WebSearchExample_Anthropic(t *testing.T) {
 
 // ─── TransformModels (Anthropic only) ─────────────────────────────────────────
 
-func TestVirtualServer_VModel_CompactThinking_Anthropic(t *testing.T) {
-	vc := newTestServer(t)
-	result := vc.SendAnthropicV1Model(t, "compact-thinking", false)
-	require.Equal(t, 200, result.HTTPStatus)
-
-	resp := parseAnthropic(t, result)
-	// TransformModel passes through — with a single-turn input it echoes the user message.
-	assert.Equal(t, "assistant", resp.Role)
-}
-
 func TestVirtualServer_VModel_CompactRoundOnly_Anthropic(t *testing.T) {
 	vc := newTestServer(t)
 	result := vc.SendAnthropicV1Model(t, "compact-round-only", false)
@@ -464,10 +454,10 @@ func TestVirtualServer_VModel_ClaudeCodeStrategy_Anthropic(t *testing.T) {
 
 // ─── TransformModels must reject OpenAI Chat requests ─────────────────────────
 
-func TestVirtualServer_VModel_CompactThinking_OpenAI_NotFound(t *testing.T) {
+func TestVirtualServer_VModel_CompactRoundOnly_OpenAI_NotFound(t *testing.T) {
 	// Transform models live in the Anthropic registry only; OpenAI endpoint must 404.
 	vc := newTestServer(t)
-	result := vc.SendOpenAIChatModel(t, "compact-thinking", false)
+	result := vc.SendOpenAIChatModel(t, "compact-round-only", false)
 	assert.Equal(t, 404, result.HTTPStatus)
 	t.Logf("[OpenAI 404] body=%s", result.RawBody)
 }

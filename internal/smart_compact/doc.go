@@ -18,8 +18,8 @@
 // tool calls, and tool results while preserving the essential flow
 // of user requests and assistant responses.
 //
-// The flag-driven thinking trim (the SmartCompact scenario flag, and the
-// "compact-thinking" virtual model) is NOT here: it lives in
-// internal/server/transform.ThinkingCompactTransform, since it is a
-// server-domain transform rather than a vmodel compression strategy.
+// The flag-driven thinking trim (the SmartCompact scenario flag) is NOT
+// here: it lives in internal/server/transform.ThinkingCompactTransform,
+// since it is a server-domain transform rather than a vmodel compression
+// strategy.
 package smart_compact

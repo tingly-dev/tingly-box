@@ -176,7 +176,7 @@ func TestRegistry_RegisterDefaults(t *testing.T) {
 	if got := r.Get("virtual-claude-3"); got != nil {
 		t.Error("virtual-claude-3 must NOT be in the OpenAI registry")
 	}
-	if got := r.Get("compact-thinking"); got != nil {
-		t.Error("compact-thinking must NOT be in the OpenAI registry")
+	if got := r.Get("compact-round-only"); got != nil {
+		t.Error("compact-round-only must NOT be in the OpenAI registry")
 	}
 }
