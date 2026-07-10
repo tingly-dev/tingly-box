@@ -141,9 +141,7 @@ func (rm *RouteManager) NewGroup(name, version, prefix string, opts ...RouteGrou
 // AddMiddleware adds middleware to the route group
 func (rg *RouteGroup) AddMiddleware(middleware ...gin.HandlerFunc) {
 	rg.middleware = append(rg.middleware, middleware...)
-	for _, mw := range rg.middleware {
-		rg.Router.Use(mw)
-	}
+	rg.Router.Use(middleware...)
 }
 
 // RegisterRoute registers a single route
@@ -162,13 +160,9 @@ func (rg *RouteGroup) RegisterRoute(config RouteConfig) {
 		middleware = append(middleware, rg.authMiddleware())
 	}
 
-	// Add route-specific middleware
+	// Add route-specific middleware, then the handler itself
 	middleware = append(middleware, config.Middleware...)
-
-	// Register route with gin and add the handler
-	middleware = append(middleware, func(c *gin.Context) {
-		config.Handler(c)
-	})
+	middleware = append(middleware, gin.HandlerFunc(config.Handler))
 
 	rg.Router.Handle(config.Method, config.Path, middleware...)
 
@@ -431,137 +425,4 @@ func (rm *RouteManager) GetRouteGroups() []*RouteGroup {
 
 func (rm *RouteManager) GetEngine() *gin.Engine {
 	return rm.engine
-}
-
-// GenerateSwaggerAnnotations generates swagger annotations for all routes
-func (rm *RouteManager) GenerateSwaggerAnnotations() string {
-	var annotations strings.Builder
-
-	// Add main swagger annotation
-	annotations.WriteString(`// @title ` + rm.swaggerInfo.Title + "\n")
-	annotations.WriteString(`// @version ` + rm.swaggerInfo.Version + "\n")
-	annotations.WriteString(`// @description ` + rm.swaggerInfo.Description + "\n")
-
-	if rm.swaggerInfo.Host != "" {
-		annotations.WriteString(`// @host ` + rm.swaggerInfo.Host + "\n")
-	}
-
-	if rm.swaggerInfo.BasePath != "" {
-		annotations.WriteString(`// @BasePath ` + rm.swaggerInfo.BasePath + "\n")
-	}
-
-	annotations.WriteString("\n")
-
-	// Add contact and license if available
-	if rm.swaggerInfo.Contact.Name != "" {
-		annotations.WriteString(`// @contact.name ` + rm.swaggerInfo.Contact.Name + "\n")
-		if rm.swaggerInfo.Contact.Email != "" {
-			annotations.WriteString(`// @contact.email ` + rm.swaggerInfo.Contact.Email + "\n")
-		}
-		if rm.swaggerInfo.Contact.URL != "" {
-			annotations.WriteString(`// @contact.url ` + rm.swaggerInfo.Contact.URL + "\n")
-		}
-	}
-
-	if rm.swaggerInfo.License.Name != "" {
-		annotations.WriteString(`// @license.name ` + rm.swaggerInfo.License.Name + "\n")
-		if rm.swaggerInfo.License.URL != "" {
-			annotations.WriteString(`// @license.url ` + rm.swaggerInfo.License.URL + "\n")
-		}
-	}
-
-	annotations.WriteString("\n")
-
-	// Generate annotations for each route
-	for _, group := range rm.groups {
-		for _, route := range group.routes {
-			annotations.WriteString(rm.generateRouteAnnotations(group, route))
-			annotations.WriteString("\n")
-		}
-	}
-
-	return annotations.String()
-}
-
-// generateRouteAnnotations generates swagger annotations for a specific route
-func (rm *RouteManager) generateRouteAnnotations(group *RouteGroup, route RouteConfig) string {
-	var annotations strings.Builder
-
-	// Add basic route information
-	annotations.WriteString("// @Summary " + route.Description + "\n")
-	annotations.WriteString("// @Description " + route.Description + "\n")
-
-	// Add tags
-	if len(route.Tags) > 0 {
-		for _, tag := range route.Tags {
-			annotations.WriteString("// @Tags " + tag + "\n")
-		}
-	} else {
-		annotations.WriteString("// @Tags " + group.name + "\n")
-	}
-
-	// Add HTTP method and path
-	fullPath := group.prefix + route.Path
-	swaggerPath := rm.convertPathFormat(fullPath)
-	methodLower := strings.ToLower(route.Method)
-	annotations.WriteString("// @Router " + swaggerPath + "[" + methodLower + "]\n")
-
-	// Add query parameters from QueryParams
-	for _, param := range route.QueryParams {
-		required := "false"
-		if param.Required {
-			required = "true"
-		}
-		annotations.WriteString("// @Param " + param.Name + " query " + param.Type + " " + required + " \"" + param.Description + "\"\n")
-	}
-
-	// Add query model if specified
-	if route.QueryModel != nil {
-		modelName := rm.getModelNameWithFallback(route.QueryModel, route.QueryModelName, route.Method, fullPath, "Query")
-		annotations.WriteString("// @Param " + modelName + " query " + modelName + " true \"Query parameters\"\n")
-	}
-
-	// Add request model if specified
-	if route.RequestModel != nil {
-		modelName := rm.getModelNameWithFallback(route.RequestModel, route.RequestModelName, route.Method, fullPath, "Request")
-		if route.Method == http.MethodGet {
-			annotations.WriteString("// @Param " + modelName + " query " + modelName + " true \"Request parameters\"\n")
-		} else {
-			annotations.WriteString("// @Param request body " + modelName + " true \"Request body\"\n")
-		}
-	}
-
-	// Add response model if specified
-	if route.ResponseModel != nil {
-		modelName := rm.getModelNameWithFallback(route.ResponseModel, route.ResponseModelName, route.Method, fullPath, "Response")
-		annotations.WriteString("// @Success 200 {object} " + modelName + "\n")
-	} else {
-		annotations.WriteString("// @Success 200 {object} map[string]interface{}\n")
-	}
-
-	// Add error responses
-	for _, errorResp := range route.ErrorResponses {
-		if errorResp.Model != nil {
-			modelName := rm.getModelNameWithFallback(errorResp.Model, "", route.Method, fullPath, fmt.Sprintf("Error%d", errorResp.Code))
-			annotations.WriteString("// @Failure " + string(rune(errorResp.Code)) + " {object} " + modelName + "\n")
-		} else {
-			annotations.WriteString("// @Failure " + string(rune(errorResp.Code)) + " {object} map[string]interface{}\n")
-		}
-	}
-
-	// Add security if auth required
-	if route.AuthRequired {
-		annotations.WriteString("// @Security ApiKeyAuth\n")
-	}
-
-	// Add deprecated if specified
-	if route.Deprecated {
-		if route.DeprecatedMsg != "" {
-			annotations.WriteString("// @Deprecated " + route.DeprecatedMsg + "\n")
-		} else {
-			annotations.WriteString("// @Deprecated\n")
-		}
-	}
-
-	return annotations.String()
 }

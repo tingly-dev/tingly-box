@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -31,12 +30,11 @@ func (rm *RouteManager) buildV3Spec() (string, error) {
 		},
 		Servers:    rm.buildV3Servers(),
 		Paths:      make(map[string]PathItemV3),
-		Components: rm.buildV3Components(),
-		Tags:       []Tag{},
+		Components: buildV3Components(),
 	}
 
 	// Add contact info if available
-	if rm.swaggerInfo.Contact.Name != "" || rm.swaggerInfo.Contact.Email != "" || rm.swaggerInfo.Contact.URL != "" {
+	if rm.swaggerInfo.Contact != (SwaggerContact{}) {
 		openapi.Info.Contact = &OpenAPIContactObject{
 			Name:  rm.swaggerInfo.Contact.Name,
 			Email: rm.swaggerInfo.Contact.Email,
@@ -45,7 +43,7 @@ func (rm *RouteManager) buildV3Spec() (string, error) {
 	}
 
 	// Add license info if available
-	if rm.swaggerInfo.License.Name != "" || rm.swaggerInfo.License.URL != "" {
+	if rm.swaggerInfo.License != (SwaggerLicense{}) {
 		openapi.Info.License = &OpenAPILicenseObject{
 			Name: rm.swaggerInfo.License.Name,
 			URL:  rm.swaggerInfo.License.URL,
@@ -59,81 +57,50 @@ func (rm *RouteManager) buildV3Spec() (string, error) {
 	for _, group := range rm.groups {
 		for _, route := range group.routes {
 			fullPath := group.prefix + route.Path
-			openapiPath := rm.convertPathFormat(fullPath)
-			method := strings.ToLower(route.Method)
+			openapiPath := convertPathFormat(fullPath)
 
-			// Create path item if not exists
-			if _, exists := openapi.Paths[openapiPath]; !exists {
-				openapi.Paths[openapiPath] = PathItemV3{}
+			operation := rm.buildV3Operation(group, route, fullPath, modelSet)
+			for _, tag := range operation.Tags {
+				tagSet[tag] = true
 			}
 
-			// Build operation
-			operation := rm.buildV3Operation(route, fullPath, modelSet)
-
-			// Add tags
-			if len(operation.Tags) > 0 {
-				for _, tag := range operation.Tags {
-					tagSet[tag] = true
-				}
-			}
-
-			// Add operation to path item
 			pathItem := openapi.Paths[openapiPath]
-			switch method {
-			case "get":
-				pathItem.Get = operation
-			case "post":
-				pathItem.Post = operation
-			case "put":
-				pathItem.Put = operation
-			case "delete":
-				pathItem.Delete = operation
-			case "patch":
-				pathItem.Patch = operation
-			case "options":
-				pathItem.Options = operation
-			case "head":
-				pathItem.Head = operation
-			}
+			setV3Operation(&pathItem, route.Method, operation)
 			openapi.Paths[openapiPath] = pathItem
 		}
 	}
 
-	// Generate tags
-	for tagName := range tagSet {
-		openapi.Tags = append(openapi.Tags, Tag{
-			Name:        tagName,
-			Description: fmt.Sprintf("Operations related to %s", tagName),
-		})
-	}
+	openapi.Tags = sortedTags(tagSet)
 
-	// Generate all model schemas with proper handling of nested models
-	processedModels := make(map[string]bool)
-	allModels := make(map[string]interface{})
+	// Generate schemas for registered models and all nested models
+	openapi.Components.Schemas = newSchemaGen(VersionV3).buildDefinitions(modelSet)
 
-	// First, collect all initial models
-	for modelName, model := range modelSet {
-		allModels[modelName] = model
-		processedModels[modelName] = false
-	}
-
-	// Then recursively collect all nested models
-	for _, model := range modelSet {
-		rm.collectNestedModels(model, allModels, processedModels)
-	}
-
-	// Finally, generate schemas for all collected models
-	for modelName, model := range allModels {
-		openapi.Components.Schemas[modelName] = rm.generateSchemaFromModelWithCacheVersion(model, allModels, VersionV3)
-	}
-
-	// Convert to JSON
 	jsonData, err := json.MarshalIndent(openapi, "", "  ")
 	if err != nil {
 		return "", err
 	}
 
 	return string(jsonData), nil
+}
+
+// setV3Operation assigns an operation to the method slot of a path item
+func setV3Operation(pathItem *PathItemV3, method string, operation *OperationV3) {
+	switch strings.ToLower(method) {
+	case "get":
+		pathItem.Get = operation
+	case "post":
+		pathItem.Post = operation
+	case "put":
+		pathItem.Put = operation
+	case "delete":
+		pathItem.Delete = operation
+	case "patch":
+		pathItem.Patch = operation
+	case "options":
+		pathItem.Options = operation
+	case "head":
+		pathItem.Head = operation
+	}
 }
 
 // buildV3Servers builds server list from swagger info
@@ -148,9 +115,8 @@ func (rm *RouteManager) buildV3Servers() []Server {
 			scheme = rm.swaggerInfo.Schemes[0]
 		}
 
-		url := fmt.Sprintf("%s://%s%s", scheme, rm.swaggerInfo.Host, rm.swaggerInfo.BasePath)
 		servers = append(servers, Server{
-			URL: url,
+			URL: fmt.Sprintf("%s://%s%s", scheme, rm.swaggerInfo.Host, rm.swaggerInfo.BasePath),
 		})
 	}
 
@@ -158,27 +124,23 @@ func (rm *RouteManager) buildV3Servers() []Server {
 }
 
 // buildV3Components builds the components object
-func (rm *RouteManager) buildV3Components() Components {
-	components := Components{
-		Schemas:         make(map[string]Schema),
-		SecuritySchemes: make(map[string]SecuritySchemeV3),
+func buildV3Components() Components {
+	return Components{
+		SecuritySchemes: map[string]SecuritySchemeV3{
+			"ApiKeyAuth": {
+				Type:        "apiKey",
+				Name:        "Authorization",
+				In:          "header",
+				Description: "API key authorization header",
+			},
+		},
 	}
-
-	// Add security schemes
-	components.SecuritySchemes["ApiKeyAuth"] = SecuritySchemeV3{
-		Type:        "apiKey",
-		Name:        "Authorization",
-		In:          "header",
-		Description: "API key authorization header",
-	}
-
-	return components
 }
 
 // buildV3Operation builds an OpenAPI 3.0 operation from route config
-func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, modelSet map[string]interface{}) *OperationV3 {
+func (rm *RouteManager) buildV3Operation(group *RouteGroup, route RouteConfig, fullPath string, modelSet map[string]interface{}) *OperationV3 {
 	operation := &OperationV3{
-		OperationID: rm.generateOperationID(route.Method, rm.convertPathFormat(fullPath)),
+		OperationID: generateOperationID(route.Method, convertPathFormat(fullPath)),
 		Summary:     route.Description,
 		Description: route.Description,
 		Responses:   make(map[string]ResponseV3),
@@ -186,9 +148,9 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 		Parameters:  []ParameterV3{},
 	}
 
-	// Set tags (fallback to group name if not specified)
-	if len(operation.Tags) == 0 && len(route.Tags) == 0 {
-		// Tags will be set by the caller from the group
+	// Fallback to group name when the route has no tags
+	if len(operation.Tags) == 0 {
+		operation.Tags = []string{group.name}
 	}
 
 	// Handle deprecated
@@ -206,38 +168,19 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 		}
 	}
 
-	// Handle path parameters
-	var pathParams []ParameterV3
-	if len(route.PathParams) > 0 {
-		for _, pathParam := range route.PathParams {
-			pathParams = append(pathParams, ParameterV3{
-				Name:        pathParam.Name,
-				In:          "path",
-				Description: pathParam.Description,
-				Required:    true,
-				Schema: &Schema{
-					Type:   pathParam.Type,
-					Format: pathParam.Format,
-				},
-			})
-		}
-	} else {
-		// Auto-detect path params
-		v2PathParams := rm.extractPathParams(route.Path)
-		for _, p := range v2PathParams {
-			pathParams = append(pathParams, ParameterV3{
-				Name:        p.Name,
-				In:          "path",
-				Description: p.Description,
-				Required:    true,
-				Schema: &Schema{
-					Type:   p.Type,
-					Format: p.Format,
-				},
-			})
-		}
+	// Path parameters first so they appear before query params
+	for _, p := range resolvePathParams(route) {
+		operation.Parameters = append(operation.Parameters, ParameterV3{
+			Name:        p.Name,
+			In:          "path",
+			Description: p.Description,
+			Required:    true,
+			Schema: &Schema{
+				Type:   p.Type,
+				Format: p.Format,
+			},
+		})
 	}
-	operation.Parameters = append(operation.Parameters, pathParams...)
 
 	// Handle query parameters from QueryParams
 	for _, param := range route.QueryParams {
@@ -247,11 +190,9 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 			Description: param.Description,
 			Required:    param.Required,
 			Schema: &Schema{
-				Type: normalizeSchemaType(param.Type),
+				Type:    normalizeSchemaType(param.Type),
+				Default: param.Default,
 			},
-		}
-		if param.Default != nil {
-			v3Param.Schema.Default = param.Default
 		}
 		if param.Minimum != nil {
 			minVal := float64(*param.Minimum)
@@ -271,8 +212,9 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 	if route.QueryModel != nil {
 		modelName := rm.getModelNameWithFallback(route.QueryModel, route.QueryModelName, route.Method, fullPath, "Query")
 		modelSet[modelName] = route.QueryModel
-		queryParams := rm.generateQueryParametersV3(route.QueryModel)
-		operation.Parameters = append(operation.Parameters, queryParams...)
+		for _, qp := range modelQueryParams(route.QueryModel) {
+			operation.Parameters = append(operation.Parameters, qp.toV3())
+		}
 	}
 
 	// Handle request model
@@ -281,11 +223,11 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 		modelSet[modelName] = route.RequestModel
 
 		if route.Method == http.MethodGet {
-			// For GET requests, add query parameters
-			queryParams := rm.generateQueryParametersV3(route.RequestModel)
-			operation.Parameters = append(operation.Parameters, queryParams...)
+			// For GET requests, document the model as query parameters
+			for _, qp := range modelQueryParams(route.RequestModel) {
+				operation.Parameters = append(operation.Parameters, qp.toV3())
+			}
 		} else {
-			// For POST/PUT/DELETE requests, add request body
 			operation.RequestBody = &RequestBody{
 				Description: "Request body",
 				Required:    true,
@@ -300,7 +242,7 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 		}
 	}
 
-	// Handle response models
+	// Handle response model
 	if route.ResponseModel != nil {
 		modelName := rm.getModelNameWithFallback(route.ResponseModel, route.ResponseModelName, route.Method, fullPath, "Response")
 		modelSet[modelName] = route.ResponseModel
@@ -319,9 +261,7 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 			Description: "Successful response",
 			Content: map[string]MediaType{
 				"application/json": {
-					Schema: &Schema{
-						Type: "object",
-					},
+					Schema: &Schema{Type: "object"},
 				},
 			},
 		}
@@ -329,18 +269,14 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 
 	// Handle error responses
 	for _, errorResp := range route.ErrorResponses {
-		statusCode := fmt.Sprintf("%d", errorResp.Code)
 		response := ResponseV3{
 			Description: errorResp.Message,
 			Content: map[string]MediaType{
 				"application/json": {
-					Schema: &Schema{
-						Type: "object",
-					},
+					Schema: &Schema{Type: "object"},
 				},
 			},
 		}
-
 		if errorResp.Model != nil {
 			modelName := rm.getModelNameWithFallback(errorResp.Model, "", route.Method, fullPath, fmt.Sprintf("Error%d", errorResp.Code))
 			modelSet[modelName] = errorResp.Model
@@ -350,66 +286,10 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 				},
 			}
 		}
-
-		operation.Responses[statusCode] = response
+		operation.Responses[fmt.Sprintf("%d", errorResp.Code)] = response
 	}
 
 	return operation
-}
-
-// generateQueryParametersV3 generates v3 query parameters from a model
-func (rm *RouteManager) generateQueryParametersV3(model interface{}) []ParameterV3 {
-	var parameters []ParameterV3
-	modelType := reflect.TypeOf(model)
-
-	if modelType.Kind() == reflect.Ptr {
-		modelType = modelType.Elem()
-	}
-
-	if modelType.Kind() != reflect.Struct {
-		return parameters
-	}
-
-	for i := 0; i < modelType.NumField(); i++ {
-		field := modelType.Field(i)
-		fieldName := field.Name
-		jsonTag := field.Tag.Get("json")
-		formTag := field.Tag.Get("form")
-
-		// Determine the parameter name
-		paramName := fieldName
-		if jsonTag != "" && jsonTag != "-" {
-			parts := strings.Split(jsonTag, ",")
-			if parts[0] != "" {
-				paramName = parts[0]
-			}
-		} else if formTag != "" && formTag != "-" {
-			parts := strings.Split(formTag, ",")
-			if parts[0] != "" {
-				paramName = parts[0]
-			}
-		}
-
-		// Check if field is required
-		bindingTag := field.Tag.Get("binding")
-		required := strings.Contains(bindingTag, "required")
-
-		// Determine parameter type
-		paramType := rm.getSwaggerType(field.Type)
-
-		parameters = append(parameters, ParameterV3{
-			Name:        paramName,
-			In:          "query",
-			Description: fmt.Sprintf("Query parameter %s", paramName),
-			Required:    required,
-			Schema: &Schema{
-				Type:   paramType.Type,
-				Format: paramType.Format,
-			},
-		})
-	}
-
-	return parameters
 }
 
 // SetupOpenAPIEndpoints configures both Swagger v2 and OpenAPI v3 documentation endpoints

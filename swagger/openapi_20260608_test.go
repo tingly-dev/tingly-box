@@ -269,11 +269,8 @@ func TestRefSchemaHandling(t *testing.T) {
 		Nested *NestedModel `json:"nested"`
 	}
 
-	rm := &RouteManager{}
-	version := VersionV3
-
 	// Generate schema for the model
-	schema := rm.generateSchemaWithReferencesVersion(TestModel{}, version)
+	schema := newSchemaGen(VersionV3).modelSchema(TestModel{})
 
 	// Check that the nested property uses $ref
 	nestedSchema, exists := schema.Properties["nested"]
@@ -329,11 +326,9 @@ func TestMarshalSchemaWithRef(t *testing.T) {
 
 // TestBooleanTypeMapping tests that bool types are mapped to boolean
 func TestBooleanTypeMapping(t *testing.T) {
-	rm := &RouteManager{}
-
 	// Test direct bool type
 	boolType := reflect.TypeOf(false)
-	schema := rm.getSwaggerType(boolType)
+	schema := newSchemaGen(VersionV3).typeSchema(boolType)
 
 	if schema.Type != "boolean" {
 		t.Errorf("Expected type 'boolean' for bool, got '%s'", schema.Type)
@@ -353,10 +348,7 @@ func TestGenerateSchemaWithRefNoSiblings(t *testing.T) {
 		Active  bool     `json:"active" description:"Is user active"`
 	}
 
-	rm := &RouteManager{}
-	version := VersionV3
-
-	schema := rm.generateSchemaWithReferencesVersion(User{}, version)
+	schema := newSchemaGen(VersionV3).modelSchema(User{})
 
 	// Check address property (should be $ref)
 	addrSchema, exists := schema.Properties["address"]
