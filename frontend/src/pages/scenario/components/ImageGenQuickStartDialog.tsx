@@ -1,12 +1,23 @@
 import { useState } from 'react';
-import { Box, Collapse, IconButton, Tab, Tabs } from '@mui/material';
-import { ExpandLess, ExpandMore } from '@/components/icons';
-import UnifiedCard from '@/components/UnifiedCard';
+import {
+    Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    Tab,
+    Tabs,
+    Typography,
+} from '@mui/material';
+import { Close } from '@/components/icons';
 import CodeBlock from '@/components/CodeBlock';
 
-interface ImageGenQuickStartCardProps {
+interface ImageGenQuickStartDialogProps {
+    open: boolean;
+    onClose: () => void;
     baseUrl: string;
-    /** Default model name shown in snippets. */
     model?: string;
     onCopy?: (text: string, label: string) => void;
 }
@@ -41,7 +52,6 @@ resp = client.images.generate(
     n=1,
 )
 
-# Decode the base64 payload and write it to a file
 image_b64 = resp.data[0].b64_json
 with open("output.png", "wb") as f:
     f.write(base64.b64decode(image_b64))
@@ -65,77 +75,87 @@ const resp = await client.images.generate({
   n: 1,
 });
 
-// Decode the base64 payload and write it to a file
 const imageB64 = resp.data[0].b64_json!;
 writeFileSync("output.png", Buffer.from(imageB64, "base64"));
 console.log("Saved output.png");
 `;
         case 'curl':
             return `# requires jq; decodes the base64 payload into output.png
-curl ${endpoint}/images/generations \\
-  -H "Authorization: Bearer <TINGLY_MODEL_TOKEN>" \\
-  -H "Content-Type: application/json" \\
+curl ${endpoint}/images/generations \
+  -H "Authorization: Bearer <TINGLY_MODEL_TOKEN>" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "${model}",
     "prompt": "${prompt}",
     "size": "1024x1024",
     "quality": "auto",
     "n": 1
-  }' \\
+  }' \
   | jq -r '.data[0].b64_json' | base64 --decode > output.png
 `;
     }
 };
 
-const ImageGenQuickStartCard: React.FC<ImageGenQuickStartCardProps> = ({
+const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
+    open,
+    onClose,
     baseUrl,
     model = 'gpt-image-1',
     onCopy,
 }) => {
     const [tab, setTab] = useState<Lang>('python');
-    const [expanded, setExpanded] = useState(true);
-    const active = TABS.find((t) => t.value === tab)!;
+    const active = TABS.find((item) => item.value === tab)!;
     const code = buildSnippet(tab, baseUrl, model);
 
     return (
-        <UnifiedCard
-            size="full"
-            title="Quick Start"
-            subtitle="Call the image generation endpoint, then decode the base64 response into an image file. Token comes from GET /api/v1/token."
-            rightAction={
-                <IconButton size="small" onClick={() => setExpanded((v) => !v)}>
-                    {expanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                </IconButton>
-            }
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="md"
+            fullWidth
+            PaperProps={{ sx: { borderRadius: 3 } }}
         >
-            <Collapse in={expanded} timeout="auto">
+            <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography component="span" variant="h6" fontWeight={600}>Image Generation Quick Start</Typography>
+                <IconButton onClick={onClose} size="small" aria-label="Close quick start">
+                    <Close fontSize="small" />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent sx={{ pt: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Call the image generation endpoint, then decode the base64 response into an image file.
+                    The model token is available from GET /api/v1/token.
+                </Typography>
+                <Tabs
+                    value={tab}
+                    onChange={(_, value: Lang) => setTab(value)}
+                    sx={{ minHeight: 36, mb: 1, '& .MuiTabs-indicator': { height: 3 } }}
+                >
+                    {TABS.map((item) => (
+                        <Tab
+                            key={item.value}
+                            value={item.value}
+                            label={item.label}
+                            sx={{ minHeight: 36, py: 0.5 }}
+                        />
+                    ))}
+                </Tabs>
                 <Box>
-                    <Tabs
-                        value={tab}
-                        onChange={(_, v) => setTab(v)}
-                        sx={{ minHeight: 32, mb: 1, '& .MuiTabs-indicator': { height: 3 } }}
-                    >
-                        {TABS.map((t) => (
-                            <Tab
-                                key={t.value}
-                                value={t.value}
-                                label={t.label}
-                                sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }}
-                            />
-                        ))}
-                    </Tabs>
                     <CodeBlock
                         code={code}
                         language={tab === 'curl' ? 'bash' : tab}
                         filename={active.filename}
-                        onCopy={onCopy ? (c) => onCopy(c, active.filename) : undefined}
-                        maxHeight={200}
+                        onCopy={onCopy ? (content) => onCopy(content, active.filename) : undefined}
+                        maxHeight={480}
                         wrap={false}
                     />
                 </Box>
-            </Collapse>
-        </UnifiedCard>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
+                <Button onClick={onClose} variant="contained">Done</Button>
+            </DialogActions>
+        </Dialog>
     );
 };
 
-export default ImageGenQuickStartCard;
+export default ImageGenQuickStartDialog;

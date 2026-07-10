@@ -1,10 +1,11 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import ImageGenQuickStartCard from "./components/ImageGenQuickStartCard";
+import ImageGenQuickStartDialog from "./components/ImageGenQuickStartDialog";
 import ImageGenPlaygroundCard from "./components/ImageGenPlaygroundCard";
-import { Box, Tooltip, IconButton } from '@mui/material';
+import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
+import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
@@ -13,6 +14,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 const scenario = "imagegen";
 
 const UseImageGenPageContent: React.FC = () => {
+    const [quickStartOpen, setQuickStartOpen] = useState(false);
     const {
         isLoading,
         notification,
@@ -45,6 +47,15 @@ const UseImageGenPageContent: React.FC = () => {
                         </Box>
                     }
                     size="full"
+                    rightAction={
+                        <Button
+                            onClick={() => setQuickStartOpen(true)}
+                            variant="contained"
+                            size="small"
+                        >
+                            Quick Start
+                        </Button>
+                    }
                 >
                     <ProviderConfigCard
                         title="Image Generation API"
@@ -59,11 +70,6 @@ const UseImageGenPageContent: React.FC = () => {
                     loadingRules={loadingRule}
                     showNotification={showNotification}
                 />
-                <ImageGenQuickStartCard
-                    baseUrl={baseUrl}
-                    model={firstModel || 'gpt-image-1'}
-                    onCopy={copyToClipboard}
-                />
                 <TemplatePage
                     scenario={scenario}
                     title="Image Generation Model Rules"
@@ -76,6 +82,13 @@ const UseImageGenPageContent: React.FC = () => {
                     onProvidersLoad={loadProviders}
                     onRuleDelete={handleRuleDelete}
                     loadRules={loadRules}
+                />
+                <ImageGenQuickStartDialog
+                    open={quickStartOpen}
+                    onClose={() => setQuickStartOpen(false)}
+                    baseUrl={baseUrl}
+                    model={firstModel || 'gpt-image-1'}
+                    onCopy={copyToClipboard}
                 />
             </CardGrid>
         </PageLayout>
