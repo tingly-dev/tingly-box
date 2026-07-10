@@ -92,19 +92,22 @@ func (s *SimpleSelector) SelectService(
 	}
 	c.Set(constant.CtxKeyLBTactic, tacticName)
 
-	fields := selectionRuleLogFields(ctx)
-	fields["stage"] = "routing_selected"
-	fields["source"] = result.Source
-	fields["lb_tactic"] = tacticName
-	fields["service"] = result.Service.ServiceID()
-	fields["provider"] = result.Provider.Name
-	fields["provider_uuid"] = result.Provider.UUID
-	fields["model"] = result.Service.Model
-	fields["routed_model"] = result.Service.Model
-	fields["routed_provider"] = result.Provider.Name
-	fields["candidate_count"] = len(ctx.Rule.GetActiveServices())
-	fields["evaluated_stages"] = result.EvaluatedStages
-	logrus.WithContext(c.Request.Context()).WithFields(fields).Infof("[routing] selected %s/%s via %s", result.Provider.UUID, result.Service.Model, result.Source)
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"stage":            "routing_selected",
+		"rule_uuid":        rule.UUID,
+		"scenario":         string(scenario),
+		"request_model":    rule.RequestModel,
+		"source":           result.Source,
+		"lb_tactic":        tacticName,
+		"service":          result.Service.ServiceID(),
+		"provider":         result.Provider.Name,
+		"provider_uuid":    result.Provider.UUID,
+		"model":            result.Service.Model,
+		"routed_model":     result.Service.Model,
+		"routed_provider":  result.Provider.Name,
+		"candidate_count":  len(ctx.Rule.GetActiveServices()),
+		"evaluated_stages": result.EvaluatedStages,
+	}).Infof("[routing] selected %s/%s via %s", result.Provider.UUID, result.Service.Model, result.Source)
 
 	setRoutingDebugHeaders(c, result.Provider.Name, result.Provider.UUID, result.Service.Model, result.Source, result.MatchedSmartRuleIndex)
 
