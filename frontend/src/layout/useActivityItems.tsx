@@ -25,7 +25,6 @@ import {
     Photo as IconPhoto,
     Users as IconUsers,
     Science as IconFlask,
-    PlayArrow as IconPlayerPlay,
     Handyman as IconTools,
     Server as IconServer,
     AiAgents as IconAiAgents,
@@ -89,9 +88,6 @@ export function useActivityItems(): ActivityItem[] {
         const visible = (group: HideableScenario[]): NavItem[] =>
             group.filter(s => !hiddenScenarios.has(s.id)).map(s => s.nav);
 
-        const playgroundTool: NavItem[] = [
-            { path: '/agent/playground', label: t('layout.nav.playground', { defaultValue: 'Playground' }), icon: <IconPlayerPlay sx={{ fontSize: 20 }} /> },
-        ];
         const codingTools = visible([
             { id: 'codex', nav: { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> } },
             { id: 'opencode', nav: { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> } },
@@ -131,7 +127,6 @@ export function useActivityItems(): ActivityItem[] {
         pushGroup(codingTools);
         pushGroup(sdkTools);
         pushGroup(agentTools);
-        pushGroup(playgroundTool);
 
         const items: ActivityItem[] = [
             {

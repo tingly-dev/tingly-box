@@ -2,9 +2,9 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import ImageGenQuickStartCard from "./components/ImageGenQuickStartCard";
-import { Box, Button, Tooltip, IconButton } from '@mui/material';
-import { PlayArrow as PlayArrowIcon, Info as InfoIcon } from '@/components/icons';
-import { useNavigate } from 'react-router-dom';
+import ImageGenPlaygroundCard from "./components/ImageGenPlaygroundCard";
+import { Box, Tooltip, IconButton } from '@mui/material';
+import { Info as InfoIcon } from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
@@ -19,10 +19,16 @@ const UseImageGenPageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
         rules,
+        loadingRule,
+        showNotification,
+        providers,
+        loadProviders,
+        handleRulesChange,
+        handleRuleDelete,
+        loadRules,
     } = useScenarioPageInternal(scenario);
-    const navigate = useNavigate();
 
-    const firstModel = rules?.find((r: any) => !r?.disabled && r?.request_model)?.request_model;
+    const firstModel = rules.find((rule) => rule.active !== false && rule.request_model)?.request_model;
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
@@ -39,16 +45,6 @@ const UseImageGenPageContent: React.FC = () => {
                         </Box>
                     }
                     size="full"
-                    rightAction={
-                        <Button
-                            onClick={() => navigate('/agent/playground')}
-                            variant="contained"
-                            size="small"
-                            startIcon={<PlayArrowIcon />}
-                        >
-                            Open Playground
-                        </Button>
-                    }
                 >
                     <ProviderConfigCard
                         title="Image Generation API"
@@ -58,6 +54,11 @@ const UseImageGenPageContent: React.FC = () => {
                         scenario={scenario}
                     />
                 </UnifiedCard>
+                <ImageGenPlaygroundCard
+                    rules={rules}
+                    loadingRules={loadingRule}
+                    showNotification={showNotification}
+                />
                 <ImageGenQuickStartCard
                     baseUrl={baseUrl}
                     model={firstModel || 'gpt-image-1'}
@@ -68,6 +69,13 @@ const UseImageGenPageContent: React.FC = () => {
                     title="Image Generation Model Rules"
                     collapsible={true}
                     allowDeleteRule={true}
+                    rules={rules}
+                    providers={providers}
+                    showNotification={showNotification}
+                    onRulesChange={handleRulesChange}
+                    onProvidersLoad={loadProviders}
+                    onRuleDelete={handleRuleDelete}
+                    loadRules={loadRules}
                 />
             </CardGrid>
         </PageLayout>

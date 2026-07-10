@@ -36,7 +36,6 @@ import UseXcodePage from './pages/scenario/UseXcodePage';
 import UseVSCodePage from './pages/scenario/UseVSCodePage';
 import UseEmbedPage from './pages/scenario/UseEmbedPage';
 import UseImageGenPage from './pages/scenario/UseImageGenPage';
-import PlaygroundPage from './pages/scenario/PlaygroundPage';
 import CredentialPage from './pages/CredentialPage';
 import ProviderListPage from './pages/ProviderListPage';
 import System from './pages/system/System.tsx';
@@ -203,7 +202,7 @@ function AppContent() {
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
                     <Route path="/agent/imagegen" element={<UseImageGenPage />} />
-                    <Route path="/agent/playground" element={<PlaygroundPage />} />
+                    <Route path="/agent/playground" element={<Navigate to="/agent/imagegen" replace />} />
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
                     {/* Provider List page - must come before :tab wildcard */}

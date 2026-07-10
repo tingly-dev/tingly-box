@@ -46,7 +46,6 @@ export default {
       "useEmbed": "Embedding",
       "useImageGen": "Image Gen",
       "useTeam": "Team",
-      "playground": "Playground",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
       "credential": "Credential",
