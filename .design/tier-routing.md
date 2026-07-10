@@ -130,7 +130,7 @@ Notes:
 
 - `available` = breaker closed or half-open, read via the non-consuming `IsAvailable` (never steals the half-open probe).
 - On a drop, the strategy re-selects and `postProcess` re-pins — the failover layer is untouched.
-- The pipeline runs **health → affinity → strategy**. `HealthFilter` only sees 429/auth, so the 500 signal comes straight from the breaker.
+- The pipeline runs **health → smart → affinity → strategy** (smart routing decides the content partition first; affinity pins are scoped inside it). `HealthFilter` only sees 429/auth, so the 500 signal comes straight from the breaker.
 - The two "drop" cases (both are `P in T* and P available? → no`): **cross-tier demote** (a higher tier recovered, so P's tier is no longer T\*) and **within-tier dead peer** (P is in T\* but its own breaker is open while a peer is up).
 
 #### Two feedback channels, and the `lb` simulator
@@ -287,7 +287,7 @@ On a decline the pipeline falls through to the strategy, which re-selects a curr
 
 - **G1 — horizontal tactics are breaker-blind. RESOLVED.** `LoadBalancer.SelectService` now runs the same two-phase breaker walk for horizontal tactics (`typ.PickBreakerAvailable`): filter to breaker-available services (rule-scoped, non-consuming `IsAvailable`), pick within the subset, Allow-claim only the pick. A flat-shape dead peer is excluded at the selection layer and a recovering peer gets exactly one probe per open-window; when every healthy service is breaker-unavailable the pick degrades to the unfiltered set so the client sees the real upstream error. Pinned by `TestLBScenario_B_Flat_DeadPeerExcludedAndSingleProbe` (formerly the `t.Skip` known-gap marker).
 - **G2 — heterogeneous failover. RESOLVED.** Previously a fallback reused the already-transformed request body and was restricted to the same `Provider.APIStyle`. The transform is now re-run per attempt against a pristine request, so failover spans API styles and carries each tier's own model. See **Heterogeneous (cross-style) failover** below.
-- **G3 — affinity is global-scope.** Affinity runs before smart routing on the union of all the rule's services (`selector.go` TODO); per-smart-rule affinity scoping is not implemented.
+- **G3 — affinity is global-scope. RESOLVED.** The pipeline now runs smart routing BEFORE affinity: smart narrows the candidate set to the matched content partition, and pins are scoped per partition (`AffinitySessionKey`: session + matched smart-rule index). A first-request pin can no longer defeat content routing for the session TTL, and processor ops (proxy_vision) run on every request instead of being skipped for pinned sessions. Pinned by `TestSelect_ContentRoutingBeatsCrossPartitionPin` and `TestSelect_ProcessorRunsForPinnedSession`.
 
 ### Verifying shapes end-to-end
 

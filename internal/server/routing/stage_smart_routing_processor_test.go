@@ -118,26 +118,29 @@ func TestSmartRoutingStage_ProcessorBypass_RunsProcessorAndContinues(t *testing.
 	ctx := testContext(rule, "")
 	ctx.Request = betaReqWithImage("describe")
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{service: services[0]}, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 
 	require.False(t, handled, "stage must not terminate when a processor is present (implicit bypass)")
 	require.Equal(t, 1, called, "registered processor must be invoked")
 }
 
-func TestSmartRoutingStage_NoProcessor_TerminalSelectionUnchanged(t *testing.T) {
-	// Rules without processor-bearing ops keep current terminal behavior.
+func TestSmartRoutingStage_NoProcessor_NarrowsCandidates(t *testing.T) {
+	// Rules without processor-bearing ops narrow the candidate set to the
+	// matched subset (a filter — affinity/LB then run within it).
 	services := []*loadbalance.Service{testService("provider-a", "gpt-4", true)}
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{service: services[0]}, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 
-	require.True(t, handled, "no processor → terminal selection")
+	require.False(t, handled, "no processor → narrow, never terminate")
 	require.NotNil(t, result)
-	require.Equal(t, "gpt-4", result.Service.Model)
+	require.Len(t, result.FilteredServices, 1)
+	require.Equal(t, "gpt-4", result.FilteredServices[0].Model)
+	require.Equal(t, 0, ctx.MatchedSmartRuleIndex)
 }
 
 func TestSmartRoutingStage_BypassedRule_NotReentered(t *testing.T) {
@@ -158,7 +161,7 @@ func TestSmartRoutingStage_BypassedRule_NotReentered(t *testing.T) {
 	// Pre-mark rule 0 as already bypassed.
 	ctx.BypassedSmartRules = map[int]struct{}{0: {}}
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{service: services[0]}, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 
 	require.False(t, handled, "stage must not terminate; pipeline continues")
@@ -193,7 +196,7 @@ func TestSmartRoutingStage_ProcessorMutatesRequest_LoadBalancerSeesMutation(t *t
 	ctx := testContext(rule, "")
 	ctx.Request = betaReqWithImage("describe")
 
-	smart := NewSmartRoutingStage(&mockLoadBalancer{service: services[0]}, newMockAffinityStore())
+	smart := NewSmartRoutingStage(newMockAffinityStore())
 	rec := &recordingStage{name: "recording", result: NewResult(services[0], "recording"), handled: true}
 
 	_, idx, evaluated := runStagePipeline(t, []SelectionStage{smart, rec}, ctx, newSelectionState(ctx.Rule))

@@ -46,53 +46,54 @@ func betaRequestWithToolResult(keyword string) *anthropic.BetaMessageNewParams {
 }
 
 func TestSmartRouting_RuleMatch(t *testing.T) {
-	lb := &mockLoadBalancer{service: testService("provider-a", "gpt-4", true)}
 	services := []*loadbalance.Service{testService("provider-a", "gpt-4", true)}
 
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	// A match is a FILTER, not a terminal selection: the stage narrows the
+	// candidate set to the matched subset so affinity/LB run within it.
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled)
+	require.False(t, handled, "smart routing narrows candidates; it does not select")
 	require.NotNil(t, result)
-	require.Equal(t, "gpt-4", result.Service.Model)
 	require.Equal(t, "smart_routing", result.Source)
-	require.Equal(t, 0, result.MatchedSmartRuleIndex)
+	require.Len(t, result.FilteredServices, 1)
+	require.Equal(t, "gpt-4", result.FilteredServices[0].Model)
+	require.Equal(t, 0, ctx.MatchedSmartRuleIndex)
 }
 
 func TestSmartRouting_NoMatch(t *testing.T) {
-	lb := &mockLoadBalancer{}
 	services := []*loadbalance.Service{testService("provider-a", "gpt-4", true)}
 
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("claude"))
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	stage := NewSmartRoutingStage(newMockAffinityStore())
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when rule doesn't match")
+	require.Nil(t, result, "no match must not narrow the candidate set")
+	require.Equal(t, -1, ctx.MatchedSmartRuleIndex)
 }
 
 func TestSmartRouting_Disabled(t *testing.T) {
-	lb := &mockLoadBalancer{}
 	rule := testRule("rule-1", "gpt-4", nil)
 	// SmartEnabled is false by default
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	ctx := testContext(rule, "")
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled)
 }
 
 func TestSmartRouting_EmptyRules(t *testing.T) {
-	lb := &mockLoadBalancer{}
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
 	rule.SmartRouting = []smartrouting.SmartRouting{} // empty
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4")
 
@@ -101,11 +102,10 @@ func TestSmartRouting_EmptyRules(t *testing.T) {
 }
 
 func TestSmartRouting_NilRequest(t *testing.T) {
-	lb := &mockLoadBalancer{}
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	ctx := testContext(rule, "")
 	ctx.Request = nil
 
@@ -114,34 +114,19 @@ func TestSmartRouting_NilRequest(t *testing.T) {
 }
 
 func TestSmartRouting_InactiveServiceFiltered(t *testing.T) {
-	lb := &mockLoadBalancer{}
 	services := []*loadbalance.Service{testService("provider-a", "gpt-4", false)} // inactive
 
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.False(t, handled, "should pass when matched service is inactive")
-}
-
-func TestSmartRouting_SingleService(t *testing.T) {
-	lb := &mockLoadBalancer{} // should NOT be called for single service
-	services := []*loadbalance.Service{testService("provider-a", "gpt-4", true)}
-
-	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
-	ctx := testContext(rule, "")
-	ctx.Request = testOpenAIRequest("gpt-4o")
-
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled)
-	require.Equal(t, "provider-a", result.Service.Provider)
+	require.False(t, handled, "should pass when matched service is inactive")
+	require.Nil(t, result, "an all-inactive subset must not narrow the candidate set")
 }
 
-func TestSmartRouting_MultipleServices_LB(t *testing.T) {
-	lb := &mockLoadBalancer{service: testService("provider-b", "gpt-4", true)}
+func TestSmartRouting_MultipleServices_Narrowed(t *testing.T) {
 	services := []*loadbalance.Service{
 		testService("provider-a", "gpt-4", true),
 		testService("provider-b", "gpt-4", true),
@@ -151,15 +136,14 @@ func TestSmartRouting_MultipleServices_LB(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	// The full matched subset is handed downstream; the LB stage picks within it.
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled)
-	require.Equal(t, "provider-b", result.Service.Provider, "should use LB-selected service")
+	require.False(t, handled)
+	require.Len(t, result.FilteredServices, 2)
 }
 
 func TestSmartRouting_MatchedRuleIndex(t *testing.T) {
-	lb := &mockLoadBalancer{}
-
 	// Rule 0: matches claude, Rule 1: matches gpt
 	servicesA := []*loadbalance.Service{testService("provider-a", "claude-3", true)}
 	servicesB := []*loadbalance.Service{testService("provider-b", "gpt-4", true)}
@@ -174,15 +158,16 @@ func TestSmartRouting_MatchedRuleIndex(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = testOpenAIRequest("gpt-4o")
 
-	stage := NewSmartRoutingStage(lb, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled)
-	require.Equal(t, "provider-b", result.Service.Provider)
-	require.Equal(t, 1, result.MatchedSmartRuleIndex, "second rule should match")
+	require.False(t, handled)
+	require.Len(t, result.FilteredServices, 1)
+	require.Equal(t, "provider-b", result.FilteredServices[0].Provider)
+	require.Equal(t, 1, ctx.MatchedSmartRuleIndex, "second rule should match")
 }
 
 func TestSmartRouting_Name(t *testing.T) {
-	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	require.Equal(t, "smart_routing", stage.Name())
 }
 
@@ -223,10 +208,12 @@ func TestSmartRouting_AgentClaudeCode_SubagentRoutesToCheapPool(t *testing.T) {
 	ctx.Scenario = typ.ScenarioClaudeCode
 	ctx.Request = subagentReq
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled, "subagent request should match")
-	require.Equal(t, "provider-cheap", result.Service.Provider)
+	require.False(t, handled)
+	require.NotNil(t, result, "subagent request should match and narrow candidates")
+	require.Len(t, result.FilteredServices, 1)
+	require.Equal(t, "provider-cheap", result.FilteredServices[0].Provider)
 }
 
 func TestSmartRouting_AgentClaudeCode_MainDoesNotMatchSubagentRule(t *testing.T) {
@@ -264,9 +251,10 @@ func TestSmartRouting_AgentClaudeCode_MainDoesNotMatchSubagentRule(t *testing.T)
 	ctx.Scenario = typ.ScenarioClaudeCode
 	ctx.Request = mainReq
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.False(t, handled, "main-agent request should not match subagent-only rule")
+	stage := NewSmartRoutingStage(newMockAffinityStore())
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled)
+	require.Nil(t, result, "main-agent request should not match subagent-only rule")
 }
 
 // TestSmartRouting_LatestUser_ToolResultDoesNotLockBranch is the stage-level
@@ -290,9 +278,10 @@ func TestSmartRouting_LatestUser_ToolResultDoesNotLockBranch(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = betaRequestWithToolResult("keyword")
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.False(t, handled,
+	stage := NewSmartRoutingStage(newMockAffinityStore())
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled)
+	require.Nil(t, result,
 		"tool_result as last user message must not match latest_user contains rule")
 }
 
@@ -339,10 +328,11 @@ func TestSmartRouting_LatestUser_TextMatchesAfterToolResult(t *testing.T) {
 	ctx := testContext(rule, "")
 	ctx.Request = req
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
+	stage := NewSmartRoutingStage(newMockAffinityStore())
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled, "real user text with keyword must match")
-	require.Equal(t, "provider-special", result.Service.Provider)
+	require.False(t, handled)
+	require.NotNil(t, result, "real user text with keyword must match")
+	require.Equal(t, "provider-special", result.FilteredServices[0].Provider)
 }
 
 func TestSmartRouting_AgentClaudeCode_NonClaudeCodeScenarioDoesNotMatch(t *testing.T) {
@@ -371,7 +361,8 @@ func TestSmartRouting_AgentClaudeCode_NonClaudeCodeScenarioDoesNotMatch(t *testi
 	ctx.Scenario = typ.ScenarioOpenAI
 	ctx.Request = testOpenAIRequest("gpt-4")
 
-	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.False(t, handled, "non-claude_code scenarios should not satisfy agent.claude_code ops")
+	stage := NewSmartRoutingStage(newMockAffinityStore())
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled)
+	require.Nil(t, result, "non-claude_code scenarios should not satisfy agent.claude_code ops")
 }

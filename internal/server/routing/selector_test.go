@@ -8,6 +8,8 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 )
 
 func TestSelect_NoAffinity_FallsToLoadBalancer(t *testing.T) {
@@ -173,7 +175,9 @@ func TestSelect_PostProcess_LocksAffinity(t *testing.T) {
 	require.Equal(t, "smart_routing", result.Source)
 	require.Len(t, store.sets, 1, "affinity should be locked after smart routing")
 	require.Equal(t, "rule-1", store.sets[0].ruleUUID)
-	require.Equal(t, testSessionKey("session-1"), store.sets[0].sessionID)
+	// The pin is scoped to the matched smart partition (index 0), so a
+	// request routed by a different partition cannot inherit it.
+	require.Equal(t, AffinitySessionKey(testSessionKey("session-1"), 0), store.sets[0].sessionID)
 }
 
 func TestSelect_PostProcess_LocksOnLoadBalancer(t *testing.T) {
@@ -261,13 +265,15 @@ func TestSelect_PipelineCaching(t *testing.T) {
 }
 
 func TestNewServiceSelector_PipelineOrder(t *testing.T) {
-	// One pipeline serves every rule: health → affinity → smart → load_balancer.
+	// One pipeline serves every rule: health → smart → affinity → load_balancer.
+	// Smart runs BEFORE affinity so content routing decides the partition and
+	// stickiness lives inside it (and processor ops always run).
 	sel := NewServiceSelector(&mockConfig{}, newMockAffinityStore(), &mockLoadBalancer{})
 
 	require.Len(t, sel.pipeline, 4)
-	require.Equal(t, "health", sel.pipeline[0].Name(), "health must run before affinity")
-	require.Equal(t, "affinity", sel.pipeline[1].Name())
-	require.Equal(t, "smart_routing", sel.pipeline[2].Name())
+	require.Equal(t, "health", sel.pipeline[0].Name(), "health must run first")
+	require.Equal(t, "smart_routing", sel.pipeline[1].Name(), "smart must run before affinity")
+	require.Equal(t, "affinity", sel.pipeline[2].Name())
 	require.Equal(t, "load_balancer", sel.pipeline[3].Name())
 }
 
@@ -304,3 +310,107 @@ func TestSelect_TierAffinity_RepinsToPrimaryAfterRecovery(t *testing.T) {
 
 // ErrNoService is a sentinel error for tests
 var ErrNoService = errors.New("no service available")
+
+// pickFirstLB is a LoadBalancer stub that picks the first active candidate —
+// it makes candidate-set narrowing observable end-to-end.
+type pickFirstLB struct{}
+
+func (p *pickFirstLB) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
+	active := rule.GetActiveServices()
+	if len(active) == 0 {
+		return nil, nil
+	}
+	return active[0], nil
+}
+
+// TestSelect_ProcessorRunsForPinnedSession pins the ordering fix: processor
+// ops (e.g. proxy_vision) mutate the request and MUST run on every request —
+// under the old affinity-before-smart order, a pinned session skipped the
+// smart stage entirely, so the mutation silently stopped happening after the
+// first request.
+func TestSelect_ProcessorRunsForPinnedSession(t *testing.T) {
+	called := 0
+	smartrouting.RegisterProcessor(bypassOpPosition, bypassOpEnabled,
+		processorFunc(func(_ *smartrouting.ProcessorContext) error {
+			called++
+			return nil
+		}))
+	t.Cleanup(func() { smartrouting.UnregisterProcessor(bypassOpPosition, bypassOpEnabled) })
+
+	svcTop := testService("provider-top", "gpt-4", true)
+	store := newMockAffinityStore()
+	cfg := &mockConfig{providers: map[string]*typ.Provider{
+		"provider-top": testProvider("provider-top", "Top", true),
+	}}
+	rule := testSmartRule("rule-pin-proc", "any-model", []*loadbalance.Service{svcTop}, bypassOp())
+	rule.Services = []*loadbalance.Service{svcTop}
+	rule.Flags.SessionAffinity = 3600
+
+	// The session is already pinned (bypass routes pin in the top-level
+	// partition, index -1).
+	store.Set("rule-pin-proc", AffinitySessionKey(testSessionKey("s1"), -1), testAffinityEntry(svcTop))
+
+	sel := NewServiceSelector(cfg, store, &pickFirstLB{})
+	ctx := testContext(rule, "s1")
+	ctx.Request = betaReqWithImage("describe")
+
+	result, err := sel.Select(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, called, "processor must run even though the session is pinned")
+	require.Equal(t, svcTop.ServiceID(), result.Service.ServiceID(), "pin still honored after processing")
+	require.Equal(t, SourceAffinity, result.Source)
+}
+
+// TestSelect_ContentRoutingBeatsCrossPartitionPin pins the other half of the
+// ordering fix: a pin created in one content partition must not capture
+// requests that match a different partition — under the old order the first
+// request's pin defeated content routing for the whole session TTL.
+func TestSelect_ContentRoutingBeatsCrossPartitionPin(t *testing.T) {
+	svcTop := testService("provider-top", "normal-model", true)
+	svcSub := testService("provider-sub", "special-model", true)
+	store := newMockAffinityStore()
+	cfg := &mockConfig{providers: map[string]*typ.Provider{
+		"provider-top": testProvider("provider-top", "Top", true),
+		"provider-sub": testProvider("provider-sub", "Sub", true),
+	}}
+
+	rule := testSmartRule("rule-partition", "any", []*loadbalance.Service{svcSub},
+		testModelContainsOp("special"))
+	rule.Services = []*loadbalance.Service{svcTop}
+	rule.Flags.SessionAffinity = 3600
+
+	sel := NewServiceSelector(cfg, store, &pickFirstLB{})
+
+	// Request 1: no smart match → top-level pool → pinned to svcTop (partition -1).
+	ctx := testContext(rule, "s1")
+	ctx.Request = testOpenAIRequest("normal-model")
+	result, err := sel.Select(ctx)
+	require.NoError(t, err)
+	require.Equal(t, svcTop.ServiceID(), result.Service.ServiceID())
+
+	// Request 2: matches the smart partition → MUST route to the subset, not
+	// the session's top-level pin.
+	ctx = testContext(rule, "s1")
+	ctx.Request = testOpenAIRequest("special-model")
+	result, err = sel.Select(ctx)
+	require.NoError(t, err)
+	require.Equal(t, svcSub.ServiceID(), result.Service.ServiceID(),
+		"content routing must beat the cross-partition pin")
+	require.Equal(t, SourceSmartRouting, result.Source)
+
+	// Request 3: same content → now sticks via the partition-scoped pin.
+	ctx = testContext(rule, "s1")
+	ctx.Request = testOpenAIRequest("special-model")
+	result, err = sel.Select(ctx)
+	require.NoError(t, err)
+	require.Equal(t, svcSub.ServiceID(), result.Service.ServiceID())
+	require.Equal(t, SourceAffinity, result.Source, "second matching request sticks within the partition")
+
+	// Request 4: non-matching content again → the top-level pin still holds.
+	ctx = testContext(rule, "s1")
+	ctx.Request = testOpenAIRequest("normal-model")
+	result, err = sel.Select(ctx)
+	require.NoError(t, err)
+	require.Equal(t, svcTop.ServiceID(), result.Service.ServiceID())
+	require.Equal(t, SourceAffinity, result.Source)
+}

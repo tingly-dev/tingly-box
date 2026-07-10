@@ -24,6 +24,7 @@ const (
 	ContextKeyFirstTokenTime = constant.CtxKeyFirstTokenTime
 	ContextKeyCacheHit       = constant.CtxKeyCacheHit
 	ContextKeySessionID      = constant.CtxKeySessionID
+	ContextKeyAffinityKey    = constant.CtxKeyAffinityKey
 	ContextKeyLBServiceID    = constant.CtxKeyLBServiceID
 	ContextKeyLBTactic       = constant.CtxKeyLBTactic
 )

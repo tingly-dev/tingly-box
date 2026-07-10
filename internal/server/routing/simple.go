@@ -70,6 +70,10 @@ func (s *SimpleSelector) SelectService(
 
 	// Automatically store sessionID in gin context for downstream handlers
 	c.Set(constant.CtxKeySessionID, ctx.SessionID.String())
+	// The scoped affinity key (session + matched smart partition) — consumers
+	// that write back to the affinity entry (e.g. message-id updates) must use
+	// this, not the bare session, or they'll miss partition-scoped pins.
+	c.Set(constant.CtxKeyAffinityKey, AffinitySessionKey(ctx.SessionID.String(), result.MatchedSmartRuleIndex))
 
 	// Store result metadata for observability
 	c.Set("routing_source", result.Source)

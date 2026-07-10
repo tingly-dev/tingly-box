@@ -15,17 +15,13 @@ import (
 // SmartRoutingStage evaluates smart routing rules and returns matched services.
 // If multiple services match, applies load balancing within the matched set.
 type SmartRoutingStage struct {
-	loadBalancer  LoadBalancer
 	affinityStore AffinityStore
 	multiLogger   *pkgobs.MultiLogger // optional; used to emit structured smart-routing logs
 }
 
 // NewSmartRoutingStage creates a new smart routing stage
-func NewSmartRoutingStage(lb LoadBalancer, affinity AffinityStore) *SmartRoutingStage {
-	return &SmartRoutingStage{
-		loadBalancer:  lb,
-		affinityStore: affinity,
-	}
+func NewSmartRoutingStage(affinity AffinityStore) *SmartRoutingStage {
+	return &SmartRoutingStage{affinityStore: affinity}
 }
 
 // SetMultiLogger attaches the multi-logger so the stage can emit structured
@@ -218,11 +214,6 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
-	ctx.MatchedSmartRuleIndex = matchedRuleIndex
-
-	logrus.Debugf("[smart_routing] rule %d matched, selecting from %d services",
-		matchedRuleIndex, len(matchedServices))
-
 	// Filter active services
 	activeServices := FilterActiveServices(matchedServices)
 	if len(activeServices) == 0 {
@@ -232,28 +223,18 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
-	// Single service? Return it directly
-	if len(activeServices) == 1 {
-		result := NewResult(activeServices[0], SourceSmartRouting)
-		result.MatchedSmartRuleIndex = matchedRuleIndex
-		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
-			activeServices[0], "selected", "single active service in matched set")
-		return result, true
-	}
-
-	// Multiple services: apply load balancing within matched set
-	service := s.selectFromServices(activeServices, rule)
-	if service == nil {
-		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
-			nil, "lb_failed", "load balancer returned no service")
-		return nil, false
-	}
-
-	result := NewResult(service, SourceSmartRouting)
-	result.MatchedSmartRuleIndex = matchedRuleIndex
+	// Narrow the candidate set to the matched partition — this stage decides
+	// WHERE to route (the content partition); AffinityStage then applies
+	// per-partition stickiness and LoadBalancerStage picks WITHIN it. Smart
+	// routing used to terminal-select here, but that ran after affinity, so a
+	// first-request pin could defeat content routing for the whole session
+	// TTL and skip processor ops entirely for pinned sessions.
+	ctx.MatchedSmartRuleIndex = matchedRuleIndex
+	logrus.Debugf("[smart_routing] rule %d matched, narrowing candidates to %d services",
+		matchedRuleIndex, len(activeServices))
 	s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
-		service, "selected", "load balanced within matched set")
-	return result, true
+		nil, "matched", "candidates narrowed to the matched subset")
+	return NewFilterResult(SourceSmartRouting, activeServices), false
 }
 
 // runOpProcessors runs the registered op-level processors of the matched rule
@@ -304,28 +285,6 @@ func (s *SmartRoutingStage) runOpProcessors(
 	}
 	ctx.BypassedSmartRules[matchedRuleIndex] = struct{}{}
 	return true
-}
-
-// selectFromServices applies load balancing to select one service from the matched set
-func (s *SmartRoutingStage) selectFromServices(services []*loadbalance.Service, rule *typ.Rule) *loadbalance.Service {
-	if len(services) == 0 {
-		return nil
-	}
-
-	if len(services) == 1 {
-		return services[0]
-	}
-
-	// Create a temporary rule with only the matched services for load balancing
-	tempRule := *rule // Copy the rule
-	tempRule.Services = services
-
-	service, err := s.loadBalancer.SelectService(&tempRule)
-	if err != nil {
-		logrus.Debugf("[smart_routing] load balancer selection failed: %v", err)
-		return nil
-	}
-	return service
 }
 
 // collectAllCapacityInfo collects seat-capacity info for all services across all smart routing rules.

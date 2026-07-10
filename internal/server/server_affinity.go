@@ -13,11 +13,16 @@ func (s *Server) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, message
 		return
 	}
 
-	sessionID, exists := c.Get(ContextKeySessionID)
+	// Use the partition-scoped affinity key set at selection time; fall back
+	// to the bare session for callers that predate the scoped keys.
+	key, exists := c.Get(ContextKeyAffinityKey)
 	if !exists {
-		return
+		key, exists = c.Get(ContextKeySessionID)
+		if !exists {
+			return
+		}
 	}
 
-	s.affinityStore.UpdateMessageID(rule.UUID, sessionID.(string), messageID)
-	logrus.Debugf("[affinity] updated message ID %s for session %s, rule %s", messageID, sessionID.(string), rule.UUID)
+	s.affinityStore.UpdateMessageID(rule.UUID, key.(string), messageID)
+	logrus.Debugf("[affinity] updated message ID %s for affinity key %s, rule %s", messageID, key.(string), rule.UUID)
 }

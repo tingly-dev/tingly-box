@@ -132,29 +132,36 @@ func NewServiceSelectorWithLogger(
 	}
 
 	newSmart := func() *SmartRoutingStage {
-		stage := NewSmartRoutingStage(lb, affinity)
+		stage := NewSmartRoutingStage(affinity)
 		if multiLogger != nil {
 			stage.SetMultiLogger(multiLogger)
 		}
 		return stage
 	}
 
-	// One pipeline serves every rule — order is health → affinity → strategy.
-	// Each stage self-guards, so there is no need for per-mode variants:
+	// One pipeline serves every rule — order is health → smart → affinity →
+	// strategy. Each stage self-guards, so there is no need for per-mode
+	// variants:
 	//   - Health  narrows the candidate set by 429/auth health; passes through
 	//     when no filter is set or filtering would empty the set (degrade).
+	//   - Smart   runs BEFORE affinity: it decides the content partition (and
+	//     always runs processor ops, which mutate the request) by narrowing
+	//     the candidate set to the matched subset. Running it after affinity
+	//     let a first-request pin defeat content routing for the whole
+	//     session TTL — and skip processor ops entirely for pinned sessions.
+	//     Passes through when smart routing is off or unmatched.
 	//   - Affinity returns nothing when affinity is disabled or there's no
-	//     session, so it is a no-op for non-affinity rules. It uses the global
-	//     (ruleUUID:sessionID) scope because it runs before smart routing, so
-	//     the matched-smart-rule index isn't available yet. The breaker-driven
-	//     (500) signal is consulted inside the affinity tier check and the
-	//     tier tactic; Health feeds it the 429/auth signal.
-	//   - Smart   passes through when smart routing is off or unmatched.
-	//   - LB      always selects (the terminal fallback).
+	//     session. Pins are scoped per matched partition (AffinitySessionKey),
+	//     so stickiness lives INSIDE the content decision, never above it.
+	//     The breaker-driven (500) signal is consulted inside the affinity
+	//     tier check and the tier tactic; Health feeds it the 429/auth signal.
+	//   - LB      always selects (the terminal fallback) within the narrowed
+	//     candidate set, labeling the result smart_routing when a partition
+	//     matched.
 	s.pipeline = []SelectionStage{
 		NewHealthStage(healthFilter),
-		NewAffinityStage(affinity, "global"),
 		newSmart(),
+		NewAffinityStage(affinity),
 		NewLoadBalancerStage(lb),
 	}
 
@@ -240,11 +247,14 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 		// Affinity disabled (no rule value, no scenario value, no legacy bool)
 		return
 	}
-	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID.String(), &AffinityEntry{
+	// Pin inside the partition this request was routed by, so one session can
+	// hold independent pins per request kind (see AffinitySessionKey).
+	affinityKey := AffinitySessionKey(ctx.SessionID.String(), ctx.MatchedSmartRuleIndex)
+	s.affinityStore.Set(ctx.Rule.UUID, affinityKey, &AffinityEntry{
 		Service:   result.Service,
 		LockedAt:  clock.Now(),
 		ExpiresAt: clock.Now().Add(ttl),
 	})
-	logrus.Infof("[affinity] locked service %s -> %s for session %s",
-		result.Provider.Name, result.Service.Model, ctx.SessionID.String())
+	logrus.Infof("[affinity] locked service %s -> %s for session key %s",
+		result.Provider.Name, result.Service.Model, affinityKey)
 }

@@ -29,22 +29,26 @@ funnels through the same path; there is exactly one production route.
   │  1 HealthStage        filter    drop 429/auth-unhealthy services                      │
   │       │               ┈┈► HealthMonitor        degrade: none healthy → keep all       │
   │       ▼                                                                               │
-  │  2 AffinityStage      terminal  honor session pin iff the strategy would pick it NOW  │
+  │  2 SmartRoutingStage  filter    first rule whose ops all match → narrow candidates    │
+  │       │               to the matched CONTENT PARTITION (runs before affinity so a     │
+  │       │               pin can never defeat content routing)                           │
+  │       │               ops read extracted RequestContext (model/tokens/agent-kind/…)   │
+  │       │               processor ops (proxy_vision) mutate req on EVERY request,       │
+  │       │               then bypass ↓ (candidates unchanged)                            │
+  │       ▼                                                                               │
+  │  3 AffinityStage      terminal  honor the PARTITION-SCOPED pin iff the strategy       │
+  │       │               would pick it now (key: session + matched partition idx)        │
   │       │               ┈┈► AffinityStore (strict TTL)                                  │
   │       │               ┈┈► typ.IsAffinityEligible: breaker walk + tier + PromotionHold │
   │       ▼                                                                               │
-  │  3 SmartRoutingStage  terminal  first rule whose ops all match → service subset       │
-  │       │               ops read extracted RequestContext (model/tokens/agent-kind/…)   │
-  │       │               processor ops (proxy_vision) mutate req, then BYPASS ↓ to 4     │
-  │       │               subset of >1 → LB *within* the subset (same engine as 4)        │
-  │       ▼                                                                               │
-  │  4 LoadBalancerStage  terminal  the global fallback — always selects (or errors)      │
+  │  4 LoadBalancerStage  terminal  always selects (or errors) within the narrowed set;   │
+  │       │               labeled smart_routing when a partition matched                  │
   │       └────────────► LoadBalancer.SelectService(rule│narrowed candidates)   see ②     │
   └───────────────────────────────────────────────────────────────────────────────────────┘
         │  validate pick: service active + provider resolvable + provider enabled
         │  (invalid → fall through to the next stage, not a hard error)
         ▼
-  postProcess: (re)pin session ━━► AffinityStore          (unless the pin itself won)
+  postProcess: (re)pin session in its partition ━━► AffinityStore   (unless the pin won)
         │
         ▼
   (provider, service) → prologue continues → dispatchWithPriorityFailover   see ③
@@ -112,13 +116,14 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
   │        ┊                  │        ┊                   │        ┊                  │
   │        ┈┈► TierTactic     │        ┈┈► HealthStage (1) │        ┈┈► token/latency/ │
   │        ┈┈► IsAffinity-    │                            │            speed tactics  │
-  │            Eligible (2)   │                            │        ┈┈► smart ops      │
+  │            Eligible (3)   │                            │        ┈┈► smart ops      │
   │        ┈┈► horizontal     │                            │            (ttft/capacity)│
   │            pick (②)       │                            │                           │
   └───────────────────────────┴────────────────────────────┴───────────────────────────┘
 
-  AffinityStore (rule-scoped, session → service pin, strict TTL — no sliding renewal)
-     written by postProcess (①) · read by AffinityStage (2) · validity delegated to
+  AffinityStore (rule- and partition-scoped: session + matched smart partition →
+     service pin, strict TTL — no sliding renewal)
+     written by postProcess (①) · read by AffinityStage (3) · validity delegated to
      the breaker walk, so a pin never outlives what the strategy would pick.
 
   Failover (failover.pencil.md) closes the loop: a retryable attempt records ✗ for
@@ -155,8 +160,9 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
   filter → pick → Allow-claim, degrade to unfiltered when nothing is available) for
   non-tier tactics; TierTactic shares the same helper per bucket. Regression:
   `TestLBScenario_B_Flat_DeadPeerExcludedAndSingleProbe`.
-- **G3 — affinity is global-scope**: pins are per rule, not per smart-routing subset
-  (`selector.go` TODO; the `smart_rule` scope plumbing exists but the store keying doesn't).
+- ~~**G3 — affinity is global-scope**~~ **RESOLVED**: smart routing runs before
+  affinity and pins are partition-scoped (`AffinitySessionKey`), so stickiness lives
+  inside the content decision. See tier-routing.md G3 for details.
 
 ## Map to code
 

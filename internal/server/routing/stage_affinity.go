@@ -1,6 +1,8 @@
 package routing
 
 import (
+	"strconv"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/clock"
@@ -9,17 +11,36 @@ import (
 
 // AffinityStage checks if a session has a locked service from previous requests.
 // If found and valid, returns the locked service; otherwise passes to next stage.
+//
+// It runs AFTER SmartRoutingStage, so pins are scoped to the content partition
+// smart routing matched (see AffinitySessionKey): a session pinned inside one
+// smart subset cannot drag requests that match a different subset — content
+// routing decides the partition, affinity provides stickiness within it.
 type AffinityStage struct {
 	store AffinityStore
-	scope string // "global" or "smart_rule"
 }
 
-// NewAffinityStage creates a new affinity stage with the given store and scope
-func NewAffinityStage(store AffinityStore, scope string) *AffinityStage {
-	return &AffinityStage{
-		store: store,
-		scope: scope,
+// NewAffinityStage creates a new affinity stage backed by the given store
+func NewAffinityStage(store AffinityStore) *AffinityStage {
+	return &AffinityStage{store: store}
+}
+
+// AffinitySessionKey returns the affinity-store session key scoped to the
+// content partition smart routing matched: the bare session for the rule's
+// top-level pool (no match, index -1), or session + "#sr<idx>" inside a smart
+// subset. Partition-scoping is what lets one session hold independent pins
+// per request kind (e.g. a Claude Code main pin and a subagent pin), each
+// with its own prompt-cache continuity.
+//
+// The partition identity is the smart rule's index, the only stable handle
+// the config offers. Editing the rule list can renumber partitions and
+// mis-bucket existing pins; pins are in-memory with short TTLs, so this
+// self-heals within one TTL.
+func AffinitySessionKey(sessionID string, matchedSmartRuleIndex int) string {
+	if matchedSmartRuleIndex < 0 {
+		return sessionID
 	}
+	return sessionID + "#sr" + strconv.Itoa(matchedSmartRuleIndex)
 }
 
 // Name returns the stage identifier
@@ -38,17 +59,9 @@ func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (
 		return nil, false
 	}
 
-	// For smart_rule scope, we need the matched rule index
-	// If we're evaluating affinity BEFORE smart routing, we can't use smart_rule scope
-	if s.scope == "smart_rule" && ctx.MatchedSmartRuleIndex < 0 {
-		// Smart routing hasn't run yet, can't check smart_rule-scoped affinity
-		return nil, false
-	}
-
-	// Check affinity store
-	// Currently AffinityStore only supports global scope (ruleUUID:sessionID)
-	// TODO: Extend AffinityStore to support smart_rule scope keys
-	entry, ok := s.store.Get(rule.UUID, ctx.SessionID.String())
+	// Look up the pin in the partition smart routing just matched (or the
+	// top-level partition when nothing matched).
+	entry, ok := s.store.Get(rule.UUID, AffinitySessionKey(ctx.SessionID.String(), ctx.MatchedSmartRuleIndex))
 	if !ok {
 		return nil, false
 	}

@@ -43,7 +43,15 @@ func (s *LoadBalancerStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
-	result := NewResult(service, SourceLoadBalancer)
+	// When a smart partition matched, the candidate set IS that partition, so
+	// label the pick smart_routing — preserving the pre-reorder observability
+	// contract (source=smart_routing ⇒ picked from a smart-matched subset).
+	source := SourceLoadBalancer
+	if ctx.MatchedSmartRuleIndex >= 0 {
+		source = SourceSmartRouting
+	}
+	result := NewResult(service, source)
+	result.MatchedSmartRuleIndex = ctx.MatchedSmartRuleIndex
 	return result, true
 }
 

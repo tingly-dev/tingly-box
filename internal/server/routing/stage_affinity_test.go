@@ -34,7 +34,7 @@ func TestAffinity_LockedSession(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "session-1")
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -51,7 +51,7 @@ func TestAffinity_NoLock(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "session-1")
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -68,7 +68,7 @@ func TestAffinity_AffinityDisabled(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 0 // disabled
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "session-1")
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -86,7 +86,7 @@ func TestAffinity_SmartDisabled(t *testing.T) {
 	rule.SmartEnabled = false
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "session-1")
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -103,28 +103,50 @@ func TestAffinity_EmptySession(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "") // empty session
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when session is empty")
 }
 
-func TestAffinity_SmartRuleScope_NoIndex(t *testing.T) {
+// Pins are partition-scoped: a pin created in the top-level partition must
+// not be honored for a request that matched a smart subset (and vice versa) —
+// content routing decides the partition, affinity sticks within it.
+func TestAffinity_PartitionScoping(t *testing.T) {
 	store := newMockAffinityStore()
-	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
+	topSvc := testService("provider-top", "gpt-4", true)
+	subSvc := testService("provider-sub", "gpt-4", true)
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "smart_rule")
-	ctx := testContext(rule, "session-1")
-	ctx.MatchedSmartRuleIndex = -1 // smart routing hasn't run yet
+	// Pin in the top-level partition (no smart match).
+	store.Set("rule-1", AffinitySessionKey(testSessionKey("session-1"), -1), testAffinityEntry(topSvc))
+	// Independent pin inside smart partition 1.
+	store.Set("rule-1", AffinitySessionKey(testSessionKey("session-1"), 1), testAffinityEntry(subSvc))
 
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.False(t, handled, "should pass when smart_rule scope but no index")
+	stage := NewAffinityStage(store)
+
+	// A request routed by smart partition 1 must see the subset pin.
+	ctx := testContext(rule, "session-1")
+	ctx.MatchedSmartRuleIndex = 1
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled)
+	require.Equal(t, "provider-sub", result.Service.Provider)
+
+	// A request with no smart match must see the top-level pin.
+	ctx = testContext(rule, "session-1")
+	result, handled = stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled)
+	require.Equal(t, "provider-top", result.Service.Provider)
+
+	// A request routed by a DIFFERENT partition must find no pin at all.
+	ctx = testContext(rule, "session-1")
+	ctx.MatchedSmartRuleIndex = 2
+	_, handled = stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled, "a pin must never leak across partitions")
 }
 
 // --- Tier-scoped affinity (breaker-aware) ---
@@ -139,7 +161,7 @@ func TestAffinity_TierScope_DeclinesStalePinWhenPrimaryHealthy(t *testing.T) {
 	store.Set("rule-tier-a", testSessionKey("s1"), testAffinityEntry(t1))
 
 	rule := tierRule("rule-tier-a", "m", []*loadbalance.Service{t0, t1})
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -163,7 +185,7 @@ func TestAffinity_TierScope_HonorsPinWhilePrimaryDown(t *testing.T) {
 	}
 	defer bs.RecordSuccess("rule-tier-b", t0.ServiceID())
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -187,7 +209,7 @@ func TestAffinity_TierScope_DeclinesWhenPinnedBreakerOpen(t *testing.T) {
 	}
 	defer bs.RecordSuccess("rule-tier-c", t1.ServiceID())
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -204,7 +226,7 @@ func TestAffinity_TierScope_WithinTierStickinessPreserved(t *testing.T) {
 	store.Set("rule-tier-d", testSessionKey("s1"), testAffinityEntry(b))
 
 	rule := tierRule("rule-tier-d", "m", []*loadbalance.Service{a, b})
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -232,7 +254,7 @@ func TestAffinity_HorizontalRule_DropsPinToDeadPeer(t *testing.T) {
 	}
 	defer bs.RecordSuccess("rule-horiz", a.ServiceID())
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -241,20 +263,22 @@ func TestAffinity_HorizontalRule_DropsPinToDeadPeer(t *testing.T) {
 }
 
 func TestAffinity_Name(t *testing.T) {
-	stage := NewAffinityStage(newMockAffinityStore(), "global")
+	stage := NewAffinityStage(newMockAffinityStore())
 	require.Equal(t, "affinity", stage.Name())
 }
 
 func TestAffinity_MatchedSmartRuleIndex_Propagated(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "smart_rule")
+	// The pin lives in partition 2's bucket, matching the request's route.
+	store.Set("rule-1", AffinitySessionKey(testSessionKey("session-1"), 2), testAffinityEntry(svc))
+
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "session-1")
 	ctx.MatchedSmartRuleIndex = 2
 
@@ -292,7 +316,7 @@ func TestAffinity_MultipleSessions(t *testing.T) {
 	rule.SmartEnabled = true
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 
 	// Session A should get provider A
 	ctxA := testContext(rule, "session-a")
@@ -326,7 +350,7 @@ func TestAffinity_StrictTTL_Expired(t *testing.T) {
 	rule := testRule("rule-ttl", "gpt-4", nil)
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
@@ -350,7 +374,7 @@ func TestAffinity_StrictTTL_NotExpired(t *testing.T) {
 	rule := testRule("rule-ttl", "gpt-4", nil)
 	rule.Flags.SessionAffinity = 3600
 
-	stage := NewAffinityStage(store, "global")
+	stage := NewAffinityStage(store)
 	ctx := testContext(rule, "s1")
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
