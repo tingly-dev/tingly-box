@@ -105,11 +105,8 @@ func UseWebStaticEndpoints(engine *gin.Engine) {
 				},
 			})
 			c.Abort()
-			return
 		}
-
-		UseIndexHTML(c)
-	})
+	}, middleware.Gzip(), UseIndexHTML)
 }
 
 // RuntimeAuditSink adapts an audit.Logger into the AuditFunc the
