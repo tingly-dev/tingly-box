@@ -237,7 +237,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 
 	// Build and run server-side pre-transform chain (scenario-driven flags)
 	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
-	if err := ExecuteAnthropicV1PreChain(
+	if err := ExecuteAnthropicPreChain(
 		req.MessageNewParams, scenarioConfig,
 		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
 	); err != nil {
@@ -363,7 +363,7 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 
 	// Build and run server-side pre-transform chain (scenario-driven flags)
 	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
-	if err := ExecuteAnthropicBetaPreChain(
+	if err := ExecuteAnthropicPreChain(
 		req.BetaMessageNewParams, scenarioConfig,
 		ph.deps.Config.GetDefaultMaxTokens(), maxAllowed, isStreaming,
 	); err != nil {

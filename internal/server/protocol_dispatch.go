@@ -40,15 +40,6 @@ func respondMCPError(h *ProtocolHandler, c *gin.Context, recorder *recording.Pro
 	}
 }
 
-// recordMCPForwardingError handles MCP errors in non-streaming forward paths.
-func recordMCPForwardingError(h *ProtocolHandler, c *gin.Context, err error, recorder *recording.ProtocolRecorder) {
-	h.trackUsageFromContext(c, 0, 0, err)
-	stream.SendForwardingError(c, err)
-	if recorder != nil {
-		recorder.RecordError(err)
-	}
-}
-
 // shouldUseGenericMCPForProvider checks if the provider is allowed to use generic MCP path
 func (ph *ProtocolHandler) shouldUseGenericMCPForProvider(provider *typ.Provider) bool {
 	return ShouldUseGenericMCPForProvider(ph.deps.Config, provider)
@@ -94,8 +85,6 @@ func (ph *ProtocolHandler) DispatchChainResult(
 		reqCtx.Release()
 	}()
 
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
-
 	// Bubble up the execution-level routing decision for probes. This is the
 	// single chokepoint where the resolved upstream API + provider + matched
 	// rule + applied flags are all known, before any response byte is written.
@@ -113,65 +102,85 @@ func (ph *ProtocolHandler) DispatchChainResult(
 			ph.NonstreamAnthropicV1(c, reqCtx, rule, provider, recorder)
 		}
 	case protocol.TypeAnthropicBeta:
-		switch reqCtx.SourceAPI {
-		case protocol.TypeOpenAIChat:
-			ph.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
-		case protocol.TypeOpenAIResponses:
-			if isStreaming {
-				ph.streamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
-			} else {
-				ph.nonstreamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
-			}
-		default:
-			ph.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
-		}
+		ph.dispatchAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeOpenAIResponses:
-		req := reqCtx.Request.(*responses.ResponseNewParams)
-		switch reqCtx.SourceAPI {
-		case protocol.TypeAnthropicV1:
-			logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
-			if isStreaming {
-				ph.streamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-			} else {
-				if provider.APIBase == protocol.CodexAPIBase {
-					ph.assembleResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-				} else {
-					ph.nonstreamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-				}
-			}
-		case protocol.TypeAnthropicBeta:
-			logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
-			if isStreaming {
-				ph.streamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-			} else {
-				if provider.APIBase == protocol.CodexAPIBase {
-					ph.assembleResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-				} else {
-					ph.nonstreamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-				}
-			}
-		case protocol.TypeOpenAIChat:
-			// Client sent Responses API, but provider needs Chat format
-			// Forward as Chat, then convert response back to Responses format
-			if isStreaming {
-				ph.streamResponsesToChat(c, reqCtx, rule, provider, recorder)
-			} else {
-				ph.nonstreamResponsesToChat(c, reqCtx, rule, provider, recorder)
-			}
-		case protocol.TypeOpenAIResponses:
-			// Responses API passthrough
-			if isStreaming {
-				ph.streamOpenAIResponses(c, reqCtx, rule, provider, recorder)
-			} else {
-				ph.nonstreamOpenAIResponses(c, reqCtx, rule, provider, recorder)
-			}
-		}
+		ph.dispatchOpenAIResponses(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeGoogle:
 		ph.dispatchGoogle(c, reqCtx, rule, provider, isStreaming, recorder)
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 		if recorder != nil {
 			recorder.RecordError(fmt.Errorf("invalid api style: %s", provider.APIStyle))
+		}
+	}
+}
+
+// dispatchAnthropicBeta routes an Anthropic-beta-bound request by the client's
+// source format: Chat and Responses sources need their responses converted
+// back; everything else is beta passthrough.
+func (ph *ProtocolHandler) dispatchAnthropicBeta(
+	c *gin.Context, reqCtx *transform.TransformContext,
+	rule *typ.Rule, provider *typ.Provider,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
+) {
+	switch reqCtx.SourceAPI {
+	case protocol.TypeOpenAIChat:
+		ph.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
+	case protocol.TypeOpenAIResponses:
+		if isStreaming {
+			ph.streamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
+		} else {
+			ph.nonstreamAnthropicBetaToResponses(c, reqCtx, rule, provider, recorder)
+		}
+	default:
+		ph.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
+	}
+}
+
+// dispatchOpenAIResponses routes a Responses-API-bound request by the client's
+// source format. Anthropic sources on Codex providers use the assembly path
+// (Codex only streams), other providers use the plain non-streaming forward.
+func (ph *ProtocolHandler) dispatchOpenAIResponses(
+	c *gin.Context, reqCtx *transform.TransformContext,
+	rule *typ.Rule, provider *typ.Provider,
+	isStreaming bool, recorder *recording.ProtocolRecorder,
+) {
+	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+	req := reqCtx.Request.(*responses.ResponseNewParams)
+
+	switch reqCtx.SourceAPI {
+	case protocol.TypeAnthropicV1:
+		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
+		if isStreaming {
+			ph.streamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
+		} else if provider.APIBase == protocol.CodexAPIBase {
+			ph.assembleResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
+		} else {
+			ph.nonstreamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
+		}
+	case protocol.TypeAnthropicBeta:
+		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
+		if isStreaming {
+			ph.streamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
+		} else if provider.APIBase == protocol.CodexAPIBase {
+			ph.assembleResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
+		} else {
+			ph.nonstreamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
+		}
+	case protocol.TypeOpenAIChat:
+		// Client sent Responses API, but provider needs Chat format
+		// Forward as Chat, then convert response back to Responses format
+		if isStreaming {
+			ph.streamResponsesToChat(c, reqCtx, rule, provider, recorder)
+		} else {
+			ph.nonstreamResponsesToChat(c, reqCtx, rule, provider, recorder)
+		}
+	case protocol.TypeOpenAIResponses:
+		// Responses API passthrough
+		if isStreaming {
+			ph.streamOpenAIResponses(c, reqCtx, rule, provider, recorder)
+		} else {
+			ph.nonstreamOpenAIResponses(c, reqCtx, rule, provider, recorder)
 		}
 	}
 }
@@ -258,8 +267,9 @@ func formatAppliedFlags(f typ.RuleFlags) string {
 	return strings.Join(parts, ", ")
 }
 
-// dispatchOpenAIChatFromAnthropicV1 handles OpenAI→Anthropic v1 conversion.
-// The client expects OpenAI format, so responses are converted back.
+// dispatchAnthropicBetaToOpenAIChat forwards an OpenAI-Chat-shaped client
+// request to an Anthropic beta provider. The client expects OpenAI format, so
+// responses are converted back.
 func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
@@ -289,11 +299,7 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			defer cancel()
 		}
 		if err != nil {
-			ph.trackUsageFromContext(c, 0, 0, err)
-			SendErrorResponse(c, err, "Failed to create streaming request")
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
+			ph.failRequest(c, recorder, err, "Failed to create streaming request")
 			return
 		}
 
@@ -319,9 +325,6 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			ph.trackUsageWithTokenUsage(c, tokenUsage, nil)
 		}
 	} else {
-		wrapper := ph.deps.ClientPool.GetAnthropicClient(ctx, provider, actualModel)
-		fc := forwarding.NewForwardContext(ctx, provider)
-
 		var anthropicResp *anthropic.BetaMessage
 		var usage *protocol.TokenUsage
 		var err error
@@ -338,17 +341,12 @@ func (ph *ProtocolHandler) dispatchAnthropicBetaToOpenAIChat(
 			}
 		} else {
 			var cancel context.CancelFunc
-			var err error
 			anthropicResp, cancel, err = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
 			}
 			if err != nil {
-				ph.trackUsageFromContext(c, 0, 0, err)
-				SendErrorResponse(c, err, "Failed to forward Anthropic request")
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
+				ph.failRequest(c, recorder, err, "Failed to forward Anthropic request")
 				return
 			}
 			usage = usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage)
@@ -414,11 +412,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 			defer cancel()
 		}
 		if err != nil {
-			ph.trackUsageFromContext(c, 0, 0, err)
-			stream.SendStreamingError(c, err)
-			if recorder != nil {
-				recorder.RecordError(err)
-			}
+			ph.handlePreStreamFailure(c, err, recorder)
 			return
 		}
 
@@ -436,7 +430,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 			var usage *mcp.TokenUsage
 			anthropicResp, usage, err = ph.RunGenericAnthropicBetaNonStream(ctx, provider, req, recorder)
 			if err != nil {
-				recordMCPForwardingError(ph, c, err, recorder)
+				ph.failForward(c, recorder, err)
 				return
 			}
 			if usage != nil {
@@ -452,11 +446,7 @@ func (ph *ProtocolHandler) passthroughAnthropicBeta(
 				defer cancel()
 			}
 			if err != nil {
-				ph.trackUsageFromContext(c, 0, 0, err)
-				stream.SendForwardingError(c, err)
-				if recorder != nil {
-					recorder.RecordError(err)
-				}
+				ph.failForward(c, recorder, err)
 				return
 			}
 

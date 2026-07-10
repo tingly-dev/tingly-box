@@ -207,15 +207,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
-		// Track error with no usage
-		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		ph.trackUsageWithTokenUsage(c, usage, err)
-		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to forward request: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
+		ph.failForward(c, nil, err)
 		return
 	}
 
@@ -294,15 +286,7 @@ func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provid
 		defer cancel()
 	}
 	if err != nil {
-		// Track error with no usage
-		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-		ph.trackUsageWithTokenUsage(c, usage, err)
-		c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to create streaming request: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
+		ph.handlePreStreamFailure(c, err, nil)
 		return
 	}
 

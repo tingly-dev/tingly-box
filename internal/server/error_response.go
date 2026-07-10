@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
 )
 
 // ErrorResponse represents an error response
@@ -27,6 +29,29 @@ type ErrorDetail struct {
 // setProbeUpstreamHeaders is the sole consumer that has moved so far; root's
 // handlers.go (not yet moved) keeps a companion alias.
 const ProbeSyntheticRuleUUID = "probe-synthetic"
+
+// failRequest reports a failed upstream call on a non-streaming (or
+// pre-stream) path: zero-usage error tracking, a SendErrorResponse with the
+// given description (propagating the upstream status), and recorder capture.
+// It consolidates the track/send/record triplet repeated across the protocol
+// dispatch paths.
+func (ph *ProtocolHandler) failRequest(c *gin.Context, recorder *recording.ProtocolRecorder, err error, desc string) {
+	ph.trackUsageFromContext(c, 0, 0, err)
+	SendErrorResponse(c, err, desc)
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
+
+// failForward is failRequest with the canonical forwarding-error body
+// (stream.SendForwardingError) instead of a per-site description.
+func (ph *ProtocolHandler) failForward(c *gin.Context, recorder *recording.ProtocolRecorder, err error) {
+	ph.trackUsageFromContext(c, 0, 0, err)
+	stream.SendForwardingError(c, err)
+	if recorder != nil {
+		recorder.RecordError(err)
+	}
+}
 
 // SendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
 func SendErrorResponse(c *gin.Context, err error, desc string) {

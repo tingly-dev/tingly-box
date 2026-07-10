@@ -108,15 +108,3 @@ func ParseEndpointOverride(s string) EndpointOverride {
 		return OverrideAuto
 	}
 }
-
-// logModeOverrideIgnored warns that a rule's openai_endpoint_override was
-// discarded because the provider's declared OpenAIEndpointMode doesn't
-// permit that target. Caller (ResolveOpenAIEndpoint) guarantees non-nil
-// provider.
-func logModeOverrideIgnored(provider *typ.Provider, requestedOverride string) {
-	mode := string(provider.OpenAIEndpointMode)
-	if mode == "" {
-		mode = "chat"
-	}
-	logrus.Warnf("rule openai_endpoint_override=%s ignored: provider %s declares mode=%s", requestedOverride, provider.UUID, mode)
-}

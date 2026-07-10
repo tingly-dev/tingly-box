@@ -1,8 +1,6 @@
 package server
 
 import (
-	"context"
-
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -18,12 +16,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// preStreamErrorRecorder and handlePreStreamFailure now live in
-// failover_dispatch.go (moved there in Step 9) — this file's calls below use
-// that canonical definition directly, no local copy needed.
+// This file hosts the Responses↔Anthropic / Responses↔Chat cross-format
+// paths. The Responses→Anthropic surface is a 2×3 matrix — {v1, beta} ×
+// {nonstream, stream, assemble} — whose six entry points share two cores:
+// forwardResponsesNonstream and forwardResponsesStream. Only the final
+// format-conversion step differs per cell, injected as a closure.
 
-// nonstreamResponsesToAnthropicBeta handles non-streaming Responses API request
-func (ph *ProtocolHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+// forwardResponsesNonstream forwards a Responses API request upstream
+// (non-streaming) and converts the response back to an Anthropic shape via
+// convert, which returns the response to write plus its message ID for
+// session-affinity bookkeeping.
+func (ph *ProtocolHandler) forwardResponsesNonstream(
+	c *gin.Context, actualModel string, provider *typ.Provider,
+	responsesReq responses.ResponseNewParams,
+	convert func(*responses.Response) (resp any, messageID string),
+) {
 	// Get protocol recorder if exists
 	recorder, _ := recording.GetRecorderFromContext(c)
 
@@ -33,34 +40,27 @@ func (ph *ProtocolHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, pro
 		rule = r.(*typ.Rule)
 	}
 
-	var response *responses.Response
-	var err error
-	var cancel context.CancelFunc
-
 	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
 	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
-	response, cancel, err = forwarding.ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	response, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, responsesReq)
 	if cancel != nil {
 		defer cancel()
 	}
-
 	if err != nil {
-		ph.trackUsageFromContext(c, 0, 0, err)
-		stream.SendForwardingError(c, err)
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		ph.failForward(c, recorder, err)
 		return
 	}
 
 	ph.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
 
-	anthropicResp := nonstream.HandleResponsesToAnthropicBeta(response, proxyModel)
+	anthropicResp, messageID := convert(response)
 
 	// Update affinity entry with message ID
-	ph.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
+	if rule != nil {
+		ph.updateAffinityMessageID(c, rule, messageID)
+	}
 
 	// Record response if scenario recording is enabled
 	if recorder != nil {
@@ -68,108 +68,121 @@ func (ph *ProtocolHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, pro
 		recorder.RecordResponse(provider, actualModel)
 	}
 	nonstream.WriteAnthropicMessage(c, anthropicResp)
-
 }
 
-// streamResponsesToAnthropicBeta handles streaming Responses API request
+// forwardResponsesStream forwards a Responses API request upstream
+// (streaming), primes the stream so lazy upstream errors surface before any
+// byte hits the wire (letting failover retry), and hands the primed stream to
+// handle for source-format conversion. handle owns writing the client
+// response; usage tracking and stream recording are handled here.
+func (ph *ProtocolHandler) forwardResponsesStream(
+	c *gin.Context, proxyModel, actualModel string, provider *typ.Provider,
+	responsesReq responses.ResponseNewParams,
+	handle func(c *gin.Context, primed stream.ResponsesStreamIter) (*protocol.TokenUsage, error),
+) {
+	// Get scenario recorder and set up stream recorder
+	recorder, _ := recording.GetRecorderFromContext(c)
+	streamRec := recording.NewStreamRecorder(recorder)
+	if streamRec != nil {
+		streamRec.SetupStreamRecorderInContext(c)
+	}
+
+	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
+	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err != nil {
+		ph.handlePreStreamFailure(c, err, streamRec)
+		return
+	}
+
+	// Prime the stream: SDK streams are lazy, real upstream errors only
+	// surface on first Next(). Forcing it here lets failover retry
+	// before any byte hits the wire.
+	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
+	if primeErr != nil {
+		ph.handlePreStreamFailure(c, primeErr, streamRec)
+		return
+	}
+
+	usage, err := handle(c, primedStream)
+	if err != nil {
+		ph.trackUsageWithTokenUsage(c, usage, err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	ph.trackUsageWithTokenUsage(c, usage, nil)
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(proxyModel, usage)
+		streamRec.RecordResponse(provider, actualModel)
+	}
+}
+
+// nonstreamResponsesToAnthropic handles a non-streaming Anthropic v1 request
+// forwarded via the Responses API.
+func (ph *ProtocolHandler) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+	ph.forwardResponsesNonstream(c, actualModel, provider, responsesReq,
+		func(rs *responses.Response) (any, string) {
+			msg := nonstream.HandleResponsesToAnthropicV1(rs, proxyModel)
+			return msg, string(msg.ID)
+		})
+}
+
+// nonstreamResponsesToAnthropicBeta handles a non-streaming Anthropic beta
+// request forwarded via the Responses API.
+func (ph *ProtocolHandler) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+	ph.forwardResponsesNonstream(c, actualModel, provider, responsesReq,
+		func(rs *responses.Response) (any, string) {
+			msg := nonstream.HandleResponsesToAnthropicBeta(rs, proxyModel)
+			return msg, string(msg.ID)
+		})
+}
+
+// streamResponsesToAnthropic streams a Responses API upstream back to an
+// Anthropic v1 client as SSE.
+func (ph *ProtocolHandler) streamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+	ph.forwardResponsesStream(c, proxyModel, actualModel, provider, responsesReq,
+		func(c *gin.Context, primed stream.ResponsesStreamIter) (*protocol.TokenUsage, error) {
+			hc := protocol.NewHandleContext(c, proxyModel)
+			return stream.HandleResponsesToAnthropicV1Stream(hc, primed, proxyModel)
+		})
+}
+
+// streamResponsesToAnthropicBeta streams a Responses API upstream back to an
+// Anthropic beta client as SSE.
 func (ph *ProtocolHandler) streamResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get scenario recorder and set up stream recorder
-	recorder, _ := recording.GetRecorderFromContext(c)
-	streamRec := recording.NewStreamRecorder(recorder)
-	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c)
-	}
-
-	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
-	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		ph.handlePreStreamFailure(c, err, streamRec)
-		return
-	}
-
-	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
-	if primeErr != nil {
-		ph.handlePreStreamFailure(c, primeErr, streamRec)
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, proxyModel)
-	usage, err := stream.HandleResponsesToAnthropicBetaStream(hc, primedStream, proxyModel)
-
-	// Track usage from stream handler
-	if err != nil {
-		ph.trackUsageWithTokenUsage(c, usage, err)
-		if streamRec != nil {
-			streamRec.RecordError(err)
-		}
-		return
-	}
-
-	ph.trackUsageWithTokenUsage(c, usage, nil)
-
-	// Finish recording and assemble response
-	if streamRec != nil {
-		streamRec.Finish(proxyModel, usage)
-		streamRec.RecordResponse(provider, actualModel)
-	}
-
-	// Success - usage tracking is handled inside the stream handler
-	// Note: The handler tracks usage when response.completed event is received
+	ph.forwardResponsesStream(c, proxyModel, actualModel, provider, responsesReq,
+		func(c *gin.Context, primed stream.ResponsesStreamIter) (*protocol.TokenUsage, error) {
+			hc := protocol.NewHandleContext(c, proxyModel)
+			return stream.HandleResponsesToAnthropicBetaStream(hc, primed, proxyModel)
+		})
 }
 
-// streamResponsesToAnthropicBeta handles streaming Responses API request
+// assembleResponsesToAnthropic consumes a Responses API upstream stream and
+// assembles it into a single non-streaming Anthropic v1 response (used for
+// providers, e.g. Codex, that only stream).
+func (ph *ProtocolHandler) assembleResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+	ph.forwardResponsesStream(c, proxyModel, actualModel, provider, responsesReq,
+		func(c *gin.Context, primed stream.ResponsesStreamIter) (*protocol.TokenUsage, error) {
+			return stream.HandleResponsesToAnthropicV1Assembly(c, primed, proxyModel)
+		})
+}
+
+// assembleResponsesToAnthropicBeta consumes a Responses API upstream stream
+// and assembles it into a single non-streaming Anthropic beta response.
 func (ph *ProtocolHandler) assembleResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get scenario recorder and set up stream recorder
-	recorder, _ := recording.GetRecorderFromContext(c)
-	streamRec := recording.NewStreamRecorder(recorder)
-	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c)
-	}
-
-	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
-	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		ph.handlePreStreamFailure(c, err, streamRec)
-		return
-	}
-
-	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
-	if primeErr != nil {
-		ph.handlePreStreamFailure(c, primeErr, streamRec)
-		return
-	}
-
-	usage, err := stream.HandleResponsesToAnthropicBetaAssembly(c, primedStream, proxyModel)
-
-	// Track usage from stream handler
-	if err != nil {
-		ph.trackUsageWithTokenUsage(c, usage, err)
-		if streamRec != nil {
-			streamRec.RecordError(err)
-		}
-		return
-	}
-
-	ph.trackUsageWithTokenUsage(c, usage, nil)
-
-	// Finish recording and assemble response
-	if streamRec != nil {
-		streamRec.Finish(proxyModel, usage)
-		streamRec.RecordResponse(provider, actualModel)
-	}
-
-	// Success - usage tracking is handled inside the stream handler
-	// Note: The handler tracks usage when response.completed event is received
+	ph.forwardResponsesStream(c, proxyModel, actualModel, provider, responsesReq,
+		func(c *gin.Context, primed stream.ResponsesStreamIter) (*protocol.TokenUsage, error) {
+			return stream.HandleResponsesToAnthropicBetaAssembly(c, primed, proxyModel)
+		})
 }
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
@@ -180,11 +193,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
-		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, err, "Failed to forward request")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		ph.failRequest(c, recorder, err, "Failed to forward request")
 		return
 	}
 
@@ -194,7 +203,6 @@ func (ph *ProtocolHandler) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx
 }
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
-// Extracted from openai_responses.go:202-216
 func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *recording.ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
@@ -206,11 +214,7 @@ func (ph *ProtocolHandler) streamOpenAIChatToResponses(c *gin.Context, reqCtx *t
 		defer cancel()
 	}
 	if err != nil {
-		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, err, "Failed to create streaming request")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		ph.failRequest(c, recorder, err, "Failed to create streaming request")
 		return
 	}
 	hc := protocol.NewHandleContext(c, responseModel)
@@ -232,11 +236,7 @@ func (ph *ProtocolHandler) nonstreamAnthropicBetaToResponses(c *gin.Context, req
 		defer cancel()
 	}
 	if err != nil {
-		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, err, "Failed to forward request")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		ph.failRequest(c, recorder, err, "Failed to forward request")
 		return
 	}
 
@@ -261,11 +261,7 @@ func (ph *ProtocolHandler) streamAnthropicBetaToResponses(c *gin.Context, reqCtx
 		defer cancel()
 	}
 	if err != nil {
-		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, err, "Failed to create streaming request")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		ph.failRequest(c, recorder, err, "Failed to create streaming request")
 		return
 	}
 
@@ -316,11 +312,7 @@ func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *tran
 		defer cancel()
 	}
 	if err != nil {
-		ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, err, "Failed to forward request")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		ph.failRequest(c, recorder, err, "Failed to forward request")
 		return
 	}
 
@@ -331,164 +323,4 @@ func (ph *ProtocolHandler) nonstreamResponsesToChat(c *gin.Context, reqCtx *tran
 		recorder.SetAssembledResponse(chatResp)
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
-}
-
-// nonstreamResponsesToAnthropic handles non-streaming Responses API request for v1
-// This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
-func (ph *ProtocolHandler) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get protocol recorder if exists
-	recorder, _ := recording.GetRecorderFromContext(c)
-
-	var response *responses.Response
-	var err error
-	var cancel context.CancelFunc
-
-	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
-	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-
-	response, cancel, err = forwarding.ForwardOpenAIResponses(fc, wrapper, responsesReq)
-	if cancel != nil {
-		defer cancel()
-	}
-
-	if err != nil {
-		ph.trackUsageFromContext(c, 0, 0, err)
-		stream.SendForwardingError(c, err)
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-		return
-	}
-
-	ph.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
-
-	// Convert Responses API response back to Anthropic v1 format
-	anthropicResp := nonstream.HandleResponsesToAnthropicV1(response, proxyModel)
-
-	// TODO: require anthropic <-> anthropic beta
-	//if ShouldRoundtripResponse(c, "openai") {
-	//	roundtripped, err := RoundtripAnthropicBetaResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
-	//	if err != nil {
-	//		stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
-	//		return
-	//	}
-	//	anthropicResp = *roundtripped
-	//}
-
-	// Record response if scenario recording is enabled
-	if recorder != nil {
-		recorder.SetAssembledResponse(anthropicResp)
-		recorder.RecordResponse(provider, actualModel)
-	}
-	nonstream.WriteAnthropicMessage(c, anthropicResp)
-}
-
-// streamResponsesToAnthropic handles streaming Responses API request for v1
-// This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
-func (ph *ProtocolHandler) streamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get scenario recorder and set up stream recorder
-	recorder, _ := recording.GetRecorderFromContext(c)
-	streamRec := recording.NewStreamRecorder(recorder)
-	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c)
-	}
-
-	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
-	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		ph.trackUsageFromContext(c, 0, 0, err)
-		stream.SendStreamingError(c, err)
-		if streamRec != nil {
-			streamRec.RecordError(err)
-		}
-		return
-	}
-
-	// Prime the stream: SDK streams are lazy, real upstream errors only
-	// surface on first Next(). Forcing it here lets failover retry
-	// before any byte hits the wire.
-	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
-	if primeErr != nil {
-		ph.handlePreStreamFailure(c, primeErr, streamRec)
-		return
-	}
-
-	hc := protocol.NewHandleContext(c, proxyModel)
-	usage, err := stream.HandleResponsesToAnthropicV1Stream(hc, primedStream, proxyModel)
-
-	// Track usage from stream handler
-	if err != nil {
-		ph.trackUsageWithTokenUsage(c, usage, err)
-		if streamRec != nil {
-			streamRec.RecordError(err)
-		}
-		return
-	}
-
-	ph.trackUsageWithTokenUsage(c, usage, nil)
-
-	// Finish recording and assemble response
-	if streamRec != nil {
-		streamRec.Finish(proxyModel, usage)
-		streamRec.RecordResponse(provider, actualModel)
-	}
-
-	// Success - usage tracking is handled inside the stream handler
-	// Note: The handler tracks usage when response.completed event is received
-}
-
-// streamResponsesToAnthropic handles streaming Responses API request
-func (ph *ProtocolHandler) assembleResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get scenario recorder and set up stream recorder
-	recorder, _ := recording.GetRecorderFromContext(c)
-	streamRec := recording.NewStreamRecorder(recorder)
-	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c)
-	}
-
-	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
-	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
-	if cancel != nil {
-		defer cancel()
-	}
-	if err != nil {
-		ph.handlePreStreamFailure(c, err, streamRec)
-		return
-	}
-
-	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
-	if primeErr != nil {
-		ph.handlePreStreamFailure(c, primeErr, streamRec)
-		return
-	}
-
-	usage, err := stream.HandleResponsesToAnthropicV1Assembly(c, primedStream, proxyModel)
-
-	// Track usage from stream handler
-	if err != nil {
-		ph.trackUsageWithTokenUsage(c, usage, err)
-		if streamRec != nil {
-			streamRec.RecordError(err)
-		}
-		return
-	}
-
-	ph.trackUsageWithTokenUsage(c, usage, nil)
-
-	// Finish recording and assemble response
-	if streamRec != nil {
-		streamRec.Finish(proxyModel, usage)
-		streamRec.RecordResponse(provider, actualModel)
-	}
-
-	// Success - usage tracking is handled inside the stream handler
-	// Note: The handler tracks usage when response.completed event is received
 }
