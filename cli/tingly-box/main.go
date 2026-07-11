@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
+	"github.com/tingly-dev/tingly-box/pkg/memlimit"
 )
 
 var (
@@ -122,6 +123,13 @@ func main() {
 	// Setup verbose logging
 	if cli.Verbose {
 		logrus.SetLevel(logrus.TraceLevel)
+	}
+
+	// Inside a memory-limited container, teach the GC about the cgroup limit
+	// so allocation bursts trigger GC back-pressure instead of a kernel
+	// OOM-kill (see pkg/memlimit). Honors an explicit GOMEMLIMIT env var.
+	if limit, ok := memlimit.SetFromCgroup(); ok {
+		logrus.Infof("GOMEMLIMIT set to %d bytes (90%% of cgroup memory limit)", limit)
 	}
 
 	var appConfig *config.AppConfig
