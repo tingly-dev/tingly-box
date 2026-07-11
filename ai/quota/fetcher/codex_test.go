@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
@@ -16,7 +15,6 @@ import (
 // ── Codex E2E ───────────────────────────────────────────
 
 func TestCodexFetcher_Fetch(t *testing.T) {
-	logger := logrus.New()
 	now := time.Now()
 	resetAt := now.Add(5 * time.Hour).Unix()
 	weeklyResetAt := now.Add(7 * 24 * time.Hour).Unix()
@@ -86,7 +84,7 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-uuid",
 		Name:     "Codex Pro",
@@ -186,7 +184,6 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
-	logger := logrus.New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]interface{}{
@@ -207,7 +204,7 @@ func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
@@ -235,7 +232,6 @@ func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_WithResetCreditsOnly(t *testing.T) {
-	logger := logrus.New()
 	resetAt := time.Now().Add(2 * time.Hour).Unix()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +252,7 @@ func TestCodexFetcher_Fetch_WithResetCreditsOnly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-plus",
 		Name:     "Codex Plus",
@@ -281,7 +277,6 @@ func TestCodexFetcher_Fetch_WithResetCreditsOnly(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_WithZeroResetCredits(t *testing.T) {
-	logger := logrus.New()
 	resetAt := time.Now().Add(2 * time.Hour).Unix()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +297,7 @@ func TestCodexFetcher_Fetch_WithZeroResetCredits(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-zero-reset",
 		Name:     "Codex Zero Reset",
@@ -326,14 +321,13 @@ func TestCodexFetcher_Fetch_WithZeroResetCredits(t *testing.T) {
 }
 
 func TestCodexFetcher_StatusError(t *testing.T) {
-	logger := logrus.New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		AuthType:    ai.AuthTypeOAuth,
 		OAuthDetail: &ai.OAuthDetail{AccessToken: "expired"},
@@ -346,8 +340,7 @@ func TestCodexFetcher_StatusError(t *testing.T) {
 }
 
 func TestCodexFetcher_Validate(t *testing.T) {
-	logger := logrus.New()
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{}
 
 	// nil
 	if err := fetcher.Validate(nil); err == nil {
@@ -372,7 +365,6 @@ func TestCodexFetcher_Validate(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
-	logger := logrus.New()
 	now := time.Now()
 	resetAt := now.Add(5 * time.Hour).Unix()
 
@@ -425,7 +417,7 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-prolite",
 		Name:     "Codex ProLite",
@@ -469,7 +461,6 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
-	logger := logrus.New()
 	now := time.Now()
 	resetAt := now.Add(7 * 24 * time.Hour).Unix()
 
@@ -504,7 +495,7 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
@@ -537,7 +528,6 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
-	logger := logrus.New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		balance := 150.0
@@ -563,7 +553,7 @@ func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-pro",
 		Name:     "Codex Pro",
@@ -588,7 +578,6 @@ func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
 }
 
 func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
-	logger := logrus.New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]interface{}{
@@ -610,7 +599,7 @@ func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
+	fetcher := &CodexFetcher{baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",

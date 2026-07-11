@@ -5,21 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// CursorFetcher Cursor 配额获取器
-type CursorFetcher struct {
-	logger *logrus.Logger
-}
+// CursorFetcher retrieves Cursor quota data.
+type CursorFetcher struct{}
 
-// NewCursorFetcher 创建 Cursor fetcher
-func NewCursorFetcher(logger *logrus.Logger) *CursorFetcher {
-	return &CursorFetcher{
-		logger: logger,
-	}
+// NewCursorFetcher creates a Cursor quota fetcher.
+func NewCursorFetcher() *CursorFetcher {
+	return &CursorFetcher{}
 }
 
 func (f *CursorFetcher) Name() string {
@@ -48,11 +43,11 @@ func (f *CursorFetcher) Validate(provider *ai.Provider) error {
 }
 
 func (f *CursorFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
-	// Cursor 没有公开的配额 API，返回默认值
+	// Cursor has no public quota API, so return fallback data.
 	return f.createDefaultUsage(provider), nil
 }
 
-// createDefaultUsage 创建默认配额信息
+// createDefaultUsage creates fallback quota data.
 func (f *CursorFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 

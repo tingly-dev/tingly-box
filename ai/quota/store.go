@@ -22,7 +22,7 @@ var (
 	ErrUsageNotFound = errors.New("usage not found")
 )
 
-// ProviderUsageRecord GORM 模型
+// ProviderUsageRecord is the GORM persistence model for provider usage.
 type ProviderUsageRecord struct {
 	ProviderUUID string `gorm:"primaryKey;column:provider_uuid"`
 	ProviderName string `gorm:"column:provider_name"`
@@ -81,7 +81,7 @@ type ProviderUsageRecord struct {
 	ExpiresAt   time.Time  `gorm:"column:expires_at"`
 	LastError   *string    `gorm:"column:last_error"`
 	LastErrorAt *time.Time `gorm:"column:last_error_at"`
-	RawResponse *string    `gorm:"column:raw_response;type:text"` // 原始 API 响应 JSON
+	RawResponse *string    `gorm:"column:raw_response;type:text"` // Raw API response JSON.
 }
 
 func (ProviderUsageRecord) TableName() string {
@@ -230,36 +230,36 @@ func getInt(i *int) int {
 	return *i
 }
 
-// Store 配额存储接口
+// Store persists provider quota data.
 type Store interface {
-	// Save 保存配额快照
+	// Save persists a quota snapshot.
 	Save(ctx context.Context, usage *ProviderUsage) error
 
-	// Get 获取指定供应商的最新配额
+	// Get returns the latest quota data for a provider.
 	Get(ctx context.Context, providerUUID string) (*ProviderUsage, error)
 
-	// List 获取所有供应商的配额
+	// List returns quota data for all providers.
 	List(ctx context.Context) ([]*ProviderUsage, error)
 
-	// Delete 删除指定供应商的配额
+	// Delete removes quota data for a provider.
 	Delete(ctx context.Context, providerUUID string) error
 
-	// CleanupExpired 清理过期的配额数据
+	// CleanupExpired removes expired quota data.
 	CleanupExpired(ctx context.Context) (int64, error)
 
-	// Close 关闭存储
+	// Close closes the store.
 	Close() error
 }
 
-// GormStore GORM 实现的存储
+// GormStore implements Store with GORM.
 type GormStore struct {
 	db     *gorm.DB
 	dbPath string
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	logger *logrus.Logger
 }
 
-// NewGormStore 创建 GORM 存储
+// NewGormStore creates a GORM-backed quota store.
 func NewGormStore(baseDir string, logger *logrus.Logger) (*GormStore, error) {
 	if err := os.MkdirAll(baseDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create quota store directory: %w", err)
@@ -305,8 +305,8 @@ func (s *GormStore) Save(ctx context.Context, usage *ProviderUsage) error {
 }
 
 func (s *GormStore) Get(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	var record ProviderUsageRecord
 	err := s.db.WithContext(ctx).
@@ -324,8 +324,8 @@ func (s *GormStore) Get(ctx context.Context, providerUUID string) (*ProviderUsag
 }
 
 func (s *GormStore) List(ctx context.Context) ([]*ProviderUsage, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	var records []ProviderUsageRecord
 	err := s.db.WithContext(ctx).Find(&records).Error

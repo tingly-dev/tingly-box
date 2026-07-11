@@ -10,21 +10,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// GeminiFetcher Google Gemini 配额获取器
-type GeminiFetcher struct {
-	logger *logrus.Logger
-}
+// GeminiFetcher retrieves Google Gemini quota data.
+type GeminiFetcher struct{}
 
-// NewGeminiFetcher 创建 Gemini fetcher
-func NewGeminiFetcher(logger *logrus.Logger) *GeminiFetcher {
-	return &GeminiFetcher{
-		logger: logger,
-	}
+// NewGeminiFetcher creates a Gemini quota fetcher.
+func NewGeminiFetcher() *GeminiFetcher {
+	return &GeminiFetcher{}
 }
 
 func (f *GeminiFetcher) Name() string {

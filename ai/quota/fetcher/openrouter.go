@@ -7,19 +7,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// OpenRouterFetcher OpenRouter 配额获取器
+// OpenRouterFetcher retrieves OpenRouter quota data.
 // Uses: GET https://openrouter.ai/api/v1/key (key info with usage)
-type OpenRouterFetcher struct {
-	logger *logrus.Logger
-}
+type OpenRouterFetcher struct{}
 
-func NewOpenRouterFetcher(logger *logrus.Logger) *OpenRouterFetcher {
-	return &OpenRouterFetcher{logger: logger}
+func NewOpenRouterFetcher() *OpenRouterFetcher {
+	return &OpenRouterFetcher{}
 }
 
 func (f *OpenRouterFetcher) Name() string                     { return "openrouter" }

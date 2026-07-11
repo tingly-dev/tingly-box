@@ -5,21 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// CopilotFetcher GitHub Copilot 配额获取器
-type CopilotFetcher struct {
-	logger *logrus.Logger
-}
+// CopilotFetcher retrieves GitHub Copilot quota data.
+type CopilotFetcher struct{}
 
-// NewCopilotFetcher 创建 Copilot fetcher
-func NewCopilotFetcher(logger *logrus.Logger) *CopilotFetcher {
-	return &CopilotFetcher{
-		logger: logger,
-	}
+// NewCopilotFetcher creates a Copilot quota fetcher.
+func NewCopilotFetcher() *CopilotFetcher {
+	return &CopilotFetcher{}
 }
 
 func (f *CopilotFetcher) Name() string {
@@ -52,11 +47,11 @@ func (f *CopilotFetcher) Validate(provider *ai.Provider) error {
 }
 
 func (f *CopilotFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
-	// GitHub Copilot 没有公开的配额 API，返回默认值
+	// GitHub Copilot has no public quota API, so return fallback data.
 	return f.createDefaultUsage(provider), nil
 }
 
-// createDefaultUsage 创建默认配额信息
+// createDefaultUsage creates fallback quota data.
 func (f *CopilotFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 

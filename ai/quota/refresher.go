@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Refresher 配额刷新后台任务
+// Refresher runs periodic quota refreshes in the background.
 type Refresher struct {
 	manager  *Manager
 	interval time.Duration
@@ -18,7 +18,7 @@ type Refresher struct {
 	logger   *logrus.Logger
 }
 
-// NewRefresher 创建刷新任务
+// NewRefresher creates a background quota refresher.
 func NewRefresher(manager *Manager, logger *logrus.Logger) *Refresher {
 	return &Refresher{
 		manager: manager,
@@ -27,7 +27,7 @@ func NewRefresher(manager *Manager, logger *logrus.Logger) *Refresher {
 	}
 }
 
-// Start 启动后台刷新任务
+// Start starts the background refresh loop.
 func (r *Refresher) Start(ctx context.Context, interval time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -46,7 +46,7 @@ func (r *Refresher) Start(ctx context.Context, interval time.Duration) {
 	go r.run(ctx)
 }
 
-// Stop 停止后台刷新任务
+// Stop stops the background refresh loop.
 func (r *Refresher) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -60,19 +60,19 @@ func (r *Refresher) Stop() {
 	r.running = false
 }
 
-// IsRunning 检查是否正在运行
+// IsRunning reports whether the refresher is running.
 func (r *Refresher) IsRunning() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.running
 }
 
-// run 运行刷新循环
+// run executes the refresh loop.
 func (r *Refresher) run(ctx context.Context) {
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
-	// 立即执行一次刷新
+	// Refresh immediately before waiting for the first tick.
 	r.refresh(ctx)
 
 	for {
@@ -89,7 +89,7 @@ func (r *Refresher) run(ctx context.Context) {
 	}
 }
 
-// refresh 执行刷新
+// refresh performs one scheduled refresh.
 func (r *Refresher) refresh(ctx context.Context) {
 	r.logger.Debug("running scheduled quota refresh")
 
@@ -116,14 +116,14 @@ func (r *Refresher) refresh(ctx context.Context) {
 	}).Debug("scheduled refresh completed")
 }
 
-// SetInterval 设置刷新间隔
+// SetInterval updates the refresh interval.
 func (r *Refresher) SetInterval(interval time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.interval = interval
 }
 
-// GetInterval 获取刷新间隔
+// GetInterval returns the refresh interval.
 func (r *Refresher) GetInterval() time.Duration {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 )
 
@@ -18,10 +17,7 @@ func TestOpenRouterE2E(t *testing.T) {
 		t.Skip("OPENROUTER_API_KEY not set, skipping e2e test")
 	}
 
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-
-	fetcher := NewOpenRouterFetcher(logger)
+	fetcher := NewOpenRouterFetcher()
 	provider := &ai.Provider{
 		UUID:     "openrouter-e2e",
 		Name:     "OpenRouter",

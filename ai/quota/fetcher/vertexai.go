@@ -5,21 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// VertexAIFetcher Google Vertex AI 配额获取器
-type VertexAIFetcher struct {
-	logger *logrus.Logger
-}
+// VertexAIFetcher retrieves Google Vertex AI quota data.
+type VertexAIFetcher struct{}
 
-// NewVertexAIFetcher 创建 VertexAI fetcher
-func NewVertexAIFetcher(logger *logrus.Logger) *VertexAIFetcher {
-	return &VertexAIFetcher{
-		logger: logger,
-	}
+// NewVertexAIFetcher creates a Vertex AI quota fetcher.
+func NewVertexAIFetcher() *VertexAIFetcher {
+	return &VertexAIFetcher{}
 }
 
 func (f *VertexAIFetcher) Name() string {
@@ -48,11 +43,11 @@ func (f *VertexAIFetcher) Validate(provider *ai.Provider) error {
 }
 
 func (f *VertexAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
-	// Vertex AI 配额通过 Google Cloud Console 管理，没有公开的 API
+	// Vertex AI quotas are managed through Google Cloud Console and have no public API.
 	return f.createDefaultUsage(provider), nil
 }
 
-// createDefaultUsage 创建默认配额信息
+// createDefaultUsage creates fallback quota data.
 func (f *VertexAIFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 

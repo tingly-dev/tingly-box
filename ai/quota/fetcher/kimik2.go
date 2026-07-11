@@ -7,19 +7,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// KimiK2Fetcher Kimi K2 (Moonshot) 配额获取器
+// KimiK2Fetcher retrieves Kimi K2 (Moonshot) quota data.
 // Uses: GET https://kimi-k2.ai/api/user/credits
-type KimiK2Fetcher struct {
-	logger *logrus.Logger
-}
+type KimiK2Fetcher struct{}
 
-func NewKimiK2Fetcher(logger *logrus.Logger) *KimiK2Fetcher {
-	return &KimiK2Fetcher{logger: logger}
+func NewKimiK2Fetcher() *KimiK2Fetcher {
+	return &KimiK2Fetcher{}
 }
 
 func (f *KimiK2Fetcher) Name() string                     { return "kimi_k2" }

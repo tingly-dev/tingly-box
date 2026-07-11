@@ -3,21 +3,18 @@ package fetcher
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 const zaiQuotaLimitURL = "https://api.z.ai/api/monitor/usage/quota/limit"
 
-// ZaiFetcher z.ai 配额获取器
+// ZaiFetcher retrieves z.ai quota data.
 // Uses: GET https://api.z.ai/api/monitor/usage/quota/limit (API key auth)
-type ZaiFetcher struct {
-	logger *logrus.Logger
-}
+type ZaiFetcher struct{}
 
-func NewZaiFetcher(logger *logrus.Logger) *ZaiFetcher {
-	return &ZaiFetcher{logger: logger}
+func NewZaiFetcher() *ZaiFetcher {
+	return &ZaiFetcher{}
 }
 
 func (f *ZaiFetcher) Name() string                     { return "zai" }

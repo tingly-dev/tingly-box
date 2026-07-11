@@ -8,21 +8,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// AnthropicFetcher Anthropic (Claude) 配额获取器
-type AnthropicFetcher struct {
-	logger *logrus.Logger
-}
+// AnthropicFetcher retrieves Anthropic (Claude) quota data.
+type AnthropicFetcher struct{}
 
-// NewAnthropicFetcher 创建 Anthropic fetcher
-func NewAnthropicFetcher(logger *logrus.Logger) *AnthropicFetcher {
-	return &AnthropicFetcher{
-		logger: logger,
-	}
+// NewAnthropicFetcher creates an Anthropic quota fetcher.
+func NewAnthropicFetcher() *AnthropicFetcher {
+	return &AnthropicFetcher{}
 }
 
 func (f *AnthropicFetcher) Name() string {
@@ -54,7 +49,7 @@ func (f *AnthropicFetcher) Validate(provider *ai.Provider) error {
 	return nil
 }
 
-// anthropicUsageResponse Anthropic OAuth usage API 响应
+// anthropicUsageResponse models the Anthropic OAuth usage API response.
 // Endpoint: GET https://api.anthropic.com/api/oauth/usage
 // Header: Authorization: Bearer <token>, anthropic-beta: oauth-2025-04-20
 type anthropicUsageResponse struct {
@@ -79,10 +74,10 @@ type anthropicUsageResponse struct {
 func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 
-	// 创建带 proxy 支持的 HTTP client
+	// Create an HTTP client with proxy support.
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
-	// 构建请求
+	// Build the request.
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/api/oauth/usage", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -93,7 +88,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 
-	// 发送请求
+	// Send the request.
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch usage: %w", err)
@@ -104,20 +99,20 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// 读取原始响应用于存储
+	// Read and retain the raw response for storage.
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	rawResponse := string(bodyBytes)
 
-	// 解析响应
+	// Decode the response.
 	var apiResp anthropicUsageResponse
 	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// 转换为统一格式
+	// Convert to the normalized quota model.
 	now := time.Now()
 	usage := &quota.ProviderUsage{
 		ProviderUUID: provider.UUID,
@@ -125,7 +120,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		ProviderType: quota.ProviderTypeAnthropic,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  rawResponse, // 存储原始响应
+		RawResponse:  rawResponse, // Preserve the raw response.
 	}
 
 	// 5-hour session quota (API returns utilization percentage only)
@@ -153,7 +148,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		Description: fmt.Sprintf("%.0f%% utilization", apiResp.SevenDay.Utilization),
 	})
 
-	// 解析 resets_at 时间（API 返回带微秒的 ISO 8601，需用 RFC3339Nano）
+	// Parse the microsecond-precision ISO 8601 reset time with RFC3339Nano.
 	if apiResp.FiveHour.ResetsAt != nil {
 		if t, err := time.Parse(time.RFC3339Nano, *apiResp.FiveHour.ResetsAt); err == nil {
 			fiveHour.ResetsAt = &t

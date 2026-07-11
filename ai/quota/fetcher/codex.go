@@ -14,16 +14,15 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// CodexFetcher OpenAI Codex 配额获取器
+// CodexFetcher retrieves OpenAI Codex quota data.
 // Uses: GET https://chatgpt.com/backend-api/wham/usage
 // Requires OAuth access_token + optional account_id (from oauth_detail.extra_fields)
 type CodexFetcher struct {
-	logger  *logrus.Logger
 	baseURL string // empty → production URL; override in tests only
 }
 
-func NewCodexFetcher(logger *logrus.Logger) *CodexFetcher {
-	return &CodexFetcher{logger: logger}
+func NewCodexFetcher() *CodexFetcher {
+	return &CodexFetcher{}
 }
 
 func (f *CodexFetcher) Name() string                     { return "codex" }
@@ -135,10 +134,10 @@ type codexResetCredit struct {
 	ID              string  `json:"id"`
 	ResetType       string  `json:"reset_type"`
 	Status          string  `json:"status"`
-	GrantedAt       string  `json:"granted_at"`        // ISO8601时间字符串
-	ExpiresAt       string  `json:"expires_at"`        // ISO8601时间字符串
-	RedeemStartedAt *string `json:"redeem_started_at"` // 可能为null
-	RedeemedAt      *string `json:"redeemed_at"`       // 可能为null
+	GrantedAt       string  `json:"granted_at"`        // ISO 8601 timestamp.
+	ExpiresAt       string  `json:"expires_at"`        // ISO 8601 timestamp.
+	RedeemStartedAt *string `json:"redeem_started_at"` // May be null.
+	RedeemedAt      *string `json:"redeemed_at"`       // May be null.
 	ProfileImageURL string  `json:"profile_image_url"`
 	ProfileUserID   string  `json:"profile_user_id"`
 	Title           string  `json:"title"`

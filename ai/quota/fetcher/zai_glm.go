@@ -3,21 +3,18 @@ package fetcher
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 const glmQuotaLimitURL = "https://open.bigmodel.cn/api/monitor/usage/quota/limit"
 
-// GLMFetcher GLM (BigModel.cn) 配额获取器
+// GLMFetcher retrieves GLM (BigModel.cn) quota data.
 // Uses: GET https://open.bigmodel.cn/api/monitor/usage/quota/limit
-type GLMFetcher struct {
-	logger *logrus.Logger
-}
+type GLMFetcher struct{}
 
-func NewGLMFetcher(logger *logrus.Logger) *GLMFetcher {
-	return &GLMFetcher{logger: logger}
+func NewGLMFetcher() *GLMFetcher {
+	return &GLMFetcher{}
 }
 
 func (f *GLMFetcher) Name() string                     { return "glm" }

@@ -8,19 +8,19 @@ import (
 // RegisterAll registers all built-in quota fetchers into the given registrar.
 func RegisterAll(r quota.FetcherRegistrar, logger *logrus.Logger) {
 	fetchers := []quota.Fetcher{
-		NewAnthropicFetcher(logger),
-		NewOpenAIFetcher(logger),
-		NewGeminiFetcher(logger),
-		NewCursorFetcher(logger),
-		NewCopilotFetcher(logger),
-		NewVertexAIFetcher(logger),
-		NewZaiFetcher(logger),
-		NewGLMFetcher(logger),
-		NewKimiK2Fetcher(logger),
-		NewOpenRouterFetcher(logger),
-		NewMiniMaxFetcher(logger),
-		NewMiniMaxCNFetcher(logger),
-		NewCodexFetcher(logger),
+		NewAnthropicFetcher(),
+		NewOpenAIFetcher(),
+		NewGeminiFetcher(),
+		NewCursorFetcher(),
+		NewCopilotFetcher(),
+		NewVertexAIFetcher(),
+		NewZaiFetcher(),
+		NewGLMFetcher(),
+		NewKimiK2Fetcher(),
+		NewOpenRouterFetcher(),
+		NewMiniMaxFetcher(),
+		NewMiniMaxCNFetcher(),
+		NewCodexFetcher(),
 	}
 	for _, f := range fetchers {
 		if err := r.RegisterFetcher(f); err != nil {

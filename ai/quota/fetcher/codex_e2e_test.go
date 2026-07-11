@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 )
 
@@ -18,10 +17,7 @@ func TestCodexE2E(t *testing.T) {
 		t.Skip("CODEX_ACCESS_TOKEN not set, skipping e2e test")
 	}
 
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-
-	fetcher := NewCodexFetcher(logger)
+	fetcher := NewCodexFetcher()
 	provider := &ai.Provider{
 		UUID:     "codex-e2e",
 		Name:     "Codex",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -11,21 +12,21 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-// Fetcher 配额获取器接口
+// Fetcher retrieves quota data for a provider type.
 type Fetcher interface {
-	// Name 返回 fetcher 名称
+	// Name returns the fetcher name.
 	Name() string
 
-	// ProviderType 返回支持的供应商类型
+	// ProviderType returns the supported provider type.
 	ProviderType() ProviderType
 
-	// Fetch 获取当前配额
+	// Fetch retrieves current quota data.
 	Fetch(ctx context.Context, provider *typ.Provider) (*ProviderUsage, error)
 
-	// Validate 验证配置是否有效
+	// Validate checks the provider configuration.
 	Validate(provider *typ.Provider) error
 
-	// RequiresAuth 返回需要的认证类型
+	// RequiresAuth returns the required authentication type.
 	RequiresAuth() typ.AuthType
 }
 
@@ -35,20 +36,23 @@ type FetcherRegistrar interface {
 	RegisterFetcher(fetcher Fetcher) error
 }
 
-// Registry Fetcher 注册表
+// Registry stores fetchers by provider type.
 type Registry struct {
+	mu       sync.RWMutex
 	fetchers map[ProviderType]Fetcher
 }
 
-// NewRegistry 创建注册表
+// NewRegistry creates an empty fetcher registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		fetchers: make(map[ProviderType]Fetcher),
 	}
 }
 
-// Register 注册 fetcher
+// Register adds a fetcher to the registry.
 func (r *Registry) Register(fetcher Fetcher) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	pt := fetcher.ProviderType()
 	if _, exists := r.fetchers[pt]; exists {
 		return ErrFetcherAlreadyRegistered
@@ -57,20 +61,26 @@ func (r *Registry) Register(fetcher Fetcher) error {
 	return nil
 }
 
-// Unregister 注销 fetcher
+// Unregister removes a fetcher from the registry.
 func (r *Registry) Unregister(pt ProviderType) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	delete(r.fetchers, pt)
 }
 
-// Get 获取指定类型的 fetcher
+// Get returns the fetcher registered for a provider type.
 func (r *Registry) Get(pt ProviderType) (Fetcher, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	f, ok := r.fetchers[pt]
 	return f, ok
 }
 
-// List 列出所有已注册的 fetcher
+// List returns all registered fetchers.
 func (r *Registry) List() map[ProviderType]Fetcher {
-	// 返回副本
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	// Return a copy so callers cannot mutate the registry.
 	result := make(map[ProviderType]Fetcher, len(r.fetchers))
 	for k, v := range r.fetchers {
 		result[k] = v
@@ -78,8 +88,10 @@ func (r *Registry) List() map[ProviderType]Fetcher {
 	return result
 }
 
-// ProviderTypes 返回所有支持的供应商类型
+// ProviderTypes returns all registered provider types.
 func (r *Registry) ProviderTypes() []ProviderType {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	types := make([]ProviderType, 0, len(r.fetchers))
 	for pt := range r.fetchers {
 		types = append(types, pt)
@@ -99,8 +111,8 @@ func (e *quotaError) Error() string {
 	return e.msg
 }
 
-// NewHTTPClient 创建带 proxy 支持的 HTTP client
-// proxyURL 格式: "http://localhost:7890" 或 "socks5://localhost:1080"
+// NewHTTPClient creates an HTTP client with optional proxy support.
+// proxyURL accepts formats such as "http://localhost:7890" or "socks5://localhost:1080".
 func NewHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 	client := &http.Client{
 		Timeout: timeout,
@@ -110,14 +122,14 @@ func NewHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 		return client
 	}
 
-	// 解析 proxy URL
+	// Parse the proxy URL.
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
 		logrus.Warnf("Failed to parse proxy URL %s: %v, using direct connection", proxyURL, err)
 		return client
 	}
 
-	// 创建 transport
+	// Configure a transport for the selected proxy scheme.
 	transport := &http.Transport{}
 
 	switch parsedURL.Scheme {

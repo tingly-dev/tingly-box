@@ -7,13 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 func TestOpenRouterFetcher_Fetch(t *testing.T) {
-	logger := logrus.New()
 
 	limit := 100.0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +41,7 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &OpenRouterFetcher{logger: logger}
+	fetcher := &OpenRouterFetcher{}
 	provider := &ai.Provider{
 		UUID:    "test-uuid",
 		Name:    "OpenRouter",
@@ -114,7 +112,6 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 }
 
 func TestOpenRouterFetcher_FreeTier(t *testing.T) {
-	logger := logrus.New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]interface{}{
@@ -134,7 +131,7 @@ func TestOpenRouterFetcher_FreeTier(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &OpenRouterFetcher{logger: logger}
+	fetcher := &OpenRouterFetcher{}
 	provider := &ai.Provider{
 		UUID:    "test-uuid",
 		Name:    "OpenRouter",
@@ -163,14 +160,13 @@ func TestOpenRouterFetcher_FreeTier(t *testing.T) {
 }
 
 func TestOpenRouterFetcher_StatusError(t *testing.T) {
-	logger := logrus.New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer server.Close()
 
-	fetcher := &OpenRouterFetcher{logger: logger}
+	fetcher := &OpenRouterFetcher{}
 	provider := &ai.Provider{
 		UUID:    "test-uuid",
 		Name:    "OpenRouter",
@@ -185,8 +181,7 @@ func TestOpenRouterFetcher_StatusError(t *testing.T) {
 }
 
 func TestOpenRouterFetcher_Validate(t *testing.T) {
-	logger := logrus.New()
-	fetcher := &OpenRouterFetcher{logger: logger}
+	fetcher := &OpenRouterFetcher{}
 
 	// nil provider
 	if err := fetcher.Validate(nil); err == nil {
