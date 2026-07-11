@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
+	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -163,6 +164,15 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		apiV1,
 		s.getUserAuthMiddleware(),
 		virtualmodelmodule.NewHandler(s.virtualModelService),
+	)
+
+	// Runtime memory diagnostics — per-instance memstats + heap profile over
+	// the production HTTP surface. Consumed by the duo harness (per-instance
+	// leak attribution) and by live incident diagnosis.
+	debugmodule.RegisterRoutes(
+		apiV1,
+		s.getUserAuthMiddleware(),
+		debugmodule.NewHandler(),
 	)
 
 	// Usage API routes - register from usage module

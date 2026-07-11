@@ -14,6 +14,8 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // Build information variables (set via ldflags).
@@ -36,6 +38,11 @@ type CLI struct {
 }
 
 func main() {
+	// Duo child mode: when the parent (harness duo) re-executes this binary
+	// under the TINGLY_DUO_* env contract, run a full server instance instead
+	// of the CLI. Never returns in that case.
+	protocoltest.MaybeRunDuoServe()
+
 	var cli CLI
 	ctx := kong.Parse(&cli,
 		kong.Name("harness"),

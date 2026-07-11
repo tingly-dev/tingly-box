@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/network"
+	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
 // Start starts the HTTP server
@@ -155,6 +156,13 @@ func (s *Server) GetRouter() *gin.Engine {
 // GetLoadBalancer returns the load balancer instance
 func (s *Server) GetLoadBalancer() *LoadBalancer {
 	return s.loadBalancer
+}
+
+// GetVirtualModelService returns the in-process virtual-model service, so
+// embedding callers (e.g. the duo harness child) can register additional
+// virtual models before Start.
+func (s *Server) GetVirtualModelService() *virtualserver.Service {
+	return s.virtualModelService
 }
 
 // HealthMonitor returns the server's health monitor

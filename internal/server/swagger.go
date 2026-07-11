@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
+	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
@@ -71,6 +72,9 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	oauthmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), s.oauthHandler)
 	// Register callback routes (unauthenticated)
 	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
+
+	// Runtime memory diagnostics routes
+	debugmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), debugmodule.NewHandler())
 
 	// Usage API routes - register from usage module
 	sm := cfg.StoreManager()

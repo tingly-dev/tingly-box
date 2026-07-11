@@ -435,6 +435,50 @@
         }
       }
     },
+    "/api/v1/debug/memstats": {
+      "get": {
+        "tags": [
+          "debug"
+        ],
+        "summary": "Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set.",
+        "description": "Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set.",
+        "operationId": "apiV1DebugMemstatsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemStatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/debug/pprof/heap": {
+      "get": {
+        "tags": [
+          "debug"
+        ],
+        "summary": "pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory.",
+        "description": "pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory.",
+        "operationId": "apiV1DebugPprofHeapGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guardrails/builtins": {
       "get": {
         "tags": [
@@ -7146,6 +7190,68 @@
           "command"
         ]
       },
+      "MemStatsResponse": {
+        "type": "object",
+        "properties": {
+          "gc_forced": {
+            "type": "boolean",
+            "description": "Field gc_forced",
+            "example": true
+          },
+          "heap_alloc_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field heap_alloc_bytes",
+            "example": 10485760
+          },
+          "heap_inuse_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field heap_inuse_bytes",
+            "example": 12582912
+          },
+          "heap_objects": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field heap_objects",
+            "example": 52000
+          },
+          "heap_sys_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field heap_sys_bytes",
+            "example": 16777216
+          },
+          "num_gc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field num_gc",
+            "example": 12
+          },
+          "num_goroutine": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field num_goroutine",
+            "example": 42
+          },
+          "total_alloc_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total_alloc_bytes",
+            "example": 104857600
+          }
+        },
+        "required": [
+          "heap_alloc_bytes",
+          "heap_inuse_bytes",
+          "heap_sys_bytes",
+          "heap_objects",
+          "total_alloc_bytes",
+          "num_gc",
+          "num_goroutine",
+          "gc_forced"
+        ]
+      },
       "ModelInfo": {
         "type": "object",
         "properties": {
@@ -7186,6 +7292,15 @@
             "items": {
               "$ref": "#/components/schemas/ModelRequestEvent"
             }
+          },
+          "failover_hops": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failover_hops"
+          },
+          "failover_path": {
+            "type": "string",
+            "description": "Field failover_path"
           },
           "has_error": {
             "type": "boolean",
@@ -7293,6 +7408,15 @@
             "type": "integer",
             "format": "int64",
             "description": "Field event_count"
+          },
+          "failover_hops": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failover_hops"
+          },
+          "failover_path": {
+            "type": "string",
+            "description": "Field failover_path"
           },
           "has_error": {
             "type": "boolean",
@@ -10866,6 +10990,10 @@
     {
       "name": "config",
       "description": "Operations related to config"
+    },
+    {
+      "name": "debug",
+      "description": "Operations related to debug"
     },
     {
       "name": "feishu",

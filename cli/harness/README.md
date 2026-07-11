@@ -354,15 +354,31 @@ exactly how routing, failover, the breaker, and affinity behave over a sequence.
 
 ## Tier Duo — `duo`
 
-Two full tingly-box instances in one process, verified end-to-end over **real
-HTTP**: `tb2` (the gateway under test) routes anthropic-scenario rules to
-`tb1`'s production vmodel endpoints, and the harness drives Claude-Code-shaped
-conversations (megabytes of context per turn) through tb2's
-protocol-conversion paths.
+Two full tingly-box instances as **separate server processes**, verified
+end-to-end over **real HTTP**: `tb2` (the gateway under test) routes
+anthropic-scenario rules to `tb1`'s production vmodel endpoints, and the
+harness drives Claude-Code-shaped conversations (megabytes of context per
+turn) through tb2's protocol-conversion paths.
 
 ```
-client ──(Anthropic v1/beta stream)──▶ tb2 ──(real HTTP)──▶ tb1 /virtual/{openai,anthropic}/... (vmodel)
+                 harness (parent process — drives requests, never measured)
+                    │
+                    │ Anthropic v1/beta stream          per-instance sampling
+                    ▼                                   /api/v1/debug/{memstats,pprof/heap}
+   ┌──────────────────────────────┐    real HTTP    ┌──────────────────────────────┐
+   │  tb2  (gateway under test)   ├────────────────▶│  tb1  (vmodel upstream)      │
+   │  own process, server.Start() │                 │  own process, server.Start() │
+   └──────────────────────────────┘                 └──────────────────────────────┘
 ```
+
+Each instance is booted through the full production path (`server.Start`:
+background refreshers, config watcher, production `http.Server` timeouts) by
+re-executing the harness binary itself, and — because each has its own Go
+runtime — memory is observed **per instance** over the production
+`/api/v1/debug/memstats` + `/api/v1/debug/pprof/heap` endpoints. A retention
+slope therefore attributes directly: tb2 slope → gateway/conversion path,
+tb1 slope → vmodel serving path. (The same endpoints work against any live
+deployment for incident diagnosis.)
 
 Every anthropic-source route the vmodel can back is wired:
 
@@ -378,31 +394,43 @@ Every anthropic-source route the vmodel can back is wired:
 (The Google target is deliberately not covered — the vmodel surface skips it
 for now.)
 
+Every route also has a **`-slow` backpressure variant** (e.g.
+`beta-chat-slow`): tb1 answers from a slow/large stream vmodel
+(`--stream-kb` KB over roughly 2×`--stream-ms` wall time) while the harness
+reads the SSE body slowly (`--read-delay-ms` between reads), so buffering
+and pinning under real TCP backpressure — invisible with instant mock
+responses — are on the measured path.
+
 Two phases, both on by default:
 
 - **Functional** — SSE event shape (`message_start` … `message_stop`),
   assembled content, `stop_reason`, usage propagation, and the non-streaming
   response body.
-- **Memory** — allocation churn per request, **post-GC retention slope**
-  across two sequential batches (a leak shows as a positive slope; transient
-  spikes do not), and peak live heap under a concurrent burst. This is the
-  setup that pinned down #1255: 823 KB/request retained before the fix,
-  ~0.5 KB after. The run fails if the slope exceeds `--max-slope-kb`
-  (default 32).
+- **Memory** — per instance: allocation churn per request, **post-GC
+  retention slope** across two sequential batches (a leak shows as a
+  positive slope; transient spikes do not), peak live heap under a
+  concurrent burst, and goroutine counts. This is the setup that pinned down
+  #1255: 823 KB/request retained on the gateway before the fix, ~0.5 KB
+  after. The run fails if **either instance's** slope exceeds
+  `--max-slope-kb` (default 32). Default routes: `beta-chat` (fast) +
+  `beta-chat-slow` (backpressure).
 
 ```bash
-./harness duo                                   # functional: all routes; memory: beta-chat hot path
-./harness duo --mem-routes all                  # memory slope on every route
+./harness duo                                   # functional: all routes; memory: beta-chat fast + backpressure
+./harness duo --mem-routes all                  # memory slope on every fast route
+./harness duo --mem-routes beta-chat-slow --stream-kb 1024 --stream-ms 2000 --read-delay-ms 50   # heavy backpressure
 ./harness duo --routes beta-responses,v1-responses --skip-memory
 ./harness duo --body-mb 4 --batch 30            # heavier sweep
-./harness duo --skip-func --profile-dir /tmp    # memory only, write pprof heap profiles
-go tool pprof -top -inuse_space /tmp/duo-beta-chat-final.pb.gz
+./harness duo --skip-func --profile-dir /tmp    # memory only, write per-instance pprof heap profiles
+go tool pprof -top -inuse_space /tmp/duo-beta-chat-tb2-final.pb.gz
 ./harness duo --json                            # machine-readable report
+./harness duo -v                                # relay both children's server logs
 ```
 
-The engine lives in `internal/protocoltest/duo.go` and is shared with the
-`TestDuoFunctional` / `TestDuoMemoryRegression` Go tests, so CI guards the
-same slope threshold.
+The engine lives in `internal/protocoltest/duo*.go` and is shared with the
+`TestDuoFunctional` / `TestDuoMemoryRegression` / `TestDuoBackpressure` Go
+tests (whose `TestMain` re-executes the test binary as the child servers), so
+CI guards the same per-instance slope threshold.
 
 ## Agent reference
 
@@ -422,7 +450,8 @@ cli/harness/
                      provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstreams, skip list
-  duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function + memory)
+  duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +
+                     per-instance memory); child mode via MaybeRunDuoServe in main.go
   agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
   lb.go              Tier LB command — load-balancing scenario simulator
@@ -446,6 +475,10 @@ internal/protocoltest/   shared engine used by all tiers
   replay.go          SetupVirtualAgentScenario, ReplayFixture, repointBuiltinRule
   assertions.go      reusable Assertion constructors
   real_model.go      providers.yaml parsing for --upstream=real / --config
+  duo.go             Tier Duo parent: routes, child spawning, request driving
+  duo_serve.go       Tier Duo child: full server boot + gateway/vmodel seeding
+  duo_checks.go      Tier Duo functional phase
+  duo_memory.go      Tier Duo memory phase (per-instance sampling over HTTP)
 ```
 
 ---
