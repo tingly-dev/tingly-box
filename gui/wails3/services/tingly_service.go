@@ -45,7 +45,6 @@ func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, e
 		appManager.AppConfig(),
 		server.WithDebug(debug),
 		server.WithUI(true),
-		server.WithAdaptor(true),
 		server.WithOpenBrowser(false), // GUI doesn't need browser auto-open
 	)
 

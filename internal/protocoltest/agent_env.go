@@ -141,7 +141,7 @@ func NewAgentTestEnv(AgentType AgentType) (*AgentTestEnv, error) {
 	}
 
 	// Create gateway server with real routing
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	gatewayServer := server.NewServer(appConfig.GetGlobalConfig())
 	router := gatewayServer.GetRouter()
 	ts := httptest.NewServer(router)
 

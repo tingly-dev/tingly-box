@@ -74,35 +74,6 @@ func NewTestServer(t *testing.T) *TestServer {
 // createTestServer creates a test server with the given appConfig
 func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	// Create server instance but don't start it
-	// Note: adapter is disabled by default in tests to test the fallback behavior
-	httpServer := server2.NewServer(appConfig.GetGlobalConfig(), server2.WithAdaptor(false))
-
-	return &TestServer{
-		appConfig: appConfig,
-		server:    httpServer,
-		ginEngine: httpServer.GetRouter(), // Use the server's router
-	}
-}
-
-// NewTestServerWithAdaptor creates a new test server with adaptor flag
-func NewTestServerWithAdaptor(t *testing.T) *TestServer {
-	// Create temp config directory
-	configDir, err := os.MkdirTemp("", "tingly-box-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp config directory: %v", err)
-	}
-
-	// Register cleanup
-	t.Cleanup(func() {
-		os.RemoveAll(configDir)
-	})
-
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
-	if err != nil {
-		t.Fatalf("Failed to create app config: %v", err)
-	}
-
-	// Create server instance with adaptor flag
 	httpServer := server2.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
@@ -230,9 +201,8 @@ func (ts *TestServer) EnsureLoadBalancingRule(t *testing.T, requestModel, model 
 	}
 }
 
-// NewTestServerWithAdaptorFromConfig creates a new test server with adaptor flag using existing app config
-func NewTestServerWithAdaptorFromConfig(appConfig *config.AppConfig) *TestServer {
-	// Create server instance with adaptor flag
+// NewTestServerFromConfig creates a new test server sharing an existing app config
+func NewTestServerFromConfig(appConfig *config.AppConfig) *TestServer {
 	httpServer := server2.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{

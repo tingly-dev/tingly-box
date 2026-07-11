@@ -105,7 +105,7 @@ func NewTestEnv(t *testing.T, opts ...TestEnvOption) *TestEnv {
 		t.Fatalf("create app config: %v", err)
 	}
 
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	gatewayServer := server.NewServer(appConfig.GetGlobalConfig())
 	router := gatewayServer.GetRouter()
 	ts := httptest.NewServer(router)
 	t.Cleanup(ts.Close)
@@ -168,7 +168,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	}
 
 	// Build server options
-	serverOpts := []server.ServerOption{server.WithAdaptor(false)}
+	var serverOpts []server.ServerOption
 	if cfg.recordDir != "" {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
 	}

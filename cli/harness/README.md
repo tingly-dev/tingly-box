@@ -354,6 +354,9 @@ exactly how routing, failover, the breaker, and affinity behave over a sequence.
 
 ## Tier Duo — `duo`
 
+> Design rationale, fidelity ledger, and observation contract:
+> [`.design/harness-duo.md`](../../.design/harness-duo.md)
+
 Two full tingly-box instances as **separate server processes**, verified
 end-to-end over **real HTTP**: `tb2` (the gateway under test) routes
 anthropic-scenario rules to `tb1`'s production vmodel endpoints, and the

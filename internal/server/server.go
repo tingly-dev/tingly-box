@@ -148,11 +148,10 @@ type Server struct {
 	quotaManager providerQuotaModule.Manager
 
 	// options
-	enableUI      bool
-	enableAdaptor bool
-	openBrowser   bool
-	host          string
-	debug         bool
+	enableUI    bool
+	openBrowser bool
+	host        string
+	debug       bool
 
 	// record options
 	recordMode obs.RecordMode

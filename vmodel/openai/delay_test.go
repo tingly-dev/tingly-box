@@ -36,7 +36,7 @@ func newMetricsTestServer(t *testing.T) *metricsTestServer {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	require.NoError(t, err)
 
-	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 	return &metricsTestServer{
 		appConfig: appConfig,
 		ginEngine: httpServer.GetRouter(),

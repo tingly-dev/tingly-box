@@ -42,7 +42,7 @@ func newRoutingTestServer(t *testing.T) *routingTestServer {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	require.NoError(t, err)
 
-	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 	ts := &routingTestServer{
 		appConfig:  appConfig,
 		httpServer: httptest.NewServer(httpServer.GetRouter()),
@@ -99,7 +99,7 @@ func newRoutingTestServerWithCapacity(t *testing.T, capacities map[string]struct
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	require.NoError(t, err)
 
-	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 	ts := &routingTestServer{
 		appConfig:  appConfig,
 		httpServer: httptest.NewServer(httpServer.GetRouter()),

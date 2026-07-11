@@ -20,7 +20,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
+		tsConverter := NewTestServerFromConfig(ts.appConfig)
 
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
@@ -69,7 +69,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		// Use the server with adaptor for the actual request
-		tsWithAdaptor.ginEngine.ServeHTTP(w, req)
+		tsConverter.ginEngine.ServeHTTP(w, req)
 
 		t.Logf("Response code: %d", w.Code)
 		t.Logf("Response body: %s", w.Body.String())
@@ -92,7 +92,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
+		tsConverter := NewTestServerFromConfig(ts.appConfig)
 
 		// Add a rule that routes to OpenAI-style provider (qwen)
 		rule := map[string]interface{}{
@@ -142,7 +142,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		// Use the server with adaptor for the actual request
-		tsWithAdaptor.ginEngine.ServeHTTP(w, req)
+		tsConverter.ginEngine.ServeHTTP(w, req)
 
 		t.Logf("Response code: %d", w.Code)
 		t.Logf("Response body: %s", w.Body.String())
@@ -165,7 +165,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
+		tsConverter := NewTestServerFromConfig(ts.appConfig)
 
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
@@ -234,7 +234,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
 		// Use the server with adaptor for the actual request
-		tsWithAdaptor.ginEngine.ServeHTTP(w, req)
+		tsConverter.ginEngine.ServeHTTP(w, req)
 
 		t.Logf("Response code: %d", w.Code)
 		if w.Code != 200 {
@@ -270,7 +270,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
+		tsConverter := NewTestServerFromConfig(ts.appConfig)
 
 		// Use existing rule for qwen-plus (which routes to qwen - OpenAI style)
 		// We'll send an Anthropic request to test the adaptor
@@ -292,7 +292,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+modelToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
-		tsWithAdaptor.ginEngine.ServeHTTP(w, req)
+		tsConverter.ginEngine.ServeHTTP(w, req)
 
 		t.Logf("Response code: %d", w.Code)
 		t.Logf("Response Content-Type: %s", w.Header().Get("Content-Type"))
