@@ -9,7 +9,7 @@ var Operations = []SmartOp{
 		Position:  PositionTime,
 		Operation: OpTimeRange,
 		Meta: SmartOpMeta{
-			Description: "Current time is within a daily wall-clock interval",
+			Description: "Current time is within a daily wall-clock interval [start, end) in a timezone (minute granularity)",
 			Type:        ValueTypeTimeRange,
 		},
 	},

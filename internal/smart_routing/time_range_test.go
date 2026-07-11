@@ -61,10 +61,14 @@ func TestEvaluateTimeRangeOp(t *testing.T) {
 	shanghai := SmartOp{Position: PositionTime, Operation: OpTimeRange, Value: `{"start":"09:00","end":"10:00","timezone":"Asia/Shanghai","outside":false}`}
 	require.True(t, r.evaluateTimeRangeOp(&shanghai).Matched)
 
-	// On DST fall-back, both 01:30 occurrences compare as the same wall-clock minute.
-	utcNow = func() time.Time { return time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC) }
+	// DST fall-back (US 2026-11-01): 02:00 EDT -> 01:00 EST at 06:00 UTC, so the
+	// wall-clock hour 01:00-02:00 occurs twice. 05:30 UTC is the first 01:30 (EDT),
+	// 06:30 UTC the second 01:30 (EST); wall-clock-minute comparison must match both.
 	newYork := SmartOp{Position: PositionTime, Operation: OpTimeRange, Value: `{"start":"01:00","end":"02:00","timezone":"America/New_York","outside":false}`}
-	require.True(t, r.evaluateTimeRangeOp(&newYork).Matched)
+	utcNow = func() time.Time { return time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC) }
+	require.True(t, r.evaluateTimeRangeOp(&newYork).Matched, "first 01:30 (EDT)")
+	utcNow = func() time.Time { return time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC) }
+	require.True(t, r.evaluateTimeRangeOp(&newYork).Matched, "second 01:30 (EST)")
 
 	invalid := SmartOp{Position: PositionTime, Operation: OpTimeRange, Value: `{}`}
 	res = r.evaluateTimeRangeOp(&invalid)
