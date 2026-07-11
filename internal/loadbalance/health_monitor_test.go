@@ -1,7 +1,6 @@
 package loadbalance
 
 import (
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -15,7 +14,6 @@ func TestNewHealthMonitor(t *testing.T) {
 
 	assert.NotNil(t, hm)
 	assert.NotNil(t, hm.services)
-	assert.Equal(t, 3, hm.consecutiveErrorThreshold)
 	assert.Equal(t, 5*time.Minute, hm.defaultRecoveryTimeout)
 }
 
@@ -47,7 +45,6 @@ func TestHealthMonitor_ReportRateLimit(t *testing.T) {
 	assert.Equal(t, HealthUnhealthy, health.Status)
 	assert.True(t, health.RateLimited)
 	assert.False(t, health.AuthError)
-	assert.Equal(t, 0, health.ConsecutiveErrors)
 }
 
 func TestHealthMonitor_ReportAuthError(t *testing.T) {
@@ -77,84 +74,23 @@ func TestHealthMonitor_ReportAuthError(t *testing.T) {
 	assert.False(t, hm.IsHealthy(serviceID))
 }
 
-func TestHealthMonitor_ReportError_ConsecutiveThreshold(t *testing.T) {
+// TestHealthMonitor_ReportSuccess_AfterRateLimitWindow verifies ReportSuccess
+// recovers a rate-limited service only after its window has elapsed.
+func TestHealthMonitor_ReportSuccess_AfterRateLimitWindow(t *testing.T) {
 	config := DefaultHealthMonitorConfig()
-	config.ConsecutiveErrorThreshold = 3
+	config.RecoveryTimeoutSeconds = 1
 	hm := NewHealthMonitor(config)
 
 	serviceID := "provider-a:gpt-4o"
-	testErr := errors.New("connection timeout")
-
-	// Initially healthy
-	assert.True(t, hm.IsHealthy(serviceID))
-
-	// Report 1 error - should still be healthy
-	hm.ReportError(serviceID, testErr)
-	assert.True(t, hm.IsHealthy(serviceID))
-
-	// Report 2nd error - should still be healthy
-	hm.ReportError(serviceID, testErr)
-	assert.True(t, hm.IsHealthy(serviceID))
-
-	// Report 3rd error - should now be unhealthy
-	hm.ReportError(serviceID, testErr)
+	hm.ReportRateLimit(serviceID)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Check health record
-	health := hm.GetHealth(serviceID)
-	assert.Equal(t, 3, health.ConsecutiveErrors)
-}
-
-func TestHealthMonitor_ReportSuccess_ImmediateRecovery(t *testing.T) {
-	config := DefaultHealthMonitorConfig()
-	config.ConsecutiveErrorThreshold = 2
-	hm := NewHealthMonitor(config)
-
-	serviceID := "provider-a:gpt-4o"
-
-	// Make service unhealthy via consecutive errors (not rate limit)
-	testErr := errors.New("connection error")
-	hm.ReportError(serviceID, testErr) // error 1
-	assert.True(t, hm.IsHealthy(serviceID), "Should still be healthy after 1 error")
-
-	hm.ReportError(serviceID, testErr) // error 2 - marks unhealthy
-	assert.False(t, hm.IsHealthy(serviceID), "Should be unhealthy after 2 errors")
-
-	// Report success
+	// Within the window a success does not clear the rate limit.
 	hm.ReportSuccess(serviceID)
+	assert.False(t, hm.IsHealthy(serviceID), "success inside the rate-limit window must not recover")
 
-	// Should be healthy again
-	assert.True(t, hm.IsHealthy(serviceID))
-
-	// Check health record
-	health := hm.GetHealth(serviceID)
-	assert.Equal(t, HealthHealthy, health.Status)
-	assert.False(t, health.RateLimited)
-	assert.False(t, health.AuthError)
-	assert.Equal(t, 0, health.ConsecutiveErrors)
-}
-
-func TestHealthMonitor_ReportSuccess_ResetsConsecutiveErrors(t *testing.T) {
-	config := DefaultHealthMonitorConfig()
-	config.ConsecutiveErrorThreshold = 3
-	hm := NewHealthMonitor(config)
-
-	serviceID := "provider-a:gpt-4o"
-	testErr := errors.New("connection timeout")
-
-	// Report 2 errors
-	hm.ReportError(serviceID, testErr)
-	hm.ReportError(serviceID, testErr)
-
-	health := hm.GetHealth(serviceID)
-	assert.Equal(t, 2, health.ConsecutiveErrors)
-
-	// Report success
+	time.Sleep(1100 * time.Millisecond)
 	hm.ReportSuccess(serviceID)
-
-	// Consecutive errors should be reset
-	health = hm.GetHealth(serviceID)
-	assert.Equal(t, 0, health.ConsecutiveErrors)
 	assert.True(t, hm.IsHealthy(serviceID))
 }
 
@@ -217,12 +153,12 @@ func TestHealthMonitor_ConcurrentAccess(t *testing.T) {
 	serviceID := "provider-a:gpt-4o"
 	var wg sync.WaitGroup
 
-	// Concurrent error reporting
+	// Concurrent rate-limit reporting
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			hm.ReportError(serviceID, errors.New("test error"))
+			hm.ReportRateLimit(serviceID)
 		}()
 	}
 
@@ -246,11 +182,12 @@ func TestHealthMonitor_ConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	// Should not panic and should have valid state
+	// Should not panic and should have valid state. (Rate-limit windows mean
+	// the final healthy/unhealthy verdict depends on interleaving; the test
+	// asserts race-freedom, not a specific outcome.)
 	health := hm.GetHealth(serviceID)
 	assert.NotNil(t, health)
-	// After concurrent success reports, it should be healthy
-	assert.True(t, hm.IsHealthy(serviceID))
+	_ = hm.IsHealthy(serviceID)
 }
 
 func TestHealthMonitor_GetAllHealth(t *testing.T) {
@@ -273,16 +210,10 @@ func TestHealthMonitor_UpdateConfig(t *testing.T) {
 	config := DefaultHealthMonitorConfig()
 	hm := NewHealthMonitor(config)
 
-	assert.Equal(t, 3, hm.consecutiveErrorThreshold)
 	assert.Equal(t, 5*time.Minute, hm.defaultRecoveryTimeout)
 
-	newConfig := HealthMonitorConfig{
-		ConsecutiveErrorThreshold: 5,
-		RecoveryTimeoutSeconds:    600,
-	}
-	hm.UpdateConfig(newConfig)
+	hm.UpdateConfig(HealthMonitorConfig{RecoveryTimeoutSeconds: 600})
 
-	assert.Equal(t, 5, hm.consecutiveErrorThreshold)
 	assert.Equal(t, 10*time.Minute, hm.defaultRecoveryTimeout)
 }
 
@@ -290,30 +221,6 @@ func TestHealthStatus_String(t *testing.T) {
 	assert.Equal(t, "healthy", HealthHealthy.String())
 	assert.Equal(t, "unhealthy", HealthUnhealthy.String())
 	assert.Equal(t, "unknown", HealthStatus(999).String())
-}
-
-func TestHealthMonitor_ReportError_WhileUnhealthy(t *testing.T) {
-	config := DefaultHealthMonitorConfig()
-	hm := NewHealthMonitor(config)
-
-	serviceID := "provider-a:gpt-4o"
-	testErr := errors.New("connection timeout")
-
-	// Make service unhealthy via rate limit
-	hm.ReportRateLimit(serviceID)
-	assert.False(t, hm.IsHealthy(serviceID))
-
-	// Consecutive errors should be 0 after rate limit
-	health := hm.GetHealth(serviceID)
-	assert.Equal(t, 0, health.ConsecutiveErrors)
-
-	// Report error while unhealthy
-	hm.ReportError(serviceID, testErr)
-
-	// Should increment consecutive errors even while unhealthy
-	health = hm.GetHealth(serviceID)
-	assert.Equal(t, 1, health.ConsecutiveErrors)
-	assert.False(t, hm.IsHealthy(serviceID))
 }
 
 // Test probe function that returns true (healthy) by default

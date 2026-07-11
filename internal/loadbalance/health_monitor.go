@@ -32,17 +32,16 @@ func (h HealthStatus) String() string {
 
 // ServiceHealth tracks health information for a single service
 type ServiceHealth struct {
-	ServiceID         string        // Unique service identifier (provider:model)
-	Status            HealthStatus  // Current health status
-	LastError         error         // Last error that caused unhealthy state
-	LastErrorTime     time.Time     // When the error occurred
-	ConsecutiveErrors int           // Count of consecutive errors
-	RateLimited       bool          // True if last error was 429
-	AuthError         bool          // True if last error was 401/403
-	RateLimitedUntil  time.Time     // Earliest time when rate limit can be cleared
-	LastHealthCheck   time.Time     // Last time health was checked
-	RecoveryTimeout   time.Duration // Time before auto-recovery
-	mutex             sync.RWMutex  // Thread safety
+	ServiceID        string        // Unique service identifier (provider:model)
+	Status           HealthStatus  // Current health status
+	LastError        error         // Last error that caused unhealthy state
+	LastErrorTime    time.Time     // When the error occurred
+	RateLimited      bool          // True if last error was 429
+	AuthError        bool          // True if last error was 401/403
+	RateLimitedUntil time.Time     // Earliest time when rate limit can be cleared
+	LastHealthCheck  time.Time     // Last time health was checked
+	RecoveryTimeout  time.Duration // Time before auto-recovery
+	mutex            sync.RWMutex  // Thread safety
 }
 
 // HealthProbeFunc is the function type for probing service health
@@ -51,8 +50,6 @@ type HealthProbeFunc func(serviceID string) bool
 
 // HealthMonitorConfig holds configuration for health monitoring
 type HealthMonitorConfig struct {
-	// ConsecutiveErrorThreshold is the number of consecutive errors before marking unhealthy
-	ConsecutiveErrorThreshold int `json:"consecutive_error_threshold" yaml:"consecutive_error_threshold"`
 	// RecoveryTimeoutSeconds is the time in seconds before auto-recovery
 	RecoveryTimeoutSeconds int `json:"recovery_timeout_seconds" yaml:"recovery_timeout_seconds"`
 	// ProbeEnabled enables health check probing before marking service healthy
@@ -62,30 +59,27 @@ type HealthMonitorConfig struct {
 // DefaultHealthMonitorConfig returns default configuration
 func DefaultHealthMonitorConfig() HealthMonitorConfig {
 	return HealthMonitorConfig{
-		ConsecutiveErrorThreshold: 3,
-		RecoveryTimeoutSeconds:    300, // 5 minutes
-		ProbeEnabled:              true,
+		RecoveryTimeoutSeconds: 300, // 5 minutes
+		ProbeEnabled:           true,
 	}
 }
 
 // HealthMonitor manages health status for all services
 type HealthMonitor struct {
-	services                  map[string]*ServiceHealth // serviceID -> health
-	mutex                     sync.RWMutex
-	config                    HealthMonitorConfig
-	defaultRecoveryTimeout    time.Duration
-	consecutiveErrorThreshold int
-	probeFunc                 HealthProbeFunc // Optional probe function for recovery checking
+	services               map[string]*ServiceHealth // serviceID -> health
+	mutex                  sync.RWMutex
+	config                 HealthMonitorConfig
+	defaultRecoveryTimeout time.Duration
+	probeFunc              HealthProbeFunc // Optional probe function for recovery checking
 }
 
 // NewHealthMonitor creates a new health monitor with the given configuration
 func NewHealthMonitor(config HealthMonitorConfig) *HealthMonitor {
 	return &HealthMonitor{
-		services:                  make(map[string]*ServiceHealth),
-		config:                    config,
-		defaultRecoveryTimeout:    time.Duration(config.RecoveryTimeoutSeconds) * time.Second,
-		consecutiveErrorThreshold: config.ConsecutiveErrorThreshold,
-		probeFunc:                 nil, // Can be set via SetProbeFunc
+		services:               make(map[string]*ServiceHealth),
+		config:                 config,
+		defaultRecoveryTimeout: time.Duration(config.RecoveryTimeoutSeconds) * time.Second,
+		probeFunc:              nil, // Can be set via SetProbeFunc
 	}
 }
 
@@ -190,7 +184,6 @@ func (hm *HealthMonitor) recoverService(serviceID string) {
 		health.RateLimited = false
 		health.AuthError = false
 		health.RateLimitedUntil = time.Time{} // Clear rate limit time
-		health.ConsecutiveErrors = 0
 		health.LastError = nil
 	}
 }
@@ -222,7 +215,6 @@ func (hm *HealthMonitor) ReportRateLimit(serviceID string) {
 	health.Status = HealthUnhealthy
 	health.RateLimited = true
 	health.LastErrorTime = now
-	health.ConsecutiveErrors = 0 // Reset consecutive errors on 429
 	health.LastHealthCheck = now
 
 	// Set rate limit recovery time
@@ -246,23 +238,6 @@ func (hm *HealthMonitor) ReportAuthError(serviceID string, statusCode int) {
 	health.LastError = errors.New("auth error")
 	health.LastErrorTime = clock.Now()
 	health.LastHealthCheck = clock.Now()
-}
-
-// ReportError reports a retryable error for a service
-func (hm *HealthMonitor) ReportError(serviceID string, err error) {
-	health := hm.getOrCreateHealth(serviceID)
-	health.mutex.Lock()
-	defer health.mutex.Unlock()
-
-	health.ConsecutiveErrors++
-	health.LastError = err
-	health.LastErrorTime = clock.Now()
-	health.LastHealthCheck = clock.Now()
-
-	// Only mark unhealthy after threshold
-	if health.ConsecutiveErrors >= hm.consecutiveErrorThreshold {
-		health.Status = HealthUnhealthy
-	}
 }
 
 // ReportSuccess reports a successful request for a service
@@ -293,11 +268,7 @@ func (hm *HealthMonitor) ReportSuccess(serviceID string) {
 		health.RateLimited = false
 		health.AuthError = false
 		health.RateLimitedUntil = time.Time{} // Clear rate limit time
-		health.ConsecutiveErrors = 0
 		health.LastError = nil
-	} else {
-		// Reset consecutive errors even if already healthy
-		health.ConsecutiveErrors = 0
 	}
 	health.LastHealthCheck = now
 }
@@ -339,5 +310,4 @@ func (hm *HealthMonitor) UpdateConfig(config HealthMonitorConfig) {
 
 	hm.config = config
 	hm.defaultRecoveryTimeout = time.Duration(config.RecoveryTimeoutSeconds) * time.Second
-	hm.consecutiveErrorThreshold = config.ConsecutiveErrorThreshold
 }

@@ -952,9 +952,9 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 
 	// Test token_based selection with threshold 20.
 	// Each request records 20 tokens (10+10), which meets the threshold, so the
-	// tactic rotates to the least-used service on every request. With the current
-	// service tracked (as the real handlers do via UpdateServiceIndex), this
-	// yields a round-robin: A, B, C, A, B, C.
+	// tactic rotates to the least-used service once the current service (the
+	// first, with no persisted pointer) exceeds the threshold, which still
+	// yields a rotation: A, B, C, A, B, C.
 	var selectedProviders []string
 	totalRequests := 6
 
@@ -972,12 +972,12 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 
 		selectedProviders = append(selectedProviders, service.Provider)
 
-		// Record usage and advance the current-service pointer, mirroring the
-		// production request handlers.
+		// Record usage as the production handlers do. The tactic anchors on
+		// the first active service and re-evaluates every request; there is
+		// no cross-request pointer.
 		service.RecordUsage(10, 10)
-		lb.UpdateServiceIndex(rule, service)
 
-		t.Logf("Request %d: Selected provider %s (service_id %s)", i+1, service.Provider, rule.CurrentServiceID)
+		t.Logf("Request %d: Selected provider %s", i+1, service.Provider)
 	}
 
 	// Expected rotation with threshold 20 and 20 tokens/request: A, B, C, A, B, C
@@ -1001,17 +1001,7 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 			providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
 	}
 
-	// Test that the CurrentServiceID is correctly maintained. After 6 round-robin
-	// requests the final selection is provider-C; derive the expected ID from the
-	// product's own formatter (Service.ServiceID() → "provider/model") rather than
-	// hardcoding the separator.
-	expectedFinalServiceID := rule.Services[2].ServiceID() // provider-C
-	if rule.CurrentServiceID != expectedFinalServiceID {
-		t.Errorf("Expected CurrentServiceID = %s, got %s", expectedFinalServiceID, rule.CurrentServiceID)
-	}
-
 	t.Logf("✅ Round-robin test passed!")
 	t.Logf("Final distribution: provider-A: %d, provider-B: %d, provider-C: %d",
 		providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
-	t.Logf("Final CurrentServiceID: %s", rule.CurrentServiceID)
 }

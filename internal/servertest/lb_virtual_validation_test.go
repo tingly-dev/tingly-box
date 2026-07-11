@@ -50,9 +50,6 @@ func simulate(t *testing.T, lb *server.LoadBalancer, rule *typ.Rule, n int) map[
 		svc.RecordUsage(100, 100)             // 200 tokens/request
 		svc.Stats.RecordLatency(500, 100)     // 500ms, identical
 		svc.Stats.RecordTokenSpeed(50.0, 100) // 50 tps, identical
-
-		// The handler updates CurrentServiceID after each pick.
-		lb.UpdateServiceIndex(rule, svc)
 	}
 	return counts
 }

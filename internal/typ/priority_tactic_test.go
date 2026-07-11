@@ -328,3 +328,39 @@ func TestTierHalfOpenProbeHeldFallsBackToPeer(t *testing.T) {
 		}
 	}
 }
+
+// TestTierPreviewDoesNotClaimProbe pins the preview contract: PreviewService
+// walks the same tiers as SelectService but never consumes the half-open
+// probe slot, so a read-only preview cannot block real traffic's recovery
+// probe.
+func TestTierPreviewDoesNotClaimProbe(t *testing.T) {
+	base := time.Unix(2_000_000_000, 0)
+	now := base
+	restore := clock.SetClock(func() time.Time { return now })
+	defer restore()
+
+	primary := mkService("prev-p1", "m1", 0)
+	backup := mkService("prev-p2", "m1", 1)
+	rule := mkTierRule(primary, backup)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
+	store := loadbalance.DefaultBreakerStore()
+
+	// Trip the primary and move past the open window: it is half-open-eligible.
+	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+		store.RecordFailure(rule.UUID, primary.ServiceID())
+	}
+	now = now.Add(loadbalance.DefaultBreakerOpenDuration + time.Second)
+
+	// Preview repeatedly: it must pick the half-open primary (top available
+	// tier) yet leave the probe slot unclaimed every time.
+	for i := 0; i < 5; i++ {
+		if got := tactic.PreviewService(rule); got != primary {
+			t.Fatalf("preview %d: want half-open primary, got %v", i, got)
+		}
+	}
+	if !store.Allow(rule.UUID, primary.ServiceID()) {
+		t.Fatal("preview must not consume the half-open probe slot")
+	}
+	// Clean up: report a success so shared-store state doesn't leak.
+	store.RecordSuccess(rule.UUID, primary.ServiceID())
+}

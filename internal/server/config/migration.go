@@ -106,11 +106,6 @@ func (c *Config) saveMigration() {
 
 func (c *Config) rekeyRuleUUIDState(migrationID string, renames map[string]string) {
 	for oldUUID, newUUID := range renames {
-		if c.ruleStateStore != nil {
-			if err := c.ruleStateStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
-				logrus.WithError(err).Warnf("Migration %s: failed to rename rule state %s -> %s", migrationID, oldUUID, newUUID)
-			}
-		}
 		if c.usageStore != nil {
 			if err := c.usageStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
 				logrus.WithError(err).Warnf("Migration %s: failed to rename usage records %s -> %s", migrationID, oldUUID, newUUID)

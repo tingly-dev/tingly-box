@@ -91,17 +91,12 @@ func testModelContainsOp(value string) smartrouting.SmartOp {
 
 // mockLoadBalancer implements LoadBalancer for testing.
 type mockLoadBalancer struct {
-	service           *loadbalance.Service
-	err               error
-	updateIndexCalled bool
+	service *loadbalance.Service
+	err     error
 }
 
 func (m *mockLoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
 	return m.service, m.err
-}
-
-func (m *mockLoadBalancer) UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service) {
-	m.updateIndexCalled = true
 }
 
 // mockAffinityStore implements AffinityStore for testing.
@@ -152,10 +147,6 @@ func (m *mockConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 		return p, nil
 	}
 	return nil, nil
-}
-
-func (m *mockConfig) SaveCurrentServiceID(ruleUUID string, serviceID string) error {
-	return nil
 }
 
 func (m *mockConfig) GetEffectiveAffinity(rule *typ.Rule) time.Duration {

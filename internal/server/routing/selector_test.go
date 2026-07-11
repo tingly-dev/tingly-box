@@ -260,19 +260,6 @@ func TestSelect_PipelineCaching(t *testing.T) {
 	}
 }
 
-func TestUpdateServiceIndex(t *testing.T) {
-	lb := &mockLoadBalancer{}
-	store := newMockAffinityStore()
-
-	svc := testService("provider-a", "gpt-4", true)
-	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{svc})
-
-	sel := NewServiceSelector(&mockConfig{}, store, lb)
-	err := sel.UpdateServiceIndex(rule, svc)
-	require.NoError(t, err)
-	require.True(t, lb.updateIndexCalled, "UpdateServiceIndex should call LB")
-}
-
 func TestNewServiceSelector_PipelineOrder(t *testing.T) {
 	// One pipeline serves every rule: health → affinity → smart → load_balancer.
 	sel := NewServiceSelector(&mockConfig{}, newMockAffinityStore(), &mockLoadBalancer{})

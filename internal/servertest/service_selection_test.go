@@ -247,10 +247,9 @@ func TestServiceSelection_TokenBasedKeepsCurrent(t *testing.T) {
 		}
 
 		typRule := &typ.Rule{
-			UUID:             "test-rule-hybrid-switch",
-			Services:         services,
-			Active:           true,
-			CurrentServiceID: "provider-a:gpt-4", // Current is provider-a
+			UUID:     "test-rule-hybrid-switch",
+			Services: services,
+			Active:   true,
 		}
 
 		tactic := typ.NewTokenBasedTactic(5000) // Lower threshold

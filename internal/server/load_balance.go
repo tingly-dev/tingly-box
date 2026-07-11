@@ -28,8 +28,23 @@ func NewLoadBalancer(cfg *config.Config, healthFilter *typ.HealthFilter) *LoadBa
 	}
 }
 
-// SelectService selects the best service for a rule based on the configured tactic
+// SelectService selects the best service for a rule based on the configured
+// tactic, claiming the picked service's breaker probe slot (the dispatch path
+// records the outcome, releasing it).
 func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
+	return lb.selectService(rule, true)
+}
+
+// PreviewService selects exactly like SelectService but never claims a
+// breaker probe slot. Read-only surfaces (the admin current-service preview)
+// must use it — they never dispatch, so a claimed half-open probe would get
+// no recorded outcome and would block real traffic from probing the
+// recovering service until the stale-probe reclaim kicks in.
+func (lb *LoadBalancer) PreviewService(rule *typ.Rule) (*loadbalance.Service, error) {
+	return lb.selectService(rule, false)
+}
+
+func (lb *LoadBalancer) selectService(rule *typ.Rule, claim bool) (*loadbalance.Service, error) {
 	if rule == nil {
 		return nil, fmt.Errorf("rule is nil")
 	}
@@ -84,7 +99,7 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	if actualTactic.GetType() != loadbalance.TacticTier {
 		chosen := typ.PickBreakerAvailable(rule.UUID, healthyServices, func(candidates []*loadbalance.Service) *loadbalance.Service {
 			return actualTactic.SelectService(ruleView(rule, candidates))
-		})
+		}, claim)
 		if chosen != nil {
 			return chosen, nil
 		}
@@ -93,6 +108,16 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 		// upstream and the client sees the real upstream error.
 		logrus.Warnf("[load_balancer] all %d healthy services for rule %s are breaker-unavailable; "+
 			"degrading to unfiltered selection", len(healthyServices), rule.RequestModel)
+	}
+
+	// Tier walk in preview mode must not claim either.
+	if !claim {
+		if tt, ok := actualTactic.(*typ.TierTactic); ok {
+			if svc := tt.PreviewService(ruleView(rule, healthyServices)); svc != nil {
+				return svc, nil
+			}
+			return healthyServices[0], nil
+		}
 	}
 
 	// Select service using the tactic (tier walk, or horizontal degrade path).
@@ -109,15 +134,14 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 // a tactic can select within a candidate subset without mutating the source.
 func ruleView(rule *typ.Rule, services []*loadbalance.Service) *typ.Rule {
 	return &typ.Rule{
-		UUID:             rule.UUID,
-		RequestModel:     rule.RequestModel,
-		ResponseModel:    rule.ResponseModel,
-		CurrentServiceID: rule.CurrentServiceID,
-		LBTactic:         rule.LBTactic,
-		Active:           rule.Active,
-		SmartEnabled:     rule.SmartEnabled,
-		SmartRouting:     rule.SmartRouting,
-		Services:         services,
+		UUID:          rule.UUID,
+		RequestModel:  rule.RequestModel,
+		ResponseModel: rule.ResponseModel,
+		LBTactic:      rule.LBTactic,
+		Active:        rule.Active,
+		SmartEnabled:  rule.SmartEnabled,
+		SmartRouting:  rule.SmartRouting,
+		Services:      services,
 	}
 }
 
@@ -141,16 +165,6 @@ func logTierConfigIgnored(rule *typ.Rule, services []*loadbalance.Service, tacti
 			return
 		}
 	}
-}
-
-// UpdateServiceIndex updates the current service ID for a rule
-func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *loadbalance.Service) {
-	if rule == nil || selectedService == nil {
-		return
-	}
-
-	// Set the current service ID (provider:model format)
-	rule.CurrentServiceID = selectedService.ServiceID()
 }
 
 // GetServiceStats returns statistics for a specific service
@@ -237,9 +251,11 @@ func (lb *LoadBalancer) ClearServiceStats(provider, model string) {
 	// 2. In-memory ServiceStats on matching active services across all rules.
 	// Reset the same field set as ClearAllStats (cumulative + window), so a
 	// single-service clear matches the all-clear scope service-by-service.
+	// NOTE: GetRequestConfigs returns rule VALUE copies, but Rule.Services is
+	// a pointer slice, so mutating svc.Stats reaches the live services; rule
+	// fields themselves must not be written here (it would edit the copy).
 	if lb.config != nil {
-		rules := lb.config.GetRequestConfigs()
-		for ruleIdx, rule := range rules {
+		for _, rule := range lb.config.GetRequestConfigs() {
 			if !rule.Active {
 				continue
 			}
@@ -256,7 +272,6 @@ func (lb *LoadBalancer) ClearServiceStats(provider, model string) {
 					stats.LastUsed = time.Time{}
 				}
 			}
-			rules[ruleIdx] = rule
 		}
 	}
 }
@@ -272,11 +287,13 @@ func (lb *LoadBalancer) ClearAllStats() {
 		}
 	}
 
-	// Also clear stats from all rules in memory
+	// Also clear stats from all rules in memory. GetRequestConfigs returns
+	// rule VALUE copies, but Rule.Services is a pointer slice, so mutating
+	// svc.Stats reaches the live services; rule fields themselves must not be
+	// written here (it would edit the copy — a previous rule-field reset and
+	// slice write-back were silent no-ops for exactly that reason).
 	if lb.config != nil {
-		rules := lb.config.GetRequestConfigs()
-		for ruleIdx, rule := range rules {
-			modified := false
+		for _, rule := range lb.config.GetRequestConfigs() {
 			for i := range rule.Services {
 				stats := &rule.Services[i].Stats
 				if stats.RequestCount > 0 || stats.WindowRequestCount > 0 {
@@ -287,16 +304,7 @@ func (lb *LoadBalancer) ClearAllStats() {
 					stats.WindowOutputTokens = 0
 					stats.WindowStart = time.Now()
 					stats.LastUsed = time.Time{}
-					modified = true
 				}
-			}
-			// Reset current service ID to empty when services change
-			if rule.CurrentServiceID != "" {
-				rule.CurrentServiceID = ""
-				modified = true
-			}
-			if modified {
-				rules[ruleIdx] = rule
 			}
 		}
 	}
@@ -348,13 +356,12 @@ func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"request_model":      rule.RequestModel,
-		"response_model":     rule.ResponseModel,
-		"tactic":             rule.GetTacticType().String(),
-		"current_service_id": rule.CurrentServiceID,
-		"active":             rule.Active,
-		"is_legacy":          false,
-		"services":           serviceSummaries,
+		"request_model":  rule.RequestModel,
+		"response_model": rule.ResponseModel,
+		"tactic":         rule.GetTacticType().String(),
+		"active":         rule.Active,
+		"is_legacy":      false,
+		"services":       serviceSummaries,
 	}
 }
 

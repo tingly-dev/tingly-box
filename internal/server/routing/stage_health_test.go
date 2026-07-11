@@ -1,7 +1,6 @@
 package routing
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,11 +10,11 @@ import (
 )
 
 func TestHealthStage_FiltersUnhealthy(t *testing.T) {
-	// Create a health monitor that marks "provider-b/gpt-4" as unhealthy
-	config := loadbalance.DefaultHealthMonitorConfig()
-	config.ConsecutiveErrorThreshold = 1 // Mark unhealthy after 1 error
-	monitor := loadbalance.NewHealthMonitor(config)
-	monitor.ReportError("provider-b/gpt-4", errors.New("test error"))
+	// Create a health monitor that marks "provider-b/gpt-4" as unhealthy.
+	// A 429 report marks a service unhealthy immediately (generic 5xx no
+	// longer feeds the health monitor — the breaker owns that signal).
+	monitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
+	monitor.ReportRateLimit("provider-b/gpt-4")
 
 	filter := typ.NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)
@@ -57,11 +56,9 @@ func TestHealthStage_AllHealthy_NoFilter(t *testing.T) {
 }
 
 func TestHealthStage_AllUnhealthy(t *testing.T) {
-	config := loadbalance.DefaultHealthMonitorConfig()
-	config.ConsecutiveErrorThreshold = 1
-	monitor := loadbalance.NewHealthMonitor(config)
-	monitor.ReportError("provider-a/gpt-4", errors.New("test error"))
-	monitor.ReportError("provider-b/gpt-4", errors.New("test error"))
+	monitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
+	monitor.ReportRateLimit("provider-a/gpt-4")
+	monitor.ReportRateLimit("provider-b/gpt-4")
 
 	filter := typ.NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)

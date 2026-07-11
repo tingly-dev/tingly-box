@@ -16,7 +16,7 @@ recovers them when they break.
   `id_token`, ChatGPT `account_id`). Persisted in `ProviderRecord`
   (`internal/data/db/provider_store.go`).
 - **A provider's UUID is its identity.** Rules' load-balancing services, smart
-  routing, `CurrentServiceID`, the vision-proxy service, advisor config, and cached
+  routing, the vision-proxy service, advisor config, and cached
   models all reference a provider **by UUID** (`internal/loadbalance`,
   `internal/typ/type.go`). Keeping the UUID stable across credential changes is what
   keeps a user's configuration intact — this drives the re-auth design below.

@@ -1,6 +1,7 @@
 package typ
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -232,15 +233,13 @@ func TestAsSpeedBasedParams(t *testing.T) {
 	}
 }
 
-func TestParseTacticFromMap_SpeedBased(t *testing.T) {
-	params := map[string]interface{}{
-		"min_samples_required": int64(10),
-		"speed_threshold_tps":  75.0,
-		"sample_window_size":   int64(50),
+func TestTacticUnmarshal_SpeedBasedParams(t *testing.T) {
+	raw := `{"type":"speed_based","params":{"min_samples_required":10,"speed_threshold_tps":75.0,"sample_window_size":50}}`
+
+	var tactic Tactic
+	if err := json.Unmarshal([]byte(raw), &tactic); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
-
-	tactic := ParseTacticFromMap(loadbalance.TacticSpeedBased, params)
-
 	if tactic.Type != loadbalance.TacticSpeedBased {
 		t.Errorf("Expected tactic type = TacticSpeedBased, got %v", tactic.Type)
 	}
@@ -249,7 +248,6 @@ func TestParseTacticFromMap_SpeedBased(t *testing.T) {
 	if !ok {
 		t.Fatal("Failed to convert params to SpeedBasedParams")
 	}
-
 	if sp.MinSamplesRequired != 10 {
 		t.Errorf("Expected MinSamplesRequired = 10, got %d", sp.MinSamplesRequired)
 	}
@@ -261,11 +259,14 @@ func TestParseTacticFromMap_SpeedBased(t *testing.T) {
 	}
 }
 
-func TestIsValidTactic_SpeedBased(t *testing.T) {
-	if !IsValidTactic("speed_based") {
-		t.Error("IsValidTactic(\"speed_based\") returned false")
+func TestParseTacticTypeStrict_SpeedBased(t *testing.T) {
+	if tt, ok := loadbalance.ParseTacticTypeStrict("speed_based"); !ok || tt != loadbalance.TacticSpeedBased {
+		t.Error("ParseTacticTypeStrict(\"speed_based\") should resolve")
 	}
-	if !IsValidTactic("SPEED_BASED") {
-		t.Error("IsValidTactic(\"SPEED_BASED\") returned false (should be case-insensitive)")
+	if tt, ok := loadbalance.ParseTacticTypeStrict("SPEED_BASED"); !ok || tt != loadbalance.TacticSpeedBased {
+		t.Error("ParseTacticTypeStrict should be case-insensitive")
+	}
+	if _, ok := loadbalance.ParseTacticTypeStrict("speed_basd"); ok {
+		t.Error("ParseTacticTypeStrict must reject unknown names")
 	}
 }

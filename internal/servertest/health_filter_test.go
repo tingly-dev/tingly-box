@@ -130,8 +130,7 @@ func TestHealthFilter_Recovery(t *testing.T) {
 
 	// Use short recovery timeout for testing
 	healthConfig := loadbalance.HealthMonitorConfig{
-		ConsecutiveErrorThreshold: 3,
-		RecoveryTimeoutSeconds:    1, // 1 second for testing
+		RecoveryTimeoutSeconds: 1, // 1 second for testing
 	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
 	healthFilter := typ.NewHealthFilter(healthMonitor)
@@ -180,15 +179,15 @@ func TestHealthFilter_Recovery(t *testing.T) {
 	assert.Equal(t, "provider1", service.Provider)
 }
 
-// TestHealthFilter_SuccessRecovery tests that services can recover after consecutive errors
+// TestHealthFilter_SuccessRecovery tests that an auth-errored service can be
+// recovered (generic errors no longer feed the health monitor — the circuit
+// breaker owns them).
 func TestHealthFilter_SuccessRecovery(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Use low threshold for testing
 	healthConfig := loadbalance.HealthMonitorConfig{
-		ConsecutiveErrorThreshold: 2,
-		RecoveryTimeoutSeconds:    300,
+		RecoveryTimeoutSeconds: 300,
 	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
 	healthFilter := typ.NewHealthFilter(healthMonitor)
@@ -217,16 +216,13 @@ func TestHealthFilter_SuccessRecovery(t *testing.T) {
 
 	serviceID := rule.Services[0].ServiceID()
 
-	// Report errors to mark service as unhealthy (threshold = 2)
-	healthMonitor.ReportError(serviceID, assert.AnError)
-	assert.True(t, healthMonitor.IsHealthy(serviceID), "Service should still be healthy after 1 error")
+	// An auth error marks the service unhealthy immediately.
+	healthMonitor.ReportAuthError(serviceID, 401)
+	assert.False(t, healthMonitor.IsHealthy(serviceID), "Service should be unhealthy after an auth error")
 
-	healthMonitor.ReportError(serviceID, assert.AnError)
-	assert.False(t, healthMonitor.IsHealthy(serviceID), "Service should be unhealthy after 2 errors")
-
-	// Report success - should recover immediately
+	// A success (e.g. after the user fixed credentials) recovers it.
 	healthMonitor.ReportSuccess(serviceID)
-	assert.True(t, healthMonitor.IsHealthy(serviceID), "Service should recover immediately after success")
+	assert.True(t, healthMonitor.IsHealthy(serviceID), "Service should recover after success")
 
 	// Should be able to select service
 	service, err := lb.SelectService(rule)
@@ -234,15 +230,16 @@ func TestHealthFilter_SuccessRecovery(t *testing.T) {
 	assert.NotNil(t, service)
 }
 
-// TestHealthFilter_ConsecutiveErrors tests that consecutive errors mark service unhealthy
-func TestHealthFilter_ConsecutiveErrors(t *testing.T) {
+// TestHealthFilter_GenericErrorsDoNotAffectHealth pins the narrowed contract:
+// generic failures are the circuit breaker's job (rule-scoped); the health
+// monitor only reacts to 429 rate limits and 401/403 auth errors, so no
+// sequence of generic errors may mark a service health-unhealthy.
+func TestHealthFilter_GenericErrorsDoNotAffectHealth(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Set low threshold for testing
 	healthConfig := loadbalance.HealthMonitorConfig{
-		ConsecutiveErrorThreshold: 2,
-		RecoveryTimeoutSeconds:    300,
+		RecoveryTimeoutSeconds: 300,
 	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
 	healthFilter := typ.NewHealthFilter(healthMonitor)
@@ -271,16 +268,10 @@ func TestHealthFilter_ConsecutiveErrors(t *testing.T) {
 
 	serviceID := rule.Services[0].ServiceID()
 
-	// First error - should still be healthy
-	healthMonitor.ReportError(serviceID, assert.AnError)
+	// No ReportError API exists anymore; the health monitor stays healthy
+	// unless a 429/auth signal arrives.
 	assert.True(t, healthMonitor.IsHealthy(serviceID))
 
-	// Second error - should now be unhealthy (threshold = 2)
-	healthMonitor.ReportError(serviceID, assert.AnError)
-	assert.False(t, healthMonitor.IsHealthy(serviceID))
-
-	// The only service is unhealthy, but SelectService falls back to it rather
-	// than failing the whole rule.
 	svc, err := lb.SelectService(rule)
 	assert.NoError(t, err)
 	assert.NotNil(t, svc)

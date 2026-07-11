@@ -111,7 +111,6 @@ type Config struct {
 	// External consumers should use StoreManager() instead
 	statsStore         *db.StatsStore
 	usageStore         *db.UsageStore
-	ruleStateStore     *db.RuleStateStore
 	providerStore      *db.ProviderStore
 	toolConfigStore    *db.ToolConfigStore
 	imbotSettingsStore *db.ImBotSettingsStore
@@ -299,7 +298,6 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	// Cache store references for internal Config methods
 	cfg.statsStore = storeManager.Stats()
 	cfg.usageStore = storeManager.Usage()
-	cfg.ruleStateStore = storeManager.RuleState()
 	cfg.providerStore = storeManager.Provider()
 	cfg.toolConfigStore = storeManager.ToolConfig()
 	cfg.imbotSettingsStore = storeManager.ImBotSettings()
@@ -552,7 +550,7 @@ func (c *Config) Save() error {
 	return os.WriteFile(c.ConfigFile, out, 0644)
 }
 
-// RefreshStatsFromStore hydrates service stats and rule state from the SQLite store.
+// RefreshStatsFromStore hydrates service stats from the SQLite store.
 func (c *Config) RefreshStatsFromStore() error {
 	if c.statsStore != nil {
 		if err := c.statsStore.HydrateRules(c.Rules); err != nil {
@@ -560,22 +558,7 @@ func (c *Config) RefreshStatsFromStore() error {
 		}
 	}
 
-	// Hydrate current_service_index from rule state store
-	if c.ruleStateStore != nil {
-		if err := c.ruleStateStore.HydrateRules(c.Rules); err != nil {
-			return err
-		}
-	}
-
 	return nil
-}
-
-// SaveCurrentServiceID persists the current service ID for a rule to SQLite
-func (c *Config) SaveCurrentServiceID(ruleUUID string, serviceID string) error {
-	if c.ruleStateStore == nil {
-		return nil
-	}
-	return c.ruleStateStore.SetServiceID(ruleUUID, serviceID)
 }
 
 // GetEffectiveAffinity returns the effective affinity TTL for a rule.
@@ -1647,15 +1630,6 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 		}
 		return false
 	})
-
-	// Purge persisted load-balancer state for the removed rules. Profile rule
-	// UUIDs are deterministic and profile IDs are recycled, so a future profile
-	// with the same ID must not inherit this profile's service pinning.
-	if c.ruleStateStore != nil {
-		if err := c.ruleStateStore.DeleteRules(removedUUIDs); err != nil {
-			logrus.WithError(err).Warn("failed to clear rule state for deleted profile rules")
-		}
-	}
 
 	// Remove scenario config for this profile (if it exists)
 	c.Scenarios = slices.DeleteFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool {

@@ -307,7 +307,6 @@ func (ph *ProtocolHandler) selectFallbackService(
 
 	tempRule := *rule
 	tempRule.Services = available
-	tempRule.CurrentServiceID = ""
 
 	// Use tier-aware selection when the rule uses tier-based routing.
 	// This ensures fallback respects tier ordering (T0 → T1 → T2...)

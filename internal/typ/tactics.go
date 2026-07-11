@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math/rand"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -66,107 +65,26 @@ func (tc *Tactic) Instantiate() LoadBalancingTactic {
 	return CreateTacticWithTypedParams(tc.Type, tc.Params)
 }
 
-// ParseTacticFromMap creates a Tactic from a tactic type and parameter map.
-// This is useful for parsing API request parameters into a Tactic configuration.
-func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]interface{}) Tactic {
-	var tacticParams TacticParams
+// NewDefaultTactic returns a Tactic of the given type carrying that type's
+// default params. Used when an API caller names a tactic without params.
+func NewDefaultTactic(tacticType loadbalance.TacticType) Tactic {
+	var params TacticParams
 	switch tacticType {
 	case loadbalance.TacticTokenBased:
-		if params != nil {
-			tacticParams = &TokenBasedParams{
-				TokenThreshold: getIntParamFromMap(params, "token_threshold", constant.DefaultTokenThreshold),
-			}
-		} else {
-			tacticParams = DefaultTokenBasedParams()
-		}
-	case loadbalance.TacticRandom:
-		tacticParams = DefaultRandomParams()
+		params = DefaultTokenBasedParams()
 	case loadbalance.TacticLatencyBased:
-		if params != nil {
-			tacticParams = &LatencyBasedParams{
-				LatencyThresholdMs: getIntParamFromMap(params, "latency_threshold_ms", constant.DefaultLatencyThresholdMs),
-				SampleWindowSize:   int(getIntParamFromMap(params, "sample_window_size", int64(constant.DefaultLatencySampleWindow))),
-				Percentile:         getFloatParamFromMap(params, "percentile", constant.DefaultLatencyPercentile),
-				ComparisonMode:     getStringParamFromMap(params, "comparison_mode", constant.DefaultLatencyComparisonMode),
-			}
-		} else {
-			tacticParams = DefaultLatencyBasedParams()
-		}
+		params = DefaultLatencyBasedParams()
 	case loadbalance.TacticSpeedBased:
-		if params != nil {
-			tacticParams = &SpeedBasedParams{
-				MinSamplesRequired: int(getIntParamFromMap(params, "min_samples_required", int64(constant.DefaultMinSpeedSamples))),
-				SpeedThresholdTps:  getFloatParamFromMap(params, "speed_threshold_tps", constant.DefaultSpeedThresholdTps),
-				SampleWindowSize:   int(getIntParamFromMap(params, "sample_window_size", int64(constant.DefaultSpeedSampleWindow))),
-			}
-		} else {
-			tacticParams = DefaultSpeedBasedParams()
-		}
+		params = DefaultSpeedBasedParams()
 	case loadbalance.TacticCapacityBased:
-		tacticParams = DefaultCapacityBasedParams()
+		params = DefaultCapacityBasedParams()
 	case loadbalance.TacticTier:
-		if params != nil {
-			tacticParams = &TierParams{
-				WithinTierTactic: loadbalance.ParseTacticType(
-					getStringParamFromMap(params, "within_tier_tactic", "random"),
-				),
-			}
-		} else {
-			tacticParams = DefaultTierParams()
-		}
+		params = DefaultTierParams()
 	default:
 		tacticType = loadbalance.TacticRandom
-		tacticParams = DefaultRandomParams()
+		params = DefaultRandomParams()
 	}
-
-	return Tactic{
-		Type:   tacticType,
-		Params: tacticParams,
-	}
-}
-
-// getIntParamFromMap safely extracts an int64 parameter from a map.
-// Supports float64 (JSON numbers), int, and int64 types.
-func getIntParamFromMap(params map[string]interface{}, key string, defaultValue int64) int64 {
-	if val, ok := params[key]; ok {
-		switch v := val.(type) {
-		case float64:
-			return int64(v)
-		case int:
-			return int64(v)
-		case int64:
-			return v
-		}
-	}
-	return defaultValue
-}
-
-// getFloatParamFromMap safely extracts a float64 parameter from a map.
-func getFloatParamFromMap(params map[string]interface{}, key string, defaultValue float64) float64 {
-	if val, ok := params[key]; ok {
-		switch v := val.(type) {
-		case float64:
-			return v
-		case float32:
-			return float64(v)
-		case int:
-			return float64(v)
-		case int64:
-			return float64(v)
-		}
-	}
-	return defaultValue
-}
-
-// getStringParamFromMap safely extracts a string parameter from a map.
-func getStringParamFromMap(params map[string]interface{}, key string, defaultValue string) string {
-	if val, ok := params[key]; ok {
-		switch v := val.(type) {
-		case string:
-			return v
-		}
-	}
-	return defaultValue
+	return Tactic{Type: tacticType, Params: params}
 }
 
 // TacticParams represents parameters for different load balancing tactics
@@ -239,8 +157,8 @@ func DefaultSpeedBasedParams() TacticParams {
 }
 
 // Type assertion helpers for TacticParams. They accept both the pointer and
-// value forms because UnmarshalJSON / ParseTacticFromMap store pointers while
-// hand-built configs may use values.
+// value forms because UnmarshalJSON stores pointers while hand-built configs
+// may use values.
 func AsRandomParams(p TacticParams) (RandomParams, bool) {
 	if rp, ok := p.(*RandomParams); ok {
 		return *rp, true
@@ -250,7 +168,7 @@ func AsRandomParams(p TacticParams) (RandomParams, bool) {
 }
 
 func AsLatencyBasedParams(p TacticParams) (LatencyBasedParams, bool) {
-	// Try pointer type first (used by ParseTacticFromMap and UnmarshalJSON)
+	// Try pointer type first (used by UnmarshalJSON)
 	if lp, ok := p.(*LatencyBasedParams); ok {
 		return *lp, true
 	}
@@ -289,24 +207,6 @@ func NewTokenBasedTactic(tokenThreshold int64) *TokenBasedTactic {
 	return &TokenBasedTactic{TokenThreshold: tokenThreshold}
 }
 
-// resolveCurrentService returns the service matching rule.CurrentServiceID
-// among the given services, defaulting to the first when unset or not found.
-// Sticky tactics (token/latency) use it to keep serving from the current
-// service until a threshold forces a switch.
-func resolveCurrentService(rule *Rule, services []*loadbalance.Service) *loadbalance.Service {
-	if rule.CurrentServiceID != "" {
-		for _, svc := range services {
-			if svc.ServiceID() == rule.CurrentServiceID {
-				return svc
-			}
-		}
-	}
-	if len(services) > 0 {
-		return services[0]
-	}
-	return nil
-}
-
 // SelectService selects service based on token consumption thresholds
 func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Get active services once to avoid duplicate filtering
@@ -315,10 +215,11 @@ func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return nil
 	}
 
-	currentService := resolveCurrentService(rule, activeServices)
-	if currentService == nil {
-		return nil
-	}
+	// Anchor on the first active service: stay on it until its window
+	// consumption crosses the threshold, then rotate to the least-used
+	// service. (This threshold-triggered rotation is what yields the
+	// round-robin-like behavior across equal services.)
+	currentService := activeServices[0]
 
 	_, windowTokens := currentService.GetWindowStats()
 
@@ -467,10 +368,9 @@ func (lt *LatencyBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return activeServices[0]
 	}
 
-	currentService := resolveCurrentService(rule, activeServices)
-	if currentService == nil {
-		return nil
-	}
+	// Anchor on the first active service: keep it while its latency stays
+	// under the threshold, otherwise pick the lowest-latency service.
+	currentService := activeServices[0]
 
 	// Check if current service has exceeded latency threshold
 	currentLatency := lt.getLatencyForService(currentService)
@@ -625,28 +525,6 @@ var (
 		constant.DefaultSpeedSampleWindow,
 	)
 )
-
-// IsValidTactic checks if the given tactic string is valid.
-// Deprecated aliases are accepted and mapped by loadbalance.ParseTacticType:
-// round_robin/hybrid → token_based, priority → tier, and adaptive → random
-// (the adaptive scorer is legacy; configuring it by name selects random).
-func IsValidTactic(tacticStr string) bool {
-	validTactics := map[string]bool{
-		"round_robin":   true, // deprecated → token_based
-		"token_based":   true,
-		"hybrid":        true, // deprecated → token_based
-		"random":        true,
-		"latency_based": true,
-		"speed_based":   true,
-		"adaptive":      true, // legacy → random
-		"tier":          true,
-		"priority":      true, // deprecated → tier
-	}
-
-	// Convert to lowercase for case-insensitive comparison
-	input := strings.ToLower(tacticStr)
-	return validTactics[input]
-}
 
 func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params TacticParams) LoadBalancingTactic {
 	switch tacticType {
@@ -846,6 +724,18 @@ func NewTierTactic(within loadbalance.TacticType) *TierTactic {
 // are never dispatched; with no outcome ever reported, those slots stayed
 // taken and the service could never finish recovering.
 func (pt *TierTactic) SelectService(rule *Rule) *loadbalance.Service {
+	return pt.selectService(rule, true)
+}
+
+// PreviewService selects exactly like SelectService but never claims a
+// breaker probe slot. Read-only surfaces (e.g. the admin current-service
+// preview) must use it: a preview that consumed the single half-open probe
+// would block real traffic from probing the recovering service.
+func (pt *TierTactic) PreviewService(rule *Rule) *loadbalance.Service {
+	return pt.selectService(rule, false)
+}
+
+func (pt *TierTactic) selectService(rule *Rule, claim bool) *loadbalance.Service {
 	active := rule.GetActiveServices()
 	if len(active) == 0 {
 		return nil
@@ -865,7 +755,7 @@ func (pt *TierTactic) SelectService(rule *Rule) *loadbalance.Service {
 		}
 		chosen := PickBreakerAvailable(rule.UUID, group.services, func(candidates []*loadbalance.Service) *loadbalance.Service {
 			return pt.pickWithinTier(rule, candidates)
-		})
+		}, claim)
 		if chosen != nil {
 			return chosen
 		}
@@ -878,16 +768,19 @@ func (pt *TierTactic) SelectService(rule *Rule) *loadbalance.Service {
 
 // PickBreakerAvailable runs a two-phase, breaker-aware selection over
 // candidates: gather the breaker-available subset with the non-consuming
-// IsAvailable read (rule-scoped), let pick choose among that subset, then
-// claim the picked service's breaker slot via Allow. A pick whose claim
-// fails (its half-open probe is already in flight) is dropped and the
-// remainder re-picked, so exactly one probe reaches a recovering service.
+// IsAvailable read (rule-scoped), let pick choose among that subset, then —
+// when claim is true — claim the picked service's breaker slot via Allow.
+// A pick whose claim fails (its half-open probe is already in flight) is
+// dropped and the remainder re-picked, so exactly one probe reaches a
+// recovering service. claim=false is the side-effect-free preview mode for
+// read-only surfaces: it picks from the same available subset but never
+// consumes a probe slot.
 //
 // It returns nil when no candidate is breaker-available or claimable —
 // callers own the degrade decision (TierTactic moves to the next bucket;
-// the horizontal path in LoadBalancer.SelectService falls back to an
-// unfiltered pick so the client sees the real upstream error).
-func PickBreakerAvailable(ruleUUID string, candidates []*loadbalance.Service, pick func([]*loadbalance.Service) *loadbalance.Service) *loadbalance.Service {
+// the horizontal path in LoadBalancer falls back to an unfiltered pick so
+// the client sees the real upstream error).
+func PickBreakerAvailable(ruleUUID string, candidates []*loadbalance.Service, pick func([]*loadbalance.Service) *loadbalance.Service, claim bool) *loadbalance.Service {
 	store := loadbalance.DefaultBreakerStore()
 	avail := make([]*loadbalance.Service, 0, len(candidates))
 	for _, svc := range candidates {
@@ -900,7 +793,7 @@ func PickBreakerAvailable(ruleUUID string, candidates []*loadbalance.Service, pi
 		if chosen == nil {
 			return nil
 		}
-		if store.Allow(ruleUUID, chosen.ServiceID()) {
+		if !claim || store.Allow(ruleUUID, chosen.ServiceID()) {
 			return chosen
 		}
 		avail = removeServiceByID(avail, chosen.ServiceID())
@@ -927,7 +820,6 @@ func (pt *TierTactic) pickWithinTier(rule *Rule, services []*loadbalance.Service
 	// services so the sub-tactic operates on the right pool.
 	sub := *rule
 	sub.Services = services
-	sub.CurrentServiceID = ""
 	tactic := GetDefaultTactic(pt.WithinTierTactic)
 	if tactic == nil {
 		return services[0]

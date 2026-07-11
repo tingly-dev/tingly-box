@@ -60,7 +60,9 @@ shared by stage 4, smart-routing subsets, failover re-selection, and the admin A
         │ active filter → health filter (degrade: none healthy → keep all) → 1-svc shortcut
         ▼
   rule.LBTactic.Instantiate()          ← the ONE seam turning config JSON into behavior
-        │                                 unset/unknown/legacy("adaptive") → random
+        │                                 unset/unknown/removed("adaptive") → random
+        │                                 (SelectService claims the pick's probe slot;
+        │                                  PreviewService is the non-claiming twin)
         ▼
   tactic.SelectService(tempRule)
         │
@@ -103,8 +105,8 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
   │                           │                            │                           │
   │ 3✗ → Open                │ 429  → rate-limit window   │ rolling windows +         │
   │ 30s → HalfOpen (1 probe,  │ 401/403 → instant unhealthy│ percentiles               │
-  │   stale-reclaimed after   │ 5xx  → 3-strike            │                           │
-  │   another OpenDuration)   │                            │                           │
+  │   stale-reclaimed after   │ (generic 5xx/transport is  │                           │
+  │   another OpenDuration)   │  the breaker's job alone)  │                           │
   │ 3✓ → Closed              │                            │                           │
   │ PromotionHold 60s         │                            │                           │
   │        ┊                  │        ┊                   │        ┊                  │
@@ -128,9 +130,13 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
 
 ```
   REST  /api/v1/load-balancer/*      LoadBalancerAPI → LoadBalancerEngine (interface slice
-        rules/stats/health/tactic     of LoadBalancer): summary, stats CRUD, current-service
-                                      preview, health view/reset; rules/:id/health includes
-                                      per-service breaker_state + breaker_retry_in_seconds
+        rules/stats/health/tactic     of LoadBalancer): summary, stats CRUD, health view/
+                                      reset; rules/:id/health includes per-service
+                                      breaker_state + breaker_retry_in_seconds + tier;
+                                      rules/:id/current-service uses PreviewService (never
+                                      claims a half-open probe slot); PUT rules/:id/tactic
+                                      validates via ParseTacticTypeStrict and decodes params
+                                      through Tactic.UnmarshalJSON (single parser)
   REST  /api/v1/requests             Requests view: per-request summary now carries
                                       failover_hops + failover_path ("A → B"), folded from
                                       the failover loop's stage=failover_retry events

@@ -137,14 +137,13 @@ func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, 
 		}
 	}
 
-	// Align the health monitor with the breaker so the two feedback channels
-	// trip and recover on the same deterministic timeline: same failure
-	// threshold, and a recovery window equal to the breaker's open duration so
-	// one sim.Advance recovers both. Probing off (the sim has no live probe).
+	// Align the health monitor's recovery window with the breaker's open
+	// duration so one sim.Advance recovers both channels (health only sees
+	// 429/auth; generic 5xx feeds the breaker alone). Probing off (the sim
+	// has no live probe).
 	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{
-		ConsecutiveErrorThreshold: loadbalance.DefaultBreakerFailureThreshold,
-		RecoveryTimeoutSeconds:    int(loadbalance.DefaultBreakerOpenDuration.Seconds()),
-		ProbeEnabled:              false,
+		RecoveryTimeoutSeconds: int(loadbalance.DefaultBreakerOpenDuration.Seconds()),
+		ProbeEnabled:           false,
 	})
 	hf := typ.NewHealthFilter(hm)
 	lb := NewLoadBalancer(cfg, hf)

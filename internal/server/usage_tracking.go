@@ -530,13 +530,14 @@ func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err er
 		return
 	}
 
-	// Check for retryable errors (timeout, connection refused)
-	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "connection refused") ||
-		strings.Contains(errStr, "no such host") || strings.Contains(errStr, "i/o timeout") {
-		s.healthMonitor.ReportError(serviceID, err)
-		return
-	}
-
-	// For other errors, report as general error
-	s.healthMonitor.ReportError(serviceID, err)
+	// Generic failures (5xx, timeouts, connection errors) deliberately do NOT
+	// feed the health monitor: the circuit breaker owns that signal, fed by
+	// the failover loop and rule-scoped so one rule's failing traffic cannot
+	// evict the service for every other rule. The health monitor tracks only
+	// the status classes with distinct semantics: 429 rate-limit windows and
+	// 401/403 auth failures.
+	logrus.WithFields(logrus.Fields{
+		"service_id": serviceID,
+		"error":      errStr,
+	}).Debug("[health] generic failure left to the circuit breaker")
 }

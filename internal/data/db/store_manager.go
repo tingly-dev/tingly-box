@@ -25,7 +25,6 @@ type StoreManager struct {
 	// Individual stores
 	statsStore         *StatsStore
 	usageStore         *UsageStore
-	ruleStateStore     *RuleStateStore
 	providerStore      *ProviderStore
 	toolConfigStore    *ToolConfigStore
 	imbotSettingsStore *ImBotSettingsStore
@@ -139,9 +138,6 @@ func (sm *StoreManager) initStores() error {
 	if err := sm.initUsageStore(); err != nil {
 		errs = append(errs, fmt.Errorf("usage store: %w", err))
 	}
-	if err := sm.initRuleStateStore(); err != nil {
-		errs = append(errs, fmt.Errorf("rule state store: %w", err))
-	}
 	if err := sm.initProviderStore(); err != nil {
 		errs = append(errs, fmt.Errorf("provider store: %w", err))
 	}
@@ -189,18 +185,6 @@ func (sm *StoreManager) initUsageStore() error {
 		return err
 	}
 	sm.usageStore = &UsageStore{
-		db:     sm.db,
-		dbPath: constant.GetDBFile(sm.baseDir),
-	}
-	return nil
-}
-
-// initRuleStateStore initializes the RuleStateStore.
-func (sm *StoreManager) initRuleStateStore() error {
-	if err := sm.db.AutoMigrate(&RuleServiceRecord{}); err != nil {
-		return err
-	}
-	sm.ruleStateStore = &RuleStateStore{
 		db:     sm.db,
 		dbPath: constant.GetDBFile(sm.baseDir),
 	}
@@ -306,14 +290,6 @@ func (sm *StoreManager) Usage() *UsageStore {
 	return sm.usageStore
 }
 
-// RuleState returns the RuleStateStore (thread-safe).
-// Returns nil if the store is not initialized or after Close() has been called.
-func (sm *StoreManager) RuleState() *RuleStateStore {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.ruleStateStore
-}
-
 // Provider returns the ProviderStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.
 func (sm *StoreManager) Provider() *ProviderStore {
@@ -392,7 +368,6 @@ func (sm *StoreManager) Close() error {
 	// Clear all store references
 	sm.statsStore = nil
 	sm.usageStore = nil
-	sm.ruleStateStore = nil
 	sm.providerStore = nil
 	sm.toolConfigStore = nil
 	sm.imbotSettingsStore = nil
@@ -412,7 +387,7 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 	defer sm.mu.RUnlock()
 
 	status := &HealthStatus{
-		TotalStores: 9,
+		TotalStores: 8,
 		StoreStatus: make(map[string]string),
 	}
 
@@ -420,7 +395,6 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 	stores := map[string]interface{}{
 		"stats":         sm.statsStore,
 		"usage":         sm.usageStore,
-		"ruleState":     sm.ruleStateStore,
 		"provider":      sm.providerStore,
 		"toolConfig":    sm.toolConfigStore,
 		"imbotSettings": sm.imbotSettingsStore,

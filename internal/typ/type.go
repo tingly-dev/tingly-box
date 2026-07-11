@@ -545,9 +545,6 @@ type Rule struct {
 	Services      []*loadbalance.Service `json:"services" yaml:"services"`
 	// Per-rule feature flags (e.g. cursor_compat / cursor_compat_auto).
 	Flags RuleFlags `json:"flags,omitempty" yaml:"flags,omitempty"`
-	// CurrentServiceID is persisted to SQLite, not JSON (provider:model format)
-	// This identifies the current service for round-robin load balancing
-	CurrentServiceID string `json:"-" yaml:"-"`
 	// Unified Tactic Configuration
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
@@ -584,7 +581,7 @@ func (r *Rule) ToJSON() interface{} {
 	// Ensure Services is populated
 	services := r.GetServices()
 
-	// Create the JSON representation (note: current_service_index is persisted to SQLite, not JSON)
+	// Create the JSON representation
 	jsonRule := map[string]interface{}{
 		"uuid":           r.UUID,
 		"scenario":       r.GetScenario(),
@@ -659,32 +656,14 @@ func (r *Rule) GetUUID() string {
 	return r.UUID
 }
 
-// SetCurrentServiceID sets the current service ID (used by RuleStateStore hydration)
-func (r *Rule) SetCurrentServiceID(serviceID string) {
-	r.CurrentServiceID = serviceID
-}
-
-// GetCurrentServiceID returns the current service ID
-func (r *Rule) GetCurrentServiceID() string {
-	return r.CurrentServiceID
-}
-
-// GetCurrentService returns the current active service based on CurrentServiceID
+// GetCurrentService returns the rule's default service: the first active one.
+// (The per-rule CurrentServiceID pointer this used to consult was removed —
+// it was never advanced at runtime, so "first active" was always the
+// effective behavior.)
 func (r *Rule) GetCurrentService() *loadbalance.Service {
 	activeServices := r.GetActiveServices()
 	if len(activeServices) == 0 {
 		return nil
 	}
-
-	// If CurrentServiceID is set, find and return that service
-	if r.CurrentServiceID != "" {
-		for _, svc := range activeServices {
-			if svc.ServiceID() == r.CurrentServiceID && svc.Active {
-				return svc
-			}
-		}
-	}
-
-	// Default to first service if CurrentServiceID not found or not set
 	return activeServices[0]
 }

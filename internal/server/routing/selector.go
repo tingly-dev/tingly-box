@@ -15,7 +15,6 @@ import (
 // ProviderResolver resolves providers by UUID and persists config state.
 type ProviderResolver interface {
 	GetProviderByUUID(uuid string) (*typ.Provider, error)
-	SaveCurrentServiceID(ruleUUID string, serviceID string) error
 	// GetEffectiveAffinity returns the effective affinity TTL for a rule,
 	// considering both scenario default and rule override. Returns 0 if disabled.
 	GetEffectiveAffinity(rule *typ.Rule) time.Duration
@@ -25,7 +24,6 @@ type ProviderResolver interface {
 // This avoids importing the server package (which would create circular imports).
 type LoadBalancer interface {
 	SelectService(rule *typ.Rule) (*loadbalance.Service, error)
-	UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service)
 }
 
 // AffinityStore interface defines operations for session-service affinity
@@ -249,16 +247,4 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 	})
 	logrus.Infof("[affinity] locked service %s -> %s for session %s",
 		result.Provider.Name, result.Service.Model, ctx.SessionID.String())
-}
-
-// UpdateServiceIndex updates the current service index for round-robin.
-// This is called from the handler after selection to persist state.
-func (s *ServiceSelector) UpdateServiceIndex(rule *typ.Rule, service *loadbalance.Service) error {
-	s.loadBalancer.UpdateServiceIndex(rule, service)
-
-	if err := s.config.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
-		return fmt.Errorf("failed to persist CurrentServiceID: %w", err)
-	}
-
-	return nil
 }

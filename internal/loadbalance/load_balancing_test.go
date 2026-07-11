@@ -264,8 +264,8 @@ func TestParseTacticType_LatencyBased(t *testing.T) {
 		expected TacticType
 	}{
 		{"latency_based", TacticLatencyBased},
-		{"LATENCY_BASED", TacticRandom}, // Case sensitive, falls back to default
-		{"invalid", TacticRandom},       // Default fallback
+		{"LATENCY_BASED", TacticLatencyBased}, // Case-insensitive
+		{"invalid", TacticRandom},             // Default fallback
 	}
 
 	for _, test := range tests {
@@ -357,8 +357,8 @@ func TestParseTacticType_SpeedBased(t *testing.T) {
 		expected TacticType
 	}{
 		{"speed_based", TacticSpeedBased},
-		{"SPEED_BASED", TacticRandom}, // Case sensitive, falls back to default
-		{"invalid", TacticRandom},     // Default fallback
+		{"SPEED_BASED", TacticSpeedBased}, // Case-insensitive
+		{"invalid", TacticRandom},         // Default fallback
 	}
 
 	for _, test := range tests {
@@ -380,7 +380,7 @@ func TestParseTacticType_AdaptiveLegacyMapsToRandom(t *testing.T) {
 		expected TacticType
 	}{
 		{"adaptive", TacticRandom},
-		{"ADAPTIVE", TacticRandom}, // Case sensitive, falls back to default
+		{"ADAPTIVE", TacticRandom}, // Case-insensitive; removed adaptive → random
 		{"invalid", TacticRandom},  // Default fallback
 	}
 

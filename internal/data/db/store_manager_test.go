@@ -110,7 +110,6 @@ func TestStoreManager_Accessors(t *testing.T) {
 	}{
 		{"Stats", func() interface{} { return sm.Stats() }},
 		{"Usage", func() interface{} { return sm.Usage() }},
-		{"RuleState", func() interface{} { return sm.RuleState() }},
 		{"Provider", func() interface{} { return sm.Provider() }},
 		{"ToolConfig", func() interface{} { return sm.ToolConfig() }},
 		{"ImBotSettings", func() interface{} { return sm.ImBotSettings() }},
@@ -148,9 +147,6 @@ func TestStoreManager_Close(t *testing.T) {
 	}
 	if sm.Usage() != nil {
 		t.Error("Usage() should return nil after Close()")
-	}
-	if sm.RuleState() != nil {
-		t.Error("RuleState() should return nil after Close()")
 	}
 	if sm.Provider() != nil {
 		t.Error("Provider() should return nil after Close()")
@@ -193,12 +189,12 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 		t.Errorf("HealthCheck() returned unhealthy: %+v", status)
 	}
 
-	if status.TotalStores != 9 {
-		t.Errorf("TotalStores = %d, want 9", status.TotalStores)
+	if status.TotalStores != 8 {
+		t.Errorf("TotalStores = %d, want 8", status.TotalStores)
 	}
 
-	if status.HealthyStores != 9 {
-		t.Errorf("HealthyStores = %d, want 9", status.HealthyStores)
+	if status.HealthyStores != 8 {
+		t.Errorf("HealthyStores = %d, want 8", status.HealthyStores)
 	}
 
 	if status.UnhealthyStores != 0 {
@@ -206,7 +202,7 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 	}
 
 	expectedStores := []string{
-		"stats", "usage", "ruleState", "provider",
+		"stats", "usage", "provider",
 		"toolConfig", "imbotSettings", "model", "apiToken",
 		"tasks",
 	}
@@ -237,8 +233,8 @@ func TestStoreManager_HealthCheckAfterClose(t *testing.T) {
 		t.Error("HealthCheck() should return unhealthy after Close()")
 	}
 
-	if status.UnhealthyStores != 9 {
-		t.Errorf("UnhealthyStores = %d, want 9", status.UnhealthyStores)
+	if status.UnhealthyStores != 8 {
+		t.Errorf("UnhealthyStores = %d, want 8", status.UnhealthyStores)
 	}
 }
 
@@ -326,7 +322,6 @@ func TestStoreManager_ConcurrentAccess(t *testing.T) {
 				_ = sm.Stats()
 				_ = sm.Usage()
 				_ = sm.Provider()
-				_ = sm.RuleState()
 				_ = sm.ToolConfig()
 				_ = sm.ImBotSettings()
 				_ = sm.Model()

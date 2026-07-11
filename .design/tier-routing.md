@@ -138,7 +138,7 @@ Notes:
 Each request outcome feeds **two channels**:
 
 - **Breaker** — binary success/failure, 3-strike trip, 30 s window. Drives tier demotion + affinity eligibility.
-- **Health monitor** (`Server.reportHealthStatus`) — status-classified: 429 → rate-limit window, 401/403 → *immediately* unhealthy, 5xx/other → 3-strike. Drives `HealthStage` filtering.
+- **Health monitor** (`Server.reportHealthStatus`) — status-classified: 429 → rate-limit window, 401/403 → *immediately* unhealthy. Generic 5xx/transport failures deliberately do **not** feed it (they used to, via a 3-strike counter) — the breaker owns that signal, rule-scoped, so one rule's failing traffic cannot evict the service globally. Drives `HealthStage` filtering.
 
 So 429 and 401/403 exclude a service on the *first* hit (health channel), well before the breaker trips. The `harness lb` simulator models both faithfully (reusing `reportHealthStatus` + the breaker recorder), driving them off one shared clock so a single simulated advance recovers both.
 
@@ -199,9 +199,9 @@ The "user moves a service card to a different tier" event has to cross five laye
 └──────────────────────────────────────────────────────────────────────┘
                                   ↓
 ┌─ Per-request feedback into the breaker ──────────────────────────────┐
-│  Dispatch finishes → ProtocolRecorder (bound to ruleUUID):            │
-│       RecordResponse → loadbalance.RecordServiceSuccess(ruleUUID, sid)│
-│       RecordError    → loadbalance.RecordServiceFailure(ruleUUID, sid)│
+│  dispatchWithPriorityFailover owns breaker accounting per attempt:    │
+│    gate committed        → RecordServiceSuccess(ruleUUID, serviceID)  │
+│    retryable failure     → RecordServiceFailure(ruleUUID, serviceID)  │
 │  Same DefaultBreakerStore the selection logic consulted, so the next  │
 │  request's TierTactic sees the updated state. State is keyed per rule │
 │  — other rules using the same provider:model are unaffected.          │
@@ -221,12 +221,7 @@ This is pinned down by `TestTierRouting_EndToEnd` in `internal/server/priority_r
 
 ### Wiring failures to the breaker
 
-`ProtocolRecorder` already sees every success and failure of every upstream call. We added the bridge:
-
-- `RecordResponse(provider, model)` → `RecordServiceSuccess(ruleUUID, serviceID)`
-- `RecordError(err)` → `RecordServiceFailure(ruleUUID, serviceID)`
-
-The recorder binds `ruleUUID` once at creation (`EnsureProtocolRecorder` reads the rule already on the gin context via `ContextKeyRule`); the rule is fixed across failover attempts so per-attempt `SetActiveService` doesn't touch it. The `serviceID` is `FormatServiceID(provider.UUID, model)` = `"provider/model"`, and the breaker key is `FormatBreakerKey(ruleUUID, serviceID)` = `"ruleUUID/provider/model"` — matching `Service.ServiceID()` for the service half, so the breaker registry's keys line up exactly with the selection pool. **Zero changes** to the dispatch hot path were required.
+Breaker accounting is owned by the failover loop itself (`dispatchWithPriorityFailover`), which evaluates every attempt's outcome anyway: a committed gate records `RecordServiceSuccess(ruleUUID, serviceID)`, a retryable failure records `RecordServiceFailure(ruleUUID, serviceID)` for **that attempt's** service before re-selecting. (Originally this bridge lived in `ProtocolRecorder`; #1326 moved it into the loop so breaker updates happen even when request recording is disabled.) The `serviceID` is `FormatServiceID(provider.UUID, model)` = `"provider/model"`, and the breaker key is `FormatBreakerKey(ruleUUID, serviceID)` = `"ruleUUID/provider/model"` — matching `Service.ServiceID()`, so the breaker registry's keys line up exactly with the selection pool.
 
 ### Frontend UX
 
@@ -394,10 +389,9 @@ Backend
 - `internal/loadbalance/breaker.go` — three-state breaker + rule-scoped store (keyed `(ruleUUID, serviceID)`), recovery hysteresis (`RecoveryThreshold`), PromotionHold (`closedSince`).
 - `internal/loadbalance/service_id.go` — `FormatServiceID`, `FormatBreakerKey`.
 - `internal/loadbalance/breaker_test.go`
-- `internal/typ/tactics.go` — `TierParams`, `TierTactic`, `groupServicesByTier`, `IsAffinityEligible` (rule-scoped, PromotionHold-aware).
+- `internal/typ/tactics.go` — `TierParams`, `TierTactic` (+ non-claiming `PreviewService`), `PickBreakerAvailable` (the shared two-phase breaker walk), `groupServicesByTier`, `IsAffinityEligible` (rule-scoped, PromotionHold-aware).
 - `internal/typ/priority_tactic_test.go`
-- `internal/server/recording/recorder.go` — recorder → (rule-scoped) breaker bridge (`BindRule`, `RecordResponse`/`RecordError`).
-- `internal/server/protocol_handler.go` — `EnsureProtocolRecorder` binds `ruleUUID` from the gin context.
+- `internal/server/failover_dispatch.go` — failover loop owns the (rule-scoped) breaker accounting per attempt (`RecordServiceSuccess`/`RecordServiceFailure`).
 
 Frontend
 - `frontend/src/components/RoutingGraphTypes.ts` — `ConfigProvider.tier`, `ConfigRecord.lbTactic`.

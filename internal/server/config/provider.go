@@ -301,7 +301,6 @@ func (c *Config) DeleteProvider(uuid string) error {
 // from all rules (both regular services and smart routing services). This maintains
 // data consistency when a provider is deleted. Rules with no services will be handled
 // by the server during request processing (returning "no service available" error).
-// Also clears stale CurrentServiceID entries that reference the deleted provider.
 func (c *Config) removeProviderServicesFromRules(providerUUID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -360,32 +359,6 @@ func (c *Config) removeProviderServicesFromRules(providerUUID string) {
 
 		if ruleModified {
 			updatedRuleUUIDs = append(updatedRuleUUIDs, rule.UUID)
-
-			// Clear stale CurrentServiceID if it references the deleted provider
-			if rule.CurrentServiceID != "" {
-				// CurrentServiceID is in "provider:model" format
-				// Check if it starts with the deleted provider UUID
-				if len(rule.CurrentServiceID) > len(providerUUID) &&
-					rule.CurrentServiceID[:len(providerUUID)] == providerUUID &&
-					rule.CurrentServiceID[len(providerUUID)] == ':' {
-					rule.CurrentServiceID = ""
-					logrus.WithFields(logrus.Fields{
-						"provider":           providerUUID,
-						"rule":               rule.UUID,
-						"current_service_id": rule.CurrentServiceID,
-					}).Info("Cleared stale CurrentServiceID after provider deletion")
-				}
-			}
-
-			// Also clear from the rule state store (SQLite)
-			if c.ruleStateStore != nil {
-				if err := c.ruleStateStore.ClearServiceIDForProvider(rule.UUID, providerUUID); err != nil {
-					logrus.WithError(err).WithFields(logrus.Fields{
-						"provider": providerUUID,
-						"rule":     rule.UUID,
-					}).Warn("Failed to clear stale CurrentServiceID from rule state store")
-				}
-			}
 		}
 	}
 

@@ -319,7 +319,6 @@ func (s *SmartRoutingStage) selectFromServices(services []*loadbalance.Service, 
 	// Create a temporary rule with only the matched services for load balancing
 	tempRule := *rule // Copy the rule
 	tempRule.Services = services
-	tempRule.CurrentServiceID = "" // Reset service ID for this sub-selection
 
 	service, err := s.loadBalancer.SelectService(&tempRule)
 	if err != nil {

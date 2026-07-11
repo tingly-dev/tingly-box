@@ -3,6 +3,7 @@ package loadbalance
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -501,30 +502,34 @@ func (tt TacticType) String() string {
 	}
 }
 
-// ParseTacticType parses string to TacticType
-func ParseTacticType(s string) TacticType {
-	switch s {
-	case "round_robin": // deprecated, map to token_based
-		return TacticTokenBased
-	case "token_based":
-		return TacticTokenBased
-	case "hybrid": // deprecated, map to token_based
-		return TacticTokenBased
-	case "random":
-		return TacticRandom
+// ParseTacticTypeStrict parses s (case-insensitively) into a TacticType,
+// reporting whether it named a known tactic — including the deprecated
+// aliases (round_robin/hybrid → token_based, priority → tier, and the
+// removed adaptive → random). Unlike ParseTacticType it does not fall back
+// to Random on unknown input, so API surfaces can reject typos instead of
+// silently degrading.
+func ParseTacticTypeStrict(s string) (TacticType, bool) {
+	switch strings.ToLower(s) {
+	case "round_robin", "hybrid", "token_based": // round_robin/hybrid deprecated → token_based
+		return TacticTokenBased, true
+	case "random", "adaptive": // adaptive removed → random
+		return TacticRandom, true
 	case "latency_based":
-		return TacticLatencyBased
+		return TacticLatencyBased, true
 	case "speed_based":
-		return TacticSpeedBased
-	case "adaptive": // removed tactic, map to random
-		return TacticRandom
+		return TacticSpeedBased, true
 	case "capacity_based":
-		return TacticCapacityBased
-	case "tier":
-		return TacticTier
-	case "priority": // backward-compat alias
-		return TacticTier
+		return TacticCapacityBased, true
+	case "tier", "priority": // priority deprecated → tier
+		return TacticTier, true
 	default:
-		return TacticRandom // default to random
+		return TacticRandom, false
 	}
+}
+
+// ParseTacticType parses string to TacticType, falling back to Random for
+// unknown input (the documented default for unset/unknown tactics).
+func ParseTacticType(s string) TacticType {
+	t, _ := ParseTacticTypeStrict(s)
+	return t
 }

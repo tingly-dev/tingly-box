@@ -106,9 +106,11 @@ Normalizes existing configs:
 - the pass is idempotent and **not marker-gated** — it self-heals configs
   written by older builds on every start;
 - SQLite state keyed by `rule_uuid` is re-keyed along with the rule:
-  `RuleStateStore.RenameRuleUUID` (load-balancer position) and
   `UsageStore.RenameRuleUUID` (historical usage attribution). Daily/monthly
   usage aggregates do not carry `rule_uuid` and need no migration.
+  (`RuleStateStore.RenameRuleUUID` used to re-key the load-balancer
+  position too; that store was removed with the phantom CurrentServiceID
+  pointer — the orphaned `rule_service_index` table is left in old DBs.)
 
 ### Usage path (`tingly-box cc --profile`)
 
@@ -152,8 +154,8 @@ scenarios keep strict matching).
 
 ### Profile deletion
 
-Because profile IDs are recycled, `DeleteProfile` purges the deleted
-rules' rows from `rule_service_index` (`RuleStateStore.DeleteRules`).
-Otherwise a future profile reusing the same ID would inherit the old
-profile's service pinning. Usage records are intentionally kept — they are
-historical facts about the old profile.
+Usage records are intentionally kept across profile deletion — they are
+historical facts about the old profile. (`RuleStateStore.DeleteRules` used
+to also purge load-balancer service pinning here; that store was removed
+with the phantom CurrentServiceID pointer, so there is nothing left to
+purge.)
