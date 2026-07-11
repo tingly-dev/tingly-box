@@ -81,10 +81,6 @@ func TestLB_VirtualValidation_EqualProviders(t *testing.T) {
 			tactic: typ.Tactic{}, // Type==0: what a rule gets when no tactic is configured
 		},
 		{
-			name:   "TokenBased(default 10000)",
-			tactic: typ.Tactic{Type: loadbalance.TacticTokenBased, Params: typ.DefaultTokenBasedParams()},
-		},
-		{
 			name:   "Random",
 			tactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
 		},

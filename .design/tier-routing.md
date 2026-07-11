@@ -4,7 +4,7 @@ Status: shipped (v1) on branch `claude/priority-service-routing-dIQfX`. Tracking
 
 ## Why
 
-Existing routing in tingly-box treats every service in a rule as an equal peer. `random`, `token_based`, `latency_based`, `speed_based`, `capacity_based` (`adaptive` has since been removed — the name still parses and falls back to `random`) — all of them spread load across services. That is the right default for "I have several equivalent providers, share the load".
+Existing routing in tingly-box treats every service in a rule as an equal peer. `random`, `speed_based`, `capacity_based` (`token_based`/`latency_based` and `adaptive` have since been removed — the names still parse and fall back to `random`) — all of them spread load across services. That is the right default for "I have several equivalent providers, share the load".
 
 It is the wrong default for the other very common shape:
 
@@ -246,7 +246,7 @@ There is **no independent "tier mode"** in tingly-box — every routing behavior
 | Shape | Config | Strategy | Failover | Affinity (when enabled) |
 |---|---|---|---|---|
 | **A. Single** | 1 tier, 1 svc | none (direct) | none — single-svc bypass in `dispatchWithPriorityFailover` | trivial: always the one service |
-| **B. Flat** | 1 tier, N svc | horizontal (`random`/`token_based`/`latency`/…) | among peers in the tier | honor pin iff the pinned peer's breaker is available; drop to a healthy peer if it is open |
+| **B. Flat** | 1 tier, N svc | horizontal (`random`/`speed_based`/`capacity_based`) | among peers in the tier | honor pin iff the pinned peer's breaker is available; drop to a healthy peer if it is open |
 | **C. Cascade** | M tiers, 1 svc each | `tier` (direct + fallback) | next tier down | follow the top available tier; return to the primary on recovery |
 | **D. Grid** | M tiers, N svc each | `tier` + within-tier sub-tactic | within the tier, then the next tier down | top available tier; within it, per-peer stickiness |
 

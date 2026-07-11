@@ -16,5 +16,5 @@ const (
 	CtxKeySessionID      = "tracking_session_id"       // string (resolved session ID for affinity)
 	CtxKeyAffinityKey    = "tracking_affinity_key"     // string (scoped affinity store key: session + matched smart partition)
 	CtxKeyLBServiceID    = "tracking_lb_service_id"    // string (selected upstream, e.g. "provider-uuid:model")
-	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "token_based")
+	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "random")
 )

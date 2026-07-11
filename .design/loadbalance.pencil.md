@@ -74,12 +74,11 @@ shared by stage 4, smart-routing subsets, failover re-selection, and the admin A
   │ HORIZONTAL — one layer, N peers    │ VERTICAL — TierTactic (multi-layer)          │
   │                                    │                                              │
   │  random    ┈┈► Service.Weight      │  bucket by Service.Tier ascending (T0 first) │
-  │  token     ┈┈► window tokens       │  per bucket:                                 │
-  │  latency   ┈┈► latency percentiles │    PickBreakerAvailable:                     │
-  │  speed     ┈┈► tokens/sec          │    pick via within-tier sub-tactic ──────────┼──► horizontal
-  │  capacity  ┈┈► ModelCapacity       │                                              │    (recursion,
-  │            (all read ServiceStats) │  all buckets tripped → degrade to T0         │     1 level)
-  │                                    │  (client must see the real upstream error)   │
+  │  speed     ┈┈► tokens/sec          │  per bucket:                                 │
+  │  capacity  ┈┈► ModelCapacity       │    PickBreakerAvailable:                     │
+  │            (all read ServiceStats) │    pick via within-tier sub-tactic ──────────┼──► horizontal
+  │                                    │  all buckets tripped → degrade to T0         │    (recursion,
+  │                                    │  (client must see the real upstream error)   │     1 level)
   │  breaker-aware via the same        │                                              │
   │  PickBreakerAvailable walk;        │  shared walk (typ.PickBreakerAvailable):     │
   │  none available → degrade to       │  IsAvailable filter (non-consuming) → pick   │
@@ -114,10 +113,10 @@ Selection is stateless; all memory lives in three stores fed by dispatch outcome
   │ 3✓ → Closed              │                            │                           │
   │ PromotionHold 60s         │                            │                           │
   │        ┊                  │        ┊                   │        ┊                  │
-  │        ┈┈► TierTactic     │        ┈┈► HealthStage (1) │        ┈┈► token/latency/ │
-  │        ┈┈► IsAffinity-    │                            │            speed tactics  │
-  │            Eligible (3)   │                            │        ┈┈► smart ops      │
-  │        ┈┈► horizontal     │                            │            (ttft/capacity)│
+  │        ┈┈► TierTactic     │        ┈┈► HealthStage (1) │        ┈┈► speed tactic   │
+  │        ┈┈► IsAffinity-    │                            │        ┈┈► smart ops      │
+  │            Eligible (3)   │                            │            (ttft/capacity)│
+  │        ┈┈► horizontal     │                            │                           │
   │            pick (②)       │                            │                           │
   └───────────────────────────┴────────────────────────────┴───────────────────────────┘
 

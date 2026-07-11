@@ -447,12 +447,12 @@ func (ss *ServiceStats) GetCostMetrics() int64 {
 type TacticType int
 
 const (
-	_                   TacticType = iota // 0: deprecated round_robin → token_based
-	TacticTokenBased                      // Rotate by token consumption
-	_                                     // 2: deprecated hybrid → token_based
-	TacticRandom                          // Random selection with weighted probability
-	TacticLatencyBased                    // Route based on response latency
-	TacticSpeedBased                      // Route based on token generation speed
+	_                   TacticType = iota // 0: deprecated round_robin → random
+	_                                     // 1: removed token_based → random (slot reserved so persisted ints keep their meaning)
+	_                                     // 2: deprecated hybrid → random
+	TacticRandom                          // 3: Random selection with weighted probability
+	_                                     // 4: removed latency_based → random (slot reserved so persisted ints keep their meaning)
+	TacticSpeedBased                      // 5: Route based on token generation speed
 	_                                     // 6: removed adaptive → random (slot reserved so persisted ints keep their meaning)
 	TacticCapacityBased                   // 7: capacity-based load balancing
 	TacticTier                            // 8: tier-based failover by Service.Tier (lower = tried first); ties share via sub-tactic
@@ -482,12 +482,8 @@ func (tt *TacticType) UnmarshalJSON(data []byte) error {
 // String returns string representation of TacticType
 func (tt TacticType) String() string {
 	switch tt {
-	case TacticTokenBased:
-		return "token_based"
 	case TacticRandom:
 		return "random"
-	case TacticLatencyBased:
-		return "latency_based"
 	case TacticSpeedBased:
 		return "speed_based"
 	case TacticCapacityBased:
@@ -495,27 +491,27 @@ func (tt TacticType) String() string {
 	case TacticTier:
 		return "tier"
 	default:
-		// Unset (type 0) / unknown: report Random, the documented default
-		// (see Rule.GetTacticType). Keeps serialization consistent with the
-		// tactic actually used for selection.
+		// Unset (type 0) / unknown / removed: report Random, the documented
+		// default (see Rule.GetTacticType). Keeps serialization consistent with
+		// the tactic actually used for selection. Removed tactics (token_based=1,
+		// latency_based=4) land here too, serializing as "random".
 		return "random"
 	}
 }
 
 // ParseTacticTypeStrict parses s (case-insensitively) into a TacticType,
-// reporting whether it named a known tactic — including the deprecated
-// aliases (round_robin/hybrid → token_based, priority → tier, and the
-// removed adaptive → random). Unlike ParseTacticType it does not fall back
-// to Random on unknown input, so API surfaces can reject typos instead of
-// silently degrading.
+// reporting whether it named a known tactic. Deprecated/removed names are still
+// accepted and silently downgrade to a safe tactic so persisted configs keep
+// working: round_robin/hybrid/token_based/latency_based/adaptive → random,
+// priority → tier. Unlike ParseTacticType it does not fall back to Random on
+// unknown input, so API surfaces can reject typos instead of silently
+// degrading.
 func ParseTacticTypeStrict(s string) (TacticType, bool) {
 	switch strings.ToLower(s) {
-	case "round_robin", "hybrid", "token_based": // round_robin/hybrid deprecated → token_based
-		return TacticTokenBased, true
-	case "random", "adaptive": // adaptive removed → random
+	case "random", "adaptive", "round_robin", "hybrid", "token_based", "latency_based":
+		// adaptive/round_robin/hybrid/token_based/latency_based removed or
+		// deprecated → random.
 		return TacticRandom, true
-	case "latency_based":
-		return TacticLatencyBased, true
 	case "speed_based":
 		return TacticSpeedBased, true
 	case "capacity_based":

@@ -313,7 +313,7 @@ All 13 built-in examples self-verify. The `expect` block is also available in `-
 
 ### Within-tier sub-tactic
 
-The `tier` tactic supports a `within_tier_tactic` field (`random` by default; also `token_based`, `latency_based`, etc.) to choose how load is shared among services in the same tier. `--example withintier` demonstrates it with `random`, asserting that both top-tier peers appear as first attempts across 20 requests.
+The `tier` tactic supports a `within_tier_tactic` field (`random` by default) to choose how load is shared among services in the same tier. `--example withintier` demonstrates it with `random`, asserting that both top-tier peers appear as first attempts across 20 requests.
 
 ### Scenario file
 

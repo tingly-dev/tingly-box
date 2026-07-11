@@ -52,7 +52,7 @@ type LbCmd struct {
 type lbScenario struct {
 	RuleUUID         string           `yaml:"rule_uuid"`
 	Tactic           string           `yaml:"tactic"`             // "tier" (default) | "random"
-	WithinTierTactic string           `yaml:"within_tier_tactic"` // "random" (default) | "token_based" | ...; tier tactic only
+	WithinTierTactic string           `yaml:"within_tier_tactic"` // "random" (default); tier tactic only
 	AffinitySecs     int              `yaml:"affinity_secs"`      // 0 = affinity off
 	Services         []lbServiceSpec  `yaml:"services"`
 	Faults           map[string][]int `yaml:"faults"`   // serviceID ("provider/model") -> per-call status sequence (last repeats)

@@ -137,9 +137,9 @@ func TestParseTacticType(t *testing.T) {
 		input    string
 		expected TacticType
 	}{
-		{"round_robin", TacticTokenBased}, // deprecated → token_based
-		{"token_based", TacticTokenBased},
-		{"hybrid", TacticTokenBased}, // deprecated → token_based
+		{"round_robin", TacticRandom}, // deprecated → random
+		{"token_based", TacticRandom}, // removed → random
+		{"hybrid", TacticRandom},      // deprecated → random
 		{"random", TacticRandom},
 		{"invalid", TacticRandom}, // Default fallback
 		{"", TacticRandom},        // Empty string fallback
@@ -154,9 +154,12 @@ func TestParseTacticType(t *testing.T) {
 
 func TestTacticType_String(t *testing.T) {
 	tests := map[TacticType]string{
-		TacticTokenBased: "token_based",
 		TacticRandom:     "random",
+		TacticSpeedBased: "speed_based",
+		TacticTier:       "tier",
 		TacticType(999):  "random", // Unset/invalid type → random (documented default)
+		TacticType(1):    "random", // removed token_based slot → random
+		TacticType(4):    "random", // removed latency_based slot → random
 	}
 
 	for tacticType, expected := range tests {
@@ -255,29 +258,6 @@ func TestServiceStats_RecordLatency_Empty(t *testing.T) {
 	}
 	if p99 != 0 {
 		t.Errorf("Expected p99 = 0 for empty samples, got %f", p99)
-	}
-}
-
-func TestParseTacticType_LatencyBased(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected TacticType
-	}{
-		{"latency_based", TacticLatencyBased},
-		{"LATENCY_BASED", TacticLatencyBased}, // Case-insensitive
-		{"invalid", TacticRandom},             // Default fallback
-	}
-
-	for _, test := range tests {
-		if got := ParseTacticType(test.input); got != test.expected {
-			t.Errorf("ParseTacticType(%s) = %v, want %v", test.input, got, test.expected)
-		}
-	}
-}
-
-func TestTacticType_String_LatencyBased(t *testing.T) {
-	if got := TacticLatencyBased.String(); got != "latency_based" {
-		t.Errorf("TacticLatencyBased.String() = %v, want %v", got, "latency_based")
 	}
 }
 

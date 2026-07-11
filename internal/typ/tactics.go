@@ -32,12 +32,8 @@ func (tc *Tactic) UnmarshalJSON(data []byte) error {
 
 	// Assign the concrete struct based on the type
 	switch tc.Type {
-	case loadbalance.TacticTokenBased:
-		tc.Params = &TokenBasedParams{}
 	case loadbalance.TacticRandom:
 		tc.Params = &RandomParams{}
-	case loadbalance.TacticLatencyBased:
-		tc.Params = &LatencyBasedParams{}
 	case loadbalance.TacticSpeedBased:
 		tc.Params = &SpeedBasedParams{}
 	case loadbalance.TacticCapacityBased:
@@ -70,10 +66,6 @@ func (tc *Tactic) Instantiate() LoadBalancingTactic {
 func NewDefaultTactic(tacticType loadbalance.TacticType) Tactic {
 	var params TacticParams
 	switch tacticType {
-	case loadbalance.TacticTokenBased:
-		params = DefaultTokenBasedParams()
-	case loadbalance.TacticLatencyBased:
-		params = DefaultLatencyBasedParams()
 	case loadbalance.TacticSpeedBased:
 		params = DefaultSpeedBasedParams()
 	case loadbalance.TacticCapacityBased:
@@ -94,27 +86,10 @@ type TacticParams interface {
 	isTacticParams()
 }
 
-// TokenBasedParams holds parameters for token-based tactic
-type TokenBasedParams struct {
-	TokenThreshold int64 `json:"token_threshold"` // Threshold for token consumption before switching
-}
-
-func (t TokenBasedParams) isTacticParams() {}
-
 // RandomParams represents parameters for random tactic (currently empty but extensible)
 type RandomParams struct{}
 
 func (r RandomParams) isTacticParams() {}
-
-// LatencyBasedParams holds parameters for latency-based tactic
-type LatencyBasedParams struct {
-	LatencyThresholdMs int64   `json:"latency_threshold_ms"` // Switch if latency exceeds this (ms)
-	SampleWindowSize   int     `json:"sample_window_size"`   // Number of samples to keep
-	Percentile         float64 `json:"percentile"`           // Which percentile to use (0.5 = p50, 0.95 = p95, 0.99 = p99)
-	ComparisonMode     string  `json:"comparison_mode"`      // "avg", "p50", "p95", "p99"
-}
-
-func (l LatencyBasedParams) isTacticParams() {}
 
 // SpeedBasedParams holds parameters for speed-based tactic
 type SpeedBasedParams struct {
@@ -131,21 +106,8 @@ func NewRandomParams() TacticParams {
 }
 
 // DefaultParams returns default parameters for each tactic type
-func DefaultTokenBasedParams() TacticParams {
-	return TokenBasedParams{TokenThreshold: constant.DefaultTokenThreshold}
-}
-
 func DefaultRandomParams() TacticParams {
 	return RandomParams{}
-}
-
-func DefaultLatencyBasedParams() TacticParams {
-	return LatencyBasedParams{
-		LatencyThresholdMs: constant.DefaultLatencyThresholdMs,
-		SampleWindowSize:   constant.DefaultLatencySampleWindow,
-		Percentile:         constant.DefaultLatencyPercentile,
-		ComparisonMode:     constant.DefaultLatencyComparisonMode,
-	}
 }
 
 func DefaultSpeedBasedParams() TacticParams {
@@ -167,16 +129,6 @@ func AsRandomParams(p TacticParams) (RandomParams, bool) {
 	return rp, ok
 }
 
-func AsLatencyBasedParams(p TacticParams) (LatencyBasedParams, bool) {
-	// Try pointer type first (used by UnmarshalJSON)
-	if lp, ok := p.(*LatencyBasedParams); ok {
-		return *lp, true
-	}
-	// Try value type
-	lp, ok := p.(LatencyBasedParams)
-	return lp, ok
-}
-
 func AsSpeedBasedParams(p TacticParams) (SpeedBasedParams, bool) {
 	// Try pointer type first
 	if sp, ok := p.(*SpeedBasedParams); ok {
@@ -192,63 +144,6 @@ type LoadBalancingTactic interface {
 	SelectService(rule *Rule) *loadbalance.Service
 	GetName() string
 	GetType() loadbalance.TacticType
-}
-
-// TokenBasedTactic implements load balancing based on token consumption
-type TokenBasedTactic struct {
-	TokenThreshold int64 // Threshold for token consumption before switching
-}
-
-// NewTokenBasedTactic creates a new token-based tactic
-func NewTokenBasedTactic(tokenThreshold int64) *TokenBasedTactic {
-	if tokenThreshold <= 0 {
-		tokenThreshold = constant.DefaultTokenThreshold // Default threshold
-	}
-	return &TokenBasedTactic{TokenThreshold: tokenThreshold}
-}
-
-// SelectService selects service based on token consumption thresholds
-func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
-	// Get active services once to avoid duplicate filtering
-	activeServices := rule.GetActiveServices()
-	if len(activeServices) == 0 {
-		return nil
-	}
-
-	// Anchor on the first active service: stay on it until its window
-	// consumption crosses the threshold, then rotate to the least-used
-	// service. (This threshold-triggered rotation is what yields the
-	// round-robin-like behavior across equal services.)
-	currentService := activeServices[0]
-
-	_, windowTokens := currentService.GetWindowStats()
-
-	// If current service hasn't exceeded threshold, keep using it
-	if windowTokens < tb.TokenThreshold {
-		return currentService
-	}
-
-	// Find service with lowest token usage in current window
-	var selectedService *loadbalance.Service
-	var lowestTokens int64 = -1
-
-	for _, service := range activeServices {
-		_, windowTokens := service.GetWindowStats()
-		if lowestTokens == -1 || windowTokens < lowestTokens {
-			lowestTokens = windowTokens
-			selectedService = service
-		}
-	}
-
-	return selectedService
-}
-
-func (tb *TokenBasedTactic) GetName() string {
-	return "Token Based"
-}
-
-func (tb *TokenBasedTactic) GetType() loadbalance.TacticType {
-	return loadbalance.TacticTokenBased
 }
 
 // RandomTactic implements random selection with weighted probability
@@ -300,106 +195,6 @@ func (rt *RandomTactic) GetName() string {
 
 func (rt *RandomTactic) GetType() loadbalance.TacticType {
 	return loadbalance.TacticRandom
-}
-
-// LatencyBasedTactic implements load balancing based on response latency
-type LatencyBasedTactic struct {
-	LatencyThresholdMs int64   // Switch if latency exceeds this (ms)
-	SampleWindowSize   int     // Number of samples to keep
-	Percentile         float64 // Which percentile to use
-	ComparisonMode     string  // "avg", "p50", "p95", "p99"
-}
-
-// NewLatencyBasedTactic creates a new latency-based tactic
-func NewLatencyBasedTactic(latencyThresholdMs int64, sampleWindowSize int, percentile float64, comparisonMode string) *LatencyBasedTactic {
-	if latencyThresholdMs <= 0 {
-		latencyThresholdMs = constant.DefaultLatencyThresholdMs
-	}
-	if sampleWindowSize <= 0 {
-		sampleWindowSize = constant.DefaultLatencySampleWindow
-	}
-	if percentile <= 0 || percentile >= 1 {
-		percentile = constant.DefaultLatencyPercentile
-	}
-	if comparisonMode == "" {
-		comparisonMode = constant.DefaultLatencyComparisonMode
-	}
-	return &LatencyBasedTactic{
-		LatencyThresholdMs: latencyThresholdMs,
-		SampleWindowSize:   sampleWindowSize,
-		Percentile:         percentile,
-		ComparisonMode:     comparisonMode,
-	}
-}
-
-// getLatencyForService returns the latency value based on comparison mode
-func (lt *LatencyBasedTactic) getLatencyForService(service *loadbalance.Service) float64 {
-	avg, p50, p95, p99, sampleCount := service.Stats.GetLatencyStats()
-
-	// If no samples available, return a high latency to deprioritize this service
-	if sampleCount == 0 {
-		return float64(lt.LatencyThresholdMs) * 2
-	}
-
-	switch lt.ComparisonMode {
-	case "p50":
-		return p50
-	case "p95":
-		return p95
-	case "p99":
-		return p99
-	case "avg":
-		fallthrough
-	default:
-		return avg
-	}
-}
-
-// SelectService selects service based on latency
-func (lt *LatencyBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
-	// Get active services
-	activeServices := rule.GetActiveServices()
-	if len(activeServices) == 0 {
-		return nil
-	}
-
-	// If only one service, return it directly
-	if len(activeServices) == 1 {
-		return activeServices[0]
-	}
-
-	// Anchor on the first active service: keep it while its latency stays
-	// under the threshold, otherwise pick the lowest-latency service.
-	currentService := activeServices[0]
-
-	// Check if current service has exceeded latency threshold
-	currentLatency := lt.getLatencyForService(currentService)
-	if int64(currentLatency) < lt.LatencyThresholdMs {
-		// Current service is within threshold, keep using it
-		return currentService
-	}
-
-	// Find service with lowest latency
-	var selectedService *loadbalance.Service
-	var lowestLatency float64 = -1
-
-	for _, service := range activeServices {
-		latency := lt.getLatencyForService(service)
-		if lowestLatency == -1 || latency < lowestLatency {
-			lowestLatency = latency
-			selectedService = service
-		}
-	}
-
-	return selectedService
-}
-
-func (lt *LatencyBasedTactic) GetName() string {
-	return "Latency Based"
-}
-
-func (lt *LatencyBasedTactic) GetType() loadbalance.TacticType {
-	return loadbalance.TacticLatencyBased
 }
 
 // SpeedBasedTactic implements load balancing based on token generation speed
@@ -511,14 +306,7 @@ func (st *SpeedBasedTactic) GetType() loadbalance.TacticType {
 
 // Pre-created singleton tactic instances
 var (
-	defaultTokenBasedTactic   = NewTokenBasedTactic(constant.DefaultTokenThreshold)
-	defaultRandomTactic       = NewRandomTactic()
-	defaultLatencyBasedTactic = NewLatencyBasedTactic(
-		constant.DefaultLatencyThresholdMs,
-		constant.DefaultLatencySampleWindow,
-		constant.DefaultLatencyPercentile,
-		constant.DefaultLatencyComparisonMode,
-	)
+	defaultRandomTactic     = NewRandomTactic()
 	defaultSpeedBasedTactic = NewSpeedBasedTactic(
 		constant.DefaultMinSpeedSamples,
 		constant.DefaultSpeedThresholdTps,
@@ -528,17 +316,8 @@ var (
 
 func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params TacticParams) LoadBalancingTactic {
 	switch tacticType {
-	case loadbalance.TacticTokenBased:
-		if tp, ok := params.(*TokenBasedParams); ok {
-			return NewTokenBasedTactic(tp.TokenThreshold)
-		}
 	case loadbalance.TacticRandom:
 		return defaultRandomTactic
-	case loadbalance.TacticLatencyBased:
-		if lp, ok := params.(*LatencyBasedParams); ok {
-			return NewLatencyBasedTactic(lp.LatencyThresholdMs, lp.SampleWindowSize, lp.Percentile, lp.ComparisonMode)
-		}
-		return defaultLatencyBasedTactic
 	case loadbalance.TacticSpeedBased:
 		if sp, ok := params.(*SpeedBasedParams); ok {
 			return NewSpeedBasedTactic(sp.MinSamplesRequired, sp.SpeedThresholdTps, sp.SampleWindowSize)
@@ -558,12 +337,8 @@ func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params Tacti
 
 func GetDefaultTactic(tType loadbalance.TacticType) LoadBalancingTactic {
 	switch tType {
-	case loadbalance.TacticTokenBased:
-		return defaultTokenBasedTactic
 	case loadbalance.TacticRandom:
 		return defaultRandomTactic
-	case loadbalance.TacticLatencyBased:
-		return defaultLatencyBasedTactic
 	case loadbalance.TacticSpeedBased:
 		return defaultSpeedBasedTactic
 	case loadbalance.TacticCapacityBased:
@@ -689,7 +464,7 @@ func GetCapacityBasedTactic() *CapacityBasedTactic {
 // Services are bucketed by Service.Tier (ascending; lower tier number tried first;
 // T0 is the highest-priority tier). The lowest-tier bucket containing at least one service
 // whose circuit breaker permits a request is selected. Within that
-// bucket, the WithinTierTactic (e.g. random, token-based) chooses the
+// bucket, the WithinTierTactic (e.g. random) chooses the
 // final service. This yields:
 //
 //   - "Direct + fallback" when each service has a distinct Tier.

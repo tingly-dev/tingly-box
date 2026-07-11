@@ -226,10 +226,10 @@ func TestAsSpeedBasedParams(t *testing.T) {
 	}
 
 	// Test with wrong type
-	rp := TokenBasedParams{}
+	rp := RandomParams{}
 	_, ok = AsSpeedBasedParams(rp)
 	if ok {
-		t.Error("AsSpeedBasedParams() returned true for TokenBasedParams")
+		t.Error("AsSpeedBasedParams() returned true for RandomParams")
 	}
 }
 

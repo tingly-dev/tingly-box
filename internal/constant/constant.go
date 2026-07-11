@@ -38,17 +38,6 @@ const (
 
 const DBFileName = "tingly.db" // Unified SQLite database file
 
-// Load balancing threshold defaults
-const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based tactics
-
-// Latency-based routing defaults
-const (
-	DefaultLatencyThresholdMs    = int64(2000) // Default latency threshold in milliseconds
-	DefaultLatencySampleWindow   = 100         // Default number of latency samples to keep
-	DefaultLatencyPercentile     = 0.95        // Default percentile for latency comparison (0.95 = p95)
-	DefaultLatencyComparisonMode = "avg"       // Default comparison mode: "avg", "p50", "p95", "p99"
-)
-
 // Token speed-based routing defaults
 const (
 	DefaultMinSpeedSamples   = 5    // Minimum samples required before making speed-based decisions

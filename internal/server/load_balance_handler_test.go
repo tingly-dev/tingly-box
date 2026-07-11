@@ -154,27 +154,30 @@ func TestUpdateRuleTactic_CanonicalParsing(t *testing.T) {
 		return rec
 	}
 
-	// Params decode via the canonical polymorphic path.
+	// Params decode via the canonical polymorphic path. within_tier_tactic is
+	// parsed via ParseTacticType too, so a removed name (token_based) silently
+	// downgrades to random — the persisted config keeps working.
 	rec := do(`{"tactic":"tier","params":{"within_tier_tactic":"token_based"}}`)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	got := cfg.GetRuleByUUID(rule.UUID)
 	require.Equal(t, loadbalance.TacticTier, got.LBTactic.Type)
 	tp, ok := got.LBTactic.Params.(*typ.TierParams)
 	require.True(t, ok, "params must decode to *TierParams, got %T", got.LBTactic.Params)
-	require.Equal(t, loadbalance.TacticTokenBased, tp.WithinTierTactic)
+	require.Equal(t, loadbalance.TacticRandom, tp.WithinTierTactic)
 
 	// Deprecated alias resolves to the canonical tactic and is echoed as such.
 	rec = do(`{"tactic":"priority"}`)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), `"tactic":"tier"`)
 
-	// No params → the tactic's defaults, not zero values.
+	// Removed tactic names are accepted (silent downgrade) and echoed as random.
 	rec = do(`{"tactic":"token_based"}`)
 	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"tactic":"random"`)
 	got = cfg.GetRuleByUUID(rule.UUID)
-	require.Equal(t, loadbalance.TacticTokenBased, got.LBTactic.Type)
+	require.Equal(t, loadbalance.TacticRandom, got.LBTactic.Type)
 
-	// Unknown names are rejected instead of silently degrading to random.
+	// Unknown names (typos) are rejected instead of silently degrading to random.
 	rec = do(`{"tactic":"latency_basd"}`)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 

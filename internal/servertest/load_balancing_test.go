@@ -28,101 +28,6 @@ import (
 // Load Balancer Unit Tests
 // =================================
 
-func TestLoadBalancer_TokenBased(t *testing.T) {
-	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
-	require.NoError(t, err)
-
-	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
-
-	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-
-	// Create test rule with multiple services using new LBTactic format
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "test",
-		UUID:         uuid.New().String(),
-		Services: []*loadbalance.Service{
-			{
-				Provider:   "provider1",
-				Model:      "model1",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-			{
-				Provider:   "provider2",
-				Model:      "model2",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTokenBased,
-			Params: &typ.TokenBasedParams{TokenThreshold: 20},
-		},
-		Active: true,
-	}
-
-	// Test token_based selection with threshold 20
-	// With threshold 20, we should switch services after consuming 20 tokens
-	var selectedProviders []string
-	totalRequests := 6
-
-	// Test that the token_based logic works with threshold 20
-	// We need to record usage directly on the services for the token_based to work
-
-	for i := 0; i < totalRequests; i++ {
-		service, err := lb.SelectService(rule)
-		if err != nil {
-			t.Fatalf("SelectService failed: %v", err)
-		}
-
-		if service == nil {
-			t.Fatal("SelectService returned nil")
-		}
-
-		selectedProviders = append(selectedProviders, service.Provider)
-
-		// Record usage directly on the service to trigger token_based logic
-		service.RecordUsage(10, 10)
-
-		t.Logf("Request %d: Selected provider %s", i+1, service.Provider)
-	}
-
-	// Verify token_based behavior with threshold 20 (each request uses 20 tokens)
-	// Expected pattern: provider1, provider2, provider1, provider2, provider1, provider2
-	expectedPattern := []string{"provider1", "provider2", "provider1", "provider2", "provider1", "provider2"}
-
-	for i, expected := range expectedPattern {
-		if selectedProviders[i] != expected {
-			t.Errorf("Request %d: expected provider %s, got %s", i+1, expected, selectedProviders[i])
-		}
-	}
-
-	// Count selections for each provider
-	provider1Count := 0
-	provider2Count := 0
-	for _, provider := range selectedProviders {
-		if provider == "provider1" {
-			provider1Count++
-		} else if provider == "provider2" {
-			provider2Count++
-		}
-	}
-
-	// With 6 requests and perfect alternation, we should have 3 each
-	if provider1Count != 3 || provider2Count != 3 {
-		t.Errorf("Expected 3 selections each, got provider1: %d, provider2: %d",
-			provider1Count, provider2Count)
-	}
-
-	t.Logf("Final distribution: provider1: %d, provider2: %d", provider1Count, provider2Count)
-}
-
 func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	// Create a minimal config for testing
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
@@ -238,8 +143,8 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTokenBased,
-			Params: typ.DefaultTokenBasedParams(),
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
 		},
 		Services: []*loadbalance.Service{
 			{
@@ -261,8 +166,8 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 		t.Errorf("Expected request_model = test, got %v", summary["request_model"])
 	}
 
-	if summary["tactic"] != "token_based" {
-		t.Errorf("Expected tactic = token_based, got %v", summary["tactic"])
+	if summary["tactic"] != "random" {
+		t.Errorf("Expected tactic = random, got %v", summary["tactic"])
 	}
 
 	if summary["active"] != true {
@@ -902,106 +807,4 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	if statsCopy.WindowTokensConsumed != 150 {
 		t.Errorf("Expected WindowTokensConsumed = 150, got %d", statsCopy.WindowTokensConsumed)
 	}
-}
-
-func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
-	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
-	require.NoError(t, err)
-
-	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
-
-	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
-
-	// Create test rule with 3 services to make the rotation more interesting
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "test",
-		UUID:         uuid.New().String(),
-		Services: []*loadbalance.Service{
-			{
-				Provider:   "provider-A",
-				Model:      "model-A",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-			{
-				Provider:   "provider-B",
-				Model:      "model-B",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-			{
-				Provider:   "provider-C",
-				Model:      "model-C",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTokenBased,
-			Params: &typ.TokenBasedParams{TokenThreshold: 20}, // Threshold of 20 tokens
-		},
-		Active: true,
-	}
-
-	// Test token_based selection with threshold 20.
-	// Each request records 20 tokens (10+10), which meets the threshold, so the
-	// tactic rotates to the least-used service once the current service (the
-	// first, with no persisted pointer) exceeds the threshold, which still
-	// yields a rotation: A, B, C, A, B, C.
-	var selectedProviders []string
-	totalRequests := 6
-
-	t.Logf("Testing token_based with threshold=20 and %d total requests", totalRequests)
-
-	for i := 0; i < totalRequests; i++ {
-		service, err := lb.SelectService(rule)
-		if err != nil {
-			t.Fatalf("SelectService failed: %v", err)
-		}
-
-		if service == nil {
-			t.Fatal("SelectService returned nil")
-		}
-
-		selectedProviders = append(selectedProviders, service.Provider)
-
-		// Record usage as the production handlers do. The tactic anchors on
-		// the first active service and re-evaluates every request; there is
-		// no cross-request pointer.
-		service.RecordUsage(10, 10)
-
-		t.Logf("Request %d: Selected provider %s", i+1, service.Provider)
-	}
-
-	// Expected rotation with threshold 20 and 20 tokens/request: A, B, C, A, B, C
-	expectedPattern := []string{"provider-A", "provider-B", "provider-C", "provider-A", "provider-B", "provider-C"}
-
-	for i, expected := range expectedPattern {
-		if selectedProviders[i] != expected {
-			t.Errorf("Request %d: expected provider %s, got %s", i+1, expected, selectedProviders[i])
-		}
-	}
-
-	// Count selections for each provider
-	providerCounts := make(map[string]int)
-	for _, provider := range selectedProviders {
-		providerCounts[provider]++
-	}
-
-	// With 6 requests and threshold 2, we should have 2 requests per provider
-	if providerCounts["provider-A"] != 2 || providerCounts["provider-B"] != 2 || providerCounts["provider-C"] != 2 {
-		t.Errorf("Expected 2 selections each, got provider-A: %d, provider-B: %d, provider-C: %d",
-			providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
-	}
-
-	t.Logf("✅ Round-robin test passed!")
-	t.Logf("Final distribution: provider-A: %d, provider-B: %d, provider-C: %d",
-		providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
 }

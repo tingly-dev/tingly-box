@@ -63,7 +63,7 @@ func TestFormatDetectionEdgeCases(t *testing.T) {
 func TestFormatCompatibilityWithExistingJSONL(t *testing.T) {
 	// This is the existing JSONL format from the codebase
 	existingJSONL := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
-{"type":"rule","uuid":"test-uuid","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test","services":[{"provider":"prov-1","model":"gpt-4","weight":100}],"lb_tactic":"round_robin","active":true,"smart_enabled":false,"smart_routing":[]}
+{"type":"rule","uuid":"test-uuid","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test","services":[{"provider":"prov-1","model":"gpt-4","weight":100}],"lb_tactic":"random","active":true,"smart_enabled":false,"smart_routing":[]}
 {"type":"provider","uuid":"prov-1","name":"Test Provider","api_base":"https://api.example.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true,"timeout":30}`
 
 	detector := NewDetector()

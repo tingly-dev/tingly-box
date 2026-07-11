@@ -37,7 +37,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 				},
 			},
 			"current_service_index": 0,
-			"tactic":                "round_robin",
+			"tactic":                "random",
 			"active":                true,
 		}
 
@@ -109,7 +109,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 				},
 			},
 			"current_service_index": 0,
-			"tactic":                "round_robin",
+			"tactic":                "random",
 			"active":                true,
 		}
 
@@ -182,7 +182,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 				},
 			},
 			"current_service_index": 0,
-			"tactic":                "round_robin",
+			"tactic":                "random",
 			"active":                true,
 		}
 

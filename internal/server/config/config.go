@@ -2156,10 +2156,6 @@ func IsTacticValid(tactic *typ.Tactic) bool {
 
 	// Check for invalid zero values in params
 	switch p := tactic.Params.(type) {
-	case *typ.TokenBasedParams:
-		return p.TokenThreshold > 0
-	case typ.TokenBasedParams:
-		return p.TokenThreshold > 0
 	case *typ.RandomParams:
 		// Random params has no fields, always valid if not nil
 		return true
