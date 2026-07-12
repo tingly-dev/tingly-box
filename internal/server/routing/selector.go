@@ -244,7 +244,7 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 
 	ttl := s.config.GetEffectiveAffinity(ctx.Rule)
 	if ttl == 0 {
-		// Affinity disabled (no rule value, no scenario value, no legacy bool)
+		// Affinity disabled for this rule.
 		return
 	}
 	// Pin inside the partition this request was routed by, so one session can

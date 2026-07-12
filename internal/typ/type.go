@@ -235,7 +235,7 @@ type RuleFlags struct {
 	// The value is the TTL in seconds (0 = disabled). Subsequent requests in
 	// the same session keep hitting that service until the affinity entry
 	// expires. This is a load-balancing concern and works independently of
-	// smart routing. Supersedes the legacy top-level Rule.SmartAffinity field.
+	// smart routing.
 	//
 	// Rule-only: there is no scenario-level inheritance. The built-in Claude
 	// Code / Claude Desktop / Codex rules default this to 1800s (30 min) via
@@ -549,31 +549,22 @@ type Rule struct {
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
 	// Smart Routing Configuration
-	SmartEnabled bool `json:"smart_enabled" yaml:"smart_enabled"`
-	// Deprecated: use Flags.SessionAffinity. Kept for backward compatibility
-	// with configs persisted before affinity moved into rule flags. Reads go
-	// through Rule.AffinityEnabled() which honors both.
-	SmartAffinity bool                        `json:"smart_affinity,omitempty" yaml:"smart_affinity,omitempty"`
-	SmartRouting  []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
+	SmartEnabled bool                        `json:"smart_enabled" yaml:"smart_enabled"`
+	SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
 }
 
 // AffinityEnabled reports whether session affinity should be applied for this
 // rule. Affinity is a load-balancing concern, independent of smart routing.
-// It honors the new Flags.SessionAffinity (seconds > 0) and the deprecated
-// top-level SmartAffinity field so pre-existing configs keep working.
 func (r *Rule) AffinityEnabled() bool {
-	return r.Flags.SessionAffinity > 0 || r.SmartAffinity
+	return r.Flags.SessionAffinity > 0
 }
 
-// AffinityTTL returns the session-affinity TTL for this rule. When the new
-// Flags.SessionAffinity is set, its value (in seconds) is used directly.
-// For legacy rules that use the top-level SmartAffinity bool, the caller
-// should fall back to its own default TTL (e.g. the store's defaultAffinityTTL).
+// AffinityTTL returns the rule's configured session-affinity TTL.
 func (r *Rule) AffinityTTL() time.Duration {
 	if r.Flags.SessionAffinity > 0 {
 		return time.Duration(r.Flags.SessionAffinity) * time.Second
 	}
-	return 0 // caller falls back to store default
+	return 0
 }
 
 // ToJSON implementation
@@ -592,7 +583,6 @@ func (r *Rule) ToJSON() interface{} {
 		"lb_tactic":      r.LBTactic,
 		"active":         r.Active,
 		"smart_enabled":  r.SmartEnabled,
-		"smart_affinity": r.SmartAffinity,
 		"smart_routing":  r.SmartRouting,
 	}
 

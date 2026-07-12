@@ -5727,10 +5727,6 @@
               "$ref": "#/components/schemas/Service"
             }
           },
-          "smart_affinity": {
-            "type": "boolean",
-            "description": "Field smart_affinity"
-          },
           "smart_enabled": {
             "type": "boolean",
             "description": "Field smart_enabled"
@@ -8974,10 +8970,6 @@
               "$ref": "#/components/schemas/Service"
             }
           },
-          "smart_affinity": {
-            "type": "boolean",
-            "description": "Field smart_affinity"
-          },
           "smart_enabled": {
             "type": "boolean",
             "description": "Field smart_enabled"
@@ -10366,10 +10358,6 @@
             "items": {
               "$ref": "#/components/schemas/Service"
             }
-          },
-          "smart_affinity": {
-            "type": "boolean",
-            "description": "Field smart_affinity"
           },
           "smart_enabled": {
             "type": "boolean",
