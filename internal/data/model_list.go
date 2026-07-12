@@ -32,6 +32,11 @@ func NewProviderModelManager(configDir string) (*ModelListManager, error) {
 	return &ModelListManager{modelStore: modelStore}, nil
 }
 
+// Close releases the underlying model store's database connection.
+func (mm *ModelListManager) Close() error {
+	return mm.modelStore.Close()
+}
+
 // SaveModels saves models for a provider by UUID to the database.
 // source should be db.ModelSourceAPI or db.ModelSourceTemplate.
 func (mm *ModelListManager) SaveModels(provider *typ.Provider, models []string, source db.ModelSource) error {

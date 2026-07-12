@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1004,6 +1005,27 @@ func (c *Config) StoreManager() *db.StoreManager {
 	defer c.mu.RUnlock()
 
 	return c.storeManager
+}
+
+// CloseStores releases every database handle the config owns: the shared
+// store-manager connection and the provider-model store. The long-lived
+// server closes the store manager from Stop; short-lived embedders (tests,
+// harness environments) call this so each instance does not leak SQLite
+// descriptors for the process lifetime. Safe to call more than once.
+func (c *Config) CloseStores() error {
+	c.mu.Lock()
+	storeManager := c.storeManager
+	modelManager := c.modelManager
+	c.mu.Unlock()
+
+	var errs []error
+	if storeManager != nil {
+		errs = append(errs, storeManager.Close())
+	}
+	if modelManager != nil {
+		errs = append(errs, modelManager.Close())
+	}
+	return errors.Join(errs...)
 }
 
 // HasModelToken checks if a model token is configured

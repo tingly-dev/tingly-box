@@ -166,6 +166,11 @@ func (env *AgentTestEnv) Close(preserve bool) error {
 		env.virtualServer.Close()
 	}
 
+	// Release the config's database handles (see TestEnv.Close for why)
+	if env.appConfig != nil {
+		_ = env.appConfig.GetGlobalConfig().CloseStores()
+	}
+
 	// Clean up config directory unless preserved
 	if !preserve && env.configDir != "" {
 		if err := os.RemoveAll(env.configDir); err != nil {

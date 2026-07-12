@@ -144,14 +144,20 @@ func clientOrDefault(c Client) Client {
 	return NewHTTPClient()
 }
 
-// Close shuts down the gateway and virtual servers and removes the config
-// directory. Safe to call multiple times (t.Cleanup plus an explicit defer).
+// Close shuts down the gateway and virtual servers, releases the config's
+// database handles, and removes the config directory. Closing the stores
+// matters: e2e suites create hundreds of envs in one process, and an
+// unclosed SQLite handle per env exhausts the fd limit. Safe to call more
+// than once (t.Cleanup plus an explicit defer).
 func (env *TestEnv) Close() {
 	if env.gatewayServer != nil {
 		env.gatewayServer.Close()
 	}
 	if env.virtual != nil {
 		env.virtual.Close()
+	}
+	if env.appConfig != nil {
+		_ = env.appConfig.GetGlobalConfig().CloseStores()
 	}
 	if env.configDir != "" {
 		os.RemoveAll(env.configDir)

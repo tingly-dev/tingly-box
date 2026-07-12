@@ -77,6 +77,23 @@ func NewModelStore(baseDir string) (*ModelStore, error) {
 	return store, nil
 }
 
+// Close releases the store's database connection. Safe to call more than
+// once. Short-lived embedders (tests, harness environments) must close, or
+// each instance leaks a SQLite handle for the process lifetime.
+func (s *ModelStore) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil
+	}
+	sqlDB, err := s.db.DB()
+	s.db = nil
+	if err != nil {
+		return fmt.Errorf("model store: get database instance: %w", err)
+	}
+	return sqlDB.Close()
+}
+
 // SaveModels saves models for a provider by UUID
 func (ms *ModelStore) SaveModels(provider *typ.Provider, models []string, source ModelSource) error {
 	if provider == nil {
