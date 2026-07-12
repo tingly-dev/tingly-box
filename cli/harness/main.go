@@ -33,6 +33,7 @@ type CLI struct {
 	Replay     ReplayCmd     `kong:"cmd,help='Replay a captured agent request fixture through the gateway'"`
 	Lb         LbCmd         `kong:"cmd,help='Simulate load-balancing (tier/failover/breaker/affinity) over a request sequence'"`
 	Duo        DuoCmd        `kong:"cmd,help='Two-instance e2e verification: tb2 gateway routed to tb1 vmodel (function + memory)'"`
+	Routing    RoutingCmd    `kong:"cmd,help='Smart-routing e2e scenarios on the duo topology (rules via API, wire + trace assertions)'"`
 	Provider   ProviderCmd   `kong:"cmd,help='Real provider API tests (Phase 3 - not yet implemented)'"`
 	InitConfig InitConfigCmd `kong:"cmd,name='init-config',help='Create a providers config file template for agent --config'"`
 }

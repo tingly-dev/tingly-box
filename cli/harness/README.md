@@ -435,6 +435,57 @@ The engine lives in `internal/protocoltest/duo*.go` and is shared with the
 tests (whose `TestMain` re-executes the test binary as the child servers), so
 CI guards the same per-instance slope threshold.
 
+## Tier Routing — `routing`
+
+> Design rationale and trace-surface contract:
+> [`.design/harness-duo.md`](../../.design/harness-duo.md) §"Routing scenarios"
+
+Smart-routing e2e verification on the duo topology. Each scenario is a rule
+shape (base services + smart-routing partitions) plus a request program;
+rules are created through **tb2's production rule API** — the same path a
+user's configuration takes — and every decision is asserted on two
+independent surfaces:
+
+- **wire level** — tb1 hosts a pool of service-identity vmodels
+  (`duo-svc-a` … `duo-svc-f`), each answering with its own marker, so which
+  service a request landed on is read directly from the response body;
+- **explanation level** — tb2's `/api/v1/requests/:id` timeline joins the
+  `smart_routing` evaluation trace by the harness-supplied `X-Request-Id`;
+  the engine asserts `outcome`, the matched partition description, and the
+  final `routed_model` — the same surface a user debugging their routing
+  config reads.
+
+```bash
+./harness routing                      # all built-in scenarios
+./harness routing --list               # catalog with descriptions
+./harness routing --scenarios token-threshold,affinity-partition
+./harness routing --file my-rules.yaml # user-defined scenarios (see testdata/routing/example.yaml)
+./harness routing --json               # machine-readable report
+```
+
+Built-ins cover the smart-routing position catalog (token, thinking,
+context_user, tool_use, model, time_range, agent.claude_code) plus two
+behavioral regressions: **first-match ordering** and **G3** (session pins
+scoped per content partition). Time-range windows are built relative to the
+wall clock — hours-wide margins, no clock seam needed.
+
+Semantics worth knowing when authoring scenarios:
+
+- When **no partition matches**, the LB falls back to the **union** of base
+  + partition services, so `expect.svc` is only deterministic for matched
+  requests; miss requests assert `outcome: no_match` on the trace instead.
+- The `tool_use` position currently extracts tool names from **user-role**
+  messages only (the built-in scenario pins this actual behavior; real
+  agent traffic carries tool_use in assistant messages — tracked as a
+  defect candidate).
+- `service_ttft` / `service_capacity` (stats-driven, pass on empty data)
+  and `proxy_vision` (processor-bearing bypass op) are not covered yet.
+
+**Use it for:** answering "given this rule config and this request shape,
+where does the request go and why" — machine-checked, over the full
+pipeline (rule API → extraction → smart stage → affinity → LB → conversion
+→ upstream).
+
 ## Agent reference
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
@@ -455,6 +506,9 @@ cli/harness/
   replay.go          Tier B command — fixture replay, upstreams, skip list
   duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +
                      per-instance memory); child mode via MaybeRunDuoServe in main.go
+  routing.go         Tier Routing command — smart-routing scenarios on the duo
+                     topology (built-ins, --file YAML, wire + trace assertions)
+  testdata/routing/  example user-defined routing scenario YAML
   agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
   lb.go              Tier LB command — load-balancing scenario simulator
@@ -482,6 +536,9 @@ internal/protocoltest/   shared engine used by all tiers
   duo_serve.go       Tier Duo child: full server boot + gateway/vmodel seeding
   duo_checks.go      Tier Duo functional phase
   duo_memory.go      Tier Duo memory phase (per-instance sampling over HTTP)
+  duo_routing.go     Tier Routing engine: scenario model, rule-via-API seeding,
+                     wire + smart_routing-trace assertions
+  duo_routing_scenarios.go  built-in scenario catalog + YAML loader
 ```
 
 ---

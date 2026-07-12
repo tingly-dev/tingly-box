@@ -1,0 +1,28 @@
+# Example user-defined smart-routing scenario for `harness routing --file`.
+#
+# Services reference tb1's service-identity pool ("a".."f"); each identity
+# answers with its own marker so `expect.svc` is verified from the response
+# body. `target` picks the provider protocol (chat | responses | anthropic).
+# Trace expectations (`outcome`, `matched`) are checked against tb2's
+# /api/v1/requests smart_routing trace.
+#
+# NOTE: when no partition matches (outcome: no_match), the load balancer
+# picks from the UNION of base + partition services, so `expect.svc` is only
+# deterministic for matched requests (or single-identity unions).
+scenarios:
+  - name: example-cheap-fast
+    description: long context goes to the big-window service, everything else to the default
+    rule:
+      services: [{svc: b}]
+      smart:
+        - description: big-window
+          ops:
+            - {position: token, operation: ge, value: "50000"}
+          services: [{svc: a}]
+    requests:
+      - name: long-context
+        body: {size_kb: 256}
+        expect: {svc: a, outcome: matched, matched: big-window}
+      - name: short
+        body: {size_kb: 2}
+        expect: {outcome: no_match}

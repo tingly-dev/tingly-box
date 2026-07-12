@@ -96,6 +96,38 @@ func TestDuoMemoryRegression(t *testing.T) {
 	assertDuoSlopes(t, report)
 }
 
+// TestDuoRouting drives every built-in smart-routing scenario end-to-end:
+// rules created through tb2's production rule API, decisions asserted at
+// wire level (which tb1 service-identity vmodel answered) and via the
+// /api/v1/requests smart_routing trace join.
+func TestDuoRouting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("duo e2e is not a -short test")
+	}
+	env, err := NewDuoEnv(DuoEnvConfig{})
+	if err != nil {
+		t.Fatalf("boot duo env: %v", err)
+	}
+	defer env.Close()
+
+	for _, sc := range BuiltinRoutingScenarios() {
+		sc := sc
+		t.Run(sc.Name, func(t *testing.T) {
+			checks := env.RunRoutingScenario(sc)
+			if len(checks) == 0 {
+				t.Fatal("no checks ran")
+			}
+			for _, c := range checks {
+				if !c.Pass {
+					t.Errorf("check %s failed: %s", c.Name, c.Detail)
+				} else {
+					t.Logf("check %s ok %s", c.Name, c.Detail)
+				}
+			}
+		})
+	}
+}
+
 // TestDuoBackpressure runs the slow-stream + slow-reader variant of the
 // Claude Code hot path: tb1 streams a large response slowly while the client
 // reads slowly, so buffering under real TCP backpressure is on the measured
