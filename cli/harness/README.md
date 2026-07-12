@@ -7,37 +7,31 @@ compatibility — without needing a deployed server.
 > Forward-looking work — new scenarios, fixture capture, CI integration,
 > closing the defect skip list — is tracked in [PLANNING.md](./PLANNING.md).
 
-```
-                          ┌─────────────────────────┐
-                          │   harness  (this CLI)   │
-                          └────────────┬────────────┘
-                                       │
-        ┌──────────────────────────────┼──────────────────────────────┐
-        │                              │                              │
-   ┌────┴─────┐                  ┌─────┴─────┐                  ┌──────┴─────┐
-   │  matrix  │                  │   replay  │                  │   agent    │
-   │  Tier A  │                  │  Tier B   │                  │   Tier C   │
-   └────┬─────┘                  └─────┬─────┘                  └──────┬─────┘
-        │                              │                               │
-  protocol x-form              fixture-driven                   real agent CLI
-  cross-product                gateway replay                   subprocess run
-  (no gateway HTTP)            (in-proc gateway,                (in-proc gateway,
-                                no CLI spawn)                    real CLI spawn)
-```
-
-The three tiers form a **cost / fidelity ladder** — cheap and exhaustive at the
-bottom, slow and realistic at the top:
+The commands cover **three orthogonal axes**, each a small ladder of its own:
 
 ```
-   fidelity
-      ▲
-      │   Tier C  agent    real CLI, real I/O      slow, flaky-prone, few runs
-      │   ─────────────────────────────────────
-      │   Tier B  replay   real gateway pipeline   fast, hermetic, broad
-      │   ─────────────────────────────────────
-      │   Tier A  matrix   pure transform funcs    instant, exhaustive
-      └──────────────────────────────────────────▶ coverage
+  axis 1: protocol-conversion correctness          axis 2: routing & dispatch behavior
+  ─────────────────────────────────────            ────────────────────────────────────
+   matrix   synthetic request cross-product         lb        LB dynamics simulator
+            through an in-process gateway                     (fake upstreams, fake clock:
+   replay   captured agent fixtures through                    breaker, failover, affinity)
+            the in-process gateway                  routing   smart-routing e2e on the duo
+   agent    real agent CLI spawned against                    topology (rule API → trace)
+            the in-process gateway
+                                                   axis 3: resource health
+   (fidelity rises down each list;                 ─────────────────────────
+    every rung shares one assertion                 duo       per-instance memory
+    vocabulary: vmodel/benchmark/check)                       observation across two
+                                                              full server processes
 ```
+
+All single-process rungs (matrix / replay / agent) run **the full gateway
+pipeline over real HTTP** — an in-process `httptest.Server` wired to a
+VirtualServer mock provider; they differ in where the *request* comes from
+(synthetic cross-product vs. captured fixture vs. a real CLI's own
+construction). The duo-topology rungs (duo / routing) trade speed for
+process-level fidelity: two full `server.Start()` child processes and real
+TCP between them.
 
 ---
 
@@ -76,9 +70,12 @@ go build -o harness ./cli/harness
 
 ## Tier A — `matrix`
 
-Validates **protocol transformation** as a pure cross-product. No HTTP, no
-gateway server — it drives the transform functions directly and asserts on the
-converted payloads.
+Validates **protocol transformation** as an exhaustive cross-product. Each
+cell boots (or reuses) an in-process gateway + VirtualServer mock, sends a
+minimal synthetic request as the source protocol over real HTTP, and asserts
+on the round-trip result — so the full pipeline (routing, transform,
+dispatch, response conversion) is on the tested path, not just the transform
+functions.
 
 ```
    sources          targets             scenarios            streaming
@@ -138,7 +135,7 @@ runs assertions on the round-trip result. **No agent CLI is spawned.**
             ▼              ▼                  ▼
      content-level    structural         structural
      assertions       assertions         assertions
-   (scenario.Assertions)  (sc.structural)   (sc.structural)
+   (Scenario.Assertions) (Scenario.Structural) (Scenario.Structural)
 ```
 
 ### Fixtures
@@ -161,23 +158,30 @@ fixture, decides which provider+model the request resolves to.
 
 | `--upstream` | wiring                                          | assertions checked        |
 |--------------|-------------------------------------------------|---------------------------|
-| `virtual`    | built-in rule → in-process `VirtualServer` mock | `scenario.Assertions` (content-level — response is deterministic) |
-| `vmodel`     | built-in rule → seeded builtin vmodel provider, dispatched in-process via `provider.IsVirtual()` short-circuit | `sc.structural` (upstream-independent) |
-| `real`       | built-in rule → live provider from `--config`   | `sc.structural` (upstream-independent) |
+| `virtual`    | built-in rule → in-process `VirtualServer` mock | `Scenario.Assertions` (content-level — response is deterministic) |
+| `vmodel`     | built-in rule → seeded builtin vmodel provider, dispatched in-process via `provider.IsVirtual()` short-circuit | `Scenario.Structural` (upstream-independent) |
+| `real`       | built-in rule → live provider from `--config`   | `Scenario.Structural` (upstream-independent) |
 
 Only the `virtual` upstream controls the response byte-for-byte, so only it can
 run the scenario's **content** assertions. `vmodel` and `real` responses aren't
-test-controlled, so they get **structural** checks (HTTP 200, non-empty content,
-tool-call count, stream-event count).
+test-controlled, so they get the scenario's **structural** checks (HTTP 200,
+non-empty content, tool-call count, stream-event count) — both tiers are
+defined on the Scenario itself (`vmodel/benchmark/scenario/builtins.go`), so a
+new replay scenario needs only the matrix ctor and a vmodel id. Streaming runs
+additionally assert the full client-facing SSE frame shape
+(`StreamShapeForAgent`) on every upstream.
 
 ### Skip list
 
-`replaySkip` maps `"<upstream>/<agent>/<scenario>"` → reason. Each entry is a
-**real defect** surfaced by replay, not a test artifact. Remove an entry once
-the underlying bug is fixed. Currently:
+Known gateway defects are registered **once**, in protocoltest's
+`skipSourceScenarios` (the matrix reads it directly; replay derives its skips
+via `KnownDefectReason` + the agent's source protocol). Each entry is a
+**real defect**, not a test artifact — fixing one is a one-line deletion in
+one place. Currently:
 
-- `*/codex/tool_use` — Responses-API source path's tool_call conversion is
-  incomplete (mirrors Tier A's `skipSourceScenarios`).
+- `openai_responses|tool_use` (+ streaming variant) — the Responses-API
+  source path's tool_call conversion is incomplete; skips Tier A's
+  openai_responses-source cells and every `codex/tool_use` replay run.
 
 Closing this list out — plus planned scenario expansion and fixture capture —
 is tracked in [PLANNING.md](./PLANNING.md).
@@ -211,8 +215,12 @@ agent's own request construction, auth headers, and output parsing.
 
 Two mutually-exclusive modes:
 
-- `--mock` — virtual-model mode: gateway wired to an in-process mock upstream.
-  Exercises protocol translation + rule matching with zero external calls.
+- `--mock` — virtual-model mode: gateway wired to an in-process mock upstream
+  serving the shared text scenario. Exercises protocol translation + rule
+  matching with zero external calls. Success requires more than a zero exit
+  code: the CLI's output must contain the mock's fixed answer
+  (`protocoltest.VirtualMockAnswerMarker`), so a CLI that prints an error yet
+  exits cleanly is a FAIL.
 - `--config <file>` — real-provider mode: for every provider×model in the YAML,
   spins an isolated gateway, binds the built-in rule to that provider, and runs
   the agent CLI against it.
@@ -499,11 +507,13 @@ cli/harness/
   main.go            Kong CLI root: version / matrix / agent / replay / lb /
                      provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
-  replay.go          Tier B command — fixture replay, upstreams, skip list
+  replay.go          Tier B command — fixture replay, upstream selection
   duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +
                      per-instance memory); child mode via MaybeRunDuoServe in main.go
   routing.go         Tier Routing command — smart-routing scenarios on the duo
                      topology (built-ins, --file YAML, wire + trace assertions)
+  duo_report.go      shared duo-topology CLI scaffolding (boot line, check
+                     blocks, JSON/PASS/exit)
   testdata/routing/  example user-defined routing scenario YAML
   agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
@@ -521,12 +531,16 @@ cli/harness/
     openai_responses/ text.json, tool_use.json, streaming_text.json
 
 internal/protocoltest/   shared engine used by all tiers
-  matrix.go          Tier A cross-product engine + skipSourceScenarios
-  scenarios.go       Scenario definitions + content-level Assertions (reused by
-                     Tier B's virtual upstream)
-  agent_env.go       AgentTestEnv: in-process gateway + SetupAgent / SetupVModelAgent
-  replay.go          SetupVirtualAgentScenario, ReplayFixture, repointBuiltinRule
-  assertions.go      reusable Assertion constructors
+  matrix.go          Tier A cross-product engine + skipSourceScenarios (the
+                     known-defect registry; replay reads it via KnownDefectReason)
+  testenv.go         TestEnv + gatewayCore (the shared single-process env
+                     skeleton) + dispatch (real-HTTP send for both modes)
+  agent_env.go       AgentTestEnv: built on gatewayCore + SetupAgent / SetupVModelAgent
+  replay.go          SetupVirtualAgentScenario, ReplayFixture, stream-shape
+                     assertions (AnthropicStreamShape / ResponsesStreamShape)
+  aliases.go         re-exports of the check/scenario foundation (the canonical
+                     Assertion library and Scenario fixtures live in
+                     vmodel/benchmark/{check,scenario})
   real_model.go      providers.yaml parsing for --upstream=real / --config
   duo.go             Tier Duo parent: routes, child spawning, request driving
   duo_serve.go       Tier Duo child: full server boot + gateway/vmodel seeding
@@ -541,20 +555,25 @@ internal/protocoltest/   shared engine used by all tiers
 
 ## How the tiers share code
 
-The three tiers are thin CLI shells over one engine (`internal/protocoltest`):
+The commands are thin CLI shells over one engine (`internal/protocoltest`),
+which itself consumes the shared check/scenario foundation:
 
 ```
-                    ┌───────────────────────────────┐
-                    │   internal/protocoltest  │
-                    │                               │
-                    │   Scenario + Assertions       │◀── Tier A asserts here
-                    │   Matrix engine               │◀── Tier A
-                    │   AgentTestEnv                │◀── Tier B + Tier C
-                    │   ReplayFixture / Setup*       │◀── Tier B
-                    │   RealModelEntry / config      │◀── Tier B + Tier C
-                    └───────────────────────────────┘
+   vmodel/benchmark/check      Assertion + RoundTripResult — the ONE assertion
+                               vocabulary (matrix, replay, duo functional)
+   vmodel/benchmark/scenario   Scenario fixtures: mock responses + content
+                               Assertions + upstream-independent Structural
+                    ▲
+                    │
+   internal/protocoltest
+     Matrix engine + known-defect registry   ◀── matrix (test + CLI, one path)
+     gatewayCore → TestEnv / AgentTestEnv    ◀── matrix / replay / agent
+     ReplayFixture / Setup* / stream shapes  ◀── replay
+     DuoEnv (two processes) + DuoCheck       ◀── duo / routing
+     RealModelEntry / providers.yaml         ◀── replay / agent
 ```
 
-Notably, **Tier B reuses Tier A's `Scenario.Assertions`** for the `virtual`
-upstream — the same content checks that validate transforms in isolation also
-validate them through the full gateway pipeline.
+Notably, **replay reuses the matrix's `Scenario.Assertions`** for the
+`virtual` upstream and `Scenario.Structural` elsewhere, and the duo
+functional phase runs the same assertion library over its two-process
+round trips — one vocabulary at every fidelity level.

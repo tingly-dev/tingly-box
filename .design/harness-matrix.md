@@ -221,13 +221,16 @@ and Responses string-`input` dropped in responses→chat conversion).
 
 ## 4. Adding a new scenario
 
-1. Define a `FooScenario() Scenario` function in `scenarios.go` with
-   `MockResponses` for all 4 formats (nonstream + stream).
+1. Define a `FooScenario() Scenario` function in
+   `vmodel/benchmark/scenario/builtins.go` with `MockResponses` for all 4
+   formats (nonstream + stream).
 
 2. Add it to `AllScenarios()`.
 
 3. Write `Assertions` that validate the converted result (HTTP status,
-   content, tool calls, etc.).
+   content, tool calls, etc.), plus the upstream-independent `Structural`
+   tier (status/shape/counts) used when the response is not test-controlled
+   (replay's vmodel/real upstreams).
 
 4. Set `SkipTransitive: true` if the scenario produces no output worth
    comparing across hops (e.g. error responses).
