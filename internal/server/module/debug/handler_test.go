@@ -47,6 +47,43 @@ func TestGetMemStats(t *testing.T) {
 	}
 }
 
+// TestForcedGCThrottle verifies that back-to-back gc=true calls do not force
+// repeated GCs: the second call inside the throttle window still serves a
+// snapshot but reports gc_forced=false.
+func TestForcedGCThrottle(t *testing.T) {
+	r := newTestRouter()
+
+	sample := func() MemStatsResponse {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/debug/memstats?gc=true", nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status %d", w.Code)
+		}
+		var resp MemStatsResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid JSON: %v", err)
+		}
+		return resp
+	}
+
+	if first := sample(); !first.GCForced {
+		t.Error("first gc=true call should force a GC")
+	}
+	if second := sample(); second.GCForced {
+		t.Error("immediate second gc=true call should be throttled (gc_forced=false)")
+	}
+
+	// The throttled heap-profile path reports the same via header.
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/debug/pprof/heap?gc=true", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("profile status %d", w.Code)
+	}
+	if got := w.Header().Get("X-Debug-GC-Forced"); got != "false" {
+		t.Errorf("X-Debug-GC-Forced = %q, want \"false\" within throttle window", got)
+	}
+}
+
 func TestGetHeapProfile(t *testing.T) {
 	r := newTestRouter()
 

@@ -440,8 +440,8 @@
         "tags": [
           "debug"
         ],
-        "summary": "Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set.",
-        "description": "Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set.",
+        "summary": "Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set; forced GCs are throttled (min 1s apart) and gc_forced reports whether one actually ran.",
+        "description": "Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set; forced GCs are throttled (min 1s apart) and gc_forced reports whether one actually ran.",
         "operationId": "apiV1DebugMemstatsGet",
         "responses": {
           "200": {
@@ -462,8 +462,8 @@
         "tags": [
           "debug"
         ],
-        "summary": "pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory.",
-        "description": "pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory.",
+        "summary": "pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory; forced GCs are throttled (min 1s apart), reported via the X-Debug-GC-Forced header.",
+        "description": "pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory; forced GCs are throttled (min 1s apart), reported via the X-Debug-GC-Forced header.",
         "operationId": "apiV1DebugPprofHeapGet",
         "responses": {
           "200": {

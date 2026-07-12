@@ -75,11 +75,23 @@ duo harness and a live incident use the same two endpoints (user-token auth):
 | Endpoint | Semantics |
 |----------|-----------|
 | `GET /api/v1/debug/memstats?gc=true` | `runtime.MemStats` snapshot; `gc=true` forces a double GC first so `heap_alloc_bytes` is the post-GC **retained set**. Also reports goroutine count (a second leak axis). |
-| `GET /api/v1/debug/pprof/heap?gc=true` | pprof heap profile (gzipped protobuf for `go tool pprof`), post-GC when `gc=true`. |
+| `GET /api/v1/debug/pprof/heap?gc=true` | pprof heap profile (gzipped protobuf for `go tool pprof`), post-GC when `gc=true` (`X-Debug-GC-Forced` header reports whether it ran). |
 
 These complement the CLI-level `--pprof` flag (side server on `:6060`,
 unauthenticated, opt-in at start): the debug module is on the main port,
 authenticated, and available on any running instance without a restart.
+
+**Cost & control.** Mounting the routes costs nothing at runtime; the only
+expensive operation is the opt-in forced GC (stop-the-world on the live
+heap), which is throttled to at most one per second per instance — a polling
+client degrades to un-forced snapshots (`gc_forced: false`) instead of
+inducing a GC storm. The endpoints stay mounted by default rather than being
+gated behind a debug flag deliberately: their primary use is incident
+diagnosis on an already-running instance, and restarting with a flag to
+enable them would destroy the leaked heap being diagnosed. Content-wise they
+expose statistics and allocation stacks, never heap contents. The duo
+harness's `MemStats(gc=true)` retries past the throttle window so slope
+samples are always genuinely post-GC.
 
 Registration note: routes are registered in `server_control.go`
 (`UseUIEndpoints`) **and** in `swagger.go` (`registerAllAPIRoutes`) — the

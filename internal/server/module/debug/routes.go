@@ -13,13 +13,13 @@ import (
 func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, handler *Handler) {
 	router.GET("/debug/memstats", handler.GetMemStats,
 		swagger.WithTags("debug"),
-		swagger.WithDescription("Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set."),
+		swagger.WithDescription("Runtime memory statistics snapshot. Pass gc=true to force a full GC first so heap_alloc_bytes is the post-GC retained set; forced GCs are throttled (min 1s apart) and gc_forced reports whether one actually ran."),
 		swagger.WithResponseModel(MemStatsResponse{}),
 		swagger.WithMiddleware(authMiddleware),
 	)
 	router.GET("/debug/pprof/heap", handler.GetHeapProfile,
 		swagger.WithTags("debug"),
-		swagger.WithDescription("pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory."),
+		swagger.WithDescription("pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory; forced GCs are throttled (min 1s apart), reported via the X-Debug-GC-Forced header."),
 		swagger.WithMiddleware(authMiddleware),
 	)
 }

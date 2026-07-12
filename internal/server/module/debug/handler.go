@@ -9,33 +9,53 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/pprof"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
+// minForcedGCInterval caps how often callers can force a full GC. A forced
+// double GC is the one genuinely expensive operation here (stop-the-world on
+// the live heap), and it is exposed to whoever holds the user token — the
+// throttle bounds the worst case (a polling client) to one extra GC per
+// second instead of a GC storm, while leaving normal diagnostic cadence
+// (samples seconds apart) untouched.
+const minForcedGCInterval = time.Second
+
 // Handler serves the runtime memory diagnostics endpoints.
-type Handler struct{}
+type Handler struct {
+	mu          sync.Mutex
+	lastForceGC time.Time
+}
 
 // NewHandler returns a Handler.
 func NewHandler() *Handler {
 	return &Handler{}
 }
 
-// forceGC runs two GC cycles so finalizer-revived objects are collected too,
-// giving a stable post-GC retained set (the same double-GC that in-process
-// retention measurements use).
-func forceGC() {
+// tryForceGC runs two GC cycles (so finalizer-revived objects are collected
+// too, giving a stable post-GC retained set) unless a forced GC ran within
+// minForcedGCInterval. Returns whether the GC actually ran; a throttled call
+// still serves its snapshot, just without forcing.
+func (h *Handler) tryForceGC() bool {
+	h.mu.Lock()
+	if time.Since(h.lastForceGC) < minForcedGCInterval {
+		h.mu.Unlock()
+		return false
+	}
+	h.lastForceGC = time.Now()
+	h.mu.Unlock()
 	runtime.GC()
 	runtime.GC()
+	return true
 }
 
 // GetMemStats returns a runtime.MemStats snapshot. With ?gc=true it forces
-// a full GC first, so heap_alloc_bytes is the post-GC retained set.
+// a full GC first (subject to the throttle), so heap_alloc_bytes is the
+// post-GC retained set; gc_forced reports whether the GC actually ran.
 func (h *Handler) GetMemStats(c *gin.Context) {
-	gcForced := c.Query("gc") == "true"
-	if gcForced {
-		forceGC()
-	}
+	gcForced := c.Query("gc") == "true" && h.tryForceGC()
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	c.JSON(http.StatusOK, MemStatsResponse{
@@ -51,11 +71,13 @@ func (h *Handler) GetMemStats(c *gin.Context) {
 }
 
 // GetHeapProfile streams a pprof heap profile (gzipped protobuf, the format
-// `go tool pprof` reads). With ?gc=true it forces a full GC first so the
-// profile reflects retained memory rather than garbage awaiting collection.
+// `go tool pprof` reads). With ?gc=true it forces a full GC first (subject
+// to the throttle; the X-Debug-GC-Forced header reports whether it ran) so
+// the profile reflects retained memory rather than garbage awaiting
+// collection.
 func (h *Handler) GetHeapProfile(c *gin.Context) {
 	if c.Query("gc") == "true" {
-		forceGC()
+		c.Header("X-Debug-GC-Forced", boolStr(h.tryForceGC()))
 	}
 	profile := pprof.Lookup("heap")
 	if profile == nil {
@@ -68,4 +90,11 @@ func (h *Handler) GetHeapProfile(c *gin.Context) {
 		// Headers are already sent; nothing better to do than log via gin.
 		_ = c.Error(err)
 	}
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }

@@ -170,8 +170,23 @@ func (inst *DuoInstance) exited() bool {
 
 // MemStats fetches a runtime memory snapshot from the instance's debug
 // endpoint. With gc=true the instance forces a full GC first, so
-// HeapAllocBytes is its post-GC retained set.
+// HeapAllocBytes is its post-GC retained set; the endpoint throttles forced
+// GCs, so a throttled sample is retried until the GC actually ran.
 func (inst *DuoInstance) MemStats(gc bool) (*debugmodule.MemStatsResponse, error) {
+	const gcRetries = 3
+	for attempt := 0; ; attempt++ {
+		m, err := inst.memStatsOnce(gc)
+		if err != nil {
+			return nil, err
+		}
+		if !gc || m.GCForced || attempt >= gcRetries {
+			return m, nil
+		}
+		time.Sleep(1100 * time.Millisecond) // just past the endpoint's forced-GC throttle window
+	}
+}
+
+func (inst *DuoInstance) memStatsOnce(gc bool) (*debugmodule.MemStatsResponse, error) {
 	url := inst.BaseURL + "/api/v1/debug/memstats"
 	if gc {
 		url += "?gc=true"
