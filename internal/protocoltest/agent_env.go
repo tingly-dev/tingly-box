@@ -9,7 +9,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
@@ -125,41 +124,27 @@ type AgentTestEnv struct {
 // The environment is isolated with a temporary config directory
 // and must be cleaned up with Close() when done
 func NewAgentTestEnv(AgentType AgentType) (*AgentTestEnv, error) {
-	// Create temporary config directory
-	configDir, err := os.MkdirTemp("", "harness-Agent-*")
+	core, err := newGatewayCore("harness-agent-*", nil)
 	if err != nil {
-		return nil, fmt.Errorf("create temp config dir: %w", err)
+		return nil, err
 	}
 
-	// Create app config
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
-	if err != nil {
-		os.RemoveAll(configDir)
-		return nil, fmt.Errorf("create app config: %w", err)
-	}
-
-	// Start the virtual server (mock provider) with the shared text scenario
-	// as its only pre-registered mock. Agent CLIs send their built-in request
-	// model (not a scenario-encoded one), so the responder serves its fallback
-	// scenario — keeping exactly one registered makes the fallback
-	// deterministic, and its fixed answer (VirtualMockAnswerMarker) lets
-	// callers assert the round trip's content in the CLI's output. Replay
-	// registers additional scenarios on demand (SetupVirtualAgentScenario).
-	virtualServer := NewVirtualServerForCLI()
-	virtualServer.RegisterScenario(TextScenario())
-
-	// Create gateway server with real routing
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig())
-	router := gatewayServer.GetRouter()
-	ts := httptest.NewServer(router)
+	// Pre-register the shared text scenario as the virtual server's only
+	// mock. Agent CLIs send their built-in request model (not a
+	// scenario-encoded one), so the responder serves its fallback scenario —
+	// keeping exactly one registered makes the fallback deterministic, and
+	// its fixed answer (VirtualMockAnswerMarker) lets callers assert the
+	// round trip's content in the CLI's output. Replay registers additional
+	// scenarios on demand (SetupVirtualAgentScenario).
+	core.virtual.RegisterScenario(TextScenario())
 
 	return &AgentTestEnv{
-		configDir:        configDir,
-		appConfig:        appConfig,
-		gatewayServer:    ts,
-		virtualServer:    virtualServer,
-		baseURL:          ts.URL,
-		modelToken:       appConfig.GetGlobalConfig().GetModelToken(),
+		configDir:        core.configDir,
+		appConfig:        core.appConfig,
+		gatewayServer:    core.gateway,
+		virtualServer:    core.virtual,
+		baseURL:          core.gateway.URL,
+		modelToken:       core.modelToken,
 		capturedRequests: make([]*CapturedRequest, 0),
 		closed:           false,
 	}, nil

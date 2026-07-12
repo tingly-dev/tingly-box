@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
@@ -63,16 +61,9 @@ func (cmd *RoutingCmd) Run() error {
 		return err
 	}
 
-	envCfg := protocoltest.DuoEnvConfig{}
-	if cmd.Verbose {
-		envCfg.ChildLog = os.Stderr
-	}
-	if !cmd.JSON {
-		fmt.Println("routing: booting tb1 (vmodel upstream) and tb2 (gateway) as server processes...")
-	}
-	env, err := protocoltest.NewDuoEnv(envCfg)
+	env, err := bootDuoEnv("routing", cmd.JSON, cmd.Verbose, protocoltest.DuoEnvConfig{})
 	if err != nil {
-		return fmt.Errorf("boot duo environment: %w", err)
+		return err
 	}
 	defer env.Close()
 
@@ -84,44 +75,17 @@ func (cmd *RoutingCmd) Run() error {
 	for _, sc := range scenarios {
 		checks := env.RunRoutingScenario(sc)
 		block := routingScenarioBlock{Name: sc.Name, Description: sc.Description, Checks: checks, Pass: true}
-		failed := 0
 		for _, c := range checks {
 			if !c.Pass {
-				failed++
 				block.Pass = false
 				result.Pass = false
 			}
 		}
 		result.Scenarios = append(result.Scenarios, block)
-		if cmd.JSON {
-			continue
-		}
-		if failed == 0 {
-			fmt.Printf("  ✔ %-22s %d checks\n", sc.Name, len(checks))
-		} else {
-			fmt.Printf("  ✘ %-22s %d/%d checks failed\n", sc.Name, failed, len(checks))
-		}
-		for _, c := range checks {
-			if !c.Pass {
-				fmt.Printf("      ✘ %-36s %s\n", c.Name, c.Detail)
-			} else if cmd.Verbose {
-				fmt.Printf("      ✔ %-36s %s\n", c.Name, c.Detail)
-			}
+		if !cmd.JSON {
+			printCheckBlock(sc.Name, checks, cmd.Verbose)
 		}
 	}
 
-	if cmd.JSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(result); err != nil {
-			return err
-		}
-	}
-	if !result.Pass {
-		return fmt.Errorf("routing verification failed")
-	}
-	if !cmd.JSON {
-		fmt.Println("routing: PASS")
-	}
-	return nil
+	return emitDuoOutcome(cmd.JSON, result, result.Pass, "routing")
 }

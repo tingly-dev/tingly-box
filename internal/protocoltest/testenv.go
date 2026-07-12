@@ -81,42 +81,60 @@ func NewTestEnvOptionWithClient(c Client) TestEnvOption {
 	}
 }
 
-// NewTestEnv creates a TestEnv with a fresh gateway config and a new VirtualServer.
-// All resources are cleaned up via t.Cleanup. Only the client option is
-// honored in test mode; recording is a CLI-only concern.
-func NewTestEnv(t *testing.T, opts ...TestEnvOption) *TestEnv {
-	t.Helper()
+// gatewayCore is the shared skeleton every single-process harness env builds
+// on: a temp config dir, an app config, a real gateway httptest.Server, and a
+// VirtualServer mock provider. TestEnv (matrix/flags) and AgentTestEnv
+// (replay/agent) both assemble from it, so the boot sequence exists once.
+type gatewayCore struct {
+	configDir  string
+	appConfig  *config.AppConfig
+	gateway    *httptest.Server
+	virtual    *VirtualServer
+	modelToken string
+}
 
-	cfg := &testEnvConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	configDir, err := os.MkdirTemp("", "pv-test-*")
+// newGatewayCore boots the skeleton. configure (optional) runs after the app
+// config exists but before the server is created, for settings the server
+// reads at construction time (e.g. the MCP extension flag).
+func newGatewayCore(dirPattern string, configure func(*config.AppConfig), serverOpts ...server.ServerOption) (*gatewayCore, error) {
+	configDir, err := os.MkdirTemp("", dirPattern)
 	if err != nil {
-		t.Fatalf("create temp config dir: %v", err)
+		return nil, fmt.Errorf("create temp config dir: %w", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(configDir) })
 
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
-		t.Fatalf("create app config: %v", err)
+		os.RemoveAll(configDir)
+		return nil, fmt.Errorf("create app config: %w", err)
+	}
+	if configure != nil {
+		configure(appConfig)
 	}
 
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig())
-	router := gatewayServer.GetRouter()
-	ts := httptest.NewServer(router)
-	t.Cleanup(ts.Close)
+	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)
+	ts := httptest.NewServer(gatewayServer.GetRouter())
 
-	return &TestEnv{
-		appConfig:     appConfig,
-		gatewayServer: ts,
-		virtual:       NewVirtualServer(t),
-		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
-		client:        clientOrDefault(cfg.client),
-		routeModels:   make(map[string]string),
-		setupRoutes:   make(map[string]bool),
+	return &gatewayCore{
+		configDir:  configDir,
+		appConfig:  appConfig,
+		gateway:    ts,
+		virtual:    NewVirtualServerForCLI(),
+		modelToken: appConfig.GetGlobalConfig().GetModelToken(),
+	}, nil
+}
+
+// NewTestEnv creates a TestEnv with a fresh gateway config and a new
+// VirtualServer, cleaned up via t.Cleanup. It is the testing.T wrapper over
+// NewTestEnvForCLI — one construction path for both entry points.
+func NewTestEnv(t *testing.T, opts ...TestEnvOption) *TestEnv {
+	t.Helper()
+
+	env, err := NewTestEnvForCLI(opts...)
+	if err != nil {
+		t.Fatalf("create test env: %v", err)
 	}
+	t.Cleanup(env.Close)
+	return env
 }
 
 // clientOrDefault returns the configured client or the raw HTTP default.
@@ -127,67 +145,51 @@ func clientOrDefault(c Client) Client {
 	return NewHTTPClient()
 }
 
-// Close cleans up resources. For testing mode, it's a no-op (resources are cleaned up via t.Cleanup).
-// For CLI mode, it closes the servers and removes the config directory.
+// Close shuts down the gateway and virtual servers and removes the config
+// directory. Safe to call multiple times (t.Cleanup plus an explicit defer).
 func (env *TestEnv) Close() {
-	// For CLI mode, close the gateway server
 	if env.gatewayServer != nil {
 		env.gatewayServer.Close()
 	}
-	// For CLI mode, clean up virtual server
 	if env.virtual != nil {
 		env.virtual.Close()
 	}
-	// For CLI mode, remove config directory
 	if env.configDir != "" {
 		os.RemoveAll(env.configDir)
 	}
 }
 
-// NewTestEnvForCLI creates a TestEnv for CLI use (without testing.T).
-// Resources must be cleaned up via explicit Close() call.
+// NewTestEnvForCLI creates a TestEnv without a testing.T.
+// Resources must be cleaned up via an explicit Close() call.
 func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
-	// Apply options
 	cfg := &testEnvConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	configDir, err := os.MkdirTemp("", "pv-cli-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temp config dir: %w", err)
-	}
-
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
-	if err != nil {
-		os.RemoveAll(configDir)
-		return nil, fmt.Errorf("create app config: %w", err)
-	}
-
-	// Build server options
 	var serverOpts []server.ServerOption
 	if cfg.recordDir != "" {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
 	}
-	if cfg.mcpEnabled {
-		_ = appConfig.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionMCP, true)
+
+	core, err := newGatewayCore("pv-env-*", func(ac *config.AppConfig) {
+		if cfg.mcpEnabled {
+			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionMCP, true)
+		}
+	}, serverOpts...)
+	if err != nil {
+		return nil, err
 	}
 
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)
-	router := gatewayServer.GetRouter()
-	ts := httptest.NewServer(router)
-
-	virtual := NewVirtualServerForCLI()
-
 	return &TestEnv{
-		appConfig:     appConfig,
-		gatewayServer: ts,
-		virtual:       virtual,
-		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
+		appConfig:     core.appConfig,
+		gatewayServer: core.gateway,
+		virtual:       core.virtual,
+		modelToken:    core.modelToken,
 		client:        clientOrDefault(cfg.client),
 		routeModels:   make(map[string]string),
 		setupRoutes:   make(map[string]bool),
-		configDir:     configDir, // Store for cleanup
+		configDir:     core.configDir,
 	}, nil
 }
 

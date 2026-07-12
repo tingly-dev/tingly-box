@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -87,16 +85,10 @@ func (cmd *DuoCmd) Run() error {
 		return err
 	}
 
-	envCfg := protocoltest.DuoEnvConfig{StreamKB: cmd.StreamKB, StreamMS: cmd.StreamMS}
-	if cmd.Verbose {
-		envCfg.ChildLog = os.Stderr
-	}
-	if !cmd.JSON {
-		fmt.Println("duo: booting tb1 (vmodel upstream) and tb2 (gateway) as server processes...")
-	}
-	env, err := protocoltest.NewDuoEnv(envCfg)
+	env, err := bootDuoEnv("duo", cmd.JSON, cmd.Verbose,
+		protocoltest.DuoEnvConfig{StreamKB: cmd.StreamKB, StreamMS: cmd.StreamMS})
 	if err != nil {
-		return fmt.Errorf("boot duo environment: %w", err)
+		return err
 	}
 	defer env.Close()
 
@@ -116,25 +108,13 @@ func (cmd *DuoCmd) Run() error {
 		for _, route := range funcRoutes {
 			checks := env.RunFunctionalChecks(route, bodyBytes)
 			result.Functional = append(result.Functional, checks...)
-			failed := 0
 			for _, c := range checks {
 				if !c.Pass {
-					failed++
 					result.Pass = false
 				}
 			}
-			if cmd.JSON {
-				continue
-			}
-			if failed == 0 {
-				fmt.Printf("  ✔ %-16s %d checks\n", route.Name, len(checks))
-				continue
-			}
-			fmt.Printf("  ✘ %-16s %d/%d checks failed\n", route.Name, failed, len(checks))
-			for _, c := range checks {
-				if !c.Pass {
-					fmt.Printf("      ✘ %-28s %s\n", c.Name, c.Detail)
-				}
+			if !cmd.JSON {
+				printCheckBlock(route.Name, checks, cmd.Verbose)
 			}
 		}
 	}
@@ -173,20 +153,7 @@ func (cmd *DuoCmd) Run() error {
 		}
 	}
 
-	if cmd.JSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(result); err != nil {
-			return err
-		}
-	}
-	if !result.Pass {
-		return fmt.Errorf("duo verification failed")
-	}
-	if !cmd.JSON {
-		fmt.Println("duo: PASS")
-	}
-	return nil
+	return emitDuoOutcome(cmd.JSON, result, result.Pass, "duo")
 }
 
 // printMemoryReport renders one route's memory outcome, tb1 and tb2 side by
