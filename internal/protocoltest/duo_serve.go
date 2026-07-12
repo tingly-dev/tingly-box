@@ -50,6 +50,14 @@ const (
 	duoRoleServe = "serve"
 )
 
+// tb2 provider UUIDs wired by seedDuoGateway; duo_routing.go's scenario
+// services reference the same IDs, so they live in one place.
+const (
+	DuoProviderChat      = "tb1-openai-chat"
+	DuoProviderResponses = "tb1-openai-responses"
+	DuoProviderAnthropic = "tb1-anthropic"
+)
+
 // Slow-stream vmodel IDs registered on tb1 for the backpressure routes.
 // Unlike the builtin virtual-gpt-4/virtual-claude-3 (tiny instant response),
 // these stream a configurably large response over a configurable duration.
@@ -138,22 +146,22 @@ func duoEnvInt(key string) int {
 func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
 	providers := map[string]*typ.Provider{
 		"chat": {
-			UUID:               "tb1-openai-chat",
-			Name:               "tb1-openai-chat",
+			UUID:               DuoProviderChat,
+			Name:               DuoProviderChat,
 			APIBase:            tb1URL + "/virtual/openai/v1",
 			APIStyle:           protocol.APIStyleOpenAI,
 			OpenAIEndpointMode: ai.EndpointModeChat,
 		},
 		"responses": {
-			UUID:               "tb1-openai-responses",
-			Name:               "tb1-openai-responses",
+			UUID:               DuoProviderResponses,
+			Name:               DuoProviderResponses,
 			APIBase:            tb1URL + "/virtual/openai/v1",
 			APIStyle:           protocol.APIStyleOpenAI,
 			OpenAIEndpointMode: ai.EndpointModeResponses,
 		},
 		"anthropic": {
-			UUID:     "tb1-anthropic",
-			Name:     "tb1-anthropic",
+			UUID:     DuoProviderAnthropic,
+			Name:     DuoProviderAnthropic,
 			APIBase:  tb1URL + "/virtual/anthropic", // SDK appends /v1/messages
 			APIStyle: protocol.APIStyleAnthropic,
 		},
@@ -272,8 +280,7 @@ func duoStreamChunks(kb int) []string {
 	if n < 1 {
 		n = 1
 	}
-	const filler = "streamed backpressure payload "
-	chunk := strings.Repeat(filler, chunkBytes/len(filler)+1)[:chunkBytes]
+	chunk := duoFiller(chunkBytes)
 	chunks := make([]string, n)
 	for i := range chunks {
 		chunks[i] = chunk

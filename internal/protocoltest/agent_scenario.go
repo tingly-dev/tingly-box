@@ -1,6 +1,5 @@
 package protocoltest
 
-
 // AgentScenario defines a test scenario for profile testing
 // Unlike matrix scenarios which test protocol transformations,
 // profile scenarios test client implementations (OAuth, path rewriting, etc.)

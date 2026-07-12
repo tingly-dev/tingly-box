@@ -122,8 +122,59 @@ func Migrate(c *Config) error {
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
+	migrate20260712(c) // Drop smart-routing partitions using removed positions (tool_use)
 	normalizeRuleDefaultsOnce(c)
 	return nil
+}
+
+// migrate20260712 drops smart-routing partitions whose ops reference a
+// position the current build no longer recognizes (tool_use was removed;
+// this also covers any future removal). Without this, one stale op fails
+// ValidateSmartRouting for the WHOLE rule: NewRouter rejects it at request
+// time — disabling every sibling partition — and AddRule/UpdateRule reject
+// any edit, leaving the rule both broken and unrepairable from the UI.
+// Dropping the partition preserves observed behavior: a tool_use partition
+// never matched real traffic. Runs every boot (idempotent) so configs
+// restored from backups heal too.
+func migrate20260712(c *Config) {
+	needsSave := false
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if len(rule.SmartRouting) == 0 {
+			continue
+		}
+		kept := rule.SmartRouting[:0]
+		for _, sr := range rule.SmartRouting {
+			invalid := ""
+			for _, op := range sr.Ops {
+				if !op.Position.IsValid() {
+					invalid = string(op.Position)
+					break
+				}
+			}
+			if invalid == "" {
+				kept = append(kept, sr)
+				continue
+			}
+			needsSave = true
+			logrus.WithFields(logrus.Fields{
+				"rule_uuid":     rule.UUID,
+				"request_model": rule.RequestModel,
+				"partition":     sr.Description,
+				"position":      invalid,
+			}).Warn("Removing smart-routing partition: position is no longer supported")
+		}
+		rule.SmartRouting = kept
+		if len(rule.SmartRouting) == 0 {
+			rule.SmartEnabled = false
+		}
+	}
+
+	if needsSave {
+		c.saveMigration()
+		logrus.Info("Migration 2026-07-12 completed: removed smart-routing partitions with unsupported positions")
+	}
 }
 
 // normalizeLegacyConfigBaseline folds the pre-2026-04 config repair migrations

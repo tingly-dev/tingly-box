@@ -187,29 +187,35 @@ func (inst *DuoInstance) MemStats(gc bool) (*debugmodule.MemStatsResponse, error
 }
 
 func (inst *DuoInstance) memStatsOnce(gc bool) (*debugmodule.MemStatsResponse, error) {
-	url := inst.BaseURL + "/api/v1/debug/memstats"
+	path := "/api/v1/debug/memstats"
 	if gc {
-		url += "?gc=true"
+		path += "?gc=true"
 	}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	var m debugmodule.MemStatsResponse
+	if err := inst.getJSON(path, &m); err != nil {
+		return nil, fmt.Errorf("%s memstats: %w", inst.Name, err)
+	}
+	return &m, nil
+}
+
+// getJSON performs an authenticated management-API GET against the instance
+// and decodes the JSON response into out.
+func (inst *DuoInstance) getJSON(path string, out any) error {
+	req, err := http.NewRequest(http.MethodGet, inst.BaseURL+path, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+inst.UserToken)
 	resp, err := inst.hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s memstats: %w", inst.Name, err)
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return nil, fmt.Errorf("%s memstats: status %d: %s", inst.Name, resp.StatusCode, b)
+		return fmt.Errorf("GET %s: status %d: %s", path, resp.StatusCode, b)
 	}
-	var m debugmodule.MemStatsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
-		return nil, fmt.Errorf("%s memstats: %w", inst.Name, err)
-	}
-	return &m, nil
+	return json.NewDecoder(resp.Body).Decode(out)
 }
 
 // WriteHeapProfile fetches a post-GC pprof heap profile from the instance
@@ -497,8 +503,7 @@ func BuildConversationBody(route DuoRoute, totalBytes int, streaming bool) []byt
 	if msgs < 1 {
 		msgs = 1
 	}
-	filler := strings.Repeat("The quick brown fox jumps over the lazy dog. ", msgBytes/45+1)[:msgBytes]
-	fb, _ := json.Marshal(filler)
+	fb, _ := json.Marshal(duoFiller(msgBytes))
 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, `{"model":%q,"max_tokens":1024,"stream":%v,"messages":[`, route.RequestModel(), streaming)
@@ -514,6 +519,13 @@ func BuildConversationBody(route DuoRoute, totalBytes int, streaming bool) []byt
 	}
 	sb.WriteString(`]}`)
 	return []byte(sb.String())
+}
+
+// duoFiller returns n bytes of benign filler text — the one padding idiom
+// shared by conversation bodies, stream chunks, and routing scenarios.
+func duoFiller(n int) string {
+	const text = "The quick brown fox jumps over the lazy dog. "
+	return strings.Repeat(text, n/len(text)+1)[:n]
 }
 
 // post sends one request through tb2's anthropic endpoint for the route's

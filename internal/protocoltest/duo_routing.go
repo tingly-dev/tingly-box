@@ -135,11 +135,11 @@ func (sc *DuoRoutingScenario) scenario() string {
 func duoRoutingProviderUUID(target string) (string, error) {
 	switch target {
 	case "", "chat":
-		return "tb1-openai-chat", nil
+		return DuoProviderChat, nil
 	case "responses":
-		return "tb1-openai-responses", nil
+		return DuoProviderResponses, nil
 	case "anthropic":
-		return "tb1-anthropic", nil
+		return DuoProviderAnthropic, nil
 	default:
 		return "", fmt.Errorf("unknown service target %q (chat|responses|anthropic)", target)
 	}
@@ -247,8 +247,7 @@ func buildRoutingBody(sc *DuoRoutingScenario, r DuoRoutingRequest) ([]byte, erro
 
 	var messages []map[string]any
 	if r.Body.SizeKB > 0 {
-		const filler = "The quick brown fox jumps over the lazy dog. "
-		pad := strings.Repeat(filler, r.Body.SizeKB*1024/len(filler)+1)[:r.Body.SizeKB*1024]
+		pad := duoFiller(r.Body.SizeKB * 1024)
 		messages = append(messages, map[string]any{
 			"role":    "user",
 			"content": []map[string]any{{"type": "text", "text": pad}},
@@ -306,27 +305,13 @@ func (inst *DuoInstance) smartRoutingTrace(requestID string) (fields map[string]
 			}
 			return nil, "", err
 		}
-		time.Sleep(150 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
 func (inst *DuoInstance) smartRoutingTraceOnce(requestID string) (map[string]any, string, error) {
-	req, err := http.NewRequest(http.MethodGet, inst.BaseURL+"/api/v1/requests/"+requestID, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+inst.UserToken)
-	resp, err := inst.hc.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, "", fmt.Errorf("request detail %s: status %d: %s", requestID, resp.StatusCode, b)
-	}
 	var detail duoRequestDetail
-	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+	if err := inst.getJSON("/api/v1/requests/"+requestID, &detail); err != nil {
 		return nil, "", err
 	}
 	for _, ev := range detail.Events {

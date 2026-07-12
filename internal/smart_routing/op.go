@@ -263,8 +263,6 @@ const (
 	OpLatestUserContains    SmartOpOperation = "contains" // Latest user message contains the value
 	OpLatestUserRequestType SmartOpOperation = "type"     // Latest user message content type
 
-	// Tool use operations
-
 	// Token operations
 	OpTokenGe SmartOpOperation = "ge" // Token count greater than or equal to value
 	OpTokenGt SmartOpOperation = "gt" // Token count greater than value

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -300,6 +301,16 @@ func TestFireDetachesValues(t *testing.T) {
 	assert.Equal(t, true, stored.Data["matched"])
 	assert.Equal(t, 5*time.Millisecond, stored.Data["latency"])
 	assert.Equal(t, "boom", stored.Data["err"])
+
+	// A typed-nil error (non-nil interface wrapping a nil pointer) passes
+	// the nil case; rendering must not panic by calling Error() on it.
+	var typedNil *net.OpError
+	nilEntry := logger.WithField("err", error(typedNil))
+	nilEntry.Time = time.Now()
+	nilEntry.Level = logrus.InfoLevel
+	nilEntry.Message = "typed-nil"
+	require.NoError(t, hook.Fire(nilEntry))
+	assert.Equal(t, "<nil>", hook.GetLatest(1)[0].Data["err"])
 
 	raw, ok := stored.Data["trace"].(json.RawMessage)
 	require.True(t, ok, "composite values are re-encoded as RawMessage")

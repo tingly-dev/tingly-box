@@ -66,8 +66,9 @@ func (h *MemoryLogHook) Fire(entry *logrus.Entry) error {
 		Level:   entry.Level,
 		Message: strings.Clone(entry.Message),
 	}
+	// Keys are code literals (read-only data) — no detachment needed.
 	for k, v := range entry.Data {
-		copied.Data[strings.Clone(k)] = detachValue(v)
+		copied.Data[k] = detachValue(v)
 	}
 
 	// Rotate: circular buffer automatically overwrites oldest entry
@@ -106,7 +107,11 @@ func detachValue(v any) any {
 	case string:
 		return strings.Clone(t)
 	case error:
-		return strings.Clone(t.Error())
+		// Render via fmt, not t.Error(): a typed-nil error (non-nil
+		// interface wrapping a nil pointer) passes the `case nil` above and
+		// would panic inside Error(); fmt recovers method panics and prints
+		// nil pointers as "<nil>". The result is a fresh string either way.
+		return fmt.Sprintf("%v", t)
 	default:
 		if b, err := json.Marshal(v); err == nil {
 			return json.RawMessage(b)
