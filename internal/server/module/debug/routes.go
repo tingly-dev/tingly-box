@@ -19,7 +19,7 @@ func RegisterRoutes(router *swagger.RouteGroup, authMiddleware gin.HandlerFunc, 
 	)
 	router.GET("/debug/pprof/heap", handler.GetHeapProfile,
 		swagger.WithTags("debug"),
-		swagger.WithDescription("pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory; forced GCs are throttled (min 1s apart), reported via the X-Debug-GC-Forced header."),
+		swagger.WithDescription("pprof heap profile (gzipped protobuf for `go tool pprof`). Pass gc=true to force a full GC first so the profile reflects retained memory; forced GCs are throttled (min 1s apart), reported via the X-Debug-GC-Forced header. Profile serialization itself is also throttled (min 1s apart, 429 with Retry-After when exceeded)."),
 		swagger.WithMiddleware(authMiddleware),
 	)
 }

@@ -213,16 +213,25 @@ func (inst *DuoInstance) memStatsOnce(gc bool) (*debugmodule.MemStatsResponse, e
 }
 
 // WriteHeapProfile fetches a post-GC pprof heap profile from the instance
-// and writes it under dir, returning the file path.
+// and writes it under dir, returning the file path. The endpoint throttles
+// profile serialization, so a 429 is retried past the throttle window.
 func (inst *DuoInstance) WriteHeapProfile(dir, name string) (string, error) {
 	req, err := http.NewRequest(http.MethodGet, inst.BaseURL+"/api/v1/debug/pprof/heap?gc=true", nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+inst.UserToken)
-	resp, err := inst.hc.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("%s heap profile: %w", inst.Name, err)
+	var resp *http.Response
+	for attempt := 0; ; attempt++ {
+		resp, err = inst.hc.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("%s heap profile: %w", inst.Name, err)
+		}
+		if resp.StatusCode != http.StatusTooManyRequests || attempt >= 3 {
+			break
+		}
+		resp.Body.Close()
+		time.Sleep(1100 * time.Millisecond) // just past the endpoint's profile throttle window
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

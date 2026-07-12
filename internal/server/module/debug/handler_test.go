@@ -73,7 +73,9 @@ func TestForcedGCThrottle(t *testing.T) {
 		t.Error("immediate second gc=true call should be throttled (gc_forced=false)")
 	}
 
-	// The throttled heap-profile path reports the same via header.
+	// The heap-profile path shares the GC throttle (reported via header) and
+	// additionally throttles profile serialization itself: a first profile
+	// serves (with the GC skipped), an immediate second one is rejected.
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/debug/pprof/heap?gc=true", nil))
 	if w.Code != http.StatusOK {
@@ -81,6 +83,11 @@ func TestForcedGCThrottle(t *testing.T) {
 	}
 	if got := w.Header().Get("X-Debug-GC-Forced"); got != "false" {
 		t.Errorf("X-Debug-GC-Forced = %q, want \"false\" within throttle window", got)
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/debug/pprof/heap", nil))
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("immediate second profile: status %d, want 429", w.Code)
 	}
 }
 

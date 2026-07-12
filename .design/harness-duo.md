@@ -81,17 +81,34 @@ These complement the CLI-level `--pprof` flag (side server on `:6060`,
 unauthenticated, opt-in at start): the debug module is on the main port,
 authenticated, and available on any running instance without a restart.
 
-**Cost & control.** Mounting the routes costs nothing at runtime; the only
-expensive operation is the opt-in forced GC (stop-the-world on the live
-heap), which is throttled to at most one per second per instance — a polling
-client degrades to un-forced snapshots (`gc_forced: false`) instead of
-inducing a GC storm. The endpoints stay mounted by default rather than being
-gated behind a debug flag deliberately: their primary use is incident
-diagnosis on an already-running instance, and restarting with a flag to
-enable them would destroy the leaked heap being diagnosed. Content-wise they
-expose statistics and allocation stacks, never heap contents. The duo
-harness's `MemStats(gc=true)` retries past the throttle window so slope
-samples are always genuinely post-GC.
+**Cost & control.** Mounting the routes costs nothing at runtime. The two
+expensive operations are both throttled to one per second per instance: the
+opt-in forced GC (stop-the-world on the live heap; a throttled call degrades
+to an un-forced snapshot, `gc_forced: false`) and heap-profile serialization
+(CPU proportional to live objects; a throttled call gets a 429 with
+Retry-After, since a profile has no cheap degraded form). Plain memstats
+reads are microsecond-scale and unthrottled. The endpoints stay mounted by
+default rather than being gated behind a debug flag deliberately: their
+primary use is incident diagnosis on an already-running instance, and
+restarting with a flag to enable them would destroy the leaked heap being
+diagnosed. The duo harness retries `MemStats(gc=true)` and profile fetches
+past the throttle windows so slope samples are always genuinely post-GC.
+
+**Relation to pprof.** The heap endpoint is deliberately a *narrowed*
+re-exposure of `runtime/pprof` (the same `Lookup("heap").WriteTo` primitive
+`net/http/pprof` wraps), not a reimplementation of the suite. Mounting
+`net/http/pprof` wholesale was rejected: its import registers unauthenticated
+handlers on `http.DefaultServeMux` as a side effect (a footgun for every
+binary embedding the server), it exposes strictly more than needed
+(`cmdline` leaks argv, goroutine dumps can leak pprof labels, CPU profiling
+is a compute lever), and its `?gc=1` cannot be throttled without forking the
+handler. Information-wise these endpoints expose allocation-site stacks and
+counters, never heap contents — strictly less than pprof — behind the same
+user token that already guards far more valuable targets (provider keys,
+config apply). The full pprof suite remains available via the CLI's
+explicit `--pprof` side server on `:6060`; the split is intentional: main
+port = narrow, contract-shaped memory observation; `:6060` = full pprof,
+opt-in at start.
 
 Registration note: routes are registered in `server_control.go`
 (`UseUIEndpoints`) **and** in `swagger.go` (`registerAllAPIRoutes`) — the

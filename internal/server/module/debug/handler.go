@@ -16,18 +16,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// minForcedGCInterval caps how often callers can force a full GC. A forced
-// double GC is the one genuinely expensive operation here (stop-the-world on
-// the live heap), and it is exposed to whoever holds the user token — the
-// throttle bounds the worst case (a polling client) to one extra GC per
-// second instead of a GC storm, while leaving normal diagnostic cadence
-// (samples seconds apart) untouched.
-const minForcedGCInterval = time.Second
+// The two genuinely expensive operations on this surface — a forced double
+// GC (stop-the-world on the live heap) and heap-profile serialization (CPU
+// proportional to live objects) — are exposed to whoever holds the user
+// token, so both are throttled. The bounds turn a polling client into a
+// degraded one (un-forced snapshots / 429) instead of a load lever, while
+// leaving normal diagnostic cadence (operations seconds apart) untouched.
+// Cheap operations (plain memstats reads, microsecond-scale) are not
+// limited.
+const (
+	minForcedGCInterval    = time.Second
+	minHeapProfileInterval = time.Second
+)
 
 // Handler serves the runtime memory diagnostics endpoints.
 type Handler struct {
 	mu          sync.Mutex
 	lastForceGC time.Time
+	lastProfile time.Time
 }
 
 // NewHandler returns a Handler.
@@ -77,6 +83,19 @@ func (h *Handler) GetMemStats(c *gin.Context) {
 // the profile reflects retained memory rather than garbage awaiting
 // collection.
 func (h *Handler) GetHeapProfile(c *gin.Context) {
+	h.mu.Lock()
+	throttled := time.Since(h.lastProfile) < minHeapProfileInterval
+	if !throttled {
+		h.lastProfile = time.Now()
+	}
+	h.mu.Unlock()
+	if throttled {
+		// Unlike memstats, a profile has no cheap degraded form — serving it
+		// IS the cost — so a throttled request is rejected outright.
+		c.Header("Retry-After", "1")
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "heap profile throttled; retry after 1s"})
+		return
+	}
 	if c.Query("gc") == "true" {
 		c.Header("X-Debug-GC-Forced", strconv.FormatBool(h.tryForceGC()))
 	}
