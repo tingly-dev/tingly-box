@@ -61,7 +61,16 @@ type Scenario struct {
 
 	MockResponses map[ResponseFormat]MockResponseBuilder
 
+	// Assertions are the content-level checks. They assume the response is the
+	// scenario's own MockResponses fixture, so they only hold when the upstream
+	// is test-controlled (the virtual mock).
 	Assertions []check.Assertion
+
+	// Structural are the upstream-independent checks (status, shape, counts —
+	// never exact content). Consumers that route the scenario through an
+	// upstream whose response is not test-controlled (a live provider, an
+	// in-process vmodel) run these instead of Assertions.
+	Structural []check.Assertion
 
 	// SkipTransitive marks scenarios that should be excluded from two-hop
 	// transitive tests (e.g. error scenarios that produce no comparable output).

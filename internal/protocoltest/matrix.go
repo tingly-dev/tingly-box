@@ -221,11 +221,24 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 	return opts
 }
 
-// skipSourceScenarios lists source+scenario combinations that are known to be broken.
+// skipSourceScenarios is the single registry of source+scenario combinations
+// that are known to be broken. Every entry is a real gateway defect, not a
+// test artifact; remove it when the defect is fixed. All tiers derive their
+// skips from this map (the matrix directly, replay via KnownDefectReason), so
+// closing a defect is a one-line deletion.
 var skipSourceScenarios = map[string]string{
 	// openai_responses source: tool_call conversion from provider back to Responses format loses tool calls
 	"openai_responses|tool_use":           "Responses API source: tool_use conversion incomplete",
 	"openai_responses|streaming_tool_use": "Responses API source: streaming tool_use conversion incomplete",
+}
+
+// KnownDefectReason reports whether a (source protocol, scenario) combination
+// is in the known-defect registry, and why. Consumers outside the matrix
+// (e.g. `harness replay`) use this to skip runs that exercise a documented
+// gateway bug instead of keeping their own copy of the list.
+func KnownDefectReason(source protocol.APIType, scenarioName string) (string, bool) {
+	reason, skip := skipSourceScenarios[fmt.Sprintf("%s|%s", source, scenarioName)]
+	return reason, skip
 }
 
 // clientSkipScenarios lists client|source|scenario[|mode] combinations that are

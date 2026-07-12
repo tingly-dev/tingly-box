@@ -27,6 +27,10 @@ func TextScenario() Scenario {
 			check.AssertContentNonEmpty(),
 			check.AssertUsageNonZero(),
 		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertContentNonEmpty(),
+		},
 	}
 }
 
@@ -126,6 +130,10 @@ func ToolUseScenario() Scenario {
 			check.AssertToolCallName(0, "get_weather"),
 			check.AssertToolCallArgs(0, "location", "Paris"),
 			check.AssertUsageNonZero(),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertHasToolCalls(1),
 		},
 	}
 }
@@ -246,6 +254,10 @@ func ToolResultScenario() Scenario {
 			check.AssertContentNonEmpty(),
 			check.AssertUsageNonZero(),
 		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertContentNonEmpty(),
+		},
 	}
 }
 
@@ -269,6 +281,10 @@ func ThinkingScenario() Scenario {
 			check.AssertContentContains("Paris"),
 			check.AssertContentNonEmpty(),
 			check.AssertUsageNonZero(),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertContentNonEmpty(),
 		},
 	}
 }
@@ -323,6 +339,10 @@ func MultiTurnScenario() Scenario {
 			check.AssertContentNonEmpty(),
 			check.AssertUsageNonZero(),
 		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertContentNonEmpty(),
+		},
 	}
 }
 
@@ -345,6 +365,11 @@ func StreamingTextScenario() Scenario {
 			check.AssertStreamEventCount(3),
 			check.AssertRoleEquals("assistant"),
 			check.AssertContentContains("Paris"),
+			check.AssertContentNonEmpty(),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertStreamEventCount(1),
 			check.AssertContentNonEmpty(),
 		},
 	}
@@ -370,6 +395,11 @@ func StreamingToolUseScenario() Scenario {
 			check.AssertHasToolCalls(1),
 			check.AssertToolCallName(0, "get_weather"),
 			check.AssertToolCallArgs(0, "location", "Paris"),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertStreamEventCount(1),
+			check.AssertHasToolCalls(1),
 		},
 	}
 }
@@ -397,6 +427,10 @@ func IncompleteScenario() Scenario {
 			check.AssertContentContains("truncated"),
 			check.AssertContentNonEmpty(),
 			check.AssertUsageNonZero(),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatus(200),
+			check.AssertContentNonEmpty(),
 		},
 	}
 }
@@ -585,6 +619,9 @@ func ErrorScenario() Scenario {
 			check.AssertHTTPStatusAtLeast(400),
 			check.AssertErrorMessageContains("rate limit"),
 		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatusAtLeast(400),
+		},
 	}
 }
 
@@ -606,6 +643,9 @@ func Error500Scenario() Scenario {
 			check.AssertHTTPStatusAtLeast(400),
 			check.AssertErrorMessageContains("upstream"),
 		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatusAtLeast(400),
+		},
 	}
 }
 
@@ -626,6 +666,9 @@ func ErrorAuth401Scenario() Scenario {
 		Assertions: []check.Assertion{
 			check.AssertHTTPStatus(401),
 			check.AssertErrorMessageContains("authentication"),
+		},
+		Structural: []check.Assertion{
+			check.AssertHTTPStatusAtLeast(400),
 		},
 	}
 }
@@ -651,6 +694,9 @@ func ErrorMidStreamCloseScenario() Scenario {
 			// in-band error event (real SDK clients raise — the turn was
 			// truncated, not completed); OpenAI-target paths end with the
 			// partial content. The gateway must not 5xx or hang either way.
+			check.AssertHTTPStatus(200),
+		},
+		Structural: []check.Assertion{
 			check.AssertHTTPStatus(200),
 		},
 	}

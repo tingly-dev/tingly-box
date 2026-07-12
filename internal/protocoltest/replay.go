@@ -37,6 +37,17 @@ func agentAPIStyle(at AgentType) protocol.APIStyle {
 	}
 }
 
+// AgentSourceAPIType returns the protocol-matrix source type matching the
+// agent CLI's wire format: codex speaks the OpenAI Responses API, claude and
+// opencode post Anthropic messages. This is the key consumers use to look up
+// an agent's runs in the shared known-defect registry (KnownDefectReason).
+func AgentSourceAPIType(at AgentType) protocol.APIType {
+	if at == AgentTypeCodex {
+		return protocol.TypeOpenAIResponses
+	}
+	return protocol.TypeAnthropicV1
+}
+
 // repointBuiltinRule updates the agent's built-in rule so its fixed
 // RequestModel routes to a single service{providerUUID, upstreamModel}.
 // It is the shared core of the SetupVirtualAgentScenario / SetupVModelAgent

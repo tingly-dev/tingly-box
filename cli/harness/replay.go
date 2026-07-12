@@ -27,15 +27,14 @@ var fixtureFS embed.FS
 
 // replayScenario binds a matrix Scenario to the replay machinery.
 //
-// The matrix Scenario carries both the deterministic mock responses (used by
-// the "virtual" upstream) and content-level assertions. For the "vmodel" and
-// "real" upstreams the response is not controlled by the test, so only the
-// upstream-independent `structural` assertions are run.
+// The Scenario carries the deterministic mock responses plus both assertion
+// tiers: content-level Assertions (run against the "virtual" upstream, whose
+// response is test-controlled) and upstream-independent Structural assertions
+// (run against "vmodel" and "real", whose responses are not).
 type replayScenario struct {
 	matrix        protocoltest.Scenario
 	streaming     bool
 	defaultVModel string // vmodel registry ID used when --upstream=vmodel
-	structural    []protocoltest.Assertion
 }
 
 // replayScenarios is the set of scenarios `harness replay` can run. The map
@@ -45,49 +44,21 @@ var replayScenarios = map[string]replayScenario{
 		matrix:        protocoltest.TextScenario(),
 		streaming:     false,
 		defaultVModel: "echo-model",
-		structural: []protocoltest.Assertion{
-			protocoltest.AssertHTTPStatus(200),
-			protocoltest.AssertContentNonEmpty(),
-		},
 	},
 	"tool_use": {
 		matrix:        protocoltest.ToolUseScenario(),
 		streaming:     false,
 		defaultVModel: "web-search-example",
-		structural: []protocoltest.Assertion{
-			protocoltest.AssertHTTPStatus(200),
-			protocoltest.AssertHasToolCalls(1),
-		},
 	},
 	"streaming_text": {
 		matrix:        protocoltest.StreamingTextScenario(),
 		streaming:     true,
 		defaultVModel: "echo-model",
-		structural: []protocoltest.Assertion{
-			protocoltest.AssertHTTPStatus(200),
-			protocoltest.AssertStreamEventCount(1),
-			protocoltest.AssertContentNonEmpty(),
-		},
 	},
 }
 
 // replayScenarioOrder is the stable run order for replay scenarios.
 var replayScenarioOrder = []string{"text", "tool_use", "streaming_text"}
-
-// replaySkip lists "<upstream>/<agent>/<scenario>" runs that hit known,
-// documented gaps or bugs. Skipping keeps the suite green while the issue is
-// tracked; remove an entry once the underlying problem is fixed.
-//
-// Each entry is a real defect surfaced by replay — not a test artifact.
-var replaySkip = map[string]string{
-	// Transform-pipeline gap: codex speaks the OpenAI Responses API, and
-	// tool_use round-trips through the Responses source path, whose
-	// tool_call conversion is incomplete. Mirrors protocoltest's
-	// skipSourceScenarios["openai_responses|tool_use"]. Fails on every upstream.
-	"virtual/codex/tool_use": "Responses API source: tool_use conversion incomplete",
-	"vmodel/codex/tool_use":  "Responses API source: tool_use conversion incomplete",
-	"real/codex/tool_use":    "Responses API source: tool_use conversion incomplete",
-}
 
 // ReplayCmd replays captured agent request fixtures through the gateway's
 // built-in rule, routed to a selectable upstream.
@@ -200,14 +171,19 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocolte
 	row := replayRow{Agent: agentName, Scenario: scenarioName, Upstream: r.Upstream}
 	start := time.Now()
 
-	if reason, skip := replaySkip[r.Upstream+"/"+agentName+"/"+scenarioName]; skip {
+	agentType := parseAgentType(agentName)
+
+	// Known gateway defects are registered once, in protocoltest's
+	// skipSourceScenarios; replay derives its skips from the agent's source
+	// protocol so fixing a defect is a single-registry deletion. The defects
+	// are transform-pipeline bugs, so they apply on every upstream.
+	if reason, skip := protocoltest.KnownDefectReason(protocoltest.AgentSourceAPIType(agentType), scenarioName); skip {
 		row.Skipped = true
 		row.SkipReason = reason
 		row.Passed = true // skipped runs do not count as failures
 		return row
 	}
 
-	agentType := parseAgentType(agentName)
 	sc := replayScenarios[scenarioName]
 
 	body, err := loadFixture(agentType, scenarioName)
@@ -272,7 +248,7 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocolte
 	// For the virtual upstream the response is deterministic, so the
 	// scenario's content-level assertions apply. For vmodel / real the
 	// response is not controlled by the test — only structural checks.
-	assertions := sc.structural
+	assertions := sc.matrix.Structural
 	if r.Upstream == "virtual" {
 		assertions = sc.matrix.Assertions
 	}
