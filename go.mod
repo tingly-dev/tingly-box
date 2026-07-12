@@ -14,18 +14,22 @@ replace github.com/tingly-dev/tingly-box/ai => ./ai
 
 replace github.com/tingly-dev/tingly-box/agentboot => ./agentboot
 
+replace github.com/tingly-dev/tingly-box/swagger => ./swagger
+
+replace github.com/tingly-dev/tingly-box/afk => ./afk
+
 require (
-	github.com/tingly-dev/tingly-box/afk v0.0.0-20260706041525-46cbb39cc7ff
-	github.com/tingly-dev/tingly-box/agentboot v0.1.0
-	github.com/tingly-dev/tingly-box/ai v0.1.0
-	github.com/tingly-dev/tingly-box/imbot v0.1.0
-	github.com/tingly-dev/tingly-box/swagger v0.0.0-20260706041525-46cbb39cc7ff
+	github.com/tingly-dev/tingly-box/afk v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/imbot v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/swagger v0.0.0-00010101000000-000000000000
 )
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.56.0
-	github.com/openai/openai-go/v3 v3.41.0
-	google.golang.org/genai v1.62.0
+	github.com/anthropics/anthropic-sdk-go v1.57.0
+	github.com/openai/openai-go/v3 v3.42.0
+	google.golang.org/genai v1.63.0
 )
 
 require (
