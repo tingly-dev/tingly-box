@@ -464,7 +464,7 @@ independent surfaces:
 ```
 
 Built-ins cover the smart-routing position catalog (token, thinking,
-context_user, tool_use, model, time_range, agent.claude_code) plus two
+context_user, model, time_range, agent.claude_code) plus two
 behavioral regressions: **first-match ordering** and **G3** (session pins
 scoped per content partition). Time-range windows are built relative to the
 wall clock — hours-wide margins, no clock seam needed.
@@ -474,10 +474,6 @@ Semantics worth knowing when authoring scenarios:
 - When **no partition matches**, the LB falls back to the **union** of base
   + partition services, so `expect.svc` is only deterministic for matched
   requests; miss requests assert `outcome: no_match` on the trace instead.
-- The `tool_use` position extracts tool names across **all** message roles
-  (assistant turns carry them in real traffic; the extractor originally
-  scanned user messages only — a defect this scenario surfaced and that is
-  now fixed and pinned at unit + e2e level).
 - `service_ttft` / `service_capacity` (stats-driven, pass on empty data)
   and `proxy_vision` (processor-bearing bypass op) are not covered yet.
 

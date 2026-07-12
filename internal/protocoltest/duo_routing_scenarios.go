@@ -63,7 +63,6 @@ func BuiltinRoutingScenarios() []*DuoRoutingScenario {
 		routingTokenThreshold(),
 		routingThinking(),
 		routingContextKeyword(),
-		routingToolUse(),
 		routingModelGlob(),
 		routingTimeRange(),
 		routingFirstMatchOrder(),
@@ -175,35 +174,6 @@ func routingContextKeyword() *DuoRoutingScenario {
 			},
 			{
 				Name: "without-keyword", Body: DuoRoutingBody{UserText: "an ordinary request"},
-				Expect: DuoRoutingExpect{Outcome: "no_match"},
-			},
-		},
-	}
-}
-
-// routingToolUse: an assistant tool_use block — the shape real agent
-// traffic has — selects the partition. (The extractor originally scanned
-// user-role messages only and never matched organic conversations; this
-// scenario surfaced that and now pins the fixed all-roles semantics.)
-func routingToolUse() *DuoRoutingScenario {
-	return &DuoRoutingScenario{
-		Name:        "tool-use",
-		Description: "assistant tool_use name selects the partition (anthropic-target service)",
-		Rule: DuoRoutingRule{
-			Services: []DuoRoutingService{svc("b")},
-			Smart: []DuoSmartPartition{{
-				Description: "tool traffic",
-				Ops:         []DuoSmartOpSpec{{Position: "tool_use", Operation: "equals", Value: "duo_probe_tool"}},
-				Services:    []DuoRoutingService{{Svc: "a", Target: "anthropic"}},
-			}},
-		},
-		Requests: []DuoRoutingRequest{
-			{
-				Name: "with-tool", Body: DuoRoutingBody{AssistantToolUse: "duo_probe_tool"},
-				Expect: DuoRoutingExpect{Svc: "a", Outcome: "matched", Matched: "tool traffic"},
-			},
-			{
-				Name: "without-tool", Body: DuoRoutingBody{},
 				Expect: DuoRoutingExpect{Outcome: "no_match"},
 			},
 		},

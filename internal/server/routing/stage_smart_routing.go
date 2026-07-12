@@ -63,7 +63,6 @@ func requestSnapshot(reqCtx *smartrouting.RequestContext) map[string]interface{}
 		"latest_role":      reqCtx.LatestRole,
 		"latest_type":      reqCtx.LatestContentType,
 		"estimated_tokens": reqCtx.EstimatedTokens,
-		"tool_uses":        reqCtx.ToolUses,
 		"latest_user_head": requestHead(reqCtx.GetLatestUserMessage()),
 		"system_msg_count": len(reqCtx.SystemMessages),
 		"user_msg_count":   len(reqCtx.UserMessages),

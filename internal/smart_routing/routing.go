@@ -107,8 +107,6 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 		return r.evaluateContextUserOp(ctx, op)
 	case PositionLatestUser:
 		return r.evaluateLatestUserOp(ctx, op)
-	case PositionToolUse:
-		return r.evaluateToolUseOp(ctx, op)
 	case PositionToken:
 		return r.evaluateTokenOp(ctx, op)
 	case PositionServiceTTFT:
@@ -386,30 +384,6 @@ func (r *Router) evaluateLatestUserOp(ctx *RequestContext, op *SmartOp) OpEvalRe
 	default:
 		res.Reason = fmt.Sprintf("unsupported latest_user op %q", op.Operation)
 	}
-	return res
-}
-
-func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
-	res := newOpResult(op)
-	res.Actual = strings.Join(ctx.ToolUses, ",")
-	value, err := op.String()
-	if err != nil {
-		log.Printf("[smart_routing] invalid tool_use value '%s': %v", op.Value, err)
-		res.Reason = fmt.Sprintf("invalid value: %v", err)
-		return res
-	}
-	if op.Operation != OpToolUseEquals {
-		res.Reason = fmt.Sprintf("unsupported tool_use op %q", op.Operation)
-		return res
-	}
-	for _, t := range ctx.ToolUses {
-		if t == value {
-			res.Matched = true
-			res.Reason = fmt.Sprintf("tool %q used", value)
-			return res
-		}
-	}
-	res.Reason = fmt.Sprintf("tool %q not in [%s]", value, strings.Join(ctx.ToolUses, ","))
 	return res
 }
 

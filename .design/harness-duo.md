@@ -211,12 +211,14 @@ authoring):
   `routed_model` (folded from the access log).
 - A bare-string `system` is dropped by the beta binding — send block form
   (Claude Code itself does).
-- `tool_use` extraction spans **all** message roles. It originally read
-  user-role messages only (`internal/smart_routing/context.go` role
-  filter), so assistant-side tool_use — the shape real agent traffic has —
-  never matched; the tool-use scenario surfaced that on first contact and
-  the fix is pinned by `TestToolUse_AssistantMessages` plus the scenario's
-  realistic body shape.
+- The `tool_use` position was **removed** after this harness surfaced it:
+  the implementation scanned user-role messages only (never matched real
+  assistant-side tool_use traffic), and its three specs (op meta, package
+  README, frontend catalog) disagreed with each other. More fundamentally,
+  matching history tool_use blocks is a lagging, mid-session-flipping
+  signal — smart routing is request-side analysis, and the stable
+  request-side signal for tool routing would be the `tools` DECLARATIONS
+  parameter (a possible future position), not past tool calls.
 - timerange evaluates against wall clock via a package-private `utcNow` —
   no cross-process seam, so scenarios build hours-wide windows relative to
   now instead of injecting a clock.

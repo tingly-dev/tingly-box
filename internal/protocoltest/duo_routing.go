@@ -88,10 +88,6 @@ type DuoRoutingBody struct {
 	System string `yaml:"system,omitempty" json:"system,omitempty"`
 	// Thinking enables the thinking parameter.
 	Thinking bool `yaml:"thinking,omitempty" json:"thinking,omitempty"`
-	// AssistantToolUse inserts an assistant tool_use block (plus its
-	// tool_result) with this tool name — the shape real agent traffic has
-	// (drives the tool_use position).
-	AssistantToolUse string `yaml:"assistant_tool_use,omitempty" json:"assistant_tool_use,omitempty"`
 }
 
 // DuoRoutingExpect is the per-request expectation; empty fields are skipped.
@@ -257,28 +253,6 @@ func buildRoutingBody(sc *DuoRoutingScenario, r DuoRoutingRequest) ([]byte, erro
 			"role":    "user",
 			"content": []map[string]any{{"type": "text", "text": pad}},
 		})
-	}
-	if r.Body.AssistantToolUse != "" {
-		messages = append(messages,
-			map[string]any{
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "text", "text": "please use the tool"},
-				},
-			},
-			map[string]any{
-				"role": "assistant",
-				"content": []map[string]any{
-					{"type": "tool_use", "id": "toolu_duo_route", "name": r.Body.AssistantToolUse, "input": map[string]any{}},
-				},
-			},
-			map[string]any{
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "tool_result", "tool_use_id": "toolu_duo_route", "content": "ok"},
-				},
-			},
-		)
 	}
 	messages = append(messages, map[string]any{
 		"role":    "user",
