@@ -26,7 +26,6 @@ type RequestContext struct {
 	ThinkingEnabled   bool
 	SystemMessages    []string
 	UserMessages      []string
-	ToolUses          []string
 	LatestRole        string // Latest message role (user, assistant, tool, function, etc.)
 	LatestContentType string
 	// LatestUserHasText is true when the most recent user-role message contained
@@ -104,8 +103,8 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 
 	if len(req.Messages) > 0 {
 		// Pass 1 — accumulate data that spans the entire history.
-		// HasImage, UserMessages, and ToolUses are cumulative: a single
-		// scan from oldest to newest is enough.
+		// HasImage and UserMessages are cumulative: a single scan from
+		// oldest to newest is enough.
 		for _, msg := range req.Messages {
 			// HasImage tracks images across every role so proxy_vision
 			// (which cleans historical images) matches when the image
@@ -117,11 +116,9 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 			if string(msg.Role) != "user" {
 				continue
 			}
-			contentStr, toolUses := extractBetaContent(msg.Content)
-			if contentStr != "" {
+			if contentStr := extractBetaContent(msg.Content); contentStr != "" {
 				ctx.UserMessages = append(ctx.UserMessages, contentStr)
 			}
-			ctx.ToolUses = append(ctx.ToolUses, toolUses...)
 		}
 
 		// Step 2 — locate: what is the role of the very last message?
@@ -136,7 +133,7 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 			if string(msg.Role) != "user" {
 				continue
 			}
-			contentStr, _ := extractBetaContent(msg.Content)
+			contentStr := extractBetaContent(msg.Content)
 			ctx.LatestUserHasText = contentStr != ""
 			if hasImageInBetaContent(msg.Content) {
 				ctx.LatestContentType = "image"
@@ -151,10 +148,9 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 	return ctx
 }
 
-// extractBetaContent extracts string content and tool uses from Beta content blocks
-func extractBetaContent(content []anthropic.BetaContentBlockParamUnion) (string, []string) {
+// extractBetaContent extracts string content from Beta content blocks
+func extractBetaContent(content []anthropic.BetaContentBlockParamUnion) string {
 	var parts []string
-	var tools []string
 
 	for _, blockUnion := range content {
 		switch {
@@ -162,12 +158,10 @@ func extractBetaContent(content []anthropic.BetaContentBlockParamUnion) (string,
 			parts = append(parts, blockUnion.OfText.Text)
 		case blockUnion.OfImage != nil:
 			parts = append(parts, "[image]")
-		case blockUnion.OfToolUse != nil:
-			tools = append(tools, blockUnion.OfToolUse.Name)
 		}
 	}
 
-	return strings.Join(parts, "\n"), tools
+	return strings.Join(parts, "\n")
 }
 
 // hasImageInBetaContent checks if content contains image

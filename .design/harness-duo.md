@@ -137,6 +137,19 @@ Per route, per instance (`DuoMemoryReport{TB1, TB2}`):
 - **Heap profiles** — `duo-<route>-<tb>-{baseline,final}.pb.gz` fetched per
   instance when `--profile-dir` is set.
 
+**Case study — the memory-sink body pin.** The moment duo children gained
+production-faithful `WithMultiLogger` boot, tb2's slope jumped from ~0.5 to
+~490 KB/request; the per-instance heap-profile diff attributed every
+retained byte to `gjson.ParseBytes` under `BetaMessageNewParams.UnmarshalJSON`.
+Root cause: gjson-parsed strings are substrings of the raw request body, and
+the memory log ring (`pkg/obs/memorylog.go`) stored entries whose field
+values aliased them — one tiny model-name field pinned the entire multi-MB
+body, ×50 ring entries. Fixed at the sink boundary: `Fire` now stores a
+detached copy (strings cloned, errors rendered, composites re-encoded as
+`json.RawMessage`, `Context` dropped — it chains to the live
+`*http.Request`). Slope back to ~2.5 KB/request; `TestFireDetachesValues`
+pins the detach semantics and the duo threshold guards the class.
+
 ## 5. Backpressure (`-slow` routes)
 
 The builtin vmodels answer instantly with ~130 bytes, which hides every
@@ -155,7 +168,65 @@ has a `-slow` variant that changes both ends:
 Default memory routes are `beta-chat,beta-chat-slow`: the Claude Code hot
 path fast *and* under backpressure, in one run.
 
-## 6. Fidelity ledger
+## 6. Routing scenarios (`harness routing`)
+
+The duo topology also carries **smart-routing e2e verification**: does a
+rule configured with smart-routing partitions behave, end-to-end, the way
+its author expects — and can the system *explain* the decision?
+
+Division of labor (deliberate, don't collapse it):
+
+| Layer | Owns |
+|---|---|
+| `internal/smart_routing` unit tests | per-op predicate semantics |
+| `harness lb` / `lb_scenario_test` | temporal dynamics: breaker, failover, affinity TTL (fake clock, fake upstreams) |
+| `harness routing` (this) | config → extraction → stage order → dispatch → explanation, over real HTTP across two processes |
+
+Mechanics:
+
+- **Rules enter through the production rule API** (`POST /api/v1/rule`) —
+  the same path user configuration takes, so serialization, validation, and
+  hot-activation are on the tested path.
+- **Wire-level assertion**: tb1 hosts service-identity vmodels
+  (`duo-svc-a`…`f`, `DuoServiceMarker`); the response body itself says which
+  service won. No cooperation from the gateway needed.
+- **Explanation assertion**: the harness sets `X-Request-Id` per request
+  and reads tb2's `/api/v1/requests/:id` timeline — the smart_routing trace
+  (`outcome`, `matched_rule_description`) plus the summary's `routed_model`.
+  This keeps the user-facing explain surface itself under test (the reason
+  duo children boot `WithMultiLogger`, matching production).
+- **Scenarios are declarative** (`DuoRoutingScenario`): built-in catalog in
+  `duo_routing_scenarios.go` (one per position category + first-match
+  ordering + the G3 partition-scoped-affinity regression), user files via
+  `harness routing --file`.
+
+Semantics the scenarios encode (learned the hard way, keep in mind when
+authoring):
+
+- The LB candidate pool is the **union** of base + partition services; a
+  no_match request is dispatched randomly within the union, so wire-level
+  expectations are only valid for matched requests.
+- The smart stage **narrows, never selects** — `selected_model` is absent
+  from narrow traces; the final pick is asserted via the summary's
+  `routed_model` (folded from the access log).
+- A bare-string `system` is dropped by the beta binding — send block form
+  (Claude Code itself does).
+- The `tool_use` position was **removed** after this harness surfaced it:
+  the implementation scanned user-role messages only (never matched real
+  assistant-side tool_use traffic), and its three specs (op meta, package
+  README, frontend catalog) disagreed with each other. More fundamentally,
+  matching history tool_use blocks is a lagging, mid-session-flipping
+  signal — smart routing is request-side analysis, and the stable
+  request-side signal for tool routing would be the `tools` DECLARATIONS
+  parameter (a possible future position), not past tool calls.
+- timerange evaluates against wall clock via a package-private `utcNow` —
+  no cross-process seam, so scenarios build hours-wide windows relative to
+  now instead of injecting a clock.
+- Not covered yet: `service_ttft` / `service_capacity` (need accumulated
+  runtime stats) and `proxy_vision` (processor-bearing bypass op; needs
+  image fixtures and its own scenario shape).
+
+## 7. Fidelity ledger
 
 What matches production, and what still doesn't:
 
@@ -172,7 +243,7 @@ What matches production, and what still doesn't:
 Extend the request-shape axis in `BuildConversationBody` if a leak is ever
 suspected in a block-type-specific conversion branch.
 
-## 7. Entry points
+## 8. Entry points
 
 ```bash
 ./harness duo                          # functional all routes; memory fast + backpressure

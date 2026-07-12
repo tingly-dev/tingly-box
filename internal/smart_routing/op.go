@@ -112,25 +112,6 @@ var Operations = []SmartOp{
 		},
 	},
 
-	// Tool use operations
-	{
-		Position:  PositionToolUse,
-		Operation: OpToolUseEquals,
-		Meta: SmartOpMeta{
-			Description: "Latest message is `tool use` and it is name is the value",
-			Type:        ValueTypeString,
-		},
-	},
-	// Keep it
-	// {
-	// 	Position:  PositionToolUse,
-	// 	Operation: OpToolUseContains,
-	// 	Meta: SmartOpMeta{
-	// 		Description: "Latest message is `tool use` and its name or arguments contains the value",
-	// 		Type:        ValueTypeString,
-	// 	},
-	// },
-
 	// Token operations
 	{
 		Position:  PositionToken,
@@ -250,7 +231,6 @@ const (
 	PositionContextSystem   SmartOpPosition = "context_system"    // System message content in context
 	PositionContextUser     SmartOpPosition = "context_user"      // User message content in context
 	PositionLatestUser      SmartOpPosition = "latest_user"       // Latest user message
-	PositionToolUse         SmartOpPosition = "tool_use"          // Tool use/name
 	PositionToken           SmartOpPosition = "token"             // Token count
 	PositionServiceTTFT     SmartOpPosition = "service_ttft"      // Service TTFT characteristics
 	PositionServiceCapacity SmartOpPosition = "service_capacity"  // Service seat capacity (affinity utilization)
@@ -282,10 +262,6 @@ const (
 	// Latest user message operations
 	OpLatestUserContains    SmartOpOperation = "contains" // Latest user message contains the value
 	OpLatestUserRequestType SmartOpOperation = "type"     // Latest user message content type
-
-	// Tool use operations
-	OpToolUseEquals   SmartOpOperation = "equals"   // Latest message is `tool use` and its name equals the value
-	OpToolUseContains SmartOpOperation = "contains" // Latest message is `tool use` and its name or arguments contains the value
 
 	// Token operations
 	OpTokenGe SmartOpOperation = "ge" // Token count greater than or equal to value

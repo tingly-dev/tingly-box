@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/obs"
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
@@ -47,6 +48,14 @@ const (
 	duoEnvStreamMS = "TINGLY_DUO_STREAM_MS"
 
 	duoRoleServe = "serve"
+)
+
+// tb2 provider UUIDs wired by seedDuoGateway; duo_routing.go's scenario
+// services reference the same IDs, so they live in one place.
+const (
+	DuoProviderChat      = "tb1-openai-chat"
+	DuoProviderResponses = "tb1-openai-responses"
+	DuoProviderAnthropic = "tb1-anthropic"
 )
 
 // Slow-stream vmodel IDs registered on tb1 for the backpressure routes.
@@ -87,19 +96,39 @@ func runDuoServe() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
+	isGateway := os.Getenv(duoEnvUpstreamURL) != ""
+
 	// tb2 role: wire providers + one rule per duo route to the upstream (tb1).
-	if upstreamURL := os.Getenv(duoEnvUpstreamURL); upstreamURL != "" {
-		if err := seedDuoGateway(appCfg, upstreamURL, os.Getenv(duoEnvUpstreamToken)); err != nil {
+	if isGateway {
+		if err := seedDuoGateway(appCfg, os.Getenv(duoEnvUpstreamURL), os.Getenv(duoEnvUpstreamToken)); err != nil {
 			return fmt.Errorf("seed gateway wiring: %w", err)
 		}
 	}
 
-	srv := server.NewServer(appCfg.GetGlobalConfig(), server.WithOpenBrowser(false))
+	// Production boots with a MultiLogger; without it the smart-routing and
+	// model-request memory sinks don't exist and /api/v1/requests has nothing
+	// to join, so the child would be less observable than a real deployment.
+	multiLogger, err := obs.NewMultiLogger(obs.DefaultMultiLoggerConfig(dir))
+	if err != nil {
+		return fmt.Errorf("init multi logger: %w", err)
+	}
 
-	// tb1 role: register the slow/large backpressure vmodels before serving.
-	if kb := duoEnvInt(duoEnvStreamKB); kb > 0 {
-		if err := registerDuoStreamModels(srv.GetVirtualModelService(), kb, duoEnvInt(duoEnvStreamMS)); err != nil {
-			return fmt.Errorf("register duo stream models: %w", err)
+	srv := server.NewServer(appCfg.GetGlobalConfig(),
+		server.WithOpenBrowser(false),
+		server.WithMultiLogger(multiLogger),
+	)
+
+	if !isGateway {
+		// tb1 role: register the duo-only vmodels before serving — the
+		// slow/large backpressure models and the service-identity pool the
+		// routing scenarios address.
+		if kb := duoEnvInt(duoEnvStreamKB); kb > 0 {
+			if err := registerDuoStreamModels(srv.GetVirtualModelService(), kb, duoEnvInt(duoEnvStreamMS)); err != nil {
+				return fmt.Errorf("register duo stream models: %w", err)
+			}
+		}
+		if err := registerDuoServiceModels(srv.GetVirtualModelService()); err != nil {
+			return fmt.Errorf("register duo service models: %w", err)
 		}
 	}
 
@@ -117,22 +146,22 @@ func duoEnvInt(key string) int {
 func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
 	providers := map[string]*typ.Provider{
 		"chat": {
-			UUID:               "tb1-openai-chat",
-			Name:               "tb1-openai-chat",
+			UUID:               DuoProviderChat,
+			Name:               DuoProviderChat,
 			APIBase:            tb1URL + "/virtual/openai/v1",
 			APIStyle:           protocol.APIStyleOpenAI,
 			OpenAIEndpointMode: ai.EndpointModeChat,
 		},
 		"responses": {
-			UUID:               "tb1-openai-responses",
-			Name:               "tb1-openai-responses",
+			UUID:               DuoProviderResponses,
+			Name:               DuoProviderResponses,
 			APIBase:            tb1URL + "/virtual/openai/v1",
 			APIStyle:           protocol.APIStyleOpenAI,
 			OpenAIEndpointMode: ai.EndpointModeResponses,
 		},
 		"anthropic": {
-			UUID:     "tb1-anthropic",
-			Name:     "tb1-anthropic",
+			UUID:     DuoProviderAnthropic,
+			Name:     DuoProviderAnthropic,
 			APIBase:  tb1URL + "/virtual/anthropic", // SDK appends /v1/messages
 			APIStyle: protocol.APIStyleAnthropic,
 		},
@@ -202,6 +231,48 @@ func registerDuoStreamModels(svc *virtualserver.Service, kb, ms int) error {
 	}))
 }
 
+// DuoServiceIdentities is the pool of service-identity vmodels registered on
+// tb1 for the routing scenarios. Each identity answers with a distinct,
+// recognizable marker (see DuoServiceMarker), so which service a request was
+// routed to is readable directly from the response body — a wire-level
+// assertion that needs no cooperation from the gateway under test.
+var DuoServiceIdentities = []string{"a", "b", "c", "d", "e", "f"}
+
+// DuoServiceModel returns the tb1 vmodel ID for a service identity.
+func DuoServiceModel(identity string) string { return "duo-svc-" + identity }
+
+// DuoServiceMarker returns the response-content marker a service-identity
+// vmodel answers with.
+func DuoServiceMarker(identity string) string { return "[duo-svc:" + identity + "]" }
+
+// registerDuoServiceModels registers the service-identity pool into both of
+// tb1's registries, so scenario services can target any provider protocol.
+func registerDuoServiceModels(svc *virtualserver.Service) error {
+	if svc == nil {
+		return fmt.Errorf("virtual model service unavailable")
+	}
+	for _, id := range DuoServiceIdentities {
+		content := "routed to " + DuoServiceMarker(id) + " — duo routing scenario response"
+		if err := svc.GetOpenAIRegistry().Register(openaivm.NewMockModel(&openaivm.MockModelConfig{
+			ID:          DuoServiceModel(id),
+			Name:        "Duo service " + id,
+			Description: "duo routing service-identity model",
+			Content:     content,
+		})); err != nil {
+			return err
+		}
+		if err := svc.GetAnthropicRegistry().Register(anthropicvm.NewMockModel(&anthropicvm.MockModelConfig{
+			ID:          DuoServiceModel(id),
+			Name:        "Duo service " + id,
+			Description: "duo routing service-identity model",
+			Content:     content,
+		})); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // duoStreamChunks builds ~2 KB filler chunks totalling approximately kb KB.
 func duoStreamChunks(kb int) []string {
 	const chunkBytes = 2 * 1024
@@ -209,8 +280,7 @@ func duoStreamChunks(kb int) []string {
 	if n < 1 {
 		n = 1
 	}
-	const filler = "streamed backpressure payload "
-	chunk := strings.Repeat(filler, chunkBytes/len(filler)+1)[:chunkBytes]
+	chunk := duoFiller(chunkBytes)
 	chunks := make([]string, n)
 	for i := range chunks {
 		chunks[i] = chunk

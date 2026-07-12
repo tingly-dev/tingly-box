@@ -86,9 +86,6 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
     latest_user: [
         { value: 'contains', label: 'Contains', description: 'Latest user message contains the value', valueType: 'string' },
     ],
-    tool_use: [
-        { value: 'equals', label: 'Equals', description: 'Latest message is tool use and its name equals the value', valueType: 'string' },
-    ],
     token: [
         { value: 'ge', label: '≥', description: 'Token count >= value', valueType: 'int' },
         { value: 'le', label: '≤', description: 'Token count <= value', valueType: 'int' },

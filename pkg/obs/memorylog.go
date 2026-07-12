@@ -1,7 +1,10 @@
 package obs
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,16 +52,23 @@ func (h *MemoryLogHook) Fire(entry *logrus.Entry) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Deep copy entry to avoid subsequent modifications affecting stored logs
+	// Store a DETACHED copy, not the entry's own values. Entries retained in
+	// this ring outlive their request, and field values frequently alias
+	// request-scoped storage: gjson-parsed strings are substrings of the full
+	// raw request body, so one retained model-name field would pin megabytes
+	// until the ring rotates (50 entries × multi-MB agent bodies is a real
+	// OOM vector — surfaced by the duo memory harness). Context is dropped
+	// for the same reason: it chains to the live *http.Request.
 	copied := &logrus.Entry{
 		Logger:  entry.Logger,
 		Data:    make(logrus.Fields, len(entry.Data)),
 		Time:    entry.Time,
 		Level:   entry.Level,
-		Message: entry.Message,
+		Message: strings.Clone(entry.Message),
 	}
+	// Keys are code literals (read-only data) — no detachment needed.
 	for k, v := range entry.Data {
-		copied.Data[k] = v
+		copied.Data[k] = detachValue(v)
 	}
 
 	// Rotate: circular buffer automatically overwrites oldest entry
@@ -77,6 +87,37 @@ func (h *MemoryLogHook) Fire(entry *logrus.Entry) error {
 	}
 
 	return nil
+}
+
+// detachValue returns v with its string storage detached from whatever
+// backing array it aliases. Primitives pass through; strings are cloned;
+// errors are rendered (an error value can pin a whole wrapped chain, and
+// most render as {} under JSON anyway); everything composite is re-encoded
+// as json.RawMessage — the readers of these entries (the /api/v1 log and
+// request-timeline handlers) serialize them to JSON, so the wire shape is
+// unchanged while every string inside gets fresh storage.
+func detachValue(v any) any {
+	switch t := v.(type) {
+	case nil, bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64,
+		time.Time, time.Duration:
+		return v
+	case string:
+		return strings.Clone(t)
+	case error:
+		// Render via fmt, not t.Error(): a typed-nil error (non-nil
+		// interface wrapping a nil pointer) passes the `case nil` above and
+		// would panic inside Error(); fmt recovers method panics and prints
+		// nil pointers as "<nil>". The result is a fresh string either way.
+		return fmt.Sprintf("%v", t)
+	default:
+		if b, err := json.Marshal(v); err == nil {
+			return json.RawMessage(b)
+		}
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // GetEntries returns all log entries in chronological order.

@@ -2,9 +2,14 @@ package obs
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"io"
+	"net"
+	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -255,4 +260,59 @@ func TestEmptyHook(t *testing.T) {
 	assert.Empty(t, hook.GetLatest(5))
 	assert.Empty(t, hook.GetEntriesSince(time.Now()))
 	assert.Empty(t, hook.GetEntriesByLevel(logrus.InfoLevel))
+}
+
+// TestFireDetachesValues verifies stored entries do not alias the caller's
+// storage: strings are cloned (a gjson-parsed string is a substring of the
+// full request body — retaining it would pin megabytes per entry), errors
+// are rendered, composites are re-encoded, and primitives pass through.
+func TestFireDetachesValues(t *testing.T) {
+	hook := NewMemoryLogHook(10)
+
+	type tracePayload struct {
+		Reason string `json:"reason"`
+	}
+	body := strings.Repeat("x", 1024)
+	sliced := body[100:110] // aliases body's backing array
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	entry := logger.WithFields(logrus.Fields{
+		"model":   sliced,
+		"status":  200,
+		"matched": true,
+		"latency": 5 * time.Millisecond,
+		"err":     errors.New("boom"),
+		"trace":   tracePayload{Reason: sliced},
+	})
+	entry.Time = time.Now()
+	entry.Level = logrus.InfoLevel
+	entry.Message = "detach test"
+	require.NoError(t, hook.Fire(entry))
+
+	stored := hook.GetEntries()[0]
+
+	got, ok := stored.Data["model"].(string)
+	require.True(t, ok)
+	assert.Equal(t, sliced, got)
+	// A clone must not share backing storage with the original body.
+	assert.NotSame(t, unsafe.StringData(sliced), unsafe.StringData(got))
+
+	assert.Equal(t, 200, stored.Data["status"])
+	assert.Equal(t, true, stored.Data["matched"])
+	assert.Equal(t, 5*time.Millisecond, stored.Data["latency"])
+	assert.Equal(t, "boom", stored.Data["err"])
+
+	// A typed-nil error (non-nil interface wrapping a nil pointer) passes
+	// the nil case; rendering must not panic by calling Error() on it.
+	var typedNil *net.OpError
+	nilEntry := logger.WithField("err", error(typedNil))
+	nilEntry.Time = time.Now()
+	nilEntry.Level = logrus.InfoLevel
+	nilEntry.Message = "typed-nil"
+	require.NoError(t, hook.Fire(nilEntry))
+	assert.Equal(t, "<nil>", hook.GetLatest(1)[0].Data["err"])
+
+	raw, ok := stored.Data["trace"].(json.RawMessage)
+	require.True(t, ok, "composite values are re-encoded as RawMessage")
+	assert.JSONEq(t, `{"reason":"`+sliced+`"}`, string(raw))
 }

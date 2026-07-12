@@ -650,8 +650,8 @@ func TestEvaluate_AgentClaudeCode_MatchesEachKind(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		kind     string
-		wantSvc  string
+		kind    string
+		wantSvc string
 	}{
 		{ClaudeCodeKindMain, "m-main"},
 		{ClaudeCodeKindSubagent, "m-sub"},
@@ -840,4 +840,3 @@ func TestLatestContentType_NotBleededFromPreviousImage(t *testing.T) {
 	require.Equal(t, "", ctx.LatestContentType, "LatestContentType should be empty for the latest text-only user message")
 	require.True(t, ctx.LatestUserHasText)
 }
-
