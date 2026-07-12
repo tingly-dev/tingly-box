@@ -474,10 +474,10 @@ Semantics worth knowing when authoring scenarios:
 - When **no partition matches**, the LB falls back to the **union** of base
   + partition services, so `expect.svc` is only deterministic for matched
   requests; miss requests assert `outcome: no_match` on the trace instead.
-- The `tool_use` position currently extracts tool names from **user-role**
-  messages only (the built-in scenario pins this actual behavior; real
-  agent traffic carries tool_use in assistant messages — tracked as a
-  defect candidate).
+- The `tool_use` position extracts tool names across **all** message roles
+  (assistant turns carry them in real traffic; the extractor originally
+  scanned user messages only — a defect this scenario surfaced and that is
+  now fixed and pinned at unit + e2e level).
 - `service_ttft` / `service_capacity` (stats-driven, pass on empty data)
   and `proxy_vision` (processor-bearing bypass op) are not covered yet.
 

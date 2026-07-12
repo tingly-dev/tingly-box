@@ -650,8 +650,8 @@ func TestEvaluate_AgentClaudeCode_MatchesEachKind(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		kind     string
-		wantSvc  string
+		kind    string
+		wantSvc string
 	}{
 		{ClaudeCodeKindMain, "m-main"},
 		{ClaudeCodeKindSubagent, "m-sub"},
@@ -841,3 +841,56 @@ func TestLatestContentType_NotBleededFromPreviousImage(t *testing.T) {
 	require.True(t, ctx.LatestUserHasText)
 }
 
+// TestToolUse_AssistantMessages pins that tool_use extraction spans every
+// role: real agent traffic carries tool_use blocks in ASSISTANT messages
+// (the tool call), with the user turn carrying only the tool_result. A
+// user-only scan would never match organic conversations — this was a real
+// defect surfaced by the duo tool-use routing scenario.
+func TestToolUse_AssistantMessages(t *testing.T) {
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "tool traffic",
+			Ops: []SmartOp{
+				{Position: PositionToolUse, Operation: OpToolUseEquals, Value: "get_weather"},
+			},
+			Services: []*loadbalance.Service{
+				{Provider: "special", Model: "m", Weight: 1, Active: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "what's the weather?"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfToolUse: &anthropic.BetaToolUseBlockParam{
+						ID:    "toolu_01",
+						Name:  "get_weather",
+						Input: map[string]any{},
+					}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfToolResult: &anthropic.BetaToolResultBlockParam{ToolUseID: "toolu_01"}},
+				},
+			},
+		},
+	}
+
+	ctx := ExtractContextFromBetaRequest(req)
+	require.Contains(t, ctx.ToolUses, "get_weather", "assistant tool_use blocks must be extracted")
+
+	_, matched := router.EvaluateRequest(ctx)
+	require.True(t, matched, "assistant-side tool_use must match the tool_use op")
+}

@@ -89,7 +89,7 @@ An **op** (`SmartOp`) is `Position + Operation + Value`:
 | `context_system` | concatenated system messages | `contains`, `regex` |
 | `context_user` | concatenated user messages | `contains`, `regex` |
 | `latest_user` | latest user message + content type | `contains`, `type` |
-| `tool_use` | tool names from assistant messages | `equals` |
+| `tool_use` | tool_use block names across all messages (assistant turns carry them in real traffic) | `equals` |
 | `token` | estimated token count (chars/4) | `ge`, `gt`, `le`, `lt` |
 | `service_ttft` | rule services' TTFT stats (ms) | `avg_le`, `avg_ge`, `max_le`, `max_ge` |
 | `service_capacity` | rule services' seat utilization (%) | `util_le`, `util_ge`, `util_lt`, `util_gt` |

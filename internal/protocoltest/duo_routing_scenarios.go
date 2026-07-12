@@ -181,18 +181,14 @@ func routingContextKeyword() *DuoRoutingScenario {
 	}
 }
 
-// routingToolUse pins the tool_use position's ACTUAL semantics: the
-// extractor collects tool_use blocks from user-role messages only (the
-// role filter in internal/smart_routing/context.go skips assistant
-// messages, despite the package README saying otherwise). Real agent
-// traffic carries tool_use in assistant messages, so this position likely
-// never matches organic requests — a defect candidate surfaced by this
-// scenario; if the extractor is fixed to read assistant messages, this
-// scenario's body shape (and the README) should change with it.
+// routingToolUse: an assistant tool_use block — the shape real agent
+// traffic has — selects the partition. (The extractor originally scanned
+// user-role messages only and never matched organic conversations; this
+// scenario surfaced that and now pins the fixed all-roles semantics.)
 func routingToolUse() *DuoRoutingScenario {
 	return &DuoRoutingScenario{
 		Name:        "tool-use",
-		Description: "tool_use block name selects the partition (anthropic-target service; current user-role extraction semantics)",
+		Description: "assistant tool_use name selects the partition (anthropic-target service)",
 		Rule: DuoRoutingRule{
 			Services: []DuoRoutingService{svc("b")},
 			Smart: []DuoSmartPartition{{
@@ -203,7 +199,7 @@ func routingToolUse() *DuoRoutingScenario {
 		},
 		Requests: []DuoRoutingRequest{
 			{
-				Name: "with-tool", Body: DuoRoutingBody{HistoryToolUse: "duo_probe_tool"},
+				Name: "with-tool", Body: DuoRoutingBody{AssistantToolUse: "duo_probe_tool"},
 				Expect: DuoRoutingExpect{Svc: "a", Outcome: "matched", Matched: "tool traffic"},
 			},
 			{

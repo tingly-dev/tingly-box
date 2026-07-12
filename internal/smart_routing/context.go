@@ -114,14 +114,18 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 			if hasImageInBetaContent(msg.Content) {
 				ctx.HasImage = true
 			}
+			contentStr, toolUses := extractBetaContent(msg.Content)
+			// ToolUses also spans every role: real traffic carries tool_use
+			// blocks in ASSISTANT messages, so a user-only scan would never
+			// match organic agent conversations (caught by the duo tool-use
+			// routing scenario).
+			ctx.ToolUses = append(ctx.ToolUses, toolUses...)
 			if string(msg.Role) != "user" {
 				continue
 			}
-			contentStr, toolUses := extractBetaContent(msg.Content)
 			if contentStr != "" {
 				ctx.UserMessages = append(ctx.UserMessages, contentStr)
 			}
-			ctx.ToolUses = append(ctx.ToolUses, toolUses...)
 		}
 
 		// Step 2 — locate: what is the role of the very last message?

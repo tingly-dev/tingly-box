@@ -88,14 +88,10 @@ type DuoRoutingBody struct {
 	System string `yaml:"system,omitempty" json:"system,omitempty"`
 	// Thinking enables the thinking parameter.
 	Thinking bool `yaml:"thinking,omitempty" json:"thinking,omitempty"`
-	// HistoryToolUse inserts a tool_use block with this tool name into a
-	// user-role history message (drives the tool_use position). NOTE: the
-	// extractor currently collects tool_use blocks from user-role messages
-	// only (extractBetaContent via the role filter in
-	// internal/smart_routing/context.go), even though real agent traffic
-	// carries tool_use in assistant messages — the scenario pins the actual
-	// behavior; see the tool-use scenario comment.
-	HistoryToolUse string `yaml:"history_tool_use,omitempty" json:"history_tool_use,omitempty"`
+	// AssistantToolUse inserts an assistant tool_use block (plus its
+	// tool_result) with this tool name — the shape real agent traffic has
+	// (drives the tool_use position).
+	AssistantToolUse string `yaml:"assistant_tool_use,omitempty" json:"assistant_tool_use,omitempty"`
 }
 
 // DuoRoutingExpect is the per-request expectation; empty fields are skipped.
@@ -262,14 +258,27 @@ func buildRoutingBody(sc *DuoRoutingScenario, r DuoRoutingRequest) ([]byte, erro
 			"content": []map[string]any{{"type": "text", "text": pad}},
 		})
 	}
-	if r.Body.HistoryToolUse != "" {
-		messages = append(messages, map[string]any{
-			"role": "user",
-			"content": []map[string]any{
-				{"type": "text", "text": "history turn carrying a tool_use block"},
-				{"type": "tool_use", "id": "toolu_duo_route", "name": r.Body.HistoryToolUse, "input": map[string]any{}},
+	if r.Body.AssistantToolUse != "" {
+		messages = append(messages,
+			map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "text", "text": "please use the tool"},
+				},
 			},
-		})
+			map[string]any{
+				"role": "assistant",
+				"content": []map[string]any{
+					{"type": "tool_use", "id": "toolu_duo_route", "name": r.Body.AssistantToolUse, "input": map[string]any{}},
+				},
+			},
+			map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": "toolu_duo_route", "content": "ok"},
+				},
+			},
+		)
 	}
 	messages = append(messages, map[string]any{
 		"role":    "user",
