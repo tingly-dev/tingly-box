@@ -103,6 +103,33 @@ Open (policy, not wiring):
 
 ---
 
+## 6. Full single-process e2e run exhausts file descriptors
+
+`go test -tags e2e ./internal/protocoltest/` (every e2e test in ONE process,
+~1500 envs) fails on low-ulimit machines with `too many open files`; each
+section run individually (the documented usage, and what CI runs) is green.
+Reproduced identically on the pre-refactor baseline — pre-existing, surfaced
+by running the whole suite at once.
+
+Evidence from an fd probe (one TestEnv, `/proc/self/fd`): an env holds ~8
+db fds; `Config.CloseStores()` (added, closes the store-manager and
+provider-model gorm pools) returns no error but releases only the
+provider-model connection — the store-manager pool's tingly.db connections
+stay open after `sql.DB.Close`, i.e. they are held in-use somewhere in the
+init path (Migrate / InsertDefaultRule / HydrateRules are the suspects), and
+the guardrails `ProtectedCredentialStore` pool (guardrails.db, opened by
+`server.NewServer`) has no close path at all.
+
+- `TODO` audit the store-manager query paths for whatever keeps connections
+  checked out (leaked Rows / Tx / prepared stmt), so `CloseStores` actually
+  drains the pool.
+- `TODO` give `ProtectedCredentialStore` a Close and call it on server
+  teardown.
+- **Done when:** the fd probe shows 0 remaining fds after `TestEnv.Close`,
+  and the full single-process `-tags e2e` run passes at `ulimit -n 4096`.
+
+---
+
 ## Out of scope (tracked elsewhere)
 
 - Tier D (`provider`) live provider-API conformance tests — placeholder in
