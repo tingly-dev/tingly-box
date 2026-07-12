@@ -8,6 +8,7 @@ package protocoltest
 // numbers the way a shared-heap setup would.
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -88,10 +89,7 @@ func (r *DuoMemoryReport) Instances() []*DuoInstanceMemory {
 
 // MaxSlopeKB returns the larger of the two instances' retention slopes.
 func (r *DuoMemoryReport) MaxSlopeKB() float64 {
-	if r.TB1.SlopeKBPerRequest > r.TB2.SlopeKBPerRequest {
-		return r.TB1.SlopeKBPerRequest
-	}
-	return r.TB2.SlopeKBPerRequest
+	return max(r.TB1.SlopeKBPerRequest, r.TB2.SlopeKBPerRequest)
 }
 
 // duoMemProbe accumulates the per-instance samples during a memory phase run.
@@ -99,16 +97,27 @@ type duoMemProbe struct {
 	inst        *DuoInstance
 	result      DuoInstanceMemory
 	baseline    uint64
+	after1      uint64
 	totalAlloc0 uint64
+	peak        uint64
 }
 
-// sampleGC takes a post-GC snapshot from the probe's instance.
-func (p *duoMemProbe) sampleGC() (heapAlloc, totalAlloc uint64, goroutines int, err error) {
-	m, err := p.inst.MemStats(true)
-	if err != nil {
-		return 0, 0, 0, err
+// forEachProbe runs fn against both probes concurrently. The instances are
+// independent processes, so their forced-GC pauses (the expensive part of a
+// checkpoint) need not be paid back-to-back; the parent is never measured, so
+// the extra goroutine is free.
+func forEachProbe(probes []*duoMemProbe, fn func(p *duoMemProbe) error) error {
+	errs := make([]error, len(probes))
+	var wg sync.WaitGroup
+	for i, p := range probes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = fn(p)
+		}()
 	}
-	return m.HeapAllocBytes, m.TotalAllocBytes, m.NumGoroutine, nil
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 // RunMemoryPhase measures allocation churn, post-GC retention slope, and
@@ -140,23 +149,26 @@ func (env *DuoEnv) RunMemoryPhase(cfg DuoMemoryConfig) (*DuoMemoryReport, error)
 		}
 	}
 
-	for _, p := range probes {
-		heap, total, goroutines, err := p.sampleGC()
+	if err := forEachProbe(probes, func(p *duoMemProbe) error {
+		m, err := p.inst.MemStats(true)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		p.baseline = heap
-		p.totalAlloc0 = total
-		p.result.BaselineHeapMB = float64(heap) / 1024 / 1024
-		p.result.BaselineGoroutines = goroutines
+		p.baseline = m.HeapAllocBytes
+		p.totalAlloc0 = m.TotalAllocBytes
+		p.result.BaselineHeapMB = float64(m.HeapAllocBytes) / 1024 / 1024
+		p.result.BaselineGoroutines = m.NumGoroutine
 		if cfg.ProfileDir != "" {
 			path, err := p.inst.WriteHeapProfile(cfg.ProfileDir,
 				fmt.Sprintf("duo-%s-%s-baseline.pb.gz", route.Name, p.inst.Name))
 			if err != nil {
-				return nil, err
+				return err
 			}
 			p.result.BaselineProfile = path
 		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	runBatch := func() error {
@@ -171,31 +183,35 @@ func (env *DuoEnv) RunMemoryPhase(cfg DuoMemoryConfig) (*DuoMemoryReport, error)
 	if err := runBatch(); err != nil {
 		return nil, err
 	}
-	after1 := make([]uint64, len(probes))
-	for i, p := range probes {
-		heap, _, _, err := p.sampleGC()
+	if err := forEachProbe(probes, func(p *duoMemProbe) error {
+		m, err := p.inst.MemStats(true)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		after1[i] = heap
-		p.result.AfterBatch1MB = float64(int64(heap)-int64(p.baseline)) / 1024 / 1024
+		p.after1 = m.HeapAllocBytes
+		p.result.AfterBatch1MB = float64(int64(m.HeapAllocBytes)-int64(p.baseline)) / 1024 / 1024
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	if err := runBatch(); err != nil {
 		return nil, err
 	}
-	for i, p := range probes {
-		heap, total, _, err := p.sampleGC()
+	if err := forEachProbe(probes, func(p *duoMemProbe) error {
+		m, err := p.inst.MemStats(true)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		p.result.AfterBatch2MB = float64(int64(heap)-int64(p.baseline)) / 1024 / 1024
-		p.result.SlopeKBPerRequest = (float64(int64(heap)) - float64(int64(after1[i]))) / float64(cfg.Batch) / 1024
-		p.result.ChurnMBPerRequest = float64(total-p.totalAlloc0) / float64(2*cfg.Batch) / 1024 / 1024
+		p.result.AfterBatch2MB = float64(int64(m.HeapAllocBytes)-int64(p.baseline)) / 1024 / 1024
+		p.result.SlopeKBPerRequest = (float64(int64(m.HeapAllocBytes)) - float64(int64(p.after1))) / float64(cfg.Batch) / 1024
+		p.result.ChurnMBPerRequest = float64(m.TotalAllocBytes-p.totalAlloc0) / float64(2*cfg.Batch) / 1024 / 1024
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	// Concurrent burst with per-instance live-heap sampling over HTTP.
 	cfg.Progress("route %s: concurrent burst %d workers × %d requests", route.Name, cfg.Workers, cfg.PerWorker)
-	peaks := make([]uint64, len(probes))
 	stop := make(chan struct{})
 	samplerDone := make(chan struct{})
 	go func() {
@@ -209,9 +225,9 @@ func (env *DuoEnv) RunMemoryPhase(cfg DuoMemoryConfig) (*DuoMemoryReport, error)
 			case <-stop:
 				return
 			case <-tick.C:
-				for i, p := range probes {
-					if m, err := p.inst.MemStats(false); err == nil && m.HeapAllocBytes > peaks[i] {
-						peaks[i] = m.HeapAllocBytes
+				for _, p := range probes {
+					if m, err := p.inst.MemStats(false); err == nil && m.HeapAllocBytes > p.peak {
+						p.peak = m.HeapAllocBytes
 					}
 				}
 			}
@@ -240,22 +256,25 @@ func (env *DuoEnv) RunMemoryPhase(cfg DuoMemoryConfig) (*DuoMemoryReport, error)
 	default:
 	}
 
-	for i, p := range probes {
-		p.result.PeakHeapMB = float64(peaks[i]) / 1024 / 1024
-		heap, _, goroutines, err := p.sampleGC()
+	if err := forEachProbe(probes, func(p *duoMemProbe) error {
+		p.result.PeakHeapMB = float64(p.peak) / 1024 / 1024
+		m, err := p.inst.MemStats(true)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		p.result.PostBurstDeltaMB = float64(int64(heap)-int64(p.baseline)) / 1024 / 1024
-		p.result.FinalGoroutines = goroutines
+		p.result.PostBurstDeltaMB = float64(int64(m.HeapAllocBytes)-int64(p.baseline)) / 1024 / 1024
+		p.result.FinalGoroutines = m.NumGoroutine
 		if cfg.ProfileDir != "" {
 			path, err := p.inst.WriteHeapProfile(cfg.ProfileDir,
 				fmt.Sprintf("duo-%s-%s-final.pb.gz", route.Name, p.inst.Name))
 			if err != nil {
-				return nil, err
+				return err
 			}
 			p.result.FinalProfile = path
 		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	report.TB1 = probes[0].result

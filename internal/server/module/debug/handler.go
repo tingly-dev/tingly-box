@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"sync"
 	"time"
 
@@ -77,7 +78,7 @@ func (h *Handler) GetMemStats(c *gin.Context) {
 // collection.
 func (h *Handler) GetHeapProfile(c *gin.Context) {
 	if c.Query("gc") == "true" {
-		c.Header("X-Debug-GC-Forced", boolStr(h.tryForceGC()))
+		c.Header("X-Debug-GC-Forced", strconv.FormatBool(h.tryForceGC()))
 	}
 	profile := pprof.Lookup("heap")
 	if profile == nil {
@@ -90,11 +91,4 @@ func (h *Handler) GetHeapProfile(c *gin.Context) {
 		// Headers are already sent; nothing better to do than log via gin.
 		_ = c.Error(err)
 	}
-}
-
-func boolStr(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
 }
