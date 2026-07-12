@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -235,52 +234,9 @@ func (env *AgentTestEnv) SetupAgent(AgentType AgentType, providerName string, mo
 		return fmt.Errorf("add provider: %w", err)
 	}
 
-	// Find the existing built-in rule and update it with our test service.
-	// Built-in rules are initialized with empty services; we inject the virtual server service.
-	scenario := AgentType.Scenario()
-
-	// Resolve the built-in rule UUID and its request model
-	var builtinUUID string
-	var requestModel string
-	switch AgentType {
-	case AgentTypeClaudeCode:
-		builtinUUID = "builtin:claude_code:cc"
-		requestModel = "tingly/cc"
-	case AgentTypeCodex:
-		builtinUUID = serverconfig.RuleUUIDCodex
-		requestModel = "tingly-codex"
-	case AgentTypeOpenCode:
-		builtinUUID = serverconfig.RuleUUIDOpenCode
-		requestModel = "tingly-opencode"
-	default:
-		return fmt.Errorf("unknown Agent type: %s", AgentType)
-	}
-
-	rule := typ.Rule{
-		UUID:          builtinUUID,
-		Scenario:      scenario,
-		RequestModel:  requestModel,
-		ResponseModel: modelName,
-		Services: []*loadbalance.Service{
-			{
-				Provider: providerName,
-				Model:    modelName,
-				Weight:   1,
-				Active:   true,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRandom,
-			Params: typ.DefaultRandomParams(),
-		},
-		Active: true,
-	}
-
-	if err := env.appConfig.GetGlobalConfig().UpdateRequestConfigByUUID(builtinUUID, rule); err != nil {
-		return fmt.Errorf("update rule: %w", err)
-	}
-
-	return nil
+	// Built-in rules are seeded with empty services; repoint injects the
+	// virtual-server service.
+	return env.repointBuiltinRule(AgentType, providerName, modelName)
 }
 
 // SetupRealAgent configures the environment to route through a real upstream provider.
@@ -303,49 +259,7 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 		return fmt.Errorf("add provider: %w", err)
 	}
 
-	scenario := AgentType.Scenario()
-
-	var builtinUUID string
-	var requestModel string
-	switch AgentType {
-	case AgentTypeClaudeCode:
-		builtinUUID = "builtin:claude_code:cc"
-		requestModel = "tingly/cc"
-	case AgentTypeCodex:
-		builtinUUID = serverconfig.RuleUUIDCodex
-		requestModel = "tingly-codex"
-	case AgentTypeOpenCode:
-		builtinUUID = serverconfig.RuleUUIDOpenCode
-		requestModel = "tingly-opencode"
-	default:
-		return fmt.Errorf("unknown Agent type: %s", AgentType)
-	}
-
-	rule := typ.Rule{
-		UUID:          builtinUUID,
-		Scenario:      scenario,
-		RequestModel:  requestModel,
-		ResponseModel: modelName,
-		Services: []*loadbalance.Service{
-			{
-				Provider: providerName,
-				Model:    modelName,
-				Weight:   1,
-				Active:   true,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRandom,
-			Params: typ.DefaultRandomParams(),
-		},
-		Active: true,
-	}
-
-	if err := env.appConfig.GetGlobalConfig().UpdateRequestConfigByUUID(builtinUUID, rule); err != nil {
-		return fmt.Errorf("update rule: %w", err)
-	}
-
-	return nil
+	return env.repointBuiltinRule(AgentType, providerName, modelName)
 }
 
 // SetupVModelAgent configures the environment so the agent's built-in rule

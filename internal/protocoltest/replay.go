@@ -6,10 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
-	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -76,40 +74,16 @@ func StreamShapeForAgent(at AgentType) Assertion {
 
 // repointBuiltinRule updates the agent's built-in rule so its fixed
 // RequestModel routes to a single service{providerUUID, upstreamModel}.
-// It is the shared core of the SetupVirtualAgentScenario / SetupVModelAgent
-// replay wiring.
+// It is the shared core of every AgentTestEnv setup path (virtual scenario,
+// vmodel, real provider, mock agent).
 func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, upstreamModel string) error {
-	var builtinUUID, requestModel string
-	switch agentType {
-	case AgentTypeClaudeCode:
-		builtinUUID, requestModel = "builtin:claude_code:cc", "tingly/cc"
-	case AgentTypeCodex:
-		builtinUUID, requestModel = serverconfig.RuleUUIDCodex, "tingly-codex"
-	case AgentTypeOpenCode:
-		builtinUUID, requestModel = serverconfig.RuleUUIDOpenCode, "tingly-opencode"
-	default:
-		return fmt.Errorf("unknown Agent type: %s", agentType)
+	builtinUUID, requestModel, err := BuiltinRuleRef(agentType)
+	if err != nil {
+		return err
 	}
 
-	rule := typ.Rule{
-		UUID:          builtinUUID,
-		Scenario:      agentType.Scenario(),
-		RequestModel:  requestModel,
-		ResponseModel: upstreamModel,
-		Services: []*loadbalance.Service{
-			{
-				Provider: providerUUID,
-				Model:    upstreamModel,
-				Weight:   1,
-				Active:   true,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRandom,
-			Params: typ.DefaultRandomParams(),
-		},
-		Active: true,
-	}
+	rule := newHarnessRule(builtinUUID, agentType.Scenario(), requestModel, upstreamModel,
+		harnessService(providerUUID, upstreamModel))
 
 	if err := env.appConfig.GetGlobalConfig().UpdateRequestConfigByUUID(builtinUUID, rule); err != nil {
 		return fmt.Errorf("update rule: %w", err)

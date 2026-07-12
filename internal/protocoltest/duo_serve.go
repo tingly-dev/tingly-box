@@ -22,7 +22,6 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -176,21 +175,8 @@ func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
 	}
 
 	for _, route := range allDuoRoutesWithSlow() {
-		rule := typ.Rule{
-			UUID:          route.RequestModel(),
-			Scenario:      typ.ScenarioAnthropic,
-			RequestModel:  route.RequestModel(),
-			ResponseModel: duoTargetVModel(route),
-			Services: []*loadbalance.Service{{
-				Provider:   providers[route.Target].UUID,
-				Model:      duoTargetVModel(route),
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			}},
-			LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
-			Active:   true,
-		}
+		rule := newHarnessRule(route.RequestModel(), typ.ScenarioAnthropic, route.RequestModel(), duoTargetVModel(route),
+			harnessService(providers[route.Target].UUID, duoTargetVModel(route)))
 		if err := appCfg.GetGlobalConfig().AddRequestConfig(rule); err != nil {
 			return fmt.Errorf("add rule %s: %w", route.Name, err)
 		}

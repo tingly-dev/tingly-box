@@ -155,13 +155,7 @@ func duoRoutingServices(specs []DuoRoutingService) ([]*loadbalance.Service, erro
 		if err != nil {
 			return nil, err
 		}
-		services = append(services, &loadbalance.Service{
-			Provider:   provider,
-			Model:      DuoServiceModel(s.Svc),
-			Weight:     1,
-			Active:     true,
-			TimeWindow: 300,
-		})
+		services = append(services, harnessService(provider, DuoServiceModel(s.Svc)))
 	}
 	return services, nil
 }
@@ -192,18 +186,12 @@ func (sc *DuoRoutingScenario) toRule() (*typ.Rule, error) {
 			Services:    services,
 		})
 	}
-	rule := &typ.Rule{
-		Scenario:      typ.RuleScenario(sc.scenario()),
-		RequestModel:  sc.RequestModel(),
-		ResponseModel: base[0].Model,
-		Services:      base,
-		LBTactic:      typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
-		SmartEnabled:  len(smart) > 0,
-		SmartRouting:  smart,
-		Active:        true,
-	}
+	// UUID "" — the rule enters through tb2's production API, which assigns one.
+	rule := newHarnessRule("", typ.RuleScenario(sc.scenario()), sc.RequestModel(), base[0].Model, base...)
+	rule.SmartEnabled = len(smart) > 0
+	rule.SmartRouting = smart
 	rule.Flags.SessionAffinity = sc.Rule.AffinitySecs
-	return rule, nil
+	return &rule, nil
 }
 
 // seedRoutingRule creates the scenario's rule on tb2 through the production

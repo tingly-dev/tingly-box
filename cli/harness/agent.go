@@ -271,17 +271,10 @@ func virtualAPIStyle(agentType protocoltest.AgentType) string {
 }
 
 // builtinRequestModel returns the fixed RequestModel used by the built-in rule
-// for each agent type. This is what the agent CLI actually sends to the gateway.
+// for each agent type — what the agent CLI actually sends to the gateway.
+// Thin alias over the engine's single copy of the mapping.
 func builtinRequestModel(agentType protocoltest.AgentType) string {
-	switch agentType {
-	case protocoltest.AgentTypeClaudeCode:
-		return "tingly/cc"
-	case protocoltest.AgentTypeCodex:
-		return "tingly-codex"
-	case protocoltest.AgentTypeOpenCode:
-		return "tingly-opencode"
-	}
-	return ""
+	return protocoltest.BuiltinRequestModel(agentType)
 }
 
 // batchAgents is the ordered list of agents to run in batch mode.

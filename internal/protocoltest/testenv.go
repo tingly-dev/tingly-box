@@ -14,7 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -269,28 +268,8 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 	}
 	_ = env.appConfig.AddProvider(provider)
 
-	ruleScenario := sourceToRuleScenario(source)
-
-	rule := typ.Rule{
-		UUID:          requestModel,
-		Scenario:      ruleScenario,
-		RequestModel:  requestModel,
-		ResponseModel: providerModel,
-		Services: []*loadbalance.Service{
-			{
-				Provider:   providerName,
-				Model:      providerModel,
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRandom,
-			Params: typ.NewRandomParams(),
-		},
-		Active: true,
-	}
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, providerModel,
+		harnessService(providerName, providerModel))
 	if flags != nil {
 		rule.Flags = *flags
 	}

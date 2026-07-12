@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -126,26 +125,8 @@ func (env *TestEnv) setupChainHopRoute(source, target protocol.APIType, s Scenar
 	}
 	_ = env.appConfig.AddProvider(provider)
 
-	rule := typ.Rule{
-		UUID:          requestModel,
-		Scenario:      sourceToRuleScenario(source),
-		RequestModel:  requestModel,
-		ResponseModel: nextModel,
-		Services: []*loadbalance.Service{
-			{
-				Provider:   providerName,
-				Model:      nextModel,
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticRandom,
-			Params: typ.NewRandomParams(),
-		},
-		Active: true,
-	}
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, nextModel,
+		harnessService(providerName, nextModel))
 	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 }
 

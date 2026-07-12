@@ -13,7 +13,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -179,18 +178,9 @@ func setupBothModeRoute(env *TestEnv, s Scenario, flags typ.RuleFlags) string {
 
 	reqModel := "pv-flag-both-" + s.Name
 	providerModel := "virtual-model-" + s.Name
-	rule := typ.Rule{
-		UUID:          reqModel,
-		Scenario:      typ.ScenarioOpenAI,
-		RequestModel:  reqModel,
-		ResponseModel: providerModel,
-		Services: []*loadbalance.Service{
-			{Provider: providerName, Model: providerModel, Weight: 1, Active: true, TimeWindow: 300},
-		},
-		LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
-		Active:   true,
-		Flags:    flags,
-	}
+	rule := newHarnessRule(reqModel, typ.ScenarioOpenAI, reqModel, providerModel,
+		harnessService(providerName, providerModel))
+	rule.Flags = flags
 	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 	return reqModel
 }
@@ -448,19 +438,10 @@ func ruleFlagCases() []flagCase {
 			registerOpenAIProvider(env, "aff-B", urlB)
 
 			const reqModel = "pv-flag-affinity"
-			rule := typ.Rule{
-				UUID:          reqModel,
-				Scenario:      typ.ScenarioOpenAI,
-				RequestModel:  reqModel,
-				ResponseModel: "affinity-model",
-				Services: []*loadbalance.Service{
-					{Provider: "aff-A", Model: "affinity-model", Weight: 1, Active: true, TimeWindow: 300},
-					{Provider: "aff-B", Model: "affinity-model", Weight: 1, Active: true, TimeWindow: 300},
-				},
-				LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
-				Active:   true,
-				Flags:    typ.RuleFlags{SessionAffinity: 3600},
-			}
+			rule := newHarnessRule(reqModel, typ.ScenarioOpenAI, reqModel, "affinity-model",
+				harnessService("aff-A", "affinity-model"),
+				harnessService("aff-B", "affinity-model"))
+			rule.Flags = typ.RuleFlags{SessionAffinity: 3600}
 			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 
 			const n = 5
@@ -502,18 +483,9 @@ func ruleFlagCases() []flagCase {
 
 			const reqModel = "pv-flag-1m"
 			providerModel := "virtual-model-" + s.Name
-			rule := typ.Rule{
-				UUID:          reqModel,
-				Scenario:      typ.ScenarioClaudeCode,
-				RequestModel:  reqModel,
-				ResponseModel: providerModel,
-				Services: []*loadbalance.Service{
-					{Provider: providerName, Model: providerModel, Weight: 1, Active: true, TimeWindow: 300},
-				},
-				LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
-				Active:   true,
-				Flags:    typ.RuleFlags{Context1M: true},
-			}
+			rule := newHarnessRule(reqModel, typ.ScenarioClaudeCode, reqModel, providerModel,
+				harnessService(providerName, providerModel))
+			rule.Flags = typ.RuleFlags{Context1M: true}
 			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 
 			_, body := flagBaseRequest(protocol.TypeAnthropicV1, reqModel+"[1m]", false)

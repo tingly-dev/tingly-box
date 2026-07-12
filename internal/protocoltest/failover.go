@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
@@ -91,22 +90,13 @@ func (env *TestEnv) SetupFailoverRoute(
 		Token: "fallback-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
 	})
 
-	rule := typ.Rule{
-		UUID:          requestModel,
-		Scenario:      sourceToRuleScenario(source),
-		RequestModel:  requestModel,
-		ResponseModel: fallbackProviderModel,
-		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: fallbackProviderModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTier,
-			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
-		},
-		Active: true,
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, fallbackProviderModel,
+		tieredService(primaryUUID, primaryFailModel, 0),
+		tieredService(fallbackUUID, fallbackProviderModel, 1))
+	rule.LBTactic = tierFailoverTactic()
+	if err := env.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {
+		t.Fatalf("add failover rule: %v", err)
 	}
-	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 
 	return FailoverRoute{
 		ModelName:        requestModel,
@@ -182,21 +172,13 @@ func (env *TestEnv) SetupCrossStyleFailoverRoute(
 		Token:              "fallback-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
 	})
 
-	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(typ.Rule{
-		UUID:          requestModel,
-		Scenario:      sourceToRuleScenario(source),
-		RequestModel:  requestModel,
-		ResponseModel: fallbackProviderModel,
-		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: fallbackProviderModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTier,
-			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
-		},
-		Active: true,
-	})
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, fallbackProviderModel,
+		tieredService(primaryUUID, primaryFailModel, 0),
+		tieredService(fallbackUUID, fallbackProviderModel, 1))
+	rule.LBTactic = tierFailoverTactic()
+	if err := env.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {
+		t.Fatalf("add failover rule: %v", err)
+	}
 
 	return FailoverRoute{
 		ModelName:        requestModel,
@@ -243,21 +225,13 @@ func (env *TestEnv) SetupVModelFailoverRoute(
 		t.Fatalf("add fallback vmodel provider: %v", err)
 	}
 
-	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(typ.Rule{
-		UUID:          requestModel,
-		Scenario:      sourceToRuleScenario(source),
-		RequestModel:  requestModel,
-		ResponseModel: fallbackModel,
-		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: fallbackModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTier,
-			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
-		},
-		Active: true,
-	})
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, fallbackModel,
+		tieredService(primaryUUID, primaryFailModel, 0),
+		tieredService(fallbackUUID, fallbackModel, 1))
+	rule.LBTactic = tierFailoverTactic()
+	if err := env.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {
+		t.Fatalf("add failover rule: %v", err)
+	}
 
 	return FailoverRoute{ModelName: requestModel}
 }
@@ -296,21 +270,13 @@ func (env *TestEnv) SetupBothFailingRoute(
 		Token: "fallback-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
 	})
 
-	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(typ.Rule{
-		UUID:          requestModel,
-		Scenario:      sourceToRuleScenario(source),
-		RequestModel:  requestModel,
-		ResponseModel: failModel,
-		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: failModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: failModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticTier,
-			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
-		},
-		Active: true,
-	})
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, failModel,
+		tieredService(primaryUUID, failModel, 0),
+		tieredService(fallbackUUID, failModel, 1))
+	rule.LBTactic = tierFailoverTactic()
+	if err := env.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {
+		t.Fatalf("add failover rule: %v", err)
+	}
 
 	return FailoverRoute{
 		ModelName:         requestModel,
