@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { ROUTING_GUIDE_STEPS } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideToolbarPreview } from './GuideToolbarPreview';
+import { GuideLanguageToggle } from './GuideLanguageToggle';
 
 export interface EntryGuideDialogProps {
     open: boolean;
@@ -128,13 +129,18 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                 }
             }}
         >
-            <DialogTitle id="entry-guide-dialog-title" sx={{ pr: 8 }}>
-                <Typography variant="h6" component="div">
-                    {guideTitle}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                    {t('rule.routing.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: safeActiveStep + 1, total: totalSteps })}
-                </Typography>
+            <DialogTitle id="entry-guide-dialog-title" sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, pr: 8 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="h6" component="div">
+                        {guideTitle}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {t('rule.routing.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: safeActiveStep + 1, total: totalSteps })}
+                    </Typography>
+                </Box>
+                <Box sx={{ pt: 0.5 }}>
+                    <GuideLanguageToggle />
+                </Box>
             </DialogTitle>
             <IconButton
                 aria-label={t('common.close', { defaultValue: 'Close' })}
@@ -266,7 +272,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                     </Box>
                 </Box>
             </DialogContent>
-            <DialogActions sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 }, py: 2 }}>
+            <DialogActions sx={{ justifyContent: 'flex-end', gap: 1.5, px: { xs: 2, sm: 3 }, py: 2 }}>
                 <Button
                     disabled={safeActiveStep === 0}
                     onClick={handleBack}
