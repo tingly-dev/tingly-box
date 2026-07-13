@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
@@ -15,7 +14,7 @@ import (
 // anthropicBetaToResponsesConverter converts an Anthropic Beta stream into
 // a sequence of Responses API wire events. It implements StreamConverter.
 type anthropicBetaToResponsesConverter struct {
-	stream        *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
+	stream        AnthropicBetaStream
 	responseModel string
 	acc           *usagepkg.AnthropicAccumulator
 
@@ -46,7 +45,7 @@ type pendingResponseToolCall struct {
 // newAnthropicBetaToResponsesConverter creates a converter that reads from an
 // Anthropic Beta stream and yields Responses API wire events.
 func newAnthropicBetaToResponsesConverter(
-	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
+	stream AnthropicBetaStream,
 	responseModel string,
 ) *anthropicBetaToResponsesConverter {
 	ts := time.Now().Unix()
@@ -59,6 +58,16 @@ func newAnthropicBetaToResponsesConverter(
 		pendingToolCalls: make(map[int]*pendingResponseToolCall),
 		createdAt:        ts,
 	}
+}
+
+// NewAnthropicBetaToOpenAIResponsesConverter creates a transport-neutral
+// converter. HTTP/SSE framing and stream close ownership remain with the
+// caller, so the same converter can serve legacy handlers and Stage Bridges.
+func NewAnthropicBetaToOpenAIResponsesConverter(
+	stream AnthropicBetaStream,
+	responseModel string,
+) StreamConverter {
+	return newAnthropicBetaToResponsesConverter(stream, responseModel)
 }
 
 func (c *anthropicBetaToResponsesConverter) Next() (interface{}, bool, error) {

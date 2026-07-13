@@ -61,10 +61,11 @@ func (*MatrixCmd) Help() string {
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
 
-  # Exercise production Stage selection (Chat/Beta/V1 routes plus Responses identity)
+  # Exercise production Stage selection (Chat/Beta/V1 routes plus Responses routes)
   harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta
   harness matrix --mode=single --stage --source=anthropic_beta --target=openai_chat
   harness matrix --mode=single --stage --source=openai_responses --target=openai_responses
+  harness matrix --mode=single --stage --source=openai_responses --target=anthropic_beta
 
   # Exercise Beta Guardrail as a Stage without changing scenario semantics
   harness matrix --mode=single --stage --guardrails --source=anthropic_beta

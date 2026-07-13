@@ -39,6 +39,8 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		{name: "stage v1 to chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage responses native nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIResponses, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage responses native stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIResponses, streaming: true, wantHeader: "stage", wantResponseModel: true},
+		{name: "stage responses to beta nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeAnthropicBeta, wantHeader: "stage", wantResponseModel: true},
+		{name: "stage responses to beta stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage unsupported chat identity stays legacy", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
 		{name: "stage unsupported responses to chat stays legacy", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
 		{

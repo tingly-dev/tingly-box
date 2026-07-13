@@ -18,9 +18,11 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/responsesbridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
@@ -74,29 +76,25 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 		),
 		newProtocolTransformStage(
 			"provider_finalize",
-			protocol.TypeOpenAIResponses,
+			target,
 			provider,
 			scenarioFlags,
 			isStreaming,
 			appendProtocolStageTransforms(
-				[]transform.Transform{transform.NewConsistencyTransform(protocol.TypeOpenAIResponses)},
+				[]transform.Transform{transform.NewConsistencyTransform(target)},
 				RulePreVendorTransforms(ruleFlags),
 				[]transform.Transform{vendorTransformShared},
 			),
 			options...,
 		),
 	}
-	registry, err := protocolstage.NewBridgeRegistry(protocolstage.NewIdentityBridge(protocol.TypeOpenAIResponses))
+	terminal, registry, err := ph.protocolStageOpenAIResponsesTarget(target, provider, actualModel, responseModel, maxAllowed)
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build OpenAI Responses Protocol Stage registry: %w", err))
+		ph.FailAttemptSetup(c, err)
 		return true
 	}
 	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
-		Terminal: &openAIResponsesProviderEndpoint{
-			ph:       ph,
-			provider: provider,
-			model:    actualModel,
-		},
+		Terminal:             terminal,
 		Stages:               stages,
 		ClientProtocol:       protocol.TypeOpenAIResponses,
 		Registry:             registry,
@@ -120,6 +118,34 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	}
 	ph.serveProtocolStageOpenAIResponsesComplete(c, endpoint, call, responseModel)
 	return true
+}
+
+func (ph *ProtocolHandler) protocolStageOpenAIResponsesTarget(
+	target protocol.APIType,
+	provider *typ.Provider,
+	actualModel string,
+	responseModel string,
+	maxAllowed int,
+) (protocolstage.Endpoint, *protocolstage.BridgeRegistry, error) {
+	responsesToBeta := responsesbridge.NewToAnthropicBeta(responsesbridge.AnthropicOptions{
+		DefaultMaxTokens: int64(maxAllowed),
+		ResponseModel:    responseModel,
+	})
+	registry, err := protocolstage.NewBridgeRegistry(
+		protocolstage.NewIdentityBridge(protocol.TypeOpenAIResponses),
+		responsesToBeta,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build OpenAI Responses Protocol Stage registry: %w", err)
+	}
+	switch target {
+	case protocol.TypeOpenAIResponses:
+		return &openAIResponsesProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeAnthropicBeta:
+		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	default:
+		return nil, nil, fmt.Errorf("OpenAI Responses Protocol Stage target %q is not implemented", target)
+	}
 }
 
 // openAIResponsesProviderEndpoint is the transport-free Responses provider
@@ -393,21 +419,31 @@ func setProtocolStageOpenAIResponsesSSEHeaders(c *gin.Context) {
 }
 
 func protocolStageOpenAIResponsesEventJSON(value any, responseModel string) (string, []byte, error) {
-	event, ok := value.(responses.ResponseStreamEventUnion)
-	if !ok {
-		return "", nil, fmt.Errorf("unsupported OpenAI Responses stream event %T", value)
-	}
-	eventType := event.Type
-	if eventType == "" {
-		return "", nil, fmt.Errorf("OpenAI Responses stream event has empty type")
-	}
-	raw := []byte(strings.Clone(event.RawJSON()))
-	if len(raw) == 0 {
+	var eventType string
+	var raw []byte
+	switch event := value.(type) {
+	case responses.ResponseStreamEventUnion:
+		eventType = event.Type
+		raw = []byte(strings.Clone(event.RawJSON()))
+		if len(raw) == 0 {
+			var err error
+			raw, err = json.Marshal(event)
+			if err != nil {
+				return "", nil, fmt.Errorf("marshal OpenAI Responses stream event: %w", err)
+			}
+		}
+	case wire.ResponsesEvent:
+		eventType = event.EventType()
 		var err error
 		raw, err = json.Marshal(event)
 		if err != nil {
-			return "", nil, fmt.Errorf("marshal OpenAI Responses stream event: %w", err)
+			return "", nil, fmt.Errorf("marshal converted OpenAI Responses stream event: %w", err)
 		}
+	default:
+		return "", nil, fmt.Errorf("unsupported OpenAI Responses stream event %T", value)
+	}
+	if eventType == "" {
+		return "", nil, fmt.Errorf("OpenAI Responses stream event has empty type")
 	}
 
 	response := gjson.GetBytes(raw, "response")

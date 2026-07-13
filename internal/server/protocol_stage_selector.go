@@ -7,6 +7,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/openaibridge"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/responsesbridge"
 )
 
 // ProtocolStageSelector is the immutable process-level selector enabled by
@@ -28,6 +29,7 @@ func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),
 		stage.NewIdentityBridge(protocol.TypeOpenAIResponses),
+		responsesbridge.NewToAnthropicBeta(responsesbridge.AnthropicOptions{}),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("construct Protocol Stage selector: %v", err))

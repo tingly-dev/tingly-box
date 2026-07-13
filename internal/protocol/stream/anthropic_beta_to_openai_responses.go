@@ -28,7 +28,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		}
 	}()
 
-	conv := newAnthropicBetaToResponsesConverter(stream, responseModel)
+	conv := NewAnthropicBetaToOpenAIResponsesConverter(stream, responseModel)
 
 	usage, err := RunConverter(hc, conv, responsesSSEWriter(c))
 
