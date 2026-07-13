@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Box, Tooltip, Typography } from '@mui/material';
+import { Box, Paper, Tooltip, Typography } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { format } from 'date-fns';
 import api from '@/services/api';
@@ -95,10 +95,25 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
     }, [loadData, provider, refreshKey]);
 
     return (
-        // flex: 1 lets the section fill the chart pane (whose height is set by
-        // the sibling column) so the grid can center vertically instead of
+        // Standard dashboard card (same style as RequestsView / Usage by
+        // Model) so the view doesn't float bare on the page background.
+        // flex: 1 lets it fill the chart pane (whose height is set by the
+        // sibling column) so the grid can center vertically instead of
         // floating at the top with dead space below.
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Paper
+            elevation={0}
+            sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                p: 2.5,
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                backgroundColor: 'background.paper',
+                boxShadow: 'none',
+            }}
+        >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
                     Token Activity
@@ -123,6 +138,6 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
                     </Box>
                 )}
             </Box>
-        </Box>
+        </Paper>
     );
 }
