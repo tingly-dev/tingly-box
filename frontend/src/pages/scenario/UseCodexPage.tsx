@@ -117,6 +117,7 @@ const UseCodexPageContent: React.FC = () => {
                         setPendingContext1MChange(null);
                     }}
                     copyToClipboard={copyToClipboard}
+                    showNotification={showNotification}
                     pendingContext1MChange={pendingContext1MChange}
                 />
                 <ConnectProviderFlow

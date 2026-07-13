@@ -2132,4 +2132,81 @@ export const handlers = [
             error: 'Profile not found',
         }, { status: 404 })
     }),
+
+    // ============================================
+    // Codex config preview / apply
+    // Mirrors internal/server/module/configapply so the modal renders a real
+    // assembled config.toml (instead of "# Loading...") and Auto Config succeeds.
+    // ============================================
+    http.post('/api/v1/config/preview/codex', async ({ request }) => {
+        const body = await request.json().catch(() => ({})) as any
+        const authMode: string = body?.authMode || 'apikey'
+        const writeCatalog: boolean = body?.writeCatalog !== false
+        const prefs = (body?.preferences || {}) as Record<string, string>
+        const models = ['gpt-5.1-codex', 'codex-mini-latest']
+        const baseUrl = 'http://localhost:3000/tingly/codex'
+        const token = 'tb-mock-model-token'
+
+        const lines: string[] = []
+        lines.push(`model = "${models[0]}"`)
+        lines.push('model_provider = "tingly-box"')
+        if (writeCatalog) lines.push('model_catalog_json = "~/.codex/tingly-model-catalog.json"')
+        // Managed reasoning/verbosity prefs — only emit the ones the user set.
+        for (const [k, v] of Object.entries(prefs)) {
+            if (v) lines.push(`${k} = "${v}"`)
+        }
+        lines.push('')
+        lines.push('[model_providers.tingly-box]')
+        lines.push('name = "OpenAI using Tingly Box"')
+        lines.push(`base_url = "${baseUrl}"`)
+        lines.push('preferred_auth_method = "apikey"')
+        lines.push('wire_api = "responses"')
+        if (authMode === 'hybrid') {
+            // Hybrid keeps the gateway token in config.toml so auth.json can hold
+            // a native ChatGPT login.
+            lines.push(`experimental_bearer_token = "${token}"`)
+            lines.push('requires_openai_auth = false')
+        }
+        for (const m of models) {
+            lines.push('')
+            lines.push(`[profiles."${m}"]`)
+            lines.push(`model = "${m}"`)
+            lines.push('model_provider = "tingly-box"')
+        }
+        const configToml = lines.join('\n') + '\n'
+
+        // Hybrid leaves auth.json untouched → nothing to preview there.
+        const authJson = authMode === 'hybrid' ? '' : JSON.stringify({ OPENAI_API_KEY: token }, null, 2)
+        const catalogJson = writeCatalog
+            ? JSON.stringify({ models: models.map((id) => ({ id, context_window: 272000 })) }, null, 2)
+            : ''
+
+        return HttpResponse.json({ success: true, configToml, authJson, catalogJson, models })
+    }),
+
+    http.post('/api/v1/config/apply/codex', async ({ request }) => {
+        const body = await request.json().catch(() => ({})) as any
+        const authMode: string = body?.authMode || 'apikey'
+        const writeCatalog: boolean = body?.writeCatalog !== false
+        return HttpResponse.json({
+            success: true,
+            configResult: {
+                success: true,
+                updated: true,
+                message: authMode === 'chatgpt'
+                    ? 'Cleared tingly gateway keys from ~/.codex/config.toml'
+                    : 'Updated ~/.codex/config.toml',
+            },
+            authResult: {
+                success: true,
+                updated: authMode !== 'hybrid',
+                message: authMode === 'hybrid'
+                    ? 'Left ~/.codex/auth.json untouched (kept existing ChatGPT login)'
+                    : 'Updated ~/.codex/auth.json',
+            },
+            catalogWritten: writeCatalog && authMode !== 'chatgpt',
+            models: ['gpt-5.1-codex', 'codex-mini-latest'],
+            message: 'Codex configuration applied',
+        })
+    }),
 ]

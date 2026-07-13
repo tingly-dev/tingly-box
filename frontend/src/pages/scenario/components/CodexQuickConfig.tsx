@@ -1,7 +1,6 @@
 import {
     Box,
     Divider,
-    IconButton,
     MenuItem,
     Select,
     Stack,
@@ -9,7 +8,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { InfoOutlined as InfoOutlinedIcon, RestartAlt as RestartAltIcon } from '@/components/icons';
+import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -110,17 +109,15 @@ const FIELDS_TEXT_EN: FieldTextMap = {
 
 const FIELDS_TEXT: Record<Lang, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN };
 
-const UI_TEXT: Record<Lang, { panelHeader: string; resetTooltip: string; sectionTitle: string; sectionHint: string; unsetLabel: string }> = {
+const UI_TEXT: Record<Lang, { panelHeader: string; sectionTitle: string; sectionHint: string; unsetLabel: string }> = {
     zh: {
         panelHeader: '这些项写入 ~/.codex/config.toml 的顶层与每个 tingly profile',
-        resetTooltip: '恢复默认',
         sectionTitle: '模型与推理',
         sectionHint: '留空表示用 Codex 自带默认',
         unsetLabel: '（默认）',
     },
     en: {
         panelHeader: 'These are written to the top level of ~/.codex/config.toml and into each tingly profile',
-        resetTooltip: 'Reset to defaults',
         sectionTitle: 'Model & reasoning',
         sectionHint: 'Empty = use Codex built-in default',
         unsetLabel: '(default)',
@@ -234,12 +231,11 @@ const CATALOG_TEXT: Record<Lang, { sectionTitle: string; label: string; purpose:
 interface CodexQuickConfigProps {
     prefs: CodexPrefs;
     setPrefs: (p: CodexPrefs) => void;
-    onResetDefaults: () => void;
     writeCatalog: boolean;
     setWriteCatalog: (v: boolean) => void;
 }
 
-const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, onResetDefaults, writeCatalog, setWriteCatalog }) => {
+const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, writeCatalog, setWriteCatalog }) => {
     const lang = useLang();
     const uiText = UI_TEXT[lang];
     const fieldsText = FIELDS_TEXT[lang];
@@ -254,14 +250,7 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, on
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2" color="text.secondary">{uiText.panelHeader}</Typography>
-                <Tooltip title={uiText.resetTooltip} arrow>
-                    <IconButton size="small" onClick={onResetDefaults}>
-                        <RestartAltIcon fontSize="small" />
-                    </IconButton>
-                </Tooltip>
-            </Box>
+            <Typography variant="body2" color="text.secondary">{uiText.panelHeader}</Typography>
 
             <Box>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>

@@ -1111,15 +1111,28 @@ export const api = {
         authMode?: 'apikey' | 'chatgpt' | 'hybrid',
         oauthProviderUuid?: string,
     ): Promise<any> => {
-        return uiAPI('/config/apply/codex', {
-            method: 'POST',
-            body: JSON.stringify({
-                preferences: preferences ?? null,
-                writeCatalog: writeCatalog ?? true,
-                authMode: authMode ?? 'apikey',
-                oauthProviderUuid: oauthProviderUuid ?? '',
-            }),
-        });
+        // Uses the typed codegen client (openapi-fetch) rather than uiAPI, which
+        // is being retired. The endpoint is swagger-registered as
+        // POST /api/v1/config/apply/codex (ApplyCodexConfigRequest).
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/config/apply/codex', {
+                headers,
+                body: {
+                    preferences: preferences ?? {},
+                    writeCatalog: writeCatalog ?? true,
+                    authMode: authMode ?? 'apikey',
+                    oauthProviderUuid: oauthProviderUuid ?? '',
+                },
+            });
+            if (response.error) {
+                return { success: false, message: 'Failed to apply Codex configuration' };
+            }
+            return response.data;
+        } catch (error: any) {
+            return { success: false, message: error?.message || 'Failed to apply Codex configuration' };
+        }
     },
 
     getCodexConfigPreview: async (
@@ -1128,15 +1141,25 @@ export const api = {
         authMode?: 'apikey' | 'chatgpt' | 'hybrid',
         oauthProviderUuid?: string,
     ): Promise<any> => {
-        return uiAPI('/config/preview/codex', {
-            method: 'POST',
-            body: JSON.stringify({
-                preferences: preferences ?? null,
-                writeCatalog: writeCatalog ?? true,
-                authMode: authMode ?? 'apikey',
-                oauthProviderUuid: oauthProviderUuid ?? '',
-            }),
-        });
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/config/preview/codex', {
+                headers,
+                body: {
+                    preferences: preferences ?? {},
+                    writeCatalog: writeCatalog ?? true,
+                    authMode: authMode ?? 'apikey',
+                    oauthProviderUuid: oauthProviderUuid ?? '',
+                },
+            });
+            if (response.error) {
+                return { success: false, message: 'Failed to preview Codex configuration' };
+            }
+            return response.data;
+        } catch (error: any) {
+            return { success: false, message: error?.message || 'Failed to preview Codex configuration' };
+        }
     },
 
     importCodexOpenAISessions: async (payload: {

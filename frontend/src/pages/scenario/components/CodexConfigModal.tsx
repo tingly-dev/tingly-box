@@ -1,5 +1,6 @@
-import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import React from 'react';
+import { RestartAlt } from '@/components/icons';
 import CodeBlock from '@/components/CodeBlock';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs } from './CodexQuickConfig';
 import Context1MChangeBanner from './Context1MChangeBanner';
@@ -12,6 +13,9 @@ interface CodexConfigModalProps {
     onClose: () => void;
     copyToClipboard: (text: string, label: string) => Promise<void>;
     pendingContext1MChange?: boolean | null;
+    // Shared page-level toast, used for apply success/error so feedback is
+    // consistent with the rest of the scenario pages.
+    showNotification?: (message: string, severity: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 type MainTab = 'quick' | 'manual';
@@ -32,27 +36,6 @@ interface CodexOAuthProviderOption {
     name: string;
 }
 
-interface ApplyCodexConfigResponse {
-    success: boolean;
-    configResult?: {
-        success: boolean;
-        backupPath?: string;
-        message?: string;
-        created?: boolean;
-        updated?: boolean;
-    };
-    authResult?: {
-        success: boolean;
-        backupPath?: string;
-        message?: string;
-        created?: boolean;
-        updated?: boolean;
-    };
-    catalogWritten?: boolean;
-    models?: string[];
-    message?: string;
-}
-
 const SHOW_CODEX_SESSION_IMPORT = false;
 
 const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
@@ -60,6 +43,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     onClose,
     copyToClipboard,
     pendingContext1MChange,
+    showNotification,
 }) => {
     // Keep token in context as a fallback for the auth.json preview while
     // the preview API request is in flight.
@@ -93,15 +77,10 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
 
     // Apply configuration state
     const [isApplying, setIsApplying] = React.useState(false);
-    const [applyResult, setApplyResult] = React.useState<ApplyCodexConfigResponse | null>(null);
-    const [applyError, setApplyError] = React.useState<string | null>(null);
 
-    // Seed defaults on open; reset transient state on close.
+    // Seed defaults on open.
     React.useEffect(() => {
-        if (!open) {
-            resetApplyState();
-            return;
-        }
+        if (!open) return;
         setPrefs(defaultCodexPrefs());
         setAuthMode('apikey');
         setSelectedOAuthProvider('');
@@ -235,12 +214,10 @@ EOF`;
 
     const handleApplyConfiguration = async () => {
         if (authMode === 'chatgpt' && !selectedOAuthProvider) {
-            setApplyError('Select a Codex OAuth provider to export.');
+            showNotification?.('Select a Codex OAuth provider to export.', 'error');
             return;
         }
         setIsApplying(true);
-        setApplyError(null);
-        setApplyResult(null);
         try {
             const response = await api.applyCodexConfig(
                 prefs as Record<string, string>,
@@ -249,20 +226,15 @@ EOF`;
                 showOAuthSelector ? (selectedOAuthProvider || undefined) : undefined,
             );
             if (response?.success) {
-                setApplyResult(response);
+                showNotification?.('Codex configuration applied to ~/.codex', 'success');
             } else {
-                setApplyError(response?.message || 'Failed to apply configuration');
+                showNotification?.(response?.message || 'Failed to apply configuration', 'error');
             }
         } catch (err: any) {
-            setApplyError(err?.message || 'Failed to apply configuration');
+            showNotification?.(err?.message || 'Failed to apply configuration', 'error');
         } finally {
             setIsApplying(false);
         }
-    };
-
-    const resetApplyState = () => {
-        setApplyResult(null);
-        setApplyError(null);
     };
 
     return (
@@ -272,7 +244,6 @@ EOF`;
                 if (shouldIgnoreDialogClose(reason)) {
                     return;
                 }
-                resetApplyState();
                 onClose();
             }}
             maxWidth="lg"
@@ -284,13 +255,26 @@ EOF`;
                 },
             }}
         >
-            <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
+            <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider', position: 'relative' }}>
                 <Typography variant="h6" fontWeight={600}>
                     Configure Codex
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     Configure Codex to use Tingly Box through `~/.codex/config.toml` and `~/.codex/auth.json`
                 </Typography>
+                {/* Reset only touches the Quick Config prefs, so it's shown only
+                    where those prefs are visible (Quick tab, non-direct). */}
+                {mainTab === 'quick' && authMode !== 'chatgpt' && (
+                    <Tooltip title="Reset model & reasoning to defaults" arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => setPrefs(defaultCodexPrefs())}
+                            sx={{ position: 'absolute', top: 12, right: 12 }}
+                        >
+                            <RestartAlt fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                )}
                 <Tabs
                     value={mainTab}
                     onChange={(_, value) => setMainTab(value)}
@@ -362,10 +346,18 @@ EOF`;
                             }
                         />
                     </RadioGroup>
+                </Box>
 
-                    {showOAuthSelector && (
-                        <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                            <FormControl size="small" sx={{ maxWidth: 360 }}>
+                {/* The account is a parameter of the two ChatGPT-login modes, not
+                    part of picking the mode — so it lives in its own labeled block
+                    rather than inside the Authentication selector. */}
+                {showOAuthSelector && (
+                    <Box sx={{ mb: 2, px: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            ChatGPT account
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <FormControl size="small" fullWidth sx={{ maxWidth: 420 }}>
                                 <Select
                                     displayEmpty
                                     value={selectedOAuthProvider}
@@ -401,13 +393,12 @@ EOF`;
                                 </Alert>
                             )}
                         </Box>
-                    )}
-                </Box>
+                    </Box>
+                )}
                 {authMode !== 'chatgpt' && mainTab === 'quick' && (
                     <CodexQuickConfig
                         prefs={prefs}
                         setPrefs={setPrefs}
-                        onResetDefaults={() => setPrefs(defaultCodexPrefs())}
                         writeCatalog={writeCatalog}
                         setWriteCatalog={setWriteCatalog}
                     />
@@ -633,36 +624,7 @@ EOF`;
                 )}
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {applyResult?.success && (
-                    <Alert severity="success" sx={{ width: '100%' }}>
-                        <Typography variant="body2" fontWeight={600}>
-                            Configuration applied successfully!
-                        </Typography>
-                        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {applyResult.configResult?.message && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ {applyResult.configResult.message}
-                                </Typography>
-                            )}
-                            {applyResult.authResult?.message && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ {applyResult.authResult.message}
-                                </Typography>
-                            )}
-                            {applyResult.configResult?.backupPath && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                                    Backup: {applyResult.configResult.backupPath}
-                                </Typography>
-                            )}
-                        </Box>
-                    </Alert>
-                )}
-                {applyError && (
-                    <Alert severity="error" sx={{ width: '100%' }}>
-                        {applyError}
-                    </Alert>
-                )}
+            <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, width: '100%' }}>
                     <Button onClick={onClose} variant="outlined">
                         Close
