@@ -27,6 +27,7 @@ func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{}),
 		stage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
+		anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{}),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),
 		stage.NewIdentityBridge(protocol.TypeOpenAIResponses),
 		responsesbridge.NewToAnthropicBeta(responsesbridge.AnthropicOptions{}),

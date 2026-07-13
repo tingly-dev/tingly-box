@@ -2,7 +2,8 @@
 
 > Status: Phases 1–2 and the first Phase 3 canary are implemented additively.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
-> routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat.
+> routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat and
+> Anthropic Beta → OpenAI Responses.
 > Anthropic Beta requests can include the Beta-native Guardrail Stage; MCP,
 > protocol recording, unsupported routes, and V1 Guardrails remain on legacy.
 >
@@ -18,8 +19,8 @@ lifecycle before the provider is called.
 | Phase | Status | Current boundary |
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
-| 2 — Bridges and production routes | Expanding additively | Eight opt-in routes listed below; reverse Responses-target routes stay legacy |
-| 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; native Beta and Chat targets |
+| 2 — Bridges and production routes | Expanding additively | Nine opt-in routes listed below; remaining Responses-target routes stay legacy |
+| 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |
@@ -30,6 +31,7 @@ Production route selection with `--stage`:
 | --- | --- | --- | --- | --- | --- |
 | `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Legacy | Legacy |
 | `anthropic_beta` | `openai_chat` | Stage through Beta→Chat Bridge | Stage with the same Beta Guardrail | Legacy | Legacy |
+| `anthropic_beta` | `openai_responses` | Stage through Beta→Responses Bridge | Stage with the same Beta Guardrail | Legacy | Legacy |
 | `anthropic_v1` | `anthropic_v1` | Stage | Legacy | Legacy | Legacy |
 | `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy | Legacy | Legacy |
 | `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
@@ -532,6 +534,10 @@ back into Responses wire DTOs before the same Responses HTTP adapter runs.
 Responses → OpenAI Chat follows the same boundary: the Bridge converts requests
 to Chat, carries explicit Chat state into provider finalization, and converts
 complete responses or Chat chunks back to Responses wire shapes.
+The reverse Beta → Responses Bridge restores Responses complete results and
+stream events to Beta before outer stages run. Consequently the existing
+`guardrail_anthropic_beta` Stage now governs Beta-, Chat-, and
+Responses-backed providers without acquiring Responses-specific logic.
 Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
 exposes the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
@@ -583,6 +589,17 @@ Verification recorded for the Responses → OpenAI Chat checkpoint:
 - the full route matrix reports 24 cases: 19 passed, 5 expected Responses
   source/scenario skips, and 0 failures.
 
+Verification recorded for the Anthropic Beta → Responses checkpoint:
+
+- Bridge complete/stream tests cover request conversion, typed Beta recovery,
+  usage, side effects, normalized events, and close ownership;
+- real HTTP selection and authoritative Guardrail tests cover complete and
+  stream routing through a Responses provider;
+- raw HTTP, official Go SDK, and allow-only Guardrails text matrices each pass
+  2/2;
+- plain and Guardrails full route matrices each report 24 cases: 22 passed, 2
+  expected streaming-only skips, and 0 failures.
+
 Commit checkpoints, oldest to newest:
 
 | Commit | Checkpoint |
@@ -595,4 +612,5 @@ Commit checkpoints, oldest to newest:
 | `430303114` | Authoritative Anthropic Beta Guardrail canary |
 | `43ef808fd` | Native OpenAI Responses Stage route |
 | `86c83e37d` | OpenAI Responses → Anthropic Beta Stage route |
-| current checkpoint | OpenAI Responses → OpenAI Chat Stage route |
+| `58cc33247` | OpenAI Responses → OpenAI Chat Stage route |
+| current checkpoint | Anthropic Beta → OpenAI Responses Stage route |

@@ -183,9 +183,13 @@ func (ph *ProtocolHandler) protocolStageAnthropicBetaTarget(
 		DisableStreamUsage: disableStreamUsage,
 		ResponseModel:      responseModel,
 	})
+	betaToResponses := anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{
+		ResponseModel: responseModel,
+	})
 	registry, err := protocolstage.NewBridgeRegistry(
 		protocolstage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		betaToChat,
+		betaToResponses,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build Anthropic Beta Protocol Stage registry: %w", err)
@@ -196,6 +200,8 @@ func (ph *ProtocolHandler) protocolStageAnthropicBetaTarget(
 		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeOpenAIChat:
 		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeOpenAIResponses:
+		return &openAIResponsesProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	default:
 		return nil, nil, fmt.Errorf("Anthropic Beta Protocol Stage target %q is not implemented", target)
 	}

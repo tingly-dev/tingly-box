@@ -24,6 +24,7 @@ func TestProtocolStageSelector(t *testing.T) {
 		{name: "enabled registered beta identity", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, want: true},
 		{name: "enabled registered v1 identity", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, want: true},
 		{name: "enabled beta to chat", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, want: true},
+		{name: "enabled beta to responses", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIResponses, want: true},
 		{name: "enabled v1 to chat", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, want: true},
 		{name: "enabled registered responses identity", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIResponses, want: true},
 		{name: "enabled responses to beta", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeAnthropicBeta, want: true},

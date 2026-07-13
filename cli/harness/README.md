@@ -143,7 +143,7 @@ because none of those surfaces are traversed by the in-process topology.
 This is converter/topology evidence, not a substitute for the production HTTP
 single-hop section. Use `matrix --mode=single --stage` to enable the real server
 selector; the current production Stage routes are OpenAI Chat → Anthropic Beta,
-Anthropic Beta → Anthropic Beta, Anthropic Beta → OpenAI Chat, Anthropic V1 →
+Anthropic Beta → Anthropic Beta/OpenAI Chat/OpenAI Responses, Anthropic V1 →
 Anthropic V1, Anthropic V1 → OpenAI Chat, and OpenAI Responses → OpenAI
 Responses/Anthropic Beta/OpenAI Chat. V1 remains a distinct protocol; reverse
 Responses-target routes remain on legacy until their concrete Bridges are
