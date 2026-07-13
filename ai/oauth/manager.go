@@ -589,9 +589,11 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	// Convert ExpiresIn to Expiry
 	token.setExpiryFromExpiresIn()
 
-	// For Anthropic/Claude providers, extract organization info from token response
-	// Use the pre-defined types from hook.go for consistency
-	if config.Type == ai.IssuerClaudeCode || config.Type == ai.IssuerAnthropic {
+	// Extract provider-specific identity metadata from the token response.
+	switch config.Type {
+	case ai.IssuerClaudeCode, ai.IssuerAnthropic:
+		// Anthropic/Claude return organization/account info in the token response.
+		// Use the pre-defined types from hook.go for consistency.
 		var anthropicResp AnthropicTokenResponse
 		if json.Unmarshal(rawBody, &anthropicResp) == nil {
 			token.putMetadata("organization_id", anthropicResp.Organization.UUID)
@@ -599,10 +601,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			token.putMetadata("account_id", anthropicResp.Account.UUID)
 			token.putMetadata("email", anthropicResp.Account.EmailAddress)
 		}
-	}
-
-	// For Codex provider, parse ID token to extract user info
-	if config.Type == ai.IssuerCodex {
+	case ai.IssuerCodex:
+		// Codex carries user info in the ID token (JWT).
 		if token.IDToken != "" {
 			if !populateCodexMetadata(token) {
 				logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
