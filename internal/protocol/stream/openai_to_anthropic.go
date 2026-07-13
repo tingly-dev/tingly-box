@@ -99,6 +99,12 @@ type OpenAIToAnthropicMCPHooks struct {
 
 var ErrMCPStreamContinue = errors.New("mcp stream should continue")
 
+// NewOpenAIChatToAnthropicV1Converter creates the transport-free V1 stream
+// state machine. The caller owns driving and closing the supplied stream.
+func NewOpenAIChatToAnthropicV1Converter(stream OpenAIChatStream, responseModel string, req *openai.ChatCompletionNewParams) StreamConverter {
+	return newOpenAIToAnthropicConverter(stream, responseModel, req, nil, mapOpenAIFinishReasonToAnthropic)
+}
+
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleOpenAIToAnthropicStreamResponse(hc *protocol.HandleContext, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {

@@ -13,6 +13,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
+// NewOpenAIChatToAnthropicBetaConverter creates the transport-free beta stream
+// state machine. The caller owns driving and closing the supplied stream.
+func NewOpenAIChatToAnthropicBetaConverter(stream OpenAIChatStream, responseModel string, req *openai.ChatCompletionNewParams) StreamConverter {
+	return newOpenAIToAnthropicConverter(stream, responseModel, req, nil, mapOpenAIFinishReasonToAnthropicBeta)
+}
+
 // HandleOpenAIToAnthropicBetaStream processes OpenAI streaming events and converts them to Anthropic beta format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleOpenAIToAnthropicBetaStream(hc *protocol.HandleContext, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
