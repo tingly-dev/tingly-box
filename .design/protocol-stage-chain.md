@@ -8,6 +8,39 @@
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
+## Current Status
+
+The migration remains additive. Starting without `--stage` selects legacy for
+every request. Starting with `--stage` makes a per-provider-attempt decision;
+an unsupported route or feature combination selects the complete legacy
+lifecycle before the provider is called.
+
+| Phase | Status | Current boundary |
+| --- | --- | --- |
+| 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
+| 2 — Bridges and production routes | Complete for the initial route set | Five opt-in routes listed below; other routes stay legacy |
+| 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; native Beta and Chat targets |
+| 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
+| 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
+| 6 — Legacy removal | Not started | No legacy feature path has been removed |
+
+Production route selection with `--stage`:
+
+| Client protocol | Provider protocol | Plain request | Guardrails enabled | MCP enabled | Protocol recording |
+| --- | --- | --- | --- | --- | --- |
+| `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Legacy | Legacy |
+| `anthropic_beta` | `openai_chat` | Stage through Beta→Chat Bridge | Stage with the same Beta Guardrail | Legacy | Legacy |
+| `anthropic_v1` | `anthropic_v1` | Stage | Legacy | Legacy | Legacy |
+| `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy | Legacy | Legacy |
+| `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
+| Any other pair | Any | Legacy | Legacy | Legacy | Legacy |
+
+The latest completed checkpoint is commit `0d50d3488` (`feat(protocol): stage
+Anthropic Beta Guardrails`). The next checkpoint is Phase 4 foundation only:
+define and independently test `ToolCatalog`, `ToolPolicy`, `ToolExecutor`, and
+an Anthropic Beta Tool Loop Stage. Production MCP entrypoints are a later,
+explicit review boundary.
+
 ## Decision
 
 Tingly-Box will evolve protocol-bound features into an ordered chain of
@@ -16,10 +49,10 @@ operations as the endpoint it wraps. Bidirectional protocol bridges adapt the
 client protocol to the stage protocol and the stage protocol to the selected
 provider protocol.
 
-The first implementation is deliberately旁路: it adds contracts and tests in a
-new package but does not connect any existing handler, Guardrail, MCP, or
-server-tool path. Existing behavior remains the default until each migrated
-stage passes parity, real-path harness, and canary validation.
+The foundations were deliberately built旁路 before handler integration. The
+current canaries connect only the route and Guardrail combinations listed in
+Current Status, behind `--stage`; MCP, server-tool loops, recording, and every
+unsupported combination retain whole-request legacy ownership.
 
 ## Why This Change
 
@@ -499,3 +532,25 @@ therefore covers native Beta and Chat-backed Beta calls in complete and stream
 modes. The real HTTP tests verify blocking on both targets and streamed tool-use
 rewriting; `harness matrix --stage --guardrails` supplies an allow-only runtime
 for full semantic compatibility matrices.
+
+Verification recorded for the Phase 3 checkpoint:
+
+- `go test ./internal/protocoltest -count=1` passes the complete real HTTP
+  protocol test package;
+- Guardrail Stage unit tests and the real Beta Guardrail HTTP canaries pass
+  under `-race`;
+- `go vet` passes for the Guardrail Stage, protocoltest, and harness packages;
+- `harness matrix --mode=single --stage --guardrails
+  --source=anthropic_beta` reports 72 cases: 66 passed, 6 expected
+  streaming-only skips, and 0 failures.
+
+Commit checkpoints, oldest to newest:
+
+| Commit | Checkpoint |
+| --- | --- |
+| `e447263f9` | Native Anthropic Beta Stage route |
+| `27dc8c45c` | Anthropic Beta → OpenAI Chat Stage route |
+| `f46a57dbb` | Native Anthropic V1 Stage route |
+| `1a46617b3` | Anthropic V1 → OpenAI Chat Stage route |
+| `e44960d1b` | Observe-only Guardrail Stage foundation |
+| `0d50d3488` | Authoritative Anthropic Beta Guardrail canary |

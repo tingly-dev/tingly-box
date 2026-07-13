@@ -142,6 +142,11 @@ go run ./cli/harness matrix --mode=single --stage \
 go run ./cli/harness matrix --mode=single --stage \
   --source=anthropic_v1 --target=openai_chat
 
+# Enable an active allow-only Guardrails runtime while exercising the
+# production Beta Stage routes. Scenario outputs remain unchanged.
+go run ./cli/harness matrix --mode=single --stage --guardrails \
+  --source=anthropic_beta
+
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
 
@@ -159,7 +164,11 @@ traverses the production gateway over HTTP. It validates legacy by default;
 OpenAI Chat → Anthropic Beta, Anthropic Beta → Anthropic Beta, Anthropic Beta →
 OpenAI Chat, Anthropic V1 → Anthropic V1, and Anthropic V1 → OpenAI Chat. V1
 remains a separate concrete protocol with its own HTTP response and SSE
-adapters. Bridges runs the
+adapters. `--guardrails` injects an active allow-only test runtime. Combined
+with `--stage`, it verifies that Beta → Beta and Beta → Chat remain on the
+production Stage path while Guardrails evaluates complete and stream
+lifecycles; dedicated real HTTP tests cover blocking mutations. It is a harness
+fixture, not a production Guardrails configuration shortcut. Bridges runs the
 dormant `stage.BuildTopology`/`stage.Adapt` path in-process and labels every
 direct result `bridges/<scenario>/...`; concrete multi-level results use
 `bridges/chain/<name>/<scenario>/...`. It must not be cited as production-path
@@ -169,7 +178,8 @@ OpenAI Chat → Anthropic Beta-native Stage → OpenAI Chat chain. Every route r
 text, tool use, tool result, stream, and non-stream (42 cells total).
 Because it has no client transport, `--mode=bridges` only accepts
 `--client=http`; it reuses scenario/source/target/streaming/batch filters but
-does not claim support for `--mcp`, `--stage`, or `--record-dir`.
+does not claim support for `--mcp`, `--stage`, `--guardrails`, or
+`--record-dir`.
 
 ### Client drivers (`--client`)
 

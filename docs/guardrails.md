@@ -2,6 +2,28 @@
 
 Guardrails adds rule-based safety checks around model output, tool calls, tool results, and protected credentials.
 
+## Protocol Stage canary
+
+Guardrails behavior remains enabled through the existing scenario setting; no
+new user-facing Guardrails mode was added. When the server is also started with
+`--stage`, Anthropic Beta requests routed to either an Anthropic Beta provider
+or an OpenAI Chat provider use the Beta-native `guardrail_anthropic_beta`
+Stage. The Stage owns request masking/filtering, complete-response evaluation,
+and streaming tool-use evaluation as one full-duplex lifecycle.
+
+All other combinations keep their existing behavior:
+
+- without `--stage`, every Guardrails request uses the legacy pipeline;
+- Anthropic V1 Guardrails still use legacy even when `--stage` is active;
+- MCP-enabled or protocol-recorded Beta requests select the complete legacy
+  lifecycle rather than mixing Stage and legacy ownership;
+- unsupported protocol pairs stay legacy.
+
+Rollback is a server restart without `--stage`. No Guardrails config or stored
+policy migration is required. For development verification,
+`harness matrix --stage --guardrails` uses an allow-only test runtime; that
+harness flag does not enable or configure production policies.
+
 ## What Guardrails manages
 
 Guardrails is organized into three user-facing areas:
