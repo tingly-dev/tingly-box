@@ -90,27 +90,33 @@ Hybrid takes the OAuth provider UUID **optionally**:
 - Preview (hybrid): `configToml` carries the bearer token; `authJson` is empty
   (no token to show — the UI renders a note instead of leaking OAuth tokens).
 
-## 4. UI — two orthogonal axes, not a 3-way mode picker
+## 4. UI — one 3-way select, not two axes
 
-Adding a third radio would grow a mode picker (against ux-principles #2/#4). The
-two things the user actually reasons about are orthogonal, so the modal splits
-them (`CodexConfigModal.tsx`):
+The modal (`CodexConfigModal.tsx`) picks the mode with a **single 3-way radio**:
 
-- **Request routing** (radio): `Through Tingly Box gateway` · `Direct to OpenAI`.
-- **Keep official ChatGPT login** (checkbox): preserves `auth.json` for Codex App.
-
-They collapse into `authMode`:
-
-| routing | keep official login | → authMode |
+| option | → authMode | OAuth picker |
 |---|---|---|
-| gateway | off | `apikey` |
-| gateway | on | **`hybrid`** |
-| direct | (forced on, disabled) | `chatgpt` |
+| Tingly Box gateway | `apikey` | — |
+| Tingly Box gateway + keep official ChatGPT login | **`hybrid`** | optional (default *"Keep existing"*) |
+| Direct to OpenAI | `chatgpt` | required |
 
-Direct routing needs the OAuth tokens, so the checkbox is forced-on and disabled
-there. The OAuth provider picker appears whenever the login is in play; in hybrid
-its default option is *"Keep existing auth.json (don't modify)"*. In the Manual
-tab, hybrid replaces the `OPENAI_API_KEY` Step 2 with a note (the token lives in
+**Why not two axes (routing × keep-login).** That framing was tried first
+(ux-principles #4 — split a knob that controls two things). But the two axes
+aren't actually orthogonal: *direct routing without keeping the official login*
+is an invalid combination, so the 2×2 grid has a dead cell. Representing it with
+a routing radio + a "keep login" checkbox forced the checkbox to be
+checked-and-disabled in direct mode — a disabled control pinned to a fixed value,
+which is the classic smell of N valid states crammed into a grid with a hole.
+There are really **three** valid states, so a 3-way select models them honestly
+and removes the awkward disabled control. ux-principles #2 (avoid mode pickers)
+is only a mild concern here because the Quick Config work surface stays visible
+below the selector regardless — this is a property selector, not an entry gate.
+The cost — the two gateway options read similarly — is paid down with a concrete
+consequence caption under each option (ux-principles #5/#8).
+
+The OAuth provider picker appears for `hybrid` (optional; default *"Keep existing
+auth.json (don't modify)"*) and `chatgpt` (required). In the Manual tab, `hybrid`
+replaces the `OPENAI_API_KEY` Step 2 with a note (the token lives in
 `config.toml`, so there is nothing to write to `auth.json`).
 
 ## 5. Caveats

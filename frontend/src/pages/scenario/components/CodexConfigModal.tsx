@@ -17,14 +17,14 @@ interface CodexConfigModalProps {
 type MainTab = 'quick' | 'manual';
 type ScriptTab = 'json' | 'windows' | 'unix';
 type SessionAction = 'import' | 'undo';
-// Two orthogonal axes the user actually reasons about, rather than one
-// "auth mode" enum (see .design/ux-principles.md #4):
-//   - routing: where model requests go.
-//   - keepOfficialLogin: whether ~/.codex/auth.json retains a native ChatGPT
-//     login so Codex App still sees the official account.
-// They collapse into the backend's authMode: gateway+off=apikey,
-// gateway+on=hybrid, direct=chatgpt (which forces the login on).
-type Routing = 'gateway' | 'direct';
+// The three mutually-exclusive ways to authenticate Codex. Modeled as one
+// 3-way select rather than routing×keep-login axes: those axes aren't truly
+// orthogonal (direct routing always keeps the official login), so a grid would
+// have a dead cell. See .design/codex-auth.md.
+//   - apikey:  route through Tingly Box, gateway key in auth.json.
+//   - hybrid:  route through Tingly Box, gateway key in config.toml, official
+//              ChatGPT login preserved in auth.json.
+//   - chatgpt: codex talks to OpenAI directly using the official login.
 type AuthMode = 'apikey' | 'chatgpt' | 'hybrid';
 
 interface CodexOAuthProviderOption {
@@ -67,11 +67,14 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [mainTab, setMainTab] = React.useState<MainTab>('quick');
     const [prefs, setPrefs] = React.useState<CodexPrefs>(() => defaultCodexPrefs());
     const [writeCatalog, setWriteCatalog] = React.useState(true);
-    const [routing, setRouting] = React.useState<Routing>('gateway');
-    const [keepOfficialLogin, setKeepOfficialLogin] = React.useState(false);
-    // Derived backend auth mode + whether the OAuth provider picker is relevant.
-    const authMode: AuthMode = routing === 'direct' ? 'chatgpt' : (keepOfficialLogin ? 'hybrid' : 'apikey');
-    const showOAuthSelector = routing === 'direct' || (routing === 'gateway' && keepOfficialLogin);
+    // Three mutually-exclusive auth states, picked directly. They aren't two
+    // orthogonal axes: "direct routing without keeping the official login" is
+    // an invalid combination, so a routing×keep-login grid would leave a dead
+    // cell (and force a disabled checkbox). A 3-way select models the real
+    // state space honestly. See .design/codex-auth.md.
+    const [authMode, setAuthMode] = React.useState<AuthMode>('apikey');
+    // The OAuth provider picker is relevant whenever a ChatGPT login is in play.
+    const showOAuthSelector = authMode === 'chatgpt' || authMode === 'hybrid';
     const [codexOAuthProviders, setCodexOAuthProviders] = React.useState<CodexOAuthProviderOption[]>([]);
     const [selectedOAuthProvider, setSelectedOAuthProvider] = React.useState<string>('');
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
@@ -100,17 +103,15 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             return;
         }
         setPrefs(defaultCodexPrefs());
-        setRouting('gateway');
-        setKeepOfficialLogin(false);
+        setAuthMode('apikey');
         setSelectedOAuthProvider('');
         setCodexOAuthProviders([]);
     }, [open]);
 
     // Fetch Codex OAuth providers only when the picker is actually shown (direct
-    // mode, or hybrid with "keep official login" on) — no network cost for the
-    // default gateway path. Direct mode auto-selects the first provider (it's
-    // required); hybrid leaves it empty (the smart default is "don't touch
-    // auth.json", per ux-principles #6).
+    // or hybrid) — no network cost for the default gateway path. Direct mode
+    // auto-selects the first provider (it's required); hybrid leaves it empty
+    // (the smart default is "don't touch auth.json", per ux-principles #6).
     React.useEffect(() => {
         if (!open || !showOAuthSelector) return;
         let cancelled = false;
@@ -123,7 +124,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
                     .filter((p) => p?.auth_type === 'oauth' && (p?.oauth_detail?.issuer === 'codex' || p?.oauth_detail?.provider_type === 'codex'))
                     .map((p) => ({ uuid: p.uuid, name: p.name }));
                 setCodexOAuthProviders(codexOAuth);
-                if (routing === 'direct') {
+                if (authMode === 'chatgpt') {
                     setSelectedOAuthProvider((prev) => prev || codexOAuth[0]?.uuid || '');
                 }
             } catch {
@@ -131,7 +132,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             }
         })();
         return () => { cancelled = true; };
-    }, [open, showOAuthSelector, routing]);
+    }, [open, showOAuthSelector, authMode]);
 
     // Re-render the server-authoritative TOML whenever prefs or writeCatalog change
     // while the modal is open. Debounced so dragging through Select options doesn't
@@ -306,62 +307,61 @@ EOF`;
                 )}
 
                 <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
-                    {/* Axis 1 — where model requests go. */}
+                    {/* One 3-way select for the three valid auth states. Each
+                        option's caption carries the concrete consequence
+                        (routing + what lands in auth.json) so the two
+                        gateway-based options are easy to tell apart. */}
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Request routing
+                        Authentication
                     </Typography>
                     <RadioGroup
-                        row
-                        value={routing}
-                        onChange={(e) => setRouting(e.target.value as Routing)}
+                        value={authMode}
+                        onChange={(e) => setAuthMode(e.target.value as AuthMode)}
                     >
                         <FormControlLabel
-                            value="gateway"
-                            control={<Radio size="small" />}
-                            label="Through Tingly Box gateway"
+                            value="apikey"
+                            sx={{ alignItems: 'flex-start', mb: 0.5 }}
+                            control={<Radio size="small" sx={{ pt: 0 }} />}
+                            label={
+                                <Box>
+                                    <Typography variant="body2">Tingly Box gateway</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        codex routes through Tingly Box. Gateway key written to <code>~/.codex/auth.json</code>.
+                                    </Typography>
+                                </Box>
+                            }
                         />
                         <FormControlLabel
-                            value="direct"
-                            control={<Radio size="small" />}
-                            label="Direct to OpenAI (ChatGPT login)"
+                            value="hybrid"
+                            sx={{ alignItems: 'flex-start', mb: 0.5 }}
+                            control={<Radio size="small" sx={{ pt: 0 }} />}
+                            label={
+                                <Box>
+                                    <Typography variant="body2">
+                                        Tingly Box gateway + keep official ChatGPT login
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Routes through Tingly Box, but the gateway key moves into <code>config.toml</code> so
+                                        your ChatGPT login in <code>auth.json</code> stays intact — Codex App still recognizes
+                                        your account (remote control, plugins, account display).
+                                    </Typography>
+                                </Box>
+                            }
+                        />
+                        <FormControlLabel
+                            value="chatgpt"
+                            sx={{ alignItems: 'flex-start' }}
+                            control={<Radio size="small" sx={{ pt: 0 }} />}
+                            label={
+                                <Box>
+                                    <Typography variant="body2">Direct to OpenAI</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        codex talks to OpenAI directly using your official ChatGPT login. No gateway.
+                                    </Typography>
+                                </Box>
+                            }
                         />
                     </RadioGroup>
-
-                    {/* Axis 2 — whether auth.json keeps a native ChatGPT login.
-                        Forced on for direct routing (it needs the OAuth tokens);
-                        an opt-in "hybrid" for gateway routing. */}
-                    <FormControlLabel
-                        sx={{ mt: 0.5, alignItems: 'flex-start' }}
-                        control={
-                            <Checkbox
-                                size="small"
-                                checked={routing === 'direct' ? true : keepOfficialLogin}
-                                disabled={routing === 'direct'}
-                                onChange={(e) => setKeepOfficialLogin(e.target.checked)}
-                                sx={{ pt: 0 }}
-                            />
-                        }
-                        label={
-                            <Box>
-                                <Typography variant="body2">
-                                    Keep official ChatGPT login in <code>~/.codex/auth.json</code>
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    So Codex App still recognizes your official account (remote control, plugins, account display).
-                                </Typography>
-                            </Box>
-                        }
-                    />
-
-                    {routing === 'gateway' && keepOfficialLogin && (
-                        <Alert severity="info" variant="outlined" sx={{ mt: 1.5, py: 0.5 }}>
-                            <strong>Hybrid mode.</strong> Requests still route through Tingly Box — the gateway
-                            token is written into <code>config.toml</code>'s provider block
-                            (<code>experimental_bearer_token</code>) instead of <code>auth.json</code>, so your
-                            official ChatGPT login stays intact. Pick a stored Codex login below to (re)write it
-                            into <code>auth.json</code>, or leave it as <em>Keep existing</em> to not touch the file.
-                        </Alert>
-                    )}
 
                     {showOAuthSelector && (
                         <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -371,8 +371,8 @@ EOF`;
                                     value={selectedOAuthProvider}
                                     onChange={(e) => setSelectedOAuthProvider(e.target.value as string)}
                                 >
-                                    <MenuItem value="" disabled={routing === 'direct'}>
-                                        {routing === 'direct'
+                                    <MenuItem value="" disabled={authMode === 'chatgpt'}>
+                                        {authMode === 'chatgpt'
                                             ? (codexOAuthProviders.length === 0
                                                 ? 'No Codex OAuth provider — log in first'
                                                 : 'Select a Codex OAuth provider')
@@ -383,7 +383,14 @@ EOF`;
                                     ))}
                                 </Select>
                             </FormControl>
-                            {routing === 'direct' && (
+                            {authMode === 'hybrid' ? (
+                                <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
+                                    The gateway token is written into <code>config.toml</code>'s provider block
+                                    (<code>experimental_bearer_token</code>). Pick a stored Codex login above to
+                                    (re)write it into <code>auth.json</code>, or leave it as <em>Keep existing</em> to
+                                    not touch the file.
+                                </Alert>
+                            ) : (
                                 <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
                                     Exports the OAuth tokens to <code>~/.codex/auth.json</code> and removes the
                                     tingly gateway keys from <code>config.toml</code> so codex CLI talks directly to
