@@ -11,6 +11,7 @@
 // Outputs go to /tmp/<name>.png. Use SendUserFile to surface them.
 
 import { chromium } from 'playwright';
+import { screenshotOptimized } from './optimize-image.mjs';
 
 const CHROME_PATH = '/tmp/chrome/chrome-linux64/chrome';
 const BASE = 'http://localhost:3000';
@@ -48,10 +49,10 @@ const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 500)
 console.log('--- body text ---\n' + bodyText + '\n---');
 
 // Full viewport
-await page.screenshot({ path: '/tmp/page-full.png', fullPage: false });
+await screenshotOptimized(page, { path: '/tmp/page-full.png', fullPage: false });
 
 // Cropped: activity bar + secondary sidebar (top-left region)
-await page.screenshot({
+await screenshotOptimized(page, {
     path: '/tmp/page-sidebar.png',
     clip: { x: 0, y: 0, width: 420, height: 280 },
 });
@@ -62,7 +63,7 @@ try {
     const btn = page.getByRole('button', { name: /Zen Mode|禅模式/i }).first();
     await btn.click({ timeout: 5000 });
     await page.waitForTimeout(500);
-    await page.screenshot({
+    await screenshotOptimized(page, {
         path: '/tmp/page-menu.png',
         clip: { x: 0, y: 0, width: 600, height: 400 },
     });

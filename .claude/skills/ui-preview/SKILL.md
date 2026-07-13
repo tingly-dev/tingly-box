@@ -75,19 +75,43 @@ const { chromium } = createRequire('file://' + process.cwd() + '/')('playwright'
 
 | Script | Mode | Purpose |
 |--------|------|---------|
-| [`screenshot.mjs`](./screenshot.mjs) | mock | **Ad-hoc template** — copy here and customise; do NOT commit |
-| [`docs-screenshots.mjs`](./docs-screenshots.mjs) | mock | All 9 `docs/images/` product screenshots + theme previews |
-| [`regression-credentials.mjs`](./regression-credentials.mjs) | mock | Assertion-based regression for `/credentials` Add API Key flow |
-| [`scenario-routing-graph.mjs`](./scenario-routing-graph.mjs) | real backend | Claude Code routing graph screenshots (requires running Go server) |
+| [`screenshot.mjs`](screenshot.mjs) | mock | **Ad-hoc template** — copy here and customise; do NOT commit |
+| [`docs-screenshots.mjs`](docs-screenshots.mjs) | mock | All 9 `docs/images/` product screenshots + theme previews |
+| [`regression-credentials.mjs`](regression-credentials.mjs) | mock | Assertion-based regression for `/credentials` Add API Key flow |
+| [`scenario-routing-graph.mjs`](scenario-routing-graph.mjs) | real backend | Codex routing graph screenshots (requires running Go server) |
 
 Each script is self-documenting — see its file header for usage, outputs, and known issues.
 
+## Screenshot size policy
+
+Screenshots are product documentation artifacts, so keep visual quality high while
+avoiding oversized repo exports. All committed screenshot scripts must write images
+through `screenshotOptimized()` from `optimize-image.mjs` instead of calling
+`page.screenshot()` directly. The helper captures the PNG/JPEG, then replaces it
+only if a smaller optimized image is produced.
+
+Optimization is intentionally best-effort and non-blocking:
+- PNG: `pngquant --quality 80-95 --strip` when available, with an ImageMagick
+  lossless fallback/pass.
+- JPEG: ImageMagick `-strip -quality 82` when available.
+- If optimizers are absent or do not make the file smaller, the original capture
+  is kept.
+
+For one-off scripts, import and use:
+
+```js
+import { screenshotOptimized } from '../.agents/skills/ui-preview/optimize-image.mjs';
+await screenshotOptimized(page, { path: '/tmp/page.png', fullPage: false });
+```
+
 ## After capturing
 
-1. `SendUserFile` the PNGs so the user can review them.
-2. For ad-hoc `screenshot.mjs`: delete it before committing — the stop hook will flag it.
-3. `docs/` is gitignored; force-add images: `git add -f docs/images/`.
-4. Free the port: `fuser -k 3000/tcp` or `pkill -f "vite --mode mock"`.
+1. Check the console for `optimized ...` lines; unexpectedly huge PNGs usually
+   mean the script bypassed `screenshotOptimized()`.
+2. `SendUserFile` the PNGs so the user can review them.
+3. For ad-hoc `screenshot.mjs`: delete it before committing — the stop hook will flag it.
+4. `docs/` is gitignored; force-add images: `git add -f docs/images/`.
+5. Free the port: `fuser -k 3000/tcp` or `pkill -f "vite --mode mock"`.
 
 ## Troubleshooting
 
