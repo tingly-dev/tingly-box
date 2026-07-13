@@ -13,7 +13,7 @@ import (
 
 // Provider-related methods (merged from AppConfig)
 
-// ProviderUpdateHook is called when a provider is updated
+// ProviderUpdateHook is called when a provider is created or updated.
 type ProviderUpdateHook interface {
 	OnProviderUpdate(provider *typ.Provider)
 }
@@ -191,12 +191,20 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 		if provider.UUID == "" {
 			provider.UUID = GenerateUUID()
 		}
-		return c.providerStore.Save(provider)
+		if err := c.providerStore.Save(provider); err != nil {
+			return err
+		}
+
+		// Notify hooks after every successful provider mutation so downstream
+		// caches (client/transport pools, etc.) respond consistently to provider
+		// state changes, including create/import flows that reuse a UUID.
+		c.notifyProviderUpdate(provider)
+		return nil
 	}
 	return nil
 }
 
-// RegisterProviderUpdateHook adds a hook to be called when a provider is updated
+// RegisterProviderUpdateHook adds a hook to be called when a provider is created or updated.
 func (c *Config) RegisterProviderUpdateHook(hook ProviderUpdateHook) {
 	c.hookMu.Lock()
 	defer c.hookMu.Unlock()
@@ -210,7 +218,7 @@ func (c *Config) RegisterProviderDeleteHook(hook ProviderDeleteHook) {
 	c.providerDeleteHooks = append(c.providerDeleteHooks, hook)
 }
 
-// notifyProviderUpdate notifies all registered hooks about a provider update
+// notifyProviderUpdate notifies all registered hooks about a provider create/update change.
 func (c *Config) notifyProviderUpdate(provider *typ.Provider) {
 	c.hookMu.RLock()
 	hooks := make([]ProviderUpdateHook, len(c.providerUpdateHooks))

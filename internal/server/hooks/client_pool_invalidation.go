@@ -10,7 +10,7 @@ type ClientPoolInvalidator interface {
 	InvalidateProvider(providerUUID string)
 }
 
-// ClientPoolInvalidationHook invalidates client pool cache when provider credentials change
+// ClientPoolInvalidationHook invalidates client pool cache when provider state changes
 type ClientPoolInvalidationHook struct {
 	clientPool ClientPoolInvalidator
 }
@@ -22,7 +22,7 @@ func NewClientPoolInvalidationHook(pool ClientPoolInvalidator) *ClientPoolInvali
 	}
 }
 
-// OnProviderUpdate is called when a provider is updated
+// OnProviderUpdate is called when a provider is created or updated
 func (h *ClientPoolInvalidationHook) OnProviderUpdate(provider *typ.Provider) {
 	if h.clientPool != nil {
 		h.clientPool.InvalidateProvider(provider.UUID)
@@ -30,7 +30,7 @@ func (h *ClientPoolInvalidationHook) OnProviderUpdate(provider *typ.Provider) {
 			"provider_uuid": provider.UUID,
 			"provider_name": provider.Name,
 			"auth_type":     provider.AuthType,
-		}).Debug("Invalidated client pool cache after provider update")
+		}).Debug("Invalidated client pool cache after provider create/update")
 	}
 }
 
