@@ -655,4 +655,4 @@ Commit checkpoints, oldest to newest:
 | `e3bb6ba72` | Anthropic Beta → OpenAI Responses Stage route |
 | `9dcdf3f7e` | OpenAI Chat → OpenAI Responses Stage route |
 | `690012613` | Anthropic V1 → OpenAI Responses Stage route |
-| current checkpoint | Native OpenAI Chat Stage route |
+| `e52c9ab36` | Native OpenAI Chat Stage route |
