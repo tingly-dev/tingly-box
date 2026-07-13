@@ -29,6 +29,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 const require = createRequire(join(process.cwd(), 'noop.js'));
 const { chromium } = require('playwright');
+import { screenshotOptimized } from './optimize-image.mjs';
 
 const CHROME_PATH = process.env.CHROME_PATH || '/tmp/chrome/chrome-linux64/chrome';
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
@@ -96,7 +97,7 @@ const spinnerVisible = await page.evaluate(() => {
     const disabledNoText = submit.disabled && submit.innerText.trim() === '';
     return hasProgress || disabledNoText;
 });
-await page.screenshot({ path: '/tmp/regression-credentials.png' });
+await screenshotOptimized(page, { path: '/tmp/regression-credentials.png' });
 assert(spinnerVisible, 'submit button shows a spinner while the request is in flight');
 
 // Let the request settle (404 in mock) and the error toast appear.

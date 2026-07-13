@@ -34,6 +34,7 @@
 // resolve from wherever the script is *run* from (i.e. frontend/).
 import { createRequire } from 'module';
 import path from 'path';
+import { screenshotOptimized } from './optimize-image.mjs';
 const { chromium } = createRequire('file://' + process.cwd() + '/')('playwright');
 
 const CHROME = '/tmp/chrome/chrome-linux64/chrome';
@@ -69,7 +70,7 @@ async function shoot(browser, route, filename, opts = {}) {
     try { await page.waitForSelector(waitFor, { timeout: 8000 }); } catch { /* ok */ }
     await page.waitForTimeout(settle);
     if (interact) await interact(page);
-    await page.screenshot({ path: path.join(OUTDIR, filename), fullPage: false });
+    await screenshotOptimized(page, { path: path.join(OUTDIR, filename), fullPage: false });
     console.log(`  ✓ [${VP.width}×${VP.height}] ${route} → ${filename}`);
     await page.close();
 }
