@@ -63,6 +63,56 @@ func TestAnthropicBetaToOpenAIResponsesComplete(t *testing.T) {
 	}
 }
 
+func TestAnthropicV1ToOpenAIResponsesComplete(t *testing.T) {
+	t.Parallel()
+
+	terminal := &memoryEndpoint{
+		api: protocol.TypeOpenAIResponses,
+		complete: func(_ context.Context, call stage.Call) (*stage.Response, error) {
+			request, ok := call.Request.(*responses.ResponseNewParams)
+			if !ok || request == nil {
+				t.Fatalf("request type = %T", call.Request)
+			}
+			if request.Model != "provider-v1-model" || call.Metadata.RequestID != "v1-responses" {
+				t.Fatalf("target call = %#v metadata=%+v", request, call.Metadata)
+			}
+			return &stage.Response{
+				Value: decodeResponsesResponse(t, `{
+					"id":"resp_v1","object":"response","model":"provider-v1-model","status":"completed",
+					"output":[{"id":"msg_v1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hello v1 from responses","annotations":[]}]}],
+					"usage":{"input_tokens":7,"output_tokens":3,"total_tokens":10,"input_tokens_details":{"cached_tokens":1},"output_tokens_details":{"reasoning_tokens":0}}
+				}`),
+				SideEffectsCommitted: true,
+			}, nil
+		},
+	}
+	adapted := mustAdapt(t, terminal, NewV1ToOpenAIResponses(ResponsesOptions{ResponseModel: "public-v1-model"}))
+	result, err := adapted.Complete(context.Background(), stage.Call{
+		Request: &anthropic.MessageNewParams{
+			Model:     "provider-v1-model",
+			MaxTokens: 128,
+			Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hello"))},
+		},
+		Metadata: stage.CallMetadata{RequestID: "v1-responses"},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	message, ok := result.Value.(*anthropic.Message)
+	if !ok || message == nil {
+		t.Fatalf("response type = %T", result.Value)
+	}
+	if message.Model != "public-v1-model" || len(message.Content) != 1 || !strings.Contains(message.Content[0].Text, "hello v1 from responses") {
+		t.Fatalf("message = %#v", message)
+	}
+	if result.Usage == nil || result.Usage.InputTokens != 6 || result.Usage.CacheInputTokens != 1 || result.Usage.OutputTokens != 3 {
+		t.Fatalf("usage = %#v", result.Usage)
+	}
+	if !result.SideEffectsCommitted {
+		t.Fatal("side effects were not preserved")
+	}
+}
+
 func TestAnthropicBetaToOpenAIResponsesStream(t *testing.T) {
 	t.Parallel()
 

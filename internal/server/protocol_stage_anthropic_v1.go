@@ -136,6 +136,9 @@ func (ph *ProtocolHandler) protocolStageAnthropicV1Target(
 			DisableStreamUsage: disableStreamUsage,
 			ResponseModel:      responseModel,
 		}),
+		anthropicbridge.NewV1ToOpenAIResponses(anthropicbridge.ResponsesOptions{
+			ResponseModel: responseModel,
+		}),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build Anthropic V1 Protocol Stage registry: %w", err)
@@ -145,6 +148,8 @@ func (ph *ProtocolHandler) protocolStageAnthropicV1Target(
 		return &anthropicV1ProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeOpenAIChat:
 		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeOpenAIResponses:
+		return &openAIResponsesProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	default:
 		return nil, nil, fmt.Errorf("Anthropic V1 Protocol Stage target %q is not implemented", target)
 	}
