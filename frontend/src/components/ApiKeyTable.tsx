@@ -297,25 +297,12 @@ const ApiKeyTable = ({
                                 {/* API Style */}
                                 <TableCell>
                                     {provider.api_base_openai && provider.api_base_anthropic ? (
-                                        <Stack
-                                            direction="column"
-                                            spacing={0.5}
-                                            alignItems="stretch"
-                                        >
-                                            <ApiStyleBadge
-                                                apiStyle="openai"
-                                                sx={{minWidth: "110px", justifyContent: "center"}}
-                                            />
-                                            <ApiStyleBadge
-                                                apiStyle="anthropic"
-                                                sx={{minWidth: "110px", justifyContent: "center"}}
-                                            />
+                                        <Stack direction="row" spacing={0.5} alignItems="center">
+                                            <ApiStyleBadge apiStyle="openai" compact />
+                                            <ApiStyleBadge apiStyle="anthropic" compact />
                                         </Stack>
                                     ) : (
-                                        <ApiStyleBadge
-                                            sx={{minWidth: "110px"}}
-                                            apiStyle={provider.api_style}
-                                        />
+                                        <ApiStyleBadge apiStyle={provider.api_style} compact />
                                     )}
                                 </TableCell>
                                 {/* API Base URL */}
