@@ -42,10 +42,15 @@ git submodule update --init --recursive
 ```
 
 ## Cross Frontend and Backend
-When you are working with both frontend and backend, 
-still remember that `client api sdk` comes from codegen, so you can just leave placeholder and mention user to complete later.
+`swagger.json` / `openapi.json` and the frontend `client api sdk` are all generated — do not hand-edit them.
 
-For new api, remember to define models in backend at first, and do swagger define for it. (example as below)
+For a new API: define the backend models first, add the swagger definition (example below), then regenerate:
+```bash
+task codegen   # task swagger (backend openapi.json) + frontend `pnpm gen:api` (client sdk)
+```
+If codegen isn't run yet (e.g. backend-only work in progress), leave a placeholder on the frontend side and mention to the user that codegen needs to be run.
+
+Example swagger definition:
 ```
 235-       // DELETE /api/v1/usage/records - Delete old usage records                                                                             
 236-       apiV1.DELETE("/usage/records", usageAPI.DeleteOldRecords,                                                                              
