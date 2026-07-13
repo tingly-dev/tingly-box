@@ -202,10 +202,14 @@ Mechanics:
   (`outcome`, `matched_rule_description`) plus the summary's `routed_model`.
   This keeps the user-facing explain surface itself under test (the reason
   duo children boot `WithMultiLogger`, matching production).
+- **Pipeline assertion**: requests opt in to routing diagnostics and assert
+  `routing_source`, the pre-dispatch selected model, and the exact cumulative
+  evaluated-stage path. The wire marker remains independent, so failover can
+  prove both which service selection chose and which service finally answered.
 - **Scenarios are declarative** (`DuoRoutingScenario`): built-in catalog in
   `duo_routing_scenarios.go` (one per position category + first-match
-  ordering + the G3 partition-scoped-affinity regression), user files via
-  `harness routing --file`.
+  ordering + four pipeline boundaries: health→smart, smart→affinity,
+  affinity→LB, and smart→LB), user files via `harness routing --file`.
 
 Semantics the scenarios encode (learned the hard way, keep in mind when
 authoring):
