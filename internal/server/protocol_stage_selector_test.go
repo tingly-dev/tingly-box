@@ -27,7 +27,7 @@ func TestProtocolStageSelector(t *testing.T) {
 		{name: "enabled v1 to chat", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, want: true},
 		{name: "enabled registered responses identity", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIResponses, want: true},
 		{name: "enabled responses to beta", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeAnthropicBeta, want: true},
-		{name: "enabled responses to chat remains unavailable", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, wantErr: true},
+		{name: "enabled responses to chat", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

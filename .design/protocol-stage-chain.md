@@ -2,7 +2,7 @@
 
 > Status: Phases 1–2 and the first Phase 3 canary are implemented additively.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
-> routes, native OpenAI Responses passthrough, and Responses → Anthropic Beta.
+> routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat.
 > Anthropic Beta requests can include the Beta-native Guardrail Stage; MCP,
 > protocol recording, unsupported routes, and V1 Guardrails remain on legacy.
 >
@@ -18,7 +18,7 @@ lifecycle before the provider is called.
 | Phase | Status | Current boundary |
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
-| 2 — Bridges and production routes | Expanding additively | Seven opt-in routes listed below; remaining Responses routes stay legacy |
+| 2 — Bridges and production routes | Expanding additively | Eight opt-in routes listed below; reverse Responses-target routes stay legacy |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; native Beta and Chat targets |
 | 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
@@ -35,13 +35,13 @@ Production route selection with `--stage`:
 | `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
 | `openai_responses` | `openai_responses` | Stage | Not attached on the Responses handler | Legacy | Not attached on the Responses handler |
 | `openai_responses` | `anthropic_beta` | Stage through Responses→Beta Bridge | Not attached on the Responses handler | Legacy | Not attached on the Responses handler |
+| `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Not attached on the Responses handler | Legacy | Not attached on the Responses handler |
 | Any other pair | Any | Legacy | Legacy | Legacy | Legacy |
 
-The Responses rollout proceeds source-first: native Responses passthrough,
-Responses → Anthropic Beta, then Responses → OpenAI Chat. Reverse target routes
-follow as separate checkpoints. Phase 4 Tool Loop remains deferred until this
-protocol surface is complete enough to host it without Responses-specific
-branches.
+The Responses source rollout now covers native passthrough, Anthropic Beta, and
+OpenAI Chat. Reverse target routes follow as separate checkpoints. Phase 4
+Tool Loop remains deferred until this protocol surface is complete enough to
+host it without Responses-specific branches.
 
 ## Decision
 
@@ -529,6 +529,9 @@ public model rewriting, and pre-stream failover semantics.
 Responses → Anthropic Beta uses a per-call Bridge session. Requests cross into
 Beta before provider finalization; complete messages and stream events cross
 back into Responses wire DTOs before the same Responses HTTP adapter runs.
+Responses → OpenAI Chat follows the same boundary: the Bridge converts requests
+to Chat, carries explicit Chat state into provider finalization, and converts
+complete responses or Chat chunks back to Responses wire shapes.
 Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
 exposes the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
@@ -571,6 +574,15 @@ Verification recorded for the Responses → Anthropic Beta checkpoint:
 - the full route matrix reports 24 cases: 19 passed, 5 expected Responses
   source/scenario skips, and 0 failures.
 
+Verification recorded for the Responses → OpenAI Chat checkpoint:
+
+- Bridge complete/stream tests cover Chat state, request conversion, response
+  recovery, usage, side effects, event ordering, and close ownership;
+- real HTTP selection tests cover complete and stream routing;
+- raw HTTP and official OpenAI Go SDK text matrices each pass 2/2;
+- the full route matrix reports 24 cases: 19 passed, 5 expected Responses
+  source/scenario skips, and 0 failures.
+
 Commit checkpoints, oldest to newest:
 
 | Commit | Checkpoint |
@@ -582,4 +594,5 @@ Commit checkpoints, oldest to newest:
 | `7eadb37ca` | Observe-only Guardrail Stage foundation |
 | `430303114` | Authoritative Anthropic Beta Guardrail canary |
 | `43ef808fd` | Native OpenAI Responses Stage route |
-| current checkpoint | OpenAI Responses → Anthropic Beta Stage route |
+| `86c83e37d` | OpenAI Responses → Anthropic Beta Stage route |
+| current checkpoint | OpenAI Responses → OpenAI Chat Stage route |

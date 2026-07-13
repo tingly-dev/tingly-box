@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/openai/openai-go/v3"
-	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
@@ -17,7 +16,7 @@ import (
 // chatToResponsesConverter converts an OpenAI Chat Completions stream into
 // a sequence of Responses API events. It implements StreamConverter.
 type chatToResponsesConverter struct {
-	stream        *openaistream.Stream[openai.ChatCompletionChunk]
+	stream        OpenAIChatStream
 	responseModel string
 
 	// internal state
@@ -51,7 +50,7 @@ type pendingToolCallResponse struct {
 
 // NewChatToResponsesConverter creates a converter that reads from an OpenAI
 // Chat Completions stream and yields Responses API wire events.
-func NewChatToResponsesConverter(stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) *chatToResponsesConverter {
+func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) *chatToResponsesConverter {
 	return &chatToResponsesConverter{
 		stream:           stream,
 		responseModel:    responseModel,

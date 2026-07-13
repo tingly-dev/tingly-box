@@ -131,9 +131,14 @@ func (ph *ProtocolHandler) protocolStageOpenAIResponsesTarget(
 		DefaultMaxTokens: int64(maxAllowed),
 		ResponseModel:    responseModel,
 	})
+	responsesToChat := responsesbridge.NewToOpenAIChat(responsesbridge.ChatOptions{
+		DefaultMaxTokens: int64(maxAllowed),
+		ResponseModel:    responseModel,
+	})
 	registry, err := protocolstage.NewBridgeRegistry(
 		protocolstage.NewIdentityBridge(protocol.TypeOpenAIResponses),
 		responsesToBeta,
+		responsesToChat,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build OpenAI Responses Protocol Stage registry: %w", err)
@@ -143,6 +148,8 @@ func (ph *ProtocolHandler) protocolStageOpenAIResponsesTarget(
 		return &openAIResponsesProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeAnthropicBeta:
 		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeOpenAIChat:
+		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	default:
 		return nil, nil, fmt.Errorf("OpenAI Responses Protocol Stage target %q is not implemented", target)
 	}

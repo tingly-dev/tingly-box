@@ -66,6 +66,7 @@ func (*MatrixCmd) Help() string {
   harness matrix --mode=single --stage --source=anthropic_beta --target=openai_chat
   harness matrix --mode=single --stage --source=openai_responses --target=openai_responses
   harness matrix --mode=single --stage --source=openai_responses --target=anthropic_beta
+  harness matrix --mode=single --stage --source=openai_responses --target=openai_chat
 
   # Exercise Beta Guardrail as a Stage without changing scenario semantics
   harness matrix --mode=single --stage --guardrails --source=anthropic_beta
