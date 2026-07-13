@@ -304,11 +304,11 @@ const ApiKeyTable = ({
                                         >
                                             <ApiStyleBadge
                                                 apiStyle="openai"
-                                                sx={{width: "100%", justifyContent: "center"}}
+                                                sx={{minWidth: "110px", justifyContent: "center"}}
                                             />
                                             <ApiStyleBadge
                                                 apiStyle="anthropic"
-                                                sx={{width: "100%", justifyContent: "center"}}
+                                                sx={{minWidth: "110px", justifyContent: "center"}}
                                             />
                                         </Stack>
                                     ) : (
