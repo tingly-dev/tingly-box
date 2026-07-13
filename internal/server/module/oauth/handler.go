@@ -237,7 +237,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 	}
 
-	issuer, err := oauth.ParseProviderType(ai.Issuer(req.Provider))
+	issuer, err := oauth.ParseIssuer(ai.Issuer(req.Provider))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -349,7 +349,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	oauthSession := &oauth.SessionState{
 		SessionID: sessionID,
 		Status:    oauth.SessionStatusPending,
-		Provider:  issuer,
+		Issuer:    issuer,
 		UserID:    userID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(oauth.DefaultSessionExpiry), // Use unified session expiration
@@ -549,7 +549,7 @@ func (h *Handler) GetOAuthToken(c *gin.Context) {
 	resp.Data.AccessToken = token.AccessToken
 	resp.Data.RefreshToken = token.RefreshToken
 	resp.Data.TokenType = token.TokenType
-	resp.Data.Provider = string(token.Provider)
+	resp.Data.Provider = string(token.Issuer)
 	resp.Data.Valid = token.Valid()
 
 	if !token.Expiry.IsZero() {
@@ -596,7 +596,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 		return
 	}
 
-	issuer, err := oauth.ParseProviderType(provider.OAuthDetail.Issuer)
+	issuer, err := oauth.ParseIssuer(provider.OAuthDetail.Issuer)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -660,7 +660,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	resp.Data.RefreshToken = token.RefreshToken
 	resp.Data.TokenType = "Bearer"
 	resp.Data.ExpiresAt = token.Expiry.Format(time.RFC3339)
-	resp.Data.ProviderType = string(token.Provider)
+	resp.Data.ProviderType = string(token.Issuer)
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -745,7 +745,7 @@ func (h *Handler) ListOAuthTokens(c *gin.Context) {
 	userID := c.Query("user_id")
 	if userID != "" {
 		// Use old API: List providers for specific user via oauthManager
-		providers, err := h.oauthManager.ListProviders(userID)
+		providers, err := h.oauthManager.ListIssuers(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
 				Success: false,
@@ -940,7 +940,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 
 	// Use createProviderFromToken to create the provider
 	// Pass session ID to retrieve proxy URL from the session
-	providerUUID, err := h.createProviderFromToken(token, token.Provider, "", token.SessionID, "")
+	providerUUID, err := h.createProviderFromToken(token, token.Issuer, "", token.SessionID, "")
 	if err != nil {
 		log.Printf("[OAuth] Failed to create provider for token.SessionID %s: %v", token.SessionID, err)
 		_ = h.oauthManager.UpdateSessionStatus(token.SessionID, oauth.SessionStatusFailed, "", err.Error())
@@ -971,7 +971,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 
 	// Return success HTML page to inform the user
 	c.HTML(http.StatusOK, "oauth_success.html", gin.H{
-		"provider":      string(token.Provider),
+		"provider":      string(token.Issuer),
 		"provider_name": "",                                  // Will be shown with UUID in the page
 		"access_token":  SafeTokenPreview(token.AccessToken), // Partially show token
 		"token_type":    token.TokenType,
@@ -1068,7 +1068,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		logrus.WithFields(logrus.Fields{
 			"action":        "oauth_provider_reauthorized",
 			"provider_name": existing.Name,
-			"provider_type": string(token.Provider),
+			"provider_type": string(token.Issuer),
 			"uuid":          existing.UUID,
 		}).Info("OAuth provider re-authenticated in place")
 
@@ -1160,7 +1160,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 	logrus.WithFields(logrus.Fields{
 		"action":        "oauth_provider_created",
 		"provider_name": providerName,
-		"provider_type": string(token.Provider),
+		"provider_type": string(token.Issuer),
 		"uuid":          providerUUID.String(),
 	}).Info("OAuth provider created successfully")
 

@@ -9,17 +9,17 @@ import (
 
 // TokenStorage defines the interface for storing and retrieving OAuth tokens
 type TokenStorage interface {
-	// SaveToken saves a token for the given user and provider
-	SaveToken(userID string, provider ai.Issuer, token *Token) error
+	// SaveToken saves a token for the given user and issuer
+	SaveToken(userID string, issuer ai.Issuer, token *Token) error
 
-	// GetToken retrieves a token for the given user and provider
-	GetToken(userID string, provider ai.Issuer) (*Token, error)
+	// GetToken retrieves a token for the given user and issuer
+	GetToken(userID string, issuer ai.Issuer) (*Token, error)
 
-	// DeleteToken removes a token for the given user and provider
-	DeleteToken(userID string, provider ai.Issuer) error
+	// DeleteToken removes a token for the given user and issuer
+	DeleteToken(userID string, issuer ai.Issuer) error
 
-	// ListProviders returns all providers that have tokens for the user
-	ListProviders(userID string) ([]ai.Issuer, error)
+	// ListIssuers returns all providers that have tokens for the user
+	ListIssuers(userID string) ([]ai.Issuer, error)
 
 	// CleanupExpired removes all expired tokens from the storage
 	CleanupExpired() error
@@ -28,7 +28,7 @@ type TokenStorage interface {
 // MemoryTokenStorage is an in-memory implementation of TokenStorage
 type MemoryTokenStorage struct {
 	mu     sync.RWMutex
-	tokens map[string]map[ai.Issuer]*Token // userID -> provider -> token
+	tokens map[string]map[ai.Issuer]*Token // userID -> issuer -> token
 }
 
 // NewMemoryTokenStorage creates a new in-memory token storage
@@ -38,8 +38,8 @@ func NewMemoryTokenStorage() *MemoryTokenStorage {
 	}
 }
 
-// SaveToken saves a token for the given user and provider
-func (s *MemoryTokenStorage) SaveToken(userID string, provider ai.Issuer, token *Token) error {
+// SaveToken saves a token for the given user and issuer
+func (s *MemoryTokenStorage) SaveToken(userID string, issuer ai.Issuer, token *Token) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -47,12 +47,12 @@ func (s *MemoryTokenStorage) SaveToken(userID string, provider ai.Issuer, token 
 		s.tokens[userID] = make(map[ai.Issuer]*Token)
 	}
 
-	s.tokens[userID][provider] = token
+	s.tokens[userID][issuer] = token
 	return nil
 }
 
-// GetToken retrieves a token for the given user and provider
-func (s *MemoryTokenStorage) GetToken(userID string, provider ai.Issuer) (*Token, error) {
+// GetToken retrieves a token for the given user and issuer
+func (s *MemoryTokenStorage) GetToken(userID string, issuer ai.Issuer) (*Token, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -60,7 +60,7 @@ func (s *MemoryTokenStorage) GetToken(userID string, provider ai.Issuer) (*Token
 		return nil, ErrTokenNotFound
 	}
 
-	token, ok := s.tokens[userID][provider]
+	token, ok := s.tokens[userID][issuer]
 	if !ok || token == nil {
 		return nil, ErrTokenNotFound
 	}
@@ -68,8 +68,8 @@ func (s *MemoryTokenStorage) GetToken(userID string, provider ai.Issuer) (*Token
 	return token, nil
 }
 
-// DeleteToken removes a token for the given user and provider
-func (s *MemoryTokenStorage) DeleteToken(userID string, provider ai.Issuer) error {
+// DeleteToken removes a token for the given user and issuer
+func (s *MemoryTokenStorage) DeleteToken(userID string, issuer ai.Issuer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -77,11 +77,11 @@ func (s *MemoryTokenStorage) DeleteToken(userID string, provider ai.Issuer) erro
 		return ErrTokenNotFound
 	}
 
-	if _, ok := s.tokens[userID][provider]; !ok {
+	if _, ok := s.tokens[userID][issuer]; !ok {
 		return ErrTokenNotFound
 	}
 
-	delete(s.tokens[userID], provider)
+	delete(s.tokens[userID], issuer)
 	return nil
 }
 
@@ -92,9 +92,9 @@ func (s *MemoryTokenStorage) CleanupExpired() error {
 
 	now := time.Now()
 	for userID, providerTokens := range s.tokens {
-		for provider, token := range providerTokens {
+		for issuer, token := range providerTokens {
 			if !token.Expiry.IsZero() && now.After(token.Expiry) {
-				delete(providerTokens, provider)
+				delete(providerTokens, issuer)
 			}
 		}
 		if len(s.tokens[userID]) == 0 {
@@ -104,8 +104,8 @@ func (s *MemoryTokenStorage) CleanupExpired() error {
 	return nil
 }
 
-// ListProviders returns all providers that have tokens for the user
-func (s *MemoryTokenStorage) ListProviders(userID string) ([]ai.Issuer, error) {
+// ListIssuers returns all providers that have tokens for the user
+func (s *MemoryTokenStorage) ListIssuers(userID string) ([]ai.Issuer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -114,8 +114,8 @@ func (s *MemoryTokenStorage) ListProviders(userID string) ([]ai.Issuer, error) {
 	}
 
 	providers := make([]ai.Issuer, 0, len(s.tokens[userID]))
-	for provider := range s.tokens[userID] {
-		providers = append(providers, provider)
+	for issuer := range s.tokens[userID] {
+		providers = append(providers, issuer)
 	}
 
 	return providers, nil

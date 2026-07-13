@@ -232,13 +232,13 @@ func (r *Registry) Register(config *ProviderConfig) {
 }
 
 // Unregister removes a provider configuration
-func (r *Registry) Unregister(providerType ai.Issuer) {
-	delete(r.providers, providerType)
+func (r *Registry) Unregister(issuer ai.Issuer) {
+	delete(r.providers, issuer)
 }
 
 // Get returns a provider configuration
-func (r *Registry) Get(providerType ai.Issuer) (*ProviderConfig, bool) {
-	config, ok := r.providers[providerType]
+func (r *Registry) Get(issuer ai.Issuer) (*ProviderConfig, bool) {
+	config, ok := r.providers[issuer]
 	return config, ok
 }
 
@@ -252,8 +252,8 @@ func (r *Registry) List() []ai.Issuer {
 }
 
 // IsRegistered checks if a provider is registered
-func (r *Registry) IsRegistered(providerType ai.Issuer) bool {
-	_, ok := r.providers[providerType]
+func (r *Registry) IsRegistered(issuer ai.Issuer) bool {
+	_, ok := r.providers[issuer]
 	return ok
 }
 

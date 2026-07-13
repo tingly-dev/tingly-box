@@ -21,32 +21,6 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 )
 
-// SessionStatus represents the status of an OAuth session
-type SessionStatus string
-
-const (
-	SessionStatusPending SessionStatus = "pending" // Authorization initiated
-	SessionStatusSuccess SessionStatus = "success" // Provider created successfully
-	SessionStatusFailed  SessionStatus = "failed"  // Authorization failed
-)
-
-// SessionState holds information about an OAuth session
-type SessionState struct {
-	SessionID    string        `json:"session_id"`
-	Status       SessionStatus `json:"status"`
-	Provider     ai.Issuer     `json:"provider"`
-	UserID       string        `json:"user_id"`
-	CreatedAt    time.Time     `json:"created_at"`
-	ExpiresAt    time.Time     `json:"expires_at"`
-	ProviderUUID string        `json:"provider_uuid,omitempty"` // Set when success
-	Error        string        `json:"error,omitempty"`         // Set when failed
-	ProxyURL     string        `json:"proxy_url,omitempty"`     // Proxy URL used for this session
-	// TargetProviderUUID, when set, marks this flow as a re-authentication of an
-	// existing provider: on success the credentials are overwritten in place on
-	// this UUID instead of creating a new provider.
-	TargetProviderUUID string `json:"target_provider_uuid,omitempty"`
-}
-
 // Manager handles OAuth flows
 type Manager struct {
 	config         *Config
@@ -61,7 +35,7 @@ type Manager struct {
 type StateData struct {
 	State         string
 	UserID        string
-	Provider      ai.Issuer
+	Issuer        ai.Issuer
 	ExpiresAt     time.Time
 	Timestamp     int64  // Unix timestamp when state was created
 	ExpiresAtUnix int64  // Unix timestamp when state expires
@@ -224,15 +198,15 @@ func (m *Manager) deleteState(state string) {
 // cleanupExpiredStates is removed - now handled by cleanupPeriodically
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo string, name string, sessionID string, opts ...Option) (string, string, error) {
+func (m *Manager) GetAuthURL(userID string, issuer ai.Issuer, redirectTo string, name string, sessionID string, opts ...Option) (string, string, error) {
 	options := applyOptions(opts...)
-	config, ok := m.registry.Get(providerType)
+	config, ok := m.registry.Get(issuer)
 	if !ok {
-		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
+		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, issuer)
 	}
 
 	if config.ClientID == "" {
-		return "", "", fmt.Errorf("%w: %s", ErrProviderNotConfigured, providerType)
+		return "", "", fmt.Errorf("%w: %s", ErrProviderNotConfigured, issuer)
 	}
 
 	// Generate state
@@ -261,7 +235,7 @@ func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo s
 	if err := m.saveState(&StateData{
 		State:        state,
 		UserID:       userID,
-		Provider:     providerType,
+		Issuer:       issuer,
 		RedirectTo:   redirectTo,
 		Name:         name,
 		CodeVerifier: codeVerifier,
@@ -499,9 +473,9 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request, opts ...O
 	defer m.deleteState(state)
 
 	// Get provider config
-	config, ok := m.registry.Get(stateData.Provider)
+	config, ok := m.registry.Get(stateData.Issuer)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, stateData.Provider)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, stateData.Issuer)
 	}
 
 	// Exchange code for token
@@ -515,13 +489,13 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request, opts ...O
 	if err != nil {
 		return nil, err
 	}
-	token.Provider = stateData.Provider
+	token.Issuer = stateData.Issuer
 	token.RedirectTo = stateData.RedirectTo
 	token.Name = stateData.Name
 	token.SessionID = stateData.SessionID
 
 	// Save token
-	if err := m.config.TokenStorage.SaveToken(stateData.UserID, stateData.Provider, token); err != nil {
+	if err := m.config.TokenStorage.SaveToken(stateData.UserID, stateData.Issuer, token); err != nil {
 		return nil, err
 	}
 
@@ -646,9 +620,9 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 }
 
 // GetToken retrieves a token for a user and provider, refreshing if necessary
-func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.Issuer, opts ...Option) (*Token, error) {
+func (m *Manager) GetToken(ctx context.Context, userID string, issuer ai.Issuer, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
-	token, err := m.config.TokenStorage.GetToken(userID, providerType)
+	token, err := m.config.TokenStorage.GetToken(userID, issuer)
 	if err != nil {
 		return nil, err
 	}
@@ -656,14 +630,14 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.I
 	// Check if token needs refresh
 	if token.ExpiredIn(m.config.TokenExpiryBuffer) {
 		if token.RefreshToken != "" {
-			refreshed, err := m.refreshToken(ctx, providerType, token.RefreshToken, options)
+			refreshed, err := m.refreshToken(ctx, issuer, token.RefreshToken, options)
 			if err == nil {
-				refreshed.Provider = providerType
+				refreshed.Issuer = issuer
 				// Preserve old refresh token if new one is not returned
 				if refreshed.RefreshToken == "" {
 					refreshed.RefreshToken = token.RefreshToken
 				}
-				if err := m.config.TokenStorage.SaveToken(userID, providerType, refreshed); err == nil {
+				if err := m.config.TokenStorage.SaveToken(userID, issuer, refreshed); err == nil {
 					return refreshed, nil
 				}
 			}
@@ -679,10 +653,10 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.I
 }
 
 // refreshToken refreshes an access token using a refresh token
-func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
-	config, ok := m.registry.Get(providerType)
+func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
+	config, ok := m.registry.Get(issuer)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, issuer)
 	}
 
 	// Build common parameters
@@ -694,7 +668,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 
 	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
 	// codex DO NOT require client_secret
-	if providerType != ai.IssuerCodex {
+	if issuer != ai.IssuerCodex {
 		params["client_secret"] = config.ClientSecret
 	}
 
@@ -719,7 +693,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 	token.setExpiryFromExpiresIn()
 
 	// For Codex provider, parse ID token to extract user info
-	if providerType == ai.IssuerCodex {
+	if issuer == ai.IssuerCodex {
 		populateCodexMetadata(token)
 	}
 
@@ -728,15 +702,15 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 
 // RefreshToken refreshes an access token using a refresh token
 // This is a public method that can be called from HTTP handlers
-func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ai.Issuer, refreshToken string, opts ...Option) (*Token, error) {
+func (m *Manager) RefreshToken(ctx context.Context, userID string, issuer ai.Issuer, refreshToken string, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
 	// Refresh the token
-	token, err := m.refreshToken(ctx, providerType, refreshToken, options)
+	token, err := m.refreshToken(ctx, issuer, refreshToken, options)
 	if err != nil {
 		return nil, err
 	}
 
-	token.Provider = providerType
+	token.Issuer = issuer
 
 	// Preserve old refresh token if new one is not returned
 	// Some OAuth providers don't return a new refresh token on each refresh
@@ -745,7 +719,7 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 	}
 
 	// Save the refreshed token
-	if err := m.config.TokenStorage.SaveToken(userID, providerType, token); err != nil {
+	if err := m.config.TokenStorage.SaveToken(userID, issuer, token); err != nil {
 		return nil, fmt.Errorf("failed to save refreshed token: %w", err)
 	}
 
@@ -753,13 +727,13 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 }
 
 // RevokeToken removes a token for a user and provider
-func (m *Manager) RevokeToken(userID string, providerType ai.Issuer) error {
-	return m.config.TokenStorage.DeleteToken(userID, providerType)
+func (m *Manager) RevokeToken(userID string, issuer ai.Issuer) error {
+	return m.config.TokenStorage.DeleteToken(userID, issuer)
 }
 
-// ListProviders returns all providers that have valid tokens for the user
-func (m *Manager) ListProviders(userID string) ([]ai.Issuer, error) {
-	return m.config.TokenStorage.ListProviders(userID)
+// ListIssuers returns all providers that have valid tokens for the user
+func (m *Manager) ListIssuers(userID string) ([]ai.Issuer, error) {
+	return m.config.TokenStorage.ListIssuers(userID)
 }
 
 // GetRegistry returns the provider registry
@@ -794,82 +768,6 @@ func (m *Manager) ResetProxyURL() {
 	logrus.Info("[OAuth] Reset proxy URL")
 }
 
-// InitiateDeviceCodeFlow initiates the Device Code flow and returns device code data
-// RFC 8628: OAuth 2.0 Device Authorization Grant
-func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ai.Issuer, redirectTo string, name string, opts ...Option) (*DeviceCodeData, error) {
-	options := applyOptions(opts...)
-	config, ok := m.registry.Get(providerType)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
-	}
-
-	if config.ClientID == "" {
-		return nil, fmt.Errorf("%w: %s", ErrProviderNotConfigured, providerType)
-	}
-
-	if config.DeviceCodeURL == "" {
-		return nil, fmt.Errorf("provider %s does not support device code flow", providerType)
-	}
-
-	// Generate PKCE code verifier if provider uses Device Code PKCE
-	var codeVerifier string
-	var codeChallenge string
-	if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
-		var err error
-		codeVerifier, err = m.generateCodeVerifier()
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate code verifier: %w", err)
-		}
-		codeChallenge = m.generateCodeChallenge(codeVerifier)
-	}
-
-	// Build device authorization request
-	// Build common parameters
-	params := map[string]string{
-		"client_id": config.ClientID,
-	}
-	if len(config.Scopes) > 0 {
-		params["scope"] = strings.Join(config.Scopes, " ")
-	}
-	// Add PKCE parameters for Device Code PKCE flow
-	if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
-		params["code_challenge"] = codeChallenge
-		params["code_challenge_method"] = "S256"
-	}
-
-	resp, err := m.sendTokenRequest(ctx, config, config.DeviceCodeURL, params, 30*time.Second, options)
-	if err != nil {
-		return nil, fmt.Errorf("device code request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("device code request failed: status %d, body: %d", resp.StatusCode, len(string(body)))
-	}
-
-	// Parse device code response
-	var deviceResp DeviceCodeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&deviceResp); err != nil {
-		return nil, fmt.Errorf("failed to decode device code response: %w", err)
-	}
-
-	// Create device code data
-	now := time.Now()
-	data := &DeviceCodeData{
-		DeviceCodeResponse: &deviceResp,
-		Provider:           providerType,
-		UserID:             userID,
-		RedirectTo:         redirectTo,
-		Name:               name,
-		InitiatedAt:        now,
-		ExpiresAt:          now.Add(time.Duration(deviceResp.ExpiresIn) * time.Second),
-		CodeVerifier:       codeVerifier, // Store PKCE verifier for token polling
-	}
-
-	return data, nil
-}
-
 // applyExtraHeaders lets callers inject provider-specific header state
 // (e.g. Kimi's X-Msh-Device-Id) without the manager knowing the provider.
 func applyExtraHeaders(dst http.Header, src http.Header) {
@@ -878,155 +776,6 @@ func applyExtraHeaders(dst http.Header, src http.Header) {
 			dst.Set(k, v)
 		}
 	}
-}
-
-// PollForToken polls the token endpoint until the user completes authentication
-// or the device code expires.
-func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token), opts ...Option) (*Token, error) {
-	options := applyOptions(opts...)
-	config, ok := m.registry.Get(data.Provider)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, data.Provider)
-	}
-
-	// Default interval is 5 seconds if not specified
-	interval := time.Duration(data.Interval) * time.Second
-	if interval == 0 {
-		interval = 2 * time.Second
-	}
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	// Poll until the provider's device code expires, falling back to the
-	// standard OAuth session expiry when the provider did not return one.
-	pollDeadline := data.ExpiresAt
-	if pollDeadline.IsZero() {
-		pollDeadline = time.Now().Add(DefaultSessionExpiry)
-	}
-	timeoutCtx, cancel := context.WithDeadline(ctx, pollDeadline)
-	defer cancel()
-
-	fmt.Printf("[OAuth] Device code polling started for %s, expires at: %s\n", data.Provider, pollDeadline.Format(time.RFC3339))
-
-	for {
-		select {
-		case <-timeoutCtx.Done():
-			return nil, fmt.Errorf("authentication timed out at %s", pollDeadline.Format(time.RFC3339))
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-ticker.C:
-			fmt.Printf("[OAuth] Polling token endpoint for %s...\n", data.Provider)
-			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier, options)
-			if err != nil {
-				// Check if error is a transient error that we should retry
-				if isTransientDeviceCodeError(err) {
-					fmt.Printf("[OAuth] Authorization pending for %s, continuing poll...\n", data.Provider)
-					time.Sleep(interval)
-					continue
-				}
-				fmt.Printf("[OAuth] Polling error for %s: %v\n", data.Provider, err)
-				return nil, err
-			}
-
-			fmt.Printf("[OAuth] Successfully obtained token for %s\n", data.Provider)
-			// Successfully got token
-			token.Provider = data.Provider
-			token.RedirectTo = data.RedirectTo
-			token.Name = data.Name
-
-			// Save token
-			if err := m.config.TokenStorage.SaveToken(data.UserID, data.Provider, token); err != nil {
-				return nil, fmt.Errorf("failed to save token: %w", err)
-			}
-
-			// Call callback if provided
-			if callback != nil {
-				callback(token)
-			}
-
-			return token, nil
-		}
-	}
-}
-
-// pollTokenRequest makes a single token polling request
-func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string, opts *Options) (*Token, error) {
-	// Build common parameters
-	params := map[string]string{
-		"grant_type":  config.GrantType,
-		"client_id":   config.ClientID,
-		"device_code": deviceCode,
-	}
-	if config.ClientSecret != "" {
-		params["client_secret"] = config.ClientSecret
-	}
-	// Add PKCE code_verifier for Device Code PKCE flow
-	if config.OAuthMethod == OAuthMethodDeviceCodePKCE && codeVerifier != "" {
-		params["code_verifier"] = codeVerifier
-	}
-
-	resp, err := m.sendTokenRequest(ctx, config, config.TokenURL, params, 30*time.Second, opts)
-	if err != nil {
-		return nil, fmt.Errorf("token poll request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// Check for authorization pending (should retry)
-	if resp.StatusCode == http.StatusBadRequest {
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &errResp) == nil {
-			switch errResp.Error {
-			case "authorization_pending", "slow_down":
-				return nil, &DeviceCodePendingError{Message: errResp.Error}
-			case "access_denied", "expired_token":
-				return nil, fmt.Errorf("device code error: %s", errResp.Error)
-			}
-			// Unknown error in 400 response
-			return nil, fmt.Errorf("device code error (400): %s - body: %s", errResp.Error, string(body))
-		}
-		// 400 but no valid error response
-		return nil, fmt.Errorf("device code error (400): body: %s", string(body))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token poll failed: status %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse token response directly into Token
-	token := &Token{}
-	if err := json.Unmarshal(body, token); err != nil {
-		return nil, fmt.Errorf("failed to decode token response: %w", err)
-	}
-
-	// Convert ExpiresIn to Expiry
-	token.setExpiryFromExpiresIn()
-
-	return token, nil
-}
-
-// DeviceCodePendingError represents a pending device code authorization
-type DeviceCodePendingError struct {
-	Message string
-}
-
-func (e *DeviceCodePendingError) Error() string {
-	return e.Message
-}
-
-// isTransientDeviceCodeError checks if an error is a transient device code error
-func isTransientDeviceCodeError(err error) bool {
-	if _, ok := err.(*DeviceCodePendingError); ok {
-		return true
-	}
-	return false
 }
 
 // debugRequest prints HTTP request details for debugging
@@ -1075,105 +824,6 @@ func (m *Manager) debugRequest(req *http.Request, format TokenRequestFormat) {
 	}
 	logrus.Debug("================================")
 }
-
-// =============================================
-// Session Management for OAuth Status Tracking
-// =============================================
-
-// generateSessionID generates a unique session ID
-func (m *Manager) generateSessionID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("failed to generate session ID: %w", err)
-	}
-	return hex.EncodeToString(b), nil
-}
-
-// CreateSession creates a new OAuth session with pending status
-func (m *Manager) CreateSession(userID string, provider ai.Issuer) (*SessionState, error) {
-	sessionID, err := m.generateSessionID()
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	session := &SessionState{
-		SessionID: sessionID,
-		Status:    SessionStatusPending,
-		Provider:  provider,
-		UserID:    userID,
-		CreatedAt: now,
-		ExpiresAt: now.Add(10 * time.Minute), // Session expires after 10 minutes
-	}
-
-	if err := m.sessionStorage.SaveSession(sessionID, session); err != nil {
-		return nil, err
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"session_id": sessionID,
-		"provider":   provider,
-		"user_id":    userID,
-		"status":     SessionStatusPending,
-	}).Info("[OAuth] Session created")
-
-	return session, nil
-}
-
-// GetSession retrieves a session by ID
-func (m *Manager) GetSession(sessionID string) (*SessionState, error) {
-	session, err := m.sessionStorage.GetSession(sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check expiration
-	if !session.ExpiresAt.IsZero() && time.Now().After(session.ExpiresAt) {
-		return nil, ErrSessionNotFound
-	}
-
-	return session, nil
-}
-
-// StoreSession stores or updates a session
-func (m *Manager) StoreSession(session *SessionState) {
-	_ = m.sessionStorage.SaveSession(session.SessionID, session)
-}
-
-// UpdateSessionStatus updates the status of a session
-func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, providerUUID string, errMsg string) error {
-	// First get the session to log provider info
-	session, err := m.sessionStorage.GetSession(sessionID)
-	if err != nil {
-		logrus.WithField("session_id", sessionID).Warn("[OAuth] Failed to update session: not found")
-		return err
-	}
-
-	// Update the status
-	if err := m.sessionStorage.UpdateSessionStatus(sessionID, status, providerUUID, errMsg); err != nil {
-		return err
-	}
-
-	// Log session status change
-	logEntry := logrus.WithFields(logrus.Fields{
-		"session_id":    sessionID,
-		"provider":      session.Provider,
-		"new_status":    status,
-		"provider_uuid": providerUUID,
-	})
-
-	if status == SessionStatusSuccess {
-		logEntry.Info("[OAuth] Session completed successfully")
-	} else if status == SessionStatusFailed {
-		logEntry.WithField("error", errMsg).Error("[OAuth] Session failed")
-	} else {
-		logEntry.Debug("[OAuth] Session status updated")
-	}
-
-	return nil
-}
-
-// cleanupExpiredSessions is removed - now handled by cleanupPeriodically
 
 // cleanupPeriodically removes expired states, sessions, and tokens
 func (m *Manager) cleanupPeriodically() {

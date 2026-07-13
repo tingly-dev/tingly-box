@@ -96,7 +96,7 @@ func main() {
 	showToken := flag.Bool("show-token", false, "Show full token (default false for security)")
 	flag.Parse()
 
-	providerType, err := oauth.ParseProviderType(ai.Issuer(*provider))
+	providerType, err := oauth.ParseIssuer(ai.Issuer(*provider))
 	if err != nil {
 		log.Fatalf("Invalid provider: %v", err)
 	}
@@ -337,7 +337,7 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth.Registry, providerCo
 
 		resultChan <- &CallbackResult{Token: token, RedirectTo: token.RedirectTo}
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, callbackHTML, safeTruncate(token.AccessToken, 50), token.TokenType, token.Expiry.Format(time.RFC3339), token.Provider)
+		fmt.Fprintf(w, callbackHTML, safeTruncate(token.AccessToken, 50), token.TokenType, token.Expiry.Format(time.RFC3339), token.Issuer)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -494,7 +494,7 @@ func printTokenResult(token *oauth.Token, userID string, oauthConfig *oauth.Conf
 		TokenType:   token.TokenType,
 		ExpiresIn:   token.Expiry.UTC().Unix(),
 		ResourceURL: token.ResourceURL,
-		Provider:    token.Provider,
+		Issuer:      token.Issuer,
 		Metadata:    token.Metadata,
 	}
 	if showFullToken {

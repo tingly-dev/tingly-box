@@ -72,7 +72,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		}
 
 		// Use oauth handler to create the provider
-		providerUUID, err := s.oauthHandler.CreateProviderFromToken(token, token.Provider, "", token.SessionID)
+		providerUUID, err := s.oauthHandler.CreateProviderFromToken(token, token.Issuer, "", token.SessionID)
 		if err != nil {
 			logrus.Debugf("[OAuth] Failed to create provider: %v", err)
 			failedSessionID := token.SessionID
@@ -94,7 +94,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth.SessionStatusSuccess, providerUUID, "")
 		}
 
-		logrus.Debugf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
+		logrus.Debugf("[OAuth] Callback successful for provider %s, created provider %s", token.Issuer, providerUUID)
 
 		// Stop the dynamic callback server after successful callback
 		s.stopDynamicCallbackServerAfterResponse(sessionID)
@@ -119,7 +119,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
         <p>Token: %s</p>
     </div>
 </body>
-</html>`, string(token.Provider), oauthmodule.SafeTokenPreview(token.AccessToken))
+</html>`, string(token.Issuer), oauthmodule.SafeTokenPreview(token.AccessToken))
 	}
 
 	// Create a new callback server with the handler

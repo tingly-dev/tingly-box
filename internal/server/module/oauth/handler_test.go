@@ -65,7 +65,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		oauthSession := &oauth.SessionState{
 			SessionID: sessionID,
 			Status:    oauth.SessionStatusPending,
-			Provider:  ai.IssuerClaudeCode,
+			Issuer:    ai.IssuerClaudeCode,
 			UserID:    "user123",
 			CreatedAt: now,
 			ExpiresAt: now.Add(oauth.DefaultSessionExpiry),
@@ -168,7 +168,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		oauthSession := &oauth.SessionState{
 			SessionID: sessionID,
 			Status:    oauth.SessionStatusPending,
-			Provider:  ai.IssuerClaudeCode,
+			Issuer:    ai.IssuerClaudeCode,
 			UserID:    "user123",
 			CreatedAt: now,
 			ExpiresAt: now.Add(oauth.DefaultSessionExpiry),
@@ -235,7 +235,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		// Verify we have the sessionID (this is what the bugfix preserves)
 		assert.Equal(t, testSessionID, stateData.SessionID, "SessionID should be retrieved from state data")
 		assert.Equal(t, "user123", stateData.UserID, "UserID should match")
-		assert.Equal(t, ai.IssuerClaudeCode, stateData.Provider, "Provider should match")
+		assert.Equal(t, ai.IssuerClaudeCode, stateData.Issuer, "Provider should match")
 
 		// Now HandleCallback would delete the state, but we already have sessionID
 		// This simulates the bugfix scenario
@@ -408,7 +408,7 @@ func TestHandler_Reauth_OverwritesInPlace(t *testing.T) {
 	oauthManager.StoreSession(&oauth.SessionState{
 		SessionID:          sessionID,
 		Status:             oauth.SessionStatusPending,
-		Provider:           ai.IssuerCodex,
+		Issuer:             ai.IssuerCodex,
 		CreatedAt:          now,
 		ExpiresAt:          now.Add(oauth.DefaultSessionExpiry),
 		TargetProviderUUID: targetUUID,
@@ -419,7 +419,7 @@ func TestHandler_Reauth_OverwritesInPlace(t *testing.T) {
 		AccessToken:  "NEW-ACCESS",
 		RefreshToken: "NEW-REFRESH",
 		Expiry:       newExpiry,
-		Provider:     ai.IssuerCodex,
+		Issuer:       ai.IssuerCodex,
 	}
 
 	gotUUID, err := handler.createProviderFromToken(token, ai.IssuerCodex, "", sessionID, "")
