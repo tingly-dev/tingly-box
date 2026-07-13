@@ -111,6 +111,29 @@ func TestHandleAnthropicToOpenAI(t *testing.T) {
 	}
 }
 
+func TestConvertAnthropicBetaToOpenAIChatMatchesLegacyEntry(t *testing.T) {
+	message := &anthropic.BetaMessage{
+		ID:   "msg_transport_neutral",
+		Role: "assistant",
+		Content: []anthropic.BetaContentBlockUnion{
+			{Type: "text", Text: "parallel path"},
+		},
+		StopReason: "end_turn",
+		Usage: anthropic.BetaUsage{
+			InputTokens:  4,
+			OutputTokens: 2,
+		},
+	}
+
+	pure := ConvertAnthropicBetaToOpenAIChat(message, "client-visible-model")
+	legacy := HandleAnthropicBetaToOpenAIResponse(message, "client-visible-model")
+	// Created is intentionally generated at conversion time; normalize it when
+	// comparing two sequential calls to the same pure implementation.
+	pure.Created = 0
+	legacy.Created = 0
+	assert.Equal(t, pure, legacy)
+}
+
 func TestHandleOpenAIToAnthropic(t *testing.T) {
 	tests := []struct {
 		name       string

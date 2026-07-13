@@ -414,20 +414,14 @@ production import:
 - monotonic propagation of usage/model fallback and committed side effects;
 - complete and streaming in-memory multi-hop harnesses.
 
-The next implementation is a concrete protocol Bridge. That now touches the
-existing pipeline for four reasons:
+The first concrete Anthropic -> OpenAI Chat Bridge and its dormant matrix are
+implemented. Both response directions now expose transport-neutral complete
+and stream conversion entrypoints while existing `Handle*` functions remain
+the production wrappers. The reverse extraction preserves MCP-aware legacy
+driving and moves no handler or routing selection onto the Stage chain.
 
-1. several non-stream handlers write directly through
-   `HandleContext.GinContext`, while their pure payload builders are missing or
-   unexported;
-2. most stream converter constructors are unexported;
-3. `StreamConverter.Next` has no context parameter or explicit close ownership,
-   and `RunConverter` binds iteration to `HandleContext` and the SSE writer;
-4. MCP continuation/suppression hooks remain embedded in some protocol
-   converters, preventing the Tool Loop Stage from owning that lifecycle.
-
-The recommended next change is a backward-compatible **dual-entry extraction**:
-export pure value/iterator constructors, keep every current `Handle*` function
-as a wrapper around them, and add characterization tests proving the legacy
-wrapper emits the same payload/events. No handler or routing switch would move
-to the Stage chain in that extraction change.
+The next additive increment is an exact-pair OpenAI Chat -> Anthropic Beta
+Bridge followed by a concrete Chat -> Beta-native Stage -> Chat in-process
+matrix. Runtime handler/dispatch integration remains a separate stop boundary:
+legacy stays the default and no server path may select `BuildTopology` without
+an explicit canary and rollback discussion.

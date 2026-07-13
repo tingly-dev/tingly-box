@@ -13,9 +13,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-// HandleAnthropicBetaToOpenAIResponse converts an Anthropic BetaMessage to the
-// OpenAI Chat Completions wire format.
-func HandleAnthropicBetaToOpenAIResponse(bm *anthropic.BetaMessage, responseModel string) wire.ChatCompletionWire {
+// ConvertAnthropicBetaToOpenAIChat converts an Anthropic Beta message to the
+// transport-neutral OpenAI Chat Completions wire value.
+func ConvertAnthropicBetaToOpenAIChat(bm *anthropic.BetaMessage, responseModel string) wire.ChatCompletionWire {
 	var toolCalls []wire.ChatCompletionToolCallWire
 	var textContent string
 	var thinking string
@@ -85,6 +85,12 @@ func HandleAnthropicBetaToOpenAIResponse(bm *anthropic.BetaMessage, responseMode
 		},
 		Usage: usage,
 	}
+}
+
+// HandleAnthropicBetaToOpenAIResponse preserves the legacy conversion entry
+// point while delegating to the transport-neutral value converter.
+func HandleAnthropicBetaToOpenAIResponse(bm *anthropic.BetaMessage, responseModel string) wire.ChatCompletionWire {
+	return ConvertAnthropicBetaToOpenAIChat(bm, responseModel)
 }
 
 // HandleAnthropicV1 handles Anthropic v1 non-streaming response.
