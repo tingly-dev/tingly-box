@@ -285,6 +285,8 @@ func (s *protocolTransformStage) prepare(ctx context.Context, call protocolstage
 	case *openai.ChatCompletionNewParams:
 		transformCtx = transform.NewTransformContext(request, opts...)
 		transformCtx.Config.OpenAIConfig = call.State.OpenAIChat
+	case *anthropic.MessageNewParams:
+		transformCtx = transform.NewTransformContext(request, opts...)
 	case *anthropic.BetaMessageNewParams:
 		transformCtx = transform.NewTransformContext(request, opts...)
 	default:

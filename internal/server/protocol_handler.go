@@ -127,7 +127,7 @@ func NewHandler(deps ProtocolHandlerDeps) *ProtocolHandler {
 	if deps.ProtocolStageEnabled {
 		logrus.WithFields(logrus.Fields{
 			"protocol_pipeline": "stage",
-			"stage_routes":      "anthropic_beta->anthropic_beta,anthropic_beta->openai_chat,openai_chat->anthropic_beta",
+			"stage_routes":      "anthropic_v1->anthropic_v1,anthropic_beta->anthropic_beta,anthropic_beta->openai_chat,openai_chat->anthropic_beta",
 			"other_routes":      "legacy",
 		}).Info("Protocol Stage mode enabled")
 	}

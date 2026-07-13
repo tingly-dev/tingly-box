@@ -85,6 +85,7 @@ func TestProtocolStageFailover_PreContent_RetriesAndSucceeds(t *testing.T) {
 		endpoint pt.EndpointKind
 	}{
 		{name: "chat_to_beta", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
+		{name: "v1_to_v1", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, endpoint: pt.EndpointAnthropic},
 		{name: "beta_to_beta", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
 		{name: "beta_to_chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
 	}
@@ -117,11 +118,13 @@ func TestProtocolStageFailover_PreContent_RetriesAndSucceeds(t *testing.T) {
 func TestProtocolStageFailover_MidStreamDoesNotRetry(t *testing.T) {
 	for _, test := range []struct {
 		name     string
+		source   protocol.APIType
 		target   protocol.APIType
 		endpoint pt.EndpointKind
 	}{
-		{name: "beta_to_beta", target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
-		{name: "beta_to_chat", target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
+		{name: "v1_to_v1", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, endpoint: pt.EndpointAnthropic},
+		{name: "beta_to_beta", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
+		{name: "beta_to_chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
@@ -129,16 +132,16 @@ func TestProtocolStageFailover_MidStreamDoesNotRetry(t *testing.T) {
 
 			route := env.SetupFailoverRoute(
 				t,
-				protocol.TypeAnthropicBeta,
+				test.source,
 				test.target,
 				pt.StreamingTextScenario(),
 				pt.FailMockMidStreamCut,
 			)
-			result := env.SendWithModel(t, protocol.TypeAnthropicBeta, route.ModelName, true)
+			result := env.SendWithModel(t, test.source, route.ModelName, true)
 
-			require.Equal(t, 200, result.HTTPStatus, "first Beta event committed the attempt")
+			require.Equal(t, 200, result.HTTPStatus, "first Anthropic event committed the attempt")
 			assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
-			assert.Equal(t, 0, env.UpstreamEndpointHits(test.endpoint), "fallback must not run after a committed Beta event")
+			assert.Equal(t, 0, env.UpstreamEndpointHits(test.endpoint), "fallback must not run after a committed Anthropic event")
 			require.NotEmpty(t, result.StreamEvents)
 		})
 	}

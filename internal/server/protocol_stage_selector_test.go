@@ -22,7 +22,7 @@ func TestProtocolStageSelector(t *testing.T) {
 		{name: "enabled supported pair", enabled: true, source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, want: true},
 		{name: "enabled implicit identity pair", enabled: true, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, wantErr: true},
 		{name: "enabled registered beta identity", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, want: true},
-		{name: "enabled unregistered v1 identity", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, wantErr: true},
+		{name: "enabled registered v1 identity", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, want: true},
 		{name: "enabled beta to chat", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, want: true},
 		{name: "enabled unsupported pair", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, wantErr: true},
 	}

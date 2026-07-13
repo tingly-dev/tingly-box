@@ -45,12 +45,9 @@ type Matrix struct {
 // to this list.
 //
 // Notes:
-//   - target=anthropic_v1 is intentionally absent. The harness picks
-//     providers by APIStyle and both Anthropic types map to the same
-//     style, so anthropic_beta as the target already exercises both
-//     Anthropic V1 passthrough (when source is V1) and the Beta
-//     conversions (when source is non-Anthropic). See
-//     internal/protocol/README.md.
+//   - V1 identity is explicit even though V1 and Beta providers share the
+//     Anthropic APIStyle. Protocol Stage selection is based on concrete API
+//     types, so the harness must preserve that distinction.
 //   - Anthropic↔Anthropic cross-version (v1↔beta) is rejected by the
 //     transform layer and not represented here.
 //   - Google targets and the google→google passthrough are not yet
@@ -58,6 +55,7 @@ type Matrix struct {
 func DefaultPairs() []ProtocolPair {
 	return []ProtocolPair{
 		// Anthropic V1 source
+		{protocol.TypeAnthropicV1, protocol.TypeAnthropicV1},     // V1 passthrough
 		{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta},   // V1 passthrough (provider APIStyle=Anthropic)
 		{protocol.TypeAnthropicV1, protocol.TypeOpenAIChat},      // V1 → OpenAI Chat
 		{protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses}, // V1 → OpenAI Responses

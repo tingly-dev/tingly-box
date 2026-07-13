@@ -30,7 +30,8 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		{name: "stage beta native stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage beta to chat nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage beta to chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, streaming: true, wantHeader: "stage", wantResponseModel: true},
-		{name: "stage keeps v1 distinct", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, wantHeader: "legacy"},
+		{name: "stage v1 native nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, wantHeader: "stage", wantResponseModel: true},
+		{name: "stage v1 native stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage v1 to chat stays legacy", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
 		{name: "stage unsupported chat identity stays legacy", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
 		{
@@ -38,6 +39,13 @@ func TestServerProtocolStageSelection(t *testing.T) {
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
 			source:     protocol.TypeAnthropicBeta,
 			target:     protocol.TypeAnthropicBeta,
+			wantHeader: "legacy",
+		},
+		{
+			name:       "stage v1 keeps MCP on legacy",
+			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
+			source:     protocol.TypeAnthropicV1,
+			target:     protocol.TypeAnthropicV1,
 			wantHeader: "legacy",
 		},
 	}
