@@ -161,10 +161,10 @@ const defaultColourMap = (value: number, max: number, colorCount: number): numbe
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Compact inline stat: "LABEL value" on a single line, to keep the heatmap's
-// summary strip short instead of two rows of large blocks.
-const Stat = ({ label, value }: { label: string; value: string }) => (
-    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 }}>
+// Stat row for the right-hand rail: label on the left, value on the right,
+// so the summary reads as a tidy vertical list beside the grid.
+const StatRow = ({ label, value }: { label: string; value: string }) => (
+    <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
         <Typography
             sx={{
                 fontSize: '0.6875rem',
@@ -240,59 +240,20 @@ export const TokenHeatmap = ({
             sx={{
                 width: '100%',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
+                flexDirection: { xs: 'column', md: 'row' },
+                alignItems: { xs: 'stretch', md: 'center' },
+                gap: { xs: 2, md: 4 },
             }}
         >
-            {/* Compact summary strip: key stats on the left, legend on the right,
-                a single row instead of two blocks of large metrics. */}
+            {/* Heatmap Grid (left) */}
             <Box
                 sx={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    columnGap: 2.5,
-                    rowGap: 1,
-                }}
-            >
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2.5, rowGap: 0.5 }}>
-                    <Stat label="Total" value={formatTokenTotal(totalTokens)} />
-                    <Stat label="Active" value={`${activeDays}/${allDays.length}`} />
-                    <Stat label="Longest streak" value={`${longestStreak}d`} />
-                    <Stat label="Max/day" value={formatTokenTotal(maxValue)} />
-                </Box>
-
-                {/* Legend */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
-                        Less
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.375 }}>
-                        {HEATMAP_COLORS.map((color, index) => (
-                            <Box
-                                key={index}
-                                sx={{
-                                    width: 11,
-                                    height: 11,
-                                    backgroundColor: index === 0 ? emptyCellBg : color,
-                                    border: cellBorder,
-                                    borderRadius: '2px',
-                                }}
-                            />
-                        ))}
-                    </Box>
-                    <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
-                        More
-                    </Typography>
-                </Box>
-            </Box>
-
-            {/* Heatmap Grid */}
-            <Box
-                sx={{
+                    flex: 1,
+                    minWidth: 0,
                     overflowX: 'auto',
                     overflowY: 'hidden',
+                    display: 'flex',
+                    justifyContent: 'center',
                     pb: 0.5,
                 }}
             >
@@ -479,6 +440,46 @@ export const TokenHeatmap = ({
                             );
                         })
                     )}
+                </Box>
+            </Box>
+
+            {/* Stats rail (right) */}
+            <Box
+                sx={{
+                    flexShrink: 0,
+                    width: { xs: '100%', md: 200 },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                }}
+            >
+                <StatRow label="Total" value={formatTokenTotal(totalTokens)} />
+                <StatRow label="Active" value={`${activeDays}/${allDays.length}`} />
+                <StatRow label="Longest streak" value={`${longestStreak}d`} />
+                <StatRow label="Max / day" value={formatTokenTotal(maxValue)} />
+
+                {/* Legend */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5 }}>
+                    <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
+                        Less
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.375 }}>
+                        {HEATMAP_COLORS.map((color, index) => (
+                            <Box
+                                key={index}
+                                sx={{
+                                    width: 11,
+                                    height: 11,
+                                    backgroundColor: index === 0 ? emptyCellBg : color,
+                                    border: cellBorder,
+                                    borderRadius: '2px',
+                                }}
+                            />
+                        ))}
+                    </Box>
+                    <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'text.secondary' }}>
+                        More
+                    </Typography>
                 </Box>
             </Box>
         </Box>

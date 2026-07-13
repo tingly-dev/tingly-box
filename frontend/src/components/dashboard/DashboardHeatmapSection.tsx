@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Box, Paper, Tooltip, Typography } from '@mui/material';
+import { Box, Tooltip, Typography } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { format } from 'date-fns';
 import api from '@/services/api';
@@ -96,43 +96,29 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
     }, [loadData, provider, refreshKey]);
 
     return (
-        <Paper
-            elevation={0}
-            sx={{
-                p: 2.5,
-                borderRadius: 2,
-                border: '1px solid',
-                borderColor: 'divider',
-                backgroundColor: 'background.paper',
-                boxShadow: 'none',
-            }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+        <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
                     Token Activity
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        Last {HEATMAP_DAYS} days
-                    </Typography>
-                    <Tooltip
-                        title={`Fixed ${HEATMAP_DAYS}-day window — not affected by the range selector above (the Provider filter still applies).`}
-                        arrow
-                    >
-                        <InfoIcon sx={{ fontSize: 15, color: 'text.disabled', cursor: 'default' }} />
-                    </Tooltip>
-                </Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    · Last {HEATMAP_DAYS} days
+                </Typography>
+                <Tooltip
+                    title={`Fixed ${HEATMAP_DAYS}-day window — not affected by the range selector (the Provider filter still applies).`}
+                    arrow
+                >
+                    <InfoIcon sx={{ fontSize: 15, color: 'text.disabled', cursor: 'default' }} />
+                </Tooltip>
             </Box>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                {dailyData.length > 0 ? (
-                    <TokenHeatmap data={dailyData} cellSize={13} gap={0.5} />
-                ) : (
-                    <Box sx={{ py: 6, color: 'text.secondary' }}>
-                        <Typography variant="body2">No activity in the last {HEATMAP_DAYS} days.</Typography>
-                    </Box>
-                )}
-            </Box>
-        </Paper>
+            {dailyData.length > 0 ? (
+                <TokenHeatmap data={dailyData} cellSize={13} gap={0.5} />
+            ) : (
+                <Box sx={{ py: 6, color: 'text.secondary', textAlign: 'center' }}>
+                    <Typography variant="body2">No activity in the last {HEATMAP_DAYS} days.</Typography>
+                </Box>
+            )}
+        </Box>
     );
 }

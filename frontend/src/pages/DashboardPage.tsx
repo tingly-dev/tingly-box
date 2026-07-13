@@ -122,8 +122,13 @@ export default function DashboardPage() {
     // Bumped on manual refresh so the fixed-window activity heatmap refetches too.
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
 
-    // By-request view state
-    const [viewMode, setViewMode] = useState<'summary' | 'requests'>('summary');
+    // Chart view mode: the trend chart ('summary'), the per-request list
+    // ('requests', hourly ranges only), or the fixed 180-day activity heatmap
+    // ('activity').
+    const [viewMode, setViewMode] = useState<'summary' | 'requests' | 'activity'>('summary');
+    // "By Request" only exists for hourly ranges; fall back to the trend if a
+    // stale 'requests' selection carries into a daily range.
+    const effectiveViewMode = viewMode === 'requests' && !isHourlyRange ? 'summary' : viewMode;
     const [records, setRecords] = useState<UsageRecord[]>([]);
     const [recordsLoading, setRecordsLoading] = useState(false);
     const [recordsTimeParams, setRecordsTimeParams] = useState<{ start_time: string; end_time: string } | null>(null);
@@ -665,31 +670,33 @@ export default function DashboardPage() {
                         </Grid>
                     </Grid>
 
-                    {/* Chart / Requests toggle */}
+                    {/* Chart view toggle: Summary trend, By Request (hourly only),
+                        or the 180-day Activity heatmap. */}
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        {isHourlyRange && (
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <ToggleButtonGroup
-                                    value={viewMode}
-                                    exclusive
-                                    onChange={(_, v) => v && setViewMode(v)}
-                                    size="small"
-                                    sx={{
-                                        '& .MuiToggleButton-root': {
-                                            px: 1.75,
-                                            py: 0.375,
-                                            fontSize: '0.78rem',
-                                            textTransform: 'none',
-                                        },
-                                    }}
-                                >
-                                    <ToggleButton value="summary">Summary</ToggleButton>
-                                    <ToggleButton value="requests">By Request</ToggleButton>
-                                </ToggleButtonGroup>
-                            </Box>
-                        )}
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <ToggleButtonGroup
+                                value={effectiveViewMode}
+                                exclusive
+                                onChange={(_, v) => v && setViewMode(v)}
+                                size="small"
+                                sx={{
+                                    '& .MuiToggleButton-root': {
+                                        px: 1.75,
+                                        py: 0.375,
+                                        fontSize: '0.78rem',
+                                        textTransform: 'none',
+                                    },
+                                }}
+                            >
+                                <ToggleButton value="summary">Summary</ToggleButton>
+                                {isHourlyRange && <ToggleButton value="requests">By Request</ToggleButton>}
+                                <ToggleButton value="activity">Activity</ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
 
-                        {viewMode === 'summary' ? (
+                        {effectiveViewMode === 'activity' ? (
+                            <DashboardHeatmapSection provider={selectedProvider} refreshKey={heatmapRefresh} />
+                        ) : effectiveViewMode === 'summary' ? (
                             timeRange === 'today' || timeRange === 'yesterday' ? (
                                 <HourlyTokenHistoryChart data={timeSeries} />
                             ) : (
@@ -914,12 +921,6 @@ export default function DashboardPage() {
                     </Paper>
                 </Box>
             </Box>
-
-            {/* Fixed 180-day activity overview — sits with the trend chart as the
-                "time views" group, above the model breakdown table so it's seen
-                without scrolling to the very bottom. Independent of the range
-                selector above; shares only the Provider filter. */}
-            <DashboardHeatmapSection provider={selectedProvider} refreshKey={heatmapRefresh} />
 
             {/* Stats Table */}
             <ServiceStatsTable stats={stats} />
