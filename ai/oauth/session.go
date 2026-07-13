@@ -28,7 +28,7 @@ const (
 type SessionState struct {
 	SessionID    string        `json:"session_id"`
 	Status       SessionStatus `json:"status"`
-	Provider     ai.Issuer     `json:"provider"`
+	Issuer       ai.Issuer     `json:"issuer"`
 	UserID       string        `json:"user_id"`
 	CreatedAt    time.Time     `json:"created_at"`
 	ExpiresAt    time.Time     `json:"expires_at"`
@@ -51,7 +51,7 @@ func (m *Manager) generateSessionID() (string, error) {
 }
 
 // CreateSession creates a new OAuth session with pending status
-func (m *Manager) CreateSession(userID string, provider ai.Issuer) (*SessionState, error) {
+func (m *Manager) CreateSession(userID string, issuer ai.Issuer) (*SessionState, error) {
 	sessionID, err := m.generateSessionID()
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (m *Manager) CreateSession(userID string, provider ai.Issuer) (*SessionStat
 	session := &SessionState{
 		SessionID: sessionID,
 		Status:    SessionStatusPending,
-		Provider:  provider,
+		Issuer:    issuer,
 		UserID:    userID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(10 * time.Minute), // Session expires after 10 minutes
@@ -73,7 +73,7 @@ func (m *Manager) CreateSession(userID string, provider ai.Issuer) (*SessionStat
 
 	logrus.WithFields(logrus.Fields{
 		"session_id": sessionID,
-		"provider":   provider,
+		"issuer":     issuer,
 		"user_id":    userID,
 		"status":     SessionStatusPending,
 	}).Info("[OAuth] Session created")
@@ -103,7 +103,7 @@ func (m *Manager) StoreSession(session *SessionState) {
 
 // UpdateSessionStatus updates the status of a session
 func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, providerUUID string, errMsg string) error {
-	// First get the session to log provider info
+	// First get the session to log issuer info
 	session, err := m.sessionStorage.GetSession(sessionID)
 	if err != nil {
 		logrus.WithField("session_id", sessionID).Warn("[OAuth] Failed to update session: not found")
@@ -118,7 +118,7 @@ func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, pr
 	// Log session status change
 	logEntry := logrus.WithFields(logrus.Fields{
 		"session_id":    sessionID,
-		"provider":      session.Provider,
+		"issuer":        session.Issuer,
 		"new_status":    status,
 		"provider_uuid": providerUUID,
 	})

@@ -16,8 +16,8 @@ import (
 // This constant is used by both the OAuth manager and session manager
 const DefaultSessionExpiry = 10 * time.Minute
 
-// ParseProviderType parses a provider type from string, case-insensitive
-func ParseProviderType(i ai.Issuer) (ai.Issuer, error) {
+// ParseIssuer parses a provider type from string, case-insensitive
+func ParseIssuer(i ai.Issuer) (ai.Issuer, error) {
 	// Validate by checking against known providers
 	switch i {
 	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerCursor, ai.IssuerCopilot:

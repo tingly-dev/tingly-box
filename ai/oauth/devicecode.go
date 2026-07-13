@@ -38,7 +38,7 @@ type DeviceCodeResponse struct {
 // DeviceCodeData holds device code information with metadata
 type DeviceCodeData struct {
 	*DeviceCodeResponse
-	Provider     ai.Issuer
+	Issuer       ai.Issuer
 	UserID       string
 	RedirectTo   string
 	Name         string
@@ -49,19 +49,19 @@ type DeviceCodeData struct {
 
 // InitiateDeviceCodeFlow initiates the Device Code flow and returns device code data
 // RFC 8628: OAuth 2.0 Device Authorization Grant
-func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ai.Issuer, redirectTo string, name string, opts ...Option) (*DeviceCodeData, error) {
+func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, issuer ai.Issuer, redirectTo string, name string, opts ...Option) (*DeviceCodeData, error) {
 	options := applyOptions(opts...)
-	config, ok := m.registry.Get(providerType)
+	config, ok := m.registry.Get(issuer)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, issuer)
 	}
 
 	if config.ClientID == "" {
-		return nil, fmt.Errorf("%w: %s", ErrProviderNotConfigured, providerType)
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotConfigured, issuer)
 	}
 
 	if config.DeviceCodeURL == "" {
-		return nil, fmt.Errorf("provider %s does not support device code flow", providerType)
+		return nil, fmt.Errorf("provider %s does not support device code flow", issuer)
 	}
 
 	// Generate PKCE code verifier if provider uses Device Code PKCE
@@ -111,7 +111,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	now := time.Now()
 	data := &DeviceCodeData{
 		DeviceCodeResponse: &deviceResp,
-		Provider:           providerType,
+		Issuer:             issuer,
 		UserID:             userID,
 		RedirectTo:         redirectTo,
 		Name:               name,
@@ -127,9 +127,9 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 // or the device code expires.
 func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token), opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
-	config, ok := m.registry.Get(data.Provider)
+	config, ok := m.registry.Get(data.Issuer)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, data.Provider)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, data.Issuer)
 	}
 
 	// Default interval is 5 seconds if not specified
@@ -150,7 +150,7 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 	timeoutCtx, cancel := context.WithDeadline(ctx, pollDeadline)
 	defer cancel()
 
-	fmt.Printf("[OAuth] Device code polling started for %s, expires at: %s\n", data.Provider, pollDeadline.Format(time.RFC3339))
+	fmt.Printf("[OAuth] Device code polling started for %s, expires at: %s\n", data.Issuer, pollDeadline.Format(time.RFC3339))
 
 	for {
 		select {
@@ -159,27 +159,27 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-ticker.C:
-			fmt.Printf("[OAuth] Polling token endpoint for %s...\n", data.Provider)
+			fmt.Printf("[OAuth] Polling token endpoint for %s...\n", data.Issuer)
 			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier, options)
 			if err != nil {
 				// Check if error is a transient error that we should retry
 				if isTransientDeviceCodeError(err) {
-					fmt.Printf("[OAuth] Authorization pending for %s, continuing poll...\n", data.Provider)
+					fmt.Printf("[OAuth] Authorization pending for %s, continuing poll...\n", data.Issuer)
 					time.Sleep(interval)
 					continue
 				}
-				fmt.Printf("[OAuth] Polling error for %s: %v\n", data.Provider, err)
+				fmt.Printf("[OAuth] Polling error for %s: %v\n", data.Issuer, err)
 				return nil, err
 			}
 
-			fmt.Printf("[OAuth] Successfully obtained token for %s\n", data.Provider)
+			fmt.Printf("[OAuth] Successfully obtained token for %s\n", data.Issuer)
 			// Successfully got token
-			token.Provider = data.Provider
+			token.Issuer = data.Issuer
 			token.RedirectTo = data.RedirectTo
 			token.Name = data.Name
 
 			// Save token
-			if err := m.config.TokenStorage.SaveToken(data.UserID, data.Provider, token); err != nil {
+			if err := m.config.TokenStorage.SaveToken(data.UserID, data.Issuer, token); err != nil {
 				return nil, fmt.Errorf("failed to save token: %w", err)
 			}
 

@@ -35,7 +35,7 @@ type Manager struct {
 type StateData struct {
 	State         string
 	UserID        string
-	Provider      ai.Issuer
+	Issuer        ai.Issuer
 	ExpiresAt     time.Time
 	Timestamp     int64  // Unix timestamp when state was created
 	ExpiresAtUnix int64  // Unix timestamp when state expires
@@ -198,15 +198,15 @@ func (m *Manager) deleteState(state string) {
 // cleanupExpiredStates is removed - now handled by cleanupPeriodically
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo string, name string, sessionID string, opts ...Option) (string, string, error) {
+func (m *Manager) GetAuthURL(userID string, issuer ai.Issuer, redirectTo string, name string, sessionID string, opts ...Option) (string, string, error) {
 	options := applyOptions(opts...)
-	config, ok := m.registry.Get(providerType)
+	config, ok := m.registry.Get(issuer)
 	if !ok {
-		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
+		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, issuer)
 	}
 
 	if config.ClientID == "" {
-		return "", "", fmt.Errorf("%w: %s", ErrProviderNotConfigured, providerType)
+		return "", "", fmt.Errorf("%w: %s", ErrProviderNotConfigured, issuer)
 	}
 
 	// Generate state
@@ -235,7 +235,7 @@ func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo s
 	if err := m.saveState(&StateData{
 		State:        state,
 		UserID:       userID,
-		Provider:     providerType,
+		Issuer:       issuer,
 		RedirectTo:   redirectTo,
 		Name:         name,
 		CodeVerifier: codeVerifier,
@@ -473,9 +473,9 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request, opts ...O
 	defer m.deleteState(state)
 
 	// Get provider config
-	config, ok := m.registry.Get(stateData.Provider)
+	config, ok := m.registry.Get(stateData.Issuer)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, stateData.Provider)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, stateData.Issuer)
 	}
 
 	// Exchange code for token
@@ -489,13 +489,13 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request, opts ...O
 	if err != nil {
 		return nil, err
 	}
-	token.Provider = stateData.Provider
+	token.Issuer = stateData.Issuer
 	token.RedirectTo = stateData.RedirectTo
 	token.Name = stateData.Name
 	token.SessionID = stateData.SessionID
 
 	// Save token
-	if err := m.config.TokenStorage.SaveToken(stateData.UserID, stateData.Provider, token); err != nil {
+	if err := m.config.TokenStorage.SaveToken(stateData.UserID, stateData.Issuer, token); err != nil {
 		return nil, err
 	}
 
@@ -620,9 +620,9 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 }
 
 // GetToken retrieves a token for a user and provider, refreshing if necessary
-func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.Issuer, opts ...Option) (*Token, error) {
+func (m *Manager) GetToken(ctx context.Context, userID string, issuer ai.Issuer, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
-	token, err := m.config.TokenStorage.GetToken(userID, providerType)
+	token, err := m.config.TokenStorage.GetToken(userID, issuer)
 	if err != nil {
 		return nil, err
 	}
@@ -630,14 +630,14 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.I
 	// Check if token needs refresh
 	if token.ExpiredIn(m.config.TokenExpiryBuffer) {
 		if token.RefreshToken != "" {
-			refreshed, err := m.refreshToken(ctx, providerType, token.RefreshToken, options)
+			refreshed, err := m.refreshToken(ctx, issuer, token.RefreshToken, options)
 			if err == nil {
-				refreshed.Provider = providerType
+				refreshed.Issuer = issuer
 				// Preserve old refresh token if new one is not returned
 				if refreshed.RefreshToken == "" {
 					refreshed.RefreshToken = token.RefreshToken
 				}
-				if err := m.config.TokenStorage.SaveToken(userID, providerType, refreshed); err == nil {
+				if err := m.config.TokenStorage.SaveToken(userID, issuer, refreshed); err == nil {
 					return refreshed, nil
 				}
 			}
@@ -653,10 +653,10 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.I
 }
 
 // refreshToken refreshes an access token using a refresh token
-func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
-	config, ok := m.registry.Get(providerType)
+func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
+	config, ok := m.registry.Get(issuer)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, issuer)
 	}
 
 	// Build common parameters
@@ -668,7 +668,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 
 	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
 	// codex DO NOT require client_secret
-	if providerType != ai.IssuerCodex {
+	if issuer != ai.IssuerCodex {
 		params["client_secret"] = config.ClientSecret
 	}
 
@@ -693,7 +693,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 	token.setExpiryFromExpiresIn()
 
 	// For Codex provider, parse ID token to extract user info
-	if providerType == ai.IssuerCodex {
+	if issuer == ai.IssuerCodex {
 		populateCodexMetadata(token)
 	}
 
@@ -702,15 +702,15 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 
 // RefreshToken refreshes an access token using a refresh token
 // This is a public method that can be called from HTTP handlers
-func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ai.Issuer, refreshToken string, opts ...Option) (*Token, error) {
+func (m *Manager) RefreshToken(ctx context.Context, userID string, issuer ai.Issuer, refreshToken string, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
 	// Refresh the token
-	token, err := m.refreshToken(ctx, providerType, refreshToken, options)
+	token, err := m.refreshToken(ctx, issuer, refreshToken, options)
 	if err != nil {
 		return nil, err
 	}
 
-	token.Provider = providerType
+	token.Issuer = issuer
 
 	// Preserve old refresh token if new one is not returned
 	// Some OAuth providers don't return a new refresh token on each refresh
@@ -719,7 +719,7 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 	}
 
 	// Save the refreshed token
-	if err := m.config.TokenStorage.SaveToken(userID, providerType, token); err != nil {
+	if err := m.config.TokenStorage.SaveToken(userID, issuer, token); err != nil {
 		return nil, fmt.Errorf("failed to save refreshed token: %w", err)
 	}
 
@@ -727,13 +727,13 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 }
 
 // RevokeToken removes a token for a user and provider
-func (m *Manager) RevokeToken(userID string, providerType ai.Issuer) error {
-	return m.config.TokenStorage.DeleteToken(userID, providerType)
+func (m *Manager) RevokeToken(userID string, issuer ai.Issuer) error {
+	return m.config.TokenStorage.DeleteToken(userID, issuer)
 }
 
-// ListProviders returns all providers that have valid tokens for the user
-func (m *Manager) ListProviders(userID string) ([]ai.Issuer, error) {
-	return m.config.TokenStorage.ListProviders(userID)
+// ListIssuers returns all providers that have valid tokens for the user
+func (m *Manager) ListIssuers(userID string) ([]ai.Issuer, error) {
+	return m.config.TokenStorage.ListIssuers(userID)
 }
 
 // GetRegistry returns the provider registry

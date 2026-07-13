@@ -15,7 +15,7 @@ func TestMemorySessionStorage(t *testing.T) {
 	session := &SessionState{
 		SessionID: sessionID,
 		Status:    SessionStatusPending,
-		Provider:  ai.IssuerClaudeCode,
+		Issuer:    ai.IssuerClaudeCode,
 		UserID:    "user123",
 	}
 
@@ -78,7 +78,7 @@ func TestMemorySessionStorageUpdateStatus(t *testing.T) {
 	session := &SessionState{
 		SessionID: sessionID,
 		Status:    SessionStatusPending,
-		Provider:  ai.IssuerClaudeCode,
+		Issuer:    ai.IssuerClaudeCode,
 		UserID:    "user123",
 	}
 
@@ -142,7 +142,7 @@ func TestMemorySessionStorageCleanup(t *testing.T) {
 			session: &SessionState{
 				SessionID: "valid-session-1",
 				Status:    SessionStatusSuccess,
-				Provider:  ai.IssuerClaudeCode,
+				Issuer:    ai.IssuerClaudeCode,
 				UserID:    "user1",
 				CreatedAt: now,
 				ExpiresAt: now.Add(1 * time.Hour),
@@ -153,7 +153,7 @@ func TestMemorySessionStorageCleanup(t *testing.T) {
 			session: &SessionState{
 				SessionID: "expired-session-1",
 				Status:    SessionStatusPending,
-				Provider:  ai.IssuerOpenAI,
+				Issuer:    ai.IssuerOpenAI,
 				UserID:    "user2",
 				CreatedAt: now.Add(-2 * time.Hour),
 				ExpiresAt: now.Add(-1 * time.Hour),
@@ -164,7 +164,7 @@ func TestMemorySessionStorageCleanup(t *testing.T) {
 			session: &SessionState{
 				SessionID: "expired-session-2",
 				Status:    SessionStatusFailed,
-				Provider:  ai.IssuerGemini,
+				Issuer:    ai.IssuerGemini,
 				UserID:    "user3",
 				CreatedAt: now.Add(-10 * time.Minute),
 				ExpiresAt: now.Add(-5 * time.Minute),
@@ -220,7 +220,7 @@ func TestMemorySessionStorageWithNilExpiry(t *testing.T) {
 	session := &SessionState{
 		SessionID: sessionID,
 		Status:    SessionStatusPending,
-		Provider:  ai.IssuerClaudeCode,
+		Issuer:    ai.IssuerClaudeCode,
 		UserID:    "user123",
 		// ExpiresAt will be set by SaveSession to default
 	}

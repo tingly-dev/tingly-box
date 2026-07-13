@@ -23,7 +23,7 @@ func TestMemoryTokenStorage(t *testing.T) {
 		RefreshToken: "test-refresh-token",
 		TokenType:    "Bearer",
 		Expiry:       time.Now().Add(1 * time.Hour),
-		Provider:     provider,
+		Issuer:       provider,
 	}
 
 	// Test SaveToken
@@ -56,11 +56,11 @@ func TestMemoryTokenStorage(t *testing.T) {
 		}
 	})
 
-	// Test ListProviders
-	t.Run("ListProviders", func(t *testing.T) {
-		providers, err := storage.ListProviders(userID)
+	// Test ListIssuers
+	t.Run("ListIssuers", func(t *testing.T) {
+		providers, err := storage.ListIssuers(userID)
 		if err != nil {
-			t.Fatalf("ListProviders failed: %v", err)
+			t.Fatalf("ListIssuers failed: %v", err)
 		}
 		if len(providers) != 1 {
 			t.Errorf("Expected 1 provider, got %d", len(providers))
@@ -343,8 +343,8 @@ func TestManager(t *testing.T) {
 			t.Errorf("Expected userID 'user123', got '%s'", stateData.UserID)
 		}
 
-		if stateData.Provider != ai.IssuerClaudeCode {
-			t.Errorf("Expected provider %s, got %s", ai.IssuerClaudeCode, stateData.Provider)
+		if stateData.Issuer != ai.IssuerClaudeCode {
+			t.Errorf("Expected provider %s, got %s", ai.IssuerClaudeCode, stateData.Issuer)
 		}
 	})
 
@@ -493,8 +493,8 @@ func TestHandleCallback(t *testing.T) {
 			t.Errorf("Expected refresh token 'test-refresh-token', got '%s'", token.RefreshToken)
 		}
 
-		if token.Provider != ai.IssuerClaudeCode {
-			t.Errorf("Expected provider %s, got %s", ai.IssuerClaudeCode, token.Provider)
+		if token.Issuer != ai.IssuerClaudeCode {
+			t.Errorf("Expected provider %s, got %s", ai.IssuerClaudeCode, token.Issuer)
 		}
 
 		// Verify token was saved
@@ -557,7 +557,7 @@ func TestGetToken(t *testing.T) {
 		token := &Token{
 			AccessToken: "test-token",
 			Expiry:      time.Now().Add(1 * time.Hour),
-			Provider:    ai.IssuerClaudeCode,
+			Issuer:      ai.IssuerClaudeCode,
 		}
 		storage.SaveToken("user123", ai.IssuerClaudeCode, token)
 
@@ -593,7 +593,7 @@ func TestRevokeToken(t *testing.T) {
 	storage := NewMemoryTokenStorage()
 	token := &Token{
 		AccessToken: "test-token",
-		Provider:    ai.IssuerClaudeCode,
+		Issuer:      ai.IssuerClaudeCode,
 	}
 	storage.SaveToken("user123", ai.IssuerClaudeCode, token)
 
@@ -620,20 +620,20 @@ func TestListProviders(t *testing.T) {
 	// Add tokens for multiple providers
 	storage.SaveToken("user123", ai.IssuerClaudeCode, &Token{
 		AccessToken: "anthropic-token",
-		Provider:    ai.IssuerClaudeCode,
+		Issuer:      ai.IssuerClaudeCode,
 	})
 	storage.SaveToken("user123", ai.IssuerOpenAI, &Token{
 		AccessToken: "openai-token",
-		Provider:    ai.IssuerOpenAI,
+		Issuer:      ai.IssuerOpenAI,
 	})
 
 	config := DefaultConfig()
 	config.TokenStorage = storage
 	manager := NewManager(WithConfig(config))
 
-	providers, err := manager.ListProviders("user123")
+	providers, err := manager.ListIssuers("user123")
 	if err != nil {
-		t.Fatalf("ListProviders failed: %v", err)
+		t.Fatalf("ListIssuers failed: %v", err)
 	}
 
 	if len(providers) != 2 {
@@ -789,8 +789,8 @@ func TestManager_GetStateData(t *testing.T) {
 			t.Errorf("Expected sessionID 'test-session-id', got '%s'", stateData.SessionID)
 		}
 
-		if stateData.Provider != ai.IssuerClaudeCode {
-			t.Errorf("Expected provider %s, got %s", ai.IssuerClaudeCode, stateData.Provider)
+		if stateData.Issuer != ai.IssuerClaudeCode {
+			t.Errorf("Expected provider %s, got %s", ai.IssuerClaudeCode, stateData.Issuer)
 		}
 	})
 

@@ -26,8 +26,8 @@ type Token struct {
 	// Expiry is the token expiration time (zero if no expiry)
 	Expiry time.Time `json:"-"`
 
-	// Provider is the provider that issued this token
-	Provider ai.Issuer `json:"-"`
+	// Issuer is the provider that issued this token
+	Issuer ai.Issuer `json:"-"`
 
 	// RedirectTo is the optional URL to redirect to after successful OAuth
 	RedirectTo string `json:"-"`
