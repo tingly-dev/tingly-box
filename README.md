@@ -321,8 +321,8 @@ task start
 # or directly:
 go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
 
-# Opt into the Protocol Stage pipeline (currently Chat→Beta and Beta→Beta;
-# unsupported routes, including Anthropic V1, remain on legacy)
+# Opt into the Protocol Stage pipeline (currently Chat→Beta, Beta→Beta, and
+# Beta→Chat; unsupported routes, including Anthropic V1, remain on legacy)
 go run ./cli/tingly-box start --stage
 ```
 

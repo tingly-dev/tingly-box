@@ -20,6 +20,9 @@ import (
 type ChatOptions struct {
 	Compatible         bool
 	DisableStreamUsage bool
+	// ResponseModel overrides the source-visible Anthropic response model while
+	// leaving the provider-bound request model unchanged.
+	ResponseModel string
 }
 
 // NewV1ToOpenAIChat returns an immutable Anthropic v1 -> OpenAI Chat Bridge.
@@ -86,6 +89,9 @@ func (b *chatBridge) Open(_ context.Context, call stage.Call, operation stage.Op
 	}
 	if chatRequest == nil {
 		return nil, fmt.Errorf("open Anthropic to OpenAI Chat bridge %q: request conversion returned nil", b.source)
+	}
+	if b.options.ResponseModel != "" {
+		sourceModel = b.options.ResponseModel
 	}
 
 	targetCall := call

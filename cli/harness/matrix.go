@@ -60,8 +60,9 @@ func (*MatrixCmd) Help() string {
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
 
-  # Exercise production Stage selection (currently Chat → Anthropic Beta)
+  # Exercise production Stage selection (Chat → Beta, Beta → Beta, Beta → Chat)
   harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta
+  harness matrix --mode=single --stage --source=anthropic_beta --target=openai_chat
 
   # Drive requests through real client stacks instead of raw HTTP
   harness matrix --mode=single --client=gosdk    # official Go SDKs, in-process

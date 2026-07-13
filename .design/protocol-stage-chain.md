@@ -357,10 +357,11 @@ stages; the provider endpoint and HTTP adapter retain their existing ownership.
 Unsupported protocol pairs and MCP-enabled requests remain on legacy. Once a
 Stage attempt has started, it is never replayed through legacy.
 
-The next native route is explicitly `anthropic_beta → anthropic_beta`.
-`anthropic_v1` remains a separate protocol and does not inherit Beta's identity
-registration. The Beta route stays on legacy whenever MCP, Guardrails, or V2
-protocol recording owns part of the request/response lifecycle.
+The next native routes are explicitly `anthropic_beta → anthropic_beta` and
+`anthropic_beta → openai_chat`. `anthropic_v1` remains a separate protocol and
+does not inherit Beta's identity or Bridge registrations. The Beta routes stay
+on legacy whenever MCP, Guardrails, or V2 protocol recording owns part of the
+request/response lifecycle.
 
 ### Phase 6 — Legacy removal
 
@@ -441,10 +442,10 @@ streaming modes.
 Runtime integration is opt-in through `--stage`. For each OpenAI Chat provider
 attempt whose concrete target is Anthropic Beta, the server builds a fresh Chat
 preparation → Bridge → Beta provider-finalization → provider endpoint topology.
-For a native Anthropic Beta provider attempt, it builds Beta preparation → Beta
-provider-finalization → provider endpoint without changing protocol. Streaming
-and complete responses return through the same endpoint chain and the outer
-HTTP adapter. Anthropic V1, capability-missing pairs, feature-owned legacy
-lifecycles, and the explicit response-roundtrip diagnostic remain on legacy.
-Debug routing exposes the concrete
-`X-Tingly-Protocol-Pipeline: stage|legacy` decision.
+For an Anthropic Beta request, it builds Beta preparation followed by either
+the Beta identity path or the Beta → OpenAI Chat Bridge, then the concrete
+provider-finalization and endpoint. Streaming and complete responses return
+through the same endpoint chain and the outer Beta HTTP adapter. Anthropic V1,
+capability-missing pairs, feature-owned legacy lifecycles, and the explicit
+response-roundtrip diagnostic remain on legacy. Debug routing exposes the
+concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.

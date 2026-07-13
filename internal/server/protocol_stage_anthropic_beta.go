@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/recording"
@@ -21,7 +22,7 @@ import (
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-// tryProtocolStageAnthropicBeta selects the explicitly registered native Beta
+// tryProtocolStageAnthropicBeta selects an explicitly registered Beta-source
 // route for one provider attempt. Anthropic V1 is intentionally not included:
 // V1 and Beta remain distinct request, response, and streaming protocols.
 func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
@@ -69,16 +70,21 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 
 	scenarioFlags, clientTransforms := protocolStageAnthropicBetaClientTransforms(scenarioConfig, ruleFlags)
 	providerTransforms := appendProtocolStageTransforms(
-		[]transform.Transform{transform.NewConsistencyTransform(protocol.TypeAnthropicBeta)},
+		[]transform.Transform{transform.NewConsistencyTransform(target)},
 		RulePreVendorTransforms(ruleFlags),
 		[]transform.Transform{vendorTransformShared},
 	)
-	registry, err := protocolstage.NewBridgeRegistry(protocolstage.NewIdentityBridge(protocol.TypeAnthropicBeta))
+	terminal, registry, err := ph.protocolStageAnthropicBetaTarget(
+		target,
+		provider,
+		actualModel,
+		responseModel,
+		scenarioFlags,
+	)
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build Anthropic Beta Protocol Stage registry: %w", err))
+		ph.FailAttemptSetup(c, err)
 		return true
 	}
-	terminal := &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}
 	stages := []protocolstage.Stage{
 		newProtocolTransformStage(
 			"client_prepare",
@@ -91,7 +97,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 		),
 		newProtocolTransformStage(
 			"provider_finalize",
-			protocol.TypeAnthropicBeta,
+			target,
 			provider,
 			scenarioFlags,
 			isStreaming,
@@ -129,6 +135,37 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 	}
 	ph.serveProtocolStageAnthropicBetaComplete(c, endpoint, call, responseModel, provider, actualModel, rule, recorder)
 	return true
+}
+
+func (ph *ProtocolHandler) protocolStageAnthropicBetaTarget(
+	target protocol.APIType,
+	provider *typ.Provider,
+	actualModel string,
+	responseModel string,
+	scenarioFlags *typ.ScenarioFlags,
+) (protocolstage.Endpoint, *protocolstage.BridgeRegistry, error) {
+	disableStreamUsage := scenarioFlags != nil && scenarioFlags.SkipUsage
+	betaToChat := anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{
+		Compatible:         true,
+		DisableStreamUsage: disableStreamUsage,
+		ResponseModel:      responseModel,
+	})
+	registry, err := protocolstage.NewBridgeRegistry(
+		protocolstage.NewIdentityBridge(protocol.TypeAnthropicBeta),
+		betaToChat,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build Anthropic Beta Protocol Stage registry: %w", err)
+	}
+
+	switch target {
+	case protocol.TypeAnthropicBeta:
+		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeOpenAIChat:
+		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	default:
+		return nil, nil, fmt.Errorf("Anthropic Beta Protocol Stage target %q is not implemented", target)
+	}
 }
 
 func protocolStageAnthropicBetaClientTransforms(
@@ -279,11 +316,11 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 			return
 		}
 
-		betaEvent, ok := event.Value.(anthropic.BetaRawMessageStreamEventUnion)
-		if !ok {
+		eventType, payload, eventErr := protocolStageAnthropicBetaEventJSON(event.Value, responseModel)
+		if eventErr != nil {
 			streamErr := fmt.Errorf("Anthropic Beta Protocol Stage stream emitted %T", event.Value)
 			if !wrote {
-				ph.FailAttemptSetup(c, streamErr)
+				ph.FailAttemptSetup(c, errors.Join(streamErr, eventErr))
 			} else {
 				protocolstream.MarshalAndSendErrorEvent(c, "Protocol Stage stream emitted an invalid event", "stream_error", "stream_failed")
 				flusher.Flush()
@@ -293,21 +330,11 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 			}
 			return
 		}
-		payload, err := protocolStageAnthropicBetaEventJSON(betaEvent, responseModel)
-		if err != nil {
-			if !wrote {
-				ph.FailAttemptSetup(c, err)
-			} else {
-				protocolstream.MarshalAndSendErrorEvent(c, "Protocol Stage stream event conversion failed", "stream_error", "stream_failed")
-				flusher.Flush()
-			}
-			return
-		}
 		if !wrote {
 			setProtocolStageAnthropicSSEHeaders(c)
 			wrote = true
 		}
-		switch betaEvent.Type {
+		switch eventType {
 		case "message_start":
 			sawMessageStart = true
 		case "message_stop":
@@ -315,7 +342,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 		case "content_block_delta":
 			protocol.MarkFirstToken(c)
 		}
-		c.SSEvent(betaEvent.Type, string(payload))
+		c.SSEvent(eventType, string(payload))
 		flusher.Flush()
 	}
 
@@ -332,40 +359,58 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 	}
 }
 
-func protocolStageAnthropicBetaEventJSON(event anthropic.BetaRawMessageStreamEventUnion, responseModel string) ([]byte, error) {
-	raw := []byte(event.RawJSON())
-	if len(raw) == 0 {
-		var err error
-		raw, err = json.Marshal(event)
-		if err != nil {
-			return nil, fmt.Errorf("marshal Anthropic Beta stream event: %w", err)
+func protocolStageAnthropicBetaEventJSON(value any, responseModel string) (string, []byte, error) {
+	var eventType string
+	var raw []byte
+	switch event := value.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		eventType = event.Type
+		raw = []byte(event.RawJSON())
+		if len(raw) == 0 {
+			var err error
+			raw, err = json.Marshal(event)
+			if err != nil {
+				return "", nil, fmt.Errorf("marshal Anthropic Beta stream event: %w", err)
+			}
 		}
+	case protocolstream.AnthropicEvent:
+		eventType = event.Type
+		var err error
+		raw, err = json.Marshal(event.Data)
+		if err != nil {
+			return "", nil, fmt.Errorf("marshal converted Anthropic Beta stream event: %w", err)
+		}
+	default:
+		return "", nil, fmt.Errorf("unsupported Anthropic Beta stream event %T", value)
 	}
-	if event.Type != "message_start" {
-		return raw, nil
+	if eventType == "" {
+		return "", nil, fmt.Errorf("Anthropic Beta stream event has empty type")
+	}
+	if eventType != "message_start" {
+		return eventType, raw, nil
 	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil {
-		return nil, fmt.Errorf("decode Anthropic Beta message_start: %w", err)
+		return "", nil, fmt.Errorf("decode Anthropic Beta message_start: %w", err)
 	}
 	var message map[string]json.RawMessage
 	if err := json.Unmarshal(object["message"], &message); err != nil {
-		return nil, fmt.Errorf("decode Anthropic Beta message_start.message: %w", err)
+		return "", nil, fmt.Errorf("decode Anthropic Beta message_start.message: %w", err)
 	}
 	model, err := json.Marshal(responseModel)
 	if err != nil {
-		return nil, fmt.Errorf("marshal Anthropic Beta stream response model: %w", err)
+		return "", nil, fmt.Errorf("marshal Anthropic Beta stream response model: %w", err)
 	}
 	message["model"] = model
 	object["message"], err = json.Marshal(message)
 	if err != nil {
-		return nil, fmt.Errorf("encode Anthropic Beta message_start.message: %w", err)
+		return "", nil, fmt.Errorf("encode Anthropic Beta message_start.message: %w", err)
 	}
 	payload, err := json.Marshal(object)
 	if err != nil {
-		return nil, fmt.Errorf("encode Anthropic Beta message_start: %w", err)
+		return "", nil, fmt.Errorf("encode Anthropic Beta message_start: %w", err)
 	}
-	return payload, nil
+	return eventType, payload, nil
 }
 
 func setProtocolStageAnthropicSSEHeaders(c *gin.Context) {

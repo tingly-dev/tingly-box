@@ -5,6 +5,7 @@ import (
 
 	protocol "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/openaibridge"
 )
 
@@ -22,6 +23,7 @@ type ProtocolStageSelector struct {
 func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 	registry, err := stage.NewBridgeRegistry(
 		stage.NewIdentityBridge(protocol.TypeAnthropicBeta),
+		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),
 	)
 	if err != nil {

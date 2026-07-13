@@ -188,6 +188,41 @@ func TestAnthropicToOpenAIChatComplete(t *testing.T) {
 	}
 }
 
+func TestAnthropicToOpenAIChatSeparatesProviderAndResponseModels(t *testing.T) {
+	t.Parallel()
+
+	request := &anthropic.BetaMessageNewParams{
+		Model:     "provider-model",
+		MaxTokens: 64,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hello"))},
+	}
+	completion := decodeChatCompletion(t, `{
+        "id":"chat-models",
+        "model":"provider-model",
+        "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
+        "usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}
+    }`)
+	terminal := &memoryEndpoint{
+		api: protocol.TypeOpenAIChat,
+		complete: func(_ context.Context, call stage.Call) (*stage.Response, error) {
+			chatRequest := requireChatRequest(t, call)
+			if chatRequest.Model != "provider-model" {
+				t.Fatalf("provider request model = %q", chatRequest.Model)
+			}
+			return &stage.Response{Value: completion}, nil
+		},
+	}
+	bridge := NewBetaToOpenAIChat(ChatOptions{Compatible: true, ResponseModel: "client-alias"})
+	response, err := mustAdapt(t, terminal, bridge).Complete(context.Background(), stage.Call{Request: request})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	message, ok := response.Value.(*anthropic.BetaMessage)
+	if !ok || string(message.Model) != "client-alias" || response.Model != "client-alias" {
+		t.Fatalf("source-visible models = message:%v response:%q", message, response.Model)
+	}
+}
+
 func TestAnthropicIdentityStageThenOpenAIChatTopology(t *testing.T) {
 	t.Parallel()
 
