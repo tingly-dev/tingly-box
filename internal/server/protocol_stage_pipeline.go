@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -136,10 +137,10 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		},
 	}
 	if isStreaming {
-		ph.serveProtocolStageOpenAIChatStream(c, endpoint, call, nil)
+		ph.serveProtocolStageOpenAIChatStream(c, endpoint, call, responseModel, disableStreamUsage, nil)
 		return true
 	}
-	ph.serveProtocolStageOpenAIChatComplete(c, endpoint, call, provider, actualModel, disableStreamUsage, nil)
+	ph.serveProtocolStageOpenAIChatComplete(c, endpoint, call, responseModel, provider, actualModel, disableStreamUsage, nil)
 	return true
 }
 
@@ -151,6 +152,7 @@ func (ph *ProtocolHandler) protocolStageOpenAIChatTarget(
 	disableStreamUsage bool,
 ) (protocolstage.Endpoint, *protocolstage.BridgeRegistry, error) {
 	registry, err := protocolstage.NewBridgeRegistry(
+		protocolstage.NewIdentityBridge(protocol.TypeOpenAIChat),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{
 			DefaultMaxTokens:   4096,
 			DisableStreamUsage: disableStreamUsage,
@@ -166,6 +168,8 @@ func (ph *ProtocolHandler) protocolStageOpenAIChatTarget(
 		return nil, nil, fmt.Errorf("build OpenAI Chat Protocol Stage registry: %w", err)
 	}
 	switch target {
+	case protocol.TypeOpenAIChat:
+		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeAnthropicBeta:
 		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeOpenAIResponses:
@@ -475,6 +479,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
 	c *gin.Context,
 	endpoint protocolstage.Endpoint,
 	call protocolstage.Call,
+	responseModel string,
 	provider *typ.Provider,
 	actualModel string,
 	disableUsage bool,
@@ -496,6 +501,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
 		return
 	}
 	value = ops.ApplyResponseTransforms(value, provider.APIBase, actualModel)
+	value["model"] = responseModel
 	if disableUsage {
 		delete(value, "usage")
 	}
@@ -518,15 +524,36 @@ func protocolStageChatResponseMap(value any) (map[string]any, error) {
 			return nil, fmt.Errorf("Protocol Stage OpenAI Chat response is nil")
 		}
 		return response.ToMap(), nil
+	case openai.ChatCompletion:
+		return protocolStageChatSDKMap(response)
+	case *openai.ChatCompletion:
+		if response == nil {
+			return nil, fmt.Errorf("Protocol Stage OpenAI Chat response is nil")
+		}
+		return protocolStageChatSDKMap(response)
 	default:
 		return nil, fmt.Errorf("Protocol Stage OpenAI Chat response has type %T", value)
 	}
+}
+
+func protocolStageChatSDKMap(value any) (map[string]any, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Protocol Stage OpenAI Chat response: %w", err)
+	}
+	var result wire.ChatCompletionWire
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("decode Protocol Stage OpenAI Chat response: %w", err)
+	}
+	return result.ToMap(), nil
 }
 
 func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 	c *gin.Context,
 	endpoint protocolstage.Endpoint,
 	call protocolstage.Call,
+	responseModel string,
+	disableUsage bool,
 	recorder *recording.ProtocolRecorder,
 ) {
 	flusher, ok := c.Writer.(http.Flusher)
@@ -578,9 +605,9 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 			return
 		}
 
-		chunk, ok := event.Value.(wire.ChatStreamChunk)
-		if !ok {
-			streamErr := fmt.Errorf("Protocol Stage stream emitted %T, want wire.ChatStreamChunk", event.Value)
+		chunk, chunkErr := protocolStageChatStreamChunk(event.Value)
+		if chunkErr != nil {
+			streamErr := chunkErr
 			result := stream.Result()
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, streamErr)
@@ -600,6 +627,13 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 				recorder.RecordError(streamErr)
 			}
 			return
+		}
+		chunk.Model = responseModel
+		if disableUsage {
+			chunk.Usage = nil
+			if len(chunk.Choices) == 0 {
+				continue
+			}
 		}
 		if !wrote {
 			setProtocolStageSSEHeaders(c)
@@ -621,6 +655,39 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 	if result.Usage != nil && result.Usage.HasUsage() {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
+}
+
+func protocolStageChatStreamChunk(value any) (wire.ChatStreamChunk, error) {
+	switch chunk := value.(type) {
+	case wire.ChatStreamChunk:
+		return chunk, nil
+	case *wire.ChatStreamChunk:
+		if chunk == nil {
+			return wire.ChatStreamChunk{}, fmt.Errorf("Protocol Stage OpenAI Chat stream chunk is nil")
+		}
+		return *chunk, nil
+	case openai.ChatCompletionChunk:
+		return protocolStageChatSDKChunk(chunk)
+	case *openai.ChatCompletionChunk:
+		if chunk == nil {
+			return wire.ChatStreamChunk{}, fmt.Errorf("Protocol Stage OpenAI Chat stream chunk is nil")
+		}
+		return protocolStageChatSDKChunk(chunk)
+	default:
+		return wire.ChatStreamChunk{}, fmt.Errorf("Protocol Stage stream emitted %T, want Chat stream chunk", value)
+	}
+}
+
+func protocolStageChatSDKChunk(value any) (wire.ChatStreamChunk, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return wire.ChatStreamChunk{}, fmt.Errorf("marshal Protocol Stage OpenAI Chat stream chunk: %w", err)
+	}
+	var result wire.ChatStreamChunk
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return wire.ChatStreamChunk{}, fmt.Errorf("decode Protocol Stage OpenAI Chat stream chunk: %w", err)
+	}
+	return result, nil
 }
 
 func setProtocolStageSSEHeaders(c *gin.Context) {

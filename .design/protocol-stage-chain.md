@@ -3,7 +3,7 @@
 > Status: Phases 1–2 and the first Phase 3 canary are implemented additively.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
-> Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat → OpenAI Responses.
+> Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
 > Anthropic Beta requests can include the Beta-native Guardrail Stage; MCP,
 > protocol recording, unsupported routes, and V1 Guardrails remain on legacy.
 >
@@ -19,7 +19,7 @@ lifecycle before the provider is called.
 | Phase | Status | Current boundary |
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
-| 2 — Bridges and production routes | Expanding additively | Eleven opt-in routes listed below; OpenAI Chat identity stays legacy |
+| 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
@@ -35,6 +35,7 @@ Production route selection with `--stage`:
 | `anthropic_v1` | `anthropic_v1` | Stage | Legacy | Legacy | Legacy |
 | `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy | Legacy | Legacy |
 | `anthropic_v1` | `openai_responses` | Stage through V1→Responses Bridge | Legacy | Legacy | Legacy |
+| `openai_chat` | `openai_chat` | Stage | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
 | `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
 | `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
 | `openai_responses` | `openai_responses` | Stage | Not attached on the Responses handler | Legacy | Not attached on the Responses handler |
@@ -42,9 +43,10 @@ Production route selection with `--stage`:
 | `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Not attached on the Responses handler | Legacy | Not attached on the Responses handler |
 | Any other pair | Any | Legacy | Legacy | Legacy | Legacy |
 
-The Responses source rollout covers native passthrough, Anthropic Beta, and
-OpenAI Chat. Reverse target coverage now includes Beta, V1, and Chat; OpenAI
-Chat identity remains the last protocol-pair checkpoint. Phase 4
+The planned protocol-pair rollout is complete: the three provider-facing
+protocols (Beta, Chat, and Responses) are available from each supported source,
+while Anthropic V1 remains deliberately distinct and native only to V1 clients.
+Phase 4
 Tool Loop remains deferred until this protocol surface is complete enough to
 host it without Responses-specific branches.
 
@@ -542,8 +544,9 @@ stream events to Beta before outer stages run. Consequently the existing
 Responses-backed providers without acquiring Responses-specific logic.
 Chat → Responses converts the Chat request before provider finalization and
 restores Responses complete/stream results to Chat wire DTOs. Its outer Chat
-adapter therefore remains unchanged, while Chat identity remains deliberately
-unregistered.
+adapter therefore remains unchanged. Chat identity uses an explicit identity
+registration; the outer adapter accepts both provider SDK values and
+Bridge-produced wire DTOs, then applies the same public-model rewrite.
 V1 → Responses uses the same Responses provider boundary but a distinct V1
 Bridge registration and typed V1 response recovery. V1 Guardrails, MCP, and
 recording continue to select the entire legacy lifecycle before Stage starts.
@@ -628,6 +631,14 @@ Verification recorded for the Anthropic V1 → Responses checkpoint:
 - the combined raw/Go SDK full route matrix reports 40 cases: 33 passed, 7
   expected client/scenario capability skips, and 0 failures.
 
+Verification recorded for the OpenAI Chat identity checkpoint:
+
+- the exact-pair selector and real HTTP tests cover complete and stream Stage
+  routing plus public model rewriting;
+- the complete route/harness section reports 36 cases: 34 passed, 2 expected
+  streaming-only skips, and 0 failures;
+- the official OpenAI Go SDK text matrix passes complete and stream 2/2.
+
 Commit checkpoints, oldest to newest:
 
 | Commit | Checkpoint |
@@ -643,4 +654,5 @@ Commit checkpoints, oldest to newest:
 | `58cc33247` | OpenAI Responses → OpenAI Chat Stage route |
 | `e3bb6ba72` | Anthropic Beta → OpenAI Responses Stage route |
 | `9dcdf3f7e` | OpenAI Chat → OpenAI Responses Stage route |
-| current checkpoint | Anthropic V1 → OpenAI Responses Stage route |
+| `690012613` | Anthropic V1 → OpenAI Responses Stage route |
+| current checkpoint | Native OpenAI Chat Stage route |

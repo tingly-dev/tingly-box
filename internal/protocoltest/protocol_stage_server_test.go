@@ -31,6 +31,8 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		{name: "stage chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage"},
 		{name: "stage chat to responses nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIResponses, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage chat to responses stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIResponses, streaming: true, wantHeader: "stage", wantResponseModel: true},
+		{name: "stage chat identity nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, wantHeader: "stage", wantResponseModel: true},
+		{name: "stage chat identity stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage beta native nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage beta native stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage beta to chat nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, wantHeader: "stage", wantResponseModel: true},
@@ -49,7 +51,6 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		{name: "stage responses to beta stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage responses to chat nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage responses to chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, streaming: true, wantHeader: "stage", wantResponseModel: true},
-		{name: "stage unsupported chat identity stays legacy", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
 		{
 			name:       "stage beta keeps MCP on legacy",
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
@@ -228,41 +229,45 @@ func sendProtocolStageProbe(t *testing.T, env *TestEnv, path string, body []byte
 func TestServerProtocolStagePreservesSkipUsageFlag(t *testing.T) {
 	t.Parallel()
 
-	for _, streaming := range []bool{false, true} {
-		name := "nonstream"
-		if streaming {
-			name = "stream"
+	for _, target := range []protocol.APIType{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat} {
+		target := target
+		for _, streaming := range []bool{false, true} {
+			streaming := streaming
+			name := string(target) + "/nonstream"
+			if streaming {
+				name = string(target) + "/stream"
+			}
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage())
+				scenario := TextScenario()
+				model := env.SetupRouteWithFlags(
+					protocol.TypeOpenAIChat,
+					target,
+					scenario,
+					typ.RuleFlags{SkipUsage: true},
+				)
+				path, body := buildRequest(protocol.TypeOpenAIChat, model, streaming)
+				result, err := env.dispatch(
+					protocol.TypeOpenAIChat,
+					target,
+					scenario.Name,
+					path,
+					body,
+					map[string]string{"X-Tingly-Debug-Routing": "1"},
+					streaming,
+				)
+				if err != nil {
+					t.Fatalf("dispatch: %v", err)
+				}
+				if result.HTTPStatus != http.StatusOK {
+					t.Fatalf("status = %d", result.HTTPStatus)
+				}
+				if strings.Contains(string(result.RawBody), `"usage"`) {
+					t.Fatalf("response contains usage: %s", result.RawBody)
+				}
+			})
 		}
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage())
-			scenario := TextScenario()
-			model := env.SetupRouteWithFlags(
-				protocol.TypeOpenAIChat,
-				protocol.TypeAnthropicBeta,
-				scenario,
-				typ.RuleFlags{SkipUsage: true},
-			)
-			path, body := buildRequest(protocol.TypeOpenAIChat, model, streaming)
-			result, err := env.dispatch(
-				protocol.TypeOpenAIChat,
-				protocol.TypeAnthropicBeta,
-				scenario.Name,
-				path,
-				body,
-				map[string]string{"X-Tingly-Debug-Routing": "1"},
-				streaming,
-			)
-			if err != nil {
-				t.Fatalf("dispatch: %v", err)
-			}
-			if result.HTTPStatus != http.StatusOK {
-				t.Fatalf("status = %d", result.HTTPStatus)
-			}
-			if strings.Contains(string(result.RawBody), `"usage"`) {
-				t.Fatalf("response contains usage: %s", result.RawBody)
-			}
-		})
 	}
 }
 

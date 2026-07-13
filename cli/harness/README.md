@@ -72,6 +72,7 @@ go build -o harness ./cli/harness
 ./harness matrix --mode=bridges  # dormant Stage/Bridge topology, in-process
 ./harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta  # real server Stage path
 ./harness matrix --mode=single --stage --source=openai_chat --target=openai_responses  # Chat→Responses Stage path
+./harness matrix --mode=single --stage --source=openai_chat --target=openai_chat  # native Chat Stage path
 ./harness matrix --mode=single --stage --source=anthropic_v1 --target=openai_responses  # V1→Responses Stage path
 ./harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta  # native Beta Stage path
 
@@ -144,11 +145,11 @@ because none of those surfaces are traversed by the in-process topology.
 
 This is converter/topology evidence, not a substitute for the production HTTP
 single-hop section. Use `matrix --mode=single --stage` to enable the real server
-selector; the current production Stage routes are OpenAI Chat → Anthropic Beta/OpenAI Responses,
+selector; the current production Stage routes are OpenAI Chat → OpenAI Chat/Anthropic Beta/OpenAI Responses,
 Anthropic Beta → Anthropic Beta/OpenAI Chat/OpenAI Responses, Anthropic V1 →
 Anthropic V1/OpenAI Chat/OpenAI Responses, and OpenAI Responses → OpenAI
 Responses/Anthropic Beta/OpenAI Chat. V1 remains a distinct protocol with
-separate Bridges; OpenAI Chat identity remains on legacy.
+separate Bridges. This planned protocol-pair surface is now complete.
 
 ---
 
