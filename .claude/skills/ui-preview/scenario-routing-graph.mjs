@@ -52,7 +52,6 @@
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { readFileSync } from 'fs';
-import { screenshotOptimized } from './optimize-image.mjs';
 const require = createRequire(join(process.cwd(), 'noop.js'));
 const { chromium } = require('playwright');
 
@@ -151,7 +150,7 @@ async function shoot(browser, mode) {
     // Allow extra time for the real API data to load and React to settle.
     await page.waitForTimeout(4000);
 
-    await screenshotOptimized(page, { path: `/tmp/scenario-routing-${mode}.png`, fullPage: true });
+    await page.screenshot({ path: `/tmp/scenario-routing-${mode}.png`, fullPage: true });
 
     // Tight crop of the smart-routing rule card (has both the model + "Add Smart Rule").
     const tagged = await page.evaluate(() => {
@@ -166,7 +165,7 @@ async function shoot(browser, mode) {
         return true;
     });
     if (tagged) {
-        await screenshotOptimized(page.locator('#__smartcard'), { path: `/tmp/scenario-routing-smart-${mode}.png` });
+        await page.locator('#__smartcard').screenshot({ path: `/tmp/scenario-routing-smart-${mode}.png` });
     } else {
         console.log(`[${mode}] smart card not found (is data seeded + separate mode active?)`);
     }

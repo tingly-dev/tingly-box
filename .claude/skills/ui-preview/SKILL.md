@@ -82,36 +82,27 @@ const { chromium } = createRequire('file://' + process.cwd() + '/')('playwright'
 
 Each script is self-documenting — see its file header for usage, outputs, and known issues.
 
-## Screenshot size policy
+## Shrinking screenshots (optional)
 
-Screenshots are product documentation artifacts, so keep visual quality high while
-avoiding oversized repo exports. All committed screenshot scripts must write images
-through `screenshotOptimized()` from `optimize-image.mjs` instead of calling
-`page.screenshot()` directly. The helper captures the PNG/JPEG, then replaces it
-only if a smaller optimized image is produced.
+Screenshots are captured with Playwright's plain `page.screenshot()` — the skill
+deliberately does **not** compress images internally, because optimizers depend on
+host tooling that is not guaranteed in the run environment. If a PNG is large and
+you want to trim it before committing, run any optimizer you have available on the
+captured file afterwards. None of these are required:
 
-Optimization is intentionally best-effort and non-blocking:
-- PNG: `pngquant --quality 80-95 --strip` when available, with an ImageMagick
-  lossless fallback/pass.
-- JPEG: ImageMagick `-strip -quality 82` when available.
-- If optimizers are absent or do not make the file smaller, the original capture
-  is kept.
+- `pngquant --quality 80-95 --strip --force --out foo.png foo.png` (lossy, smallest PNGs)
+- `oxipng -o 4 --strip safe foo.png` (lossless)
+- Node: `sharp(file).png({ quality: 80, palette: true }).toFile(out)`
+- Python: `Pillow` → `img.save(out, optimize=True)`
 
-For one-off scripts, import and use:
-
-```js
-import { screenshotOptimized } from '../.agents/skills/ui-preview/optimize-image.mjs';
-await screenshotOptimized(page, { path: '/tmp/page.png', fullPage: false });
-```
+Prefer keeping the original capture when quality matters more than size.
 
 ## After capturing
 
-1. Check the console for `optimized ...` lines; unexpectedly huge PNGs usually
-   mean the script bypassed `screenshotOptimized()`.
-2. `SendUserFile` the PNGs so the user can review them.
-3. For ad-hoc `screenshot.mjs`: delete it before committing — the stop hook will flag it.
-4. `docs/` is gitignored; force-add images: `git add -f docs/images/`.
-5. Free the port: `fuser -k 3000/tcp` or `pkill -f "vite --mode mock"`.
+1. `SendUserFile` the PNGs so the user can review them.
+2. For ad-hoc `screenshot.mjs`: delete it before committing — the stop hook will flag it.
+3. `docs/` is gitignored; force-add images: `git add -f docs/images/`.
+4. Free the port: `fuser -k 3000/tcp` or `pkill -f "vite --mode mock"`.
 
 ## Troubleshooting
 
