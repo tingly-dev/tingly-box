@@ -19,6 +19,14 @@ type responsesToChatNonStreamState struct {
 // HandleResponsesToOpenAIChat writes a Responses API response as OpenAI Chat format.
 // Corresponds to stream.HandleResponsesToOpenAIChatStream.
 func HandleResponsesToOpenAIChat(hc *protocol.HandleContext, rs *responses.Response) (map[string]any, *protocol.TokenUsage, error) {
+	chatResp := BuildOpenAIChatPayloadFromResponses(rs, hc.ResponseModel)
+	hc.GinContext.JSON(http.StatusOK, chatResp)
+	return chatResp, usageconv.FromOpenAIResponses(rs.Usage), nil
+}
+
+// BuildOpenAIChatPayloadFromResponses converts a complete Responses result to
+// the minimal Chat Completions wire shape without writing an HTTP response.
+func BuildOpenAIChatPayloadFromResponses(rs *responses.Response, responseModel string) map[string]any {
 	state := buildResponsesToChatNonStreamState(rs)
 	message := state.message()
 
@@ -56,12 +64,11 @@ func HandleResponsesToOpenAIChat(hc *protocol.HandleContext, rs *responses.Respo
 		"id":      rs.ID,
 		"object":  "chat.completion",
 		"created": int64(rs.CreatedAt),
-		"model":   hc.ResponseModel,
+		"model":   responseModel,
 		"choices": choices,
 		"usage":   usage,
 	}
-	hc.GinContext.JSON(http.StatusOK, chatResp)
-	return chatResp, usageconv.FromOpenAIResponses(rs.Usage), nil
+	return chatResp
 }
 
 func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChatNonStreamState {

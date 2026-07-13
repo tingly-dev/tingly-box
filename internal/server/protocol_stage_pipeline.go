@@ -65,7 +65,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	}
 	// The response-roundtrip header is an explicit legacy diagnostic. Preserve
 	// that exact experiment instead of changing its semantics under --stage.
-	if ShouldRoundtripResponse(c, "anthropic") {
+	if target == protocol.TypeAnthropicBeta && ShouldRoundtripResponse(c, "anthropic") {
 		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "response roundtrip diagnostic requires the legacy pipeline")
 		return false
 	}
@@ -78,23 +78,19 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	preBase := RulePreBaseTransforms(ruleFlags)
 	preVendor := RulePreVendorTransforms(ruleFlags)
 	disableStreamUsage := ruleFlags.SkipUsage || ruleFlags.CursorCompat
-	bridge := openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{
-		DefaultMaxTokens:   4096,
-		DisableStreamUsage: disableStreamUsage,
-		ResponseModel:      responseModel,
-	})
-	registry, err := protocolstage.NewBridgeRegistry(bridge)
+	terminal, registry, err := ph.protocolStageOpenAIChatTarget(
+		target,
+		provider,
+		actualModel,
+		responseModel,
+		disableStreamUsage,
+	)
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build Protocol Stage registry: %w", err))
+		ph.FailAttemptSetup(c, err)
 		return true
 	}
 
 	scenarioFlags := scenarioFlagsOrNil(scenarioConfig)
-	terminal := &anthropicBetaProviderEndpoint{
-		ph:       ph,
-		provider: provider,
-		model:    actualModel,
-	}
 	stages := []protocolstage.Stage{
 		newProtocolTransformStage(
 			"client_prepare",
@@ -107,12 +103,12 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		),
 		newProtocolTransformStage(
 			"provider_finalize",
-			protocol.TypeAnthropicBeta,
+			target,
 			provider,
 			scenarioFlags,
 			isStreaming,
 			appendProtocolStageTransforms(
-				[]transform.Transform{transform.NewConsistencyTransform(protocol.TypeAnthropicBeta)},
+				[]transform.Transform{transform.NewConsistencyTransform(target)},
 				preVendor,
 				[]transform.Transform{vendorTransformShared},
 			),
@@ -145,6 +141,38 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	}
 	ph.serveProtocolStageOpenAIChatComplete(c, endpoint, call, provider, actualModel, disableStreamUsage, nil)
 	return true
+}
+
+func (ph *ProtocolHandler) protocolStageOpenAIChatTarget(
+	target protocol.APIType,
+	provider *typ.Provider,
+	actualModel string,
+	responseModel string,
+	disableStreamUsage bool,
+) (protocolstage.Endpoint, *protocolstage.BridgeRegistry, error) {
+	registry, err := protocolstage.NewBridgeRegistry(
+		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{
+			DefaultMaxTokens:   4096,
+			DisableStreamUsage: disableStreamUsage,
+			ResponseModel:      responseModel,
+		}),
+		openaibridge.NewChatToOpenAIResponses(openaibridge.ResponsesOptions{
+			DefaultMaxTokens:   4096,
+			DisableStreamUsage: disableStreamUsage,
+			ResponseModel:      responseModel,
+		}),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build OpenAI Chat Protocol Stage registry: %w", err)
+	}
+	switch target {
+	case protocol.TypeAnthropicBeta:
+		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeOpenAIResponses:
+		return &openAIResponsesProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	default:
+		return nil, nil, fmt.Errorf("OpenAI Chat Protocol Stage target %q is not implemented", target)
+	}
 }
 
 func (ph *ProtocolHandler) shouldUseProtocolStage(

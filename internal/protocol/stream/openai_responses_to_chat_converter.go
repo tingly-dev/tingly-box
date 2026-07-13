@@ -57,6 +57,16 @@ func newResponsesToChatConverter(stream ResponsesStreamIter, responseModel strin
 	}
 }
 
+// NewOpenAIResponsesToChatConverter creates a transport-neutral Responses to
+// Chat stream converter. The caller owns stream closure and SSE framing.
+func NewOpenAIResponsesToChatConverter(
+	stream ResponsesStreamIter,
+	responseModel string,
+	disableUsage bool,
+) StreamConverter {
+	return newResponsesToChatConverter(stream, responseModel, disableUsage)
+}
+
 func (c *responsesToChatConverter) Next() (interface{}, bool, error) {
 	// Drain buffered events first
 	if len(c.pending) > 0 {
