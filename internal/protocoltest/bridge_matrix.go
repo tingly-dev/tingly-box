@@ -15,7 +15,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/openaibridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 const bridgeMatrixModel = "bridge-client-model"
@@ -26,9 +28,19 @@ const bridgeMatrixModel = "bridge-client-model"
 // consistent while result names make the execution surface explicit.
 type BridgeMatrix struct {
 	Pairs      []ProtocolPair
+	Chains     []BridgeChain
 	Scenarios  []Scenario
 	Streaming  []bool
 	BatchCount int
+}
+
+// BridgeChain describes one concrete multi-level topology. Source and Target
+// are the client and terminal protocols; Stage is the native middle protocol.
+type BridgeChain struct {
+	Name   string
+	Source protocol.APIType
+	Stage  protocol.APIType
+	Target protocol.APIType
 }
 
 // DefaultBridgePairs lists only concrete Stage boundaries implemented today.
@@ -37,8 +49,24 @@ func DefaultBridgePairs() []ProtocolPair {
 	return []ProtocolPair{
 		{Source: protocol.TypeAnthropicV1, Target: protocol.TypeAnthropicV1},
 		{Source: protocol.TypeAnthropicBeta, Target: protocol.TypeAnthropicBeta},
+		{Source: protocol.TypeOpenAIChat, Target: protocol.TypeOpenAIChat},
 		{Source: protocol.TypeAnthropicV1, Target: protocol.TypeOpenAIChat},
 		{Source: protocol.TypeAnthropicBeta, Target: protocol.TypeOpenAIChat},
+		{Source: protocol.TypeOpenAIChat, Target: protocol.TypeAnthropicBeta},
+	}
+}
+
+// DefaultBridgeChains contains real concrete Bridges on both sides of an
+// Anthropic Beta-native Stage. It remains in-process and carries no production
+// traffic.
+func DefaultBridgeChains() []BridgeChain {
+	return []BridgeChain{
+		{
+			Name:   "chat_beta_stage_chat",
+			Source: protocol.TypeOpenAIChat,
+			Stage:  protocol.TypeAnthropicBeta,
+			Target: protocol.TypeOpenAIChat,
+		},
 	}
 }
 
@@ -46,7 +74,8 @@ func DefaultBridgePairs() []ProtocolPair {
 // Anthropic Bridges declare: text, tool use, tool results, complete, and stream.
 func DefaultBridgeMatrix() *BridgeMatrix {
 	return &BridgeMatrix{
-		Pairs: DefaultBridgePairs(),
+		Pairs:  DefaultBridgePairs(),
+		Chains: DefaultBridgeChains(),
 		Scenarios: []Scenario{
 			TextScenario(),
 			ToolUseScenario(),
@@ -90,6 +119,13 @@ func (m *BridgeMatrix) OnlySources(sources ...string) *BridgeMatrix {
 	}
 	out := m.clone()
 	out.Pairs = filtered
+	filteredChains := make([]BridgeChain, 0, len(m.Chains))
+	for _, chain := range m.Chains {
+		if wanted[chain.Source] {
+			filteredChains = append(filteredChains, chain)
+		}
+	}
+	out.Chains = filteredChains
 	return out
 }
 
@@ -106,6 +142,13 @@ func (m *BridgeMatrix) OnlyTargets(targets ...string) *BridgeMatrix {
 	}
 	out := m.clone()
 	out.Pairs = filtered
+	filteredChains := make([]BridgeChain, 0, len(m.Chains))
+	for _, chain := range m.Chains {
+		if wanted[chain.Target] {
+			filteredChains = append(filteredChains, chain)
+		}
+	}
+	out.Chains = filteredChains
 	return out
 }
 
@@ -123,26 +166,60 @@ func (m *BridgeMatrix) WithBatchCount(count int) *BridgeMatrix {
 
 // ExecuteAll runs the in-process Bridge matrix and returns CLI-shaped results.
 func (m *BridgeMatrix) ExecuteAll() []TestResult {
-	results := make([]TestResult, 0, len(m.Pairs)*len(m.Scenarios)*len(m.Streaming))
+	routes := make([]bridgeMatrixRoute, 0, len(m.Pairs)+len(m.Chains))
+	for _, pair := range m.Pairs {
+		routes = append(routes, bridgeMatrixRoute{Pair: pair})
+	}
+	for _, chain := range m.Chains {
+		routes = append(routes, bridgeMatrixRoute{
+			Name:  chain.Name,
+			Pair:  ProtocolPair{Source: chain.Source, Target: chain.Target},
+			Stage: chain.Stage,
+		})
+	}
+	results := make([]TestResult, 0, len(routes)*len(m.Scenarios)*len(m.Streaming))
 	for _, scenario := range m.Scenarios {
-		for _, pair := range m.Pairs {
+		for _, route := range routes {
 			for _, streaming := range m.Streaming {
 				if m.BatchCount > 1 {
-					results = append(results, m.executeBatch(scenario, pair, streaming))
+					results = append(results, m.executeBatch(scenario, route, streaming))
 					continue
 				}
-				results = append(results, m.executeOne(scenario, pair, streaming))
+				results = append(results, m.executeOne(scenario, route, streaming))
 			}
 		}
 	}
 	return results
 }
 
-func (m *BridgeMatrix) executeOne(scenario Scenario, pair ProtocolPair, streaming bool) TestResult {
+type bridgeMatrixRoute struct {
+	Name  string
+	Pair  ProtocolPair
+	Stage protocol.APIType
+}
+
+func (r bridgeMatrixRoute) isChain() bool { return r.Name != "" }
+
+func (r bridgeMatrixRoute) scenarioName(scenario string) string {
+	if r.isChain() {
+		return "bridges/chain/" + r.Name + "/" + scenario
+	}
+	return "bridges/" + scenario
+}
+
+func (r bridgeMatrixRoute) resultName(scenario string, streaming bool) string {
+	if r.isChain() {
+		return fmt.Sprintf("bridges/chain/%s/%s/%s/%s/%s", r.Name, scenario, r.Pair.Source, r.Pair.Target, streamMode(streaming))
+	}
+	return fmt.Sprintf("bridges/%s/%s/%s/%s", scenario, r.Pair.Source, r.Pair.Target, streamMode(streaming))
+}
+
+func (m *BridgeMatrix) executeOne(scenario Scenario, route bridgeMatrixRoute, streaming bool) TestResult {
 	start := time.Now()
+	pair := route.Pair
 	result := TestResult{
-		Name:      fmt.Sprintf("bridges/%s/%s/%s/%s", scenario.Name, pair.Source, pair.Target, streamMode(streaming)),
-		Scenario:  "bridges/" + scenario.Name,
+		Name:      route.resultName(scenario.Name, streaming),
+		Scenario:  route.scenarioName(scenario.Name),
 		Source:    pair.Source,
 		Target:    pair.Target,
 		Streaming: streaming,
@@ -152,11 +229,11 @@ func (m *BridgeMatrix) executeOne(scenario Scenario, pair ProtocolPair, streamin
 	if err != nil {
 		return bridgeMatrixFailure(result, start, "fixture/request", err, "")
 	}
-	terminal, err := newBridgeMatrixTerminal(pair.Target, scenario.Name, streaming)
+	terminal, err := newBridgeMatrixTerminal(route, scenario.Name, streaming)
 	if err != nil {
 		return bridgeMatrixFailure(result, start, "fixture/terminal", err, "")
 	}
-	endpoint, err := bridgeMatrixEndpoint(terminal, pair)
+	endpoint, probe, err := bridgeMatrixEndpoint(terminal, route)
 	if err != nil {
 		return bridgeMatrixFailure(result, start, "topology", err, "")
 	}
@@ -174,7 +251,7 @@ func (m *BridgeMatrix) executeOne(scenario Scenario, pair ProtocolPair, streamin
 		if streamErr != nil {
 			return bridgeMatrixFailure(result, start, "stream/open", streamErr, "")
 		}
-		semantic, failures = consumeBridgeMatrixStream(stream, pair, scenario.Name)
+		semantic, failures = consumeBridgeMatrixStream(stream, route, scenario.Name)
 		if terminal.lastStream == nil || terminal.lastStream.closeCount != 1 {
 			failures = append(failures, AssertionError{
 				Assertion: "stream/ownership",
@@ -186,10 +263,11 @@ func (m *BridgeMatrix) executeOne(scenario Scenario, pair ProtocolPair, streamin
 		if completeErr != nil {
 			return bridgeMatrixFailure(result, start, "complete", completeErr, "")
 		}
-		semantic, failures = parseBridgeMatrixResponse(response, pair, scenario.Name)
+		semantic, failures = parseBridgeMatrixResponse(response, route, scenario.Name)
 	}
 
-	failures = append(failures, validateBridgeMatrixTargetCall(terminal.lastCall, request, pair, scenario.Name, streaming)...)
+	failures = append(failures, validateBridgeMatrixTargetCall(terminal.lastCall, request, route, scenario.Name, streaming)...)
+	failures = append(failures, validateBridgeMatrixProbe(probe, streaming)...)
 	if semantic != nil {
 		failures = append(failures, runBridgeMatrixAssertions(semantic, scenario.Name)...)
 		result.Response = semantic
@@ -200,14 +278,14 @@ func (m *BridgeMatrix) executeOne(scenario Scenario, pair ProtocolPair, streamin
 	return result
 }
 
-func (m *BridgeMatrix) executeBatch(scenario Scenario, pair ProtocolPair, streaming bool) TestResult {
+func (m *BridgeMatrix) executeBatch(scenario Scenario, route bridgeMatrixRoute, streaming bool) TestResult {
 	count := m.BatchCount
 	runs := make([]TestResult, 0, count)
 	passed := 0
 	var total, min, max time.Duration
 	uniqueErrors := make(map[string]AssertionError)
 	for i := 0; i < count; i++ {
-		run := m.executeOne(scenario, pair, streaming)
+		run := m.executeOne(scenario, route, streaming)
 		runs = append(runs, run)
 		total += run.Duration
 		if i == 0 || run.Duration < min {
@@ -248,30 +326,139 @@ func bridgeMatrixFailure(result TestResult, start time.Time, assertion string, e
 	return result
 }
 
-func bridgeMatrixEndpoint(terminal stage.Endpoint, pair ProtocolPair) (stage.Endpoint, error) {
+func bridgeMatrixEndpoint(terminal stage.Endpoint, route bridgeMatrixRoute) (stage.Endpoint, *bridgeMatrixProbeStage, error) {
 	registry, err := stage.NewBridgeRegistry(
 		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{}),
 		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
+		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if pair.Source == pair.Target {
-		identity, err := registry.Resolve(pair.Source, pair.Target, stage.AllBridgeCapabilities)
+	if !route.isChain() && route.Pair.Source == route.Pair.Target {
+		identity, err := registry.Resolve(route.Pair.Source, route.Pair.Target, stage.AllBridgeCapabilities)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return stage.Adapt(terminal, identity)
+		endpoint, err := stage.Adapt(terminal, identity)
+		return endpoint, nil, err
 	}
-	return stage.BuildTopology(stage.TopologyConfig{
+	var (
+		stages []stage.Stage
+		probe  *bridgeMatrixProbeStage
+	)
+	if route.isChain() {
+		probe = &bridgeMatrixProbeStage{api: route.Stage}
+		stages = []stage.Stage{probe}
+	}
+	endpoint, err := stage.BuildTopology(stage.TopologyConfig{
 		Terminal:             terminal,
-		ClientProtocol:       pair.Source,
+		Stages:               stages,
+		ClientProtocol:       route.Pair.Source,
 		Registry:             registry,
 		RequiredCapabilities: stage.AllBridgeCapabilities,
 	})
+	return endpoint, probe, err
+}
+
+// bridgeMatrixProbeStage proves that the concrete middle level receives and
+// returns its declared native protocol in both execution modes.
+type bridgeMatrixProbeStage struct {
+	api protocol.APIType
+
+	completeRequest  any
+	completeResponse any
+	streamRequest    any
+	streamEvents     int
+	streamTypeError  error
+}
+
+func (*bridgeMatrixProbeStage) Name() string { return "bridge-matrix-probe" }
+
+func (s *bridgeMatrixProbeStage) Protocol() protocol.APIType { return s.api }
+
+func (s *bridgeMatrixProbeStage) Wrap(next stage.Endpoint) stage.Endpoint {
+	return &bridgeMatrixProbeEndpoint{stage: s, next: next}
+}
+
+type bridgeMatrixProbeEndpoint struct {
+	stage *bridgeMatrixProbeStage
+	next  stage.Endpoint
+}
+
+func (e *bridgeMatrixProbeEndpoint) Protocol() protocol.APIType { return e.stage.api }
+
+func (e *bridgeMatrixProbeEndpoint) Complete(ctx context.Context, call stage.Call) (*stage.Response, error) {
+	e.stage.completeRequest = call.Request
+	response, err := e.next.Complete(ctx, call)
+	if response != nil {
+		e.stage.completeResponse = response.Value
+	}
+	return response, err
+}
+
+func (e *bridgeMatrixProbeEndpoint) Stream(ctx context.Context, call stage.Call) (stage.EventStream, error) {
+	e.stage.streamRequest = call.Request
+	stream, err := e.next.Stream(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	return &bridgeMatrixProbeStream{stage: e.stage, next: stream}, nil
+}
+
+type bridgeMatrixProbeStream struct {
+	stage *bridgeMatrixProbeStage
+	next  stage.EventStream
+}
+
+func (s *bridgeMatrixProbeStream) Next(ctx context.Context) (stage.Event, error) {
+	event, err := s.next.Next(ctx)
+	if err != nil {
+		return event, err
+	}
+	s.stage.streamEvents++
+	switch event.Value.(type) {
+	case protocolstream.AnthropicEvent, anthropic.BetaRawMessageStreamEventUnion, *anthropic.BetaRawMessageStreamEventUnion:
+	default:
+		s.stage.streamTypeError = fmt.Errorf("middle Stage received %T, want Anthropic Beta event", event.Value)
+	}
+	return event, nil
+}
+
+func (s *bridgeMatrixProbeStream) Close() error { return s.next.Close() }
+
+func (s *bridgeMatrixProbeStream) Result() stage.StreamResult { return s.next.Result() }
+
+func validateBridgeMatrixProbe(probe *bridgeMatrixProbeStage, streaming bool) []AssertionError {
+	if probe == nil {
+		return nil
+	}
+	var failures []AssertionError
+	if streaming {
+		if _, ok := probe.streamRequest.(*anthropic.BetaMessageNewParams); !ok {
+			failures = append(failures, AssertionError{Assertion: "chain/stage_request", Error: fmt.Sprintf("got %T, want *anthropic.BetaMessageNewParams", probe.streamRequest)})
+		}
+		if probe.streamEvents == 0 {
+			failures = append(failures, AssertionError{Assertion: "chain/stage_events", Error: "middle Stage observed no response events"})
+		}
+		if probe.streamTypeError != nil {
+			failures = append(failures, AssertionError{Assertion: "chain/stage_event_type", Error: probe.streamTypeError.Error()})
+		}
+		return failures
+	}
+	if _, ok := probe.completeRequest.(*anthropic.BetaMessageNewParams); !ok {
+		failures = append(failures, AssertionError{Assertion: "chain/stage_request", Error: fmt.Sprintf("got %T, want *anthropic.BetaMessageNewParams", probe.completeRequest)})
+	}
+	if _, ok := probe.completeResponse.(*anthropic.BetaMessage); !ok {
+		failures = append(failures, AssertionError{Assertion: "chain/stage_response", Error: fmt.Sprintf("got %T, want *anthropic.BetaMessage", probe.completeResponse)})
+	}
+	return failures
 }
 
 func bridgeMatrixRequest(source protocol.APIType, scenario string) (any, error) {
+	if source == protocol.TypeOpenAIChat {
+		return bridgeMatrixChatRequest(scenario)
+	}
 	messages := []any{
 		map[string]any{"role": "user", "content": []any{map[string]any{"type": "text", "text": "What is the weather in Paris?"}}},
 	}
@@ -312,6 +499,38 @@ func bridgeMatrixRequest(source protocol.APIType, scenario string) (any, error) 
 	}
 }
 
+func bridgeMatrixChatRequest(scenario string) (any, error) {
+	request := map[string]any{
+		"model":      bridgeMatrixModel,
+		"max_tokens": 128,
+		"messages": []any{
+			map[string]any{"role": "user", "content": "What is the weather in Paris?"},
+		},
+	}
+	switch scenario {
+	case "text":
+	case "tool_use":
+		request["tools"] = []any{bridgeMatrixChatToolDefinition()}
+	case "tool_result":
+		request["tools"] = []any{bridgeMatrixChatToolDefinition()}
+		request["messages"] = []any{
+			map[string]any{"role": "user", "content": "What is the weather in Paris?"},
+			map[string]any{
+				"role": "assistant", "content": nil,
+				"tool_calls": []any{map[string]any{
+					"id": "toolu_bridge_weather", "type": "function",
+					"function": map[string]any{"name": "get_weather", "arguments": `{"location":"Paris"}`},
+				}},
+			},
+			map[string]any{"role": "tool", "tool_call_id": "toolu_bridge_weather", "content": "18°C and sunny"},
+		}
+	default:
+		return nil, fmt.Errorf("unsupported bridge scenario %q", scenario)
+	}
+	value, err := decodeBridgeFixture[openai.ChatCompletionNewParams](request)
+	return &value, err
+}
+
 func bridgeMatrixToolDefinition() map[string]any {
 	return map[string]any{
 		"name":        "get_weather",
@@ -320,6 +539,18 @@ func bridgeMatrixToolDefinition() map[string]any {
 			"type":       "object",
 			"properties": map[string]any{"location": map[string]any{"type": "string"}},
 			"required":   []string{"location"},
+		},
+	}
+}
+
+func bridgeMatrixChatToolDefinition() map[string]any {
+	definition := bridgeMatrixToolDefinition()
+	return map[string]any{
+		"type": "function",
+		"function": map[string]any{
+			"name":        definition["name"],
+			"description": definition["description"],
+			"parameters":  definition["input_schema"],
 		},
 	}
 }
@@ -333,41 +564,45 @@ type bridgeMatrixTerminal struct {
 	lastStream *bridgeMatrixEventStream
 }
 
-func newBridgeMatrixTerminal(target protocol.APIType, scenario string, streaming bool) (*bridgeMatrixTerminal, error) {
+func newBridgeMatrixTerminal(route bridgeMatrixRoute, scenario string, streaming bool) (*bridgeMatrixTerminal, error) {
+	target := route.Pair.Target
 	terminal := &bridgeMatrixTerminal{api: target}
 	usage := protocol.NewTokenUsage(10, 8)
-	terminal.result = stage.StreamResult{Usage: usage, Model: "bridge-provider-model"}
+	terminalModel := "bridge-provider-model"
+	if !route.isChain() && route.Pair.Source == route.Pair.Target {
+		terminalModel = bridgeMatrixModel
+	}
+	terminal.result = stage.StreamResult{Usage: usage, Model: terminalModel}
 	if target == protocol.TypeOpenAIChat {
 		if streaming {
-			events, err := bridgeMatrixChatEvents(scenario)
+			events, err := bridgeMatrixChatEvents(scenario, terminalModel)
 			if err != nil {
 				return nil, err
 			}
 			terminal.events = events
 			return terminal, nil
 		}
-		response, err := bridgeMatrixChatResponse(scenario)
+		response, err := bridgeMatrixChatResponse(scenario, terminalModel)
 		if err != nil {
 			return nil, err
 		}
-		terminal.response = &stage.Response{Value: response, Usage: usage, Model: "bridge-provider-model"}
+		terminal.response = &stage.Response{Value: response, Usage: usage, Model: terminalModel}
 		return terminal, nil
 	}
-	terminal.result.Model = bridgeMatrixModel
 
 	if streaming {
-		events, err := bridgeMatrixAnthropicEvents(target, scenario)
+		events, err := bridgeMatrixAnthropicEvents(target, scenario, terminalModel)
 		if err != nil {
 			return nil, err
 		}
 		terminal.events = events
 		return terminal, nil
 	}
-	response, err := bridgeMatrixAnthropicResponse(target, scenario)
+	response, err := bridgeMatrixAnthropicResponse(target, scenario, terminalModel)
 	if err != nil {
 		return nil, err
 	}
-	terminal.response = &stage.Response{Value: response, Usage: usage, Model: bridgeMatrixModel}
+	terminal.response = &stage.Response{Value: response, Usage: usage, Model: terminalModel}
 	return terminal, nil
 }
 
@@ -423,8 +658,8 @@ func (s *bridgeMatrixEventStream) Close() error {
 
 func (s *bridgeMatrixEventStream) Result() stage.StreamResult { return s.result }
 
-func bridgeMatrixAnthropicResponse(target protocol.APIType, scenario string) (any, error) {
-	body := bridgeMatrixAnthropicResponseBody(scenario)
+func bridgeMatrixAnthropicResponse(target protocol.APIType, scenario, model string) (any, error) {
+	body := bridgeMatrixAnthropicResponseBody(scenario, model)
 	switch target {
 	case protocol.TypeAnthropicV1:
 		value, err := decodeBridgeFixture[anthropic.Message](body)
@@ -437,7 +672,7 @@ func bridgeMatrixAnthropicResponse(target protocol.APIType, scenario string) (an
 	}
 }
 
-func bridgeMatrixAnthropicResponseBody(scenario string) map[string]any {
+func bridgeMatrixAnthropicResponseBody(scenario, model string) map[string]any {
 	content := []any{map[string]any{"type": "text", "text": "The capital of France is Paris."}}
 	stopReason := "end_turn"
 	usage := map[string]any{"input_tokens": 10, "output_tokens": 8}
@@ -451,12 +686,12 @@ func bridgeMatrixAnthropicResponseBody(scenario string) map[string]any {
 	}
 	return map[string]any{
 		"id": "msg_bridge_matrix", "type": "message", "role": "assistant",
-		"content": content, "model": bridgeMatrixModel, "stop_reason": stopReason,
+		"content": content, "model": model, "stop_reason": stopReason,
 		"stop_sequence": nil, "usage": usage,
 	}
 }
 
-func bridgeMatrixChatResponse(scenario string) (*openai.ChatCompletion, error) {
+func bridgeMatrixChatResponse(scenario, model string) (*openai.ChatCompletion, error) {
 	message := map[string]any{"role": "assistant", "content": "The capital of France is Paris."}
 	finishReason := "stop"
 	usage := map[string]any{"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18}
@@ -473,7 +708,7 @@ func bridgeMatrixChatResponse(scenario string) (*openai.ChatCompletion, error) {
 	}
 	body := map[string]any{
 		"id": "chatcmpl_bridge_matrix", "object": "chat.completion", "created": 1,
-		"model":   "bridge-provider-model",
+		"model":   model,
 		"choices": []any{map[string]any{"index": 0, "message": message, "finish_reason": finishReason}},
 		"usage":   usage,
 	}
@@ -481,12 +716,12 @@ func bridgeMatrixChatResponse(scenario string) (*openai.ChatCompletion, error) {
 	return &value, err
 }
 
-func bridgeMatrixChatEvents(scenario string) ([]stage.Event, error) {
+func bridgeMatrixChatEvents(scenario, model string) ([]stage.Event, error) {
 	var chunks []map[string]any
 	if scenario == "tool_use" {
 		chunks = []map[string]any{
 			{
-				"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": "bridge-provider-model",
+				"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": model,
 				"choices": []any{map[string]any{
 					"index": 0, "finish_reason": "", "delta": map[string]any{
 						"role": "assistant", "tool_calls": []any{map[string]any{
@@ -496,19 +731,19 @@ func bridgeMatrixChatEvents(scenario string) ([]stage.Event, error) {
 					},
 				}},
 			},
-			bridgeMatrixChatFinishChunk("tool_calls"),
-			bridgeMatrixChatUsageChunk(15, 20),
+			bridgeMatrixChatFinishChunk("tool_calls", model),
+			bridgeMatrixChatUsageChunk(15, 20, model),
 		}
 	} else {
 		chunks = []map[string]any{
 			{
-				"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": "bridge-provider-model",
+				"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": model,
 				"choices": []any{map[string]any{
 					"index": 0, "finish_reason": "", "delta": map[string]any{"role": "assistant", "content": "The capital of France is Paris."},
 				}},
 			},
-			bridgeMatrixChatFinishChunk("stop"),
-			bridgeMatrixChatUsageChunk(10, 8),
+			bridgeMatrixChatFinishChunk("stop", model),
+			bridgeMatrixChatUsageChunk(10, 8, model),
 		}
 	}
 	events := make([]stage.Event, 0, len(chunks))
@@ -522,22 +757,22 @@ func bridgeMatrixChatEvents(scenario string) ([]stage.Event, error) {
 	return events, nil
 }
 
-func bridgeMatrixChatFinishChunk(reason string) map[string]any {
+func bridgeMatrixChatFinishChunk(reason, model string) map[string]any {
 	return map[string]any{
-		"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": "bridge-provider-model",
+		"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": model,
 		"choices": []any{map[string]any{"index": 0, "finish_reason": reason, "delta": map[string]any{}}},
 	}
 }
 
-func bridgeMatrixChatUsageChunk(input, output int) map[string]any {
+func bridgeMatrixChatUsageChunk(input, output int, model string) map[string]any {
 	return map[string]any{
-		"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": "bridge-provider-model",
+		"id": "chatcmpl_bridge_stream", "object": "chat.completion.chunk", "created": 1, "model": model,
 		"choices": []any{},
 		"usage":   map[string]any{"prompt_tokens": input, "completion_tokens": output, "total_tokens": input + output},
 	}
 }
 
-func bridgeMatrixAnthropicEvents(target protocol.APIType, scenario string) ([]stage.Event, error) {
+func bridgeMatrixAnthropicEvents(target protocol.APIType, scenario, model string) ([]stage.Event, error) {
 	inputTokens, outputTokens := 10, 8
 	stopReason := "end_turn"
 	var contentEvents []map[string]any
@@ -561,7 +796,7 @@ func bridgeMatrixAnthropicEvents(target protocol.APIType, scenario string) ([]st
 			"type": "message_start",
 			"message": map[string]any{
 				"id": "msg_bridge_stream", "type": "message", "role": "assistant", "content": []any{},
-				"model": bridgeMatrixModel, "stop_reason": nil, "stop_sequence": nil,
+				"model": model, "stop_reason": nil, "stop_sequence": nil,
 				"usage": map[string]any{"input_tokens": inputTokens, "output_tokens": 0},
 			},
 		},
@@ -594,10 +829,11 @@ func bridgeMatrixAnthropicEvents(target protocol.APIType, scenario string) ([]st
 	return result, nil
 }
 
-func parseBridgeMatrixResponse(response *stage.Response, pair ProtocolPair, scenario string) (*RoundTripResult, []AssertionError) {
+func parseBridgeMatrixResponse(response *stage.Response, route bridgeMatrixRoute, scenario string) (*RoundTripResult, []AssertionError) {
 	if response == nil {
 		return nil, []AssertionError{{Assertion: "response", Error: "response is nil"}}
 	}
+	pair := route.Pair
 	var failures []AssertionError
 	switch pair.Source {
 	case protocol.TypeAnthropicV1:
@@ -607,6 +843,12 @@ func parseBridgeMatrixResponse(response *stage.Response, pair ProtocolPair, scen
 	case protocol.TypeAnthropicBeta:
 		if _, ok := response.Value.(*anthropic.BetaMessage); !ok {
 			failures = append(failures, AssertionError{Assertion: "response/type", Error: fmt.Sprintf("got %T, want *anthropic.BetaMessage", response.Value)})
+		}
+	case protocol.TypeOpenAIChat:
+		switch response.Value.(type) {
+		case *openai.ChatCompletion, openai.ChatCompletion, wire.ChatCompletionWire, *wire.ChatCompletionWire:
+		default:
+			failures = append(failures, AssertionError{Assertion: "response/type", Error: fmt.Sprintf("got %T, want OpenAI Chat response value", response.Value)})
 		}
 	}
 	raw, err := json.Marshal(response.Value)
@@ -619,8 +861,13 @@ func parseBridgeMatrixResponse(response *stage.Response, pair ProtocolPair, scen
 		failures = append(failures, AssertionError{Assertion: "response/decode", Error: err.Error(), Context: string(raw)})
 		return nil, failures
 	}
-	parsed := sse.ParseAnthropicResult(body)
-	result := roundTripFromBridgeParsed(parsed, pair, scenario, false, raw, nil)
+	var parsed *sse.ParsedResult
+	if pair.Source == protocol.TypeOpenAIChat {
+		parsed = sse.ParseOpenAIChatResult(body)
+	} else {
+		parsed = sse.ParseAnthropicResult(body)
+	}
+	result := roundTripFromBridgeParsed(parsed, route, scenario, false, raw, nil)
 	if response.Model != bridgeMatrixModel {
 		failures = append(failures, AssertionError{Assertion: "response/model_fact", Error: fmt.Sprintf("got %q, want %q", response.Model, bridgeMatrixModel)})
 	}
@@ -630,7 +877,7 @@ func parseBridgeMatrixResponse(response *stage.Response, pair ProtocolPair, scen
 	return result, failures
 }
 
-func consumeBridgeMatrixStream(stream stage.EventStream, pair ProtocolPair, scenario string) (*RoundTripResult, []AssertionError) {
+func consumeBridgeMatrixStream(stream stage.EventStream, route bridgeMatrixRoute, scenario string) (*RoundTripResult, []AssertionError) {
 	var failures []AssertionError
 	var eventLines []string
 	for {
@@ -642,12 +889,21 @@ func consumeBridgeMatrixStream(stream stage.EventStream, pair ProtocolPair, scen
 			failures = append(failures, AssertionError{Assertion: "stream/next", Error: err.Error()})
 			break
 		}
-		eventType, data, err := normalizeBridgeMatrixEvent(event.Value)
-		if err != nil {
-			failures = append(failures, AssertionError{Assertion: "stream/event", Error: err.Error()})
-			continue
+		if route.Pair.Source == protocol.TypeOpenAIChat {
+			data, err := normalizeBridgeMatrixChatEvent(event.Value)
+			if err != nil {
+				failures = append(failures, AssertionError{Assertion: "stream/event", Error: err.Error()})
+				continue
+			}
+			eventLines = append(eventLines, "data: "+string(data))
+		} else {
+			eventType, data, err := normalizeBridgeMatrixEvent(event.Value)
+			if err != nil {
+				failures = append(failures, AssertionError{Assertion: "stream/event", Error: err.Error()})
+				continue
+			}
+			eventLines = append(eventLines, "event: "+eventType, "data: "+string(data))
 		}
-		eventLines = append(eventLines, "event: "+eventType, "data: "+string(data))
 	}
 	streamResult := stream.Result()
 	if streamResult.Model != bridgeMatrixModel {
@@ -659,9 +915,39 @@ func consumeBridgeMatrixStream(stream stage.EventStream, pair ProtocolPair, scen
 	if err := stream.Close(); err != nil {
 		failures = append(failures, AssertionError{Assertion: "stream/close", Error: err.Error()})
 	}
-	parsed := sse.AssembleAnthropicStream(eventLines)
+	var parsed *sse.ParsedResult
+	if route.Pair.Source == protocol.TypeOpenAIChat {
+		parsed = sse.AssembleOpenAIChatStream(eventLines)
+	} else {
+		parsed = sse.AssembleAnthropicStream(eventLines)
+	}
 	raw := []byte(strings.Join(eventLines, "\n") + "\n")
-	return roundTripFromBridgeParsed(parsed, pair, scenario, true, raw, eventLines), failures
+	result := roundTripFromBridgeParsed(parsed, route, scenario, true, raw, eventLines)
+	if result.Usage == nil && streamResult.Usage != nil {
+		result.Usage = &TokenUsage{InputTokens: streamResult.Usage.InputTokens, OutputTokens: streamResult.Usage.OutputTokens}
+	}
+	return result, failures
+}
+
+func normalizeBridgeMatrixChatEvent(value any) ([]byte, error) {
+	switch event := value.(type) {
+	case openai.ChatCompletionChunk:
+		return json.Marshal(event)
+	case *openai.ChatCompletionChunk:
+		if event == nil {
+			return nil, fmt.Errorf("nil OpenAI Chat chunk")
+		}
+		return json.Marshal(event)
+	case wire.ChatStreamChunk:
+		return json.Marshal(event)
+	case *wire.ChatStreamChunk:
+		if event == nil {
+			return nil, fmt.Errorf("nil OpenAI Chat wire chunk")
+		}
+		return json.Marshal(event)
+	default:
+		return nil, fmt.Errorf("unsupported OpenAI Chat stream event %T", value)
+	}
 }
 
 func normalizeBridgeMatrixEvent(value any) (string, []byte, error) {
@@ -697,11 +983,11 @@ func normalizeBridgeMatrixEvent(value any) (string, []byte, error) {
 	return eventType, raw, nil
 }
 
-func roundTripFromBridgeParsed(parsed *sse.ParsedResult, pair ProtocolPair, scenario string, streaming bool, raw []byte, events []string) *RoundTripResult {
+func roundTripFromBridgeParsed(parsed *sse.ParsedResult, route bridgeMatrixRoute, scenario string, streaming bool, raw []byte, events []string) *RoundTripResult {
 	result := &RoundTripResult{
-		SourceProtocol: pair.Source,
-		TargetProtocol: pair.Target,
-		ScenarioName:   "bridges/" + scenario,
+		SourceProtocol: route.Pair.Source,
+		TargetProtocol: route.Pair.Target,
+		ScenarioName:   route.scenarioName(scenario),
 		IsStreaming:    streaming,
 		RawBody:        raw,
 		StreamEvents:   events,
@@ -757,17 +1043,23 @@ func runBridgeMatrixAssertions(result *RoundTripResult, scenario string) []Asser
 	return failures
 }
 
-func validateBridgeMatrixTargetCall(call stage.Call, sourceRequest any, pair ProtocolPair, scenario string, streaming bool) []AssertionError {
+func validateBridgeMatrixTargetCall(call stage.Call, sourceRequest any, route bridgeMatrixRoute, scenario string, streaming bool) []AssertionError {
 	if call.Metadata.RequestID == "" {
 		return []AssertionError{{Assertion: "request/metadata", Error: "request ID was not preserved"}}
 	}
-	if pair.Source == pair.Target {
+	if !route.isChain() && route.Pair.Source == route.Pair.Target {
 		if call.Request != sourceRequest {
 			return []AssertionError{{Assertion: "request/identity", Error: fmt.Sprintf("identity request changed from %T to %T", sourceRequest, call.Request)}}
 		}
 		return nil
 	}
+	if route.Pair.Target == protocol.TypeAnthropicBeta {
+		return validateBridgeMatrixBetaTargetCall(call, scenario)
+	}
+	return validateBridgeMatrixChatTargetCall(call, scenario, streaming)
+}
 
+func validateBridgeMatrixChatTargetCall(call stage.Call, scenario string, streaming bool) []AssertionError {
 	chatRequest, ok := call.Request.(*openai.ChatCompletionNewParams)
 	if !ok || chatRequest == nil {
 		return []AssertionError{{Assertion: "request/type", Error: fmt.Sprintf("got %T, want *openai.ChatCompletionNewParams", call.Request)}}
@@ -799,6 +1091,35 @@ func validateBridgeMatrixTargetCall(call stage.Call, sourceRequest any, pair Pro
 		if !strings.Contains(text, `"role":"tool"`) || !strings.Contains(text, `"tool_call_id":"toolu_bridge_weather"`) {
 			failures = append(failures, AssertionError{Assertion: "request/tool_result", Error: "converted request lost tool result linkage", Context: truncate(text, 300)})
 		}
+	}
+	return failures
+}
+
+func validateBridgeMatrixBetaTargetCall(call stage.Call, scenario string) []AssertionError {
+	request, ok := call.Request.(*anthropic.BetaMessageNewParams)
+	if !ok || request == nil {
+		return []AssertionError{{Assertion: "request/type", Error: fmt.Sprintf("got %T, want *anthropic.BetaMessageNewParams", call.Request)}}
+	}
+	var failures []AssertionError
+	if string(request.Model) != bridgeMatrixModel {
+		failures = append(failures, AssertionError{Assertion: "request/model", Error: fmt.Sprintf("got %q, want %q", request.Model, bridgeMatrixModel)})
+	}
+	if call.State.OpenAIChat != nil {
+		failures = append(failures, AssertionError{Assertion: "request/state", Error: "OpenAIConfig leaked into Anthropic target"})
+	}
+	raw, err := json.Marshal(request)
+	if err != nil {
+		return append(failures, AssertionError{Assertion: "request/marshal", Error: err.Error()})
+	}
+	text := string(raw)
+	if !strings.Contains(text, "Paris") {
+		failures = append(failures, AssertionError{Assertion: "request/content", Error: "converted request lost Paris content", Context: truncate(text, 300)})
+	}
+	if (scenario == "tool_use" || scenario == "tool_result") && !strings.Contains(text, "get_weather") {
+		failures = append(failures, AssertionError{Assertion: "request/tools", Error: "converted request lost get_weather", Context: truncate(text, 300)})
+	}
+	if scenario == "tool_result" && (!strings.Contains(text, `"type":"tool_result"`) || !strings.Contains(text, `"tool_use_id":"toolu_bridge_weather"`)) {
+		failures = append(failures, AssertionError{Assertion: "request/tool_result", Error: "converted request lost tool result linkage", Context: truncate(text, 300)})
 	}
 	return failures
 }

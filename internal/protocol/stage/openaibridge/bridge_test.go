@@ -12,6 +12,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	protocol "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -187,6 +188,65 @@ func TestOpenAIChatToAnthropicBetaStream(t *testing.T) {
 	}
 	if targetStream.closeCount != 1 {
 		t.Fatalf("target close count = %d, want 1", targetStream.closeCount)
+	}
+}
+
+func TestOpenAIChatToAnthropicBetaStreamAcceptsNormalizedStageEvents(t *testing.T) {
+	t.Parallel()
+
+	targetStream := &memoryStream{events: []stage.Event{
+		{Value: protocolstream.AnthropicEvent{Type: "message_start", Data: map[string]any{
+			"message": map[string]any{
+				"id": "msg_normalized", "type": "message", "role": "assistant",
+				"model": "provider-model", "content": []any{},
+				"usage": map[string]any{"input_tokens": 3, "output_tokens": 0},
+			},
+		}}},
+		{Value: protocolstream.AnthropicEvent{Type: "content_block_start", Data: map[string]any{
+			"type": "content_block_start", "index": 0,
+			"content_block": map[string]any{"type": "text", "text": ""},
+		}}},
+		{Value: protocolstream.AnthropicEvent{Type: "content_block_delta", Data: map[string]any{
+			"type": "content_block_delta", "index": 0,
+			"delta": map[string]any{"type": "text_delta", "text": "parallel path"},
+		}}},
+		{Value: protocolstream.AnthropicEvent{Type: "content_block_stop", Data: map[string]any{
+			"type": "content_block_stop", "index": 0,
+		}}},
+		{Value: protocolstream.AnthropicEvent{Type: "message_delta", Data: map[string]any{
+			"type": "message_delta", "delta": map[string]any{"stop_reason": "end_turn"},
+			"usage": map[string]any{"output_tokens": 2},
+		}}},
+		{Value: protocolstream.AnthropicEvent{Type: "message_stop", Data: map[string]any{"type": "message_stop"}}},
+	}}
+	terminal := &memoryEndpoint{
+		api: protocol.TypeAnthropicBeta,
+		stream: func(context.Context, stage.Call) (stage.EventStream, error) {
+			return targetStream, nil
+		},
+	}
+	adapted := mustAdapt(t, terminal, NewChatToAnthropicBeta(AnthropicOptions{}))
+	stream, err := adapted.Stream(context.Background(), stage.Call{Request: &openai.ChatCompletionNewParams{Model: openai.ChatModel("client-model")}})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	var content strings.Builder
+	for {
+		event, err := stream.Next(context.Background())
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next() error = %v", err)
+		}
+		chunk := event.Value.(wire.ChatStreamChunk)
+		content.WriteString(chunk.Choices[0].Delta.Content)
+	}
+	if content.String() != "parallel path" {
+		t.Fatalf("content = %q", content.String())
+	}
+	if result := stream.Result(); result.Usage == nil || result.Usage.InputTokens != 3 || result.Usage.OutputTokens != 2 {
+		t.Fatalf("Result() = %+v", result)
 	}
 }
 

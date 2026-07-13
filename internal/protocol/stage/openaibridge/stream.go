@@ -2,6 +2,7 @@ package openaibridge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -62,11 +63,47 @@ func (s *anthropicBetaStreamIterator) Next() bool {
 			return false
 		}
 		s.current = *value
+	case protocolstream.AnthropicEvent:
+		if err := s.setNormalizedEvent(value); err != nil {
+			s.err = err
+			return false
+		}
 	default:
-		s.err = fmt.Errorf("convert Anthropic Beta stream to OpenAI Chat: event has type %T, want anthropic.BetaRawMessageStreamEventUnion", event.Value)
+		s.err = fmt.Errorf("convert Anthropic Beta stream to OpenAI Chat: event has type %T, want anthropic.BetaRawMessageStreamEventUnion or stream.AnthropicEvent", event.Value)
 		return false
 	}
 	return true
+}
+
+func (s *anthropicBetaStreamIterator) setNormalizedEvent(event protocolstream.AnthropicEvent) error {
+	raw, err := json.Marshal(event.Data)
+	if err != nil {
+		return fmt.Errorf("convert normalized Anthropic event %q: marshal data: %w", event.Type, err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return fmt.Errorf("convert normalized Anthropic event %q: data must be a JSON object", event.Type)
+	}
+	if _, ok := fields["type"]; !ok {
+		typeJSON, err := json.Marshal(event.Type)
+		if err != nil {
+			return fmt.Errorf("convert normalized Anthropic event type: %w", err)
+		}
+		fields["type"] = typeJSON
+		raw, err = json.Marshal(fields)
+		if err != nil {
+			return fmt.Errorf("convert normalized Anthropic event %q: marshal envelope: %w", event.Type, err)
+		}
+	}
+	var decoded anthropic.BetaRawMessageStreamEventUnion
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return fmt.Errorf("convert normalized Anthropic event %q: decode Beta event: %w", event.Type, err)
+	}
+	if decoded.Type != event.Type {
+		return fmt.Errorf("convert normalized Anthropic event: envelope type %q does not match data type %q", event.Type, decoded.Type)
+	}
+	s.current = decoded
+	return nil
 }
 
 func (s *anthropicBetaStreamIterator) Current() anthropic.BetaRawMessageStreamEventUnion {

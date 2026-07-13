@@ -145,9 +145,12 @@ The `bridges` section is deliberately separate from single-hop. Single-hop
 traverses the production gateway over HTTP and therefore continues to validate
 the legacy dispatch path until runtime migration occurs. Bridges runs the
 dormant `stage.BuildTopology`/`stage.Adapt` path in-process and labels every
-result `bridges/<scenario>/...`; it must not be cited as production-path proof.
-Its initial matrix covers exact Anthropic v1/beta identity plus v1/beta →
-OpenAI Chat, across text, tool use, tool result, stream, and non-stream.
+direct result `bridges/<scenario>/...`; concrete multi-level results use
+`bridges/chain/<name>/<scenario>/...`. It must not be cited as production-path
+proof. The matrix covers exact Anthropic v1/beta/OpenAI Chat identity,
+Anthropic v1/beta → OpenAI Chat, OpenAI Chat → Anthropic Beta, and the concrete
+OpenAI Chat → Anthropic Beta-native Stage → OpenAI Chat chain. Every route runs
+text, tool use, tool result, stream, and non-stream (42 cells total).
 Because it has no client transport, `--mode=bridges` only accepts
 `--client=http`; it reuses scenario/source/target/streaming/batch filters but
 does not claim support for `--mcp` or `--record-dir`.

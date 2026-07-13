@@ -1,9 +1,9 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–2 foundations are implemented additively and carry no
-> production traffic. Anthropic identity and Anthropic-to-OpenAI-Chat bridges
-> are the first concrete bridge increment; converter changes expose dual-entry
-> pure APIs while existing handlers remain the production path.
+> Status: Phases 1–2 are implemented additively and carry no production
+> traffic. Bidirectional Anthropic Beta/OpenAI Chat bridges and a concrete
+> Chat → Beta-native Stage → Chat harness chain are complete; existing handlers
+> remain the only production path.
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
@@ -311,7 +311,7 @@ probe remains useful only as an explicit comparison path.
 - Add unit tests for complete and stream ordering, protocol mismatch, and close.
 - Do not import the package from existing server code.
 
-### Phase 2 — Bridge and live-chain harness
+### Phase 2 — Bridge and concrete-chain harness
 
 - Adapt existing request/nonstream/stream converters behind a bidirectional
   bridge session.
@@ -321,10 +321,12 @@ probe remains useful only as an explicit comparison path.
 
 Generic Bridge sessions, capability checks, an immutable exact-pair registry,
 identity bridges, and mixed-protocol in-memory topology tests are implemented.
-Concrete Anthropic v1/beta → OpenAI Chat bridges and their dormant in-process
-matrix are implemented for complete and stream. A production/live-path harness
-remains pending until server dispatch is deliberately integrated with the new
-topology; the dormant matrix must not be treated as evidence of that wiring.
+Concrete Anthropic v1/beta → OpenAI Chat and OpenAI Chat → Anthropic Beta
+bridges are implemented for complete and stream. The dormant matrix now runs a
+real Chat → Beta-native Stage → Chat topology in both modes. A production-path
+harness remains pending until server dispatch is deliberately integrated with
+the new topology; the dormant matrix must not be treated as evidence of that
+wiring.
 
 ### Phase 3 — Guardrails canary
 
@@ -414,14 +416,13 @@ production import:
 - monotonic propagation of usage/model fallback and committed side effects;
 - complete and streaming in-memory multi-hop harnesses.
 
-The first concrete Anthropic -> OpenAI Chat Bridge and its dormant matrix are
-implemented. Both response directions now expose transport-neutral complete
-and stream conversion entrypoints while existing `Handle*` functions remain
-the production wrappers. The reverse extraction preserves MCP-aware legacy
-driving and moves no handler or routing selection onto the Stage chain.
+Bidirectional Anthropic Beta/OpenAI Chat Bridges are implemented. Both response
+directions expose transport-neutral complete and stream conversion entrypoints
+while existing `Handle*` functions remain the production wrappers. The dormant
+42-cell Bridge matrix includes a concrete Chat → Beta-native Stage → Chat
+topology and verifies text, tool-use, and tool-result semantics in complete and
+streaming modes.
 
-The next additive increment is an exact-pair OpenAI Chat -> Anthropic Beta
-Bridge followed by a concrete Chat -> Beta-native Stage -> Chat in-process
-matrix. Runtime handler/dispatch integration remains a separate stop boundary:
-legacy stays the default and no server path may select `BuildTopology` without
-an explicit canary and rollback discussion.
+Runtime handler/dispatch integration is the next step and remains a separate
+stop boundary: legacy stays the default and no server path may select
+`BuildTopology` without an explicit canary and rollback discussion.

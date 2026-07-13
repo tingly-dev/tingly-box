@@ -129,9 +129,12 @@ functions.
 
 `./harness matrix --mode=bridges` validates the additive protocol Stage path
 without routing production gateway traffic through it. Results are visibly
-prefixed with `bridges/`; the section covers Anthropic v1/beta identity and
-Anthropic v1/beta → OpenAI Chat for text, tool-use, and tool-result requests in
-both execution modes. It reuses the normal matrix filters and batch option.
+prefixed with `bridges/`; concrete multi-level results use `bridges/chain/`.
+The 42-cell section covers Anthropic v1/beta/OpenAI Chat identity,
+Anthropic v1/beta → OpenAI Chat, OpenAI Chat → Anthropic Beta, and a real
+OpenAI Chat → Anthropic Beta-native Stage → OpenAI Chat topology for text,
+tool-use, and tool-result requests in both execution modes. It reuses the
+normal matrix filters and batch option.
 The standalone mode rejects external client drivers, MCP, and HTTP recording,
 because none of those surfaces are traversed by the in-process topology.
 
