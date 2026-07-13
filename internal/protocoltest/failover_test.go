@@ -86,6 +86,7 @@ func TestProtocolStageFailover_PreContent_RetriesAndSucceeds(t *testing.T) {
 	}{
 		{name: "chat_to_beta", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
 		{name: "v1_to_v1", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, endpoint: pt.EndpointAnthropic},
+		{name: "v1_to_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
 		{name: "beta_to_beta", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
 		{name: "beta_to_chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
 	}
@@ -123,6 +124,7 @@ func TestProtocolStageFailover_MidStreamDoesNotRetry(t *testing.T) {
 		endpoint pt.EndpointKind
 	}{
 		{name: "v1_to_v1", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, endpoint: pt.EndpointAnthropic},
+		{name: "v1_to_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
 		{name: "beta_to_beta", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
 		{name: "beta_to_chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
 	} {

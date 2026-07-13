@@ -23,6 +23,7 @@ type ProtocolStageSelector struct {
 func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 	registry, err := stage.NewBridgeRegistry(
 		stage.NewIdentityBridge(protocol.TypeAnthropicV1),
+		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{}),
 		stage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),

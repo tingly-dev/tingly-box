@@ -60,7 +60,7 @@ func (*MatrixCmd) Help() string {
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
 
-  # Exercise production Stage selection (Chat → Beta, Beta → Beta, Beta → Chat, V1 → V1)
+  # Exercise production Stage selection (Chat → Beta, Beta → Beta, Beta → Chat, V1 → V1, V1 → Chat)
   harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta
   harness matrix --mode=single --stage --source=anthropic_beta --target=openai_chat
 

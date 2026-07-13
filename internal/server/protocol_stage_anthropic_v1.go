@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
@@ -63,16 +64,15 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 
 	scenarioFlags, clientTransforms := protocolStageAnthropicV1ClientTransforms(scenarioConfig, ruleFlags)
 	providerTransforms := appendProtocolStageTransforms(
-		[]transform.Transform{transform.NewConsistencyTransform(protocol.TypeAnthropicV1)},
+		[]transform.Transform{transform.NewConsistencyTransform(target)},
 		RulePreVendorTransforms(ruleFlags),
 		[]transform.Transform{vendorTransformShared},
 	)
-	registry, err := protocolstage.NewBridgeRegistry(protocolstage.NewIdentityBridge(protocol.TypeAnthropicV1))
+	terminal, registry, err := ph.protocolStageAnthropicV1Target(target, provider, actualModel, responseModel, scenarioFlags)
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build Anthropic V1 Protocol Stage registry: %w", err))
+		ph.FailAttemptSetup(c, err)
 		return true
 	}
-	terminal := &anthropicV1ProviderEndpoint{ph: ph, provider: provider, model: actualModel}
 	stages := []protocolstage.Stage{
 		newProtocolTransformStage(
 			"client_prepare",
@@ -85,7 +85,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 		),
 		newProtocolTransformStage(
 			"provider_finalize",
-			protocol.TypeAnthropicV1,
+			target,
 			provider,
 			scenarioFlags,
 			isStreaming,
@@ -123,6 +123,35 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	}
 	ph.serveProtocolStageAnthropicV1Complete(c, endpoint, call, responseModel, provider, actualModel, rule, recorder)
 	return true
+}
+
+func (ph *ProtocolHandler) protocolStageAnthropicV1Target(
+	target protocol.APIType,
+	provider *typ.Provider,
+	actualModel string,
+	responseModel string,
+	scenarioFlags *typ.ScenarioFlags,
+) (protocolstage.Endpoint, *protocolstage.BridgeRegistry, error) {
+	disableStreamUsage := scenarioFlags != nil && scenarioFlags.SkipUsage
+	registry, err := protocolstage.NewBridgeRegistry(
+		protocolstage.NewIdentityBridge(protocol.TypeAnthropicV1),
+		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{
+			Compatible:         true,
+			DisableStreamUsage: disableStreamUsage,
+			ResponseModel:      responseModel,
+		}),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build Anthropic V1 Protocol Stage registry: %w", err)
+	}
+	switch target {
+	case protocol.TypeAnthropicV1:
+		return &anthropicV1ProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeOpenAIChat:
+		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	default:
+		return nil, nil, fmt.Errorf("Anthropic V1 Protocol Stage target %q is not implemented", target)
+	}
 }
 
 func protocolStageAnthropicV1ClientTransforms(
@@ -426,21 +455,31 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 }
 
 func protocolStageAnthropicV1EventJSON(value any, responseModel string) (string, []byte, error) {
-	event, ok := value.(anthropic.MessageStreamEventUnion)
-	if !ok {
+	var eventType string
+	var raw []byte
+	switch event := value.(type) {
+	case anthropic.MessageStreamEventUnion:
+		eventType = event.Type
+		raw = []byte(event.RawJSON())
+		if len(raw) == 0 {
+			var err error
+			raw, err = json.Marshal(event)
+			if err != nil {
+				return "", nil, fmt.Errorf("marshal Anthropic V1 stream event: %w", err)
+			}
+		}
+	case protocolstream.AnthropicEvent:
+		eventType = event.Type
+		var err error
+		raw, err = json.Marshal(event.Data)
+		if err != nil {
+			return "", nil, fmt.Errorf("marshal converted Anthropic V1 stream event: %w", err)
+		}
+	default:
 		return "", nil, fmt.Errorf("unsupported Anthropic V1 stream event %T", value)
 	}
-	eventType := event.Type
 	if eventType == "" {
 		return "", nil, fmt.Errorf("Anthropic V1 stream event has empty type")
-	}
-	raw := []byte(event.RawJSON())
-	if len(raw) == 0 {
-		var err error
-		raw, err = json.Marshal(event)
-		if err != nil {
-			return "", nil, fmt.Errorf("marshal Anthropic V1 stream event: %w", err)
-		}
 	}
 	if eventType != "message_start" {
 		return eventType, raw, nil

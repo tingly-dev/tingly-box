@@ -322,7 +322,7 @@ task start
 go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
 
 # Opt into the Protocol Stage pipeline (currently Chat→Beta, Beta→Beta,
-# Beta→Chat, and V1→V1; unsupported routes remain on legacy)
+# Beta→Chat, V1→V1, and V1→Chat; unsupported routes remain on legacy)
 go run ./cli/tingly-box start --stage
 ```
 
