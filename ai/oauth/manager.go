@@ -443,6 +443,20 @@ func (m *Manager) sendTokenRequest(ctx context.Context, config *ProviderConfig, 
 	return client.Do(req)
 }
 
+// populateAnthropicMetadata extracts organization / account identity from an
+// Anthropic (Claude) token response body into the token metadata. A response
+// body that does not decode is ignored — the token itself is still usable.
+func populateAnthropicMetadata(token *Token, rawBody []byte) {
+	var resp AnthropicTokenResponse
+	if json.Unmarshal(rawBody, &resp) != nil {
+		return
+	}
+	token.putMetadata("organization_id", resp.Organization.UUID)
+	token.putMetadata("organization_name", resp.Organization.Name)
+	token.putMetadata("account_id", resp.Account.UUID)
+	token.putMetadata("email", resp.Account.EmailAddress)
+}
+
 // populateCodexMetadata extracts email / account_id / name from a Codex ID
 // token (JWT) into the token metadata. Returns false if there is no ID token or
 // it could not be parsed.
@@ -593,14 +607,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	switch config.Type {
 	case ai.IssuerClaudeCode, ai.IssuerAnthropic:
 		// Anthropic/Claude return organization/account info in the token response.
-		// Use the pre-defined types from hook.go for consistency.
-		var anthropicResp AnthropicTokenResponse
-		if json.Unmarshal(rawBody, &anthropicResp) == nil {
-			token.putMetadata("organization_id", anthropicResp.Organization.UUID)
-			token.putMetadata("organization_name", anthropicResp.Organization.Name)
-			token.putMetadata("account_id", anthropicResp.Account.UUID)
-			token.putMetadata("email", anthropicResp.Account.EmailAddress)
-		}
+		populateAnthropicMetadata(token, rawBody)
 	case ai.IssuerCodex:
 		// Codex carries user info in the ID token (JWT).
 		if token.IDToken != "" {
