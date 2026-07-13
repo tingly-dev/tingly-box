@@ -116,7 +116,7 @@ export default {
     "system": "System",
     "general": "General",
     "experimental": "Experimental",
-    "logs": "Troubleshoot",
+    "logs": "Logs",
     "userRequest": "User Request",
     "skills": "Skills",
     "addProfile": "Add Profile",
@@ -737,9 +737,9 @@ export default {
       "skills": "Skills",
       "guardrails": "Guardrails",
       "mcp": "MCP",
-      "enableIdeSkills": "Enable IDE Skills feature for managing code snippets and skills from IDEs",
-      "enableGuardrails": "Enable Guardrails - block risky tool calls and filter sensitive outputs",
-      "enableMCP": "Enable MCP Tools - Configure MCP (Model Context Protocol) tools like web search and web fetch",
+      "enableIdeSkills": "Manage code snippets and skills from your IDE",
+      "enableGuardrails": "Block risky tool calls and filter sensitive outputs",
+      "enableMCP": "MCP (Model Context Protocol) tools such as web search and web fetch",
       "on": "On",
       "off": "Off",
       "enabled": "enabled",
@@ -760,6 +760,9 @@ export default {
       "server": "Server",
       "forceLogout": "Force logout",
       "refreshStatus": "Refresh status"
+    },
+    "preferences": {
+      "title": "Appearance & Language"
     }
   },
   "serverInfo": {

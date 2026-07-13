@@ -452,11 +452,6 @@ const AccessControl = () => {
                             </Box>
                         </Box>
 
-                        <Alert severity="info" sx={{ mt: 1 }}>
-                            <Typography variant="body2">
-                                {t('accessControl.modelToken.sharing')}
-                            </Typography>
-                        </Alert>
                     </Stack>
                 </UnifiedCard>
             </Stack>

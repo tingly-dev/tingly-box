@@ -117,7 +117,7 @@ export default {
     "system": "系统",
     "general": "通用",
     "experimental": "实验功能",
-    "logs": "错误检查",
+    "logs": "日志",
     "userRequest": "用户请求",
     "skills": "技能",
     "addProfile": "添加配置文件",
@@ -738,9 +738,9 @@ export default {
       "skills": "Skills",
       "guardrails": "Guardrails",
       "mcp": "MCP",
-      "enableIdeSkills": "启用 IDE Skills 功能，用于管理来自 IDE 的代码片段和技能",
-      "enableGuardrails": "启用 Guardrails - 阻止有风险的工具调用并过滤敏感输出",
-      "enableMCP": "启用 MCP Tools - 配置 MCP（Model Context Protocol）工具，如网页搜索和网页获取",
+      "enableIdeSkills": "管理来自 IDE 的代码片段和技能",
+      "enableGuardrails": "阻止有风险的工具调用并过滤敏感输出",
+      "enableMCP": "MCP（Model Context Protocol）工具，如网页搜索和网页获取",
       "on": "On",
       "off": "Off",
       "enabled": "已启用",
@@ -761,6 +761,9 @@ export default {
       "server": "服务器",
       "forceLogout": "强制登出",
       "refreshStatus": "刷新状态"
+    },
+    "preferences": {
+      "title": "外观与语言"
     }
   },
   "serverInfo": {

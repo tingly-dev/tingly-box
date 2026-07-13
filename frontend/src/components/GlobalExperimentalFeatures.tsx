@@ -1,6 +1,6 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import { Psychology as IconBrain, Shield as IconShield, SettingsApplications } from '@/components/icons';
-import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
+import {Alert, Box, Chip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {api} from '../services/api';
@@ -123,63 +123,56 @@ const GlobalExperimentalFeatures: React.FC = () => {
         },
     });
 
+    // One row per feature: name + always-visible description, with a plain
+    // On/Off chip on the right. The description used to live only in a hover
+    // tooltip (and the chip repeated the feature name).
+    const featureRow = (
+        icon: React.ReactNode,
+        name: string,
+        description: string,
+        enabled: boolean,
+        onToggle: () => void,
+    ) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                {icon}
+                <Typography variant="subtitle2">{name}</Typography>
+            </Box>
+            <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
+                {description}
+            </Typography>
+            <Chip
+                label={enabled ? t('common.on') : t('common.off')}
+                onClick={onToggle}
+                size="small"
+                sx={{ ...chipStyle(enabled), minWidth: 52 }}
+            />
+        </Box>
+    );
+
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', gap: 0}}>
             {/* Skill Features - Only in full edition */}
-            {isFullEdition && (
-                <Box sx={{display: 'flex', alignItems: 'center', py: 2, gap: 3}}>
-                    {/* Label */}
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 180}}>
-                        <IconBrain sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        <Typography variant="subtitle2" sx={{color: 'text.secondary'}}>
-                            {t('system.experimentalFeatures.skills')}
-                        </Typography>
-                        <Tooltip title={t('system.experimentalFeatures.enableIdeSkills')} arrow>
-                            <Box/>
-                        </Tooltip>
-                    </Box>
-
-                    {/* Skill feature toggles as clickable chips */}
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flex: 1}}>
-                        {SKILL_FEATURES.map((feature) => {
-                            const isEnabled = features[feature.key] || false;
-                            return (
-                                <Tooltip key={feature.key}
-                                         title={t(feature.descriptionKey) + (isEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)}
-                                         arrow>
-                                    <Chip
-                                        label={`${t(feature.labelKey)} · ${isEnabled ? t('common.on') : t('common.off')}`}
-                                        onClick={() => toggleFeature(feature.key)}
-                                        size="small"
-                                        sx={chipStyle(isEnabled)}
-                                    />
-                                </Tooltip>
-                            );
-                        })}
-                    </Box>
-                </Box>)
-            }
+            {isFullEdition && SKILL_FEATURES.map((feature) =>
+                <React.Fragment key={feature.key}>
+                    {featureRow(
+                        <IconBrain sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                        t(feature.labelKey),
+                        t(feature.descriptionKey),
+                        features[feature.key] || false,
+                        () => toggleFeature(feature.key),
+                    )}
+                </React.Fragment>
+            )}
 
             {/* Guardrails Section */}
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <IconShield sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        {t('system.experimentalFeatures.guardrails')}
-                    </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    <Tooltip title={t('system.experimentalFeatures.enableGuardrails') + (guardrailsEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)} arrow>
-                        <Chip
-                            label={`${t('system.experimentalFeatures.guardrails')} · ${guardrailsEnabled ? t('common.on') : t('common.off')}`}
-                            onClick={toggleGuardrails}
-                            size="small"
-                            sx={chipStyle(guardrailsEnabled)}
-                        />
-                    </Tooltip>
-                </Box>
-            </Box>
+            {featureRow(
+                <IconShield sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.guardrails'),
+                t('system.experimentalFeatures.enableGuardrails'),
+                guardrailsEnabled,
+                toggleGuardrails,
+            )}
 
             {guardrailsEnabled && (
                 <Alert severity="info" sx={{ mt: 1 }}>
@@ -190,25 +183,13 @@ const GlobalExperimentalFeatures: React.FC = () => {
             )}
 
             {/* MCP Section */}
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <SettingsApplications sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        {t('system.experimentalFeatures.mcp')}
-                    </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    <Tooltip title={t('system.experimentalFeatures.enableMCP') + (mcpEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)} arrow>
-                        <Chip
-                            label={`${t('system.experimentalFeatures.mcp')} Tools · ${mcpEnabled ? t('common.on') : t('common.off')}`}
-                            onClick={toggleMCP}
-                            size="small"
-                            sx={{ ...chipStyle(mcpEnabled), cursor: 'pointer', pointerEvents: 'auto' }}
-                        />
-                    </Tooltip>
-                </Box>
-            </Box>
+            {featureRow(
+                <SettingsApplications sx={{ fontSize: '1rem', color: 'text.secondary' }} />,
+                `${t('system.experimentalFeatures.mcp')} Tools`,
+                t('system.experimentalFeatures.enableMCP'),
+                mcpEnabled,
+                toggleMCP,
+            )}
 
             {mcpEnabled && (
                 <Alert severity="info" sx={{ mt: 1 }}>

@@ -223,87 +223,6 @@ const System = () => {
                             </Box>
                         </Box>
 
-                        {/* Language — merged from the standalone Language Settings card */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconLanguage sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                    {t('system.language.title')}
-                                </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                                <Chip
-                                    label={t('system.language.en')}
-                                    onClick={() => changeLanguage('en')}
-                                    size="small"
-                                    sx={{
-                                        bgcolor: i18n.language === 'en' ? 'primary.main' : 'action.hover',
-                                        color: i18n.language === 'en' ? 'primary.contrastText' : 'text.primary',
-                                        fontWeight: i18n.language === 'en' ? 600 : 400,
-                                        border: i18n.language === 'en' ? 'none' : '1px solid',
-                                        borderColor: 'divider',
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            bgcolor: i18n.language === 'en' ? 'primary.dark' : 'action.selected',
-                                        },
-                                    }}
-                                />
-                                <Chip
-                                    label={t('system.language.zh')}
-                                    onClick={() => changeLanguage('zh')}
-                                    size="small"
-                                    sx={{
-                                        bgcolor: i18n.language === 'zh' ? 'primary.main' : 'action.hover',
-                                        color: i18n.language === 'zh' ? 'primary.contrastText' : 'text.primary',
-                                        fontWeight: i18n.language === 'zh' ? 600 : 400,
-                                        border: i18n.language === 'zh' ? 'none' : '1px solid',
-                                        borderColor: 'divider',
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            bgcolor: i18n.language === 'zh' ? 'primary.dark' : 'action.selected',
-                                        },
-                                    }}
-                                />
-                            </Box>
-                        </Box>
-
-                        {/* Theme — moved from the activity bar */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconBrush sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                    {t('common.theme')}
-                                </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, flexWrap: 'wrap' }}>
-                                {themeOptions.map(({ value, label, renderIcon }) => {
-                                    const selected = themeMode === value;
-                                    return (
-                                        <Chip
-                                            key={value}
-                                            icon={renderIcon({ size: 14 })}
-                                            label={label}
-                                            onClick={() => setTheme(value)}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: selected ? 'primary.main' : 'action.hover',
-                                                color: selected ? 'primary.contrastText' : 'text.primary',
-                                                fontWeight: selected ? 600 : 400,
-                                                border: selected ? 'none' : '1px solid',
-                                                borderColor: 'divider',
-                                                cursor: 'pointer',
-                                                '& .MuiChip-icon': {
-                                                    color: 'inherit',
-                                                },
-                                                '&:hover': {
-                                                    bgcolor: selected ? 'primary.dark' : 'action.selected',
-                                                },
-                                            }}
-                                        />
-                                    );
-                                })}
-                            </Box>
-                        </Box>
                     </Stack>
                 </UnifiedCard>
 
@@ -351,6 +270,98 @@ const System = () => {
                                 {proxyUrlSaving ? <CircularProgress size={14} color="inherit" /> : t('common.save')}
                             </Button>
                         </Stack>
+                    </Stack>
+                </UnifiedCard>
+
+                {/* Appearance & Language — user preferences, kept apart from
+                    server state so "Server Status" only answers "is the
+                    gateway healthy?" */}
+                <UnifiedCard
+                    title={t('system.preferences.title')}
+                    size="full"
+                >
+                    <Stack spacing={1.5}>
+                        {/* Language */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                <IconLanguage sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    {t('system.language.title')}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                                <Chip
+                                    label={t('system.language.en')}
+                                    onClick={() => changeLanguage('en')}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: i18n.language === 'en' ? 'primary.main' : 'action.hover',
+                                        color: i18n.language === 'en' ? 'primary.contrastText' : 'text.primary',
+                                        fontWeight: i18n.language === 'en' ? 600 : 400,
+                                        border: i18n.language === 'en' ? 'none' : '1px solid',
+                                        borderColor: 'divider',
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                            bgcolor: i18n.language === 'en' ? 'primary.dark' : 'action.selected',
+                                        },
+                                    }}
+                                />
+                                <Chip
+                                    label={t('system.language.zh')}
+                                    onClick={() => changeLanguage('zh')}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: i18n.language === 'zh' ? 'primary.main' : 'action.hover',
+                                        color: i18n.language === 'zh' ? 'primary.contrastText' : 'text.primary',
+                                        fontWeight: i18n.language === 'zh' ? 600 : 400,
+                                        border: i18n.language === 'zh' ? 'none' : '1px solid',
+                                        borderColor: 'divider',
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                            bgcolor: i18n.language === 'zh' ? 'primary.dark' : 'action.selected',
+                                        },
+                                    }}
+                                />
+                            </Box>
+                        </Box>
+
+                        {/* Theme */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                <IconBrush sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    {t('common.theme')}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, flexWrap: 'wrap' }}>
+                                {themeOptions.map(({ value, label, renderIcon }) => {
+                                    const selected = themeMode === value;
+                                    return (
+                                        <Chip
+                                            key={value}
+                                            icon={renderIcon({ size: 14 })}
+                                            label={label}
+                                            onClick={() => setTheme(value)}
+                                            size="small"
+                                            sx={{
+                                                bgcolor: selected ? 'primary.main' : 'action.hover',
+                                                color: selected ? 'primary.contrastText' : 'text.primary',
+                                                fontWeight: selected ? 600 : 400,
+                                                border: selected ? 'none' : '1px solid',
+                                                borderColor: 'divider',
+                                                cursor: 'pointer',
+                                                '& .MuiChip-icon': {
+                                                    color: 'inherit',
+                                                },
+                                                '&:hover': {
+                                                    bgcolor: selected ? 'primary.dark' : 'action.selected',
+                                                },
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </Box>
+                        </Box>
                     </Stack>
                 </UnifiedCard>
 
