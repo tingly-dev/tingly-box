@@ -398,6 +398,32 @@ lifecycle.
 - Side-effect commitment must be propagated even when a later model round
   fails.
 
+## Feature Stage Contract
+
+Guardrail and Tool Loop integrations must behave as typed multi-level services,
+not renamed handler hooks:
+
+- each feature is a full-duplex `Stage` that wraps one `Endpoint` and owns both
+  complete and stream lifecycles in one concrete protocol;
+- feature code declares its concrete protocol and never invokes protocol
+  conversion directly; `BuildTopology` inserts capability-complete Bridges;
+- one Bridge session converts the request inward and the response or events
+  outward for a single call;
+- adjacent feature Stages using the same protocol compose without another
+  conversion;
+- a feature Stage can be tested without Gin, server routing, or a provider
+  transport and can later be replaced by a remote Endpoint implementation;
+- missing capabilities fail topology construction or select the entire legacy
+  pipeline; one request never mixes Stage and legacy ownership;
+- tools are dependencies of a `ToolLoopStage`: MCP, server tools, and builtins
+  implement `ToolExecutor` rather than becoming protocols themselves.
+
+The first Guardrail foundation is an observe-only, fail-open Stage. It inspects
+requests, complete responses, and every stream event while preserving the live
+native values, endpoint errors, stream ownership, usage, model, and monotonic
+side-effect facts. Enforcement and mutation remain a later canary so the first
+integration cannot change user-visible policy behavior.
+
 ## UX-First Review
 
 - **Vocabulary**: “Protocol Stage” avoids collision with routing Tier.
