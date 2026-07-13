@@ -1,11 +1,12 @@
-# Codex Hybrid Auth: keep the official ChatGPT login while routing through tingly-box
+# Codex Auth Modes: gateway, direct ChatGPT, and hybrid
 
 > Audience: contributors touching the Codex "Auto Config" flow
 > (`~/.codex/config.toml` + `~/.codex/auth.json`).
-> This records why Codex gained a third auth path — **hybrid** — that lets a
-> user route requests through the tingly-box gateway *and* keep a native
-> ChatGPT login in `auth.json`, and how it maps onto two orthogonal UI axes
-> instead of a growing mode picker.
+> This documents the three ways tingly-box wires Codex authentication —
+> **gateway** (`apikey`), **direct ChatGPT** (`chatgpt`), and **hybrid** — with
+> the emphasis on why hybrid was added: it lets a user route requests through
+> the tingly-box gateway *and* keep a native ChatGPT login in `auth.json`, and
+> maps onto two orthogonal UI axes instead of a growing mode picker.
 
 ---
 
