@@ -915,12 +915,14 @@ export default function DashboardPage() {
                 </Box>
             </Box>
 
+            {/* Fixed 180-day activity overview — sits with the trend chart as the
+                "time views" group, above the model breakdown table so it's seen
+                without scrolling to the very bottom. Independent of the range
+                selector above; shares only the Provider filter. */}
+            <DashboardHeatmapSection provider={selectedProvider} refreshKey={heatmapRefresh} />
+
             {/* Stats Table */}
             <ServiceStatsTable stats={stats} />
-
-            {/* Fixed 180-day activity overview — independent of the range selector
-                above; shares only the Provider filter. */}
-            <DashboardHeatmapSection provider={selectedProvider} refreshKey={heatmapRefresh} />
         </Box>
     );
 }

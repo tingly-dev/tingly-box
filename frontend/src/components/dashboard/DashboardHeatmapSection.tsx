@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Paper, Tooltip, Typography } from '@mui/material';
+import { Info as InfoIcon } from '@/components/icons';
 import { format } from 'date-fns';
 import api from '@/services/api';
 import { type DailyUsage, TokenHeatmap } from './TokenHeatmap';
@@ -124,13 +125,21 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
                 boxShadow: 'none',
             }}
         >
-            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Token Activity
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Last {HEATMAP_DAYS} days
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        Last {HEATMAP_DAYS} days
+                    </Typography>
+                    <Tooltip
+                        title={`Fixed ${HEATMAP_DAYS}-day window — not affected by the range selector above (the Provider filter still applies).`}
+                        arrow
+                    >
+                        <InfoIcon sx={{ fontSize: 15, color: 'text.disabled', cursor: 'default' }} />
+                    </Tooltip>
+                </Box>
             </Box>
 
             <Box ref={gridContainerRef} sx={{ display: 'flex', justifyContent: 'center' }}>
