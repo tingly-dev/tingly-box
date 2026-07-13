@@ -135,11 +135,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 		return true
 	}
 
-	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-		"protocol_pipeline": "stage",
-		"source_protocol":   protocol.TypeAnthropicBeta,
-		"target_protocol":   target,
-	}).Debug("Selected Protocol Stage pipeline")
+	logProtocolStageEntry(c, protocol.TypeAnthropicBeta, target, stages, isStreaming)
 
 	call := protocolstage.Call{
 		Request: req.BetaMessageNewParams,

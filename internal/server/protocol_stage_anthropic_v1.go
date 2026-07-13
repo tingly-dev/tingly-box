@@ -105,11 +105,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 		return true
 	}
 
-	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-		"protocol_pipeline": "stage",
-		"source_protocol":   protocol.TypeAnthropicV1,
-		"target_protocol":   target,
-	}).Debug("Selected Protocol Stage pipeline")
+	logProtocolStageEntry(c, protocol.TypeAnthropicV1, target, stages, isStreaming)
 
 	call := protocolstage.Call{
 		Request: req.MessageNewParams,

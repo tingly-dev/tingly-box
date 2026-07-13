@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -129,11 +130,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		return true
 	}
 
-	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-		"protocol_pipeline": "stage",
-		"source_protocol":   protocol.TypeOpenAIChat,
-		"target_protocol":   target,
-	}).Debug("Selected Protocol Stage pipeline")
+	logProtocolStageEntry(c, protocol.TypeOpenAIChat, target, stages, isStreaming)
 
 	call := protocolstage.Call{
 		Request: req.ChatCompletionNewParams,
@@ -176,6 +173,29 @@ func logProtocolStageFallback(c *gin.Context, source, target protocol.APIType, r
 		"target_protocol":   target,
 		"reason":            reason,
 	}).Debug("Protocol Stage request stayed on legacy")
+}
+
+func logProtocolStageEntry(
+	c *gin.Context,
+	source, target protocol.APIType,
+	stages []protocolstage.Stage,
+	streaming bool,
+) {
+	operation := "complete"
+	if streaming {
+		operation = "stream"
+	}
+	chain := make([]string, 0, len(stages))
+	for _, current := range stages {
+		chain = append(chain, fmt.Sprintf("%s[%s]", current.Name(), current.Protocol()))
+	}
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"protocol_pipeline": "stage",
+		"source_protocol":   source,
+		"target_protocol":   target,
+		"operation":         operation,
+		"stage_chain":       strings.Join(chain, " -> "),
+	}).Debug("Entering Protocol Stage pipeline")
 }
 
 func appendProtocolStageTransforms(groups ...[]transform.Transform) []transform.Transform {
