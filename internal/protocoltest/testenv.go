@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -55,6 +56,7 @@ type testEnvConfig struct {
 	recordDir            string
 	mcpEnabled           bool
 	protocolStageEnabled bool
+	guardrailsRuntime    *guardrails.Guardrails
 	client               Client
 }
 
@@ -77,6 +79,14 @@ func NewTestEnvOptionWithMCP() TestEnvOption {
 func NewTestEnvOptionWithProtocolStage() TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.protocolStageEnabled = true
+	}
+}
+
+// NewTestEnvOptionWithGuardrails enables Guardrails for the global scenario
+// and injects the supplied runtime into the real gateway server.
+func NewTestEnvOptionWithGuardrails(runtime *guardrails.Guardrails) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.guardrailsRuntime = runtime
 	}
 }
 
@@ -187,10 +197,16 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	if cfg.protocolStageEnabled {
 		serverOpts = append(serverOpts, server.WithProtocolStage(true))
 	}
+	if cfg.guardrailsRuntime != nil {
+		serverOpts = append(serverOpts, server.WithGuardrails(cfg.guardrailsRuntime))
+	}
 
 	core, err := newGatewayCore("pv-env-*", func(ac *config.AppConfig) {
 		if cfg.mcpEnabled {
 			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionMCP, true)
+		}
+		if cfg.guardrailsRuntime != nil {
+			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionGuardrails, true)
 		}
 	}, serverOpts...)
 	if err != nil {

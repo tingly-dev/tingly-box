@@ -11,9 +11,11 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
+	protocolguardrail "github.com/tingly-dev/tingly-box/internal/protocol/stage/guardrail"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/recording"
@@ -49,13 +51,9 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 
 	// These features still own parts of the legacy Beta lifecycle. Keep the
 	// entire attempt on legacy until each one is represented by a native Stage;
-	// partial execution would silently omit response policy or tool-loop work.
+	// partial execution would silently omit tool-loop or recording work.
 	if ph.mcpEnabled() {
 		logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "MCP runtime still uses the legacy pipeline")
-		return false
-	}
-	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
-		logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "Guardrails still use the legacy Anthropic Beta lifecycle")
 		return false
 	}
 	if recorder != nil {
@@ -95,6 +93,26 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 			clientTransforms,
 			protocolStageTransformOptions(ph, c)...,
 		),
+	}
+	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
+		guardrailStage, guardrailErr := protocolguardrail.NewAnthropicBeta(protocolguardrail.AnthropicBetaConfig{
+			Runtime: ph.currentGuardrailsRuntime(),
+			BaseInput: BuildGuardrailsBaseInput(
+				c,
+				actualModel,
+				provider,
+				guardrailscore.DirectionRequest,
+				nil,
+			),
+			Observe: protocolStageGuardrailObserver(c),
+		})
+		if guardrailErr != nil {
+			ph.FailAttemptSetup(c, guardrailErr)
+			return true
+		}
+		stages = append(stages, guardrailStage)
+	}
+	stages = append(stages,
 		newProtocolTransformStage(
 			"provider_finalize",
 			target,
@@ -104,7 +122,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 			providerTransforms,
 			protocolStageTransformOptions(ph, c)...,
 		),
-	}
+	)
 	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
 		Terminal:             terminal,
 		Stages:               stages,
@@ -135,6 +153,25 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 	}
 	ph.serveProtocolStageAnthropicBetaComplete(c, endpoint, call, responseModel, provider, actualModel, rule, recorder)
 	return true
+}
+
+func protocolStageGuardrailObserver(c *gin.Context) protocolguardrail.Observer {
+	return func(observation protocolguardrail.Observation) {
+		entry := logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"protocol_pipeline": "stage",
+			"stage":             observation.Stage,
+			"stage_protocol":    observation.Protocol,
+			"guardrail_phase":   observation.Phase,
+			"guardrail_verdict": observation.Decision.Verdict,
+		})
+		if observation.Err != nil {
+			entry.WithError(observation.Err).Warn("Protocol Stage Guardrail evaluation failed open")
+			return
+		}
+		if observation.Decision.Verdict == protocolguardrail.VerdictBlock {
+			entry.Debug("Protocol Stage Guardrail changed the response")
+		}
+	}
 }
 
 func (ph *ProtocolHandler) protocolStageAnthropicBetaTarget(
@@ -231,17 +268,27 @@ func protocolStageAnthropicBetaMessageJSON(message *anthropic.BetaMessage, respo
 	if message == nil {
 		return nil, fmt.Errorf("Anthropic Beta Protocol Stage response is nil")
 	}
-	raw := []byte(message.RawJSON())
-	if len(raw) == 0 {
-		var err error
-		raw, err = json.Marshal(message)
-		if err != nil {
-			return nil, fmt.Errorf("marshal Anthropic Beta response: %w", err)
-		}
+	structured, err := json.Marshal(message)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Anthropic Beta response: %w", err)
 	}
 	var object map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &object); err != nil {
-		return nil, fmt.Errorf("decode Anthropic Beta response: %w", err)
+	if raw := []byte(message.RawJSON()); len(raw) > 0 {
+		if err := json.Unmarshal(raw, &object); err != nil {
+			return nil, fmt.Errorf("decode Anthropic Beta raw response: %w", err)
+		}
+	} else {
+		object = make(map[string]json.RawMessage)
+	}
+	// The SDK retains the provider wire payload in RawJSON. Merge current
+	// structured fields over that payload so Stage mutations (Guardrails,
+	// transforms) reach the client while unknown provider fields survive.
+	var current map[string]json.RawMessage
+	if err := json.Unmarshal(structured, &current); err != nil {
+		return nil, fmt.Errorf("decode structured Anthropic Beta response: %w", err)
+	}
+	for key, value := range current {
+		object[key] = value
 	}
 	model, err := json.Marshal(responseModel)
 	if err != nil {

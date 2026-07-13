@@ -2,11 +2,14 @@ package protocoltest
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -88,6 +91,113 @@ func TestServerProtocolStageSelection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServerProtocolStageAnthropicBetaGuardrailComplete(t *testing.T) {
+	t.Parallel()
+
+	for _, target := range []protocol.APIType{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat} {
+		target := target
+		t.Run(string(target), func(t *testing.T) {
+			t.Parallel()
+			runtime := newProtocolStageGuardrails(func(_ context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
+				if input.Direction == guardrailscore.DirectionResponse {
+					return protocolStageBlockedResult("response denied"), nil
+				}
+				return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
+			})
+			env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(runtime))
+			scenario := TextScenario()
+			env.SetupRoute(protocol.TypeAnthropicBeta, target, scenario)
+			model := env.findRouteModel(protocol.TypeAnthropicBeta, target, scenario.Name)
+			path, body := buildRequest(protocol.TypeAnthropicBeta, model, false)
+
+			resp, responseBody := sendProtocolStageProbe(t, env, path, body)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d: %s", resp.StatusCode, responseBody)
+			}
+			if got := resp.Header.Get("X-Tingly-Protocol-Pipeline"); got != "stage" {
+				t.Fatalf("pipeline header = %q, want stage", got)
+			}
+			if !strings.Contains(string(responseBody), "Blocked by guardrails") {
+				t.Fatalf("response was not blocked: %s", responseBody)
+			}
+		})
+	}
+}
+
+func TestServerProtocolStageAnthropicBetaGuardrailStream(t *testing.T) {
+	t.Parallel()
+
+	runtime := newProtocolStageGuardrails(func(_ context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
+		if input.Direction == guardrailscore.DirectionResponse && input.Content.Command != nil {
+			return protocolStageBlockedResult("command denied"), nil
+		}
+		return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
+	})
+	env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(runtime))
+	scenario := StreamingToolUseScenario()
+	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, scenario)
+	model := env.findRouteModel(protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, scenario.Name)
+	path, body := buildRequest(protocol.TypeAnthropicBeta, model, true)
+
+	resp, responseBody := sendProtocolStageProbe(t, env, path, body)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, responseBody)
+	}
+	if got := resp.Header.Get("X-Tingly-Protocol-Pipeline"); got != "stage" {
+		t.Fatalf("pipeline header = %q, want stage", got)
+	}
+	if !strings.Contains(string(responseBody), "Blocked by guardrails") {
+		t.Fatalf("stream was not blocked: %s", responseBody)
+	}
+	if strings.Contains(string(responseBody), `"type":"tool_use"`) {
+		t.Fatalf("blocked tool_use leaked to client: %s", responseBody)
+	}
+}
+
+type protocolStageGuardrailPolicy func(context.Context, guardrailscore.Input) (guardrailscore.Result, error)
+
+func (policy protocolStageGuardrailPolicy) Evaluate(ctx context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
+	return policy(ctx, input)
+}
+
+func newProtocolStageGuardrails(policy protocolStageGuardrailPolicy) *guardrails.Guardrails {
+	return &guardrails.Guardrails{Policy: policy, HasActivePolicies: true}
+}
+
+func protocolStageBlockedResult(reason string) guardrailscore.Result {
+	return guardrailscore.Result{
+		Verdict: guardrailscore.VerdictBlock,
+		Reasons: []guardrailscore.PolicyResult{{
+			PolicyID: "protocol-stage-test",
+			Verdict:  guardrailscore.VerdictBlock,
+			Reason:   reason,
+		}},
+	}
+}
+
+func sendProtocolStageProbe(t *testing.T, env *TestEnv, path string, body []byte) (*http.Response, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, env.GatewayURL()+path, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+env.ModelToken())
+	req.Header.Set("X-Tingly-Debug-Routing", "1")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		resp.Body.Close()
+		t.Fatalf("read response: %v", err)
+	}
+	return resp, responseBody
 }
 
 func TestServerProtocolStagePreservesSkipUsageFlag(t *testing.T) {

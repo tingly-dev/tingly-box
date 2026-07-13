@@ -1,9 +1,10 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–2 are implemented additively. `tingly-box start --stage`
-> now opts OpenAI Chat → Anthropic Beta and Anthropic Beta → Anthropic Beta
-> attempts into the production Stage pipeline; all other routes and requests
-> requiring MCP, Guardrails, or protocol recording remain on legacy.
+> Status: Phases 1–2 and the first Phase 3 canary are implemented additively.
+> `tingly-box start --stage` selects the supported Chat/Beta/V1 production
+> routes. Anthropic Beta requests can now include the Beta-native Guardrail
+> Stage; MCP, protocol recording, unsupported routes, and V1 Guardrails remain
+> on legacy.
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
@@ -323,17 +324,25 @@ Generic Bridge sessions, capability checks, an immutable exact-pair registry,
 identity bridges, and mixed-protocol in-memory topology tests are implemented.
 Concrete Anthropic v1/beta → OpenAI Chat and OpenAI Chat → Anthropic Beta
 bridges are implemented for complete and stream. The dormant matrix now runs a
-real Chat → Beta-native Stage → Chat topology in both modes. A production-path
-harness remains pending until server dispatch is deliberately integrated with
-the new topology; the dormant matrix must not be treated as evidence of that
-wiring.
+real Chat → Beta-native Stage → Chat topology in both modes. Production-path
+server and harness validation is tracked separately; the dormant matrix alone
+must not be treated as evidence of production dispatch wiring.
 
 ### Phase 3 — Guardrails canary
 
 - Implement Guardrails for one native stage protocol.
-- Compare dry-run decisions and mutations with legacy behavior.
-- Enable only for allowlisted scenarios/providers; retain legacy fallback before
-  response commitment.
+- Compare request, complete-response, and stream-event mutations with legacy
+  behavior in independent and real-path tests.
+- Enable only when both `--stage` and the existing Guardrails scenario gate are
+  active; retain whole-attempt legacy fallback for unsupported feature mixes.
+
+The first canary is authoritative rather than shadowed: a response policy can
+only inspect the result of the one provider call that will be returned to the
+client. Running a second legacy response path would either call the provider
+twice or compare a synthetic lifecycle, neither of which is a safe dry run.
+Anthropic Beta Guardrails therefore own request and response processing only
+after the Stage topology is selected. If selection declines, the untouched
+attempt enters the complete legacy Guardrail lifecycle.
 
 ### Phase 4 — Tool Loop canary
 
@@ -362,9 +371,10 @@ The native routes are explicitly `anthropic_beta → anthropic_beta`,
 `anthropic_v1 → openai_chat`.
 `anthropic_v1` remains a separate protocol with its own request, response,
 stream, terminal, and identity registration; it does not inherit Beta's
-identity or Bridge registrations. These routes stay on legacy whenever MCP,
-Guardrails, or V2 protocol recording owns part of the request/response
-lifecycle.
+identity or Bridge registrations. These routes stay on legacy whenever MCP or
+V2 protocol recording owns part of the request/response lifecycle. Guardrails
+are native only on Beta-source routes; V1 Guardrails still select the entire
+legacy pipeline.
 
 ### Phase 6 — Legacy removal
 
@@ -418,11 +428,12 @@ not renamed handler hooks:
 - tools are dependencies of a `ToolLoopStage`: MCP, server tools, and builtins
   implement `ToolExecutor` rather than becoming protocols themselves.
 
-The first Guardrail foundation is an observe-only, fail-open Stage. It inspects
-requests, complete responses, and every stream event while preserving the live
-native values, endpoint errors, stream ownership, usage, model, and monotonic
-side-effect facts. Enforcement and mutation remain a later canary so the first
-integration cannot change user-visible policy behavior.
+The generic Guardrail foundation remains an observe-only, fail-open Stage for
+new evaluators. The first authoritative adapter implements the existing
+Anthropic Beta request mutation, complete-response blocking/restoration, and
+stream `tool_use` buffering/rewrite while preserving endpoint errors, stream
+ownership, usage, model, and monotonic side-effect facts. It contains no Gin,
+provider, or Bridge dependency.
 
 ## UX-First Review
 
@@ -449,8 +460,7 @@ integration cannot change user-visible policy behavior.
 
 ## Implementation Checkpoint — 2026-07-13
 
-The following are implemented under `internal/protocol/stage` without any
-production import:
+The following foundations are implemented under `internal/protocol/stage`:
 
 - complete and streaming Endpoint contracts;
 - ordered same-protocol Stage composition;
@@ -480,3 +490,12 @@ Chat Bridge, then the concrete provider-finalization and endpoint.
 Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
 exposes the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
+
+The first feature canary composes `guardrail_anthropic_beta` between Beta client
+preparation and provider finalization. On Beta → Chat, `BuildTopology` inserts
+the Beta → Chat Bridge below the Guardrail, so provider responses are converted
+back to Beta before response policy runs. The same one-protocol Guardrail
+therefore covers native Beta and Chat-backed Beta calls in complete and stream
+modes. The real HTTP tests verify blocking on both targets and streamed tool-use
+rewriting; `harness matrix --stage --guardrails` supplies an allow-only runtime
+for full semantic compatibility matrices.

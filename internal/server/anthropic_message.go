@@ -386,12 +386,6 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 		return
 	}
 
-	// request guardrails
-	scenario := GetTrackingContextScenario(c)
-	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1BetaRequest(c, ph.currentGuardrailsRuntime(), req.BetaMessageNewParams, requestModel, provider)
-	}
-
 	// Determine target API type for protocol transformation detection
 	target := protocol.TypeAnthropicBeta
 	switch provider.APIStyle {
@@ -425,6 +419,14 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 		recorder,
 	) {
 		return
+	}
+
+	// The Stage path owns Guardrail request and response processing as one
+	// full-duplex unit. Apply the legacy request mutation only after Stage
+	// selection declines the entire attempt, avoiding duplicate policy work.
+	scenario := GetTrackingContextScenario(c)
+	if ph.guardrailsEnabledForScenario(scenario) {
+		ApplyGuardrailsToAnthropicV1BetaRequest(c, ph.currentGuardrailsRuntime(), req.BetaMessageNewParams, requestModel, provider)
 	}
 
 	reqCtx, err := ph.TransformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))

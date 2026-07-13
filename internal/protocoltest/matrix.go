@@ -37,6 +37,7 @@ type Matrix struct {
 	BatchCount           int    // Number of times to run each test
 	MCPEnabled           bool   // Enable MCP feature flag in test env
 	ProtocolStageEnabled bool   // Enable the production Protocol Stage selector
+	GuardrailsEnabled    bool   // Enable an allow-only Guardrails runtime in the test env
 	Client               Client // Client driver (nil = raw HTTP default)
 }
 
@@ -191,6 +192,14 @@ func (m *Matrix) WithProtocolStage() *Matrix {
 	return out
 }
 
+// WithGuardrails enables an active allow-only Guardrails runtime. Matrix
+// scenarios retain their normal semantics while exercising feature topology.
+func (m *Matrix) WithGuardrails() *Matrix {
+	out := m.clone()
+	out.GuardrailsEnabled = true
+	return out
+}
+
 // WithClient returns a copy of the Matrix that drives requests through the
 // given client driver (official SDKs, subprocess drivers) instead of the
 // default raw HTTP client.
@@ -209,6 +218,9 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 	}
 	if m.ProtocolStageEnabled {
 		opts = append(opts, NewTestEnvOptionWithProtocolStage())
+	}
+	if m.GuardrailsEnabled {
+		opts = append(opts, NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime()))
 	}
 	if m.Client != nil {
 		opts = append(opts, NewTestEnvOptionWithClient(m.Client))
