@@ -19,6 +19,7 @@ import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TIER_GUIDE_STEPS, type GuideStep } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
+import { GuideLanguageToggle } from './GuideLanguageToggle';
 
 export interface TierGuideDialogProps {
     open: boolean;
@@ -110,13 +111,18 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                 }
             }}
         >
-            <DialogTitle id="tier-guide-dialog-title" sx={{ pr: 8 }}>
-                <Typography variant="h6" component="div">
-                    {t(`rule.tier.guide.steps.${activeStep + 1}.title`)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                    {t('rule.tier.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: activeStep + 1, total: maxSteps })}
-                </Typography>
+            <DialogTitle id="tier-guide-dialog-title" sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, pr: 8 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="h6" component="div">
+                        {t(`rule.tier.guide.steps.${activeStep + 1}.title`)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {t('rule.tier.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: activeStep + 1, total: maxSteps })}
+                    </Typography>
+                </Box>
+                <Box sx={{ pt: 0.5 }}>
+                    <GuideLanguageToggle />
+                </Box>
             </DialogTitle>
             <IconButton
                 aria-label={t('common.close', { defaultValue: 'Close' })}
@@ -245,7 +251,7 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                     </Box>
                 </Box>
             </DialogContent>
-            <DialogActions sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 }, py: 2 }}>
+            <DialogActions sx={{ justifyContent: 'flex-end', gap: 1.5, px: { xs: 2, sm: 3 }, py: 2 }}>
                 <Button
                     disabled={activeStep === 0}
                     onClick={handleBack}
