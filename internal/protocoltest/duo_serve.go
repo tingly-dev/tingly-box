@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -102,6 +103,11 @@ func runDuoServe() error {
 		if err := seedDuoGateway(appCfg, os.Getenv(duoEnvUpstreamURL), os.Getenv(duoEnvUpstreamToken)); err != nil {
 			return fmt.Errorf("seed gateway wiring: %w", err)
 		}
+		// Pipeline health scenarios need a non-zero recovery window so a 429
+		// remains observable by the next request. State still comes exclusively
+		// from real gateway traffic; this only makes the duo config explicit and
+		// deterministic instead of inheriting a zero-value immediate recovery.
+		appCfg.GetGlobalConfig().HealthMonitor = loadbalance.DefaultHealthMonitorConfig()
 	}
 
 	// Production boots with a MultiLogger; without it the smart-routing and

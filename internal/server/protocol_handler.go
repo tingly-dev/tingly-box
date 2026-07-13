@@ -61,8 +61,8 @@ type ProtocolHandlerDeps struct {
 	// description, context window) from the provider template catalog.
 	TemplateManager *data.TemplateManager
 
-	// RoutingSelector runs the full selection pipeline (health → affinity →
-	// smart → strategy) for a scenario/rule/request, used by the top-level
+	// RoutingSelector runs the full selection pipeline (health → smart →
+	// affinity → strategy) for a scenario/rule/request, used by the top-level
 	// OpenAI/Anthropic entry handlers (Step 10).
 	RoutingSelector *routing.SimpleSelector
 

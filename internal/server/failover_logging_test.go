@@ -132,6 +132,9 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 		}
 
 		h.DispatchWithPriorityFailover(c, rule, providerT0, "gpt-4o", attempt)
+		if hm.IsHealthy(loadbalance.FormatServiceID(providerT0.UUID, "gpt-4o")) {
+			t.Fatal("retryable 429 attempt must mark the failed service unhealthy even when fallback succeeds")
+		}
 
 		printCapturedLog(t, hook.entries)
 

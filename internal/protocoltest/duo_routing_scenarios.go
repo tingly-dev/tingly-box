@@ -60,6 +60,10 @@ func LoadRoutingScenarios(path string) ([]*DuoRoutingScenario, error) {
 // clock (the smart-routing clock is not injectable across processes).
 func BuiltinRoutingScenarios() []*DuoRoutingScenario {
 	return []*DuoRoutingScenario{
+		routingPipelineHealthBeforeSmart(),
+		routingPipelineSmartBeforeLoadBalancer(),
+		routingPipelineAffinityBeforeLoadBalancer(),
+		routingPipelineSmartBeforeAffinity(),
 		routingTokenThreshold(),
 		routingThinking(),
 		routingContextKeyword(),
@@ -67,7 +71,124 @@ func BuiltinRoutingScenarios() []*DuoRoutingScenario {
 		routingTimeRange(),
 		routingFirstMatchOrder(),
 		routingClaudeCodeKind(),
-		routingAffinityPartition(),
+	}
+}
+
+var fullSelectionPipeline = []string{"health", "smart_routing", "affinity", "load_balancer"}
+
+func routingPipelineHealthBeforeSmart() *DuoRoutingScenario {
+	return &DuoRoutingScenario{
+		Name:        "pipeline-health-before-smart-routing",
+		Description: "health removes a rate-limited service before smart routing intersects the matched partition",
+		Rule: DuoRoutingRule{
+			LBTactic:         "tier",
+			WithinTierTactic: "random",
+			Services: []DuoRoutingService{
+				{Svc: "b", Tier: 1},
+				{Svc: "c", Tier: 2},
+			},
+			Smart: []DuoSmartPartition{{
+				Description: "health-sensitive partition",
+				Ops:         []DuoSmartOpSpec{{Position: "context_user", Operation: "contains", Value: "ROUTE-HEALTH"}},
+				Services: []DuoRoutingService{
+					{Model: FailMockPreContent429, Tier: 0},
+					{Svc: "b", Tier: 1},
+				},
+			}},
+		},
+		Requests: []DuoRoutingRequest{
+			{
+				Name: "mark-primary-unhealthy", Body: DuoRoutingBody{UserText: "ROUTE-HEALTH setup"},
+				Expect: DuoRoutingExpect{
+					Svc: "b", Outcome: "matched", Matched: "health-sensitive partition",
+					Source: "smart_routing", SelectedModel: FailMockPreContent429, Stages: fullSelectionPipeline,
+				},
+			},
+			{
+				Name: "health-filtered-before-smart", Body: DuoRoutingBody{UserText: "ROUTE-HEALTH verify"},
+				Expect: DuoRoutingExpect{
+					Svc: "b", Outcome: "matched", Matched: "health-sensitive partition",
+					Source: "smart_routing", SelectedModel: DuoServiceModel("b"), Stages: fullSelectionPipeline,
+				},
+			},
+		},
+	}
+}
+
+// routingPipelineSmartBeforeLoadBalancer deliberately makes the global LB preference conflict
+// with the smart partition. If LB ran first it would choose base tier-0 A;
+// the expected tier-1 B proves SmartRouting narrowed the candidates before
+// the terminal tier tactic selected within that subset. The no-match request
+// is the control and must return to A under the same rule.
+func routingPipelineSmartBeforeLoadBalancer() *DuoRoutingScenario {
+	return &DuoRoutingScenario{
+		Name:        "pipeline-smart-routing-before-load-balancer",
+		Description: "smart routing narrows candidates before the tier load balancer selects",
+		Rule: DuoRoutingRule{
+			LBTactic:         "tier",
+			WithinTierTactic: "random",
+			Services:         []DuoRoutingService{{Svc: "a", Tier: 0}},
+			Smart: []DuoSmartPartition{{
+				Description: "smart partition",
+				Ops:         []DuoSmartOpSpec{{Position: "context_user", Operation: "contains", Value: "ROUTE-SMART"}},
+				Services: []DuoRoutingService{
+					{Svc: "b", Tier: 1},
+					{Svc: "c", Tier: 2},
+				},
+			}},
+		},
+		Requests: []DuoRoutingRequest{
+			{
+				Name: "match", Body: DuoRoutingBody{UserText: "please ROUTE-SMART now"},
+				Expect: DuoRoutingExpect{
+					Svc: "b", Outcome: "matched", Matched: "smart partition",
+					Source: "smart_routing", Stages: fullSelectionPipeline,
+				},
+			},
+			{
+				Name: "no-match", Body: DuoRoutingBody{UserText: "ordinary request"},
+				Expect: DuoRoutingExpect{
+					Svc: "a", Outcome: "no_match", Source: "load_balancer", Stages: fullSelectionPipeline,
+				},
+			},
+		},
+	}
+}
+
+func routingPipelineAffinityBeforeLoadBalancer() *DuoRoutingScenario {
+	const session = "duo-affinity-before-lb"
+	return &DuoRoutingScenario{
+		Name:        "pipeline-affinity-before-load-balancer",
+		Description: "the first request creates a partition pin; the second terminates at affinity without evaluating load balancing",
+		Rule: DuoRoutingRule{
+			AffinitySecs: 300,
+			LBTactic:     "tier",
+			Services:     []DuoRoutingService{{Svc: "c", Tier: 2}},
+			Smart: []DuoSmartPartition{{
+				Description: "sticky partition",
+				Ops:         []DuoSmartOpSpec{{Position: "context_user", Operation: "contains", Value: "ROUTE-STICKY"}},
+				Services: []DuoRoutingService{
+					{Svc: "a", Tier: 0},
+					{Svc: "b", Tier: 1},
+				},
+			}},
+		},
+		Requests: []DuoRoutingRequest{
+			{
+				Name: "create-pin", Session: session, Body: DuoRoutingBody{UserText: "ROUTE-STICKY first"},
+				Expect: DuoRoutingExpect{
+					Svc: "a", Outcome: "matched", Matched: "sticky partition",
+					Source: "smart_routing", Stages: fullSelectionPipeline,
+				},
+			},
+			{
+				Name: "affinity-short-circuit", Session: session, Body: DuoRoutingBody{UserText: "ROUTE-STICKY second"},
+				Expect: DuoRoutingExpect{
+					Svc: "a", Outcome: "matched", Matched: "sticky partition",
+					Source: "affinity", Stages: []string{"health", "smart_routing", "affinity"},
+				},
+			},
+		},
 	}
 }
 
@@ -309,15 +430,15 @@ func routingClaudeCodeKind() *DuoRoutingScenario {
 	}
 }
 
-// routingAffinityPartition is the G3 regression: with session affinity on,
+// routingPipelineSmartBeforeAffinity is the G3 regression: with session affinity on,
 // a pin acquired in one content partition must not drag requests of the
 // other partition — content routing wins, pins are scoped per partition.
-func routingAffinityPartition() *DuoRoutingScenario {
+func routingPipelineSmartBeforeAffinity() *DuoRoutingScenario {
 	const session = "duo-g3-session"
 	big := DuoRoutingBody{SizeKB: 256}
 	small := DuoRoutingBody{SizeKB: 4}
 	return &DuoRoutingScenario{
-		Name:        "affinity-partition",
+		Name:        "pipeline-smart-routing-before-affinity",
 		Description: "G3: session pins are scoped per smart partition; content routing beats a cross-partition pin",
 		Rule: DuoRoutingRule{
 			AffinitySecs: 300,
@@ -338,15 +459,24 @@ func routingAffinityPartition() *DuoRoutingScenario {
 		Requests: []DuoRoutingRequest{
 			{
 				Name: "big-1", Session: session, Body: big,
-				Expect: DuoRoutingExpect{Svc: "a", Outcome: "matched", Matched: "big"},
+				Expect: DuoRoutingExpect{
+					Svc: "a", Outcome: "matched", Matched: "big",
+					Source: "smart_routing", Stages: fullSelectionPipeline,
+				},
 			},
 			{
 				Name: "small-after-pin", Session: session, Body: small,
-				Expect: DuoRoutingExpect{Svc: "b", Outcome: "matched", Matched: "small"},
+				Expect: DuoRoutingExpect{
+					Svc: "b", Outcome: "matched", Matched: "small",
+					Source: "smart_routing", Stages: fullSelectionPipeline,
+				},
 			},
 			{
 				Name: "big-2", Session: session, Body: big,
-				Expect: DuoRoutingExpect{Svc: "a", Outcome: "matched", Matched: "big"},
+				Expect: DuoRoutingExpect{
+					Svc: "a", Outcome: "matched", Matched: "big",
+					Source: "affinity", Stages: []string{"health", "smart_routing", "affinity"},
+				},
 			},
 		},
 	}

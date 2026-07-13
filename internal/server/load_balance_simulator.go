@@ -19,7 +19,7 @@ import (
 )
 
 // LBSimulator drives the real load-balancing path — routing.ServiceSelector.Select
-// (health → affinity → smart → strategy) followed by dispatchWithPriorityFailover —
+// (health → smart → affinity → strategy) followed by dispatchWithPriorityFailover —
 // against programmable fake upstreams over a request sequence, with a deterministic
 // breaker clock.
 //

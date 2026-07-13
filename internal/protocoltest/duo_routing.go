@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,6 +45,15 @@ type DuoRoutingService struct {
 	// Target is the provider protocol: "chat" (default), "responses", or
 	// "anthropic".
 	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+	// Model overrides the service-identity model derived from Svc. It is used
+	// for production mock models such as virtual-fail-429 in pipeline setup
+	// requests. Normal wire-identity services should use Svc.
+	Model string `yaml:"model,omitempty" json:"model,omitempty"`
+	// Tier is the service priority for the tier tactic (lower is preferred).
+	Tier int `yaml:"tier,omitempty" json:"tier,omitempty"`
+	// Weight controls selection within tactics that support weighting. Zero
+	// keeps the harness default of 1.
+	Weight int `yaml:"weight,omitempty" json:"weight,omitempty"`
 }
 
 // DuoSmartOpSpec is one smart-routing condition in scenario form; it maps
@@ -69,6 +79,12 @@ type DuoRoutingRule struct {
 	Scenario string `yaml:"scenario,omitempty" json:"scenario,omitempty"`
 	// AffinitySecs enables session affinity (Flags.SessionAffinity).
 	AffinitySecs int `yaml:"affinity_secs,omitempty" json:"affinity_secs,omitempty"`
+	// LBTactic selects the terminal load-balancing strategy. Empty means the
+	// harness default (random).
+	LBTactic string `yaml:"lb_tactic,omitempty" json:"lb_tactic,omitempty"`
+	// WithinTierTactic selects among services in the same tier. Empty means
+	// random. It is only meaningful when LBTactic is tier.
+	WithinTierTactic string `yaml:"within_tier_tactic,omitempty" json:"within_tier_tactic,omitempty"`
 	// Services is the base pool the LB falls back to when no partition
 	// matches.
 	Services []DuoRoutingService `yaml:"services" json:"services"`
@@ -99,6 +115,14 @@ type DuoRoutingExpect struct {
 	Outcome string `yaml:"outcome,omitempty" json:"outcome,omitempty"`
 	// Matched asserts the matched partition's description.
 	Matched string `yaml:"matched,omitempty" json:"matched,omitempty"`
+	// Source asserts the production routing source response header
+	// (smart_routing, affinity, or load_balancer).
+	Source string `yaml:"source,omitempty" json:"source,omitempty"`
+	// SelectedModel asserts the service selected before dispatch/failover. Use
+	// Svc for the independent final wire responder assertion.
+	SelectedModel string `yaml:"selected_model,omitempty" json:"selected_model,omitempty"`
+	// Stages asserts the exact cumulative ServiceSelector path.
+	Stages []string `yaml:"stages,omitempty" json:"stages,omitempty"`
 }
 
 // DuoRoutingRequest is one request in a scenario's program.
@@ -155,7 +179,19 @@ func duoRoutingServices(specs []DuoRoutingService) ([]*loadbalance.Service, erro
 		if err != nil {
 			return nil, err
 		}
-		services = append(services, harnessService(provider, DuoServiceModel(s.Svc)))
+		model := s.Model
+		if model == "" {
+			if s.Svc == "" {
+				return nil, fmt.Errorf("service requires svc or model")
+			}
+			model = DuoServiceModel(s.Svc)
+		}
+		svc := harnessService(provider, model)
+		svc.Tier = s.Tier
+		if s.Weight > 0 {
+			svc.Weight = s.Weight
+		}
+		services = append(services, svc)
 	}
 	return services, nil
 }
@@ -191,6 +227,23 @@ func (sc *DuoRoutingScenario) toRule() (*typ.Rule, error) {
 	rule.SmartEnabled = len(smart) > 0
 	rule.SmartRouting = smart
 	rule.Flags.SessionAffinity = sc.Rule.AffinitySecs
+	if sc.Rule.LBTactic != "" {
+		tactic, ok := loadbalance.ParseTacticTypeStrict(sc.Rule.LBTactic)
+		if !ok {
+			return nil, fmt.Errorf("scenario %s: unknown lb_tactic %q", sc.Name, sc.Rule.LBTactic)
+		}
+		rule.LBTactic = typ.NewDefaultTactic(tactic)
+	}
+	if sc.Rule.WithinTierTactic != "" {
+		if rule.GetTacticType() != loadbalance.TacticTier {
+			return nil, fmt.Errorf("scenario %s: within_tier_tactic requires lb_tactic tier", sc.Name)
+		}
+		within, ok := loadbalance.ParseTacticTypeStrict(sc.Rule.WithinTierTactic)
+		if !ok || within == loadbalance.TacticTier {
+			return nil, fmt.Errorf("scenario %s: invalid within_tier_tactic %q", sc.Name, sc.Rule.WithinTierTactic)
+		}
+		rule.LBTactic.Params = &typ.TierParams{WithinTierTactic: within}
+	}
 	return &rule, nil
 }
 
@@ -267,47 +320,36 @@ func buildRoutingBody(sc *DuoRoutingScenario, r DuoRoutingRequest) ([]byte, erro
 
 // duoRequestDetail mirrors the /api/v1/requests/:id response shape the
 // engine consumes.
+type duoRequestEvent struct {
+	Source string         `json:"source"`
+	Fields map[string]any `json:"fields"`
+}
+
 type duoRequestDetail struct {
-	RequestID   string `json:"request_id"`
-	RoutedModel string `json:"routed_model"`
-	Events      []struct {
-		Source string         `json:"source"`
-		Fields map[string]any `json:"fields"`
-	} `json:"events"`
+	RequestID   string            `json:"request_id"`
+	RoutedModel string            `json:"routed_model"`
+	Events      []duoRequestEvent `json:"events"`
 }
 
 // smartRoutingTrace fetches the request's timeline from the instance and
 // returns the smart_routing event's fields plus the summary's routed_model
 // (the model the LB ultimately dispatched, folded from the access log).
 // Sink writes race the response, so it retries briefly.
-func (inst *DuoInstance) smartRoutingTrace(requestID string) (fields map[string]any, routedModel string, err error) {
+func (inst *DuoInstance) routingRequestDetail(requestID string) (detail duoRequestDetail, err error) {
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		fields, routedModel, err = inst.smartRoutingTraceOnce(requestID)
-		if err == nil && routedModel != "" {
-			return fields, routedModel, nil
+		err = inst.getJSON("/api/v1/requests/"+requestID, &detail)
+		if err == nil && detail.RoutedModel != "" {
+			return detail, nil
 		}
 		if time.Now().After(deadline) {
 			if err == nil {
 				err = fmt.Errorf("request %s: routed_model not recorded", requestID)
 			}
-			return nil, "", err
+			return duoRequestDetail{}, err
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-
-func (inst *DuoInstance) smartRoutingTraceOnce(requestID string) (map[string]any, string, error) {
-	var detail duoRequestDetail
-	if err := inst.getJSON("/api/v1/requests/"+requestID, &detail); err != nil {
-		return nil, "", err
-	}
-	for _, ev := range detail.Events {
-		if ev.Source == "smart_routing" {
-			return ev.Fields, detail.RoutedModel, nil
-		}
-	}
-	return nil, "", fmt.Errorf("request %s: no smart_routing event in timeline (%d events)", requestID, len(detail.Events))
 }
 
 // ─── Scenario execution ───────────────────────────────────────────────────────
@@ -359,6 +401,7 @@ func (env *DuoEnv) runRoutingRequest(sc *DuoRoutingScenario, r DuoRoutingRequest
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+env.TB2.ModelToken)
 	req.Header.Set("X-Request-Id", requestID)
+	req.Header.Set("X-Tingly-Debug-Routing", "1")
 	if r.Session != "" {
 		req.Header.Set("X-Tingly-Session-ID", r.Session)
 	}
@@ -374,6 +417,22 @@ func (env *DuoEnv) runRoutingRequest(sc *DuoRoutingScenario, r DuoRoutingRequest
 		return
 	}
 	add("http", true, "200")
+	if r.Expect.Source != "" {
+		got := resp.Header.Get("X-Tingly-Routing-Source")
+		add("routing/source", got == r.Expect.Source, fmt.Sprintf("want %s, got %s", r.Expect.Source, got))
+	}
+	if r.Expect.SelectedModel != "" {
+		got := resp.Header.Get("X-Tingly-Selected-Model")
+		add("routing/selected_model", got == r.Expect.SelectedModel,
+			fmt.Sprintf("want %s, got %s", r.Expect.SelectedModel, got))
+	}
+	if len(r.Expect.Stages) > 0 {
+		got := strings.Split(resp.Header.Get("X-Tingly-Evaluated-Stages"), ",")
+		if len(got) == 1 && got[0] == "" {
+			got = nil
+		}
+		add("routing/stages", slices.Equal(got, r.Expect.Stages), fmt.Sprintf("want %v, got %v", r.Expect.Stages, got))
+	}
 
 	// Wire-level: which service identity answered.
 	if r.Expect.Svc != "" {
@@ -393,10 +452,17 @@ func (env *DuoEnv) runRoutingRequest(sc *DuoRoutingScenario, r DuoRoutingRequest
 	if r.Expect.Outcome == "" && r.Expect.Matched == "" && r.Expect.Svc == "" {
 		return
 	}
-	fields, routedModel, err := env.TB2.smartRoutingTrace(requestID)
+	detail, err := env.TB2.routingRequestDetail(requestID)
 	if err != nil {
 		add("trace", false, err.Error())
 		return
+	}
+	var fields map[string]any
+	for _, ev := range detail.Events {
+		if ev.Source == "smart_routing" {
+			fields = ev.Fields
+			break
+		}
 	}
 	if r.Expect.Outcome != "" {
 		got, _ := fields["outcome"].(string)
@@ -409,6 +475,6 @@ func (env *DuoEnv) runRoutingRequest(sc *DuoRoutingScenario, r DuoRoutingRequest
 	}
 	if r.Expect.Svc != "" {
 		want := DuoServiceModel(r.Expect.Svc)
-		add("trace/routed_model", routedModel == want, fmt.Sprintf("want %s, got %s", want, routedModel))
+		add("trace/routed_model", detail.RoutedModel == want, fmt.Sprintf("want %s, got %s", want, detail.RoutedModel))
 	}
 }

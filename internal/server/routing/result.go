@@ -61,8 +61,3 @@ func NewFilterResult(source string, services []*loadbalance.Service) *SelectionR
 		MatchedSmartRuleIndex: -1,
 	}
 }
-
-// AddEvaluatedStage records that a stage was evaluated
-func (r *SelectionResult) AddEvaluatedStage(stageName string) {
-	r.EvaluatedStages = append(r.EvaluatedStages, stageName)
-}

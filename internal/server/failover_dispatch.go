@@ -419,6 +419,15 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			return
 		}
 
+		// Health owns rate-limit/auth availability across requests, while the
+		// breaker owns transient 5xx failures within a rule. A successful
+		// fallback means final usage tracking only sees the fallback's success,
+		// so record a failed 429 attempt here or the next request would select
+		// the rate-limited service again before SmartRouting/LB evaluation.
+		if status == http.StatusTooManyRequests && ph.deps.HealthMonitor != nil {
+			ph.deps.HealthMonitor.ReportRateLimit(serviceID)
+		}
+
 		loadbalance.RecordServiceFailure(rule.UUID, serviceID)
 		state := loadbalance.DefaultBreakerStore().Get(rule.UUID, serviceID).State()
 		fields = failoverLogFields(c, rule, provider, model, serviceID)

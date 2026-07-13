@@ -3,8 +3,11 @@
 # Services reference tb1's service-identity pool ("a".."f"); each identity
 # answers with its own marker so `expect.svc` is verified from the response
 # body. `target` picks the provider protocol (chat | responses | anthropic).
-# Trace expectations (`outcome`, `matched`) are checked against tb2's
-# /api/v1/requests smart_routing trace.
+# Rules may set `lb_tactic` / `within_tier_tactic`; services may set `tier`
+# and `weight`, allowing SmartRouting-before-LB precedence checks.
+# Pipeline expectations (`source`, `selected_model`, `stages`) are checked
+# against opt-in routing diagnostics. Trace expectations (`outcome`, `matched`)
+# are checked against tb2's /api/v1/requests smart_routing trace.
 #
 # NOTE: when no partition matches (outcome: no_match), the load balancer
 # picks from the UNION of base + partition services, so `expect.svc` is only

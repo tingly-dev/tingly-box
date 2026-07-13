@@ -172,6 +172,7 @@ func NewServiceSelectorWithLogger(
 // It picks a pre-built pipeline based on rule configuration and executes it.
 func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error) {
 	state := newSelectionState(ctx.Rule)
+	evaluatedStages := make([]string, 0, len(s.pipeline))
 
 	logrus.Debugf("[selector] executing pipeline with %d stages for rule %s",
 		len(s.pipeline), ctx.Rule.UUID)
@@ -179,19 +180,25 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 	// Execute pipeline stages in order
 	for _, stage := range s.pipeline {
 		stageName := stage.Name()
+		evaluatedStages = append(evaluatedStages, stageName)
 		logrus.Debugf("[selector] evaluating stage: %s", stageName)
 
 		result, handled := stage.Evaluate(ctx, state)
 
-		// Track that this stage was evaluated
 		if result != nil {
-			result.AddEvaluatedStage(stageName)
 			if result.FilteredServices != nil {
 				state.candidateServices = result.FilteredServices
 			}
 		}
 
 		if handled {
+			if result != nil {
+				// A filter stage's result is intentionally replaced as the
+				// pipeline advances. Attach the cumulative path at the terminal
+				// boundary so observability reports every stage that actually ran,
+				// including pass-through stages that returned nil.
+				result.EvaluatedStages = append([]string(nil), evaluatedStages...)
+			}
 			// Stage produced a result, validate and return
 			if result == nil || result.Service == nil {
 				logrus.Warnf("[selector] stage %s returned handled=true but nil result", stageName)

@@ -50,7 +50,7 @@ func (s *SimpleSelector) SelectService(
 			}
 			svc := &loadbalance.Service{Provider: providerUUID, Model: model, Active: true}
 			logrus.Debugf("[routing] probe service pin: provider=%s model=%s", provider.Name, model)
-			setRoutingDebugHeaders(c, provider.Name, provider.UUID, model, SourceProbePin, -1)
+			setRoutingDebugHeaders(c, provider.Name, provider.UUID, model, SourceProbePin, -1, nil)
 			return provider, svc, nil
 		}
 	}
@@ -105,7 +105,7 @@ func (s *SimpleSelector) SelectService(
 		"evaluated_stages": result.EvaluatedStages,
 	}).Infof("[routing] selected %s/%s via %s", result.Provider.UUID, result.Service.Model, result.Source)
 
-	setRoutingDebugHeaders(c, result.Provider.Name, result.Provider.UUID, result.Service.Model, result.Source, result.MatchedSmartRuleIndex)
+	setRoutingDebugHeaders(c, result.Provider.Name, result.Provider.UUID, result.Service.Model, result.Source, result.MatchedSmartRuleIndex, result.EvaluatedStages)
 
 	return result.Provider, result.Service, nil
 }
@@ -113,7 +113,7 @@ func (s *SimpleSelector) SelectService(
 // setRoutingDebugHeaders emits X-Tingly-Selected-* response headers describing
 // the routing decision, but only when the request opted in via
 // X-Tingly-Debug-Routing: 1 (set by probes). matchedSmartRule < 0 means none.
-func setRoutingDebugHeaders(c *gin.Context, providerName, providerUUID, model, source string, matchedSmartRule int) {
+func setRoutingDebugHeaders(c *gin.Context, providerName, providerUUID, model, source string, matchedSmartRule int, evaluatedStages []string) {
 	if c.GetHeader("X-Tingly-Debug-Routing") != "1" {
 		return
 	}
@@ -121,6 +121,9 @@ func setRoutingDebugHeaders(c *gin.Context, providerName, providerUUID, model, s
 	c.Header("X-Tingly-Selected-Provider-UUID", providerUUID)
 	c.Header("X-Tingly-Selected-Model", model)
 	c.Header("X-Tingly-Routing-Source", source)
+	if len(evaluatedStages) > 0 {
+		c.Header("X-Tingly-Evaluated-Stages", strings.Join(evaluatedStages, ","))
+	}
 	if matchedSmartRule >= 0 {
 		c.Header("X-Tingly-Matched-Smart-Rule", fmt.Sprintf("%d", matchedSmartRule))
 	}

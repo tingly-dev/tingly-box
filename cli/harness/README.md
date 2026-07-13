@@ -491,22 +491,29 @@ independent surfaces:
 ```bash
 ./harness routing                      # all built-in scenarios
 ./harness routing --list               # catalog with descriptions
-./harness routing --scenarios token-threshold,affinity-partition
+./harness routing --scenarios pipeline-health-before-smart-routing,pipeline-smart-routing-before-affinity,pipeline-affinity-before-load-balancer,pipeline-smart-routing-before-load-balancer
 ./harness routing --file my-rules.yaml # user-defined scenarios (see testdata/routing/example.yaml)
 ./harness routing --json               # machine-readable report
 ```
 
 Built-ins cover the smart-routing position catalog (token, thinking,
-context_user, model, time_range, agent.claude_code) plus two
-behavioral regressions: **first-match ordering** and **G3** (session pins
-scoped per content partition). Time-range windows are built relative to the
-wall clock — hours-wide margins, no clock seam needed.
+context_user, model, time_range, agent.claude_code), **first-match ordering**,
+and four explicit pipeline invariants: **health before smart-routing**,
+**smart-routing before affinity**, **affinity before load-balancer**, and
+**smart-routing before load-balancer**. Each pipeline scenario asserts the
+opt-in debug routing source and exact evaluated-stage path in addition to the
+wire responder and smart-routing timeline. Time-range windows are built
+relative to the wall clock — hours-wide margins, no clock seam needed.
 
 Semantics worth knowing when authoring scenarios:
 
 - When **no partition matches**, the LB falls back to the **union** of base
   + partition services, so `expect.svc` is only deterministic for matched
   requests; miss requests assert `outcome: no_match` on the trace instead.
+- Pipeline expectations can assert `source`, `selected_model`, and the exact
+  ordered `stages`. `svc` remains the independent final wire responder, so a
+  failover scenario can distinguish the initially selected service from the
+  service that ultimately answered.
 - `service_ttft` / `service_capacity` (stats-driven, pass on empty data)
   and `proxy_vision` (processor-bearing bypass op) are not covered yet.
 
