@@ -91,11 +91,6 @@ func (s *MemoryStateStorage) CleanupExpired() error {
 	return nil
 }
 
-// stateKey generates a key for storing state data (for compatibility with existing code)
-func (s *MemoryStateStorage) stateKey(state string) string {
-	return state
-}
-
 // Count returns the number of states currently stored (for testing)
 func (s *MemoryStateStorage) Count() int {
 	s.mu.RLock()

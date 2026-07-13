@@ -195,11 +195,6 @@ func (m *Manager) generateCodeChallenge(verifier string) string {
 	return challenge
 }
 
-// generateStateKey generates a key for storing state data
-func (m *Manager) stateKey(state string) string {
-	return state
-}
-
 // saveState saves state data with expiration
 func (m *Manager) saveState(data *StateData) error {
 	// Set expiration time based on config
@@ -396,6 +391,89 @@ func (m *Manager) getHTTPClient(opts *Options) *http.Client {
 	return m.config.GetHTTPClient()
 }
 
+// buildTokenRequest constructs a POST request to endpoint carrying params in the
+// provider's configured body format. It sets the default Content-Type/Accept
+// headers, runs the provider hook (which may mutate params and headers),
+// rebuilds the body if the hook changed params, and merges per-flow extra
+// headers. This is the single construction path shared by token exchange,
+// refresh, device-code initiation, and device-code polling.
+func (m *Manager) buildTokenRequest(ctx context.Context, config *ProviderConfig, endpoint string, params map[string]string, opts *Options) (*http.Request, error) {
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", "application/json")
+
+	// Call provider's token hook if present. It may mutate params and headers.
+	if config.Hook != nil {
+		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
+			return nil, err
+		}
+		// Rebuild the body in case the hook mutated params.
+		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
+		}
+		req.Body = io.NopCloser(reqBody)
+	}
+
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
+	return req, nil
+}
+
+// sendTokenRequest builds and sends a token request, applying the debug hook and
+// the per-request timeout. Callers own response reading and status handling
+// because their success/error decoding differs.
+func (m *Manager) sendTokenRequest(ctx context.Context, config *ProviderConfig, endpoint string, params map[string]string, timeout time.Duration, opts *Options) (*http.Response, error) {
+	req, err := m.buildTokenRequest(ctx, config, endpoint, params, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	m.debugRequest(req, config.TokenRequestFormat)
+
+	client := m.getHTTPClient(opts)
+	client.Timeout = timeout
+	return client.Do(req)
+}
+
+// populateAnthropicMetadata extracts organization / account identity from an
+// Anthropic (Claude) token response body into the token metadata. A response
+// body that does not decode is ignored — the token itself is still usable.
+func populateAnthropicMetadata(token *Token, rawBody []byte) {
+	var resp AnthropicTokenResponse
+	if json.Unmarshal(rawBody, &resp) != nil {
+		return
+	}
+	token.putMetadata("organization_id", resp.Organization.UUID)
+	token.putMetadata("organization_name", resp.Organization.Name)
+	token.putMetadata("account_id", resp.Account.UUID)
+	token.putMetadata("email", resp.Account.EmailAddress)
+}
+
+// populateCodexMetadata extracts email / account_id / name from a Codex ID
+// token (JWT) into the token metadata. Returns false if there is no ID token or
+// it could not be parsed.
+func populateCodexMetadata(token *Token) bool {
+	if token.IDToken == "" {
+		return false
+	}
+	claims := parseIDToken(token.IDToken)
+	if claims == nil {
+		return false
+	}
+	token.putMetadata("email", claims.Email)
+	token.putMetadata("account_id", claims.GetAccountID())
+	token.putMetadata("name", claims.Name)
+	return true
+}
+
 // HandleCallback handles the OAuth callback request
 func (m *Manager) HandleCallback(ctx context.Context, r *http.Request, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
@@ -491,40 +569,9 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		"has_client_secret":    config.ClientSecret != "",
 		"token_url":            config.TokenURL,
 		"request_format":       map[TokenRequestFormat]string{TokenRequestFormatJSON: "JSON", TokenRequestFormatForm: "Form"}[config.TokenRequestFormat],
-	}).Info("[OAuth] PKCE code_verifier added to token request")
+	}).Info("[OAuth] Exchanging authorization code for token")
 
-	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Accept", "application/json")
-
-	// Call provider's token hook if present
-	if config.Hook != nil {
-		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
-			return nil, err
-		}
-		req.Body = io.NopCloser(reqBody)
-	}
-
-	applyExtraHeaders(req.Header, opts.ExtraHeaders)
-
-	// Debug: print request details
-	m.debugRequest(req, config.TokenRequestFormat)
-
-	// Send request with optional proxy support
-	// Uses OAUTH_PROXY_URL, HTTP_PROXY, or HTTPS_PROXY environment variables
-	client := m.getHTTPClient(opts)
-	client.Timeout = 60 * time.Second
-
-	resp, err := client.Do(req)
+	resp, err := m.sendTokenRequest(ctx, config, config.TokenURL, params, 60*time.Second, opts)
 	if err != nil {
 		return nil, fmt.Errorf("client error: %w: %v", ErrTokenExchangeFailed, err)
 	}
@@ -554,86 +601,45 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	}
 
 	// Convert ExpiresIn to Expiry
-	if token.ExpiresIn > 0 {
-		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
-	}
+	token.setExpiryFromExpiresIn()
 
-	// For Anthropic/Claude providers, extract organization info from token response
-	// Use the pre-defined types from hook.go for consistency
-	if config.Type == ai.IssuerClaudeCode || config.Type == ai.IssuerAnthropic {
-		var anthropicResp AnthropicTokenResponse
-		if json.Unmarshal(rawBody, &anthropicResp) == nil {
-			// Extract metadata from token response
-			if token.Metadata == nil {
-				token.Metadata = make(map[string]any)
-			}
-			if anthropicResp.Organization.UUID != "" {
-				token.Metadata["organization_id"] = anthropicResp.Organization.UUID
-			}
-			if anthropicResp.Organization.Name != "" {
-				token.Metadata["organization_name"] = anthropicResp.Organization.Name
-			}
-			if anthropicResp.Account.UUID != "" {
-				token.Metadata["account_id"] = anthropicResp.Account.UUID
-			}
-			if anthropicResp.Account.EmailAddress != "" {
-				token.Metadata["email"] = anthropicResp.Account.EmailAddress
-			}
-		}
-	}
-
-	// For Codex provider, parse ID token to extract user info
-	if config.Type == ai.IssuerCodex && token.IDToken != "" {
-		if claims := parseIDToken(token.IDToken); claims != nil {
-			if token.Metadata == nil {
-				token.Metadata = make(map[string]any)
-			}
-			if claims.Email != "" {
-				token.Metadata["email"] = claims.Email
-			}
-			if accountID := claims.GetAccountID(); accountID != "" {
-				token.Metadata["account_id"] = accountID
-			}
-			if claims.Name != "" {
-				token.Metadata["name"] = claims.Name
+	// Extract provider-specific identity metadata from the token response.
+	switch config.Type {
+	case ai.IssuerClaudeCode, ai.IssuerAnthropic:
+		// Anthropic/Claude return organization/account info in the token response.
+		populateAnthropicMetadata(token, rawBody)
+	case ai.IssuerCodex:
+		// Codex carries user info in the ID token (JWT).
+		if token.IDToken != "" {
+			if !populateCodexMetadata(token) {
+				logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 			}
 		} else {
-			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
-		}
-	} else if config.Type == ai.IssuerCodex {
-		// Log only the key set so we can tell whether OpenAI omitted id_token
-		// or returned it under a different key — never the values, which
-		// contain access_token / refresh_token.
-		var raw map[string]json.RawMessage
-		if jsonErr := json.Unmarshal(rawBody, &raw); jsonErr == nil {
-			keys := make([]string, 0, len(raw))
-			for k := range raw {
-				keys = append(keys, k)
+			// Log only the key set so we can tell whether OpenAI omitted id_token
+			// or returned it under a different key — never the values, which
+			// contain access_token / refresh_token.
+			var raw map[string]json.RawMessage
+			if jsonErr := json.Unmarshal(rawBody, &raw); jsonErr == nil {
+				keys := make([]string, 0, len(raw))
+				for k := range raw {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response field names: %v", keys)
+			} else {
+				logrus.Warnf("[OAuth] Codex token exchange returned no id_token; could not inspect response: %v", jsonErr)
 			}
-			sort.Strings(keys)
-			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response field names: %v", keys)
-		} else {
-			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; could not inspect response: %v", jsonErr)
 		}
 	}
 
 	// Call provider's after-token hook to fetch additional metadata
 	if config.Hook != nil && token.AccessToken != "" {
-		metadata, err := config.Hook.AfterToken(ctx, token.AccessToken, client)
+		metadata, err := config.Hook.AfterToken(ctx, token.AccessToken, m.getHTTPClient(opts))
 		if err != nil {
-			fmt.Printf("[OAuth] AfterToken hook failed: %v\n", err)
+			logrus.Warnf("[OAuth] AfterToken hook failed: %v", err)
 			// Continue even if AfterToken fails, as we already have the token
 		}
-		if metadata != nil {
-			if token.Metadata == nil {
-				token.Metadata = metadata
-			} else {
-				// Merge metadata
-				for k, v := range metadata {
-					token.Metadata[k] = v
-				}
-			}
-		}
+		token.mergeMetadata(metadata)
 	}
 
 	return token, nil
@@ -692,46 +698,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 		params["client_secret"] = config.ClientSecret
 	}
 
-	// Build request body first
-	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Accept", "application/json")
-
-	// Call provider's token hook if present (may modify params and headers)
-	if config.Hook != nil {
-		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
-			return nil, err
-		}
-		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, config.TokenRequestFormat)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
-		}
-		req.Body = io.NopCloser(reqBody)
-	}
-
-	// Set Content-Type after hook (hook may have modified it)
-	req.Header.Set("Content-Type", contentType)
-
-	applyExtraHeaders(req.Header, opts.ExtraHeaders)
-
-	// Debug: print request details
-	m.debugRequest(req, config.TokenRequestFormat)
-
-	// Send request with optional proxy support
-	// Uses OAUTH_PROXY_URL, HTTP_PROXY, or HTTPS_PROXY environment variables
-	client := m.getHTTPClient(opts)
-	client.Timeout = 30 * time.Second
-
-	resp, err := client.Do(req)
+	resp, err := m.sendTokenRequest(ctx, config, config.TokenURL, params, 30*time.Second, opts)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w: %v", ErrTokenExchangeFailed, err)
 	}
@@ -749,26 +716,11 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 	}
 
 	// Convert ExpiresIn to Expiry
-	if token.ExpiresIn > 0 {
-		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
-	}
+	token.setExpiryFromExpiresIn()
 
 	// For Codex provider, parse ID token to extract user info
-	if providerType == ai.IssuerCodex && token.IDToken != "" {
-		if claims := parseIDToken(token.IDToken); claims != nil {
-			if token.Metadata == nil {
-				token.Metadata = make(map[string]any)
-			}
-			if claims.Email != "" {
-				token.Metadata["email"] = claims.Email
-			}
-			if accountID := claims.GetAccountID(); accountID != "" {
-				token.Metadata["account_id"] = accountID
-			}
-			if claims.Name != "" {
-				token.Metadata["name"] = claims.Name
-			}
-		}
+	if providerType == ai.IssuerCodex {
+		populateCodexMetadata(token)
 	}
 
 	return token, nil
@@ -885,38 +837,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		params["code_challenge_method"] = "S256"
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", config.DeviceCodeURL, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Accept", "application/json")
-
-	// Call provider's token hook if present
-	if config.Hook != nil {
-		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
-			return nil, err
-		}
-		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, config.TokenRequestFormat)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
-		}
-		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
-	}
-
-	applyExtraHeaders(req.Header, options.ExtraHeaders)
-
-	client := m.getHTTPClient(options)
-	client.Timeout = 30 * time.Second
-	resp, err := client.Do(req)
+	resp, err := m.sendTokenRequest(ctx, config, config.DeviceCodeURL, params, 30*time.Second, options)
 	if err != nil {
 		return nil, fmt.Errorf("device code request failed: %w", err)
 	}
@@ -1045,36 +966,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		params["code_verifier"] = codeVerifier
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Accept", "application/json")
-
-	// Call provider's token hook if present
-	if config.Hook != nil {
-		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
-			return nil, err
-		}
-		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
-		}
-		req.Body = io.NopCloser(reqBody)
-	}
-
-	applyExtraHeaders(req.Header, opts.ExtraHeaders)
-
-	client := m.getHTTPClient(opts)
-	client.Timeout = 30 * time.Second
-	resp, err := client.Do(req)
+	resp, err := m.sendTokenRequest(ctx, config, config.TokenURL, params, 30*time.Second, opts)
 	if err != nil {
 		return nil, fmt.Errorf("token poll request failed: %w", err)
 	}
@@ -1115,9 +1007,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 	}
 
 	// Convert ExpiresIn to Expiry
-	if token.ExpiresIn > 0 {
-		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
-	}
+	token.setExpiryFromExpiresIn()
 
 	return token, nil
 }

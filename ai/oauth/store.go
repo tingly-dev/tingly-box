@@ -120,26 +120,3 @@ func (s *MemoryTokenStorage) ListProviders(userID string) ([]ai.Issuer, error) {
 
 	return providers, nil
 }
-
-// TokenWithMetadata represents a token with additional metadata
-type TokenWithMetadata struct {
-	Token     *Token
-	UserID    string
-	Provider  ai.Issuer
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-// MetadataTokenStorage extends TokenStorage with metadata support
-type MetadataTokenStorage interface {
-	TokenStorage
-
-	// SaveTokenWithMetadata saves a token with additional metadata
-	SaveTokenWithMetadata(userID string, provider ai.Issuer, token *Token, metadata map[string]string) error
-
-	// GetTokenWithMetadata retrieves a token with metadata
-	GetTokenWithMetadata(userID string, provider ai.Issuer) (*TokenWithMetadata, error)
-
-	// ListAllTokens returns all tokens with their metadata
-	ListAllTokens() ([]*TokenWithMetadata, error)
-}

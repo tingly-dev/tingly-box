@@ -27,8 +27,6 @@ func ParseProviderType(i ai.Issuer) (ai.Issuer, error) {
 	}
 }
 
-// String returns the string representation of ai.Issuer
-
 // Config holds the OAuth configuration
 type Config struct {
 	// BaseURL is the base URL of this server for callback generation
@@ -357,6 +355,41 @@ func (t *Token) ExpiredIn(within time.Duration) bool {
 	return time.Now().Add(within).After(t.Expiry)
 }
 
+// setExpiryFromExpiresIn derives the absolute Expiry from the ExpiresIn seconds
+// field returned by the provider. A non-positive ExpiresIn leaves Expiry unset
+// (treated as "no expiry").
+func (t *Token) setExpiryFromExpiresIn() {
+	if t.ExpiresIn > 0 {
+		t.Expiry = time.Now().Add(time.Duration(t.ExpiresIn) * time.Second)
+	}
+}
+
+// putMetadata stores a non-empty value under key, allocating the metadata map
+// on demand. Empty values are ignored so callers can pass optional fields
+// unconditionally.
+func (t *Token) putMetadata(key, value string) {
+	if value == "" {
+		return
+	}
+	if t.Metadata == nil {
+		t.Metadata = make(map[string]any)
+	}
+	t.Metadata[key] = value
+}
+
+// mergeMetadata merges src into the token metadata, allocating on demand.
+func (t *Token) mergeMetadata(src map[string]any) {
+	if len(src) == 0 {
+		return
+	}
+	if t.Metadata == nil {
+		t.Metadata = make(map[string]any)
+	}
+	for k, v := range src {
+		t.Metadata[k] = v
+	}
+}
+
 // DeviceCodeResponse represents the response from the device authorization endpoint
 // RFC 8628: OAuth 2.0 Device Authorization Grant
 type DeviceCodeResponse struct {
@@ -390,19 +423,4 @@ type DeviceCodeData struct {
 	ExpiresAt    time.Time
 	InitiatedAt  time.Time
 	CodeVerifier string // PKCE code verifier (for Device Code PKCE flow)
-}
-
-// DeviceTokenRequest represents the request to poll for token with device code
-type DeviceTokenRequest struct {
-	// GrantType is the grant type, must be "urn:ietf:params:oauth:grant-type:device_code"
-	GrantType string `json:"grant_type"`
-
-	// DeviceCode is the device code from the device authorization response
-	DeviceCode string `json:"device_code"`
-
-	// ClientID is the OAuth client ID
-	ClientID string `json:"client_id"`
-
-	// ClientSecret is the OAuth client secret (optional for public clients)
-	ClientSecret string `json:"client_secret,omitempty"`
 }
