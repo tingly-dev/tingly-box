@@ -1,8 +1,9 @@
 # Protocol Stage Chain
 
 > Status: Phases 1–2 are implemented additively. `tingly-box start --stage`
-> now opts OpenAI Chat → Anthropic Beta attempts into the production Stage
-> pipeline; all other routes and MCP-enabled requests remain on legacy.
+> now opts OpenAI Chat → Anthropic Beta and Anthropic Beta → Anthropic Beta
+> attempts into the production Stage pipeline; all other routes and requests
+> requiring MCP, Guardrails, or protocol recording remain on legacy.
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
@@ -356,6 +357,11 @@ stages; the provider endpoint and HTTP adapter retain their existing ownership.
 Unsupported protocol pairs and MCP-enabled requests remain on legacy. Once a
 Stage attempt has started, it is never replayed through legacy.
 
+The next native route is explicitly `anthropic_beta → anthropic_beta`.
+`anthropic_v1` remains a separate protocol and does not inherit Beta's identity
+registration. The Beta route stays on legacy whenever MCP, Guardrails, or V2
+protocol recording owns part of the request/response lifecycle.
+
 ### Phase 6 — Legacy removal
 
 - Remove protocol-specific feature hooks and MCP transforms in separate changes.
@@ -432,10 +438,13 @@ while existing `Handle*` functions remain the production wrappers. The dormant
 topology and verifies text, tool-use, and tool-result semantics in complete and
 streaming modes.
 
-The first runtime integration is opt-in through `--stage`. For each OpenAI Chat
-provider attempt whose concrete target is Anthropic Beta, the server builds a
-fresh Chat preparation → Bridge → Beta provider-finalization → provider endpoint
-topology. Streaming and complete responses return through the same Bridge and
-the outer HTTP adapter. Capability-missing pairs, MCP-enabled requests, and the
-explicit response-roundtrip diagnostic remain on legacy. Debug routing exposes
-the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
+Runtime integration is opt-in through `--stage`. For each OpenAI Chat provider
+attempt whose concrete target is Anthropic Beta, the server builds a fresh Chat
+preparation → Bridge → Beta provider-finalization → provider endpoint topology.
+For a native Anthropic Beta provider attempt, it builds Beta preparation → Beta
+provider-finalization → provider endpoint without changing protocol. Streaming
+and complete responses return through the same endpoint chain and the outer
+HTTP adapter. Anthropic V1, capability-missing pairs, feature-owned legacy
+lifecycles, and the explicit response-roundtrip diagnostic remain on legacy.
+Debug routing exposes the concrete
+`X-Tingly-Protocol-Pipeline: stage|legacy` decision.

@@ -78,26 +78,49 @@ func TestFailover_Stream_PreContent_500_RetriesAndSucceeds(t *testing.T) {
 }
 
 func TestProtocolStageFailover_PreContent_RetriesAndSucceeds(t *testing.T) {
-	for _, streaming := range []bool{false, true} {
-		name := "nonstream"
-		scenario := pt.TextScenario()
-		if streaming {
-			name = "stream"
-			scenario = pt.StreamingTextScenario()
-		}
-		t.Run(name, func(t *testing.T) {
-			env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
-			defer env.Close()
+	for _, source := range []protocol.APIType{protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta} {
+		t.Run(string(source), func(t *testing.T) {
+			for _, streaming := range []bool{false, true} {
+				name := "nonstream"
+				scenario := pt.TextScenario()
+				if streaming {
+					name = "stream"
+					scenario = pt.StreamingTextScenario()
+				}
+				t.Run(name, func(t *testing.T) {
+					env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
+					defer env.Close()
 
-			route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, scenario, pt.FailMockPreContent429)
-			result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, streaming)
+					route := env.SetupFailoverRoute(t, source, protocol.TypeAnthropicBeta, scenario, pt.FailMockPreContent429)
+					result := env.SendWithModel(t, source, route.ModelName, streaming)
 
-			require.Equal(t, 200, result.HTTPStatus)
-			assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
-			assert.Equal(t, 1, env.UpstreamEndpointHits(pt.EndpointAnthropic))
-			assert.NotEmpty(t, result.Content)
+					require.Equal(t, 200, result.HTTPStatus)
+					assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
+					assert.Equal(t, 1, env.UpstreamEndpointHits(pt.EndpointAnthropic))
+					assert.NotEmpty(t, result.Content)
+				})
+			}
 		})
 	}
+}
+
+func TestProtocolStageFailover_MidStreamDoesNotRetry(t *testing.T) {
+	env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
+	defer env.Close()
+
+	route := env.SetupFailoverRoute(
+		t,
+		protocol.TypeAnthropicBeta,
+		protocol.TypeAnthropicBeta,
+		pt.StreamingTextScenario(),
+		pt.FailMockMidStreamCut,
+	)
+	result := env.SendWithModel(t, protocol.TypeAnthropicBeta, route.ModelName, true)
+
+	require.Equal(t, 200, result.HTTPStatus, "first Beta event committed the attempt")
+	assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
+	assert.Equal(t, 0, env.UpstreamEndpointHits(pt.EndpointAnthropic), "fallback must not run after a committed Beta event")
+	require.NotEmpty(t, result.StreamEvents)
 }
 
 // TestFailover_AllTiersFail_ClientSeesLastError — both services return 429.

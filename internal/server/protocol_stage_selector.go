@@ -21,6 +21,7 @@ type ProtocolStageSelector struct {
 // a partially updated protocol graph.
 func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 	registry, err := stage.NewBridgeRegistry(
+		stage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),
 	)
 	if err != nil {

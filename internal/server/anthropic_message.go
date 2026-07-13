@@ -396,6 +396,21 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	// Resolve flags with scenario injection and auto-apply for CleanHeader.
 	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target, provider)
+	if ph.tryProtocolStageAnthropicBeta(
+		c,
+		req,
+		responseModel,
+		target,
+		provider,
+		requestModel,
+		rule,
+		isStreaming,
+		scenarioConfig,
+		ruleFlags,
+		recorder,
+	) {
+		return
+	}
 
 	reqCtx, err := ph.TransformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))
 	if err != nil {

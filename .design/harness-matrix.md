@@ -133,6 +133,8 @@ go run ./cli/harness matrix --mode=bridges   # in-process Stage/Bridge topology
 # Real HTTP/server path with production Stage selection enabled
 go run ./cli/harness matrix --mode=single --stage \
   --source=openai_chat --target=anthropic_beta
+go run ./cli/harness matrix --mode=single --stage \
+  --source=anthropic_beta --target=anthropic_beta
 
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
@@ -148,7 +150,8 @@ The `flags` section is documented in detail in
 The `bridges` section is deliberately separate from single-hop. Single-hop
 traverses the production gateway over HTTP. It validates legacy by default;
 `--stage` enables the server's production Stage selector, currently for
-OpenAI Chat → Anthropic Beta. Bridges runs the
+OpenAI Chat → Anthropic Beta and Anthropic Beta → Anthropic Beta. Anthropic V1
+remains a separate, legacy-routed protocol. Bridges runs the
 dormant `stage.BuildTopology`/`stage.Adapt` path in-process and labels every
 direct result `bridges/<scenario>/...`; concrete multi-level results use
 `bridges/chain/<name>/<scenario>/...`. It must not be cited as production-path

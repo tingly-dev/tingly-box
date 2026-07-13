@@ -45,23 +45,12 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	scenarioConfig *typ.ScenarioConfig,
 	ruleFlags typ.RuleFlags,
 ) bool {
-	selector := ph.protocolStageSelector
-	if selector == nil {
-		return false
-	}
-	useStage, selectionErr := selector.ShouldUseStage(
+	if !ph.shouldUseProtocolStage(
+		c,
 		protocol.TypeOpenAIChat,
 		target,
 		protocolstage.AllBridgeCapabilities,
-	)
-	if !useStage {
-		if selector.Enabled() && selectionErr != nil {
-			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
-				"protocol_pipeline": "legacy",
-				"source_protocol":   protocol.TypeOpenAIChat,
-				"target_protocol":   target,
-			}).Debugf("Protocol Stage route unavailable: %v", selectionErr)
-		}
+	) {
 		return false
 	}
 
@@ -69,13 +58,13 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	// Keeping the whole request on legacy is safer than silently omitting tool
 	// injection or executing tools through two owners.
 	if ph.mcpEnabled() {
-		logProtocolStageFallback(c, target, "MCP runtime still uses the legacy pipeline")
+		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "MCP runtime still uses the legacy pipeline")
 		return false
 	}
 	// The response-roundtrip header is an explicit legacy diagnostic. Preserve
 	// that exact experiment instead of changing its semantics under --stage.
 	if ShouldRoundtripResponse(c, "anthropic") {
-		logProtocolStageFallback(c, target, "response roundtrip diagnostic requires the legacy pipeline")
+		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "response roundtrip diagnostic requires the legacy pipeline")
 		return false
 	}
 
@@ -112,6 +101,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 			scenarioFlags,
 			isStreaming,
 			preBase,
+			protocolStageTransformOptions(ph, c)...,
 		),
 		newProtocolTransformStage(
 			"provider_finalize",
@@ -124,6 +114,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 				preVendor,
 				[]transform.Transform{vendorTransformShared},
 			),
+			protocolStageTransformOptions(ph, c)...,
 		),
 	}
 	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
@@ -158,10 +149,30 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	return true
 }
 
-func logProtocolStageFallback(c *gin.Context, target protocol.APIType, reason string) {
+func (ph *ProtocolHandler) shouldUseProtocolStage(
+	c *gin.Context,
+	source, target protocol.APIType,
+	required protocolstage.Capabilities,
+) bool {
+	selector := ph.protocolStageSelector
+	if selector == nil {
+		return false
+	}
+	useStage, selectionErr := selector.ShouldUseStage(source, target, required)
+	if !useStage && selector.Enabled() && selectionErr != nil {
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"protocol_pipeline": "legacy",
+			"source_protocol":   source,
+			"target_protocol":   target,
+		}).Debugf("Protocol Stage route unavailable: %v", selectionErr)
+	}
+	return useStage
+}
+
+func logProtocolStageFallback(c *gin.Context, source, target protocol.APIType, reason string) {
 	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 		"protocol_pipeline": "legacy",
-		"source_protocol":   protocol.TypeOpenAIChat,
+		"source_protocol":   source,
 		"target_protocol":   target,
 		"reason":            reason,
 	}).Debug("Protocol Stage request stayed on legacy")
@@ -179,6 +190,16 @@ func appendProtocolStageTransforms(groups ...[]transform.Transform) []transform.
 	return result
 }
 
+func protocolStageTransformOptions(ph *ProtocolHandler, c *gin.Context) []transform.TransformOption {
+	options := []transform.TransformOption{
+		transform.WithDevice(ph.deps.Config.ClaudeCodeDeviceID),
+	}
+	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
+		options = append(options, transform.WithIsAdvisorRequest(true))
+	}
+	return options
+}
+
 type protocolStageSetupError struct{ err error }
 
 func (e *protocolStageSetupError) Error() string { return e.err.Error() }
@@ -194,6 +215,7 @@ type protocolTransformStage struct {
 	scenarioFlags *typ.ScenarioFlags
 	streaming     bool
 	transforms    []transform.Transform
+	options       []transform.TransformOption
 }
 
 func newProtocolTransformStage(
@@ -203,6 +225,7 @@ func newProtocolTransformStage(
 	scenarioFlags *typ.ScenarioFlags,
 	streaming bool,
 	transforms []transform.Transform,
+	options ...transform.TransformOption,
 ) protocolstage.Stage {
 	return &protocolTransformStage{
 		name:          name,
@@ -211,6 +234,7 @@ func newProtocolTransformStage(
 		scenarioFlags: scenarioFlags,
 		streaming:     streaming,
 		transforms:    append([]transform.Transform(nil), transforms...),
+		options:       append([]transform.TransformOption(nil), options...),
 	}
 }
 
@@ -255,6 +279,7 @@ func (s *protocolTransformStage) prepare(ctx context.Context, call protocolstage
 		transform.WithScenarioFlags(s.scenarioFlags),
 		transform.WithStreaming(s.streaming),
 	}
+	opts = append(opts, s.options...)
 	var transformCtx *transform.TransformContext
 	switch request := call.Request.(type) {
 	case *openai.ChatCompletionNewParams:
@@ -269,6 +294,8 @@ func (s *protocolTransformStage) prepare(ctx context.Context, call protocolstage
 			s.api,
 		)}
 	}
+	transformCtx.SourceAPI = s.api
+	transformCtx.TargetAPI = s.api
 	finalCtx, err := transform.NewTransformChain(s.transforms).Execute(transformCtx)
 	if err != nil {
 		transformCtx.Release()
