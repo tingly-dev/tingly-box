@@ -300,7 +300,7 @@ const ApiKeyTable = ({
                                         <Stack
                                             direction="column"
                                             spacing={0.5}
-                                            alignItems="stretch"
+                                            alignItems="flex-start"
                                         >
                                             <ApiStyleBadge
                                                 apiStyle="openai"
