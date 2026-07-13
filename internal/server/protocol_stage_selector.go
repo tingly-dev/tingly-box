@@ -27,6 +27,7 @@ func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 		stage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),
+		stage.NewIdentityBridge(protocol.TypeOpenAIResponses),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("construct Protocol Stage selector: %v", err))

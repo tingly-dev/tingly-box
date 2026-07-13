@@ -2,9 +2,9 @@
 
 > Status: Phases 1–2 and the first Phase 3 canary are implemented additively.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
-> routes. Anthropic Beta requests can now include the Beta-native Guardrail
-> Stage; MCP, protocol recording, unsupported routes, and V1 Guardrails remain
-> on legacy.
+> routes and native OpenAI Responses passthrough. Anthropic Beta requests can
+> include the Beta-native Guardrail Stage; MCP, protocol recording,
+> unsupported routes, and V1 Guardrails remain on legacy.
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
@@ -18,7 +18,7 @@ lifecycle before the provider is called.
 | Phase | Status | Current boundary |
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
-| 2 — Bridges and production routes | Complete for the initial route set | Five opt-in routes listed below; other routes stay legacy |
+| 2 — Bridges and production routes | Expanding additively | Six opt-in routes listed below; Responses cross-protocol routes stay legacy |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; native Beta and Chat targets |
 | 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
@@ -33,13 +33,14 @@ Production route selection with `--stage`:
 | `anthropic_v1` | `anthropic_v1` | Stage | Legacy | Legacy | Legacy |
 | `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy | Legacy | Legacy |
 | `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Legacy | Not attached on the Chat handler |
+| `openai_responses` | `openai_responses` | Stage | Not attached on the Responses handler | Legacy | Not attached on the Responses handler |
 | Any other pair | Any | Legacy | Legacy | Legacy | Legacy |
 
-The latest completed checkpoint is commit `0d50d3488` (`feat(protocol): stage
-Anthropic Beta Guardrails`). The next checkpoint is Phase 4 foundation only:
-define and independently test `ToolCatalog`, `ToolPolicy`, `ToolExecutor`, and
-an Anthropic Beta Tool Loop Stage. Production MCP entrypoints are a later,
-explicit review boundary.
+The Responses rollout proceeds source-first: native Responses passthrough,
+Responses → Anthropic Beta, then Responses → OpenAI Chat. Reverse target routes
+follow as separate checkpoints. Phase 4 Tool Loop remains deferred until this
+protocol surface is complete enough to host it without Responses-specific
+branches.
 
 ## Decision
 
@@ -520,6 +521,10 @@ provider-finalization and endpoint. Streaming and complete responses return
 through the same endpoint chain and the outer Beta HTTP adapter. Anthropic V1
 uses separate V1 preparation followed by either V1 identity or the V1 → OpenAI
 Chat Bridge, then the concrete provider-finalization and endpoint.
+OpenAI Responses identity uses Responses preparation and finalization around a
+transport-free Responses provider endpoint; its outer adapter preserves raw
+provider JSON fields, Responses SSE event names, usage-detail compatibility,
+public model rewriting, and pre-stream failover semantics.
 Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
 exposes the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
@@ -544,13 +549,23 @@ Verification recorded for the Phase 3 checkpoint:
   --source=anthropic_beta` reports 72 cases: 66 passed, 6 expected
   streaming-only skips, and 0 failures.
 
+Verification recorded for the native Responses checkpoint:
+
+- selector and wire-shape unit tests pass;
+- real HTTP selection tests cover complete, stream, unsupported-route fallback,
+  and MCP fallback;
+- raw HTTP and official OpenAI Go SDK text matrices each pass 2/2;
+- the full Responses identity matrix reports 24 cases: 19 passed, 5 expected
+  capability/scenario skips, and 0 failures.
+
 Commit checkpoints, oldest to newest:
 
 | Commit | Checkpoint |
 | --- | --- |
-| `e447263f9` | Native Anthropic Beta Stage route |
-| `27dc8c45c` | Anthropic Beta → OpenAI Chat Stage route |
-| `f46a57dbb` | Native Anthropic V1 Stage route |
-| `1a46617b3` | Anthropic V1 → OpenAI Chat Stage route |
-| `e44960d1b` | Observe-only Guardrail Stage foundation |
-| `0d50d3488` | Authoritative Anthropic Beta Guardrail canary |
+| `173509393` | Native Anthropic Beta Stage route |
+| `0fc34defc` | Anthropic Beta → OpenAI Chat Stage route |
+| `13babf39e` | Native Anthropic V1 Stage route |
+| `580a28964` | Anthropic V1 → OpenAI Chat Stage route |
+| `7eadb37ca` | Observe-only Guardrail Stage foundation |
+| `430303114` | Authoritative Anthropic Beta Guardrail canary |
+| current checkpoint | Native OpenAI Responses Stage route |

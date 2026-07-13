@@ -13,6 +13,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
@@ -305,6 +306,8 @@ func (s *protocolTransformStage) prepare(ctx context.Context, call protocolstage
 	case *openai.ChatCompletionNewParams:
 		transformCtx = transform.NewTransformContext(request, opts...)
 		transformCtx.Config.OpenAIConfig = call.State.OpenAIChat
+	case *responses.ResponseNewParams:
+		transformCtx = transform.NewTransformContext(request, opts...)
 	case *anthropic.MessageNewParams:
 		transformCtx = transform.NewTransformContext(request, opts...)
 	case *anthropic.BetaMessageNewParams:
