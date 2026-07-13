@@ -102,6 +102,34 @@ func TestOpenAIChatToAnthropicBetaUsesDefaultMaxTokens(t *testing.T) {
 	}
 }
 
+func TestOpenAIChatToAnthropicBetaSeparatesProviderAndResponseModels(t *testing.T) {
+	t.Parallel()
+
+	bridge := NewChatToAnthropicBeta(AnthropicOptions{ResponseModel: "public-model"})
+	session, err := bridge.Open(context.Background(), stage.Call{Request: &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel("provider-model"),
+	}}, stage.OperationComplete)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	request := requireBetaRequest(t, session.TargetCall().Request)
+	if request.Model != "provider-model" {
+		t.Fatalf("target model = %q, want provider-model", request.Model)
+	}
+	response, err := session.ConvertComplete(context.Background(), &stage.Response{Value: decodeBetaMessage(t, map[string]any{
+		"id": "msg_model", "type": "message", "role": "assistant", "model": "provider-model",
+		"content":     []any{map[string]any{"type": "text", "text": "ok"}},
+		"stop_reason": "end_turn", "usage": map[string]any{"input_tokens": 1, "output_tokens": 1},
+	})})
+	if err != nil {
+		t.Fatalf("ConvertComplete() error = %v", err)
+	}
+	chat := response.Value.(wire.ChatCompletionWire)
+	if chat.Model != "public-model" || response.Model != "public-model" {
+		t.Fatalf("source-visible models = %q/%q", chat.Model, response.Model)
+	}
+}
+
 func TestOpenAIChatToAnthropicBetaStream(t *testing.T) {
 	t.Parallel()
 

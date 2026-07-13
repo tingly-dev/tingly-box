@@ -95,6 +95,14 @@ func WithDebug(enabled bool) ServerOption {
 	}
 }
 
+// WithProtocolStage enables the additive Protocol Stage request pipeline.
+// Unsupported protocol paths remain on the legacy pipeline.
+func WithProtocolStage(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.protocolStageEnabled = enabled
+	}
+}
+
 // WithMultiLogger sets the multi-mode logger for the server
 func WithMultiLogger(logger *pkgobs.MultiLogger) ServerOption {
 	return func(s *Server) {

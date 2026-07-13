@@ -138,6 +138,9 @@ func TestBridgeRegistryResolution(t *testing.T) {
 	if identity.Source() != protocol.TypeAnthropicBeta || identity.Target() != protocol.TypeAnthropicBeta {
 		t.Fatalf("identity bridge = %q -> %q", identity.Source(), identity.Target())
 	}
+	if _, err := registry.ResolveRegistered(protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, AllBridgeCapabilities); err == nil {
+		t.Fatal("ResolveRegistered() accepted an implicit identity bridge")
+	}
 
 	_, err = registry.Resolve(protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, CapabilityToolUse)
 	if err == nil || !strings.Contains(err.Error(), "missing capabilities: tool_use") {

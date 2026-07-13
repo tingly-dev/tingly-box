@@ -52,9 +52,10 @@ type TestEnv struct {
 type TestEnvOption func(*testEnvConfig)
 
 type testEnvConfig struct {
-	recordDir  string
-	mcpEnabled bool
-	client     Client
+	recordDir            string
+	mcpEnabled           bool
+	protocolStageEnabled bool
+	client               Client
 }
 
 // NewTestEnvOptionWithRecordDir creates an option to set the record directory.
@@ -69,6 +70,13 @@ func NewTestEnvOptionWithRecordDir(dir string) TestEnvOption {
 func NewTestEnvOptionWithMCP() TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.mcpEnabled = true
+	}
+}
+
+// NewTestEnvOptionWithProtocolStage enables the real server Stage selector.
+func NewTestEnvOptionWithProtocolStage() TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.protocolStageEnabled = true
 	}
 }
 
@@ -175,6 +183,9 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	var serverOpts []server.ServerOption
 	if cfg.recordDir != "" {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
+	}
+	if cfg.protocolStageEnabled {
+		serverOpts = append(serverOpts, server.WithProtocolStage(true))
 	}
 
 	core, err := newGatewayCore("pv-env-*", func(ac *config.AppConfig) {

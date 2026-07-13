@@ -141,6 +141,7 @@ func TestMatrixCmdBridgeModeRejectsUnsupportedFeatures(t *testing.T) {
 		want string
 	}{
 		{name: "mcp", cmd: MatrixCmd{Mode: "bridges", Client: "http", MCPEnabled: true}, want: "does not support --mcp"},
+		{name: "stage", cmd: MatrixCmd{Mode: "bridges", Client: "http", StageEnabled: true}, want: "does not support --stage"},
 		{name: "recording", cmd: MatrixCmd{Mode: "bridges", Client: "http", RecordDir: t.TempDir()}, want: "does not support --record-dir"},
 	}
 	for _, tt := range tests {

@@ -22,6 +22,10 @@ const defaultAnthropicMaxTokens int64 = 4096
 type AnthropicOptions struct {
 	DefaultMaxTokens   int64
 	DisableStreamUsage bool
+	// ResponseModel overrides the source-visible OpenAI response model while
+	// leaving the provider-bound request model unchanged. Production routing
+	// uses this when a public model alias resolves to a different provider model.
+	ResponseModel string
 }
 
 // NewChatToAnthropicBeta returns an immutable OpenAI Chat -> Anthropic Beta
@@ -66,10 +70,14 @@ func (b *anthropicBetaBridge) Open(_ context.Context, call stage.Call, operation
 	// OpenAIChat state describes a Chat target request. It must not leak across
 	// the protocol boundary into an Anthropic-native endpoint.
 	targetCall.State.OpenAIChat = nil
+	sourceModel := string(chatRequest.Model)
+	if b.options.ResponseModel != "" {
+		sourceModel = b.options.ResponseModel
+	}
 	return &anthropicBetaSession{
 		operation:          operation,
 		targetCall:         targetCall,
-		sourceModel:        string(chatRequest.Model),
+		sourceModel:        sourceModel,
 		disableStreamUsage: b.options.DisableStreamUsage,
 	}, nil
 }

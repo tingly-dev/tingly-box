@@ -20,18 +20,19 @@ import (
 //
 // --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
-	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
-	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
-	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
-	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
-	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,bridges',help='Section selection: default (single + idempotent + dormant Bridges; two-hop OFF), all (every section), single (production A→B only), transitive (production A→B→C only), idempotent (production round-trip only), flags (per-rule flags only), bridges (dormant Stage/Bridge topology only)'"`
-	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
-	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
-	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
-	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
-	BatchCount int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
-	MCPEnabled bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
+	Scenarios    []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
+	Sources      []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
+	Targets      []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
+	Streaming    bool     `kong:"name='streaming',help='Run only streaming tests'"`
+	NonStream    bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	Mode         string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,bridges',help='Section selection: default (single + idempotent + dormant Bridges; two-hop OFF), all (every section), single (production A→B only), transitive (production A→B→C only), idempotent (production round-trip only), flags (per-rule flags only), bridges (dormant Stage/Bridge topology only)'"`
+	Client       string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
+	JsonOutput   bool     `kong:"name='json',help='Output results as JSON'"`
+	Verbose      int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
+	RecordDir    string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
+	BatchCount   int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
+	MCPEnabled   bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
+	StageEnabled bool     `kong:"name='stage',help='Enable production Protocol Stage selection in the test server'"`
 }
 
 // Help returns extended help text shown by `harness matrix --help`.
@@ -58,6 +59,9 @@ func (*MatrixCmd) Help() string {
 
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
+
+  # Exercise production Stage selection (currently Chat → Anthropic Beta)
+  harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta
 
   # Drive requests through real client stacks instead of raw HTTP
   harness matrix --mode=single --client=gosdk    # official Go SDKs, in-process
@@ -111,6 +115,9 @@ func (m *MatrixCmd) Run() error {
 	if m.Mode == "bridges" && m.MCPEnabled {
 		return fmt.Errorf("--mode=bridges does not support --mcp (the Bridge matrix validates protocol topology only)")
 	}
+	if m.Mode == "bridges" && m.StageEnabled {
+		return fmt.Errorf("--mode=bridges does not support --stage (use --mode=single to exercise the production Stage path)")
+	}
 	if m.Mode == "bridges" && m.RecordDir != "" {
 		return fmt.Errorf("--mode=bridges does not support --record-dir (the Bridge matrix runs in-process without HTTP recording)")
 	}
@@ -149,6 +156,9 @@ func (m *MatrixCmd) Run() error {
 	}
 	if m.MCPEnabled {
 		matrix = matrix.WithMCPEnabled()
+	}
+	if m.StageEnabled {
+		matrix = matrix.WithProtocolStage()
 	}
 	bridgeMatrix := protocoltest.DefaultBridgeMatrix()
 	if len(m.Scenarios) > 0 {

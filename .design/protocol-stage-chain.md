@@ -1,9 +1,8 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–2 are implemented additively and carry no production
-> traffic. Bidirectional Anthropic Beta/OpenAI Chat bridges and a concrete
-> Chat → Beta-native Stage → Chat harness chain are complete; existing handlers
-> remain the only production path.
+> Status: Phases 1–2 are implemented additively. `tingly-box start --stage`
+> now opts OpenAI Chat → Anthropic Beta attempts into the production Stage
+> pipeline; all other routes and MCP-enabled requests remain on legacy.
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
@@ -349,6 +348,14 @@ wiring.
 - Progress from internal allowlist to default only after protocol matrix,
   official SDK, Duo, and failover validation.
 
+The first opt-in integration selects Stage per provider attempt after routing
+has resolved the concrete target protocol but before legacy Base conversion.
+`--stage` is immutable for the server process. The Stage path reuses client
+preparation, target consistency, rule, and vendor transforms as native protocol
+stages; the provider endpoint and HTTP adapter retain their existing ownership.
+Unsupported protocol pairs and MCP-enabled requests remain on legacy. Once a
+Stage attempt has started, it is never replayed through legacy.
+
 ### Phase 6 — Legacy removal
 
 - Remove protocol-specific feature hooks and MCP transforms in separate changes.
@@ -359,6 +366,8 @@ wiring.
 ## Rollout and Rollback
 
 - `legacy` remains the default at the beginning.
+- `tingly-box start --stage` activates Stage selection; restart without the flag
+  is the rollback artifact.
 - Pure conversion and dry-run Guardrail behavior may run in shadow.
 - Tool execution may only run once and therefore uses explicit canaries.
 - Fallback is allowed only before output or side effects are committed.
@@ -423,6 +432,10 @@ while existing `Handle*` functions remain the production wrappers. The dormant
 topology and verifies text, tool-use, and tool-result semantics in complete and
 streaming modes.
 
-Runtime handler/dispatch integration is the next step and remains a separate
-stop boundary: legacy stays the default and no server path may select
-`BuildTopology` without an explicit canary and rollback discussion.
+The first runtime integration is opt-in through `--stage`. For each OpenAI Chat
+provider attempt whose concrete target is Anthropic Beta, the server builds a
+fresh Chat preparation → Bridge → Beta provider-finalization → provider endpoint
+topology. Streaming and complete responses return through the same Bridge and
+the outer HTTP adapter. Capability-missing pairs, MCP-enabled requests, and the
+explicit response-roundtrip diagnostic remain on legacy. Debug routing exposes
+the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.

@@ -148,10 +148,11 @@ type Server struct {
 	quotaManager providerQuotaModule.Manager
 
 	// options
-	enableUI    bool
-	openBrowser bool
-	host        string
-	debug       bool
+	enableUI             bool
+	openBrowser          bool
+	host                 string
+	debug                bool
+	protocolStageEnabled bool
 
 	// record options
 	recordMode obs.RecordMode
@@ -496,6 +497,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		GetOrCreateScenarioSink:  server.GetOrCreateScenarioSink,
 		CurrentGuardrailsRuntime: server.currentGuardrailsRuntime,
 		GetScenarioRecordMode:    server.GetScenarioRecordMode,
+		ProtocolStageEnabled:     server.protocolStageEnabled,
 	})
 
 	// Setup middleware

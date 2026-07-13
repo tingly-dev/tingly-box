@@ -1,0 +1,561 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"sync"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
+	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
+	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/openaibridge"
+	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
+	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
+	"github.com/tingly-dev/tingly-box/internal/server/recording"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
+)
+
+const protocolPipelineHeader = "X-Tingly-Protocol-Pipeline"
+
+// tryProtocolStageOpenAIChat selects and executes the Stage path for one
+// provider attempt. Returning false means the caller must continue through the
+// legacy transform/dispatch path. Returning true means this method has fully
+// handled the attempt, including any response or error.
+func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
+	c *gin.Context,
+	req *protocol.OpenAIChatCompletionRequest,
+	responseModel string,
+	target protocol.APIType,
+	provider *typ.Provider,
+	actualModel string,
+	rule *typ.Rule,
+	isStreaming bool,
+	scenarioConfig *typ.ScenarioConfig,
+	ruleFlags typ.RuleFlags,
+) bool {
+	selector := ph.protocolStageSelector
+	if selector == nil {
+		return false
+	}
+	useStage, selectionErr := selector.ShouldUseStage(
+		protocol.TypeOpenAIChat,
+		target,
+		protocolstage.AllBridgeCapabilities,
+	)
+	if !useStage {
+		if selector.Enabled() && selectionErr != nil {
+			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+				"protocol_pipeline": "legacy",
+				"source_protocol":   protocol.TypeOpenAIChat,
+				"target_protocol":   target,
+			}).Debugf("Protocol Stage route unavailable: %v", selectionErr)
+		}
+		return false
+	}
+
+	// The generic MCP transform/tool loop has not moved behind a Stage yet.
+	// Keeping the whole request on legacy is safer than silently omitting tool
+	// injection or executing tools through two owners.
+	if ph.mcpEnabled() {
+		logProtocolStageFallback(c, target, "MCP runtime still uses the legacy pipeline")
+		return false
+	}
+	// The response-roundtrip header is an explicit legacy diagnostic. Preserve
+	// that exact experiment instead of changing its semantics under --stage.
+	if ShouldRoundtripResponse(c, "anthropic") {
+		logProtocolStageFallback(c, target, "response roundtrip diagnostic requires the legacy pipeline")
+		return false
+	}
+
+	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
+		setProbeUpstreamHeadersForTarget(c, target, rule, provider)
+		c.Header(protocolPipelineHeader, "stage")
+	}
+
+	preBase := RulePreBaseTransforms(ruleFlags)
+	preVendor := RulePreVendorTransforms(ruleFlags)
+	disableStreamUsage := ruleFlags.SkipUsage || ruleFlags.CursorCompat
+	bridge := openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{
+		DefaultMaxTokens:   4096,
+		DisableStreamUsage: disableStreamUsage,
+		ResponseModel:      responseModel,
+	})
+	registry, err := protocolstage.NewBridgeRegistry(bridge)
+	if err != nil {
+		ph.FailAttemptSetup(c, fmt.Errorf("build Protocol Stage registry: %w", err))
+		return true
+	}
+
+	scenarioFlags := scenarioFlagsOrNil(scenarioConfig)
+	terminal := &anthropicBetaProviderEndpoint{
+		ph:       ph,
+		provider: provider,
+		model:    actualModel,
+	}
+	stages := []protocolstage.Stage{
+		newProtocolTransformStage(
+			"client_prepare",
+			protocol.TypeOpenAIChat,
+			provider,
+			scenarioFlags,
+			isStreaming,
+			preBase,
+		),
+		newProtocolTransformStage(
+			"provider_finalize",
+			protocol.TypeAnthropicBeta,
+			provider,
+			scenarioFlags,
+			isStreaming,
+			appendProtocolStageTransforms(
+				[]transform.Transform{transform.NewConsistencyTransform(protocol.TypeAnthropicBeta)},
+				preVendor,
+				[]transform.Transform{vendorTransformShared},
+			),
+		),
+	}
+	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
+		Terminal:             terminal,
+		Stages:               stages,
+		ClientProtocol:       protocol.TypeOpenAIChat,
+		Registry:             registry,
+		RequiredCapabilities: protocolstage.AllBridgeCapabilities,
+	})
+	if err != nil {
+		ph.FailAttemptSetup(c, fmt.Errorf("build Protocol Stage topology: %w", err))
+		return true
+	}
+
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"protocol_pipeline": "stage",
+		"source_protocol":   protocol.TypeOpenAIChat,
+		"target_protocol":   target,
+	}).Debug("Selected Protocol Stage pipeline")
+
+	call := protocolstage.Call{
+		Request: req.ChatCompletionNewParams,
+		Metadata: protocolstage.CallMetadata{
+			RequestID: pkgobs.RequestIDFromContext(c.Request.Context()),
+		},
+	}
+	if isStreaming {
+		ph.serveProtocolStageOpenAIChatStream(c, endpoint, call, nil)
+		return true
+	}
+	ph.serveProtocolStageOpenAIChatComplete(c, endpoint, call, provider, actualModel, disableStreamUsage, nil)
+	return true
+}
+
+func logProtocolStageFallback(c *gin.Context, target protocol.APIType, reason string) {
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"protocol_pipeline": "legacy",
+		"source_protocol":   protocol.TypeOpenAIChat,
+		"target_protocol":   target,
+		"reason":            reason,
+	}).Debug("Protocol Stage request stayed on legacy")
+}
+
+func appendProtocolStageTransforms(groups ...[]transform.Transform) []transform.Transform {
+	var count int
+	for _, group := range groups {
+		count += len(group)
+	}
+	result := make([]transform.Transform, 0, count)
+	for _, group := range groups {
+		result = append(result, group...)
+	}
+	return result
+}
+
+type protocolStageSetupError struct{ err error }
+
+func (e *protocolStageSetupError) Error() string { return e.err.Error() }
+func (e *protocolStageSetupError) Unwrap() error { return e.err }
+
+// protocolTransformStage reuses the existing non-transport transforms inside a
+// native Protocol Stage boundary. It is constructed per provider attempt, while
+// all mutable transform state remains per call.
+type protocolTransformStage struct {
+	name          string
+	api           protocol.APIType
+	provider      *typ.Provider
+	scenarioFlags *typ.ScenarioFlags
+	streaming     bool
+	transforms    []transform.Transform
+}
+
+func newProtocolTransformStage(
+	name string,
+	api protocol.APIType,
+	provider *typ.Provider,
+	scenarioFlags *typ.ScenarioFlags,
+	streaming bool,
+	transforms []transform.Transform,
+) protocolstage.Stage {
+	return &protocolTransformStage{
+		name:          name,
+		api:           api,
+		provider:      provider,
+		scenarioFlags: scenarioFlags,
+		streaming:     streaming,
+		transforms:    append([]transform.Transform(nil), transforms...),
+	}
+}
+
+func (s *protocolTransformStage) Name() string               { return s.name }
+func (s *protocolTransformStage) Protocol() protocol.APIType { return s.api }
+func (s *protocolTransformStage) Wrap(next protocolstage.Endpoint) protocolstage.Endpoint {
+	return &protocolTransformEndpoint{stage: s, next: next}
+}
+
+type protocolTransformEndpoint struct {
+	stage *protocolTransformStage
+	next  protocolstage.Endpoint
+}
+
+func (e *protocolTransformEndpoint) Protocol() protocol.APIType { return e.stage.api }
+
+func (e *protocolTransformEndpoint) Complete(ctx context.Context, call protocolstage.Call) (*protocolstage.Response, error) {
+	prepared, release, err := e.stage.prepare(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return e.next.Complete(ctx, prepared)
+}
+
+func (e *protocolTransformEndpoint) Stream(ctx context.Context, call protocolstage.Call) (protocolstage.EventStream, error) {
+	prepared, release, err := e.stage.prepare(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return e.next.Stream(ctx, prepared)
+}
+
+func (s *protocolTransformStage) prepare(ctx context.Context, call protocolstage.Call) (protocolstage.Call, func(), error) {
+	if len(s.transforms) == 0 {
+		return call, func() {}, nil
+	}
+	opts := []transform.TransformOption{
+		transform.WithContext(ctx),
+		transform.WithProvider(s.provider),
+		transform.WithScenarioFlags(s.scenarioFlags),
+		transform.WithStreaming(s.streaming),
+	}
+	var transformCtx *transform.TransformContext
+	switch request := call.Request.(type) {
+	case *openai.ChatCompletionNewParams:
+		transformCtx = transform.NewTransformContext(request, opts...)
+	case *anthropic.BetaMessageNewParams:
+		transformCtx = transform.NewTransformContext(request, opts...)
+	default:
+		return protocolstage.Call{}, func() {}, &protocolStageSetupError{err: fmt.Errorf(
+			"Protocol Stage %q received request %T for %q",
+			s.name,
+			call.Request,
+			s.api,
+		)}
+	}
+	finalCtx, err := transform.NewTransformChain(s.transforms).Execute(transformCtx)
+	if err != nil {
+		transformCtx.Release()
+		return protocolstage.Call{}, func() {}, &protocolStageSetupError{err: fmt.Errorf("Protocol Stage %q transform: %w", s.name, err)}
+	}
+	prepared := call
+	prepared.Request = finalCtx.Request
+	return prepared, finalCtx.Release, nil
+}
+
+// anthropicBetaProviderEndpoint is the transport-free provider terminal used
+// by the first production Stage route.
+type anthropicBetaProviderEndpoint struct {
+	ph       *ProtocolHandler
+	provider *typ.Provider
+	model    string
+}
+
+func (*anthropicBetaProviderEndpoint) Protocol() protocol.APIType { return protocol.TypeAnthropicBeta }
+
+func (e *anthropicBetaProviderEndpoint) Complete(ctx context.Context, call protocolstage.Call) (*protocolstage.Response, error) {
+	request, err := protocolStageBetaRequest(call.Request)
+	if err != nil {
+		return nil, err
+	}
+	wrapper := e.ph.deps.ClientPool.GetAnthropicClient(ctx, e.provider, e.model)
+	fc := forwarding.NewForwardContext(ctx, e.provider)
+	message, cancel, err := forwarding.ForwardAnthropicV1Beta(fc, wrapper, request)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &protocolstage.Response{
+		Value: message,
+		Usage: protocolusage.FromAnthropicBetaMessage(message.Usage),
+		Model: e.model,
+	}, nil
+}
+
+func (e *anthropicBetaProviderEndpoint) Stream(ctx context.Context, call protocolstage.Call) (protocolstage.EventStream, error) {
+	request, err := protocolStageBetaRequest(call.Request)
+	if err != nil {
+		return nil, err
+	}
+	wrapper := e.ph.deps.ClientPool.GetAnthropicClient(ctx, e.provider, e.model)
+	fc := forwarding.NewForwardContext(ctx, e.provider)
+	stream, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, request)
+	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
+		return nil, err
+	}
+	return &anthropicBetaProviderStream{
+		stream: stream,
+		cancel: cancel,
+		model:  e.model,
+		usage:  protocolusage.NewAnthropicAccumulator(),
+	}, nil
+}
+
+func protocolStageBetaRequest(value any) (*anthropic.BetaMessageNewParams, error) {
+	request, ok := value.(*anthropic.BetaMessageNewParams)
+	if !ok || request == nil {
+		return nil, &protocolStageSetupError{err: fmt.Errorf("Anthropic Beta provider endpoint received %T", value)}
+	}
+	return request, nil
+}
+
+type anthropicBetaProviderStream struct {
+	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
+	cancel context.CancelFunc
+	model  string
+	usage  *protocolusage.AnthropicAccumulator
+
+	closeOnce sync.Once
+	closeErr  error
+}
+
+func (s *anthropicBetaProviderStream) Next(ctx context.Context) (protocolstage.Event, error) {
+	if err := ctx.Err(); err != nil {
+		return protocolstage.Event{}, err
+	}
+	if s.stream == nil {
+		return protocolstage.Event{}, fmt.Errorf("Anthropic Beta provider stream is nil")
+	}
+	if !s.stream.Next() {
+		if err := s.stream.Err(); err != nil {
+			return protocolstage.Event{}, err
+		}
+		return protocolstage.Event{}, io.EOF
+	}
+	event := s.stream.Current()
+	if s.usage != nil {
+		s.usage.ConsumeBeta(&event)
+	}
+	return protocolstage.Event{Value: event}, nil
+}
+
+func (s *anthropicBetaProviderStream) Close() error {
+	s.closeOnce.Do(func() {
+		if s.stream != nil {
+			s.closeErr = s.stream.Close()
+		}
+		if s.cancel != nil {
+			s.cancel()
+		}
+	})
+	return s.closeErr
+}
+
+func (s *anthropicBetaProviderStream) Result() protocolstage.StreamResult {
+	var usage *protocol.TokenUsage
+	if s.usage != nil && s.usage.HasUsage() {
+		usage = s.usage.Result()
+	}
+	return protocolstage.StreamResult{Usage: usage, Model: s.model}
+}
+
+func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
+	c *gin.Context,
+	endpoint protocolstage.Endpoint,
+	call protocolstage.Call,
+	provider *typ.Provider,
+	actualModel string,
+	disableUsage bool,
+	recorder *recording.ProtocolRecorder,
+) {
+	response, err := endpoint.Complete(c.Request.Context(), call)
+	if err != nil {
+		var setupErr *protocolStageSetupError
+		if errors.As(err, &setupErr) {
+			ph.FailAttemptSetup(c, setupErr)
+			return
+		}
+		ph.failRequest(c, recorder, err, "Protocol Stage provider request failed")
+		return
+	}
+	value, err := protocolStageChatResponseMap(response.Value)
+	if err != nil {
+		ph.failRequest(c, recorder, err, "Protocol Stage response conversion failed")
+		return
+	}
+	value = ops.ApplyResponseTransforms(value, provider.APIBase, actualModel)
+	if disableUsage {
+		delete(value, "usage")
+	}
+	if response.Usage != nil && response.Usage.HasUsage() {
+		ph.trackUsageWithTokenUsage(c, response.Usage, nil)
+	}
+	if recorder != nil {
+		recorder.SetAssembledResponse(value)
+		recorder.RecordResponse(provider, actualModel)
+	}
+	c.JSON(http.StatusOK, value)
+}
+
+func protocolStageChatResponseMap(value any) (map[string]any, error) {
+	switch response := value.(type) {
+	case wire.ChatCompletionWire:
+		return response.ToMap(), nil
+	case *wire.ChatCompletionWire:
+		if response == nil {
+			return nil, fmt.Errorf("Protocol Stage OpenAI Chat response is nil")
+		}
+		return response.ToMap(), nil
+	default:
+		return nil, fmt.Errorf("Protocol Stage OpenAI Chat response has type %T", value)
+	}
+}
+
+func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
+	c *gin.Context,
+	endpoint protocolstage.Endpoint,
+	call protocolstage.Call,
+	recorder *recording.ProtocolRecorder,
+) {
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		ph.FailAttemptSetup(c, fmt.Errorf("Protocol Stage streaming is unsupported by this connection"))
+		return
+	}
+	stream, err := endpoint.Stream(c.Request.Context(), call)
+	if err != nil {
+		var setupErr *protocolStageSetupError
+		if errors.As(err, &setupErr) {
+			ph.FailAttemptSetup(c, setupErr)
+			return
+		}
+		ph.failRequest(c, recorder, err, "Protocol Stage provider stream failed")
+		return
+	}
+	defer func() {
+		if closeErr := stream.Close(); closeErr != nil {
+			logrus.WithContext(c.Request.Context()).Warnf("close Protocol Stage stream: %v", closeErr)
+		}
+	}()
+
+	wrote := false
+	for {
+		event, nextErr := stream.Next(c.Request.Context())
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			result := stream.Result()
+			if result.Usage != nil && result.Usage.HasUsage() {
+				ph.trackUsageWithTokenUsage(c, result.Usage, nextErr)
+			} else {
+				ph.trackUsageFromContext(c, 0, 0, nextErr)
+			}
+			if !wrote {
+				SendErrorResponse(c, nextErr, "Protocol Stage provider stream failed")
+			} else {
+				protocolstream.OpenAISSE(c, ErrorResponse{Error: ErrorDetail{
+					Message: "Protocol Stage stream terminated",
+					Type:    "protocol_error",
+				}})
+				flusher.Flush()
+			}
+			if recorder != nil {
+				recorder.RecordError(nextErr)
+			}
+			return
+		}
+
+		chunk, ok := event.Value.(wire.ChatStreamChunk)
+		if !ok {
+			streamErr := fmt.Errorf("Protocol Stage stream emitted %T, want wire.ChatStreamChunk", event.Value)
+			result := stream.Result()
+			if result.Usage != nil && result.Usage.HasUsage() {
+				ph.trackUsageWithTokenUsage(c, result.Usage, streamErr)
+			} else {
+				ph.trackUsageFromContext(c, 0, 0, streamErr)
+			}
+			if !wrote {
+				ph.FailAttemptSetup(c, streamErr)
+			} else {
+				protocolstream.OpenAISSE(c, ErrorResponse{Error: ErrorDetail{
+					Message: "Protocol Stage stream emitted an invalid event",
+					Type:    "protocol_error",
+				}})
+				flusher.Flush()
+			}
+			if recorder != nil {
+				recorder.RecordError(streamErr)
+			}
+			return
+		}
+		if !wrote {
+			setProtocolStageSSEHeaders(c)
+			wrote = true
+		}
+		if protocolStageChatChunkHasContent(chunk) {
+			protocol.MarkFirstToken(c)
+		}
+		protocolstream.OpenAISSE(c, chunk)
+		flusher.Flush()
+	}
+
+	if !wrote {
+		setProtocolStageSSEHeaders(c)
+	}
+	protocolstream.OpenAISSEDone(c)
+	flusher.Flush()
+	result := stream.Result()
+	if result.Usage != nil && result.Usage.HasUsage() {
+		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
+	}
+}
+
+func setProtocolStageSSEHeaders(c *gin.Context) {
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Cache-Control")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+}
+
+func protocolStageChatChunkHasContent(chunk wire.ChatStreamChunk) bool {
+	for _, choice := range chunk.Choices {
+		if choice.Delta.Content != "" || choice.Delta.ReasoningContent != "" || len(choice.Delta.ToolCalls) > 0 {
+			return true
+		}
+	}
+	return false
+}

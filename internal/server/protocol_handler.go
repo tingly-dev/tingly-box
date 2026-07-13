@@ -41,6 +41,11 @@ import (
 type ProtocolHandlerDeps struct {
 	Config *config.Config
 
+	// ProtocolStageEnabled is an immutable process-start choice. When true,
+	// registered and capability-complete protocol paths may use Protocol Stage;
+	// unsupported paths remain on the legacy pipeline.
+	ProtocolStageEnabled bool
+
 	// TokenTracker records usage to the OTel meter pipeline (may be nil if
 	// OTel setup failed at startup — callers must nil-check).
 	TokenTracker *tracker.TokenTracker
@@ -105,7 +110,8 @@ type ProtocolHandlerDeps struct {
 // files (openai_*.go, anthropic_*.go, protocol_*.go, etc.) will be moved
 // here in later steps and become methods on *ProtocolHandler.
 type ProtocolHandler struct {
-	deps ProtocolHandlerDeps
+	deps                  ProtocolHandlerDeps
+	protocolStageSelector *ProtocolStageSelector
 
 	// mcpTC caches the stateless MCP chain transforms (see
 	// protocol_transform.go); they depend only on construction-time deps.
@@ -114,7 +120,18 @@ type ProtocolHandler struct {
 
 // NewHandler constructs the AI Model API handler from its dependencies.
 func NewHandler(deps ProtocolHandlerDeps) *ProtocolHandler {
-	return &ProtocolHandler{deps: deps}
+	handler := &ProtocolHandler{
+		deps:                  deps,
+		protocolStageSelector: NewProtocolStageSelector(deps.ProtocolStageEnabled),
+	}
+	if deps.ProtocolStageEnabled {
+		logrus.WithFields(logrus.Fields{
+			"protocol_pipeline": "stage",
+			"stage_routes":      "openai_chat->anthropic_beta",
+			"other_routes":      "legacy",
+		}).Info("Protocol Stage mode enabled")
+	}
+	return handler
 }
 
 // The methods below are thin wrappers wiring the Deps callbacks to the

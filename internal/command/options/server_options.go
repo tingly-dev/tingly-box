@@ -12,6 +12,7 @@ type StartFlags struct {
 	Host                 string
 	EnableUI             bool
 	EnableDebug          bool
+	EnableProtocolStage  bool
 	EnableOpenBrowser    bool
 	EnableStyleTransform bool
 	Daemon               bool
@@ -23,16 +24,17 @@ type StartFlags struct {
 
 // StartServerOptions contains resolved options for starting the server
 type StartServerOptions struct {
-	Host                 string
-	Port                 int
-	EnableUI             bool
-	EnableDebug          bool
-	EnableOpenBrowser    bool
-	Daemon               bool
-	LogFile              string
-	PromptRestart        bool
-	RecordMode string
-	RecordDir  string
+	Host                string
+	Port                int
+	EnableUI            bool
+	EnableDebug         bool
+	EnableProtocolStage bool
+	EnableOpenBrowser   bool
+	Daemon              bool
+	LogFile             string
+	PromptRestart       bool
+	RecordMode          string
+	RecordDir           string
 }
 
 // AddStartFlags adds all start-related flags to a command
@@ -42,6 +44,7 @@ func AddStartFlags(cmd *cobra.Command, flags *StartFlags) {
 	cmd.Flags().StringVar(&flags.Host, "host", "localhost", "Server host")
 	cmd.Flags().BoolVarP(&flags.EnableUI, "ui", "u", true, "Enable web UI (default: true)")
 	cmd.Flags().BoolVar(&flags.EnableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
+	cmd.Flags().BoolVar(&flags.EnableProtocolStage, "stage", false, "Enable the Protocol Stage request pipeline (default: false)")
 	cmd.Flags().BoolVar(&flags.EnableOpenBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
 	cmd.Flags().BoolVar(&flags.EnableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
 	cmd.Flags().BoolVar(&flags.Daemon, "daemon", false, "Run as daemon in background (default: false)")
@@ -74,15 +77,16 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *config
 	}
 
 	return StartServerOptions{
-		Host:              flags.Host,
-		Port:              resolvedPort,
-		EnableUI:          flags.EnableUI,
-		EnableDebug:       resolvedDebug,
-		EnableOpenBrowser: flags.EnableOpenBrowser,
-		Daemon:            flags.Daemon,
-		LogFile:           flags.LogFile,
-		PromptRestart:     flags.PromptRestart,
-		RecordMode:        flags.RecordMode,
-		RecordDir:         resolvedRecordDir,
+		Host:                flags.Host,
+		Port:                resolvedPort,
+		EnableUI:            flags.EnableUI,
+		EnableDebug:         resolvedDebug,
+		EnableProtocolStage: flags.EnableProtocolStage,
+		EnableOpenBrowser:   flags.EnableOpenBrowser,
+		Daemon:              flags.Daemon,
+		LogFile:             flags.LogFile,
+		PromptRestart:       flags.PromptRestart,
+		RecordMode:          flags.RecordMode,
+		RecordDir:           resolvedRecordDir,
 	}
 }

@@ -70,6 +70,7 @@ go build -o harness ./cli/harness
 ./harness matrix
 ./harness matrix --scenario text --source anthropic_v1 --target openai_chat
 ./harness matrix --mode=bridges  # dormant Stage/Bridge topology, in-process
+./harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta  # real server Stage path
 
 # Tier A through real client stacks (--client; see .design/harness-matrix.md
 # "Client drivers"): official Go SDKs in-process, or real Python/Node SDKs
@@ -139,8 +140,8 @@ The standalone mode rejects external client drivers, MCP, and HTTP recording,
 because none of those surfaces are traversed by the in-process topology.
 
 This is converter/topology evidence, not a substitute for the production HTTP
-single-hop section. Once server dispatch is migrated, a separate real-path
-matrix leg must prove that the new topology is actually selected.
+single-hop section. Use `matrix --mode=single --stage` to enable the real server
+selector; the current production Stage route is OpenAI Chat → Anthropic Beta.
 
 ---
 

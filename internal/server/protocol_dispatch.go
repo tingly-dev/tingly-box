@@ -75,6 +75,7 @@ func (ph *ProtocolHandler) DispatchChainResult(
 	// rule + applied flags are all known, before any response byte is written.
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
 		setProbeUpstreamHeaders(c, reqCtx, rule, provider)
+		c.Header(protocolPipelineHeader, "legacy")
 	}
 
 	switch reqCtx.TargetAPI {
@@ -179,9 +180,13 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 // X-Tingly-* response headers, consumed by the probe's captureRoutingRoundTripper.
 // Gated by the caller on X-Tingly-Debug-Routing so production traffic is untouched.
 func setProbeUpstreamHeaders(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider) {
-	c.Header("X-Tingly-Upstream-API", string(reqCtx.TargetAPI))
+	setProbeUpstreamHeadersForTarget(c, reqCtx.TargetAPI, rule, provider)
+}
+
+func setProbeUpstreamHeadersForTarget(c *gin.Context, target protocol.APIType, rule *typ.Rule, provider *typ.Provider) {
+	c.Header("X-Tingly-Upstream-API", string(target))
 	if provider != nil {
-		c.Header("X-Tingly-Upstream-URL", upstreamURLFor(provider, reqCtx.TargetAPI))
+		c.Header("X-Tingly-Upstream-URL", upstreamURLFor(provider, target))
 	}
 	// Synthetic rules (provider probes) carry no meaningful rule identity.
 	if rule != nil && rule.UUID != ProbeSyntheticRuleUUID {

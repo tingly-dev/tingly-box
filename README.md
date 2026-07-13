@@ -320,6 +320,9 @@ Run the Go server (hot-reload via `go run`):
 task start
 # or directly:
 go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
+
+# Opt into the Protocol Stage pipeline (unsupported routes remain on legacy)
+go run ./cli/tingly-box start --stage
 ```
 
 Open http://localhost:12580 in your browser (serves the last built frontend bundle).

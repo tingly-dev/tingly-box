@@ -130,6 +130,10 @@ go run ./cli/harness matrix --mode=idempotent
 go run ./cli/harness matrix --mode=flags     # per-rule flag behavior
 go run ./cli/harness matrix --mode=bridges   # in-process Stage/Bridge topology
 
+# Real HTTP/server path with production Stage selection enabled
+go run ./cli/harness matrix --mode=single --stage \
+  --source=openai_chat --target=anthropic_beta
+
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
 
@@ -142,8 +146,9 @@ The `flags` section is documented in detail in
 `TestResult` per flag (`Name: "flags/<key>"`, `Scenario: <key>`).
 
 The `bridges` section is deliberately separate from single-hop. Single-hop
-traverses the production gateway over HTTP and therefore continues to validate
-the legacy dispatch path until runtime migration occurs. Bridges runs the
+traverses the production gateway over HTTP. It validates legacy by default;
+`--stage` enables the server's production Stage selector, currently for
+OpenAI Chat → Anthropic Beta. Bridges runs the
 dormant `stage.BuildTopology`/`stage.Adapt` path in-process and labels every
 direct result `bridges/<scenario>/...`; concrete multi-level results use
 `bridges/chain/<name>/<scenario>/...`. It must not be cited as production-path
@@ -153,7 +158,7 @@ OpenAI Chat → Anthropic Beta-native Stage → OpenAI Chat chain. Every route r
 text, tool use, tool result, stream, and non-stream (42 cells total).
 Because it has no client transport, `--mode=bridges` only accepts
 `--client=http`; it reuses scenario/source/target/streaming/batch filters but
-does not claim support for `--mcp` or `--record-dir`.
+does not claim support for `--mcp`, `--stage`, or `--record-dir`.
 
 ### Client drivers (`--client`)
 

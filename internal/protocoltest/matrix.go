@@ -30,13 +30,14 @@ func (p ProtocolPair) String() string {
 // Matrix defines the set of (source, target) pairs, scenarios, and
 // streaming modes to validate.
 type Matrix struct {
-	Pairs      []ProtocolPair
-	Scenarios  []Scenario
-	Streaming  []bool
-	RecordDir  string // Optional directory for recording requests/responses
-	BatchCount int    // Number of times to run each test
-	MCPEnabled bool   // Enable MCP feature flag in test env
-	Client     Client // Client driver (nil = raw HTTP default)
+	Pairs                []ProtocolPair
+	Scenarios            []Scenario
+	Streaming            []bool
+	RecordDir            string // Optional directory for recording requests/responses
+	BatchCount           int    // Number of times to run each test
+	MCPEnabled           bool   // Enable MCP feature flag in test env
+	ProtocolStageEnabled bool   // Enable the production Protocol Stage selector
+	Client               Client // Client driver (nil = raw HTTP default)
 }
 
 // DefaultPairs is the canonical list of (source → target) conversion
@@ -184,6 +185,14 @@ func (m *Matrix) WithMCPEnabled() *Matrix {
 	return out
 }
 
+// WithProtocolStage returns a copy that starts the real gateway with Stage
+// selection enabled. This is production-path validation, unlike BridgeMatrix.
+func (m *Matrix) WithProtocolStage() *Matrix {
+	out := m.clone()
+	out.ProtocolStageEnabled = true
+	return out
+}
+
 // WithClient returns a copy of the Matrix that drives requests through the
 // given client driver (official SDKs, subprocess drivers) instead of the
 // default raw HTTP client.
@@ -199,6 +208,9 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 	opts = append(opts, NewTestEnvOptionWithRecordDir(m.RecordDir))
 	if m.MCPEnabled {
 		opts = append(opts, NewTestEnvOptionWithMCP())
+	}
+	if m.ProtocolStageEnabled {
+		opts = append(opts, NewTestEnvOptionWithProtocolStage())
 	}
 	if m.Client != nil {
 		opts = append(opts, NewTestEnvOptionWithClient(m.Client))

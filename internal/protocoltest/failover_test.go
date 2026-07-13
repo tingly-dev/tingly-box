@@ -77,6 +77,29 @@ func TestFailover_Stream_PreContent_500_RetriesAndSucceeds(t *testing.T) {
 	assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
 }
 
+func TestProtocolStageFailover_PreContent_RetriesAndSucceeds(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		name := "nonstream"
+		scenario := pt.TextScenario()
+		if streaming {
+			name = "stream"
+			scenario = pt.StreamingTextScenario()
+		}
+		t.Run(name, func(t *testing.T) {
+			env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
+			defer env.Close()
+
+			route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, scenario, pt.FailMockPreContent429)
+			result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, streaming)
+
+			require.Equal(t, 200, result.HTTPStatus)
+			assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
+			assert.Equal(t, 1, env.UpstreamEndpointHits(pt.EndpointAnthropic))
+			assert.NotEmpty(t, result.Content)
+		})
+	}
+}
+
 // TestFailover_AllTiersFail_ClientSeesLastError — both services return 429.
 // After the loop exhausts the candidate pool, the deferred CommitIfBuffered
 // flushes the last buffered error to the wire. The client must see a non-200,
