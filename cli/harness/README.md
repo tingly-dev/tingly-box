@@ -69,6 +69,7 @@ go build -o harness ./cli/harness
 # Tier A — exhaustive protocol-transform matrix
 ./harness matrix
 ./harness matrix --scenario text --source anthropic_v1 --target openai_chat
+./harness matrix --mode=bridges  # dormant Stage/Bridge topology, in-process
 
 # Tier A through real client stacks (--client; see .design/harness-matrix.md
 # "Client drivers"): official Go SDKs in-process, or real Python/Node SDKs
@@ -123,6 +124,20 @@ functions.
   request/response pairs; `--batch N` for stability runs.
 
 **Use it for:** catching transform regressions exhaustively and instantly.
+
+### Dormant Stage/Bridge section
+
+`./harness matrix --mode=bridges` validates the additive protocol Stage path
+without routing production gateway traffic through it. Results are visibly
+prefixed with `bridges/`; the section covers Anthropic v1/beta identity and
+Anthropic v1/beta → OpenAI Chat for text, tool-use, and tool-result requests in
+both execution modes. It reuses the normal matrix filters and batch option.
+The standalone mode rejects external client drivers, MCP, and HTTP recording,
+because none of those surfaces are traversed by the in-process topology.
+
+This is converter/topology evidence, not a substitute for the production HTTP
+single-hop section. Once server dispatch is migrated, a separate real-path
+matrix leg must prove that the new topology is actually selected.
 
 ---
 

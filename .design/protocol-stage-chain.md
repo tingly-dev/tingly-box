@@ -321,9 +321,10 @@ probe remains useful only as an explicit comparison path.
 
 Generic Bridge sessions, capability checks, an immutable exact-pair registry,
 identity bridges, and mixed-protocol in-memory topology tests are implemented.
-Concrete OpenAI/Anthropic bridges and the real-path harness remain pending
-because the existing converters do not yet expose a complete transport-free
-surface.
+Concrete Anthropic v1/beta → OpenAI Chat bridges and their dormant in-process
+matrix are implemented for complete and stream. A production/live-path harness
+remains pending until server dispatch is deliberately integrated with the new
+topology; the dormant matrix must not be treated as evidence of that wiring.
 
 ### Phase 3 — Guardrails canary
 
