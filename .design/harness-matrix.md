@@ -160,11 +160,13 @@ The `flags` section is documented in detail in
 
 The `bridges` section is deliberately separate from single-hop. Single-hop
 traverses the production gateway over HTTP. It validates legacy by default;
-`--stage` enables the server's production Stage selector, currently for
-OpenAI Chat → Anthropic Beta, Anthropic Beta → Anthropic Beta, Anthropic Beta →
-OpenAI Chat, Anthropic V1 → Anthropic V1, and Anthropic V1 → OpenAI Chat. V1
+`--stage` enables the server's twelve explicitly registered production routes:
+three provider targets for each Beta, V1, Chat, and Responses source. V1
 remains a separate concrete protocol with its own HTTP response and SSE
-adapters. `--guardrails` injects an active allow-only test runtime. Combined
+adapters; the V1 → Beta matrix compatibility label resolves to V1 identity at
+runtime and is not a V1/Beta Bridge. `--record-dir` enables `recording_v2` and
+persists RequestRecord envelopes for supported single-service Stage cases.
+`--guardrails` injects an active allow-only test runtime. Combined
 with `--stage`, it verifies that Beta → Beta and Beta → Chat remain on the
 production Stage path while Guardrails evaluates complete and stream
 lifecycles; dedicated real HTTP tests cover blocking mutations. It is a harness

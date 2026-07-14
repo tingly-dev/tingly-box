@@ -1,7 +1,8 @@
 # Request Recording Redesign
 
-> Status: R1–R4 implemented. The first production canary is additive and
-> requires both `--stage` and an enabled scenario `recording_v2` flag.
+> Status: R1–R4 and the additive R8 protocol-wide rollout are implemented.
+> RequestRecord remains opt-in and requires both `--stage` and an enabled
+> scenario `recording_v2` flag. R5 failover support is next.
 >
 > Scope: the protocol request/response content retained for one incoming
 > request. `UsageRecord`, request logging, and stage tracing are separate.
@@ -316,26 +317,36 @@ each. No all-protocol handler rewrite is required.
 | R5 — Failover | Not started | Multiple exchanges, one final record | Opt-in only |
 | R6 — Tool Loop | Not started | Multiple exchanges in one attempt | Opt-in only |
 | R7 — Persistence/UI | Partial | Native reader and request inspection surface; R4 already writes an additive `request_record` envelope through the existing sink | Opt-in only |
-| R8 — Cutover | Not started | Map the existing recording switch to `RequestRecord` | Discuss before changing defaults |
+| R8 — Protocol-wide rollout | Complete | All twelve production Stage routes, complete and stream, single service and no MCP | Opt-in only; no default cutover |
 | R9 — Cleanup | Not started | Remove Gin recorder, transform recorder, stream hooks, and MCP recorder interface | After parity proof |
 
-### R4 Canary Activation
+### Current Activation Boundary
 
 The new recording path is selected only when all of these are true:
 
 - the server starts with `--stage`;
 - the request scenario has `recording_v2` enabled;
-- the route is Anthropic Beta → Anthropic Beta;
+- the route is one of the twelve explicitly registered production Stage routes;
 - the rule has exactly one active service;
 - MCP is disabled.
 
 Every other recording combination keeps the complete legacy lifecycle. Without
 `recording_v2`, no new recorder or sink work is performed. Restarting without
-`--stage` is the rollback.
+`--stage` is the rollback. The harness compatibility label V1 → Beta resolves
+to the V1 provider protocol at runtime; it exercises V1 identity rather than
+introducing a V1/Beta Bridge.
 
 The completed `RequestRecord` is persisted through the existing asynchronous
 obs sink as an additive `request_record` envelope. Legacy readers may ignore
-that field; non-canary routes continue to emit the legacy recording shape.
+that field; non-Stage or unsupported feature combinations continue to use the
+legacy behavior.
+
+R8 verification ran the text matrix through the real server path with
+`--stage --record-dir`: all 26 labeled complete/stream cases passed. The
+persisted output contained 26 successful `RequestRecord` envelopes, each with
+one input, one provider exchange, and one final response. Those 26 cases cover
+the twelve production Stage routes twice, plus the two V1 → Beta compatibility
+cases that normalize to V1 identity.
 
 ## Required Verification
 
