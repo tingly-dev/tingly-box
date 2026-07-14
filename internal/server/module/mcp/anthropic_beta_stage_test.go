@@ -12,9 +12,135 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	stagetoolloop "github.com/tingly-dev/tingly-box/internal/protocol/stage/toolloop"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
+
+func TestAnthropicV1TopologyRunsBetaToolLoop(t *testing.T) {
+	t.Run("complete", func(t *testing.T) {
+		terminal := &betaStageScriptedEndpoint{responses: []*protocolstage.Response{
+			{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-v1", Name: "lookup"}), Usage: protocol.NewTokenUsage(3, 2)},
+			{Value: betaStageTextMessage(t, "done through Beta"), Usage: protocol.NewTokenUsage(5, 4), Model: "provider"},
+		}}
+		executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+			"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+		}}
+		endpoint := buildV1BetaToolLoopTopology(t, terminal, executor)
+
+		response, err := endpoint.Complete(context.Background(), protocolstage.Call{
+			Request: &anthropic.MessageNewParams{
+				Model:     "client",
+				MaxTokens: 64,
+				Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hello"))},
+			},
+			Metadata: protocolstage.CallMetadata{RequestID: "v1-beta-complete", Attempt: 2},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		message, ok := response.Value.(*anthropic.Message)
+		if !ok || message == nil || len(message.Content) != 1 || message.Content[0].Text != "done through Beta" {
+			t.Fatalf("v1 response = %#v (%T)", response.Value, response.Value)
+		}
+		if response.Usage == nil || response.Usage.InputTokens != 8 || response.Usage.OutputTokens != 6 || !response.SideEffectsCommitted {
+			t.Fatalf("response facts = %#v", response)
+		}
+		if len(terminal.calls) != 2 || len(executor.calls) != 1 {
+			t.Fatalf("provider calls=%d executor calls=%d", len(terminal.calls), len(executor.calls))
+		}
+		if terminal.calls[0].Metadata.RequestID != "v1-beta-complete" {
+			t.Fatalf("provider metadata = %+v", terminal.calls[0].Metadata)
+		}
+		continued := terminal.calls[1].Request.(*anthropic.BetaMessageNewParams)
+		if len(continued.Messages) != 3 {
+			t.Fatalf("Beta continuation messages = %d", len(continued.Messages))
+		}
+	})
+
+	t.Run("stream", func(t *testing.T) {
+		first := &betaStageMemoryStream{
+			events: betaStageToolStreamEvents(betaStageToolCallSpec{ID: "toolu-v1-stream", Name: "lookup"}),
+			result: protocolstage.StreamResult{Usage: protocol.NewTokenUsage(3, 2), Model: "provider"},
+		}
+		second := &betaStageMemoryStream{
+			events: betaStageTextStreamEvents("done through Beta stream"),
+			result: protocolstage.StreamResult{Usage: protocol.NewTokenUsage(5, 4), Model: "provider"},
+		}
+		terminal := &betaStageScriptedEndpoint{streams: []*betaStageMemoryStream{first, second}}
+		executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+			"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+		}}
+		endpoint := buildV1BetaToolLoopTopology(t, terminal, executor)
+
+		stream, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.MessageNewParams{
+			Model: "client", MaxTokens: 64,
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bodies []string
+		for {
+			event, nextErr := stream.Next(context.Background())
+			if errors.Is(nextErr, io.EOF) {
+				break
+			}
+			if nextErr != nil {
+				t.Fatal(nextErr)
+			}
+			if _, ok := event.Value.(anthropic.MessageStreamEventUnion); !ok {
+				t.Fatalf("v1 stream event type = %T", event.Value)
+			}
+			raw, marshalErr := json.Marshal(event.Value)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			bodies = append(bodies, string(raw))
+		}
+		body := strings.Join(bodies, "\n")
+		if strings.Contains(body, "toolu-v1-stream") || strings.Contains(body, "lookup") {
+			t.Fatalf("internal Beta round leaked to v1 stream: %s", body)
+		}
+		if !strings.Contains(body, "done through Beta stream") {
+			t.Fatalf("final Beta round missing from v1 stream: %s", body)
+		}
+		result := stream.Result()
+		if result.Usage == nil || result.Usage.InputTokens != 8 || result.Usage.OutputTokens != 6 || !result.SideEffectsCommitted {
+			t.Fatalf("stream result = %#v", result)
+		}
+		if err := stream.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if first.closeCalls != 1 || second.closeCalls != 1 || len(executor.calls) != 1 {
+			t.Fatalf("close/execution = %d/%d/%d", first.closeCalls, second.closeCalls, len(executor.calls))
+		}
+	})
+}
+
+func buildV1BetaToolLoopTopology(t *testing.T, terminal protocolstage.Endpoint, executor AnthropicBetaStageExecutor) protocolstage.Endpoint {
+	t.Helper()
+	toolStage, err := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:    staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor: executor,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := protocolstage.NewBridgeRegistry(anthropicbridge.NewV1ToBeta())
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
+		Terminal:       terminal,
+		Stages:         []protocolstage.Stage{toolStage},
+		ClientProtocol: protocol.TypeAnthropicV1,
+		Registry:       registry,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return endpoint
+}
 
 func TestAnthropicBetaStageCompleteRunsOwnedToolAndContinues(t *testing.T) {
 	tools := staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}}
