@@ -1891,15 +1891,64 @@ export const handlers = [
     // ============================================
     // ImBot Settings API (v1)
     // ============================================
+    // Mirrors the platform registry in imbot/platform.go (PlatformConfigs) -
+    // field shape (platform/display_name/auth_type/category/fields) must match
+    // the real API or BotPlatformSelector's <Select> and BotAuthForm both
+    // silently fail to render (key/value lookups use `.platform`).
     http.get('/api/v1/imbot-platforms', () => {
         return HttpResponse.json({
             success: true,
             platforms: [
-                { name: 'telegram', label: 'Telegram', auth_type: 'token', category: 'im' },
-                { name: 'slack', label: 'Slack', auth_type: 'oauth', category: 'im' },
-                { name: 'discord', label: 'Discord', auth_type: 'token', category: 'im' },
-                { name: 'feishu', label: 'Feishu', auth_type: 'qr', category: 'enterprise' },
-                { name: 'wecom', label: 'WeCom', auth_type: 'token', category: 'enterprise' },
+                {
+                    platform: 'telegram', display_name: 'Telegram', auth_type: 'token', category: 'im',
+                    fields: [
+                        { key: 'token', label: 'Bot Token', placeholder: '123456789:ABCdefGHIjklMNOpqrsTUVwxyz', required: true, secret: true, helperText: 'Get from @BotFather on Telegram' },
+                    ],
+                },
+                {
+                    platform: 'slack', display_name: 'Slack', auth_type: 'token', category: 'im',
+                    fields: [
+                        { key: 'token', label: 'Bot Token', placeholder: 'xoxb-your-token-here', required: true, secret: true, helperText: "Must start with 'xoxb-'. Get from Slack API" },
+                    ],
+                },
+                {
+                    platform: 'discord', display_name: 'Discord', auth_type: 'token', category: 'im',
+                    fields: [
+                        { key: 'token', label: 'Bot Token', placeholder: 'MTIzNDU2Nzg5OABCDEF123456789', required: true, secret: true, helperText: "Must start with 'Bot ' prefix. Get from Discord Developer Portal" },
+                    ],
+                },
+                {
+                    platform: 'dingtalk', display_name: 'DingTalk', auth_type: 'oauth', category: 'enterprise',
+                    fields: [
+                        { key: 'clientId', label: 'App Key', placeholder: 'ding-your-app-key', required: true, secret: true, helperText: 'Also known as AppKey or ClientId' },
+                        { key: 'clientSecret', label: 'App Secret', placeholder: 'Your app secret', required: true, secret: true, helperText: 'Also known as AppSecret or ClientSecret' },
+                    ],
+                },
+                {
+                    platform: 'feishu', display_name: 'Feishu', auth_type: 'oauth', category: 'enterprise',
+                    fields: [
+                        { key: 'clientId', label: 'App ID', placeholder: 'cli-your-app-id', required: true, secret: true, helperText: 'Also known as AppID or ClientId' },
+                        { key: 'clientSecret', label: 'App Secret', placeholder: 'Your app secret', required: true, secret: true, helperText: 'Also known as AppSecret or ClientSecret' },
+                    ],
+                },
+                {
+                    platform: 'lark', display_name: 'Lark', auth_type: 'oauth', category: 'enterprise',
+                    fields: [
+                        { key: 'clientId', label: 'App ID', placeholder: 'cli-your-app-id', required: true, secret: true, helperText: 'Also known as AppID or ClientId' },
+                        { key: 'clientSecret', label: 'App Secret', placeholder: 'Your app secret', required: true, secret: true, helperText: 'Also known as AppSecret or ClientSecret' },
+                    ],
+                },
+                {
+                    platform: 'weixin', display_name: 'Weixin', auth_type: 'qr', category: 'enterprise',
+                    fields: [],
+                },
+                {
+                    platform: 'wecom', display_name: 'WeCom', auth_type: 'oauth', category: 'enterprise',
+                    fields: [
+                        { key: 'clientId', label: 'Bot ID', placeholder: 'Your WeCom AI Bot ID', required: true, secret: false, helperText: 'The AI Bot ID from WeCom developer console' },
+                        { key: 'clientSecret', label: 'Bot Secret', placeholder: 'Your WeCom AI Bot secret', required: true, secret: true, helperText: 'The AI Bot secret from WeCom developer console' },
+                    ],
+                },
             ],
         })
     }),
@@ -1999,6 +2048,73 @@ export const handlers = [
         const body = await request.json() as any
         return HttpResponse.json({ success: true, uuid: params.uuid, ...body })
     }),
+
+    http.post('/api/v1/imbot-settings', async ({ request }) => {
+        const body = await request.json() as any
+        const uuid = 'mock-bot-' + Math.random().toString(36).slice(2, 10)
+        return HttpResponse.json({ success: true, uuid, setting: { uuid, ...body } })
+    }),
+
+    http.delete('/api/v1/imbot-settings/:uuid', ({ params }) => {
+        return HttpResponse.json({ success: true, uuid: params.uuid })
+    }),
+
+    http.post('/api/v1/imbot-admin/restart/:uuid', ({ params }) => {
+        return HttpResponse.json({ success: true, uuid: params.uuid })
+    }),
+
+    // --- Weixin QR bind flow (WeixinQRAuth.tsx) ---
+    // Poll counters are per-uuid so the mock progresses wait -> scaned ->
+    // confirmed over a few polls instead of hanging forever.
+    ...(() => {
+        const weixinPolls = new Map<string, number>()
+        return [
+            http.post('/api/v1/imbot-settings/:uuid/weixin/qr-start', ({ params }) => {
+                weixinPolls.set(params.uuid as string, 0)
+                return HttpResponse.json({
+                    success: true,
+                    data: { qrcode_id: 'mock-qr-' + params.uuid, qrcode_data: 'weixin://mock-bind/' + params.uuid, expires_in: 120 },
+                })
+            }),
+            http.get('/api/v1/imbot-settings/:uuid/weixin/qr-status', ({ params }) => {
+                const uuid = params.uuid as string
+                const count = (weixinPolls.get(uuid) ?? 0) + 1
+                weixinPolls.set(uuid, count)
+                if (count < 2) return HttpResponse.json({ success: true, data: { status: 'wait' } })
+                if (count < 3) return HttpResponse.json({ success: true, data: { status: 'scaned' } })
+                return HttpResponse.json({ success: true, data: { status: 'confirmed', bot_uuid: uuid.startsWith('temp-') ? 'mock-bot-' + uuid.slice(5, 13) : uuid } })
+            }),
+            http.post('/api/v1/imbot-settings/:uuid/weixin/qr-cancel', ({ params }) => {
+                weixinPolls.delete(params.uuid as string)
+                return HttpResponse.json({ status: 'cancelled' })
+            }),
+        ]
+    })(),
+
+    // --- Feishu/Lark one-click registration flow (FeishuQRAuth.tsx) ---
+    ...(() => {
+        const feishuPolls = new Map<string, number>()
+        return [
+            http.post('/api/v1/imbot-settings/:uuid/feishu/qr-start', ({ params }) => {
+                feishuPolls.set(params.uuid as string, 0)
+                return HttpResponse.json({
+                    success: true,
+                    data: { qr_url: 'https://open.feishu.cn/mock-launcher/' + params.uuid, expires_in: 120 },
+                })
+            }),
+            http.get('/api/v1/imbot-settings/:uuid/feishu/qr-status', ({ params }) => {
+                const uuid = params.uuid as string
+                const count = (feishuPolls.get(uuid) ?? 0) + 1
+                feishuPolls.set(uuid, count)
+                if (count < 3) return HttpResponse.json({ success: true, data: { status: 'pending' } })
+                return HttpResponse.json({ success: true, data: { status: 'confirmed', bot_uuid: uuid.startsWith('temp-') ? 'mock-bot-' + uuid.slice(5, 13) : uuid, tenant_brand: 'Feishu' } })
+            }),
+            http.post('/api/v1/imbot-settings/:uuid/feishu/qr-cancel', ({ params }) => {
+                feishuPolls.delete(params.uuid as string)
+                return HttpResponse.json({ status: 'cancelled' })
+            }),
+        ]
+    })(),
 
     http.get('/api/v1/system/logs', ({ request }) => {
         const url = new URL(request.url)
