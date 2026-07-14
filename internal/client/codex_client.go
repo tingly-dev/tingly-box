@@ -133,8 +133,19 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 	return c.parseImageGenerationStream(ctx, stream)
 }
 
+// fastModelSuffix marks a virtual Codex catalog model id (e.g. "gpt-5.6-sol:fast")
+// that requests OpenAI's priority service tier at higher cost. It is stripped
+// before the request reaches the ChatGPT backend API, which knows nothing about it.
+const fastModelSuffix = ":fast"
+
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
 func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
+	// Resolve the ":fast" virtual model suffix into the real model id + priority service tier.
+	if strings.HasSuffix(req.Model, fastModelSuffix) {
+		req.Model = strings.TrimSuffix(req.Model, fastModelSuffix)
+		req.ServiceTier = responses.ResponseNewParamsServiceTierPriority
+	}
+
 	// Set default instructions if not provided
 	if !req.Instructions.Valid() {
 		req.Instructions = param.NewOpt(defaultInstructions)
