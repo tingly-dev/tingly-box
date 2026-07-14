@@ -1,16 +1,3 @@
-import PlatformBotPage from './PlatformBotPage';
-import { usePlatformGuide } from '@/constants/platformGuides';
+import { createPlatformBotPage } from './createPlatformBotPage';
 
-const FeishuPage = () => {
-    const config = usePlatformGuide('feishu');
-
-    return (
-        <PlatformBotPage
-            platformId="feishu"
-            platformName={config?.name || 'Feishu (飞书)'}
-            platformGuide={config?.guide}
-        />
-    );
-};
-
-export default FeishuPage;
+export default createPlatformBotPage('feishu', 'Feishu (飞书)');

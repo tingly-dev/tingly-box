@@ -1,16 +1,3 @@
-import PlatformBotPage from './PlatformBotPage';
-import { usePlatformGuide } from '@/constants/platformGuides';
+import { createPlatformBotPage } from './createPlatformBotPage';
 
-const QQPage = () => {
-    const config = usePlatformGuide('qq');
-
-    return (
-        <PlatformBotPage
-            platformId="qq"
-            platformName={config?.name || 'QQ'}
-            platformGuide={config?.guide}
-        />
-    );
-};
-
-export default QQPage;
+export default createPlatformBotPage('qq', 'QQ');

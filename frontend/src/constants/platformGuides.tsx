@@ -19,6 +19,67 @@ export interface PlatformGuideConfig {
     guide: React.ReactNode;
 }
 
+// Feishu and Lark are the same product (China vs. international release) -
+// same one-click QR flow, same manual App ID/App Secret fallback, different
+// domain and mobile app name. Shared here so the two guides can't drift.
+const buildFeishuFamilyGuide = (t: TFunction, opts: {
+    tip: string;
+    step1TextAfter: string;
+    manualUrl: string;
+    manualLinkLabel: string;
+}) => (
+    <Stack spacing={2}>
+        <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+            <Typography variant="body2" color="info.dark">
+                {opts.tip}
+            </Typography>
+        </Box>
+        <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {t('remoteControl.guides.feishuFamily.step1Title', { defaultValue: '1. Scan to create (recommended)' })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+                {t('remoteControl.guides.feishuFamily.step1TextBefore', { defaultValue: 'Click "Add Bot" above, choose' })}{' '}
+                <strong>{t('remoteControl.guides.feishuFamily.oneClickOption', { defaultValue: 'One-click (scan QR)' })}</strong>
+                {opts.step1TextAfter}
+            </Typography>
+        </Box>
+        <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {t('remoteControl.guides.feishuFamily.step2Title', { defaultValue: '2. Or create manually' })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" component="div">
+                <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                    <li>
+                        {t('remoteControl.guides.feishu.step2Open', { defaultValue: 'Open' })}{' '}
+                        <Link href={opts.manualUrl} target="_blank">
+                            {opts.manualLinkLabel} <OpenInNew sx={{ fontSize: 10 }} />
+                        </Link>
+                        {' '}{t('remoteControl.guides.feishuFamily.step2LogIn', { defaultValue: 'and log in' })}
+                    </li>
+                    <li>{t('remoteControl.guides.feishuFamily.step2Configure', { defaultValue: 'Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you' })}</li>
+                    <li>
+                        {t('remoteControl.guides.feishuFamily.step2CopyBefore', { defaultValue: 'Copy the generated' })}{' '}
+                        <strong>App ID</strong> {t('common.and', { defaultValue: 'and' })} <strong>App Secret</strong>
+                        {t('remoteControl.guides.feishuFamily.step2CopyAfterBefore', { defaultValue: ', then enter them via "Add Bot" →' })}{' '}
+                        <strong>{t('remoteControl.authForm.manualOption', { defaultValue: 'Enter manually' })}</strong>
+                    </li>
+                </Box>
+            </Typography>
+        </Box>
+    </Stack>
+);
+
+const buildComingSoonGuide = (t: TFunction, platformName: string) => (
+    <Stack spacing={2}>
+        <Box>
+            <Typography variant="body2" color="text.secondary">
+                {t('remoteControl.guides.comingSoon', { defaultValue: '{{platform}} bot integration is currently under development. Stay tuned for updates!', platform: platformName })}
+            </Typography>
+        </Box>
+    </Stack>
+);
+
 // Guide prose is built per-render from `t` so it re-localizes immediately on
 // language switch (the guide JSX can't call the useTranslation hook itself,
 // since it's assembled outside a component). Technical field names a user
@@ -76,48 +137,12 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         status: 'available',
         path: '/remote-control/feishu',
         color: '#00d6b9',
-        guide: (
-            <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        {t('remoteControl.guides.feishu.tip', { defaultValue: 'Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.' })}
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        {t('remoteControl.guides.feishuFamily.step1Title', { defaultValue: '1. Scan to create (recommended)' })}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        {t('remoteControl.guides.feishuFamily.step1TextBefore', { defaultValue: 'Click "Add Bot" above, choose' })}{' '}
-                        <strong>{t('remoteControl.guides.feishuFamily.oneClickOption', { defaultValue: 'One-click (scan QR)' })}</strong>
-                        {t('remoteControl.guides.feishu.step1TextAfter', { defaultValue: ', and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.' })}
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        {t('remoteControl.guides.feishuFamily.step2Title', { defaultValue: '2. Or create manually' })}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>
-                                {t('remoteControl.guides.feishu.step2Open', { defaultValue: 'Open' })}{' '}
-                                <Link href="https://open.feishu.cn/page/launcher?from=backend_oneclick" target="_blank">
-                                    {t('remoteControl.guides.feishu.step2LinkLabel', { defaultValue: 'Feishu one-click app creation' })} <OpenInNew sx={{ fontSize: 10 }} />
-                                </Link>
-                                {' '}{t('remoteControl.guides.feishuFamily.step2LogIn', { defaultValue: 'and log in' })}
-                            </li>
-                            <li>{t('remoteControl.guides.feishuFamily.step2Configure', { defaultValue: 'Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you' })}</li>
-                            <li>
-                                {t('remoteControl.guides.feishuFamily.step2CopyBefore', { defaultValue: 'Copy the generated' })}{' '}
-                                <strong>App ID</strong> {t('common.and', { defaultValue: 'and' })} <strong>App Secret</strong>
-                                {t('remoteControl.guides.feishuFamily.step2CopyAfterBefore', { defaultValue: ', then enter them via "Add Bot" →' })}{' '}
-                                <strong>{t('remoteControl.authForm.manualOption', { defaultValue: 'Enter manually' })}</strong>
-                            </li>
-                        </Box>
-                    </Typography>
-                </Box>
-            </Stack>
-        ),
+        guide: buildFeishuFamilyGuide(t, {
+            tip: t('remoteControl.guides.feishu.tip', { defaultValue: 'Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.' }),
+            step1TextAfter: t('remoteControl.guides.feishu.step1TextAfter', { defaultValue: ', and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.' }),
+            manualUrl: 'https://open.feishu.cn/page/launcher?from=backend_oneclick',
+            manualLinkLabel: t('remoteControl.guides.feishu.step2LinkLabel', { defaultValue: 'Feishu one-click app creation' }),
+        }),
     },
     lark: {
         id: 'lark',
@@ -128,48 +153,12 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         status: 'available',
         path: '/remote-control/lark',
         color: '#00d6b9',
-        guide: (
-            <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
-                        {t('remoteControl.guides.lark.tip', { defaultValue: 'Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.' })}
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        {t('remoteControl.guides.feishuFamily.step1Title', { defaultValue: '1. Scan to create (recommended)' })}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        {t('remoteControl.guides.feishuFamily.step1TextBefore', { defaultValue: 'Click "Add Bot" above, choose' })}{' '}
-                        <strong>{t('remoteControl.guides.feishuFamily.oneClickOption', { defaultValue: 'One-click (scan QR)' })}</strong>
-                        {t('remoteControl.guides.lark.step1TextAfter', { defaultValue: ', and scan the QR code with the Lark mobile app. The app, permissions and events are created automatically and the credentials are saved for you.' })}
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        {t('remoteControl.guides.feishuFamily.step2Title', { defaultValue: '2. Or create manually' })}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>
-                                {t('remoteControl.guides.feishu.step2Open', { defaultValue: 'Open' })}{' '}
-                                <Link href="https://open.larksuite.com/page/launcher?from=backend_oneclick" target="_blank">
-                                    {t('remoteControl.guides.lark.step2LinkLabel', { defaultValue: 'Lark one-click app creation' })} <OpenInNew sx={{ fontSize: 10 }} />
-                                </Link>
-                                {' '}{t('remoteControl.guides.feishuFamily.step2LogIn', { defaultValue: 'and log in' })}
-                            </li>
-                            <li>{t('remoteControl.guides.feishuFamily.step2Configure', { defaultValue: 'Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you' })}</li>
-                            <li>
-                                {t('remoteControl.guides.feishuFamily.step2CopyBefore', { defaultValue: 'Copy the generated' })}{' '}
-                                <strong>App ID</strong> {t('common.and', { defaultValue: 'and' })} <strong>App Secret</strong>
-                                {t('remoteControl.guides.feishuFamily.step2CopyAfterBefore', { defaultValue: ', then enter them via "Add Bot" →' })}{' '}
-                                <strong>{t('remoteControl.authForm.manualOption', { defaultValue: 'Enter manually' })}</strong>
-                            </li>
-                        </Box>
-                    </Typography>
-                </Box>
-            </Stack>
-        ),
+        guide: buildFeishuFamilyGuide(t, {
+            tip: t('remoteControl.guides.lark.tip', { defaultValue: 'Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.' }),
+            step1TextAfter: t('remoteControl.guides.lark.step1TextAfter', { defaultValue: ', and scan the QR code with the Lark mobile app. The app, permissions and events are created automatically and the credentials are saved for you.' }),
+            manualUrl: 'https://open.larksuite.com/page/launcher?from=backend_oneclick',
+            manualLinkLabel: t('remoteControl.guides.lark.step2LinkLabel', { defaultValue: 'Lark one-click app creation' }),
+        }),
     },
     dingtalk: {
         id: 'dingtalk',
@@ -332,15 +321,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         status: 'coming-soon',
         path: '/remote-control/qq',
         color: '#888',
-        guide: (
-            <Stack spacing={2}>
-                <Box>
-                    <Typography variant="body2" color="text.secondary">
-                        {t('remoteControl.guides.comingSoon', { defaultValue: '{{platform}} bot integration is currently under development. Stay tuned for updates!', platform: 'QQ' })}
-                    </Typography>
-                </Box>
-            </Stack>
-        ),
+        guide: buildComingSoonGuide(t, 'QQ'),
     },
     discord: {
         id: 'discord',
@@ -351,15 +332,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         status: 'coming-soon',
         path: '/remote-control/discord',
         color: '#888',
-        guide: (
-            <Stack spacing={2}>
-                <Box>
-                    <Typography variant="body2" color="text.secondary">
-                        {t('remoteControl.guides.comingSoon', { defaultValue: '{{platform}} bot integration is currently under development. Stay tuned for updates!', platform: 'Discord' })}
-                    </Typography>
-                </Box>
-            </Stack>
-        ),
+        guide: buildComingSoonGuide(t, 'Discord'),
     },
     slack: {
         id: 'slack',
@@ -370,15 +343,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         status: 'coming-soon',
         path: '/remote-control/slack',
         color: '#888',
-        guide: (
-            <Stack spacing={2}>
-                <Box>
-                    <Typography variant="body2" color="text.secondary">
-                        {t('remoteControl.guides.comingSoon', { defaultValue: '{{platform}} bot integration is currently under development. Stay tuned for updates!', platform: 'Slack' })}
-                    </Typography>
-                </Box>
-            </Stack>
-        ),
+        guide: buildComingSoonGuide(t, 'Slack'),
     },
 });
 

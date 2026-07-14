@@ -1,16 +1,3 @@
-import PlatformBotPage from './PlatformBotPage';
-import { usePlatformGuide } from '@/constants/platformGuides';
+import { createPlatformBotPage } from './createPlatformBotPage';
 
-const SlackPage = () => {
-    const config = usePlatformGuide('slack');
-
-    return (
-        <PlatformBotPage
-            platformId="slack"
-            platformName={config?.name || 'Slack'}
-            platformGuide={config?.guide}
-        />
-    );
-};
-
-export default SlackPage;
+export default createPlatformBotPage('slack', 'Slack');

@@ -16,6 +16,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/services/api';
 import { useTranslation } from 'react-i18next';
+import { useQrPollingSession, usePollingLoop } from './useQrPollingSession';
 
 interface WeixinQRAuthProps {
     botUUID?: string; // Optional - existing bot UUID for edit mode; omit for new bot flow
@@ -44,18 +45,10 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
     const [qrId, setQrId] = useState<string>('');
     const [error, setError] = useState<string>('');
     const [refreshCount, setRefreshCount] = useState(0);
-    const stoppedRef = React.useRef(false);
 
     const MAX_REFRESH = 3;
 
-    // Generate a temporary UUID for QR flow if botUUID is not provided
-    const [tempUUID] = useState(() => {
-        if (botUUID) return botUUID;
-        // Generate a simple temp UUID (format: temp-{timestamp}-{random})
-        return `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    });
-
-    const effectiveBotUUID = botUUID || tempUUID;
+    const { effectiveBotUUID, stoppedRef } = useQrPollingSession(botUUID, api.weixinQRCancel);
 
     const startQRLogin = useCallback(async () => {
         if (!effectiveBotUUID) {
@@ -86,8 +79,8 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
         }
     }, [effectiveBotUUID, platform, botName, t]);
 
-    const pollQRStatus = useCallback(async () => {
-        if (!effectiveBotUUID || !qrId) return;
+    const pollQRStatus = useCallback(async (): Promise<boolean> => {
+        if (!effectiveBotUUID || !qrId) return false;
 
         try {
             const response = await api.weixinQRStatus(effectiveBotUUID, qrId);
@@ -143,30 +136,8 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
         }
     }, [state, effectiveBotUUID, startQRLogin]);
 
-    // Cancel QR session on unmount (user navigates away or closes dialog)
-    useEffect(() => {
-        return () => {
-            if (!stoppedRef.current && effectiveBotUUID) {
-                api.weixinQRCancel(effectiveBotUUID).catch(() => {});
-            }
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // Poll QR status every 2 seconds when showing QR or scanned
-    useEffect(() => {
-        if (stoppedRef.current) return;
-        if (state !== 'show_qr' && state !== 'scanned') return;
-
-        const interval = setInterval(async () => {
-            const shouldStop = await pollQRStatus();
-            if (shouldStop) {
-                clearInterval(interval);
-            }
-        }, 2000);
-
-        return () => clearInterval(interval);
-    }, [state, pollQRStatus]);
+    usePollingLoop(state === 'show_qr' || state === 'scanned', stoppedRef, pollQRStatus);
 
     const handleRetry = () => {
         setRefreshCount(0);

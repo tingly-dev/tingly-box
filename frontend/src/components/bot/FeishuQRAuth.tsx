@@ -15,6 +15,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/services/api';
 import { useTranslation } from 'react-i18next';
+import { useQrPollingSession, usePollingLoop } from './useQrPollingSession';
 
 interface FeishuQRAuthProps {
     botUUID?: string; // Existing bot UUID for edit mode; omit for new bot flow
@@ -30,16 +31,10 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
     const [state, setState] = useState<QRState>('idle');
     const [qrUrl, setQrUrl] = useState<string>('');
     const [error, setError] = useState<string>('');
-    const stoppedRef = React.useRef(false);
 
     const label = platform === 'lark' ? 'Lark' : 'Feishu';
 
-    // Generate a temporary UUID for the QR flow if botUUID is not provided
-    const [tempUUID] = useState(() => {
-        if (botUUID) return botUUID;
-        return `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    });
-    const effectiveBotUUID = botUUID || tempUUID;
+    const { effectiveBotUUID, stoppedRef } = useQrPollingSession(botUUID, api.feishuRegCancel);
 
     const startRegistration = useCallback(async () => {
         if (!effectiveBotUUID) {
@@ -110,30 +105,8 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
         }
     }, [state, effectiveBotUUID, startRegistration]);
 
-    // Cancel the pending session if the user navigates away before completing
-    useEffect(() => {
-        return () => {
-            if (!stoppedRef.current && effectiveBotUUID) {
-                api.feishuRegCancel(effectiveBotUUID).catch(() => {});
-            }
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // Poll status every 2 seconds while the QR code is displayed
-    useEffect(() => {
-        if (stoppedRef.current) return;
-        if (state !== 'show_qr') return;
-
-        const interval = setInterval(async () => {
-            const shouldStop = await pollStatus();
-            if (shouldStop) {
-                clearInterval(interval);
-            }
-        }, 2000);
-
-        return () => clearInterval(interval);
-    }, [state, pollStatus]);
+    usePollingLoop(state === 'show_qr', stoppedRef, pollStatus);
 
     const renderContent = () => {
         switch (state) {

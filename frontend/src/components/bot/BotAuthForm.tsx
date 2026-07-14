@@ -30,8 +30,10 @@ interface BotAuthFormProps {
     onBindingComplete?: (botUUID: string) => void; // Callback with real bot UUID after QR binding
 }
 
-// OAuth platform help links. Labels are resolved via t() at render time
-// (see oauthHelpLinkLabelKeys below) since this map is module-scope.
+// OAuth platform help links. The i18n key is derived from the platform id
+// (remoteControl.authForm.helpLinks.<platform>); defaultLabel is the English
+// fallback used until that key resolves via t() at render time, since this
+// map itself is module-scope and can't call the translation hook.
 const oauthHelpLinks: Record<string, { url: string; defaultLabel: string }> = {
     dingtalk: {
         url: 'https://open.dingtalk.com/document/orgapp/obtain-the-appkey-and-appsecret-of-an-internal-app',
@@ -49,15 +51,6 @@ const oauthHelpLinks: Record<string, { url: string; defaultLabel: string }> = {
         url: 'https://work.weixin.qq.com/wework_admin/frame#/aiHelper/list',
         defaultLabel: 'WeCom Admin Console',
     },
-};
-
-// react-i18next key per platform, since the map above is module-scope and
-// can't call the t() hook directly.
-const oauthHelpLinkKeys: Record<string, string> = {
-    dingtalk: 'remoteControl.authForm.helpLinks.dingtalk',
-    feishu: 'remoteControl.authForm.helpLinks.feishu',
-    lark: 'remoteControl.authForm.helpLinks.lark',
-    wecom: 'remoteControl.authForm.helpLinks.wecom',
 };
 
 export const BotAuthForm: React.FC<BotAuthFormProps> = ({
@@ -179,7 +172,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                                 rel="noopener noreferrer"
                                 sx={{ ml: 1, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
                             >
-                                {t(oauthHelpLinkKeys[platform], { defaultValue: helpLink.defaultLabel })}
+                                {t(`remoteControl.authForm.helpLinks.${platform}`, { defaultValue: helpLink.defaultLabel })}
                                 <OpenInNew fontSize="inherit" />
                             </Link>
                         )}
