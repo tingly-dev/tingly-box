@@ -1,7 +1,9 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–3 and the in-process Phase 4 Tool Loop Stage are implemented
-> additively. The Tool Loop is not connected to production handlers yet.
+> Status: Phases 1–3 and the in-process Phase 4 Tool Loop implementation are
+> complete additively. The Beta-native Tool Loop, MCP/runtime adapters, V1→Beta
+> ingress Bridge, and recording proof are ready, but the Tool Loop is not
+> connected to production handlers yet.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
 > Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
@@ -25,7 +27,7 @@ lifecycle before the provider is called.
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
-| 4 — Tool Loop canary | Stage complete; production canary pending | Chat-native complete/stream Tool Loop and protocol-neutral runtime are tested in-process; no MCP/servertool adapters or production routing yet |
+| 4 — Tool Loop canary | In-process implementation complete; production canary pending | Beta-native complete/stream Tool Loop, direct MCP/runtime + servertool adapters, V1→Beta ingress, mixed continuation, and recording are tested; no production routing yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |
 
@@ -50,10 +52,12 @@ Production route selection with `--stage`:
 The planned protocol-pair rollout is complete: the three provider-facing
 protocols (Beta, Chat, and Responses) are available from each supported source,
 while Anthropic V1 remains deliberately distinct and native only to V1 clients.
-That complete Bridge surface now hosts a Chat-native Tool Loop without
-Responses-, Beta-, or V1-specific branches. Production selection still treats
-MCP as legacy until the existing MCP/servertool runtime is adapted to the new
-protocol-neutral contracts and wired behind an explicit canary.
+The production candidate now uses Anthropic Beta as the Tool Loop working
+protocol because Beta has the complete MCP/server-tool surface. V1 enters it
+through the lossless V1→Beta subset Bridge; Chat and Responses use their
+existing Bridges. The earlier Chat-native Tool Loop remains a useful lifecycle
+proof, but production selection still treats MCP as legacy until the
+Beta-native topology is wired behind an explicit canary.
 
 ## Decision
 
@@ -300,18 +304,28 @@ The Tool Loop Stage owns:
 - appending tool results and continuing the next model round;
 - max-round enforcement and usage accumulation.
 
-The implemented native protocol is `openai_chat`. Existing Bridges make it
-available to the other supported client/provider protocols without teaching
-the Tool Loop those protocols. The implementation buffers only the prefix of a
-stream needed to classify a tool round: ordinary visible content remains
-pull-based, pure server-owned tool rounds are consumed internally, and external
-or mixed tool rounds are replayed outward unchanged. A request tool and server
-tool with the same name fail explicitly because name-only ownership would be
-ambiguous.
+Two native implementations now exist. The earlier `openai_chat` Stage proves
+the generic lifecycle contracts. The production candidate is
+`anthropic_beta`: it keeps Anthropic MCP/tool/thinking structures native and
+avoids a neutral DTO or an OpenAI-shaped intermediate. Existing Bridges make
+that Beta Stage available to V1, Chat, and Responses without teaching the Tool
+Loop those protocols. A request tool and server tool with the same name fail
+explicitly because name-only ownership would be ambiguous.
 
-MCP remains a tool catalog/runtime source. `servertool.Executor` remains an
-execution backend. Neither needs to understand every client/provider protocol;
-only the Tool Loop Stage understands its native stage protocol.
+The Beta stream implementation buffers one provider round before exposure.
+Anthropic may emit visible text or thinking before a later internal
+`tool_use`, so no prefix proves that the round is safe to release. Pure
+server-owned rounds are consumed internally; external rounds are replayed;
+mixed rounds execute only owned calls, hide their blocks, renumber remaining
+indexes, and retain a single-consume continuation segment. This correctness
+requirement is explicit; future TTFT optimization must not assume tool blocks
+arrive first.
+
+MCP remains a tool catalog/runtime source. It now lists virtual tools directly
+as Beta tool definitions. `servertool.Executor` is reused through the existing
+execution boundary, and the provider-scoped continuation store is reused with
+typed Beta messages. None of these dependencies needs to understand every
+client/provider protocol; only the Tool Loop Stage understands Beta.
 
 Splitting MCP and servertool into two protocol stages immediately would create
 a false boundary because both would compete to own the same model tool-call
@@ -349,9 +363,10 @@ above rather than silently claiming byte-for-byte parity.
    closes the stream.
 
 Converters and stages must support cancellation and backpressure by performing
-work only when `Next` is called and honoring the passed context. No stage may
-buffer the full response merely to simplify transport handling unless a
-specific Guardrail policy explicitly requires bounded accumulation.
+work only when `Next` is called and honoring the passed context. Full-response
+buffering must not be used merely to simplify transport handling. A Stage may
+buffer one bounded provider round when protocol semantics make an earlier
+ownership decision impossible, as documented for the Beta Tool Loop above.
 
 ## Failover and Irreversible Side Effects
 
@@ -430,14 +445,17 @@ attempt enters the complete legacy Guardrail lifecycle.
 - Validate using deterministic mocks and read-only tools before a production
   canary. Never dual-execute tools for shadow comparison.
 
-The in-process portion is complete: protocol-neutral catalog, policy, executor,
-and side-effect error contracts are implemented; the Chat-native Stage owns
-complete and streaming continuation; deterministic tests cover internal,
-external, and mixed ownership, max-round/side-effect boundaries, usage
-aggregation, stream close/backpressure, and RequestRecord multi-exchange
-behavior. The next step is intentionally a production boundary change: adapt
-the existing MCP/servertool runtime, add topology selection, and validate the
-real handler path. It is not included in this checkpoint.
+The in-process portion is complete. The Chat-native Stage established the
+lifecycle contracts; the Beta-native Stage now owns complete and streaming
+continuation using the existing Anthropic MCP adapter. The existing runtime
+injects Beta tools directly, the existing servertool executor is reused, and
+provider-scoped mixed continuation is typed and single-consume. V1 requests
+enter Beta through JSON marshal/unmarshal of the V1 subset. Deterministic tests
+cover internal, external, and mixed ownership, max-round/side-effect
+boundaries, usage aggregation, stream close, composed V1→Beta execution, and
+RequestRecord multi-exchange behavior. The next step is intentionally a
+production boundary change: register/build this topology in handler selection
+and validate the real server path. It is not included in this checkpoint.
 
 ### Phase 5 — Handler integration and default rollout
 
@@ -561,12 +579,13 @@ The following foundations are implemented under `internal/protocol/stage`:
 - monotonic propagation of usage/model fallback and committed side effects;
 - complete and streaming in-memory multi-hop harnesses.
 
-Bidirectional Anthropic Beta/OpenAI Chat Bridges are implemented. Both response
-directions expose transport-neutral complete and stream conversion entrypoints
-while existing `Handle*` functions remain the production wrappers. The dormant
-42-cell Bridge matrix includes a concrete Chat → Beta-native Stage → Chat
-topology and verifies text, tool-use, and tool-result semantics in complete and
-streaming modes.
+Bidirectional Anthropic Beta/OpenAI Chat Bridges and the lossless V1→Beta
+subset Bridge are implemented. Their response directions expose
+transport-neutral complete and stream conversion entrypoints while existing
+`Handle*` functions remain the production wrappers. The dormant 54-cell Bridge
+matrix includes concrete V1 → Beta-native Stage → Chat and Chat → Beta-native
+Stage → Chat topologies and verifies text, tool-use, and tool-result semantics
+in complete and streaming modes.
 
 Runtime integration is opt-in through `--stage`. For each OpenAI Chat provider
 attempt whose concrete target is Anthropic Beta, the server builds a fresh Chat
@@ -701,6 +720,24 @@ Verification recorded for the typed Wire DTO boundary checkpoint:
 - `go test ./internal/protocoltest -count=1` passes the full real HTTP protocol
   suite.
 
+Verification recorded for the in-process Beta Tool Loop checkpoint:
+
+- Beta-native complete and stream tests cover owned, external, and mixed tool
+  calls, continuation, max rounds, usage, side effects, and stream ownership;
+- MCP runtime tests cover direct Beta tool injection, Advisor filtering, the
+  existing servertool executor boundary, and provider-scoped continuation;
+- V1→Beta tests preserve the full V1 wire subset and source-visible model for
+  complete and stream responses;
+- composed topology tests run V1 → Beta Tool Loop → Beta provider in complete
+  and stream modes without production handler registration;
+- RequestRecord tests retain two provider exchanges in one attempt and one
+  final response for both complete and stream;
+- `harness matrix --mode=bridges --source=anthropic_v1
+  --target=anthropic_beta` passes 6/6, and the V1 → Beta Stage → Chat filtered
+  matrix passes alongside direct V1→Chat (12/12);
+- the full `internal/protocoltest` suite, targeted race suites, and `go vet`
+  pass. Production `--stage + MCP` selection is intentionally not claimed.
+
 Commit checkpoints, oldest to newest:
 
 | Commit | Checkpoint |
@@ -729,3 +766,12 @@ Commit checkpoints, oldest to newest:
 | `5c058199e` | OpenAI Chat recording across all targets |
 | `6827a4dbf` | OpenAI Responses recording across all targets |
 | `b52d75af7` | Request-scoped recording across provider failover attempts |
+| `71bbca421` | Beta-native Tool Loop complete lifecycle |
+| `9abb86590` | Beta mixed ownership continuation |
+| `cb255719d` | Beta-native Tool Loop streaming |
+| `90e40dc2c` | MCP/runtime and servertool Beta adapters |
+| `3aebef338` | Lossless V1 request projection to Beta |
+| `7cee576ee` | V1→Beta Stage Bridge |
+| `ef0f76a62` | Composed V1 ingress through Beta Tool Loop |
+| `e29b71171` | Beta Tool Loop RequestRecord proof |
+| `6ee32a2ae` | V1→Beta dormant harness matrix |

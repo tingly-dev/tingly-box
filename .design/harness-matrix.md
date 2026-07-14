@@ -129,6 +129,8 @@ go run ./cli/harness matrix --mode=transitive
 go run ./cli/harness matrix --mode=idempotent
 go run ./cli/harness matrix --mode=flags     # per-rule flag behavior
 go run ./cli/harness matrix --mode=bridges   # in-process Stage/Bridge topology
+go run ./cli/harness matrix --mode=bridges \
+  --source=anthropic_v1 --target=anthropic_beta
 
 # Real HTTP/server path with production Stage selection enabled
 go run ./cli/harness matrix --mode=single --stage \
@@ -164,8 +166,10 @@ traverses the production gateway over HTTP. It validates legacy by default;
 three provider targets for each Beta, V1, Chat, and Responses source. V1
 remains a separate concrete protocol with its own HTTP response and SSE
 adapters; the V1 → Beta matrix compatibility label resolves to V1 identity at
-runtime and is not a V1/Beta Bridge. `--record-dir` enables `recording_v2` and
-persists RequestRecord envelopes for supported single-service Stage cases.
+runtime and is not a production V1/Beta Bridge. The separate dormant
+`--mode=bridges` matrix does contain the real V1→Beta Bridge. `--record-dir`
+enables `recording_v2` and persists RequestRecord envelopes for supported
+single-service Stage cases.
 `--guardrails` injects an active allow-only test runtime. Combined
 with `--stage`, it verifies that Beta → Beta and Beta → Chat remain on the
 production Stage path while Guardrails evaluates complete and stream
@@ -175,9 +179,10 @@ dormant `stage.BuildTopology`/`stage.Adapt` path in-process and labels every
 direct result `bridges/<scenario>/...`; concrete multi-level results use
 `bridges/chain/<name>/<scenario>/...`. It must not be cited as production-path
 proof. The matrix covers exact Anthropic v1/beta/OpenAI Chat identity,
-Anthropic v1/beta → OpenAI Chat, OpenAI Chat → Anthropic Beta, and the concrete
-OpenAI Chat → Anthropic Beta-native Stage → OpenAI Chat chain. Every route runs
-text, tool use, tool result, stream, and non-stream (42 cells total).
+Anthropic V1→Beta, Anthropic v1/beta → OpenAI Chat, OpenAI Chat → Anthropic
+Beta, and the concrete V1 → Beta-native Stage → Chat plus Chat → Beta-native
+Stage → Chat chains. Every route runs text, tool use, tool result, stream, and
+non-stream (54 cells total).
 Because it has no client transport, `--mode=bridges` only accepts
 `--client=http`; it reuses scenario/source/target/streaming/batch filters but
 does not claim support for `--mcp`, `--stage`, `--guardrails`, or

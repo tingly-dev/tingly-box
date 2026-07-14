@@ -2,9 +2,9 @@
 
 > Status: R1–R5 and the additive R8 protocol-wide rollout are implemented.
 > RequestRecord remains opt-in and requires both `--stage` and an enabled
-> scenario `recording_v2` flag. R6 is proven with the in-process Tool Loop
-> Stage; production MCP routing remains on legacy until the Stage canary is
-> wired.
+> scenario `recording_v2` flag. R6 is proven for both the lifecycle foundation
+> and the Beta-native MCP Tool Loop; production MCP routing remains on legacy
+> until the Stage canary is wired.
 >
 > Scope: the protocol request/response content retained for one incoming
 > request. `UsageRecord`, request logging, and stage tracing are separate.
@@ -317,7 +317,7 @@ each. No all-protocol handler rewrite is required.
 | R3 — Boundary harness | Complete | Verify input, provider, and output snapshots across all Stage routes | No persisted output |
 | R4 — Single-route canary | Complete | Beta identity, single service, no MCP | Opt-in only |
 | R5 — Failover | Complete | Ordered attempt exchanges across homogeneous and cross-protocol failover, one final record | Opt-in only |
-| R6 — Tool Loop | Stage proof complete; production pending | Multiple exchanges in one attempt through the real Provider Observer, with one final response | None yet; MCP still selects legacy |
+| R6 — Tool Loop | In-process Beta proof complete; production pending | Beta complete/stream Tool Loop records multiple exchanges in one attempt through the real Provider Observer, with one final response | None yet; MCP still selects legacy |
 | R7 — Persistence/UI | Partial | Native reader and request inspection surface; R4 already writes an additive `request_record` envelope through the existing sink | Opt-in only |
 | R8 — Protocol-wide rollout | Complete | All twelve production Stage routes, complete and stream, Stage-compatible service sets and no MCP | Opt-in only; no default cutover |
 | R9 — Cleanup | Not started | Remove Gin recorder, transform recorder, stream hooks, and MCP recorder interface | After parity proof |
@@ -336,8 +336,8 @@ The new recording path is selected only when all of these are true:
 Every other recording combination keeps the complete legacy lifecycle. Without
 `recording_v2`, no new recorder or sink work is performed. Restarting without
 `--stage` is the rollback. The harness compatibility label V1 → Beta resolves
-to the V1 provider protocol at runtime; it exercises V1 identity rather than
-introducing a V1/Beta Bridge.
+to the V1 provider protocol at runtime; the production recording path still
+uses V1 identity and does not register the dormant V1→Beta Bridge.
 
 The completed `RequestRecord` is persisted through the existing asynchronous
 obs sink as an additive `request_record` envelope. Legacy readers may ignore
@@ -360,14 +360,14 @@ protocols with cross-protocol failure → success, plus exhausted two-provider
 failure. Rules containing a provider protocol outside the registered Stage
 surface do not enter the new recording path.
 
-R6 requires no new recording hook. The Chat-native Tool Loop calls the already
-observed Provider Endpoint once per model round, so each round appends an
-ordered exchange under the same attempt number. Complete/stream Stage tests
-prove that an internal tool round followed by a final model round produces two
-successful provider exchanges and one final outward response. This is an
-in-process boundary proof, not production activation: requests with MCP remain
-on the complete legacy path until the Tool Loop runtime adapters and handler
-selection are wired.
+R6 requires no new recording hook. Both Tool Loop implementations call the
+already observed Provider Endpoint once per model round, so each round appends
+an ordered exchange under the same attempt number. The authoritative Beta
+complete/stream tests prove that an internal tool round followed by a final
+model round produces two successful provider-native Beta exchanges and one
+final outward response; the original input is captured before tool injection.
+This is an in-process boundary proof, not production activation: requests with
+MCP remain on the complete legacy path until handler selection is wired.
 
 ## Required Verification
 
