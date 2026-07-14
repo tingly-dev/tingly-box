@@ -113,6 +113,41 @@ func TestServerProtocolStageSelection(t *testing.T) {
 	}
 }
 
+func TestServerProtocolStageAnthropicBetaRecordingCanarySelection(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name       string
+		target     protocol.APIType
+		wantHeader string
+	}{
+		{name: "identity uses stage", target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
+		{name: "cross protocol stays legacy", target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			env := NewTestEnv(t,
+				NewTestEnvOptionWithProtocolStage(),
+				NewTestEnvOptionWithRecordDir(t.TempDir()),
+			)
+			scenario := TextScenario()
+			env.SetupRoute(protocol.TypeAnthropicBeta, tt.target, scenario)
+			model := env.findRouteModel(protocol.TypeAnthropicBeta, tt.target, scenario.Name)
+			path, body := buildRequest(protocol.TypeAnthropicBeta, model, false)
+
+			resp, responseBody := sendProtocolStageProbe(t, env, path, body)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d: %s", resp.StatusCode, responseBody)
+			}
+			if got := resp.Header.Get("X-Tingly-Protocol-Pipeline"); got != tt.wantHeader {
+				t.Fatalf("pipeline header = %q, want %q", got, tt.wantHeader)
+			}
+		})
+	}
+}
+
 func TestServerProtocolStageAnthropicBetaGuardrailComplete(t *testing.T) {
 	t.Parallel()
 

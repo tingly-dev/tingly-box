@@ -5,7 +5,8 @@
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
 > Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
 > Anthropic Beta requests can include the Beta-native Guardrail Stage; MCP,
-> protocol recording, unsupported routes, and V1 Guardrails remain on legacy.
+> unsupported routes, and V1 Guardrails remain on legacy. Request recording has
+> one canary: single-service Anthropic Beta identity with `recording_v2` enabled.
 >
 > Scope: LLM request/response data plane for non-streaming and streaming calls.
 
@@ -21,6 +22,7 @@ lifecycle before the provider is called.
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
+| 3b — Request recording canary | Complete for Anthropic Beta identity | Original input, raw provider exchange, and final complete/stream response through the existing sink |
 | 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |
@@ -29,7 +31,7 @@ Production route selection with `--stage`:
 
 | Client protocol | Provider protocol | Plain request | Guardrails enabled | MCP enabled | Protocol recording |
 | --- | --- | --- | --- | --- | --- |
-| `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Legacy | Legacy |
+| `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Legacy | Stage `RequestRecord` for one active service; otherwise Legacy |
 | `anthropic_beta` | `openai_chat` | Stage through Beta→Chat Bridge | Stage with the same Beta Guardrail | Legacy | Legacy |
 | `anthropic_beta` | `openai_responses` | Stage through Beta→Responses Bridge | Stage with the same Beta Guardrail | Legacy | Legacy |
 | `anthropic_v1` | `anthropic_v1` | Stage | Legacy | Legacy | Legacy |
@@ -60,8 +62,9 @@ provider protocol.
 
 The foundations were deliberately built旁路 before handler integration. The
 current canaries connect only the route and Guardrail combinations listed in
-Current Status, behind `--stage`; MCP, server-tool loops, recording, and every
-unsupported combination retain whole-request legacy ownership.
+Current Status, behind `--stage`; MCP, server-tool loops, recording outside the
+Beta identity canary, and every unsupported combination retain whole-request
+legacy ownership.
 
 ## Why This Change
 
@@ -435,7 +438,9 @@ registration is always per exact source/target pair.
 `anthropic_v1` remains a separate protocol with its own request, response,
 stream, terminal, and identity registration; it does not inherit Beta's
 identity or Bridge registrations. These routes stay on legacy whenever MCP or
-V2 protocol recording owns part of the request/response lifecycle. Guardrails
+V2 protocol recording owns part of the request/response lifecycle. Beta
+identity recording may use Stage only for one active service and no MCP;
+cross-protocol and failover recording still stay entirely legacy. Guardrails
 are native only on Beta-source routes; V1 Guardrails still select the entire
 legacy pipeline.
 

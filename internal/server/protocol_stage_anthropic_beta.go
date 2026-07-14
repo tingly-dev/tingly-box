@@ -13,11 +13,13 @@ import (
 	"github.com/sirupsen/logrus"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	protocolguardrail "github.com/tingly-dev/tingly-box/internal/protocol/stage/guardrail"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -39,6 +41,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 	scenarioConfig *typ.ScenarioConfig,
 	ruleFlags typ.RuleFlags,
 	recorder *recording.ProtocolRecorder,
+	stageRecording *protocolStageRequestRecording,
 ) bool {
 	if !ph.shouldUseProtocolStage(
 		c,
@@ -56,9 +59,16 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 		logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "MCP runtime still uses the legacy pipeline")
 		return false
 	}
-	if recorder != nil {
-		logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "protocol recording still uses legacy transform and stream hooks")
-		return false
+	if recorder != nil || stageRecording != nil {
+		if stageRecording == nil || target != protocol.TypeAnthropicBeta || len(rule.GetActiveServices()) != 1 {
+			logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "new recording canary currently supports only single-service Anthropic Beta identity")
+			return false
+		}
+	}
+
+	var requestErr error
+	if stageRecording != nil {
+		defer func() { stageRecording.finish(requestErr) }()
 	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
@@ -80,9 +90,15 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 		scenarioFlags,
 	)
 	if err != nil {
+		requestErr = err
 		ph.FailAttemptSetup(c, err)
 		return true
 	}
+	terminal = requestrecord.ObserveProvider(terminal, stageRecordingRecorder(stageRecording), requestrecord.ExchangeMetadata{
+		Attempt:  1,
+		Provider: provider.Name,
+		Model:    actualModel,
+	})
 	stages := []protocolstage.Stage{
 		newProtocolTransformStage(
 			"client_prepare",
@@ -107,6 +123,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 			Observe: protocolStageGuardrailObserver(c),
 		})
 		if guardrailErr != nil {
+			requestErr = guardrailErr
 			ph.FailAttemptSetup(c, guardrailErr)
 			return true
 		}
@@ -131,7 +148,8 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 		RequiredCapabilities: protocolstage.AllBridgeCapabilities,
 	})
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build Anthropic Beta Protocol Stage topology: %w", err))
+		requestErr = fmt.Errorf("build Anthropic Beta Protocol Stage topology: %w", err)
+		ph.FailAttemptSetup(c, requestErr)
 		return true
 	}
 
@@ -143,12 +161,25 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 			RequestID: pkgobs.RequestIDFromContext(c.Request.Context()),
 		},
 	}
+	legacyRecorder := recorder
+	if stageRecording != nil {
+		// The canary emits one new-format envelope. The legacy recorder remains
+		// the rollback path when Stage is disabled or this route falls back.
+		legacyRecorder = nil
+	}
 	if isStreaming {
-		ph.serveProtocolStageAnthropicBetaStream(c, endpoint, call, responseModel, recorder)
+		requestErr = ph.serveProtocolStageAnthropicBetaStream(c, endpoint, call, responseModel, legacyRecorder, stageRecordingRecorder(stageRecording))
 		return true
 	}
-	ph.serveProtocolStageAnthropicBetaComplete(c, endpoint, call, responseModel, provider, actualModel, rule, recorder)
+	requestErr = ph.serveProtocolStageAnthropicBetaComplete(c, endpoint, call, responseModel, provider, actualModel, rule, legacyRecorder, stageRecordingRecorder(stageRecording))
 	return true
+}
+
+func stageRecordingRecorder(recording *protocolStageRequestRecording) *requestrecord.Recorder {
+	if recording == nil {
+		return nil
+	}
+	return recording.recorder
 }
 
 func protocolStageGuardrailObserver(c *gin.Context) protocolguardrail.Observer {
@@ -233,26 +264,33 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaComplete(
 	actualModel string,
 	rule *typ.Rule,
 	recorder *recording.ProtocolRecorder,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, recorder, err, "Anthropic Beta Protocol Stage provider request failed")
-		return
+		return err
 	}
 	message, ok := response.Value.(*anthropic.BetaMessage)
 	if !ok || message == nil {
-		ph.failRequest(c, recorder, fmt.Errorf("Anthropic Beta Protocol Stage response has type %T", response.Value), "Protocol Stage response conversion failed")
-		return
+		responseErr := fmt.Errorf("Anthropic Beta Protocol Stage response has type %T", response.Value)
+		ph.failRequest(c, recorder, responseErr, "Protocol Stage response conversion failed")
+		return responseErr
 	}
 	body, err := protocolStageAnthropicBetaMessageJSON(message, responseModel)
 	if err != nil {
 		ph.failRequest(c, recorder, err, "Protocol Stage response conversion failed")
-		return
+		return err
+	}
+	if requestRecorder != nil {
+		if captureErr := requestRecorder.SetFinalResponse(protocol.TypeAnthropicBeta, json.RawMessage(body)); captureErr != nil {
+			logrus.WithContext(c.Request.Context()).WithError(captureErr).Debug("Protocol Stage RequestRecord final response capture failed")
+		}
 	}
 	if response.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, response.Usage, nil)
@@ -264,6 +302,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaComplete(
 		recorder.RecordResponse(provider, actualModel)
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
+	return nil
 }
 
 func protocolStageAnthropicBetaMessageJSON(message *anthropic.BetaMessage, responseModel string) ([]byte, error) {
@@ -310,27 +349,36 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 	call protocolstage.Call,
 	responseModel string,
 	recorder *recording.ProtocolRecorder,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		ph.FailAttemptSetup(c, fmt.Errorf("Anthropic Beta Protocol Stage streaming is unsupported by this connection"))
-		return
+		err := fmt.Errorf("Anthropic Beta Protocol Stage streaming is unsupported by this connection")
+		ph.FailAttemptSetup(c, err)
+		return err
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, recorder, err, "Anthropic Beta Protocol Stage provider stream failed")
-		return
+		return err
 	}
 	defer func() {
 		if closeErr := stream.Close(); closeErr != nil {
 			logrus.WithContext(c.Request.Context()).Warnf("close Anthropic Beta Protocol Stage stream: %v", closeErr)
 		}
 	}()
+	var finalAssembler assembler.StreamAssembler
+	if requestRecorder != nil {
+		finalAssembler, err = assembler.NewStreamAssembler(protocol.TypeAnthropicBeta)
+		if err != nil {
+			logrus.WithContext(c.Request.Context()).WithError(err).Debug("Protocol Stage RequestRecord final stream assembler unavailable")
+		}
+	}
 
 	wrote := false
 	sawMessageStart := false
@@ -346,7 +394,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 				if result.Usage != nil {
 					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 				}
-				return
+				return nextErr
 			}
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, nextErr)
@@ -362,7 +410,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 			if recorder != nil {
 				recorder.RecordError(nextErr)
 			}
-			return
+			return nextErr
 		}
 
 		eventType, payload, eventErr := protocolStageAnthropicBetaEventJSON(event.Value, responseModel)
@@ -377,7 +425,13 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 			if recorder != nil {
 				recorder.RecordError(streamErr)
 			}
-			return
+			return errors.Join(streamErr, eventErr)
+		}
+		if finalAssembler != nil {
+			if captureErr := finalAssembler.Add(json.RawMessage(payload)); captureErr != nil {
+				logrus.WithContext(c.Request.Context()).WithError(captureErr).Debug("Protocol Stage RequestRecord final stream event capture failed")
+				finalAssembler = nil
+			}
 		}
 		if !wrote {
 			setProtocolStageAnthropicSSEHeaders(c)
@@ -401,11 +455,21 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 	if sawMessageStart && !sawMessageStop {
 		protocolstream.MarshalAndSendErrorEvent(c, "upstream stream ended before completion", "stream_error", "incomplete_stream")
 		flusher.Flush()
+		return errors.New("Anthropic Beta Protocol Stage stream ended before message_stop")
 	}
 	result := stream.Result()
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
+	if finalAssembler != nil && requestRecorder != nil {
+		finalResponse, captureErr := finalAssembler.Finish()
+		if captureErr != nil {
+			logrus.WithContext(c.Request.Context()).WithError(captureErr).Debug("Protocol Stage RequestRecord final stream assembly failed")
+		} else if captureErr = requestRecorder.SetFinalResponse(protocol.TypeAnthropicBeta, finalResponse); captureErr != nil {
+			logrus.WithContext(c.Request.Context()).WithError(captureErr).Debug("Protocol Stage RequestRecord final stream response capture failed")
+		}
+	}
+	return nil
 }
 
 func protocolStageAnthropicBetaEventJSON(value any, responseModel string) (string, []byte, error) {

@@ -1,7 +1,7 @@
 # Request Recording Redesign
 
-> Status: proposed design for review; no production pipeline wiring is changed
-> by this document.
+> Status: R1–R4 implemented. The first production canary is additive and
+> requires both `--stage` and an enabled scenario `recording_v2` flag.
 >
 > Scope: the protocol request/response content retained for one incoming
 > request. `UsageRecord`, request logging, and stage tracing are separate.
@@ -307,20 +307,35 @@ each. No all-protocol handler rewrite is required.
 
 ## Additive Migration Plan
 
-| Checkpoint | Change | Production effect |
-| --- | --- | --- |
-| R1 — Foundation | `RequestRecord`, ordered exchanges, lifecycle, in-memory tests | None |
-| R2 — Protocol capture support | Common interface over existing Beta, V1, Chat, and Responses assemblers | None |
-| R3 — Boundary harness | Verify input, provider, and output snapshots across all Stage routes | No persisted output |
-| R4 — Single-route canary | Beta identity route behind an internal experimental switch | Opt-in only |
-| R5 — Failover | Multiple exchanges, one final record | Opt-in only |
-| R6 — Tool Loop | Multiple exchanges in one attempt | Opt-in only |
-| R7 — Persistence/UI | New writer, reader, and request inspection surface | Opt-in only |
-| R8 — Cutover | Map the existing recording switch to `RequestRecord` | Discuss before changing defaults |
-| R9 — Cleanup | Remove Gin recorder, transform recorder, stream hooks, and MCP recorder interface | After parity proof |
+| Checkpoint | Status | Change | Production effect |
+| --- | --- | --- | --- |
+| R1 — Foundation | Complete | `RequestRecord`, ordered exchanges, lifecycle, in-memory tests | None |
+| R2 — Protocol capture support | Complete | Common interface over existing Beta, V1, Chat, and Responses assemblers | None |
+| R3 — Boundary harness | Complete | Verify input, provider, and output snapshots across all Stage routes | No persisted output |
+| R4 — Single-route canary | Complete | Beta identity, single service, no MCP | Opt-in only |
+| R5 — Failover | Not started | Multiple exchanges, one final record | Opt-in only |
+| R6 — Tool Loop | Not started | Multiple exchanges in one attempt | Opt-in only |
+| R7 — Persistence/UI | Partial | Native reader and request inspection surface; R4 already writes an additive `request_record` envelope through the existing sink | Opt-in only |
+| R8 — Cutover | Not started | Map the existing recording switch to `RequestRecord` | Discuss before changing defaults |
+| R9 — Cleanup | Not started | Remove Gin recorder, transform recorder, stream hooks, and MCP recorder interface | After parity proof |
 
-R1–R3 do not modify the active request pipeline. Work stops for review before
-R4 touches production topology wiring.
+### R4 Canary Activation
+
+The new recording path is selected only when all of these are true:
+
+- the server starts with `--stage`;
+- the request scenario has `recording_v2` enabled;
+- the route is Anthropic Beta → Anthropic Beta;
+- the rule has exactly one active service;
+- MCP is disabled.
+
+Every other recording combination keeps the complete legacy lifecycle. Without
+`recording_v2`, no new recorder or sink work is performed. Restarting without
+`--stage` is the rollback.
+
+The completed `RequestRecord` is persisted through the existing asynchronous
+obs sink as an additive `request_record` envelope. Legacy readers may ignore
+that field; non-canary routes continue to emit the legacy recording shape.
 
 ## Required Verification
 
