@@ -124,8 +124,12 @@ func (e *openAIChatEndpoint) Complete(ctx context.Context, call protocolstage.Ca
 	return nil, WrapError(ErrMaxRounds, sideEffectsCommitted)
 }
 
-func (*openAIChatEndpoint) Stream(context.Context, protocolstage.Call) (protocolstage.EventStream, error) {
-	return nil, errors.New("OpenAI Chat ToolLoop streaming is not implemented")
+func (e *openAIChatEndpoint) Stream(ctx context.Context, call protocolstage.Call) (protocolstage.EventStream, error) {
+	prepared, owned, err := e.prepare(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	return newOpenAIChatToolLoopStream(ctx, e, prepared, owned)
 }
 
 func (e *openAIChatEndpoint) prepare(ctx context.Context, call protocolstage.Call) (protocolstage.Call, map[string]struct{}, error) {
