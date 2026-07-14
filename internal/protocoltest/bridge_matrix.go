@@ -44,10 +44,10 @@ type BridgeChain struct {
 }
 
 // DefaultBridgePairs lists only concrete Stage boundaries implemented today.
-// Anthropic v1/beta cross-version conversion remains intentionally absent.
 func DefaultBridgePairs() []ProtocolPair {
 	return []ProtocolPair{
 		{Source: protocol.TypeAnthropicV1, Target: protocol.TypeAnthropicV1},
+		{Source: protocol.TypeAnthropicV1, Target: protocol.TypeAnthropicBeta},
 		{Source: protocol.TypeAnthropicBeta, Target: protocol.TypeAnthropicBeta},
 		{Source: protocol.TypeOpenAIChat, Target: protocol.TypeOpenAIChat},
 		{Source: protocol.TypeAnthropicV1, Target: protocol.TypeOpenAIChat},
@@ -61,6 +61,12 @@ func DefaultBridgePairs() []ProtocolPair {
 // traffic.
 func DefaultBridgeChains() []BridgeChain {
 	return []BridgeChain{
+		{
+			Name:   "v1_beta_stage_chat",
+			Source: protocol.TypeAnthropicV1,
+			Stage:  protocol.TypeAnthropicBeta,
+			Target: protocol.TypeOpenAIChat,
+		},
 		{
 			Name:   "chat_beta_stage_chat",
 			Source: protocol.TypeOpenAIChat,
@@ -328,6 +334,7 @@ func bridgeMatrixFailure(result TestResult, start time.Time, assertion string, e
 
 func bridgeMatrixEndpoint(terminal stage.Endpoint, route bridgeMatrixRoute) (stage.Endpoint, *bridgeMatrixProbeStage, error) {
 	registry, err := stage.NewBridgeRegistry(
+		anthropicbridge.NewV1ToBeta(),
 		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{}),
 		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{}),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{}),

@@ -11,6 +11,7 @@ import (
 	protocol "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 )
 
 // NewV1ToBeta returns the lossless Anthropic v1 -> Beta subset Bridge. Request
@@ -40,7 +41,11 @@ func (v1ToBetaBridge) Open(_ context.Context, call stage.Call, operation stage.O
 	}
 	targetCall := call
 	targetCall.Request = beta
-	return &v1ToBetaSession{operation: operation, targetCall: targetCall}, nil
+	return &v1ToBetaSession{
+		operation:   operation,
+		targetCall:  targetCall,
+		sourceModel: string(v1.Model),
+	}, nil
 }
 
 func v1BetaRequest(value any) (*anthropic.MessageNewParams, error) {
@@ -58,8 +63,9 @@ func v1BetaRequest(value any) (*anthropic.MessageNewParams, error) {
 }
 
 type v1ToBetaSession struct {
-	operation  stage.Operation
-	targetCall stage.Call
+	operation   stage.Operation
+	targetCall  stage.Call
+	sourceModel string
 }
 
 func (s *v1ToBetaSession) TargetCall() stage.Call { return s.targetCall }
@@ -76,10 +82,15 @@ func (s *v1ToBetaSession) ConvertComplete(_ context.Context, response *stage.Res
 	if err != nil {
 		return nil, err
 	}
+	model := response.Model
+	if s.sourceModel != "" {
+		v1.Model = s.sourceModel
+		model = s.sourceModel
+	}
 	return &stage.Response{
 		Value:                v1,
 		Usage:                response.Usage,
-		Model:                response.Model,
+		Model:                model,
 		SideEffectsCommitted: response.SideEffectsCommitted,
 	}, nil
 }
@@ -108,13 +119,14 @@ func (s *v1ToBetaSession) ConvertStream(_ context.Context, target stage.EventStr
 	if target == nil {
 		return nil, errors.New("convert Anthropic Beta stream to v1: target stream is nil")
 	}
-	return &v1BetaStream{target: target}, nil
+	return &v1BetaStream{target: target, sourceModel: s.sourceModel}, nil
 }
 
 func (s *v1ToBetaSession) ConvertError(_ context.Context, err error) error { return err }
 
 type v1BetaStream struct {
-	target stage.EventStream
+	target      stage.EventStream
+	sourceModel string
 
 	closeOnce sync.Once
 	closeErr  error
@@ -133,6 +145,9 @@ func (s *v1BetaStream) Next(ctx context.Context) (stage.Event, error) {
 	if err != nil {
 		return stage.Event{}, err
 	}
+	if v1.Type == "message_start" && s.sourceModel != "" {
+		v1.Message.Model = s.sourceModel
+	}
 	return stage.Event{Value: *v1}, nil
 }
 
@@ -141,7 +156,13 @@ func (s *v1BetaStream) Close() error {
 	return s.closeErr
 }
 
-func (s *v1BetaStream) Result() stage.StreamResult { return s.target.Result() }
+func (s *v1BetaStream) Result() stage.StreamResult {
+	result := s.target.Result()
+	if s.sourceModel != "" {
+		result.Model = s.sourceModel
+	}
+	return result
+}
 
 func betaStreamEvent(value any) (*anthropic.BetaRawMessageStreamEventUnion, error) {
 	switch typed := value.(type) {
@@ -161,6 +182,12 @@ func betaStreamEvent(value any) (*anthropic.BetaRawMessageStreamEventUnion, erro
 		if raw != "" {
 			return decodeBetaStreamEvent([]byte(raw))
 		}
+	case protocolstream.AnthropicEvent:
+		converted, err := convertJSON[anthropic.BetaRawMessageStreamEventUnion](typed.Data, "Anthropic Beta transport event")
+		if err != nil {
+			return nil, err
+		}
+		return converted, nil
 	}
 	return nil, fmt.Errorf("convert Anthropic Beta stream event to v1: event has type %T, want Anthropic Beta event or JSON", value)
 }

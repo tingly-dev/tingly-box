@@ -57,6 +57,7 @@ func (*MatrixCmd) Help() string {
 
   # Run only the dormant Stage/Bridge topology (no production dispatch claim)
   harness matrix --mode=bridges
+  harness matrix --mode=bridges --source=anthropic_v1 --target=anthropic_beta
 
   # Run only single-hop (A→B) tests
   harness matrix --mode=single

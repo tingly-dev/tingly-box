@@ -23,7 +23,7 @@ func TestV1ToBetaCompletePreservesWireAndFacts(t *testing.T) {
 			if !ok || beta == nil {
 				t.Fatalf("request type = %T", call.Request)
 			}
-			if call.Metadata.RequestID != "v1-beta" || beta.Model != "claude-provider" || len(beta.Tools) != 1 {
+			if call.Metadata.RequestID != "v1-beta" || beta.Model != "client-model" || len(beta.Tools) != 1 {
 				t.Fatalf("target call = %#v metadata=%+v", beta, call.Metadata)
 			}
 			return &stage.Response{
@@ -39,7 +39,7 @@ func TestV1ToBetaCompletePreservesWireAndFacts(t *testing.T) {
 	}
 	adapted := mustAdapt(t, terminal, NewV1ToBeta())
 	v1 := decodeV1BetaRequest(t, `{
-		"model":"claude-provider","max_tokens":128,
+		"model":"client-model","max_tokens":128,
 		"messages":[{"role":"user","content":[{"type":"text","text":"weather"}]}],
 		"tools":[{"name":"lookup","input_schema":{"type":"object","properties":{"city":{"type":"string"}}}}]
 	}`)
@@ -56,7 +56,7 @@ func TestV1ToBetaCompletePreservesWireAndFacts(t *testing.T) {
 	if message.StopReason != "tool_use" || len(message.Content) != 1 || message.Content[0].Type != "tool_use" {
 		t.Fatalf("response = %#v", message)
 	}
-	if response.Usage != usage || response.Model != "claude-provider" || !response.SideEffectsCommitted {
+	if message.Model != "client-model" || response.Usage != usage || response.Model != "client-model" || !response.SideEffectsCommitted {
 		t.Fatalf("response facts = %+v", response)
 	}
 }

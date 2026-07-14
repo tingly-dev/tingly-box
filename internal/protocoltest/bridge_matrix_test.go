@@ -9,8 +9,8 @@ func TestDefaultBridgeMatrix(t *testing.T) {
 	t.Parallel()
 
 	results := DefaultBridgeMatrix().ExecuteAll()
-	if len(results) != 42 {
-		t.Fatalf("result count = %d, want 42", len(results))
+	if len(results) != 54 {
+		t.Fatalf("result count = %d, want 54", len(results))
 	}
 	chainResults := 0
 	for _, result := range results {
@@ -27,8 +27,25 @@ func TestDefaultBridgeMatrix(t *testing.T) {
 			t.Errorf("%s has nil semantic response", result.Name)
 		}
 	}
-	if chainResults != 6 {
-		t.Fatalf("chain result count = %d, want 6", chainResults)
+	if chainResults != 12 {
+		t.Fatalf("chain result count = %d, want 12", chainResults)
+	}
+}
+
+func TestBridgeMatrixV1ToBeta(t *testing.T) {
+	t.Parallel()
+
+	results := DefaultBridgeMatrix().
+		OnlySources("anthropic_v1").
+		OnlyTargets("anthropic_beta").
+		ExecuteAll()
+	if len(results) != 6 {
+		t.Fatalf("result count = %d, want 6", len(results))
+	}
+	for _, result := range results {
+		if !result.Passed || result.Skipped {
+			t.Fatalf("result = %+v", result)
+		}
 	}
 }
 
