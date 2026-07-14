@@ -12,21 +12,31 @@ The new unit is `RequestRecord`. It records the original request received at
 the client-facing endpoint, the provider calls that actually happened, and the
 final response returned outward after Stage and Bridge processing.
 
-Recording attaches only at two stable endpoint boundaries:
+Recording attaches only at the two stable client/provider boundaries:
 
 ```text
 HTTP Adapter
-  → Request Observer
+  → Request Scope: capture input_request
   → Stages / Bridges
   → Provider Observer
   → Provider Endpoint
+
+Provider Endpoint response
+  → Provider Observer: capture provider_response
+  → Stages / Bridges
+  → Client Output Adapter: final rewrites + capture final_response
+  → HTTP/SSE writer
 ```
 
-- **Request Observer** records the original client-protocol request before any
-  Stage or Bridge. On the return path it records the final outward response.
+- **Request Scope** records the original client-protocol request before any
+  Stage or Bridge and owns the completed `RequestRecord` across failover
+  attempts.
 - **Provider Observer** records the provider-native request passed into the
   terminal endpoint and the untouched provider-native response returned from
   it.
+- **Client Output Adapter** records the final response after outward Stages,
+  Bridges, response transforms, public-model rewriting, and other
+  client-facing adjustments.
 
 Recording does not snapshot every Stage. Stage insertion, removal, or
 reordering must not change the persisted `RequestRecord` shape.
@@ -122,13 +132,13 @@ No intermediate Stage request or response is stored.
 ## Ownership and Lifecycle
 
 ```text
-Request Observer: BeginRequestRecord(input request)
+request scope: BeginRequestRecord(input request)
   └── provider attempt
         └── Provider Observer: begin ProviderExchange
               └── Provider Endpoint
         └── Provider Observer: finish ProviderExchange
   └── optional failover / additional Tool Loop exchanges
-  └── Request Observer: capture final outward response
+  └── Client Output Adapter: capture final outward response
 request execution scope: FinishRequestRecord exactly once
 ```
 
@@ -139,25 +149,33 @@ Rules:
 2. A provider error finishes only its `ProviderExchange`; it does not finish
    the overall record while failover may continue.
 3. Exchanges are appended in actual provider-call order.
-4. The Request Observer never calls the provider and never controls failover.
+4. The recorder never calls the provider and never controls failover.
 5. Recording objects contain no Gin context and never write HTTP/SSE.
 6. Recording cannot change request execution.
 
 ## Placement in Protocol Stage Topology
 
 The Provider Observer wraps the terminal before topology construction. The
-Request Observer wraps the completed client-facing topology and must remain
-outside every client preparation Stage:
+request scope is created before the failover loop, while the Client Output
+Adapter records the value immediately before HTTP/SSE serialization:
 
 ```text
-provider := ObserveProvider(terminal, recorder)
-topology := BuildTopology(provider, stages, bridges)
-endpoint := ObserveRequest(topology, recorder)
+recorder := BeginRequestRecord(input)
+for each provider attempt:
+    provider := ObserveProvider(terminal, recorder, attempt)
+    endpoint := BuildTopology(provider, stages, bridges)
+    ServeClientOutput(endpoint, recorder)
+FinishRequestRecord(recorder)
 ```
+
+Capturing only the value returned by `BuildTopology` is too early. Existing
+client adapters still apply protocol response transforms, public-model
+rewriting, and stream-event adjustments before writing; `final_response` must
+reflect those operations.
 
 This placement has stable semantics for all topologies:
 
-| Topology | Request Observer sees | Provider Observer sees |
+| Topology | Client boundary records | Provider Observer records |
 | --- | --- | --- |
 | Identity | original request and final response | provider request/response |
 | Cross-protocol Bridge | source-protocol input and converted output | target-protocol request/response |
@@ -178,9 +196,9 @@ and outcome. It is diagnostics metadata, not request/response content.
 
 ## Complete and Streaming
 
-Complete calls snapshot the input request at the Request Observer and the
-request/response pair at each Provider Observer invocation. The Request
-Observer snapshots the final response on return.
+Complete calls snapshot the input request in the request scope and the
+request/response pair at each Provider Observer invocation. The Client Output
+Adapter snapshots the final response after its last response rewrite.
 
 For streaming, each observer wraps the stream returned by the next endpoint
 and assembles events in that observer's native protocol while the normal caller
@@ -188,7 +206,8 @@ pulls them. The observer does not consume the stream independently:
 
 - Provider Observer assembles the complete raw provider response for every
   provider exchange.
-- Request Observer assembles the complete final outward response.
+- Client Output Adapter assembles the final outward events after client-facing
+  rewrites into one complete response.
 - Raw stream chunks are not stored in the first implementation.
 
 Each protocol therefore needs one capture codec for complete values and stream
@@ -218,6 +237,45 @@ The target semantics map as follows:
 | Raw provider response (`provider_response`, previously not reliably populated) | `provider_exchanges[n].provider_response` |
 | Final outward result (`final_response`) | `final_response` |
 | Transform step names | separate stage trace |
+
+## Implementation Containment
+
+The new implementation starts in one isolated package:
+
+```text
+internal/requestrecord/
+├── record.go              // RequestRecord, ProviderExchange, Payload
+├── recorder.go            // request-scoped lifecycle
+├── provider_endpoint.go   // terminal Endpoint observer
+├── codec.go               // protocol capture contract
+└── *_codec.go             // Beta, V1, Chat, Responses
+```
+
+This package has no Gin, HTTP writer, routing, Guardrail, MCP, or legacy
+recorder dependency. It may wrap `protocol/stage.Endpoint`; the Stage core does
+not import Recording.
+
+Production integration is limited to three seams per client protocol:
+
+1. The protocol prologue creates one recorder and captures `input_request`
+   before the failover loop.
+2. The Stage target builder wraps the selected Provider Endpoint.
+3. The client output adapter captures the post-rewrite complete response or
+   outgoing stream events.
+
+The first Beta identity canary therefore touches only
+`anthropic_message.go` and `protocol_stage_anthropic_beta.go` outside the new
+package. It does not modify Stage/Bridge contracts, Guardrail, MCP, or the
+legacy recorder.
+
+Failover integration is a later, central change in `failover_dispatch.go`: it
+provides the current attempt number while keeping the same request-scoped
+recorder. Tool Loop requires no recording hook; repeated calls through the
+already-wrapped Provider Endpoint naturally append exchanges.
+
+Other source protocols are integrated one at a time through their existing
+prologue and client output adapter, with an independent test and commit for
+each. No all-protocol handler rewrite is required.
 
 ## Additive Migration Plan
 
