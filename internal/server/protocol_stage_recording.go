@@ -1,10 +1,13 @@
 package server
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	internalobs "github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -59,4 +62,73 @@ func (r *protocolStageRequestRecording) finish(requestErr error) {
 		return
 	}
 	r.sink.EmitRequestRecord(completed)
+}
+
+func stageRecordingRecorder(recording *protocolStageRequestRecording) *requestrecord.Recorder {
+	if recording == nil {
+		return nil
+	}
+	return recording.recorder
+}
+
+func captureProtocolStageFinalResponse(
+	ctx context.Context,
+	recorder *requestrecord.Recorder,
+	api protocol.APIType,
+	response any,
+) {
+	if recorder == nil {
+		return
+	}
+	if err := recorder.SetFinalResponse(api, response); err != nil {
+		logrus.WithContext(ctx).WithError(err).Debug("Protocol Stage RequestRecord final response capture failed")
+	}
+}
+
+type protocolStageFinalStreamCapture struct {
+	recorder  *requestrecord.Recorder
+	protocol  protocol.APIType
+	assembler assembler.StreamAssembler
+}
+
+func newProtocolStageFinalStreamCapture(
+	ctx context.Context,
+	recorder *requestrecord.Recorder,
+	api protocol.APIType,
+) *protocolStageFinalStreamCapture {
+	if recorder == nil {
+		return nil
+	}
+	streamAssembler, err := assembler.NewStreamAssembler(api)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).Debug("Protocol Stage RequestRecord final stream assembler unavailable")
+		return nil
+	}
+	return &protocolStageFinalStreamCapture{
+		recorder:  recorder,
+		protocol:  api,
+		assembler: streamAssembler,
+	}
+}
+
+func (c *protocolStageFinalStreamCapture) add(ctx context.Context, event any) {
+	if c == nil || c.assembler == nil {
+		return
+	}
+	if err := c.assembler.Add(event); err != nil {
+		logrus.WithContext(ctx).WithError(err).Debug("Protocol Stage RequestRecord final stream event capture failed")
+		c.assembler = nil
+	}
+}
+
+func (c *protocolStageFinalStreamCapture) finish(ctx context.Context) {
+	if c == nil || c.assembler == nil || c.recorder == nil {
+		return
+	}
+	response, err := c.assembler.Finish()
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).Debug("Protocol Stage RequestRecord final stream assembly failed")
+		return
+	}
+	captureProtocolStageFinalResponse(ctx, c.recorder, c.protocol, response)
 }

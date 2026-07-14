@@ -180,12 +180,22 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 	// pristine request as received (post-vision-proxy, pre-pre-chain); the
 	// winning attempt's provider/model is re-bound per attempt via SetActiveService.
 	var recorder *recording.ProtocolRecorder
+	var stageRecording *protocolStageRequestRecording
 	if scenarioConfig.IsRecordingEnable() {
 		bs, err := req.MarshalJSON()
 		if err != nil {
 			bs = []byte("{}")
 		}
 		recorder = ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, ph.getScenarioRecordMode(scenarioType), bs)
+		if len(rule.GetActiveServices()) == 1 {
+			stageRecording = ph.newProtocolStageRequestRecording(
+				scenarioType,
+				protocol.TypeAnthropicV1,
+				req.MessageNewParams,
+				sessionID,
+				pkgobs.RequestIDFromContext(c.Request.Context()),
+			)
+		}
 	}
 
 	// Snapshot a pristine template only when failover is possible; the single
@@ -213,7 +223,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 				}
 				areq = cloned
 			}
-			ph.runAnthropicV1Attempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, recorder)
+			ph.runAnthropicV1Attempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, recorder, stageRecording)
 		})
 }
 
@@ -222,7 +232,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 // pre-transform chain and guardrails, resolve the target API for this provider's
 // style, transform, and dispatch. Setup failures route through failAttemptSetup
 // so the orchestrator can advance to the next candidate.
-func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *recording.ProtocolRecorder) {
+func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.AnthropicMessagesRequest, responseModel string, provider *typ.Provider, requestModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, recorder *recording.ProtocolRecorder, stageRecording *protocolStageRequestRecording) {
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
@@ -282,6 +292,7 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 		scenarioConfig,
 		ruleFlags,
 		recorder,
+		stageRecording,
 	) {
 		return
 	}

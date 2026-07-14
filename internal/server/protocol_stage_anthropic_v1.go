@@ -19,6 +19,7 @@ import (
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
@@ -40,6 +41,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	scenarioConfig *typ.ScenarioConfig,
 	ruleFlags typ.RuleFlags,
 	recorder *recording.ProtocolRecorder,
+	stageRecording *protocolStageRequestRecording,
 ) bool {
 	if !ph.shouldUseProtocolStage(c, protocol.TypeAnthropicV1, target, protocolstage.AllBridgeCapabilities) {
 		return false
@@ -52,9 +54,16 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 		logProtocolStageFallback(c, protocol.TypeAnthropicV1, target, "Guardrails still use the legacy Anthropic V1 lifecycle")
 		return false
 	}
-	if recorder != nil {
-		logProtocolStageFallback(c, protocol.TypeAnthropicV1, target, "protocol recording still uses legacy transform and stream hooks")
-		return false
+	if recorder != nil || stageRecording != nil {
+		if stageRecording == nil || len(rule.GetActiveServices()) != 1 {
+			logProtocolStageFallback(c, protocol.TypeAnthropicV1, target, "new recording path currently supports only single-service Anthropic V1 requests")
+			return false
+		}
+	}
+
+	var requestErr error
+	if stageRecording != nil {
+		defer func() { stageRecording.finish(requestErr) }()
 	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
@@ -70,9 +79,15 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	)
 	terminal, registry, err := ph.protocolStageAnthropicV1Target(target, provider, actualModel, responseModel, scenarioFlags)
 	if err != nil {
+		requestErr = err
 		ph.FailAttemptSetup(c, err)
 		return true
 	}
+	terminal = requestrecord.ObserveProvider(terminal, stageRecordingRecorder(stageRecording), requestrecord.ExchangeMetadata{
+		Attempt:  1,
+		Provider: provider.Name,
+		Model:    actualModel,
+	})
 	stages := []protocolstage.Stage{
 		newProtocolTransformStage(
 			"client_prepare",
@@ -101,7 +116,8 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 		RequiredCapabilities: protocolstage.AllBridgeCapabilities,
 	})
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build Anthropic V1 Protocol Stage topology: %w", err))
+		requestErr = fmt.Errorf("build Anthropic V1 Protocol Stage topology: %w", err)
+		ph.FailAttemptSetup(c, requestErr)
 		return true
 	}
 
@@ -113,11 +129,15 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 			RequestID: pkgobs.RequestIDFromContext(c.Request.Context()),
 		},
 	}
+	legacyRecorder := recorder
+	if stageRecording != nil {
+		legacyRecorder = nil
+	}
 	if isStreaming {
-		ph.serveProtocolStageAnthropicV1Stream(c, endpoint, call, responseModel, recorder)
+		requestErr = ph.serveProtocolStageAnthropicV1Stream(c, endpoint, call, responseModel, legacyRecorder, stageRecordingRecorder(stageRecording))
 		return true
 	}
-	ph.serveProtocolStageAnthropicV1Complete(c, endpoint, call, responseModel, provider, actualModel, rule, recorder)
+	requestErr = ph.serveProtocolStageAnthropicV1Complete(c, endpoint, call, responseModel, provider, actualModel, rule, legacyRecorder, stageRecordingRecorder(stageRecording))
 	return true
 }
 
@@ -290,27 +310,30 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Complete(
 	actualModel string,
 	rule *typ.Rule,
 	recorder *recording.ProtocolRecorder,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, recorder, err, "Anthropic V1 Protocol Stage provider request failed")
-		return
+		return err
 	}
 	message, ok := response.Value.(*anthropic.Message)
 	if !ok || message == nil {
-		ph.failRequest(c, recorder, fmt.Errorf("Anthropic V1 Protocol Stage response has type %T", response.Value), "Protocol Stage response conversion failed")
-		return
+		responseErr := fmt.Errorf("Anthropic V1 Protocol Stage response has type %T", response.Value)
+		ph.failRequest(c, recorder, responseErr, "Protocol Stage response conversion failed")
+		return responseErr
 	}
 	body, err := protocolStageAnthropicV1MessageJSON(message, responseModel)
 	if err != nil {
 		ph.failRequest(c, recorder, err, "Protocol Stage response conversion failed")
-		return
+		return err
 	}
+	captureProtocolStageFinalResponse(c.Request.Context(), requestRecorder, protocol.TypeAnthropicV1, json.RawMessage(body))
 	if response.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, response.Usage, nil)
 	}
@@ -321,6 +344,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Complete(
 		recorder.RecordResponse(provider, actualModel)
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
+	return nil
 }
 
 func protocolStageAnthropicV1MessageJSON(message *anthropic.Message, responseModel string) ([]byte, error) {
@@ -357,27 +381,30 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 	call protocolstage.Call,
 	responseModel string,
 	recorder *recording.ProtocolRecorder,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		ph.FailAttemptSetup(c, fmt.Errorf("Anthropic V1 Protocol Stage streaming is unsupported by this connection"))
-		return
+		err := fmt.Errorf("Anthropic V1 Protocol Stage streaming is unsupported by this connection")
+		ph.FailAttemptSetup(c, err)
+		return err
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, recorder, err, "Anthropic V1 Protocol Stage provider stream failed")
-		return
+		return err
 	}
 	defer func() {
 		if closeErr := stream.Close(); closeErr != nil {
 			logrus.WithContext(c.Request.Context()).Warnf("close Anthropic V1 Protocol Stage stream: %v", closeErr)
 		}
 	}()
+	finalCapture := newProtocolStageFinalStreamCapture(c.Request.Context(), requestRecorder, protocol.TypeAnthropicV1)
 
 	wrote := false
 	sawMessageStart := false
@@ -393,7 +420,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 				if result.Usage != nil {
 					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 				}
-				return
+				return nextErr
 			}
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, nextErr)
@@ -409,7 +436,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 			if recorder != nil {
 				recorder.RecordError(nextErr)
 			}
-			return
+			return nextErr
 		}
 
 		eventType, payload, eventErr := protocolStageAnthropicV1EventJSON(event.Value, responseModel)
@@ -424,8 +451,9 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 			if recorder != nil {
 				recorder.RecordError(streamErr)
 			}
-			return
+			return errors.Join(streamErr, eventErr)
 		}
+		finalCapture.add(c.Request.Context(), json.RawMessage(payload))
 		if !wrote {
 			setProtocolStageAnthropicSSEHeaders(c)
 			wrote = true
@@ -448,11 +476,14 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 	if sawMessageStart && !sawMessageStop {
 		protocolstream.MarshalAndSendErrorEvent(c, "upstream stream ended before completion", "stream_error", "incomplete_stream")
 		flusher.Flush()
+		return errors.New("Anthropic V1 Protocol Stage stream ended before message_stop")
 	}
 	result := stream.Result()
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
+	finalCapture.finish(c.Request.Context())
+	return nil
 }
 
 func protocolStageAnthropicV1EventJSON(value any, responseModel string) (string, []byte, error) {

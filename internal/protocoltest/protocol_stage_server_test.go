@@ -113,17 +113,21 @@ func TestServerProtocolStageSelection(t *testing.T) {
 	}
 }
 
-func TestServerProtocolStageAnthropicBetaRecordingSelection(t *testing.T) {
+func TestServerProtocolStageRecordingSelection(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
 		name       string
+		source     protocol.APIType
 		target     protocol.APIType
 		wantHeader string
 	}{
-		{name: "identity uses stage", target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
-		{name: "chat target uses stage", target: protocol.TypeOpenAIChat, wantHeader: "stage"},
-		{name: "responses target uses stage", target: protocol.TypeOpenAIResponses, wantHeader: "stage"},
+		{name: "beta identity", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
+		{name: "beta to chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, wantHeader: "stage"},
+		{name: "beta to responses", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIResponses, wantHeader: "stage"},
+		{name: "v1 identity", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, wantHeader: "stage"},
+		{name: "v1 to chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, wantHeader: "stage"},
+		{name: "v1 to responses", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIResponses, wantHeader: "stage"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,9 +137,9 @@ func TestServerProtocolStageAnthropicBetaRecordingSelection(t *testing.T) {
 				NewTestEnvOptionWithRecordDir(t.TempDir()),
 			)
 			scenario := TextScenario()
-			env.SetupRoute(protocol.TypeAnthropicBeta, tt.target, scenario)
-			model := env.findRouteModel(protocol.TypeAnthropicBeta, tt.target, scenario.Name)
-			path, body := buildRequest(protocol.TypeAnthropicBeta, model, false)
+			env.SetupRoute(tt.source, tt.target, scenario)
+			model := env.findRouteModel(tt.source, tt.target, scenario.Name)
+			path, body := buildRequest(tt.source, model, false)
 
 			resp, responseBody := sendProtocolStageProbe(t, env, path, body)
 			defer resp.Body.Close()
