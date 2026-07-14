@@ -55,12 +55,16 @@ func TestResponsesToOpenAIChatComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
-	response, ok := result.Value.(*responses.Response)
-	if !ok || response == nil {
+	response, ok := result.Value.(wire.ResponsesWireResponse)
+	if !ok {
 		t.Fatalf("response type = %T", result.Value)
 	}
-	if response.Model != "public-model" || !strings.Contains(response.RawJSON(), "hello from chat") {
-		t.Fatalf("response = %#v raw=%s", response, response.RawJSON())
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	if response.Model != "public-model" || !strings.Contains(string(encoded), "hello from chat") {
+		t.Fatalf("response = %#v json=%s", response, encoded)
 	}
 	if result.Usage == nil || result.Usage.InputTokens != 8 || result.Usage.OutputTokens != 4 {
 		t.Fatalf("usage = %#v", result.Usage)

@@ -1,6 +1,8 @@
 package nonstream
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -32,6 +34,10 @@ func TestBuildResponsesPayloadFromChat_UsageDetails(t *testing.T) {
 	}
 
 	payload := BuildResponsesPayloadFromChat(resp, "gpt-x", "gpt-x")
+	typed := ConvertChatToResponsesWire(resp, "gpt-x", "gpt-x")
+	require.NotNil(t, typed.Usage)
+	assert.EqualValues(t, 30, typed.Usage.InputTokensDetails.CachedTokens)
+	assert.EqualValues(t, 12, typed.Usage.OutputTokensDetails.ReasoningTokens)
 	usage, _ := payload["usage"].(map[string]any)
 	require.NotNil(t, usage)
 
@@ -45,6 +51,33 @@ func TestBuildResponsesPayloadFromChat_UsageDetails(t *testing.T) {
 	outDetails, _ := usage["output_tokens_details"].(map[string]any)
 	require.NotNil(t, outDetails, "output_tokens_details must carry reasoning_tokens")
 	assert.EqualValues(t, 12, outDetails["reasoning_tokens"])
+}
+
+func TestConvertAnthropicBetaToResponsesWireToolCall(t *testing.T) {
+	resp := &anthropic.BetaMessage{
+		ID:   "msg_tool",
+		Role: "assistant",
+		Type: "message",
+		Content: []anthropic.BetaContentBlockUnion{{
+			Type: "tool_use", ID: "call_1", Name: "lookup",
+			Input: json.RawMessage(`{"query":"typed wire"}`),
+		}},
+		StopReason: "tool_use",
+	}
+
+	converted := ConvertAnthropicBetaToResponsesWire(resp, "public-model", "provider-model")
+	require.Len(t, converted.Output, 1)
+	item := converted.Output[0]
+	assert.Equal(t, "function_call", item.Type)
+	assert.Empty(t, item.Status, "complete function_call status remains omitted for wire compatibility")
+	require.NotNil(t, item.Arguments)
+	assert.Contains(t, *item.Arguments, "typed wire")
+	require.NotNil(t, item.OutputIndex)
+	assert.Equal(t, 0, *item.OutputIndex)
+
+	encoded, err := json.Marshal(converted)
+	require.NoError(t, err)
+	assert.True(t, strings.Contains(string(encoded), `"arguments":"{\"query\":\"typed wire\"}"`), string(encoded))
 }
 
 // TestBuildResponsesPayloadFromAnthropicBeta_UsageDetails verifies that the
@@ -69,6 +102,10 @@ func TestBuildResponsesPayloadFromAnthropicBeta_UsageDetails(t *testing.T) {
 	}
 
 	payload := BuildResponsesPayloadFromAnthropicBeta(resp, "claude-x", "claude-x")
+	typed := ConvertAnthropicBetaToResponsesWire(resp, "claude-x", "claude-x")
+	require.NotNil(t, typed.Usage)
+	assert.EqualValues(t, 66, typed.Usage.InputTokens)
+	assert.EqualValues(t, 11, typed.Usage.InputTokensDetails.CachedTokens)
 	usage, _ := payload["usage"].(map[string]any)
 	require.NotNil(t, usage)
 

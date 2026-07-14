@@ -2,7 +2,6 @@ package openaibridge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/openai/openai-go/v3/responses"
@@ -12,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
-	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // ResponsesOptions configures Chat to OpenAI Responses conversion.
@@ -86,15 +84,7 @@ func (s *responsesTargetSession) ConvertComplete(_ context.Context, response *st
 	if err != nil {
 		return nil, err
 	}
-	payload := nonstream.BuildOpenAIChatPayloadFromResponses(value, s.sourceModel)
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("convert OpenAI Responses response to Chat: marshal payload: %w", err)
-	}
-	var converted wire.ChatCompletionWire
-	if err := json.Unmarshal(raw, &converted); err != nil {
-		return nil, fmt.Errorf("convert OpenAI Responses response to Chat: decode payload: %w", err)
-	}
+	converted := nonstream.ConvertResponsesToOpenAIChat(value, s.sourceModel)
 	usage := protocolusage.FromOpenAIResponses(value.Usage)
 	if !usage.HasUsage() {
 		usage = nil

@@ -92,6 +92,7 @@ responses and stream events travel outward through the same wrappers.
 | Bridge | A bidirectional adapter between two protocols: request inward, response/events/errors outward |
 | Terminal Endpoint | The innermost provider-facing endpoint |
 | HTTP Adapter | The only component allowed to parse ingress HTTP and commit response bytes/SSE |
+| Wire DTO | A typed, serializable client-protocol response/event contract used only at the outward protocol boundary |
 
 Do not call Protocol Stages “tiers”. Tier already means provider failover
 priority in Tingly-Box.
@@ -117,6 +118,27 @@ Provider Endpoint
 
 The arrows for requests point downward. Complete responses, stream events, and
 errors return upward through the same wrappers.
+
+### Wire DTO Boundary
+
+Wire DTOs are the typed hand-off between a Bridge's outward conversion and the
+client protocol's HTTP/SSE adapter. They are not a shared internal protocol or
+a canonical model for Guardrails, Tool Loop, routing, or provider calls.
+
+- request conversion and provider execution keep using the concrete protocol
+  SDK types plus `Call` and `ProtocolState`;
+- complete/stream Bridge return paths may emit the source client protocol's
+  `wire.*` value directly;
+- the outer HTTP/SSE adapter serializes that value and remains the sole owner of
+  headers, public model rewriting, response transforms, and framing;
+- Bridges must construct typed wire values directly. A
+  `map → JSON → SDK/wire` round-trip is not a protocol boundary and can silently
+  discard extensions such as refusal or detailed usage.
+
+Wire types are named after the protocol they serialize, never after a specific
+conversion route. This keeps `Responses → Chat` and any future provider path
+able to reuse the same Chat output contract without coupling the DTO to its
+origin.
 
 ## Core Contracts
 
@@ -639,6 +661,17 @@ Verification recorded for the OpenAI Chat identity checkpoint:
   streaming-only skips, and 0 failures;
 - the official OpenAI Go SDK text matrix passes complete and stream 2/2.
 
+Verification recorded for the typed Wire DTO boundary checkpoint:
+
+- Chat and Responses complete builders preserve tool calls, refusal, cache and
+  reasoning usage details in typed output contracts;
+- Chat → Responses, Responses → Chat, and Responses → Anthropic Beta real-path
+  text harnesses each pass complete and stream 2/2;
+- their full raw/Go SDK matrices report respectively 33/40, 30/40, and 19/24
+  passed, with only the documented capability/scenario skips and no failures;
+- `go test ./internal/protocoltest -count=1` passes the full real HTTP protocol
+  suite.
+
 Commit checkpoints, oldest to newest:
 
 | Commit | Checkpoint |
@@ -656,3 +689,4 @@ Commit checkpoints, oldest to newest:
 | `9dcdf3f7e` | OpenAI Chat → OpenAI Responses Stage route |
 | `690012613` | Anthropic V1 → OpenAI Responses Stage route |
 | `e52c9ab36` | Native OpenAI Chat Stage route |
+| current checkpoint | Typed Wire DTO boundary for complete Bridge responses |

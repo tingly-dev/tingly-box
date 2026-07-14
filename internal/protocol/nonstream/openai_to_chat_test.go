@@ -117,3 +117,29 @@ func TestOpenAIResponsesToChatIncompleteReasons(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertResponsesToOpenAIChatPreservesTypedExtensions(t *testing.T) {
+	raw := []byte(`{
+		"id":"resp_extensions","created_at":1710000000,"model":"gpt-4.1",
+		"object":"response","status":"completed",
+		"output":[{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"refusal","refusal":"cannot comply"}]}],
+		"usage":{"input_tokens":12,"output_tokens":7,"total_tokens":19,"input_tokens_details":{"cached_tokens":4},"output_tokens_details":{"reasoning_tokens":3}}
+	}`)
+	var resp responses.Response
+	require.NoError(t, json.Unmarshal(raw, &resp))
+
+	converted := ConvertResponsesToOpenAIChat(&resp, "public-model")
+	require.Len(t, converted.Choices, 1)
+	assert.Equal(t, "cannot comply", converted.Choices[0].Message.Refusal)
+	require.NotNil(t, converted.Usage.PromptTokensDetails)
+	assert.EqualValues(t, 4, converted.Usage.PromptTokensDetails.CachedTokens)
+	require.NotNil(t, converted.Usage.CompletionTokensDetails)
+	assert.EqualValues(t, 3, converted.Usage.CompletionTokensDetails.ReasoningTokens)
+
+	payload := converted.ToMap()
+	choices := payload["choices"].([]map[string]any)
+	message := choices[0]["message"].(map[string]any)
+	assert.Equal(t, "cannot comply", message["refusal"])
+	usage := payload["usage"].(map[string]any)
+	assert.EqualValues(t, 3, usage["completion_tokens_details"].(map[string]any)["reasoning_tokens"])
+}

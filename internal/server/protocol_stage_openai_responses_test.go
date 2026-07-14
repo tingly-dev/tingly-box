@@ -6,6 +6,7 @@ import (
 
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 func TestProtocolStageOpenAIResponsesJSONPreservesRawWireFields(t *testing.T) {
@@ -26,6 +27,35 @@ func TestProtocolStageOpenAIResponsesJSONPreservesRawWireFields(t *testing.T) {
 	}
 	if !gjson.GetBytes(body, "provider_extension.kept").Bool() {
 		t.Fatalf("provider extension was not preserved: %s", body)
+	}
+}
+
+func TestProtocolStageOpenAIResponsesValueJSONAcceptsTypedWireResponse(t *testing.T) {
+	t.Parallel()
+
+	body, err := protocolStageOpenAIResponsesValueJSON(wire.ResponsesWireResponse{
+		ID:     "resp_typed",
+		Object: "response",
+		Model:  "provider-model",
+		Status: "completed",
+		Output: []wire.ResponsesOutputItemWire{{
+			ID: "msg_1", Type: "message", Role: "assistant", Status: "completed",
+			Content: []wire.ResponsesContentPartWire{{Type: "output_text", Text: "typed response"}},
+		}},
+		Usage: &wire.ResponsesUsageWire{InputTokens: 3, OutputTokens: 2, TotalTokens: 5},
+	}, "public-model")
+	if err != nil {
+		t.Fatalf("protocolStageOpenAIResponsesValueJSON: %v", err)
+	}
+	if got := gjson.GetBytes(body, "model").String(); got != "public-model" {
+		t.Fatalf("model = %q, want public-model", got)
+	}
+	if got := gjson.GetBytes(body, "output.0.content.0.text").String(); got != "typed response" {
+		t.Fatalf("text = %q", got)
+	}
+	if !gjson.GetBytes(body, "usage.input_tokens_details.cached_tokens").Exists() ||
+		!gjson.GetBytes(body, "usage.output_tokens_details.reasoning_tokens").Exists() {
+		t.Fatalf("strict usage details missing: %s", body)
 	}
 }
 

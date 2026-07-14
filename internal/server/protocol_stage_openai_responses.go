@@ -290,12 +290,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesComplete(
 		ph.failRequest(c, nil, err, "OpenAI Responses Protocol Stage provider request failed")
 		return
 	}
-	response, ok := result.Value.(*responses.Response)
-	if !ok || response == nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("OpenAI Responses Protocol Stage response has type %T", result.Value))
-		return
-	}
-	body, err := protocolStageOpenAIResponsesJSON(response, responseModel)
+	body, err := protocolStageOpenAIResponsesValueJSON(result.Value, responseModel)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
 		return
@@ -304,6 +299,35 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesComplete(
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
+}
+
+func protocolStageOpenAIResponsesValueJSON(value any, responseModel string) ([]byte, error) {
+	switch response := value.(type) {
+	case *responses.Response:
+		return protocolStageOpenAIResponsesJSON(response, responseModel)
+	case responses.Response:
+		return protocolStageOpenAIResponsesJSON(&response, responseModel)
+	case wire.ResponsesWireResponse:
+		response.Model = responseModel
+		body, err := json.Marshal(response)
+		if err != nil {
+			return nil, fmt.Errorf("marshal Protocol Stage Responses wire response: %w", err)
+		}
+		return body, nil
+	case *wire.ResponsesWireResponse:
+		if response == nil {
+			return nil, fmt.Errorf("OpenAI Responses Protocol Stage wire response is nil")
+		}
+		converted := *response
+		converted.Model = responseModel
+		body, err := json.Marshal(converted)
+		if err != nil {
+			return nil, fmt.Errorf("marshal Protocol Stage Responses wire response: %w", err)
+		}
+		return body, nil
+	default:
+		return nil, fmt.Errorf("OpenAI Responses Protocol Stage response has type %T", value)
+	}
 }
 
 func protocolStageOpenAIResponsesJSON(response *responses.Response, responseModel string) ([]byte, error) {

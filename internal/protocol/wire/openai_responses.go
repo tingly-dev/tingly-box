@@ -26,8 +26,8 @@ func (e ResponsesFunctionCallArgumentsDeltaEvent) EventType() string { return e.
 func (e ResponsesFunctionCallArgumentsDoneEvent) EventType() string  { return e.Type }
 
 type ResponsesStreamErrorEvent struct {
-	Type           string                  `json:"type"`
-	SequenceNumber int64                   `json:"sequence_number"`
+	Type           string                   `json:"type"`
+	SequenceNumber int64                    `json:"sequence_number"`
 	Error          ResponsesStreamErrorBody `json:"error"`
 }
 
@@ -37,26 +37,26 @@ type ResponsesStreamErrorBody struct {
 }
 
 type ResponsesCreatedEvent struct {
-	Type           string               `json:"type"`
-	SequenceNumber int64                `json:"sequence_number"`
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
 	Response       ResponsesWireResponse `json:"response"`
 }
 
 type ResponsesInProgressEvent struct {
-	Type           string               `json:"type"`
-	SequenceNumber int64                `json:"sequence_number"`
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
 	Response       ResponsesWireResponse `json:"response"`
 }
 
 type ResponsesCompletedEvent struct {
-	Type           string               `json:"type"`
-	SequenceNumber int64                `json:"sequence_number"`
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
 	Response       ResponsesWireResponse `json:"response"`
 }
 
 type ResponsesIncompleteEvent struct {
-	Type           string               `json:"type"`
-	SequenceNumber int64                `json:"sequence_number"`
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
 	Response       ResponsesWireResponse `json:"response"`
 }
 
@@ -72,14 +72,101 @@ type ResponsesWireResponse struct {
 	IncompleteDetails *ResponsesIncompleteDetailsWire `json:"incomplete_details,omitempty"`
 }
 
+// ToMap converts the typed response contract to the legacy map surface used by
+// existing non-stream handlers. Stage Bridges should pass the typed value.
+func (r ResponsesWireResponse) ToMap() map[string]any {
+	output := make([]map[string]any, 0, len(r.Output))
+	for _, item := range r.Output {
+		value := map[string]any{
+			"id":   item.ID,
+			"type": item.Type,
+		}
+		if item.Status != "" {
+			value["status"] = item.Status
+		}
+		if item.Role != "" {
+			value["role"] = item.Role
+		}
+		if len(item.Content) > 0 {
+			content := make([]map[string]any, 0, len(item.Content))
+			for _, part := range item.Content {
+				partValue := map[string]any{"type": part.Type}
+				if part.Type == "output_text" || part.Text != "" {
+					partValue["text"] = part.Text
+				}
+				if part.Type == "output_text" {
+					annotations := part.Annotations
+					if annotations == nil {
+						annotations = []any{}
+					}
+					partValue["annotations"] = annotations
+				} else if part.Annotations != nil {
+					partValue["annotations"] = part.Annotations
+				}
+				content = append(content, partValue)
+			}
+			value["content"] = content
+		}
+		if item.CallID != "" {
+			value["call_id"] = item.CallID
+		}
+		if item.Name != "" {
+			value["name"] = item.Name
+		}
+		if item.Arguments != nil {
+			value["arguments"] = *item.Arguments
+		}
+		if item.OutputIndex != nil {
+			value["output_index"] = *item.OutputIndex
+		}
+		output = append(output, value)
+	}
+
+	result := map[string]any{
+		"id":         r.ID,
+		"object":     r.Object,
+		"created_at": r.CreatedAt,
+		"status":     r.Status,
+		"output":     output,
+	}
+	if r.Model != "" {
+		result["model"] = r.Model
+	}
+	if r.CompletedAt != 0 {
+		result["completed_at"] = r.CompletedAt
+	}
+	if r.IncompleteDetails != nil {
+		result["incomplete_details"] = map[string]any{"reason": r.IncompleteDetails.Reason}
+	}
+	if r.Usage != nil {
+		usage := map[string]any{
+			"input_tokens":  r.Usage.InputTokens,
+			"output_tokens": r.Usage.OutputTokens,
+			"total_tokens":  r.Usage.TotalTokens,
+		}
+		if r.Usage.InputTokensDetails.CachedTokens > 0 {
+			usage["input_tokens_details"] = map[string]any{
+				"cached_tokens": r.Usage.InputTokensDetails.CachedTokens,
+			}
+		}
+		if r.Usage.OutputTokensDetails.ReasoningTokens > 0 {
+			usage["output_tokens_details"] = map[string]any{
+				"reasoning_tokens": r.Usage.OutputTokensDetails.ReasoningTokens,
+			}
+		}
+		result["usage"] = usage
+	}
+	return result
+}
+
 type ResponsesIncompleteDetailsWire struct {
 	Reason string `json:"reason"`
 }
 
 type ResponsesUsageWire struct {
-	InputTokens         int64                           `json:"input_tokens"`
-	OutputTokens        int64                           `json:"output_tokens"`
-	TotalTokens         int64                           `json:"total_tokens"`
+	InputTokens         int64                            `json:"input_tokens"`
+	OutputTokens        int64                            `json:"output_tokens"`
+	TotalTokens         int64                            `json:"total_tokens"`
 	InputTokensDetails  ResponsesInputTokensDetailsWire  `json:"input_tokens_details,omitempty"`
 	OutputTokensDetails ResponsesOutputTokensDetailsWire `json:"output_tokens_details,omitempty"`
 }
@@ -97,28 +184,29 @@ type ResponsesOutputTokensDetailsWire struct {
 }
 
 type ResponsesOutputItemAddedEvent struct {
-	Type           string                 `json:"type"`
-	SequenceNumber int64                  `json:"sequence_number"`
-	OutputIndex    int                    `json:"output_index"`
+	Type           string                  `json:"type"`
+	SequenceNumber int64                   `json:"sequence_number"`
+	OutputIndex    int                     `json:"output_index"`
 	Item           ResponsesOutputItemWire `json:"item"`
 }
 
 type ResponsesOutputItemDoneEvent struct {
-	Type           string                 `json:"type"`
-	SequenceNumber int64                  `json:"sequence_number"`
-	OutputIndex    int                    `json:"output_index"`
+	Type           string                  `json:"type"`
+	SequenceNumber int64                   `json:"sequence_number"`
+	OutputIndex    int                     `json:"output_index"`
 	Item           ResponsesOutputItemWire `json:"item"`
 }
 
 type ResponsesOutputItemWire struct {
-	ID        string                    `json:"id"`
-	Type      string                    `json:"type"`
-	Role      string                    `json:"role,omitempty"`
-	Status    string                    `json:"status"`
-	Content   []ResponsesContentPartWire `json:"content,omitempty"`
-	CallID    string                    `json:"call_id,omitempty"`
-	Name      string                    `json:"name,omitempty"`
-	Arguments *string                   `json:"arguments,omitempty"`
+	ID          string                     `json:"id"`
+	Type        string                     `json:"type"`
+	Role        string                     `json:"role,omitempty"`
+	Status      string                     `json:"status,omitempty"`
+	Content     []ResponsesContentPartWire `json:"content,omitempty"`
+	CallID      string                     `json:"call_id,omitempty"`
+	Name        string                     `json:"name,omitempty"`
+	Arguments   *string                    `json:"arguments,omitempty"`
+	OutputIndex *int                       `json:"output_index,omitempty"`
 }
 
 type ResponsesContentPartWire struct {
@@ -151,20 +239,20 @@ func (p ResponsesContentPartWire) MarshalJSON() ([]byte, error) {
 }
 
 type ResponsesContentPartAddedEvent struct {
-	Type           string                  `json:"type"`
-	SequenceNumber int64                   `json:"sequence_number"`
-	ItemID         string                  `json:"item_id"`
-	OutputIndex    int                     `json:"output_index"`
-	ContentIndex   int                     `json:"content_index"`
+	Type           string                   `json:"type"`
+	SequenceNumber int64                    `json:"sequence_number"`
+	ItemID         string                   `json:"item_id"`
+	OutputIndex    int                      `json:"output_index"`
+	ContentIndex   int                      `json:"content_index"`
 	Part           ResponsesContentPartWire `json:"part"`
 }
 
 type ResponsesContentPartDoneEvent struct {
-	Type           string                  `json:"type"`
-	SequenceNumber int64                   `json:"sequence_number"`
-	ItemID         string                  `json:"item_id"`
-	OutputIndex    int                     `json:"output_index"`
-	ContentIndex   int                     `json:"content_index"`
+	Type           string                   `json:"type"`
+	SequenceNumber int64                    `json:"sequence_number"`
+	ItemID         string                   `json:"item_id"`
+	OutputIndex    int                      `json:"output_index"`
+	ContentIndex   int                      `json:"content_index"`
 	Part           ResponsesContentPartWire `json:"part"`
 }
 

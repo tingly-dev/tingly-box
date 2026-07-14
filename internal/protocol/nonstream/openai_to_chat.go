@@ -8,12 +8,13 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 type responsesToChatNonStreamState struct {
 	content   strings.Builder
 	refusal   strings.Builder
-	toolCalls []map[string]any
+	toolCalls []wire.ChatCompletionToolCallWire
 }
 
 // HandleResponsesToOpenAIChat writes a Responses API response as OpenAI Chat format.
@@ -27,15 +28,18 @@ func HandleResponsesToOpenAIChat(hc *protocol.HandleContext, rs *responses.Respo
 // BuildOpenAIChatPayloadFromResponses converts a complete Responses result to
 // the minimal Chat Completions wire shape without writing an HTTP response.
 func BuildOpenAIChatPayloadFromResponses(rs *responses.Response, responseModel string) map[string]any {
-	state := buildResponsesToChatNonStreamState(rs)
-	message := state.message()
+	return ConvertResponsesToOpenAIChat(rs, responseModel).ToMap()
+}
 
-	choices := []map[string]any{
-		{
-			"index":         0,
-			"message":       message,
-			"finish_reason": mapResponsesFinishReason(rs, len(state.toolCalls) > 0),
-		},
+// ConvertResponsesToOpenAIChat builds the typed Chat Completions wire
+// contract without coupling protocol conversion to HTTP or generic maps.
+func ConvertResponsesToOpenAIChat(rs *responses.Response, responseModel string) wire.ChatCompletionWire {
+	state := buildResponsesToChatNonStreamState(rs)
+	message := wire.ChatCompletionMessageWire{
+		Role:      "assistant",
+		Content:   state.content.String(),
+		Refusal:   state.refusal.String(),
+		ToolCalls: state.toolCalls,
 	}
 
 	normalizedUsage := usageconv.FromOpenAIResponses(rs.Usage)
@@ -44,36 +48,39 @@ func BuildOpenAIChatPayloadFromResponses(rs *responses.Response, responseModel s
 	if totalTokens == 0 {
 		totalTokens = totalInputTokens + normalizedUsage.OutputTokens
 	}
-	usage := map[string]any{
-		"prompt_tokens":     totalInputTokens,
-		"completion_tokens": normalizedUsage.OutputTokens,
-		"total_tokens":      totalTokens,
+	usage := wire.ChatCompletionUsageWire{
+		PromptTokens:     int64(totalInputTokens),
+		CompletionTokens: int64(normalizedUsage.OutputTokens),
+		TotalTokens:      int64(totalTokens),
 	}
 	if normalizedUsage.CacheInputTokens > 0 {
-		usage["prompt_tokens_details"] = map[string]any{
-			"cached_tokens": normalizedUsage.CacheInputTokens,
+		usage.PromptTokensDetails = &wire.ChatCompletionPromptDetailsWire{
+			CachedTokens: int64(normalizedUsage.CacheInputTokens),
 		}
 	}
 	if normalizedUsage.ReasoningTokens > 0 {
-		usage["completion_tokens_details"] = map[string]any{
-			"reasoning_tokens": normalizedUsage.ReasoningTokens,
+		usage.CompletionTokensDetails = &wire.ChatCompletionOutputDetailsWire{
+			ReasoningTokens: int64(normalizedUsage.ReasoningTokens),
 		}
 	}
 
-	chatResp := map[string]any{
-		"id":      rs.ID,
-		"object":  "chat.completion",
-		"created": int64(rs.CreatedAt),
-		"model":   responseModel,
-		"choices": choices,
-		"usage":   usage,
+	return wire.ChatCompletionWire{
+		ID:      rs.ID,
+		Object:  "chat.completion",
+		Created: int64(rs.CreatedAt),
+		Model:   responseModel,
+		Choices: []wire.ChatCompletionChoiceWire{{
+			Index:        0,
+			Message:      message,
+			FinishReason: mapResponsesFinishReason(rs, len(state.toolCalls) > 0),
+		}},
+		Usage: usage,
 	}
-	return chatResp
 }
 
 func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChatNonStreamState {
 	state := &responsesToChatNonStreamState{
-		toolCalls: make([]map[string]any, 0),
+		toolCalls: make([]wire.ChatCompletionToolCallWire, 0),
 	}
 	if rs == nil {
 		return state
@@ -91,39 +98,18 @@ func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChat
 				}
 			}
 		case "function_call", "custom_tool_call", "mcp_call":
-			state.toolCalls = append(state.toolCalls, map[string]any{
-				"id":   firstNonEmpty(output.CallID, output.ID),
-				"type": "function",
-				"function": map[string]any{
-					"name":      output.Name,
-					"arguments": output.Arguments.OfString,
+			state.toolCalls = append(state.toolCalls, wire.ChatCompletionToolCallWire{
+				ID:   firstNonEmpty(output.CallID, output.ID),
+				Type: "function",
+				Function: wire.ChatCompletionFunctionWire{
+					Name:      output.Name,
+					Arguments: output.Arguments.OfString,
 				},
 			})
 		}
 	}
 
 	return state
-}
-
-func (s *responsesToChatNonStreamState) message() map[string]any {
-	message := map[string]any{
-		"role": "assistant",
-	}
-	if s == nil {
-		return message
-	}
-
-	if content := s.content.String(); content != "" {
-		message["content"] = content
-	}
-	if refusal := s.refusal.String(); refusal != "" {
-		message["refusal"] = refusal
-	}
-	if len(s.toolCalls) > 0 {
-		message["tool_calls"] = s.toolCalls
-	}
-
-	return message
 }
 
 func mapResponsesFinishReason(rs *responses.Response, hasToolCalls bool) string {

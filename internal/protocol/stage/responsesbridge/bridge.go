@@ -4,7 +4,6 @@ package responsesbridge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -104,20 +103,12 @@ func (s *anthropicBetaSession) ConvertComplete(_ context.Context, response *stag
 	if err != nil {
 		return nil, err
 	}
-	payload := nonstream.BuildResponsesPayloadFromAnthropicBeta(message, s.sourceModel, string(message.Model))
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("convert Anthropic Beta response to OpenAI Responses: marshal payload: %w", err)
-	}
-	var converted responses.Response
-	if err := json.Unmarshal(raw, &converted); err != nil {
-		return nil, fmt.Errorf("convert Anthropic Beta response to OpenAI Responses: decode payload: %w", err)
-	}
+	converted := nonstream.ConvertAnthropicBetaToResponsesWire(message, s.sourceModel, string(message.Model))
 	usage := protocolusage.FromAnthropicBetaMessage(message.Usage)
 	if !usage.HasUsage() {
 		usage = nil
 	}
-	return &stage.Response{Value: &converted, Usage: usage, Model: s.sourceModel}, nil
+	return &stage.Response{Value: converted, Usage: usage, Model: s.sourceModel}, nil
 }
 
 func betaMessage(response *stage.Response) (*anthropic.BetaMessage, error) {

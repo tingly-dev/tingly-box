@@ -2,11 +2,9 @@ package responsesbridge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/responses"
 
 	protocol "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -87,20 +85,12 @@ func (s *openAIChatSession) ConvertComplete(_ context.Context, response *stage.R
 	if err != nil {
 		return nil, err
 	}
-	payload := nonstream.BuildResponsesPayloadFromChat(completion, s.sourceModel, string(completion.Model))
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("convert Chat response to OpenAI Responses: marshal payload: %w", err)
-	}
-	var converted responses.Response
-	if err := json.Unmarshal(raw, &converted); err != nil {
-		return nil, fmt.Errorf("convert Chat response to OpenAI Responses: decode payload: %w", err)
-	}
+	converted := nonstream.ConvertChatToResponsesWire(completion, s.sourceModel, string(completion.Model))
 	usage := protocolusage.FromOpenAIChatCompletion(completion.Usage)
 	if !usage.HasUsage() {
 		usage = nil
 	}
-	return &stage.Response{Value: &converted, Usage: usage, Model: s.sourceModel}, nil
+	return &stage.Response{Value: converted, Usage: usage, Model: s.sourceModel}, nil
 }
 
 func chatCompletion(response *stage.Response) (*openai.ChatCompletion, error) {

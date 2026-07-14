@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // HandleOpenAIChatToResponses writes an OpenAI Chat response as Responses API format.
@@ -29,6 +30,12 @@ func HandleAnthropicBetaToResponses(hc *protocol.HandleContext, resp *anthropic.
 
 // BuildResponsesPayloadFromChat converts a Chat completion response to Responses API format.
 func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, actualModel string) map[string]any {
+	return ConvertChatToResponsesWire(resp, responseModel, actualModel).ToMap()
+}
+
+// ConvertChatToResponsesWire builds the typed Responses API output contract
+// without routing protocol conversion through generic maps or JSON decoding.
+func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actualModel string) wire.ResponsesWireResponse {
 	model := responseModel
 	if model == "" {
 		model = actualModel
@@ -41,89 +48,97 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 		finishReason = string(resp.Choices[0].FinishReason)
 	}
 
-	status, incompleteDetails := chatFinishReasonToResponsesStatus(finishReason)
+	status, incompleteReason := chatFinishReasonToResponsesStatus(finishReason)
 	itemStatus := status
 
-	output := []map[string]any{}
+	output := []wire.ResponsesOutputItemWire{}
 	if messageContent != "" {
-		output = append(output, map[string]any{
+		output = append(output, wire.ResponsesOutputItemWire{
 			// The real Responses API always assigns output items an id;
 			// strict clients (AI SDK zod) require it.
-			"id":     "msg_" + resp.ID,
-			"type":   "message",
-			"role":   "assistant",
-			"status": itemStatus,
-			"content": []map[string]any{
+			ID:     "msg_" + resp.ID,
+			Type:   "message",
+			Role:   "assistant",
+			Status: itemStatus,
+			Content: []wire.ResponsesContentPartWire{
 				// The real Responses API always includes annotations on
 				// output_text; strict clients (AI SDK zod) require it.
-				{"type": "output_text", "text": messageContent, "annotations": []any{}},
+				{Type: "output_text", Text: messageContent, Annotations: []any{}},
 			},
 		})
 	}
 
-	usageMap := map[string]any{
-		"input_tokens":  resp.Usage.PromptTokens,
-		"output_tokens": resp.Usage.CompletionTokens,
-		"total_tokens":  resp.Usage.PromptTokens + resp.Usage.CompletionTokens,
+	usageWire := &wire.ResponsesUsageWire{
+		InputTokens:  resp.Usage.PromptTokens,
+		OutputTokens: resp.Usage.CompletionTokens,
+		TotalTokens:  resp.Usage.PromptTokens + resp.Usage.CompletionTokens,
 	}
 	// Carry cache-read and reasoning detail so a client reading usage off the
 	// Responses-API body sees them instead of zeros.
 	if cached := resp.Usage.PromptTokensDetails.CachedTokens; cached > 0 {
-		usageMap["input_tokens_details"] = map[string]any{"cached_tokens": cached}
+		usageWire.InputTokensDetails.CachedTokens = cached
 	}
 	if reasoning := resp.Usage.CompletionTokensDetails.ReasoningTokens; reasoning > 0 {
-		usageMap["output_tokens_details"] = map[string]any{"reasoning_tokens": reasoning}
+		usageWire.OutputTokensDetails.ReasoningTokens = reasoning
 	}
 
-	result := map[string]any{
-		"id":         resp.ID,
-		"object":     "response",
-		"created_at": time.Now().Unix(),
-		"model":      model,
-		"status":     status,
-		"output":     output,
-		"usage":      usageMap,
+	result := wire.ResponsesWireResponse{
+		ID:        resp.ID,
+		Object:    "response",
+		CreatedAt: time.Now().Unix(),
+		Model:     model,
+		Status:    status,
+		Output:    output,
+		Usage:     usageWire,
 	}
-	if incompleteDetails != nil {
-		result["incomplete_details"] = incompleteDetails
+	if incompleteReason != "" {
+		result.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{
+			Reason: incompleteReason,
+		}
 	}
 	return result
 }
 
-func chatFinishReasonToResponsesStatus(finishReason string) (string, map[string]any) {
+func chatFinishReasonToResponsesStatus(finishReason string) (status, incompleteReason string) {
 	switch finishReason {
 	case "length":
-		return "incomplete", map[string]any{"reason": "max_output_tokens"}
+		return "incomplete", "max_output_tokens"
 	case "content_filter":
-		return "incomplete", map[string]any{"reason": "content_filter"}
+		return "incomplete", "content_filter"
 	default:
-		return "completed", nil
+		return "completed", ""
 	}
 }
 
 // BuildResponsesPayloadFromAnthropicBeta converts an Anthropic Beta message response to Responses API format.
 func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, responseModel, actualModel string) map[string]any {
+	return ConvertAnthropicBetaToResponsesWire(resp, responseModel, actualModel).ToMap()
+}
+
+// ConvertAnthropicBetaToResponsesWire builds the typed Responses API output
+// contract without coupling the Bridge to transport or SDK JSON internals.
+func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseModel, actualModel string) wire.ResponsesWireResponse {
 	model := responseModel
 	if model == "" {
 		model = actualModel
 	}
 
-	status, incompleteDetails := anthropicStopReasonToResponsesStatus(string(resp.StopReason))
+	status, incompleteReason := anthropicStopReasonToResponsesStatus(string(resp.StopReason))
 
-	output := []map[string]any{}
+	output := []wire.ResponsesOutputItemWire{}
 	outputIndex := 0
 
-	var textParts []map[string]any
+	var textParts []wire.ResponsesContentPartWire
 	for _, block := range resp.Content {
 		switch block.Type {
 		case "text":
 			if block.Text == "" {
 				continue
 			}
-			textParts = append(textParts, map[string]any{
-				"type":        "output_text",
-				"text":        block.Text,
-				"annotations": []any{},
+			textParts = append(textParts, wire.ResponsesContentPartWire{
+				Type:        "output_text",
+				Text:        block.Text,
+				Annotations: []any{},
 			})
 		case "tool_use":
 			argsJSON := "{}"
@@ -132,61 +147,64 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 					argsJSON = string(raw)
 				}
 			}
-			output = append(output, map[string]any{
-				"type":         "function_call",
-				"id":           block.ID,
-				"name":         block.Name,
-				"arguments":    argsJSON,
-				"output_index": outputIndex,
+			index := outputIndex
+			output = append(output, wire.ResponsesOutputItemWire{
+				Type:        "function_call",
+				ID:          block.ID,
+				Name:        block.Name,
+				Arguments:   &argsJSON,
+				OutputIndex: &index,
 			})
 			outputIndex++
 		}
 	}
 
 	if len(textParts) > 0 {
-		msgItem := map[string]any{
-			"id":      "msg_" + resp.ID,
-			"type":    "message",
-			"role":    "assistant",
-			"status":  status,
-			"content": textParts,
+		msgItem := wire.ResponsesOutputItemWire{
+			ID:      "msg_" + resp.ID,
+			Type:    "message",
+			Role:    "assistant",
+			Status:  status,
+			Content: textParts,
 		}
-		output = append([]map[string]any{msgItem}, output...)
+		output = append([]wire.ResponsesOutputItemWire{msgItem}, output...)
 	}
 
 	// Responses-API input_tokens is the TOTAL prompt cost. Anthropic reports
 	// uncached input separately from cache-read/creation, so fold them in here
 	// (matching the Chat conversion) instead of reporting only the uncached slice.
 	totalInput := resp.Usage.InputTokens + resp.Usage.CacheReadInputTokens + resp.Usage.CacheCreationInputTokens
-	usageMap := map[string]any{
-		"input_tokens":  totalInput,
-		"output_tokens": resp.Usage.OutputTokens,
-		"total_tokens":  totalInput + resp.Usage.OutputTokens,
+	usageWire := &wire.ResponsesUsageWire{
+		InputTokens:  totalInput,
+		OutputTokens: resp.Usage.OutputTokens,
+		TotalTokens:  totalInput + resp.Usage.OutputTokens,
 	}
 	if cached := resp.Usage.CacheReadInputTokens; cached > 0 {
-		usageMap["input_tokens_details"] = map[string]any{"cached_tokens": cached}
+		usageWire.InputTokensDetails.CachedTokens = cached
 	}
 
-	result := map[string]any{
-		"id":         resp.ID,
-		"object":     "response",
-		"created_at": time.Now().Unix(),
-		"model":      model,
-		"status":     status,
-		"output":     output,
-		"usage":      usageMap,
+	result := wire.ResponsesWireResponse{
+		ID:        resp.ID,
+		Object:    "response",
+		CreatedAt: time.Now().Unix(),
+		Model:     model,
+		Status:    status,
+		Output:    output,
+		Usage:     usageWire,
 	}
-	if incompleteDetails != nil {
-		result["incomplete_details"] = incompleteDetails
+	if incompleteReason != "" {
+		result.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{
+			Reason: incompleteReason,
+		}
 	}
 	return result
 }
 
-func anthropicStopReasonToResponsesStatus(stopReason string) (string, map[string]any) {
+func anthropicStopReasonToResponsesStatus(stopReason string) (status, incompleteReason string) {
 	switch stopReason {
 	case "max_tokens":
-		return "incomplete", map[string]any{"reason": "max_output_tokens"}
+		return "incomplete", "max_output_tokens"
 	default:
-		return "completed", nil
+		return "completed", ""
 	}
 }
