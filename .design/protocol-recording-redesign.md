@@ -1,90 +1,86 @@
-# Protocol Recording Redesign
+# Request Recording Redesign
 
 > Status: proposed design for review; no production pipeline wiring is changed
 > by this document.
 >
-> Scope: complete AI request/response recording for non-streaming, streaming,
-> failover, Guardrail, and future Tool Loop/MCP Stage paths. Usage accounting
-> is a separate subsystem and is not redesigned here.
+> Scope: the protocol request/response content retained for one incoming
+> request. `UsageRecord`, request logging, and stage tracing are separate.
 
 ## Decision
 
-Recording will be rebuilt as a request-scoped observation service. One client
-request produces one complete `AIRequestRecord`, including the client-visible
-request/response and the provider exchanges that produced it. It will not be
-implemented as one protocol-owning Stage and it will not own HTTP writing,
-routing, retries, tool execution, provider calls, or usage accounting.
+The new unit is `RequestRecord`. It records the provider calls that actually
+happened and, when different, the final response returned outward after Stage
+and Bridge processing.
 
-Two thin observers will expose the real protocol boundaries:
+Recording attaches only at two stable endpoint boundaries:
 
-- the HTTP adapter records the complete client request and final logical
-  response;
-- a provider-endpoint observer records every concrete provider request and
-  complete response immediately outside the terminal endpoint.
+```text
+HTTP Adapter
+  → Output Observer
+  → Stages / Bridges
+  → Provider Observer
+  → Provider Endpoint
+```
 
-An outer request-execution scope is the only owner allowed to finish the
-overall AI request record. The failover dispatcher owns attempts; provider
-errors finish an attempt or exchange, not the overall record.
+- **Provider Observer** records the provider-native request passed into the
+  terminal endpoint and the untouched provider-native response returned from
+  it.
+- **Output Observer** sees the response after every outward Stage and Bridge.
+  It stores `output_response` only when that response differs from the final
+  successful provider response.
 
-## Why the Existing Design Must Be Replaced
+Recording does not snapshot every Stage. Stage insertion, removal, or
+reordering must not change the persisted `RequestRecord` shape.
 
-The current `ProtocolRecorder` combines unrelated responsibilities:
+## What “Provider Request and Response” Means
 
-- it stores a `gin.Context` and reads request/response HTTP state;
-- transform objects mutate it with pre/post request snapshots;
-- failover rebinds one mutable recorder to different providers;
-- protocol handlers, stream hooks, MCP, and error writers can all emit/finalize;
-- Anthropic-specific assemblers synthesize streaming responses;
-- it buffers generic stream chunks in memory;
-- it selects record fields and emits directly to the sink.
+The provider request is the final protocol-native value handed to the
+`Provider Endpoint`, after all inward Stages, Bridges, consistency transforms,
+and provider transforms.
 
-This creates concrete correctness problems:
+The provider response is the protocol-native value returned by the
+`Provider Endpoint`, before any outward Bridge or response-processing Stage.
 
-1. A retryable provider error can emit and release the call before failover
-   succeeds.
-2. One mutable provider binding cannot represent multiple attempts.
-3. Tool-loop rounds and provider attempts are indistinguishable.
-4. `ProviderResponse` exists in the record model but is not populated by the
-   main recorder lifecycle.
-5. Stream recording behavior depends on which protocol handler and assembler
-   happened to run.
-6. JSON round-trips through `map[string]any` lose type/raw-wire fidelity.
-7. Message assembly depends on usage objects supplied by converters, coupling
-   two records with different purposes.
-8. Generic stream chunks are retained even though the desired artifact is the
-   final complete AI response.
+These are the closest stable values owned by Tingly-Box around a provider
+call. They are not an HTTP transport dump of SDK headers and bytes. Exact SDK
+wire capture would be a separate transport feature and is not part of this
+design.
 
 ## Data Model
 
-One client request produces exactly one `AIRequestRecord`:
+One incoming request produces one `RequestRecord`:
 
 ```text
-AIRequestRecord
-├── identity: request/session/scenario/source protocol
-├── client request
-├── attempts[]
-│   ├── route/provider/model/target protocol
-│   ├── exchanges[]
-│   │   ├── provider request
-│   │   ├── provider response
-│   │   └── outcome/timing/error
-│   └── outcome: succeeded | retryable_error | terminal_error | cancelled
-├── client response
-└── outcome/timing/error
+RequestRecord
+├── request identity / scenario / outcome / duration
+├── provider_exchanges[]
+│   ├── sequence / attempt
+│   ├── provider / model / protocol
+│   ├── provider_request
+│   ├── provider_response
+│   └── outcome / error / duration
+└── output_response?             // only when different
 ```
 
-`AIRequestRecord` is deliberately named after the API request, not
-`MessageRecord`: one API request can contain many entries in `messages[]` and
-several Tool Loop rounds.
-
-An **attempt** is one failover candidate. An **exchange** is one provider call
-inside that attempt. A normal request has one attempt and one exchange; a Tool
-Loop can have one attempt with several exchanges; failover can have several
-attempts, each with one or more exchanges.
-
-Payloads use an explicit boundary contract:
-
 ```go
+type RequestRecord struct {
+    RequestID         string
+    ProviderExchanges []ProviderExchange
+    OutputResponse    *Payload
+    Outcome           Outcome
+}
+
+type ProviderExchange struct {
+    Sequence int
+    Attempt  int
+    Provider string
+    Model    string
+    Protocol protocol.APIType
+    Request  Payload
+    Response *Payload
+    Error    string
+}
+
 type Payload struct {
     Protocol    protocol.APIType
     ContentType string
@@ -92,152 +88,166 @@ type Payload struct {
 }
 ```
 
-Typed protocol/SDK values exist only while producing `Payload`. The stored
-model preserves JSON bytes and protocol identity; recorder core never converts
-one protocol to another.
+`ProviderExchange` is flat and ordered. Failover creates entries with different
+attempt numbers. A Tool Loop creates several ordered entries under the same
+attempt. A separate nested attempt model is unnecessary for message recording.
+
+The incoming client body is not stored as another core payload. The provider
+request is the request that can explain or replay the actual provider call. If
+client-ingress capture is later needed for a specific product use case, it can
+be added as a separate boundary field without changing provider exchange
+semantics.
+
+## When `output_response` Exists
+
+The outward response is stored when any of these is true:
+
+- a Bridge changed the response protocol;
+- a response Stage changed its content;
+- the outer chain produced a response without a provider response.
+
+For an identity path whose final response equals the final successful provider
+response, `output_response` is omitted. Readers treat the provider response as
+the returned response in that case. This preserves the old useful distinction
+without storing the same payload twice.
+
+The comparison happens between captured protocol payloads at the two
+boundaries. Individual Stages do not need to report whether they mutated a
+response.
 
 ## Ownership and Lifecycle
 
 ```text
-HTTP adapter: BeginAIRequest(raw client request)
-  └── request execution scope (deferred FinishAIRequest)
-        └── failover dispatcher: BeginAttempt(candidate)
-              └── provider observer: BeginExchange(provider request)
-                    └── provider response/error: FinishExchange
-              └── dispatcher: FinishAttempt
-        └── HTTP adapter: observe final response
-  └── request execution scope: FinishAIRequest exactly once
+request execution scope: BeginRequestRecord
+  └── provider attempt
+        └── Provider Observer: begin ProviderExchange
+              └── Provider Endpoint
+        └── Provider Observer: finish ProviderExchange
+  └── optional failover / additional Tool Loop exchanges
+  └── Output Observer: capture final outward response
+request execution scope: FinishRequestRecord exactly once
 ```
 
 Rules:
 
-1. `FinishAIRequest` is idempotent and owned only by the outer
-   request-execution scope, including failures before provider dispatch.
-2. `FinishAttempt` never emits an overall record.
-3. A retryable error remains attached to the failed attempt.
-4. Streaming success is determined by the same commitment gate used by
-   failover, not by whether a recorder hook observed an event.
-5. Cancellation is an explicit outcome, not a generic error string.
-6. Recorder objects contain no Gin context and never write HTTP/SSE.
-7. Recording completion cannot change request execution.
+1. The outer request-execution scope is the only owner of
+   `FinishRequestRecord`.
+2. A provider error finishes only its `ProviderExchange`; it does not finish
+   the overall record while failover may continue.
+3. Exchanges are appended in actual provider-call order.
+4. The Output Observer never calls the provider and never controls failover.
+5. Recording objects contain no Gin context and never write HTTP/SSE.
+6. Recording cannot change request execution.
 
-## Pipeline Integration
+## Placement in Protocol Stage Topology
 
-Recording is an observer of protocol boundaries, not a protocol feature that
-forces all traffic into one canonical representation.
+The Provider Observer wraps the terminal before topology construction. The
+Output Observer wraps the completed client-facing topology:
 
 ```text
-client HTTP adapter + wire observer
-  → Guardrail / Tool Loop stages
-  → Bridge
-  → provider recording endpoint wrapper (target protocol)
-  → provider endpoint
+provider := ObserveProvider(terminal, recorder)
+topology := BuildTopology(provider, stages, bridges)
+endpoint := ObserveOutput(topology, recorder)
 ```
 
-Provider observation and client stream assembly use a protocol-specific
-`CaptureCodec`:
+This placement has stable semantics for all topologies:
 
-```go
-type CaptureCodec interface {
-    Snapshot(value any) (Payload, error)
-    NewStreamAssembler() StreamAssembler
-}
-```
-
-The codec serializes complete typed values and assembles stream events into one
-final protocol response. Raw HTTP request/response bytes can be captured
-directly. The codec does not perform protocol conversion. Adding a protocol
-means registering one codec, not adding recording branches to every protocol
-pair.
-
-The adapter observer receives the raw inbound body and the final complete
-response after public-model rewriting, so the client snapshot matches the
-logical message the user sent and received. For a stream, the protocol codec
-assembles events into that complete response; raw event history is not part of
-the first design. Recorder core still has no Gin dependency: the adapter
-passes immutable payload bytes and status metadata.
-
-The provider observer is immediately outside the terminal endpoint, so every
-Tool Loop round naturally becomes a separate exchange. It is an Endpoint
-wrapper with complete and stream observation, but it never controls the
-provider call or consumes the stream independently.
-
-## Recording Scope
-
-The first implementation has one behavior when enabled:
-
-- record the complete client request;
-- record every complete provider request/response exchange;
-- record the final complete client response;
-- for streaming, assemble events into the same logical response shape used by
-  non-streaming recording;
-- record outcomes needed to explain failover and Tool Loop ordering.
-
-It does not introduce capture-depth modes or raw stream-event recording. The
-first milestone is only the correct lifecycle and the complete AI message.
-
-## Relation to Other Observability
-
-AI message recording, request logging, and usage accounting are separate
-systems:
-
-| Concern | Source of truth | Recording relationship |
+| Topology | Provider Observer sees | Output Observer sees |
 | --- | --- | --- |
-| Request timeline and diagnostics | structured logging | Join by the same `request_id`; recording does not emit lifecycle logs on its behalf |
-| Token/cost accounting | `UsageRecord` / usage tracking | Independent of `AIRequestRecord`; neither creates nor finalizes the other |
-| Provider health and retry | failover/load balancing | Recording observes attempt outcomes after the routing decision; it never changes health or retry state |
-| AI request inspection | `AIRequestRecord` / recording | Owns protocol payloads and attempt/exchange history |
+| Identity | provider request/response | same response; normally omitted |
+| Cross-protocol Bridge | target-protocol request/response | source-protocol converted response |
+| Guardrail | request after inbound policy; raw provider response | response after outbound policy |
+| Tool Loop | every provider round | only the final outward response |
+| Failover | every provider call by attempt | only the response ultimately returned |
 
-The shared `request_id` is correlation, not shared mutable ownership. Recording
-must work when usage tracking is disabled, and usage tracking must work when
-recording is disabled.
+Recording every Stage boundary is deliberately rejected for the core record:
 
-A protocol response may naturally contain a native `usage` field inside its
-captured JSON body. That field remains part of the unmodified AI response; the
-recorder does not parse it into normalized token fields and does not write a
-`UsageRecord`.
+- payload count would grow with topology depth;
+- internal Stage order would become a storage contract;
+- the same content would usually be duplicated;
+- Guardrail and Tool Loop implementation details would leak into the request
+  artifact.
 
-## Schema Evolution
+An ordered stage trace may separately record stage name, protocol, duration,
+and outcome. It is diagnostics metadata, not request/response content.
 
-The new persisted schema will be version 4. V3 files remain readable; V4 adds
-`attempts` and `exchanges` rather than overloading `transformed_request` and
-`provider_response`. The recorder produces one completed `AIRequestRecord`.
+## Complete and Streaming
+
+Complete calls snapshot the request and response values at each observer.
+
+For streaming, each observer wraps the stream returned by the next endpoint
+and assembles events in that observer's native protocol while the normal caller
+pulls them. The observer does not consume the stream independently:
+
+- Provider Observer assembles the complete raw provider response for every
+  provider exchange.
+- Output Observer assembles the complete final outward response.
+- Raw stream chunks are not stored in the first implementation.
+
+Each protocol therefore needs one capture codec for complete values and stream
+assembly. Recording never performs protocol conversion itself.
+
+## Separation from Usage
+
+`RequestRecord` and `UsageRecord` are independent:
+
+- neither creates, updates, or finalizes the other;
+- either feature works when the other is disabled;
+- both may use the same `request_id` for correlation;
+- Recording does not parse or normalize token counts.
+
+A provider response may contain a native `usage` field inside its captured
+body. It remains ordinary response content and does not make the records share
+ownership.
+
+## Legacy Field Mapping
+
+The target semantics map as follows:
+
+| Legacy concept | New field |
+| --- | --- |
+| Final provider-bound request (`transformed_request` was the closest implementation) | `provider_exchanges[n].provider_request` |
+| Raw provider response (`provider_response`, previously not reliably populated) | `provider_exchanges[n].provider_response` |
+| Converted or response-processed result (`final_response`) | optional `output_response` |
+| Client/pre-transform snapshot (`original_request`) | no first-version core field |
+| Transform step names | separate stage trace |
 
 ## Additive Migration Plan
 
 | Checkpoint | Change | Production effect |
 | --- | --- | --- |
-| R1 — Foundation | V4 `AIRequestRecord` types, lifecycle state machine, in-memory recorder tests | None |
-| R2 — Codecs | Beta, V1, Chat, Responses complete/stream capture codecs | None |
-| R3 — Shadow harness | Observe Stage calls into an in-memory new recorder and compare with client/provider fixtures | No persisted output |
-| R4 — Single-route canary | Beta identity Stage route behind an internal experimental switch | Opt-in only |
-| R5 — Failover | Dispatcher owns attempts and the single final commit | Opt-in only |
-| R6 — Tool Loop | Each provider round becomes an exchange | Opt-in only |
-| R7 — Persistence/UI | V4 writer, reader, and product surface | Opt-in only |
-| R8 — Cutover | Map the existing recording switch to `AIRequestRecord` | Discuss before changing defaults |
-| R9 — Cleanup | Remove Gin recorder context, transform recorder, protocol hooks, and MCP recorder interface | After parity proof |
+| R1 — Foundation | `RequestRecord`, ordered exchanges, lifecycle, in-memory tests | None |
+| R2 — Capture codecs | Beta, V1, Chat, Responses complete/stream assembly | None |
+| R3 — Boundary harness | Verify provider and output snapshots across all Stage routes | No persisted output |
+| R4 — Single-route canary | Beta identity route behind an internal experimental switch | Opt-in only |
+| R5 — Failover | Multiple exchanges, one final record | Opt-in only |
+| R6 — Tool Loop | Multiple exchanges in one attempt | Opt-in only |
+| R7 — Persistence/UI | New writer, reader, and request inspection surface | Opt-in only |
+| R8 — Cutover | Map the existing recording switch to `RequestRecord` | Discuss before changing defaults |
+| R9 — Cleanup | Remove Gin recorder, transform recorder, stream hooks, and MCP recorder interface | After parity proof |
 
 R1–R3 do not modify the active request pipeline. Work stops for review before
-R4 touches production handler/topology wiring.
+R4 touches production topology wiring.
 
 ## Required Verification
 
-- exactly one AI request record for complete, stream, error, and cancellation;
-- retryable failure followed by success retains both attempts and commits once;
-- Tool Loop retains all provider exchanges in order;
-- client/provider protocols and payloads remain distinct across Bridges;
-- final assembled stream record matches the complete logical client response;
-- recording works with usage tracking disabled;
-- usage tracking works with recording disabled;
-- both records can be correlated by `request_id` without shared ownership;
-- disabled recording preserves Stage and legacy behavior;
-- harness covers all twelve current Stage routes in complete and stream modes.
+- identity complete/stream records one provider pair and omits duplicate
+  `output_response`;
+- each cross-protocol route records target-protocol provider payloads and the
+  source-protocol output response;
+- same-protocol response mutation produces `output_response`;
+- retryable failure followed by success retains both provider exchanges and
+  finishes one `RequestRecord`;
+- Tool Loop retains every provider exchange in order but only one final output;
+- stream assembly produces the same logical payload as complete recording;
+- Recording works with Usage disabled and Usage works with Recording disabled;
+- the harness covers all twelve current Stage routes in complete and stream
+  modes.
 
 ## Explicit Non-Goals
 
-- Recording does not drive retries, health, usage accounting, or affinity.
-- Recording does not create, update, or finalize `UsageRecord`.
+- Recording does not drive routing, retries, health, usage, or affinity.
+- Recording does not snapshot every Stage payload.
 - Recording does not become a canonical protocol AST.
-- Recording does not execute or filter tools.
 - Recording does not own HTTP response writing or SSE framing.
 - R1–R3 do not replace or modify the existing recorder.
