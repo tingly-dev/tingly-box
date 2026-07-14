@@ -152,9 +152,25 @@ func betaStreamEvent(value any) (*anthropic.BetaRawMessageStreamEventUnion, erro
 			return nil, errors.New("convert Anthropic Beta stream event to v1: event is nil")
 		}
 		return typed, nil
-	default:
-		return nil, fmt.Errorf("convert Anthropic Beta stream event to v1: event has type %T, want anthropic.BetaRawMessageStreamEventUnion", value)
+	case json.RawMessage:
+		return decodeBetaStreamEvent(typed)
+	case []byte:
+		return decodeBetaStreamEvent(typed)
+	case interface{ RawJSON() string }:
+		raw := typed.RawJSON()
+		if raw != "" {
+			return decodeBetaStreamEvent([]byte(raw))
+		}
 	}
+	return nil, fmt.Errorf("convert Anthropic Beta stream event to v1: event has type %T, want Anthropic Beta event or JSON", value)
+}
+
+func decodeBetaStreamEvent(raw []byte) (*anthropic.BetaRawMessageStreamEventUnion, error) {
+	var event anthropic.BetaRawMessageStreamEventUnion
+	if err := json.Unmarshal(raw, &event); err != nil {
+		return nil, fmt.Errorf("convert Anthropic Beta stream event to v1: decode %T: %w", raw, err)
+	}
+	return &event, nil
 }
 
 func convertJSON[T any](value any, label string) (*T, error) {

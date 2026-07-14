@@ -73,8 +73,12 @@ func TestV1ToBetaStreamConvertsLifecycleAndOwnsTarget(t *testing.T) {
 		`{"type":"message_stop"}`,
 	}
 	events := make([]stage.Event, 0, len(wires))
-	for _, wire := range wires {
-		events = append(events, stage.Event{Value: decodeV1BetaEvent(t, wire)})
+	for i, wire := range wires {
+		value := any(decodeV1BetaEvent(t, wire))
+		if i%2 == 0 {
+			value = json.RawMessage(wire)
+		}
+		events = append(events, stage.Event{Value: value})
 	}
 	usage := protocol.NewTokenUsage(5, 2)
 	target := &memoryStream{
