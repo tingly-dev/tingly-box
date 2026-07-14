@@ -113,7 +113,7 @@ func TestServerProtocolStageSelection(t *testing.T) {
 	}
 }
 
-func TestServerProtocolStageAnthropicBetaRecordingCanarySelection(t *testing.T) {
+func TestServerProtocolStageAnthropicBetaRecordingSelection(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
@@ -122,7 +122,8 @@ func TestServerProtocolStageAnthropicBetaRecordingCanarySelection(t *testing.T) 
 		wantHeader string
 	}{
 		{name: "identity uses stage", target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
-		{name: "cross protocol stays legacy", target: protocol.TypeOpenAIChat, wantHeader: "legacy"},
+		{name: "chat target uses stage", target: protocol.TypeOpenAIChat, wantHeader: "stage"},
+		{name: "responses target uses stage", target: protocol.TypeOpenAIResponses, wantHeader: "stage"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {

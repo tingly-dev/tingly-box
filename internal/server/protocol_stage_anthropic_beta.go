@@ -60,8 +60,8 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 		return false
 	}
 	if recorder != nil || stageRecording != nil {
-		if stageRecording == nil || target != protocol.TypeAnthropicBeta || len(rule.GetActiveServices()) != 1 {
-			logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "new recording canary currently supports only single-service Anthropic Beta identity")
+		if stageRecording == nil || len(rule.GetActiveServices()) != 1 {
+			logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "new recording path currently supports only single-service Anthropic Beta requests")
 			return false
 		}
 	}
