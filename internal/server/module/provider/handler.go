@@ -15,7 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -471,41 +470,52 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 	expiresAt := time.Now().Add(neverExpires)
 	lastUpdated := ""
 
+	p, provErr := h.config.GetProviderByUUID(uid)
+	isVirtual := provErr == nil && p.IsVirtual()
+
 	if len(models) > 0 {
 		if _, updated, exists := providerModelManager.GetProviderInfo(uid); exists {
 			lastUpdated = updated
 		}
 		expiresAt = time.Now().Add(1 * time.Hour)
-	} else {
-		// Cache miss or stale — proceed to fallback.
-		p, provErr := h.config.GetProviderByUUID(uid)
-		if provErr == nil {
-			if p.IsVirtual() {
-				// Step 2a: VModel fallback (static, no cache).
-				if p.VModelDetail != nil {
-					models = p.VModelDetail.Models
-					source = ModelCacheSourceVModel
+	} else if provErr == nil {
+		if isVirtual {
+			// Step 2a: VModel fallback (static, no cache).
+			if p.VModelDetail != nil {
+				models = p.VModelDetail.Models
+				source = ModelCacheSourceVModel
+			}
+			// VModel lists are static — never expire.
+		} else {
+			// Step 2b: Try Provider API.
+			if apiErr := h.config.FetchAndSaveProviderModels(uid); apiErr == nil {
+				models = providerModelManager.GetModels(uid)
+				if len(models) > 0 {
+					source = ModelCacheSourceAPI
+					expiresAt = time.Now().Add(1 * time.Hour)
 				}
-				// VModel lists are static — never expire.
-			} else {
-				// Step 2b: Try Provider API.
-				if apiErr := h.config.FetchAndSaveProviderModels(uid); apiErr == nil {
-					models = providerModelManager.GetModels(uid)
-					if len(models) > 0 {
-						source = ModelCacheSourceAPI
-						expiresAt = time.Now().Add(1 * time.Hour)
-					}
-				}
+			}
+		}
+	}
 
-				// Step 3: Template fallback (save to DB with 1h TTL).
-				if len(models) == 0 && h.config.GetTemplateManager() != nil {
-					templateModels, tmplErr := h.config.GetTemplateManager().GetEmbeddedModelsForProvider(p)
-					if tmplErr == nil && len(templateModels) > 0 {
-						_ = providerModelManager.SaveModels(p, templateModels, db.ModelSourceTemplate)
-						models = templateModels
-						source = ModelCacheSourceTemplate
-						expiresAt = time.Now().Add(1 * time.Hour)
-					}
+	// Step 3: Merge in the template/preset fallback live, on every request —
+	// not just on a cache miss. This is what lets an updated preset list
+	// take effect immediately (no waiting on the cached entry's TTL) and
+	// what fills in preset models an intercepted/incomplete upstream
+	// response omitted, even though the API list itself was non-empty.
+	if provErr == nil && !isVirtual && h.config.GetTemplateManager() != nil {
+		templateModels, tmplErr := h.config.GetTemplateManager().GetEmbeddedModelsForProvider(p)
+		if tmplErr == nil && len(templateModels) > 0 {
+			merged := config.MergeModelLists(models, templateModels)
+			if len(merged) > len(models) {
+				if len(models) == 0 {
+					source = ModelCacheSourceTemplate
+				} else {
+					source = ModelCacheSourceMerged
+				}
+				models = merged
+				if expiresAt.After(time.Now().Add(1 * time.Hour)) {
+					expiresAt = time.Now().Add(1 * time.Hour)
 				}
 			}
 		}

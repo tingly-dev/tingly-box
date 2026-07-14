@@ -2035,6 +2035,14 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	if lister != nil {
 		models, apiErr = lister.ListModels(ctx)
 		if apiErr == nil && len(models) > 0 {
+			// Merge in the preset/template list before persisting: upstream can
+			// return a non-empty but incomplete list (e.g. intercepted by a
+			// proxy), which must not silently drop preset models the API omits.
+			if c.templateManager != nil {
+				if tmplModels, tmplErr := c.templateManager.GetEmbeddedModelsForProvider(provider); tmplErr == nil {
+					models = MergeModelLists(models, tmplModels)
+				}
+			}
 			// Apply canonical ordering before persisting; the same sort is
 			// reapplied at the serving boundary so cached order is irrelevant.
 			SortProviderModels(provider, models)
@@ -2138,6 +2146,40 @@ func SortProviderModels(provider *typ.Provider, models []string) {
 		}
 		return strings.Compare(a, b)
 	})
+}
+
+// MergeModelLists unions apiModels with fallbackModels, preserving apiModels'
+// order and appending any fallbackModels entries not already present.
+//
+// Upstream proxies can intercept the models endpoint and return a truncated
+// but non-empty (HTTP 200) list, which previously caused the template/preset
+// fallback to be skipped entirely (it only ran when the API list was empty).
+// Merging instead of replacing ensures preset models the API omits still
+// reach the client.
+func MergeModelLists(apiModels, fallbackModels []string) []string {
+	if len(fallbackModels) == 0 {
+		return apiModels
+	}
+	if len(apiModels) == 0 {
+		return fallbackModels
+	}
+	seen := make(map[string]struct{}, len(apiModels)+len(fallbackModels))
+	merged := make([]string, 0, len(apiModels)+len(fallbackModels))
+	for _, m := range apiModels {
+		if _, ok := seen[m]; ok {
+			continue
+		}
+		seen[m] = struct{}{}
+		merged = append(merged, m)
+	}
+	for _, m := range fallbackModels {
+		if _, ok := seen[m]; ok {
+			continue
+		}
+		seen[m] = struct{}{}
+		merged = append(merged, m)
+	}
+	return merged
 }
 
 // isOpenRouterProvider reports whether the provider routes to OpenRouter.
