@@ -294,6 +294,11 @@ HTTP.
 
 ### Tool Loop Stage
 
+The focused Phase 4 contract is
+[`protocol-stage-tool-loop.md`](./protocol-stage-tool-loop.md). This section is
+the architectural summary; the focused document owns lifecycle, V1-subset,
+activation, and acceptance details.
+
 The Tool Loop Stage owns:
 
 - server-visible tool catalog injection;
@@ -439,6 +444,9 @@ after the Stage topology is selected. If selection declines, the untouched
 attempt enters the complete legacy Guardrail lifecycle.
 
 ### Phase 4 — Tool Loop canary
+
+Implementation and production-entry requirements for this phase are specified
+in [`protocol-stage-tool-loop.md`](./protocol-stage-tool-loop.md).
 
 - Move generic complete/stream MCP loops behind one Stage.
 - Inject `ToolCatalog`, `ToolPolicy`, and `ToolExecutor` dependencies.
