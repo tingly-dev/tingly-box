@@ -9,9 +9,8 @@
 ## Decision
 
 The new unit is `RequestRecord`. It records the original request received at
-the client-facing endpoint, the provider calls that actually happened, and,
-when different, the final response returned outward after Stage and Bridge
-processing.
+the client-facing endpoint, the provider calls that actually happened, and the
+final response returned outward after Stage and Bridge processing.
 
 Recording attaches only at two stable endpoint boundaries:
 
@@ -24,9 +23,7 @@ HTTP Adapter
 ```
 
 - **Request Observer** records the original client-protocol request before any
-  Stage or Bridge. On the return path it sees the final outward response and
-  stores `output_response` only when that response differs from the final
-  successful provider response.
+  Stage or Bridge. On the return path it records the final outward response.
 - **Provider Observer** records the provider-native request passed into the
   terminal endpoint and the untouched provider-native response returned from
   it.
@@ -73,7 +70,7 @@ RequestRecord
 │   ├── provider_request
 │   ├── provider_response
 │   └── outcome / error / duration
-└── output_response?             // only when different
+└── final_response?              // present for a successful request
 ```
 
 ```go
@@ -81,7 +78,7 @@ type RequestRecord struct {
     RequestID         string
     InputRequest      Payload
     ProviderExchanges []ProviderExchange
-    OutputResponse    *Payload
+    FinalResponse     *Payload
     Outcome           Outcome
 }
 
@@ -107,22 +104,20 @@ type Payload struct {
 attempt numbers. A Tool Loop creates several ordered entries under the same
 attempt. A separate nested attempt model is unnecessary for message recording.
 
-## When `output_response` Exists
+## Three Stable Payload Boundaries
 
-The outward response is stored when any of these is true:
+The core record contains only these payload boundaries:
 
-- a Bridge changed the response protocol;
-- a response Stage changed its content;
-- the outer chain produced a response without a provider response.
+1. `input_request`: the original client-protocol request.
+2. `provider_exchanges[n]`: each actual provider request and raw provider
+   response.
+3. `final_response`: the client-protocol response after all outward processing.
 
-For an identity path whose final response equals the final successful provider
-response, `output_response` is omitted. Readers treat the provider response as
-the returned response in that case. This preserves the old useful distinction
-without storing the same payload twice.
+A successful request always records `final_response`, including identity paths
+where it equals the provider response. Readers never need fallback or equality
+rules. A request that fails before producing a response may leave it empty.
 
-The comparison happens between captured protocol payloads at the two
-boundaries. Individual Stages do not need to report whether they mutated a
-response.
+No intermediate Stage request or response is stored.
 
 ## Ownership and Lifecycle
 
@@ -164,7 +159,7 @@ This placement has stable semantics for all topologies:
 
 | Topology | Request Observer sees | Provider Observer sees |
 | --- | --- | --- |
-| Identity | original request; same response normally omitted | provider request/response |
+| Identity | original request and final response | provider request/response |
 | Cross-protocol Bridge | source-protocol input and converted output | target-protocol request/response |
 | Guardrail | request before inbound policy; response after outbound policy | request after inbound policy; raw provider response |
 | Tool Loop | original request and only the final outward response | every provider round |
@@ -185,7 +180,7 @@ and outcome. It is diagnostics metadata, not request/response content.
 
 Complete calls snapshot the input request at the Request Observer and the
 request/response pair at each Provider Observer invocation. The Request
-Observer snapshots the final response on return when needed.
+Observer snapshots the final response on return.
 
 For streaming, each observer wraps the stream returned by the next endpoint
 and assembles events in that observer's native protocol while the normal caller
@@ -221,7 +216,7 @@ The target semantics map as follows:
 | Client/pre-transform snapshot (`original_request`) | `input_request` |
 | Final provider-bound request (`transformed_request` was the closest implementation) | `provider_exchanges[n].provider_request` |
 | Raw provider response (`provider_response`, previously not reliably populated) | `provider_exchanges[n].provider_response` |
-| Converted or response-processed result (`final_response`) | optional `output_response` |
+| Final outward result (`final_response`) | `final_response` |
 | Transform step names | separate stage trace |
 
 ## Additive Migration Plan
@@ -243,13 +238,13 @@ R4 touches production topology wiring.
 
 ## Required Verification
 
-- identity complete/stream records one provider pair and omits duplicate
-  `output_response`;
+- identity complete/stream records the input, one provider pair, and the final
+  response;
 - every route preserves the original client-protocol request in
   `input_request` before any Stage or Bridge mutation;
 - each cross-protocol route records target-protocol provider payloads and the
   source-protocol output response;
-- same-protocol response mutation produces `output_response`;
+- same-protocol response mutation is reflected in `final_response`;
 - retryable failure followed by success retains both provider exchanges and
   finishes one `RequestRecord`;
 - Tool Loop retains every provider exchange in order but only one final output;
