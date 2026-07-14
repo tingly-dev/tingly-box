@@ -1,10 +1,12 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -78,4 +80,39 @@ func PopOpenAIContinuationSegment(sessionID typ.SessionID, providerUUID string) 
 		return nil, false
 	}
 	return messages, true
+}
+
+// ProviderBetaContinuationStore adapts the existing bounded, single-consume
+// mixed continuation store to the Beta-native ToolLoop Stage. Binding the
+// provider UUID in the instance keeps provider routing out of the Stage.
+type ProviderBetaContinuationStore struct {
+	providerUUID string
+}
+
+func NewProviderBetaContinuationStore(providerUUID string) *ProviderBetaContinuationStore {
+	return &ProviderBetaContinuationStore{providerUUID: providerUUID}
+}
+
+func (s *ProviderBetaContinuationStore) Pop(ctx context.Context) ([]anthropic.BetaMessageParam, bool) {
+	if s == nil {
+		return nil, false
+	}
+	key := continuationKey(typ.GetSessionID(ctx), s.providerUUID, "anthropic-beta")
+	segment, ok := mixedContinuationStore.pop(key)
+	if !ok {
+		return nil, false
+	}
+	messages, ok := segment.([]anthropic.BetaMessageParam)
+	if !ok || len(messages) == 0 {
+		return nil, false
+	}
+	return messages, true
+}
+
+func (s *ProviderBetaContinuationStore) Put(ctx context.Context, segment []anthropic.BetaMessageParam) {
+	if s == nil || len(segment) == 0 {
+		return
+	}
+	key := continuationKey(typ.GetSessionID(ctx), s.providerUUID, "anthropic-beta")
+	mixedContinuationStore.put(key, append([]anthropic.BetaMessageParam(nil), segment...))
 }

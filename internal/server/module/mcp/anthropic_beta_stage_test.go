@@ -297,6 +297,28 @@ func TestAnthropicBetaStageStreamPreservesSideEffectBoundaryAfterLaterFailure(t 
 	_ = stream.Close()
 }
 
+func TestProviderBetaContinuationStoreIsProviderScopedAndSingleConsume(t *testing.T) {
+	ctx := context.Background()
+	first := NewProviderBetaContinuationStore("provider-a")
+	second := NewProviderBetaContinuationStore("provider-b")
+	segment := []anthropic.BetaMessageParam{{
+		Role:    anthropic.BetaMessageParamRoleAssistant,
+		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("stored")},
+	}}
+	first.Put(ctx, segment)
+
+	if _, ok := second.Pop(ctx); ok {
+		t.Fatal("continuation leaked across providers")
+	}
+	got, ok := first.Pop(ctx)
+	if !ok || len(got) != 1 {
+		t.Fatalf("stored continuation = %#v, ok=%v", got, ok)
+	}
+	if _, ok := first.Pop(ctx); ok {
+		t.Fatal("continuation was consumed more than once")
+	}
+}
+
 type staticBetaStageTools struct {
 	tools []anthropic.BetaToolUnionParam
 }
