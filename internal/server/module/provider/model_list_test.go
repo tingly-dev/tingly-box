@@ -97,30 +97,28 @@ func TestGetProviderModelsByUUID_Codex_EmptyCache_UsesTemplate(t *testing.T) {
 	assert.Contains(t, resp.Data.Models, "gpt-5.5")
 }
 
-// TestGetProviderModelsByUUID_ClaudeCode_MergesIncompleteUpstreamWithTemplate
-// simulates the "上游拦截了 model list，但不完整" bug report: a stale/partial
-// DB cache (as if an intercepting proxy had returned a truncated model list)
-// must still be topped up with the embedded template/preset models rather
-// than being served as-is.
-func TestGetProviderModelsByUUID_ClaudeCode_MergesIncompleteUpstreamWithTemplate(t *testing.T) {
+// TestGetProviderModelsByUUID_ClaudeCode_NonEmptyCache_NotPollutedByTemplate
+// pins the deprecation-safety guarantee: the embedded template is a
+// compile-time snapshot that can still list models the upstream has retired,
+// so it must NEVER be merged into a non-empty real list. A cached upstream
+// list is served verbatim, even if it is shorter than the template.
+func TestGetProviderModelsByUUID_ClaudeCode_NonEmptyCache_NotPollutedByTemplate(t *testing.T) {
 	cfg := newTestConfigWithTemplates(t)
 	provider := newClaudeCodeOAuthProvider()
 	require.NoError(t, cfg.AddProvider(provider))
 
-	// Pre-seed the DB cache with an incomplete API-sourced list, as if an
-	// intercepting proxy truncated the real upstream response. This keeps
-	// Step 1 (DB cache hit) from being empty, so Step 2b (real network call)
-	// is never reached, and only Step 3 (template merge) is under test.
-	incomplete := []string{"claude-sonnet-4-5"}
-	require.NoError(t, cfg.GetModelManager().SaveModels(provider, incomplete, db.ModelSourceAPI))
+	// A real upstream list that deliberately omits a model still present in
+	// the embedded template (e.g. the model was retired upstream). The handler
+	// must trust upstream and not resurrect the template-only model.
+	upstream := []string{"claude-sonnet-4-5"}
+	require.NoError(t, cfg.GetModelManager().SaveModels(provider, upstream, db.ModelSourceAPI))
 
 	resp := getProviderModels(t, cfg, provider.UUID)
 
 	require.True(t, resp.Success)
-	assert.Equal(t, ModelCacheSourceMerged, resp.Data.Source)
-	assert.Contains(t, resp.Data.Models, "claude-sonnet-4-5", "original cached model must be preserved")
-	assert.Contains(t, resp.Data.Models, "claude-opus-4-5", "template preset model must be merged in even though upstream cache was non-empty")
-	assert.Greater(t, len(resp.Data.Models), len(incomplete))
+	assert.Equal(t, ModelCacheSourceDB, resp.Data.Source)
+	assert.ElementsMatch(t, upstream, resp.Data.Models, "non-empty cache must be served verbatim, not merged with the template")
+	assert.NotContains(t, resp.Data.Models, "claude-opus-4-5", "template-only model must not be resurrected into an authoritative upstream list")
 }
 
 // TestGetProviderModelsByUUID_ClaudeCode_FullCache_NoMergeNeeded verifies that

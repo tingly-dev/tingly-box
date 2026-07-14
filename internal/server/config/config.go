@@ -2035,10 +2035,9 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	if lister != nil {
 		models, apiErr = lister.ListModels(ctx)
 		if apiErr == nil && len(models) > 0 {
-			// Merge in the preset/template list before persisting: upstream can
-			// return a non-empty but incomplete list (e.g. intercepted by a
-			// proxy), which must not silently drop preset models the API omits.
-			models, _ = MergeTemplateModels(c.templateManager, provider, models)
+			// Persist the upstream list verbatim. It is authoritative for both
+			// additions and removals, so the embedded template snapshot must
+			// not be merged in here — that would resurrect retired models.
 			// Apply canonical ordering before persisting; the same sort is
 			// reapplied at the serving boundary so cached order is irrelevant.
 			SortProviderModels(provider, models)
@@ -2142,62 +2141,6 @@ func SortProviderModels(provider *typ.Provider, models []string) {
 		}
 		return strings.Compare(a, b)
 	})
-}
-
-// MergeTemplateModels unions models with the provider's embedded
-// template/preset fallback list, if a template manager is configured and has
-// an entry for the provider. It reports whether the template contributed any
-// model not already present, so callers can tell a no-op merge from one that
-// actually filled a gap (e.g. to pick a "merged" vs. unchanged cache source).
-//
-// This is the single place both the fetch/persist path
-// (FetchAndSaveProviderModels) and the serving path (GetProviderModelsByUUID)
-// go through, so upstream's list and the built-in preset list are always
-// reconciled the same way regardless of which one is stale or incomplete.
-func MergeTemplateModels(tm *data.TemplateManager, provider *typ.Provider, models []string) (merged []string, grew bool) {
-	if tm == nil {
-		return models, false
-	}
-	templateModels, err := tm.GetEmbeddedModelsForProvider(provider)
-	if err != nil || len(templateModels) == 0 {
-		return models, false
-	}
-	merged = MergeModelLists(models, templateModels)
-	return merged, len(merged) > len(models)
-}
-
-// MergeModelLists unions apiModels with fallbackModels, preserving apiModels'
-// order and appending any fallbackModels entries not already present.
-//
-// Upstream proxies can intercept the models endpoint and return a truncated
-// but non-empty (HTTP 200) list, which previously caused the template/preset
-// fallback to be skipped entirely (it only ran when the API list was empty).
-// Merging instead of replacing ensures preset models the API omits still
-// reach the client.
-func MergeModelLists(apiModels, fallbackModels []string) []string {
-	if len(fallbackModels) == 0 {
-		return apiModels
-	}
-	if len(apiModels) == 0 {
-		return fallbackModels
-	}
-	seen := make(map[string]struct{}, len(apiModels)+len(fallbackModels))
-	merged := make([]string, 0, len(apiModels)+len(fallbackModels))
-	for _, m := range apiModels {
-		if _, ok := seen[m]; ok {
-			continue
-		}
-		seen[m] = struct{}{}
-		merged = append(merged, m)
-	}
-	for _, m := range fallbackModels {
-		if _, ok := seen[m]; ok {
-			continue
-		}
-		seen[m] = struct{}{}
-		merged = append(merged, m)
-	}
-	return merged
 }
 
 // isOpenRouterProvider reports whether the provider routes to OpenRouter.

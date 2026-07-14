@@ -447,7 +447,10 @@ func (h *Handler) UpdateProviderModelsByUUID(c *gin.Context) {
 }
 
 // GetProviderModelsByUUID returns the model list for a provider, falling back
-// through DB cache → VModel static list → provider API → template.
+// through DB cache → VModel static list → provider API → template. The template
+// is a pure last-resort fallback (used only when every earlier source is
+// empty); it is never merged into a non-empty list, since the embedded
+// snapshot can list models the upstream has since retired.
 func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 	uid := c.Param("uuid")
 
@@ -498,21 +501,21 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 		}
 	}
 
-	// Step 3: Merge in the template/preset fallback live, on every request —
-	// not just on a cache miss. This is what lets an updated preset list
-	// take effect immediately (no waiting on the cached entry's TTL) and
-	// what fills in preset models an intercepted/incomplete upstream
-	// response omitted, even though the API list itself was non-empty.
-	if provErr == nil && !isVirtual {
-		wasEmpty := len(models) == 0
-		var grew bool
-		if models, grew = config.MergeTemplateModels(h.config.GetTemplateManager(), p, models); grew {
-			if wasEmpty {
+	// Step 3: Template fallback — used only when we still have no models at
+	// all (API failed, unsupported, or returned nothing). The embedded
+	// template is a compile-time snapshot that can still list models the
+	// upstream has since retired, so it must never be merged into a non-empty
+	// real list — doing so would resurrect deprecated models. It is a pure
+	// last-resort fallback. Read live (never persisted) so an improved
+	// embedded list takes effect immediately instead of waiting out a cached
+	// entry's TTL.
+	if provErr == nil && !isVirtual && len(models) == 0 {
+		if tm := h.config.GetTemplateManager(); tm != nil {
+			if templateModels, err := tm.GetEmbeddedModelsForProvider(p); err == nil && len(templateModels) > 0 {
+				models = templateModels
 				source = ModelCacheSourceTemplate
-			} else {
-				source = ModelCacheSourceMerged
+				expiresAt = time.Now().Add(1 * time.Hour)
 			}
-			expiresAt = time.Now().Add(1 * time.Hour)
 		}
 	}
 

@@ -98,10 +98,6 @@ const (
 	ModelCacheSourceAPI      ModelCacheSource = "api"
 	ModelCacheSourceTemplate ModelCacheSource = "template"
 	ModelCacheSourceVModel   ModelCacheSource = "vmodel"
-	// ModelCacheSourceMerged indicates the served list is a union of a cached
-	// (DB/API) list with the template/preset fallback — used when the
-	// fallback contributed models the cached list didn't already have.
-	ModelCacheSourceMerged ModelCacheSource = "merged"
 )
 
 // ProviderModelInfo represents model information for a specific provider.
