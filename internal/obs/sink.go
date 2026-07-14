@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 )
 
 // RecordMode defines which fields are captured by the Sink.
@@ -143,6 +144,32 @@ func (s *Sink) Emit(r *Record) {
 		return
 	}
 	s.processor.Emit(r)
+}
+
+// EmitRequestRecord writes the new request-boundary recording model through
+// the existing asynchronous exporter pipeline. The legacy Record fields stay
+// available during the additive Stage canary; readers can distinguish the new
+// shape by the request_record field.
+func (s *Sink) EmitRequestRecord(requestRecord *requestrecord.RequestRecord) {
+	if s == nil || requestRecord == nil {
+		return
+	}
+
+	record := &Record{
+		Timestamp:     requestRecord.Timestamp,
+		RequestID:     requestRecord.RequestID,
+		SessionID:     requestRecord.SessionID,
+		Scenario:      requestRecord.Scenario,
+		Duration:      requestRecord.Duration,
+		Err:           requestRecord.Error,
+		RequestRecord: requestRecord,
+	}
+	if exchanges := requestRecord.ProviderExchanges; len(exchanges) > 0 {
+		last := exchanges[len(exchanges)-1]
+		record.Provider = last.Provider
+		record.Model = last.Model
+	}
+	s.Emit(record)
 }
 
 // RecordWithScenario builds a single-stage Record (original request + final

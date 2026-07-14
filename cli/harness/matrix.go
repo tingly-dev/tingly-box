@@ -69,6 +69,9 @@ func (*MatrixCmd) Help() string {
   harness matrix --mode=single --stage --source=openai_responses --target=openai_chat
   harness matrix --mode=single --stage --source=anthropic_beta --target=openai_responses
 
+  # Exercise the opt-in Beta identity RequestRecord canary and retain artifacts
+  harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta --record-dir=/tmp/tingly-records
+
   # Exercise Beta Guardrail as a Stage without changing scenario semantics
   harness matrix --mode=single --stage --guardrails --source=anthropic_beta
 

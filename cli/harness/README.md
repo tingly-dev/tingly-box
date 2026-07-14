@@ -126,7 +126,10 @@ functions.
 - Known-broken cells are centralized in
   `protocoltest.skipSourceScenarios` (e.g. `openai_responses|tool_use`).
 - `--json` for CI; `-v` / `-vv` to raise log verbosity; `--record-dir` to dump
-  request/response pairs; `--batch N` for stability runs.
+  request/response pairs; `--batch N` for stability runs. In the ephemeral
+  harness environment, `--record-dir` enables `recording_v2` for the Anthropic
+  and OpenAI scenarios and flushes every sink before shutdown, so the returned
+  files are complete test artifacts.
 
 **Use it for:** catching transform regressions exhaustively and instantly.
 

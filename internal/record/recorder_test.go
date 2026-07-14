@@ -14,6 +14,16 @@ type countingMarshaler struct {
 	calls *int
 }
 
+type rawJSONValue struct {
+	raw string
+}
+
+func (v rawJSONValue) RawJSON() string { return v.raw }
+
+func (rawJSONValue) MarshalJSON() ([]byte, error) {
+	return []byte(`{"expanded_zero_value":""}`), nil
+}
+
 func (m countingMarshaler) MarshalJSON() ([]byte, error) {
 	(*m.calls)++
 	return []byte(`{"unexpected":true}`), nil
@@ -125,6 +135,27 @@ func TestRecorderKeepsToolLoopRoundsInOneAttempt(t *testing.T) {
 		require.Equal(t, i+1, exchange.Sequence)
 		require.Equal(t, 1, exchange.Attempt)
 	}
+}
+
+func TestRecorderPrefersProtocolRawJSON(t *testing.T) {
+	recorder, err := New(Config{
+		Enabled:       true,
+		InputProtocol: protocol.TypeAnthropicBeta,
+		Input:         map[string]any{"model": "client"},
+	})
+	require.NoError(t, err)
+	exchange, err := recorder.BeginExchange(ExchangeMetadata{
+		Protocol: protocol.TypeAnthropicBeta,
+	}, map[string]any{"model": "provider"})
+	require.NoError(t, err)
+	require.NoError(t, exchange.Finish(rawJSONValue{raw: `{"model":"provider","unknown":"preserved"}`}, nil))
+
+	completed, first := recorder.Finish(nil)
+	require.True(t, first)
+	require.JSONEq(t,
+		`{"model":"provider","unknown":"preserved"}`,
+		string(completed.ProviderExchanges[0].Response.Body),
+	)
 }
 
 func TestRecorderMapsCancellationAndRejectsMutationAfterFinish(t *testing.T) {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -20,6 +21,31 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
+
+// ForceFlushRecordings waits until every scenario recording sink has exported
+// its queued records. It is used by diagnostics and the protocol harness so a
+// successful run leaves a complete artifact before the test server exits.
+func (s *Server) ForceFlushRecordings(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.scenarioRecordSinksMu.RLock()
+	sinks := make([]*obs.Sink, 0, len(s.scenarioRecordSinks))
+	for _, sink := range s.scenarioRecordSinks {
+		if sink != nil {
+			sinks = append(sinks, sink)
+		}
+	}
+	s.scenarioRecordSinksMu.RUnlock()
+
+	var flushErrs []error
+	for _, sink := range sinks {
+		if err := sink.ForceFlush(ctx); err != nil {
+			flushErrs = append(flushErrs, err)
+		}
+	}
+	return errors.Join(flushErrs...)
+}
 
 // Start starts the HTTP server
 func (s *Server) Start(port int) error {

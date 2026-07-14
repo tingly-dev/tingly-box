@@ -3,6 +3,8 @@ package obs
 import (
 	"encoding/json"
 	"time"
+
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 )
 
 const inlineThreshold = 256 // bytes; values smaller than this stay inline
@@ -21,10 +23,11 @@ type SlimRecord struct {
 	Scenario string `json:"scenario,omitempty"`
 	Model    string `json:"model,omitempty"`
 
-	OriginalRequest    *SlimHTTPData `json:"original_request,omitempty"`
-	TransformedRequest *SlimHTTPData `json:"transformed_request,omitempty"`
-	ProviderResponse   *SlimHTTPData `json:"provider_response,omitempty"`
-	FinalResponse      *SlimHTTPData `json:"final_response,omitempty"`
+	OriginalRequest    *SlimHTTPData                `json:"original_request,omitempty"`
+	TransformedRequest *SlimHTTPData                `json:"transformed_request,omitempty"`
+	ProviderResponse   *SlimHTTPData                `json:"provider_response,omitempty"`
+	FinalResponse      *SlimHTTPData                `json:"final_response,omitempty"`
+	RequestRecord      *requestrecord.RequestRecord `json:"request_record,omitempty"`
 
 	DurationMs int64  `json:"duration_ms"`
 	Error      string `json:"error,omitempty"`
@@ -35,12 +38,12 @@ type SlimRecord struct {
 // SlimHTTPData mirrors RecordRequest / RecordResponse with a body that may
 // contain {"$ref":"sha256:<hex>"} markers instead of large inline values.
 type SlimHTTPData struct {
-	Method     string            `json:"method,omitempty"`
-	URL        string            `json:"url,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	StatusCode int               `json:"status_code,omitempty"`
-	Body       interface{}       `json:"body,omitempty"`
-	IsStreaming bool             `json:"is_streaming,omitempty"`
+	Method      string            `json:"method,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	StatusCode  int               `json:"status_code,omitempty"`
+	Body        interface{}       `json:"body,omitempty"`
+	IsStreaming bool              `json:"is_streaming,omitempty"`
 }
 
 // SlimifyRecord converts a Record to a SlimRecord by replacing large JSON
@@ -64,17 +67,18 @@ func FullRecord(r *Record) *SlimRecord {
 func recordToSlim(r *Record, knownBlobs map[string]struct{}, threshold int) (*SlimRecord, map[string][]byte) {
 	newBlobs := make(map[string][]byte)
 	slim := &SlimRecord{
-		V:          3,
-		Timestamp:  r.Timestamp.UTC().Format(time.RFC3339),
-		RequestID:  r.RequestID,
-		SessionID:  r.SessionID,
-		SessionSrc: r.SessionSrc,
-		Provider:   r.Provider,
-		Scenario:   r.Scenario,
-		Model:      r.Model,
-		DurationMs: r.Duration.Milliseconds(),
-		Error:      r.Err,
-		Steps:      r.Steps,
+		V:             3,
+		Timestamp:     r.Timestamp.UTC().Format(time.RFC3339),
+		RequestID:     r.RequestID,
+		SessionID:     r.SessionID,
+		SessionSrc:    r.SessionSrc,
+		Provider:      r.Provider,
+		Scenario:      r.Scenario,
+		Model:         r.Model,
+		DurationMs:    r.Duration.Milliseconds(),
+		Error:         r.Err,
+		Steps:         r.Steps,
+		RequestRecord: r.RequestRecord,
 	}
 
 	if r.OriginalRequest != nil {

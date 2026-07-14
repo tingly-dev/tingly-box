@@ -204,7 +204,7 @@ func capturePayload(api protocol.APIType, value any) (Payload, error) {
 	if api == "" {
 		return Payload{}, errors.New("protocol is empty")
 	}
-	body, err := json.Marshal(value)
+	body, err := payloadJSON(value)
 	if err != nil {
 		return Payload{}, err
 	}
@@ -213,6 +213,19 @@ func capturePayload(api protocol.APIType, value any) (Payload, error) {
 		ContentType: jsonContentType,
 		Body:        append(json.RawMessage(nil), body...),
 	}, nil
+}
+
+func payloadJSON(value any) ([]byte, error) {
+	if rawValue, ok := value.(interface{ RawJSON() string }); ok {
+		raw := []byte(rawValue.RawJSON())
+		if len(raw) > 0 {
+			if !json.Valid(raw) {
+				return nil, fmt.Errorf("RawJSON from %T is invalid", value)
+			}
+			return append([]byte(nil), raw...), nil
+		}
+	}
+	return json.Marshal(value)
 }
 
 func outcomeForError(err error) Outcome {
