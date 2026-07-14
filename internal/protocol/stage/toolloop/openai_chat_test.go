@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
@@ -107,6 +108,22 @@ func TestOpenAIChatCompletePreservesSideEffectBoundaryAfterLaterFailure(t *testi
 	_, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &openai.ChatCompletionNewParams{}})
 	if !errors.Is(err, providerErr) || !HasCommittedSideEffects(err) {
 		t.Fatalf("later error = %v, committed=%v", err, HasCommittedSideEffects(err))
+	}
+}
+
+func TestOpenAIChatRejectsAmbiguousToolNameOwnership(t *testing.T) {
+	request := &openai.ChatCompletionNewParams{Tools: []openai.ChatCompletionToolUnionParam{
+		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "lookup"}),
+	}}
+	stage, _ := NewOpenAIChat(OpenAIChatConfig{
+		Catalog:  staticCatalog{{Name: "lookup"}},
+		Executor: &fakeExecutor{},
+	})
+	endpoint, _ := protocolstage.Compose(&scriptedChatEndpoint{}, stage)
+
+	_, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: request})
+	if !errors.Is(err, ErrToolNameCollision) {
+		t.Fatalf("tool name collision error = %v", err)
 	}
 }
 

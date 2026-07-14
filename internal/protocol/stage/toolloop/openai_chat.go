@@ -156,10 +156,10 @@ func (e *openAIChatEndpoint) prepare(ctx context.Context, call protocolstage.Cal
 	}
 	owned := make(map[string]struct{}, len(definitions))
 	for _, definition := range definitions {
-		owned[definition.Name] = struct{}{}
 		if _, exists := existing[definition.Name]; exists {
-			continue
+			return protocolstage.Call{}, nil, fmt.Errorf("%w: %q", ErrToolNameCollision, definition.Name)
 		}
+		owned[definition.Name] = struct{}{}
 		function := shared.FunctionDefinitionParam{
 			Name:       definition.Name,
 			Parameters: cloneParameters(definition.Parameters),

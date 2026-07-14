@@ -54,7 +54,10 @@ type AllowAllPolicy struct{}
 
 func (AllowAllPolicy) Authorize(context.Context, ToolCall) error { return nil }
 
-var ErrMaxRounds = errors.New("tool loop reached the maximum number of rounds")
+var (
+	ErrMaxRounds         = errors.New("tool loop reached the maximum number of rounds")
+	ErrToolNameCollision = errors.New("server tool name collides with request tool")
+)
 
 // ExecutionError preserves the irreversible-side-effect boundary when a later
 // provider round or policy check fails. Failover code can inspect it without
