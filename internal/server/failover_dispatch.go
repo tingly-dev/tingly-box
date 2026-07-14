@@ -354,6 +354,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 ) {
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) <= 1 {
+		setProtocolStageAttempt(c, 1)
 		attempt(initialProvider, initialModel)
 		return
 	}
@@ -393,6 +394,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			rec.SetActiveService(provider, model)
 		}
 
+		setProtocolStageAttempt(c, i+1)
 		attempt(provider, model)
 
 		// A committed gate means the stream's first real chunk reached

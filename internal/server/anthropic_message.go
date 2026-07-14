@@ -187,7 +187,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 			bs = []byte("{}")
 		}
 		recorder = ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, ph.getScenarioRecordMode(scenarioType), bs)
-		if len(rule.GetActiveServices()) == 1 {
+		if ph.protocolStageRecordingSupportsRule(rule) {
 			stageRecording = ph.newProtocolStageRequestRecording(
 				scenarioType,
 				protocol.TypeAnthropicV1,
@@ -196,6 +196,10 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 				pkgobs.RequestIDFromContext(c.Request.Context()),
 			)
 		}
+	}
+	if stageRecording != nil {
+		enableProtocolStageAttemptTracking(c)
+		defer stageRecording.finishFromHTTP(c)
 	}
 
 	// Snapshot a pristine template only when failover is possible; the single
@@ -343,7 +347,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 			bs = []byte("{}")
 		}
 		recorder = ph.EnsureProtocolRecorder(c, string(scenarioType), provider, requestModel, ph.getScenarioRecordMode(scenarioType), bs)
-		if len(rule.GetActiveServices()) == 1 {
+		if ph.protocolStageRecordingSupportsRule(rule) {
 			stageRecording = ph.newProtocolStageRequestRecording(
 				scenarioType,
 				protocol.TypeAnthropicBeta,
@@ -352,6 +356,10 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 				pkgobs.RequestIDFromContext(c.Request.Context()),
 			)
 		}
+	}
+	if stageRecording != nil {
+		enableProtocolStageAttemptTracking(c)
+		defer stageRecording.finishFromHTTP(c)
 	}
 
 	// Snapshot a pristine template only when failover is possible.

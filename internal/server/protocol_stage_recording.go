@@ -3,6 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +25,10 @@ const protocolStageOriginalInputKey = "protocol_stage_original_input"
 type protocolStageRequestRecording struct {
 	recorder *requestrecord.Recorder
 	sink     *internalobs.Sink
+
+	mu             sync.Mutex
+	used           bool
+	lastAttemptErr error
 }
 
 func rememberProtocolStageOriginalInput(c *gin.Context, body []byte) {
@@ -83,6 +90,80 @@ func (r *protocolStageRequestRecording) finish(requestErr error) {
 		return
 	}
 	r.sink.EmitRequestRecord(completed)
+}
+
+func (r *protocolStageRequestRecording) observeAttempt(requestErr error) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.used = true
+	r.lastAttemptErr = requestErr
+	r.mu.Unlock()
+}
+
+func (r *protocolStageRequestRecording) finishFromHTTP(c *gin.Context) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	used := r.used
+	requestErr := r.lastAttemptErr
+	r.mu.Unlock()
+	if !used {
+		return
+	}
+	if c != nil && c.Writer.Status() >= http.StatusBadRequest && requestErr == nil {
+		requestErr = fmt.Errorf("request completed with HTTP status %d", c.Writer.Status())
+	}
+	r.finish(requestErr)
+}
+
+func (ph *ProtocolHandler) protocolStageRecordingSupportsRule(rule *typ.Rule) bool {
+	if ph == nil || rule == nil {
+		return false
+	}
+	services := rule.GetActiveServices()
+	if len(services) == 0 {
+		return false
+	}
+	for _, service := range services {
+		provider, err := ph.deps.Config.GetProviderByUUID(service.Provider)
+		if err != nil || provider == nil || provider.APIStyle == protocol.APIStyleGoogle {
+			return false
+		}
+	}
+	return true
+}
+
+const protocolStageAttemptKey = "protocol_stage_attempt"
+const protocolStageRecordingActiveKey = "protocol_stage_recording_active"
+
+func enableProtocolStageAttemptTracking(c *gin.Context) {
+	if c != nil {
+		c.Set(protocolStageRecordingActiveKey, true)
+	}
+}
+
+func setProtocolStageAttempt(c *gin.Context, attempt int) {
+	if c == nil {
+		return
+	}
+	if active, ok := c.Get(protocolStageRecordingActiveKey); !ok || active != true {
+		return
+	}
+	c.Set(protocolStageAttemptKey, attempt)
+}
+
+func currentProtocolStageAttempt(c *gin.Context) int {
+	if c != nil {
+		if attempt, ok := c.Get(protocolStageAttemptKey); ok {
+			if value, valid := attempt.(int); valid && value > 0 {
+				return value
+			}
+		}
+	}
+	return 1
 }
 
 func stageRecordingRecorder(recording *protocolStageRequestRecording) *requestrecord.Recorder {

@@ -41,6 +41,22 @@ func TestFirstChunkGate_BufferCaptureBeforeCommit(t *testing.T) {
 	}
 }
 
+func TestProtocolStageAttemptTrackingRequiresActiveRecording(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	setProtocolStageAttempt(c, 2)
+	if _, exists := c.Get(protocolStageAttemptKey); exists {
+		t.Fatal("attempt context was created while recording was disabled")
+	}
+
+	enableProtocolStageAttemptTracking(c)
+	setProtocolStageAttempt(c, 2)
+	if got := currentProtocolStageAttempt(c); got != 2 {
+		t.Fatalf("current attempt = %d, want 2", got)
+	}
+}
+
 func TestFirstChunkGate_CommitFirstChunkFlushesThenPassesThrough(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

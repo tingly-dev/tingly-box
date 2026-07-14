@@ -153,7 +153,7 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	var stageRecording *protocolStageRequestRecording
-	if scenarioConfig.IsRecordingEnable() && len(rule.GetActiveServices()) == 1 {
+	if scenarioConfig.IsRecordingEnable() && ph.protocolStageRecordingSupportsRule(rule) {
 		stageRecording = ph.newProtocolStageRequestRecording(
 			scenarioType,
 			protocol.TypeOpenAIChat,
@@ -161,6 +161,10 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 			sessionID,
 			pkgobs.RequestIDFromContext(c.Request.Context()),
 		)
+	}
+	if stageRecording != nil {
+		enableProtocolStageAttemptTracking(c)
+		defer stageRecording.finishFromHTTP(c)
 	}
 
 	// Snapshot a pristine template only when failover is possible.

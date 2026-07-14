@@ -2,15 +2,20 @@ package protocoltest
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -157,6 +162,157 @@ func TestServerProtocolStageRecordingSelection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServerProtocolStageRecordingFailover(t *testing.T) {
+	routes := []struct {
+		name           string
+		source         protocol.APIType
+		primaryStyle   protocol.APIStyle
+		fallbackTarget protocol.APIType
+		firstProtocol  protocol.APIType
+		secondProtocol protocol.APIType
+	}{
+		{name: "beta", source: protocol.TypeAnthropicBeta, primaryStyle: protocol.APIStyleAnthropic, fallbackTarget: protocol.TypeOpenAIChat, firstProtocol: protocol.TypeAnthropicBeta, secondProtocol: protocol.TypeOpenAIChat},
+		{name: "v1", source: protocol.TypeAnthropicV1, primaryStyle: protocol.APIStyleAnthropic, fallbackTarget: protocol.TypeOpenAIChat, firstProtocol: protocol.TypeAnthropicV1, secondProtocol: protocol.TypeOpenAIChat},
+		{name: "chat", source: protocol.TypeOpenAIChat, primaryStyle: protocol.APIStyleOpenAI, fallbackTarget: protocol.TypeAnthropicBeta, firstProtocol: protocol.TypeOpenAIChat, secondProtocol: protocol.TypeAnthropicBeta},
+		{name: "responses", source: protocol.TypeOpenAIResponses, primaryStyle: protocol.APIStyleOpenAI, fallbackTarget: protocol.TypeAnthropicBeta, firstProtocol: protocol.TypeOpenAIChat, secondProtocol: protocol.TypeAnthropicBeta},
+	}
+	for _, routeCase := range routes {
+		routeCase := routeCase
+		for _, streaming := range []bool{false, true} {
+			streaming := streaming
+			name := routeCase.name + "/complete"
+			if streaming {
+				name = routeCase.name + "/stream"
+			}
+			t.Run(name, func(t *testing.T) {
+				recordDir := t.TempDir()
+				env := NewTestEnv(t,
+					NewTestEnvOptionWithProtocolStage(),
+					NewTestEnvOptionWithRecordDir(recordDir),
+				)
+				scenario := TextScenario()
+				if streaming {
+					scenario = StreamingTextScenario()
+				}
+				route := env.SetupCrossStyleFailoverRoute(
+					t,
+					routeCase.source,
+					routeCase.primaryStyle,
+					routeCase.fallbackTarget,
+					scenario,
+					FailMockPreContent500,
+				)
+
+				result := env.SendWithModel(t, routeCase.source, route.ModelName, streaming)
+				if result.HTTPStatus != http.StatusOK {
+					t.Fatalf("status = %d", result.HTTPStatus)
+				}
+				env.Close()
+
+				records := readPersistedRequestRecords(t, recordDir)
+				if len(records) != 1 {
+					t.Fatalf("RequestRecord count = %d, want 1", len(records))
+				}
+				record := records[0]
+				if record.Outcome != requestrecord.OutcomeSucceeded {
+					t.Fatalf("request outcome = %q, want succeeded", record.Outcome)
+				}
+				if len(record.ProviderExchanges) != 2 {
+					t.Fatalf("provider exchange count = %d, want 2", len(record.ProviderExchanges))
+				}
+				first, second := record.ProviderExchanges[0], record.ProviderExchanges[1]
+				if first.Attempt != 1 || first.Protocol != routeCase.firstProtocol || first.Outcome != requestrecord.OutcomeFailed {
+					t.Fatalf("first exchange = attempt %d protocol %q outcome %q", first.Attempt, first.Protocol, first.Outcome)
+				}
+				if second.Attempt != 2 || second.Protocol != routeCase.secondProtocol || second.Outcome != requestrecord.OutcomeSucceeded {
+					t.Fatalf("second exchange = attempt %d protocol %q outcome %q", second.Attempt, second.Protocol, second.Outcome)
+				}
+				if record.FinalResponse == nil || record.FinalResponse.Protocol != routeCase.source {
+					t.Fatalf("final response = %#v, want %s", record.FinalResponse, routeCase.source)
+				}
+			})
+		}
+	}
+}
+
+func TestServerProtocolStageRecordingFailoverExhausted(t *testing.T) {
+	recordDir := t.TempDir()
+	env := NewTestEnv(t,
+		NewTestEnvOptionWithProtocolStage(),
+		NewTestEnvOptionWithRecordDir(recordDir),
+	)
+	route := env.SetupBothFailingRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, FailMockPreContent500)
+
+	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
+	if result.HTTPStatus == http.StatusOK {
+		t.Fatal("exhausted failover unexpectedly returned 200")
+	}
+	env.Close()
+
+	records := readPersistedRequestRecords(t, recordDir)
+	if len(records) != 1 {
+		t.Fatalf("RequestRecord count = %d, want 1", len(records))
+	}
+	record := records[0]
+	if record.Outcome != requestrecord.OutcomeFailed {
+		t.Fatalf("request outcome = %q, want failed", record.Outcome)
+	}
+	if len(record.ProviderExchanges) != 2 {
+		t.Fatalf("provider exchange count = %d, want 2", len(record.ProviderExchanges))
+	}
+	for index, exchange := range record.ProviderExchanges {
+		if exchange.Attempt != index+1 || exchange.Outcome != requestrecord.OutcomeFailed {
+			t.Fatalf("exchange %d = attempt %d outcome %q", index, exchange.Attempt, exchange.Outcome)
+		}
+	}
+	if record.FinalResponse != nil {
+		t.Fatalf("final response = %#v, want nil", record.FinalResponse)
+	}
+}
+
+func readPersistedRequestRecords(t *testing.T, root string) []*requestrecord.RequestRecord {
+	t.Helper()
+	var records []*requestrecord.RequestRecord
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".jsonl.gz") {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		reader, err := gzip.NewReader(file)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+		decoder := json.NewDecoder(reader)
+		for {
+			var envelope struct {
+				RequestRecord *requestrecord.RequestRecord `json:"request_record"`
+			}
+			if err := decoder.Decode(&envelope); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return err
+			}
+			if envelope.RequestRecord != nil {
+				records = append(records, envelope.RequestRecord)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("read persisted RequestRecords: %v", err)
+	}
+	return records
 }
 
 func TestServerProtocolStageAnthropicBetaGuardrailComplete(t *testing.T) {

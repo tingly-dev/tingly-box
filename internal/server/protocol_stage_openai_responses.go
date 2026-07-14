@@ -57,14 +57,14 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 		logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "MCP runtime still uses the legacy pipeline")
 		return false
 	}
-	if scenarioConfig.IsRecordingEnable() && (stageRecording == nil || len(rule.GetActiveServices()) != 1) {
-		logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "new recording path currently supports only single-service OpenAI Responses requests")
+	if scenarioConfig.IsRecordingEnable() && stageRecording == nil {
+		logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "new recording path requires a fully Stage-compatible service set")
 		return false
 	}
 
 	var requestErr error
 	if stageRecording != nil {
-		defer func() { stageRecording.finish(requestErr) }()
+		defer func() { stageRecording.observeAttempt(requestErr) }()
 	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
@@ -105,7 +105,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 		return true
 	}
 	terminal = requestrecord.ObserveProvider(terminal, stageRecordingRecorder(stageRecording), requestrecord.ExchangeMetadata{
-		Attempt:  1,
+		Attempt:  currentProtocolStageAttempt(c),
 		Provider: provider.Name,
 		Model:    actualModel,
 	})

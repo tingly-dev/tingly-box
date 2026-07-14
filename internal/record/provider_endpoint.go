@@ -102,7 +102,12 @@ func (s *providerStream) Close() error {
 	if closeErr != nil {
 		s.finish(closeErr)
 	} else {
-		s.finish(context.Canceled)
+		// A successful outer Stage/Bridge may stop after the provider's terminal
+		// event without pulling one additional EOF from this inner stream. The
+		// request driver still closes the chain normally, so preserve the
+		// assembled provider response as a successful exchange. Cancellation and
+		// other early termination already reach Next and win finishOnce first.
+		s.finish(nil)
 	}
 	return closeErr
 }

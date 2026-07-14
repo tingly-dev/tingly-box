@@ -168,7 +168,7 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 	actualModel := string(req.Model)
 
 	var stageRecording *protocolStageRequestRecording
-	if scenarioConfig.IsRecordingEnable() && len(rule.GetActiveServices()) == 1 {
+	if scenarioConfig.IsRecordingEnable() && ph.protocolStageRecordingSupportsRule(rule) {
 		stageRecording = ph.newProtocolStageRequestRecording(
 			scenarioType,
 			protocol.TypeOpenAIResponses,
@@ -176,6 +176,10 @@ func (ph *ProtocolHandler) ResponsesCreate(c *gin.Context, scenarioType typ.Rule
 			typ.GetSessionID(c.Request.Context()),
 			pkgobs.RequestIDFromContext(c.Request.Context()),
 		)
+	}
+	if stageRecording != nil {
+		enableProtocolStageAttemptTracking(c)
+		defer stageRecording.finishFromHTTP(c)
 	}
 
 	// Snapshot a pristine template only when failover is possible. The template

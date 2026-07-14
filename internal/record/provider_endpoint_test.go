@@ -141,6 +141,38 @@ func TestObserveProviderStreamAssemblesRawProviderResponse(t *testing.T) {
 	require.Contains(t, string(exchange.Response.Body), "hello")
 }
 
+func TestObserveProviderStreamCleanCloseAfterTerminalEventSucceeds(t *testing.T) {
+	recorder := newRecordingTestRecorder(t, protocol.TypeAnthropicBeta)
+	providerStream := &recordingTestStream{events: []stage.Event{
+		{Value: json.RawMessage(`{"type":"message_start","message":{"id":"msg-stream","type":"message","role":"assistant","content":[],"model":"provider-model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":0}}}`)},
+		{Value: json.RawMessage(`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}`)},
+		{Value: json.RawMessage(`{"type":"message_stop"}`)},
+	}}
+	endpoint := &recordingTestEndpoint{
+		api: protocol.TypeAnthropicBeta,
+		stream: func(context.Context, stage.Call) (stage.EventStream, error) {
+			return providerStream, nil
+		},
+	}
+	stream, err := ObserveProvider(endpoint, recorder, ExchangeMetadata{Attempt: 2}).Stream(
+		context.Background(),
+		stage.Call{Request: map[string]any{"model": "provider-model"}},
+	)
+	require.NoError(t, err)
+	for range providerStream.events {
+		_, err = stream.Next(context.Background())
+		require.NoError(t, err)
+	}
+	require.NoError(t, stream.Close())
+
+	completed, first := recorder.Finish(nil)
+	require.True(t, first)
+	require.Len(t, completed.ProviderExchanges, 1)
+	require.Equal(t, 2, completed.ProviderExchanges[0].Attempt)
+	require.Equal(t, OutcomeSucceeded, completed.ProviderExchanges[0].Outcome)
+	require.NotNil(t, completed.ProviderExchanges[0].Response)
+}
+
 func newRecordingTestRecorder(t *testing.T, api protocol.APIType) *Recorder {
 	t.Helper()
 	recorder, err := New(Config{

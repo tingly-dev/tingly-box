@@ -72,14 +72,14 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "response roundtrip diagnostic requires the legacy pipeline")
 		return false
 	}
-	if scenarioConfig.IsRecordingEnable() && (stageRecording == nil || len(rule.GetActiveServices()) != 1) {
-		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "new recording path currently supports only single-service OpenAI Chat requests")
+	if scenarioConfig.IsRecordingEnable() && stageRecording == nil {
+		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "new recording path requires a fully Stage-compatible service set")
 		return false
 	}
 
 	var requestErr error
 	if stageRecording != nil {
-		defer func() { stageRecording.finish(requestErr) }()
+		defer func() { stageRecording.observeAttempt(requestErr) }()
 	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
@@ -103,7 +103,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		return true
 	}
 	terminal = requestrecord.ObserveProvider(terminal, stageRecordingRecorder(stageRecording), requestrecord.ExchangeMetadata{
-		Attempt:  1,
+		Attempt:  currentProtocolStageAttempt(c),
 		Provider: provider.Name,
 		Model:    actualModel,
 	})
