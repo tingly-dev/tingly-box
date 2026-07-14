@@ -1,7 +1,7 @@
 import CardGrid from '@/components/CardGrid.tsx';
 import { PageLayout } from '@/components/PageLayout.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
-import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, Star as IconStar, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Language as IconWorld, Check as IconCheck, AccessTime as IconClock } from '@/components/icons';
+import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, Star as IconStar, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Check as IconCheck, AccessTime as IconClock } from '@/components/icons';
 import { VersionDisplay } from '@/components/VersionDisplay';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
@@ -228,14 +228,7 @@ const System = () => {
 
                 {/* Quick Proxy — dedicated card for the reusable proxy preset */}
                 <UnifiedCard
-                    title={
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                            <IconWorld sx={{ fontSize: 18, color: 'text.secondary' }} />
-                            <Typography variant="subtitle1" fontWeight={600}>
-                                {t('system.proxy.globalProxyUrl.label')}
-                            </Typography>
-                        </Stack>
-                    }
+                    title={t('system.proxy.globalProxyUrl.label')}
                     size="full"
                 >
                     <Stack spacing={1.5}>
