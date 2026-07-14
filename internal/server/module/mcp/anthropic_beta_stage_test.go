@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -186,6 +188,115 @@ func TestAnthropicBetaStagePreservesSideEffectBoundaryAfterLaterFailure(t *testi
 	}
 }
 
+func TestAnthropicBetaStageStreamHidesOwnedRoundAndContinues(t *testing.T) {
+	toolEvents := betaStageToolStreamEvents(betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup", Input: map[string]any{"q": "x"}})
+	textEvents := betaStageTextStreamEvents("done")
+	first := &betaStageMemoryStream{events: toolEvents, result: protocolstage.StreamResult{Usage: protocol.NewTokenUsage(3, 2), Model: "provider"}}
+	second := &betaStageMemoryStream{events: textEvents, result: protocolstage.StreamResult{Usage: protocol.NewTokenUsage(5, 4), Model: "provider"}}
+	terminal := &betaStageScriptedEndpoint{streams: []*betaStageMemoryStream{first, second}}
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:    staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor: executor,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	stream, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := collectBetaStageEvents(t, stream)
+	if betaStageEventBodies(t, got) != betaStageEventBodies(t, textEvents) {
+		t.Fatalf("outward events = %s, want final round %s", betaStageEventBodies(t, got), betaStageEventBodies(t, textEvents))
+	}
+	result := stream.Result()
+	if result.Usage == nil || result.Usage.InputTokens != 8 || result.Usage.OutputTokens != 6 {
+		t.Fatalf("aggregate stream usage = %#v", result.Usage)
+	}
+	if !result.SideEffectsCommitted || result.Model != "provider" {
+		t.Fatalf("stream result = %#v", result)
+	}
+	if len(terminal.streamCalls) != 2 || len(executor.calls) != 1 {
+		t.Fatalf("provider streams=%d executions=%d", len(terminal.streamCalls), len(executor.calls))
+	}
+	continued := terminal.streamCalls[1].Request.(*anthropic.BetaMessageNewParams)
+	if len(continued.Messages) != 2 {
+		t.Fatalf("continuation messages = %d, want assistant + tool-result user", len(continued.Messages))
+	}
+	if first.closeCalls != 1 || second.closeCalls != 1 {
+		t.Fatalf("inner close calls = %d, %d", first.closeCalls, second.closeCalls)
+	}
+	_ = stream.Close()
+}
+
+func TestAnthropicBetaStageStreamFiltersMixedOwnedBlocks(t *testing.T) {
+	continuations := &memoryBetaStageContinuations{}
+	events := betaStageToolStreamEvents(
+		betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup"},
+		betaStageToolCallSpec{ID: "toolu-external", Name: "client_tool"},
+	)
+	terminal := &betaStageScriptedEndpoint{streams: []*betaStageMemoryStream{{events: events}}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:         staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:      &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{"lookup": {Contents: coretool.TextToolResult("ok").Contents}}},
+		Continuations: continuations,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	stream, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := collectBetaStageEvents(t, stream)
+	body := betaStageEventBodies(t, got)
+	if strings.Contains(body, "lookup") || strings.Contains(body, "toolu-owned") {
+		t.Fatalf("owned tool leaked into outward stream: %s", body)
+	}
+	if !strings.Contains(body, "client_tool") || !strings.Contains(body, "toolu-external") {
+		t.Fatalf("external tool missing from outward stream: %s", body)
+	}
+	for _, event := range got {
+		raw, _ := betaStageStreamEventJSON(event.Value)
+		var value map[string]any
+		_ = json.Unmarshal(raw, &value)
+		if index, ok := value["index"].(float64); ok && int(index) != 0 {
+			t.Fatalf("filtered external block index = %v, want 0", index)
+		}
+	}
+	if continuations.puts != 1 || !stream.Result().SideEffectsCommitted {
+		t.Fatalf("mixed continuation puts=%d result=%#v", continuations.puts, stream.Result())
+	}
+	_ = stream.Close()
+}
+
+func TestAnthropicBetaStageStreamPreservesSideEffectBoundaryAfterLaterFailure(t *testing.T) {
+	providerErr := errors.New("second stream failed")
+	terminal := &betaStageScriptedEndpoint{
+		streams:      []*betaStageMemoryStream{{events: betaStageToolStreamEvents(betaStageToolCallSpec{ID: "toolu-1", Name: "lookup"})}},
+		streamErrors: []error{nil, providerErr},
+	}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:    staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor: &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{"lookup": {Contents: coretool.TextToolResult("ok").Contents}}},
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+	stream, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = stream.Next(context.Background())
+	if !errors.Is(err, providerErr) || !stagetoolloop.HasCommittedSideEffects(err) {
+		t.Fatalf("later stream error = %v, committed=%v", err, stagetoolloop.HasCommittedSideEffects(err))
+	}
+	if !stream.Result().SideEffectsCommitted {
+		t.Fatal("stream result lost committed side effects")
+	}
+	_ = stream.Close()
+}
+
 type staticBetaStageTools struct {
 	tools []anthropic.BetaToolUnionParam
 }
@@ -234,9 +345,12 @@ func (e *fakeBetaStageExecutor) ExecuteToolWithContext(ctx context.Context, tool
 }
 
 type betaStageScriptedEndpoint struct {
-	responses []*protocolstage.Response
-	errors    []error
-	calls     []protocolstage.Call
+	responses    []*protocolstage.Response
+	errors       []error
+	calls        []protocolstage.Call
+	streams      []*betaStageMemoryStream
+	streamErrors []error
+	streamCalls  []protocolstage.Call
 }
 
 func (*betaStageScriptedEndpoint) Protocol() protocol.APIType { return protocol.TypeAnthropicBeta }
@@ -253,9 +367,43 @@ func (e *betaStageScriptedEndpoint) Complete(_ context.Context, call protocolsta
 	return e.responses[index], nil
 }
 
-func (*betaStageScriptedEndpoint) Stream(context.Context, protocolstage.Call) (protocolstage.EventStream, error) {
-	return nil, errors.New("stream is not configured")
+func (e *betaStageScriptedEndpoint) Stream(_ context.Context, call protocolstage.Call) (protocolstage.EventStream, error) {
+	index := len(e.streamCalls)
+	e.streamCalls = append(e.streamCalls, call)
+	if index < len(e.streamErrors) && e.streamErrors[index] != nil {
+		return nil, e.streamErrors[index]
+	}
+	if index >= len(e.streams) {
+		return nil, errors.New("unexpected provider stream")
+	}
+	return e.streams[index], nil
 }
+
+type betaStageMemoryStream struct {
+	events     []protocolstage.Event
+	result     protocolstage.StreamResult
+	next       int
+	closeCalls int
+}
+
+func (s *betaStageMemoryStream) Next(ctx context.Context) (protocolstage.Event, error) {
+	if err := ctx.Err(); err != nil {
+		return protocolstage.Event{}, err
+	}
+	if s.next >= len(s.events) {
+		return protocolstage.Event{}, io.EOF
+	}
+	event := s.events[s.next]
+	s.next++
+	return event, nil
+}
+
+func (s *betaStageMemoryStream) Close() error {
+	s.closeCalls++
+	return nil
+}
+
+func (s *betaStageMemoryStream) Result() protocolstage.StreamResult { return s.result }
 
 type betaStageToolCallSpec struct {
 	ID    string
@@ -317,4 +465,101 @@ func betaStageToolResultIDs(message anthropic.BetaMessageParam) []string {
 		}
 	}
 	return ids
+}
+
+func collectBetaStageEvents(t *testing.T, stream protocolstage.EventStream) []protocolstage.Event {
+	t.Helper()
+	var events []protocolstage.Event
+	for {
+		event, err := stream.Next(context.Background())
+		if errors.Is(err, io.EOF) {
+			return events
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, event)
+	}
+}
+
+func betaStageEventBodies(t *testing.T, events []protocolstage.Event) string {
+	t.Helper()
+	var bodies []string
+	for _, event := range events {
+		raw, err := betaStageStreamEventJSON(event.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bodies = append(bodies, string(raw))
+	}
+	return strings.Join(bodies, "\n")
+}
+
+func betaStageToolStreamEvents(calls ...betaStageToolCallSpec) []protocolstage.Event {
+	events := []protocolstage.Event{betaStageRawEvent(map[string]any{
+		"type": "message_start",
+		"message": map[string]any{
+			"id": "msg-tool-stream", "type": "message", "role": "assistant", "content": []any{},
+			"model": "provider", "stop_reason": nil, "stop_sequence": nil,
+			"usage": map[string]any{"input_tokens": 3, "output_tokens": 0},
+		},
+	})}
+	for index, call := range calls {
+		input := call.Input
+		if input == nil {
+			input = map[string]any{}
+		}
+		inputJSON, _ := json.Marshal(input)
+		events = append(events,
+			betaStageRawEvent(map[string]any{
+				"type": "content_block_start", "index": index,
+				"content_block": map[string]any{"type": "tool_use", "id": call.ID, "name": call.Name, "input": map[string]any{}},
+			}),
+			betaStageRawEvent(map[string]any{
+				"type": "content_block_delta", "index": index,
+				"delta": map[string]any{"type": "input_json_delta", "partial_json": string(inputJSON)},
+			}),
+			betaStageRawEvent(map[string]any{"type": "content_block_stop", "index": index}),
+		)
+	}
+	events = append(events,
+		betaStageRawEvent(map[string]any{
+			"type": "message_delta", "delta": map[string]any{"stop_reason": "tool_use", "stop_sequence": nil},
+			"usage": map[string]any{"output_tokens": 2},
+		}),
+		betaStageRawEvent(map[string]any{"type": "message_stop"}),
+	)
+	return events
+}
+
+func betaStageTextStreamEvents(text string) []protocolstage.Event {
+	return []protocolstage.Event{
+		betaStageRawEvent(map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id": "msg-text-stream", "type": "message", "role": "assistant", "content": []any{},
+				"model": "provider", "stop_reason": nil, "stop_sequence": nil,
+				"usage": map[string]any{"input_tokens": 5, "output_tokens": 0},
+			},
+		}),
+		betaStageRawEvent(map[string]any{
+			"type": "content_block_start", "index": 0,
+			"content_block": map[string]any{"type": "text", "text": ""},
+		}),
+		betaStageRawEvent(map[string]any{
+			"type": "content_block_delta", "index": 0,
+			"delta": map[string]any{"type": "text_delta", "text": text},
+		}),
+		betaStageRawEvent(map[string]any{"type": "content_block_stop", "index": 0}),
+		betaStageRawEvent(map[string]any{
+			"type": "message_delta", "delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil},
+			"usage": map[string]any{"output_tokens": 4},
+		}),
+		betaStageRawEvent(map[string]any{"type": "message_stop"}),
+	}
+}
+
+func betaStageRawEvent(value any) protocolstage.Event {
+	raw, _ := json.Marshal(value)
+	return protocolstage.Event{Value: json.RawMessage(raw)}
 }

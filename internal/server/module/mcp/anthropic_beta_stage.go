@@ -179,8 +179,12 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 	return nil, stagetoolloop.WrapError(stagetoolloop.ErrMaxRounds, sideEffectsCommitted)
 }
 
-func (*anthropicBetaToolLoopEndpoint) Stream(context.Context, protocolstage.Call) (protocolstage.EventStream, error) {
-	return nil, errors.New("Anthropic Beta ToolLoop streaming is not implemented")
+func (e *anthropicBetaToolLoopEndpoint) Stream(ctx context.Context, call protocolstage.Call) (protocolstage.EventStream, error) {
+	prepared, owned, err := e.prepare(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	return newAnthropicBetaToolLoopStream(ctx, e, prepared, owned)
 }
 
 func (e *anthropicBetaToolLoopEndpoint) prepare(ctx context.Context, call protocolstage.Call) (protocolstage.Call, map[string]struct{}, error) {
