@@ -210,8 +210,9 @@ pulls them. The observer does not consume the stream independently:
   rewrites into one complete response.
 - Raw stream chunks are not stored in the first implementation.
 
-Each protocol therefore needs one capture codec for complete values and stream
-assembly. Recording never performs protocol conversion itself.
+Recording reuses protocol-owned typed values, Wire DTOs, and stream assemblers.
+It never performs protocol conversion itself and does not maintain a second
+recording-specific codec registry.
 
 ## Separation from Usage
 
@@ -243,17 +244,44 @@ The target semantics map as follows:
 The new implementation starts in one isolated package:
 
 ```text
-internal/requestrecord/
+internal/record/
 ├── record.go              // RequestRecord, ProviderExchange, Payload
 ├── recorder.go            // request-scoped lifecycle
 ├── provider_endpoint.go   // terminal Endpoint observer
-├── codec.go               // protocol capture contract
-└── *_codec.go             // Beta, V1, Chat, Responses
+└── stream.go              // observes EventStream through protocol assemblers
 ```
 
 This package has no Gin, HTTP writer, routing, Guardrail, MCP, or legacy
 recorder dependency. It may wrap `protocol/stage.Endpoint`; the Stage core does
 not import Recording.
+
+Protocol handling stays in the existing protocol packages:
+
+- complete request/response values remain the typed values already carried by
+  `stage.Call`, `stage.Response`, and `wire` DTOs;
+- Provider observation delegates through the existing `stage.Endpoint` and
+  `stage.EventStream` contracts;
+- stream reconstruction reuses the existing Anthropic V1/Beta, OpenAI Chat,
+  and OpenAI Responses assemblers in `internal/protocol/assembler`;
+- client output capture reuses the same Wire DTO/event values already produced
+  by the HTTP/SSE adapters.
+
+If Recording exposes a real common gap, the protocol layer is enhanced once.
+The expected addition is a small protocol-owned assembler interface/factory
+over the existing implementations, for example:
+
+```go
+type StreamAssembler interface {
+    Add(value any) error
+    Finish() (any, error)
+}
+
+func NewStreamAssembler(api protocol.APIType) (StreamAssembler, error)
+```
+
+The concrete type switches for SDK and Wire events belong to the protocol
+assembler package, not `internal/record`. No source→target protocol-pair logic
+is added for Recording.
 
 Production integration is limited to three seams per client protocol:
 
@@ -282,7 +310,7 @@ each. No all-protocol handler rewrite is required.
 | Checkpoint | Change | Production effect |
 | --- | --- | --- |
 | R1 — Foundation | `RequestRecord`, ordered exchanges, lifecycle, in-memory tests | None |
-| R2 — Capture codecs | Beta, V1, Chat, Responses complete/stream assembly | None |
+| R2 — Protocol capture support | Common interface over existing Beta, V1, Chat, and Responses assemblers | None |
 | R3 — Boundary harness | Verify input, provider, and output snapshots across all Stage routes | No persisted output |
 | R4 — Single-route canary | Beta identity route behind an internal experimental switch | Opt-in only |
 | R5 — Failover | Multiple exchanges, one final record | Opt-in only |
