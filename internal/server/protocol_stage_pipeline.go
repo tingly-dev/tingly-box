@@ -24,6 +24,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -47,6 +48,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	isStreaming bool,
 	scenarioConfig *typ.ScenarioConfig,
 	ruleFlags typ.RuleFlags,
+	stageRecording *protocolStageRequestRecording,
 ) bool {
 	if !ph.shouldUseProtocolStage(
 		c,
@@ -70,6 +72,15 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "response roundtrip diagnostic requires the legacy pipeline")
 		return false
 	}
+	if scenarioConfig.IsRecordingEnable() && (stageRecording == nil || len(rule.GetActiveServices()) != 1) {
+		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "new recording path currently supports only single-service OpenAI Chat requests")
+		return false
+	}
+
+	var requestErr error
+	if stageRecording != nil {
+		defer func() { stageRecording.finish(requestErr) }()
+	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
 		setProbeUpstreamHeadersForTarget(c, target, rule, provider)
@@ -87,9 +98,15 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		disableStreamUsage,
 	)
 	if err != nil {
+		requestErr = err
 		ph.FailAttemptSetup(c, err)
 		return true
 	}
+	terminal = requestrecord.ObserveProvider(terminal, stageRecordingRecorder(stageRecording), requestrecord.ExchangeMetadata{
+		Attempt:  1,
+		Provider: provider.Name,
+		Model:    actualModel,
+	})
 
 	scenarioFlags := scenarioFlagsOrNil(scenarioConfig)
 	stages := []protocolstage.Stage{
@@ -124,7 +141,8 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		RequiredCapabilities: protocolstage.AllBridgeCapabilities,
 	})
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build Protocol Stage topology: %w", err))
+		requestErr = fmt.Errorf("build Protocol Stage topology: %w", err)
+		ph.FailAttemptSetup(c, requestErr)
 		return true
 	}
 
@@ -137,10 +155,10 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 		},
 	}
 	if isStreaming {
-		ph.serveProtocolStageOpenAIChatStream(c, endpoint, call, responseModel, disableStreamUsage, nil)
+		requestErr = ph.serveProtocolStageOpenAIChatStream(c, endpoint, call, responseModel, disableStreamUsage, nil, stageRecordingRecorder(stageRecording))
 		return true
 	}
-	ph.serveProtocolStageOpenAIChatComplete(c, endpoint, call, responseModel, provider, actualModel, disableStreamUsage, nil)
+	requestErr = ph.serveProtocolStageOpenAIChatComplete(c, endpoint, call, responseModel, provider, actualModel, disableStreamUsage, nil, stageRecordingRecorder(stageRecording))
 	return true
 }
 
@@ -484,27 +502,29 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
 	actualModel string,
 	disableUsage bool,
 	recorder *recording.ProtocolRecorder,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, recorder, err, "Protocol Stage provider request failed")
-		return
+		return err
 	}
 	value, err := protocolStageChatResponseMap(response.Value)
 	if err != nil {
 		ph.failRequest(c, recorder, err, "Protocol Stage response conversion failed")
-		return
+		return err
 	}
 	value = ops.ApplyResponseTransforms(value, provider.APIBase, actualModel)
 	value["model"] = responseModel
 	if disableUsage {
 		delete(value, "usage")
 	}
+	captureProtocolStageFinalResponse(c.Request.Context(), requestRecorder, protocol.TypeOpenAIChat, value)
 	if response.Usage != nil && response.Usage.HasUsage() {
 		ph.trackUsageWithTokenUsage(c, response.Usage, nil)
 	}
@@ -513,6 +533,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
 		recorder.RecordResponse(provider, actualModel)
 	}
 	c.JSON(http.StatusOK, value)
+	return nil
 }
 
 func protocolStageChatResponseMap(value any) (map[string]any, error) {
@@ -555,27 +576,30 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 	responseModel string,
 	disableUsage bool,
 	recorder *recording.ProtocolRecorder,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		ph.FailAttemptSetup(c, fmt.Errorf("Protocol Stage streaming is unsupported by this connection"))
-		return
+		err := fmt.Errorf("Protocol Stage streaming is unsupported by this connection")
+		ph.FailAttemptSetup(c, err)
+		return err
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, recorder, err, "Protocol Stage provider stream failed")
-		return
+		return err
 	}
 	defer func() {
 		if closeErr := stream.Close(); closeErr != nil {
 			logrus.WithContext(c.Request.Context()).Warnf("close Protocol Stage stream: %v", closeErr)
 		}
 	}()
+	finalCapture := newProtocolStageFinalStreamCapture(c.Request.Context(), requestRecorder, protocol.TypeOpenAIChat)
 
 	wrote := false
 	for {
@@ -602,7 +626,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 			if recorder != nil {
 				recorder.RecordError(nextErr)
 			}
-			return
+			return nextErr
 		}
 
 		chunk, chunkErr := protocolStageChatStreamChunk(event.Value)
@@ -626,7 +650,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 			if recorder != nil {
 				recorder.RecordError(streamErr)
 			}
-			return
+			return streamErr
 		}
 		chunk.Model = responseModel
 		if disableUsage {
@@ -635,6 +659,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 				continue
 			}
 		}
+		finalCapture.add(c.Request.Context(), chunk)
 		if !wrote {
 			setProtocolStageSSEHeaders(c)
 			wrote = true
@@ -655,6 +680,8 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 	if result.Usage != nil && result.Usage.HasUsage() {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
+	finalCapture.finish(c.Request.Context())
+	return nil
 }
 
 func protocolStageChatStreamChunk(value any) (wire.ChatStreamChunk, error) {
