@@ -27,11 +27,21 @@ type AnthropicBetaStageExecutor interface {
 	ExecuteToolWithContext(ctx context.Context, tool Tool, messages []map[string]any) (context.Context, ToolExecutionResult, error)
 }
 
+// AnthropicBetaContinuationStore owns the Beta-native continuation segment
+// needed when one model response mixes internal and client-owned tool calls.
+// A production implementation may bind one instance to a provider and derive
+// the session key from ctx; the Stage never knows that storage key.
+type AnthropicBetaContinuationStore interface {
+	Pop(ctx context.Context) ([]anthropic.BetaMessageParam, bool)
+	Put(ctx context.Context, segment []anthropic.BetaMessageParam)
+}
+
 type AnthropicBetaStageConfig struct {
-	Name      string
-	Tools     AnthropicBetaToolProvider
-	Executor  AnthropicBetaStageExecutor
-	MaxRounds int
+	Name          string
+	Tools         AnthropicBetaToolProvider
+	Executor      AnthropicBetaStageExecutor
+	Continuations AnthropicBetaContinuationStore
+	MaxRounds     int
 }
 
 func NewAnthropicBetaStage(config AnthropicBetaStageConfig) (protocolstage.Stage, error) {
@@ -50,20 +60,22 @@ func NewAnthropicBetaStage(config AnthropicBetaStageConfig) (protocolstage.Stage
 		maxRounds = defaultMaxRounds
 	}
 	return &anthropicBetaToolLoopStage{
-		name:      name,
-		tools:     config.Tools,
-		executor:  config.Executor,
-		maxRounds: maxRounds,
-		adapter:   NewAnthropicBetaAdapter(),
+		name:          name,
+		tools:         config.Tools,
+		executor:      config.Executor,
+		continuations: config.Continuations,
+		maxRounds:     maxRounds,
+		adapter:       NewAnthropicBetaAdapter(),
 	}, nil
 }
 
 type anthropicBetaToolLoopStage struct {
-	name      string
-	tools     AnthropicBetaToolProvider
-	executor  AnthropicBetaStageExecutor
-	maxRounds int
-	adapter   *AnthropicBetaAdapter
+	name          string
+	tools         AnthropicBetaToolProvider
+	executor      AnthropicBetaStageExecutor
+	continuations AnthropicBetaContinuationStore
+	maxRounds     int
+	adapter       *AnthropicBetaAdapter
 }
 
 func (s *anthropicBetaToolLoopStage) Name() string             { return s.name }
@@ -110,7 +122,39 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 		if extractErr != nil {
 			return nil, stagetoolloop.WrapError(extractErr, sideEffectsCommitted)
 		}
-		if !allBetaStageToolsOwned(tools, owned) {
+		managed, external, externalIDs := splitBetaStageTools(tools, owned)
+		if len(managed) == 0 {
+			response.Usage = totalUsage
+			response.SideEffectsCommitted = sideEffectsCommitted
+			return response, nil
+		}
+		if len(external) > 0 {
+			if e.stage.continuations == nil {
+				response.Usage = totalUsage
+				response.SideEffectsCommitted = sideEffectsCommitted
+				return response, nil
+			}
+			results, nextCtx, committed := e.executeTools(runCtx, current.Request, managed)
+			sideEffectsCommitted = sideEffectsCommitted || committed
+			runCtx = nextCtx
+			normalized, normalizeErr := validateAndNormalizeMixedStash(externalIDs, results)
+			if normalizeErr != nil {
+				return nil, stagetoolloop.WrapError(normalizeErr, sideEffectsCommitted)
+			}
+			segmentValue, segmentErr := e.stage.adapter.BuildContinuationSegment(message, normalized)
+			if segmentErr != nil {
+				return nil, stagetoolloop.WrapError(segmentErr, sideEffectsCommitted)
+			}
+			segment, ok := segmentValue.([]anthropic.BetaMessageParam)
+			if !ok || len(segment) == 0 {
+				return nil, stagetoolloop.WrapError(errors.New("Anthropic Beta ToolLoop built an empty mixed continuation"), sideEffectsCommitted)
+			}
+			e.stage.continuations.Put(runCtx, segment)
+			filtered, filterErr := e.stage.adapter.FilterVirtualTools(message, external)
+			if filterErr != nil {
+				return nil, stagetoolloop.WrapError(filterErr, sideEffectsCommitted)
+			}
+			response.Value = filtered
 			response.Usage = totalUsage
 			response.SideEffectsCommitted = sideEffectsCommitted
 			return response, nil
@@ -119,7 +163,7 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 			return nil, stagetoolloop.WrapError(stagetoolloop.ErrMaxRounds, sideEffectsCommitted)
 		}
 
-		results, nextCtx, committed := e.executeTools(runCtx, current.Request, tools)
+		results, nextCtx, committed := e.executeTools(runCtx, current.Request, managed)
 		sideEffectsCommitted = sideEffectsCommitted || committed
 		runCtx = nextCtx
 		resultValues := make([]any, len(results))
@@ -173,6 +217,19 @@ func (e *anthropicBetaToolLoopEndpoint) prepare(ctx context.Context, call protoc
 		}
 	}
 	prepared := call
+	if e.stage.continuations != nil {
+		if segment, ok := e.stage.continuations.Pop(ctx); ok {
+			continued, applyErr := e.stage.adapter.ApplyContinuation(cloned, segment)
+			if applyErr != nil {
+				return protocolstage.Call{}, nil, fmt.Errorf("apply Anthropic Beta ToolLoop continuation: %w", applyErr)
+			}
+			var continuedOK bool
+			cloned, continuedOK = continued.(*anthropic.BetaMessageNewParams)
+			if !continuedOK || cloned == nil {
+				return protocolstage.Call{}, nil, fmt.Errorf("apply Anthropic Beta ToolLoop continuation returned %T", continued)
+			}
+		}
+	}
 	prepared.Request = cloned
 	return prepared, owned, nil
 }
@@ -218,16 +275,18 @@ func betaStageMessage(value any) (*anthropic.BetaMessage, error) {
 	}
 }
 
-func allBetaStageToolsOwned(tools []Tool, owned map[string]struct{}) bool {
-	if len(tools) == 0 {
-		return false
-	}
+func splitBetaStageTools(tools []Tool, owned map[string]struct{}) (managed, external []Tool, externalIDs []string) {
+	managed = make([]Tool, 0, len(tools))
+	external = make([]Tool, 0, len(tools))
 	for _, tool := range tools {
-		if _, ok := owned[tool.Name()]; !ok {
-			return false
+		if _, ok := owned[tool.Name()]; ok {
+			managed = append(managed, tool)
+			continue
 		}
+		external = append(external, tool)
+		externalIDs = append(externalIDs, tool.ID())
 	}
-	return true
+	return managed, external, externalIDs
 }
 
 func betaStageToolNames(tools []anthropic.BetaToolUnionParam) map[string]struct{} {

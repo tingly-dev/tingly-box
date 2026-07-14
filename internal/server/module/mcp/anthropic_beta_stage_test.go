@@ -95,6 +95,63 @@ func TestAnthropicBetaStageCompleteLeavesExternalAndMixedToolsOutward(t *testing
 	}
 }
 
+func TestAnthropicBetaStageCompleteStoresAndAppliesMixedContinuation(t *testing.T) {
+	continuations := &memoryBetaStageContinuations{}
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("internal result").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{responses: []*protocolstage.Response{
+		{Value: betaStageToolMessage(t,
+			betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup"},
+			betaStageToolCallSpec{ID: "toolu-external", Name: "client_tool"},
+		)},
+		{Value: betaStageTextMessage(t, "combined")},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:         staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:      executor,
+		Continuations: continuations,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	first, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := first.Value.(*anthropic.BetaMessage)
+	filteredTools, err := NewAnthropicBetaAdapter().ExtractTools(filtered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filteredTools) != 1 || filteredTools[0].Name() != "client_tool" {
+		t.Fatalf("filtered mixed tools = %#v", filteredTools)
+	}
+	if !first.SideEffectsCommitted || continuations.puts != 1 || len(executor.calls) != 1 {
+		t.Fatalf("first result committed=%v puts=%d executions=%d", first.SideEffectsCommitted, continuations.puts, len(executor.calls))
+	}
+
+	externalResult := anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu-external", "external result", false))
+	second, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{
+		Messages: []anthropic.BetaMessageParam{externalResult},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Value.(*anthropic.BetaMessage).Content[0].Text != "combined" {
+		t.Fatalf("second response = %#v", second.Value)
+	}
+	if continuations.pops != 2 || len(terminal.calls) != 2 {
+		t.Fatalf("continuation pops=%d provider calls=%d", continuations.pops, len(terminal.calls))
+	}
+	continued := terminal.calls[1].Request.(*anthropic.BetaMessageNewParams)
+	if len(continued.Messages) != 2 {
+		t.Fatalf("continued messages = %d, want assistant + merged tool-result user", len(continued.Messages))
+	}
+	if got := betaStageToolResultIDs(continued.Messages[1]); len(got) != 2 || got[0] != "toolu-owned" || got[1] != "toolu-external" {
+		t.Fatalf("merged tool result IDs = %#v", got)
+	}
+}
+
 func TestAnthropicBetaStageRejectsAmbiguousOwnership(t *testing.T) {
 	request := &anthropic.BetaMessageNewParams{Tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}}
 	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
@@ -148,6 +205,27 @@ type fakeBetaStageExecutor struct {
 	results map[string]ToolExecutionResult
 	errors  map[string]error
 	calls   []Tool
+}
+
+type memoryBetaStageContinuations struct {
+	segment []anthropic.BetaMessageParam
+	puts    int
+	pops    int
+}
+
+func (s *memoryBetaStageContinuations) Pop(context.Context) ([]anthropic.BetaMessageParam, bool) {
+	s.pops++
+	if len(s.segment) == 0 {
+		return nil, false
+	}
+	segment := s.segment
+	s.segment = nil
+	return segment, true
+}
+
+func (s *memoryBetaStageContinuations) Put(_ context.Context, segment []anthropic.BetaMessageParam) {
+	s.puts++
+	s.segment = append([]anthropic.BetaMessageParam(nil), segment...)
 }
 
 func (e *fakeBetaStageExecutor) ExecuteToolWithContext(ctx context.Context, tool Tool, _ []map[string]any) (context.Context, ToolExecutionResult, error) {
@@ -229,4 +307,14 @@ func betaStageToolDefinition(name string) anthropic.BetaToolUnionParam {
 	return anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{
 		Properties: map[string]any{},
 	}, name)
+}
+
+func betaStageToolResultIDs(message anthropic.BetaMessageParam) []string {
+	var ids []string
+	for _, block := range message.Content {
+		if block.OfToolResult != nil {
+			ids = append(ids, block.OfToolResult.ToolUseID)
+		}
+	}
+	return ids
 }
