@@ -111,6 +111,42 @@ func TestOpenAIChatCompletePreservesSideEffectBoundaryAfterLaterFailure(t *testi
 	}
 }
 
+func TestOpenAIChatCompleteRecordsToolRoundsAsExchangesInOneAttempt(t *testing.T) {
+	request := &openai.ChatCompletionNewParams{Model: "public", Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")}}
+	recorder, err := record.New(record.Config{
+		Enabled:       true,
+		RequestID:     "req-complete-tool-loop",
+		InputProtocol: protocol.TypeOpenAIChat,
+		Input:         request,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := &scriptedChatEndpoint{completeResponses: []*protocolstage.Response{
+		{Value: toolCallCompletion("call-1", "lookup", `{}`)},
+		{Value: textCompletion("done")},
+	}}
+	observed := record.ObserveProvider(terminal, recorder, record.ExchangeMetadata{Attempt: 3})
+	toolStage, _ := NewOpenAIChat(OpenAIChatConfig{
+		Catalog:  staticCatalog{{Name: "lookup"}},
+		Executor: &fakeExecutor{results: map[string]ToolResult{"lookup": {Content: "ok"}}},
+	})
+	endpoint, _ := protocolstage.Compose(observed, toolStage)
+
+	response, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: request})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recorder.SetFinalResponse(protocol.TypeOpenAIChat, response.Value); err != nil {
+		t.Fatal(err)
+	}
+	completed, first := recorder.Finish(nil)
+	if !first {
+		t.Fatal("recorder was already finished")
+	}
+	assertToolLoopRecord(t, completed)
+}
+
 func TestOpenAIChatRejectsAmbiguousToolNameOwnership(t *testing.T) {
 	request := &openai.ChatCompletionNewParams{Tools: []openai.ChatCompletionToolUnionParam{
 		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "lookup"}),
@@ -246,6 +282,30 @@ func TestOpenAIChatStreamPreservesSideEffectBoundaryAfterLaterFailure(t *testing
 	_ = stream.Close()
 }
 
+func TestOpenAIChatStreamEnforcesMaxRoundsBeforeToolExecution(t *testing.T) {
+	executor := &fakeExecutor{}
+	terminal := &scriptedChatEndpoint{streams: []*memoryEventStream{{events: toolCallStreamEvents("call-1", "lookup", `{}`)}}}
+	stage, _ := NewOpenAIChat(OpenAIChatConfig{
+		Catalog:   staticCatalog{{Name: "lookup"}},
+		Executor:  executor,
+		MaxRounds: 1,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, stage)
+	stream, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &openai.ChatCompletionNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = stream.Next(context.Background())
+	if !errors.Is(err, ErrMaxRounds) || HasCommittedSideEffects(err) {
+		t.Fatalf("max-round error = %v, committed=%v", err, HasCommittedSideEffects(err))
+	}
+	if len(executor.calls) != 0 {
+		t.Fatalf("executed %d tools after reaching max rounds", len(executor.calls))
+	}
+	_ = stream.Close()
+}
+
 func TestOpenAIChatStreamRecordsToolRoundsAsExchangesInOneAttempt(t *testing.T) {
 	request := &openai.ChatCompletionNewParams{Model: "public", Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")}}
 	recorder, err := record.New(record.Config{
@@ -287,6 +347,11 @@ func TestOpenAIChatStreamRecordsToolRoundsAsExchangesInOneAttempt(t *testing.T) 
 	if !first {
 		t.Fatal("recorder was already finished")
 	}
+	assertToolLoopRecord(t, completed)
+}
+
+func assertToolLoopRecord(t *testing.T, completed *record.RequestRecord) {
+	t.Helper()
 	if len(completed.ProviderExchanges) != 2 {
 		t.Fatalf("provider exchanges = %d, want 2", len(completed.ProviderExchanges))
 	}
