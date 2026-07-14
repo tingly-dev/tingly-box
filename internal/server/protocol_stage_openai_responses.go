@@ -23,14 +23,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-// tryProtocolStageOpenAIResponses selects the first Responses-source route.
-// Only native Responses passthrough is registered initially; cross-protocol
-// routes remain on the legacy pipeline until their concrete Bridges are ready.
+// tryProtocolStageOpenAIResponses selects an explicitly registered
+// Responses-source route and owns its complete request lifecycle.
 func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	c *gin.Context,
 	req *protocol.ResponseCreateRequest,
@@ -43,6 +43,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	scenarioConfig *typ.ScenarioConfig,
 	ruleFlags typ.RuleFlags,
 	maxAllowed int,
+	stageRecording *protocolStageRequestRecording,
 ) bool {
 	if !ph.shouldUseProtocolStage(
 		c,
@@ -55,6 +56,15 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	if ph.mcpEnabled() {
 		logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "MCP runtime still uses the legacy pipeline")
 		return false
+	}
+	if scenarioConfig.IsRecordingEnable() && (stageRecording == nil || len(rule.GetActiveServices()) != 1) {
+		logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "new recording path currently supports only single-service OpenAI Responses requests")
+		return false
+	}
+
+	var requestErr error
+	if stageRecording != nil {
+		defer func() { stageRecording.finish(requestErr) }()
 	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
@@ -90,9 +100,15 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	}
 	terminal, registry, err := ph.protocolStageOpenAIResponsesTarget(target, provider, actualModel, responseModel, maxAllowed)
 	if err != nil {
+		requestErr = err
 		ph.FailAttemptSetup(c, err)
 		return true
 	}
+	terminal = requestrecord.ObserveProvider(terminal, stageRecordingRecorder(stageRecording), requestrecord.ExchangeMetadata{
+		Attempt:  1,
+		Provider: provider.Name,
+		Model:    actualModel,
+	})
 	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
 		Terminal:             terminal,
 		Stages:               stages,
@@ -101,7 +117,8 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 		RequiredCapabilities: protocolstage.AllBridgeCapabilities,
 	})
 	if err != nil {
-		ph.FailAttemptSetup(c, fmt.Errorf("build OpenAI Responses Protocol Stage topology: %w", err))
+		requestErr = fmt.Errorf("build OpenAI Responses Protocol Stage topology: %w", err)
+		ph.FailAttemptSetup(c, requestErr)
 		return true
 	}
 
@@ -113,10 +130,10 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 		},
 	}
 	if isStreaming {
-		ph.serveProtocolStageOpenAIResponsesStream(c, endpoint, call, responseModel)
+		requestErr = ph.serveProtocolStageOpenAIResponsesStream(c, endpoint, call, responseModel, stageRecordingRecorder(stageRecording))
 		return true
 	}
-	ph.serveProtocolStageOpenAIResponsesComplete(c, endpoint, call, responseModel)
+	requestErr = ph.serveProtocolStageOpenAIResponsesComplete(c, endpoint, call, responseModel, stageRecordingRecorder(stageRecording))
 	return true
 }
 
@@ -279,26 +296,29 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesComplete(
 	endpoint protocolstage.Endpoint,
 	call protocolstage.Call,
 	responseModel string,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	result, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.failRequest(c, nil, err, "OpenAI Responses Protocol Stage provider request failed")
-		return
+		return err
 	}
 	body, err := protocolStageOpenAIResponsesValueJSON(result.Value, responseModel)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
-		return
+		return err
 	}
+	captureProtocolStageFinalResponse(c.Request.Context(), requestRecorder, protocol.TypeOpenAIResponses, json.RawMessage(body))
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
+	return nil
 }
 
 func protocolStageOpenAIResponsesValueJSON(value any, responseModel string) ([]byte, error) {
@@ -354,27 +374,30 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 	endpoint protocolstage.Endpoint,
 	call protocolstage.Call,
 	responseModel string,
-) {
+	requestRecorder *requestrecord.Recorder,
+) error {
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		ph.FailAttemptSetup(c, fmt.Errorf("OpenAI Responses Protocol Stage streaming is unsupported by this connection"))
-		return
+		err := fmt.Errorf("OpenAI Responses Protocol Stage streaming is unsupported by this connection")
+		ph.FailAttemptSetup(c, err)
+		return err
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
-			return
+			return err
 		}
 		ph.handlePreStreamFailure(c, err, nil)
-		return
+		return err
 	}
 	defer func() {
 		if closeErr := stream.Close(); closeErr != nil {
 			logrus.WithContext(c.Request.Context()).Warnf("close OpenAI Responses Protocol Stage stream: %v", closeErr)
 		}
 	}()
+	finalCapture := newProtocolStageFinalStreamCapture(c.Request.Context(), requestRecorder, protocol.TypeOpenAIResponses)
 
 	wrote := false
 	for {
@@ -388,7 +411,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 				if result.Usage != nil {
 					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 				}
-				return
+				return nextErr
 			}
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, nextErr)
@@ -407,7 +430,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 				})
 				flusher.Flush()
 			}
-			return
+			return nextErr
 		}
 
 		eventType, payload, eventErr := protocolStageOpenAIResponsesEventJSON(event.Value, responseModel)
@@ -425,8 +448,9 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 				})
 				flusher.Flush()
 			}
-			return
+			return streamErr
 		}
+		finalCapture.add(c.Request.Context(), json.RawMessage(payload))
 		if !wrote {
 			setProtocolStageOpenAIResponsesSSEHeaders(c)
 			wrote = true
@@ -439,6 +463,8 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}
+	finalCapture.finish(c.Request.Context())
+	return nil
 }
 
 func setProtocolStageOpenAIResponsesSSEHeaders(c *gin.Context) {

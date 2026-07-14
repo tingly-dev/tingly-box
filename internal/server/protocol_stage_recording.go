@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	internalobs "github.com/tingly-dev/tingly-box/internal/obs"
@@ -12,12 +14,31 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+const protocolStageOriginalInputKey = "protocol_stage_original_input"
+
 // protocolStageRequestRecording owns the new request-boundary recorder and its
 // existing obs sink. It is intentionally separate from the legacy Gin-based
 // ProtocolRecorder while the Stage path is canaried additively.
 type protocolStageRequestRecording struct {
 	recorder *requestrecord.Recorder
 	sink     *internalobs.Sink
+}
+
+func rememberProtocolStageOriginalInput(c *gin.Context, body []byte) {
+	if c == nil || len(body) == 0 {
+		return
+	}
+	c.Set(protocolStageOriginalInputKey, json.RawMessage(append([]byte(nil), body...)))
+}
+
+func protocolStageOriginalInput(c *gin.Context, fallback any) any {
+	if c == nil {
+		return fallback
+	}
+	if input, ok := c.Get(protocolStageOriginalInputKey); ok {
+		return input
+	}
+	return fallback
 }
 
 func (ph *ProtocolHandler) newProtocolStageRequestRecording(

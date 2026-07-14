@@ -31,6 +31,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
+	rememberProtocolStageOriginalInput(c, bodyBytes)
 
 	// Parse OpenAI-style request
 	var req = &protocol.OpenAIChatCompletionRequest{}
@@ -156,7 +157,7 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 		stageRecording = ph.newProtocolStageRequestRecording(
 			scenarioType,
 			protocol.TypeOpenAIChat,
-			req.ChatCompletionNewParams,
+			protocolStageOriginalInput(c, req.ChatCompletionNewParams),
 			sessionID,
 			pkgobs.RequestIDFromContext(c.Request.Context()),
 		)

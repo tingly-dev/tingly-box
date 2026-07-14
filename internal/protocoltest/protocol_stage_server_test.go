@@ -131,6 +131,9 @@ func TestServerProtocolStageRecordingSelection(t *testing.T) {
 		{name: "chat identity", source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, wantHeader: "stage"},
 		{name: "chat to beta", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
 		{name: "chat to responses", source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIResponses, wantHeader: "stage"},
+		{name: "responses identity", source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIResponses, wantHeader: "stage"},
+		{name: "responses to beta", source: protocol.TypeOpenAIResponses, target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
+		{name: "responses to chat", source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, wantHeader: "stage"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
