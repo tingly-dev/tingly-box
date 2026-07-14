@@ -358,11 +358,25 @@
           "note": "旗舰模型，能力最强，适合复杂编码、长程 Agent 和高难度推理"
         },
         {
+          "id": "gpt-5.6-sol:fast",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "note": "旗舰模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持"
+        },
+        {
           "id": "gpt-5.6-terra",
           "context": 1050000,
           "max_output": 128000,
           "created": "2026-07-09",
           "note": "平衡能力与成本，适合常规开发任务"
+        },
+        {
+          "id": "gpt-5.6-terra:fast",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-07-09",
+          "note": "平衡模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持"
         },
         {
           "id": "gpt-5.6-luna",
