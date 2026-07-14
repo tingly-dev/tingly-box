@@ -2038,11 +2038,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 			// Merge in the preset/template list before persisting: upstream can
 			// return a non-empty but incomplete list (e.g. intercepted by a
 			// proxy), which must not silently drop preset models the API omits.
-			if c.templateManager != nil {
-				if tmplModels, tmplErr := c.templateManager.GetEmbeddedModelsForProvider(provider); tmplErr == nil {
-					models = MergeModelLists(models, tmplModels)
-				}
-			}
+			models, _ = MergeTemplateModels(c.templateManager, provider, models)
 			// Apply canonical ordering before persisting; the same sort is
 			// reapplied at the serving boundary so cached order is irrelevant.
 			SortProviderModels(provider, models)
@@ -2146,6 +2142,28 @@ func SortProviderModels(provider *typ.Provider, models []string) {
 		}
 		return strings.Compare(a, b)
 	})
+}
+
+// MergeTemplateModels unions models with the provider's embedded
+// template/preset fallback list, if a template manager is configured and has
+// an entry for the provider. It reports whether the template contributed any
+// model not already present, so callers can tell a no-op merge from one that
+// actually filled a gap (e.g. to pick a "merged" vs. unchanged cache source).
+//
+// This is the single place both the fetch/persist path
+// (FetchAndSaveProviderModels) and the serving path (GetProviderModelsByUUID)
+// go through, so upstream's list and the built-in preset list are always
+// reconciled the same way regardless of which one is stale or incomplete.
+func MergeTemplateModels(tm *data.TemplateManager, provider *typ.Provider, models []string) (merged []string, grew bool) {
+	if tm == nil {
+		return models, false
+	}
+	templateModels, err := tm.GetEmbeddedModelsForProvider(provider)
+	if err != nil || len(templateModels) == 0 {
+		return models, false
+	}
+	merged = MergeModelLists(models, templateModels)
+	return merged, len(merged) > len(models)
 }
 
 // MergeModelLists unions apiModels with fallbackModels, preserving apiModels'

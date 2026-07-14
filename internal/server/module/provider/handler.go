@@ -503,28 +503,23 @@ func (h *Handler) GetProviderModelsByUUID(c *gin.Context) {
 	// take effect immediately (no waiting on the cached entry's TTL) and
 	// what fills in preset models an intercepted/incomplete upstream
 	// response omitted, even though the API list itself was non-empty.
-	if provErr == nil && !isVirtual && h.config.GetTemplateManager() != nil {
-		templateModels, tmplErr := h.config.GetTemplateManager().GetEmbeddedModelsForProvider(p)
-		if tmplErr == nil && len(templateModels) > 0 {
-			merged := config.MergeModelLists(models, templateModels)
-			if len(merged) > len(models) {
-				if len(models) == 0 {
-					source = ModelCacheSourceTemplate
-				} else {
-					source = ModelCacheSourceMerged
-				}
-				models = merged
-				if expiresAt.After(time.Now().Add(1 * time.Hour)) {
-					expiresAt = time.Now().Add(1 * time.Hour)
-				}
+	if provErr == nil && !isVirtual {
+		wasEmpty := len(models) == 0
+		var grew bool
+		if models, grew = config.MergeTemplateModels(h.config.GetTemplateManager(), p, models); grew {
+			if wasEmpty {
+				source = ModelCacheSourceTemplate
+			} else {
+				source = ModelCacheSourceMerged
 			}
+			expiresAt = time.Now().Add(1 * time.Hour)
 		}
 	}
 
 	// Apply canonical ordering at the serving boundary so the response order
 	// is authoritative regardless of cache source. The frontend relies on this
 	// order and no longer sorts client-side.
-	if p, err := h.config.GetProviderByUUID(uid); err == nil {
+	if provErr == nil {
 		config.SortProviderModels(p, models)
 	}
 
