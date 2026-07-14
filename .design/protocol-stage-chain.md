@@ -1,6 +1,7 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–2 and the first Phase 3 canary are implemented additively.
+> Status: Phases 1–3 and the in-process Phase 4 Tool Loop Stage are implemented
+> additively. The Tool Loop is not connected to production handlers yet.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
 > Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
@@ -24,7 +25,7 @@ lifecycle before the provider is called.
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
-| 4 — Tool Loop canary | Not started | Design agreed; no Tool Loop Stage code or production MCP wiring yet |
+| 4 — Tool Loop canary | Stage complete; production canary pending | Chat-native complete/stream Tool Loop and protocol-neutral runtime are tested in-process; no MCP/servertool adapters or production routing yet |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |
 
@@ -49,9 +50,10 @@ Production route selection with `--stage`:
 The planned protocol-pair rollout is complete: the three provider-facing
 protocols (Beta, Chat, and Responses) are available from each supported source,
 while Anthropic V1 remains deliberately distinct and native only to V1 clients.
-Phase 4
-Tool Loop remains deferred until this protocol surface is complete enough to
-host it without Responses-specific branches.
+That complete Bridge surface now hosts a Chat-native Tool Loop without
+Responses-, Beta-, or V1-specific branches. Production selection still treats
+MCP as legacy until the existing MCP/servertool runtime is adapted to the new
+protocol-neutral contracts and wired behind an explicit canary.
 
 ## Decision
 
@@ -298,6 +300,15 @@ The Tool Loop Stage owns:
 - appending tool results and continuing the next model round;
 - max-round enforcement and usage accumulation.
 
+The implemented native protocol is `openai_chat`. Existing Bridges make it
+available to the other supported client/provider protocols without teaching
+the Tool Loop those protocols. The implementation buffers only the prefix of a
+stream needed to classify a tool round: ordinary visible content remains
+pull-based, pure server-owned tool rounds are consumed internally, and external
+or mixed tool rounds are replayed outward unchanged. A request tool and server
+tool with the same name fail explicitly because name-only ownership would be
+ambiguous.
+
 MCP remains a tool catalog/runtime source. `servertool.Executor` remains an
 execution backend. Neither needs to understand every client/provider protocol;
 only the Tool Loop Stage understands its native stage protocol.
@@ -418,6 +429,15 @@ attempt enters the complete legacy Guardrail lifecycle.
 - Inject `ToolCatalog`, `ToolPolicy`, and `ToolExecutor` dependencies.
 - Validate using deterministic mocks and read-only tools before a production
   canary. Never dual-execute tools for shadow comparison.
+
+The in-process portion is complete: protocol-neutral catalog, policy, executor,
+and side-effect error contracts are implemented; the Chat-native Stage owns
+complete and streaming continuation; deterministic tests cover internal,
+external, and mixed ownership, max-round/side-effect boundaries, usage
+aggregation, stream close/backpressure, and RequestRecord multi-exchange
+behavior. The next step is intentionally a production boundary change: adapt
+the existing MCP/servertool runtime, add topology selection, and validate the
+real handler path. It is not included in this checkpoint.
 
 ### Phase 5 — Handler integration and default rollout
 
@@ -578,7 +598,9 @@ registration; the outer adapter accepts both provider SDK values and
 Bridge-produced wire DTOs, then applies the same public-model rewrite.
 V1 → Responses uses the same Responses provider boundary but a distinct V1
 Bridge registration and typed V1 response recovery. V1 Guardrails, MCP, and
-recording continue to select the entire legacy lifecycle before Stage starts.
+unsupported feature combinations continue to select the entire legacy
+lifecycle before Stage starts; protocol recording is available on the twelve
+registered routes under its separate opt-in gate.
 Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
 exposes the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
