@@ -1421,8 +1421,29 @@ export const handlers = [
         return HttpResponse.json({ valid: true, user: { username: 'admin', role: 'admin' } })
     }),
 
+    http.get('/api/v1/auth/token', () => {
+        return HttpResponse.json({
+            success: true,
+            data: { token: 'mock-user-token-a1b2c3d4e5f6', is_default: false },
+        })
+    }),
+
+    http.post('/api/v1/auth/token/reset', () => {
+        return HttpResponse.json({
+            success: true,
+            data: { token: `mock-user-token-${Math.random().toString(36).slice(2, 14)}` },
+        })
+    }),
+
     http.get('/api/v1/token', () => {
         return HttpResponse.json({ token: 'mock-model-token', type: 'Bearer' })
+    }),
+
+    http.post('/api/v1/auth/model-token/reset', () => {
+        return HttpResponse.json({
+            success: true,
+            data: { token: `mock-model-token-${Math.random().toString(36).slice(2, 14)}` },
+        })
     }),
 
     http.get('/api/v1/rules', ({ request }) => {
