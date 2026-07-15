@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -84,6 +85,19 @@ func (r *RestartCmdKong) Run(appManager *AppManager) error {
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 	wasRunning := fileLock.IsLocked()
 
+	// A real restart continues on the port the server is actually running on,
+	// not the config default. That port may have come from `--port` at start
+	// time and is intentionally never persisted, so without this a bare
+	// `restart` would silently relocate the server and break clients (cc /
+	// profile / an open web UI) pointed at the live port. An explicit `--port`
+	// still wins. The live port must be read BEFORE stopping, since stopping
+	// removes the runtime port file.
+	restartPort := r.Port
+	preservedPort := restartPort == 0 && wasRunning
+	if preservedPort {
+		restartPort = appManager.GetRuntimeServerPort()
+	}
+
 	if wasRunning {
 		fmt.Println("Stopping current server...")
 		if err := stopServerWithFileLock(fileLock); err != nil {
@@ -94,8 +108,14 @@ func (r *RestartCmdKong) Run(appManager *AppManager) error {
 		fmt.Println("Server was not running, starting it...")
 	}
 
+	// Make the preserved port and how to override it visible, so the "sticky"
+	// port is never invisible state (see .design/runtime-port-file.md).
+	if preservedPort {
+		fmt.Printf("Continuing on the running port %d (pass --port to change it; run 'stop' then 'start' for the default).\n", restartPort)
+	}
+
 	flags := options.StartFlags{
-		Port:                 r.Port,
+		Port:                 restartPort,
 		Host:                 r.Host,
 		EnableUI:             r.EnableUI,
 		EnableDebug:          r.EnableDebug,
@@ -123,7 +143,7 @@ func (o *OpenCmdKong) Run(appManager *AppManager) error {
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
 	if fileLock.IsLocked() {
-		port := appConfig.GetServerPort()
+		port := appManager.GetRuntimeServerPort()
 		globalConfig := appManager.GetGlobalConfig()
 
 		host := opts.Host
@@ -203,7 +223,7 @@ func runStatusCmd(appManager *AppManager) error {
 	fmt.Printf("Server Status: ")
 	if serverRunning {
 		fmt.Printf("Running\n")
-		port := appConfig.GetServerPort()
+		port := appManager.GetRuntimeServerPort()
 		fmt.Printf("Port: %d\n", port)
 		fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/tingly/openai/v1/chat/completions\n", port)
 		fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/tingly/anthropic/v1/messages\n", port)
@@ -491,7 +511,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 
 	// Check if server is already running using file lock (BEFORE port check)
 	if fileLock.IsLocked() {
-		fmt.Printf("Server is already running on port %d\n", port)
+		fmt.Printf("Server is already running on port %d\n", appManager.GetRuntimeServerPort())
 		fmt.Println("Use 'tingly-box restart' to restart the server")
 		fmt.Println("Use 'tingly-box stop' to stop it")
 
@@ -530,6 +550,15 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	fmt.Printf("Lock acquired: %s\n", fileLock.GetLockFilePath())
+
+	// Record the actual listening port next to the PID lock so other CLI
+	// processes (cc/profile/log/status/open) can discover it — the port is
+	// intentionally not persisted in the config file. The lock owns this
+	// runtime artifact and removes it on Unlock, so no per-exit-path cleanup
+	// is needed here.
+	if err := fileLock.WritePort(port); err != nil {
+		logrus.Warnf("Failed to record server port: %v", err)
+	}
 
 	serverManager := NewServerManager(
 		appConfig,
@@ -570,8 +599,11 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 	// Handle daemon mode - fork and detach after all messages are printed
 	if opts.Daemon {
 		if !daemon.IsDaemonProcess() {
-			// Fork and detach - this call exits the parent process
-			if err := daemon.Daemonize(); err != nil {
+			// Fork and detach - this call exits the parent process. Pin the
+			// resolved port so the re-exec'd child binds the same port instead
+			// of re-resolving from its own args (which omit a preserved/config
+			// port and would drift to the default).
+			if err := daemon.Daemonize("--port", strconv.Itoa(port)); err != nil {
 				fileLock.Unlock()
 				return fmt.Errorf("failed to daemonize: %w", err)
 			}
@@ -590,17 +622,17 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
 	case err := <-serverErr:
-		// Release lock on error
+		// Release lock on error (also removes the runtime port file)
 		fileLock.Unlock()
 		return fmt.Errorf("server stopped unexpectedly: %w", err)
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
-		// Release lock on shutdown
+		// Release lock on shutdown (also removes the runtime port file)
 		fileLock.Unlock()
 		return serverManager.Stop()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
-		// Release lock on shutdown
+		// Release lock on shutdown (also removes the runtime port file)
 		fileLock.Unlock()
 		return serverManager.Stop()
 	}

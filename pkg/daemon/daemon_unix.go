@@ -10,8 +10,12 @@ import (
 )
 
 // Daemonize detaches the process from the terminal and runs in the background
-// This works on Unix-like systems (Linux, macOS)
-func Daemonize() error {
+// This works on Unix-like systems (Linux, macOS).
+//
+// overrideArgs pins flags the parent resolved (e.g. "--port", "9000") so the
+// detached child binds exactly what the parent decided instead of re-resolving
+// its own command line. See buildDaemonArgs.
+func Daemonize(overrideArgs ...string) error {
 	// Check if we're already the child process
 	if IsDaemonProcess() {
 		return nil
@@ -23,8 +27,8 @@ func Daemonize() error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	// Get original arguments
-	args := os.Args[1:]
+	// Get original arguments, pinning any resolved flags for the child
+	args := buildDaemonArgs(os.Args[1:], overrideArgs)
 
 	// Set environment variable to mark the child as daemon
 	cmd := exec.Command(execPath, args...)

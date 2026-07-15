@@ -41,3 +41,19 @@ func NewLogger(cfg *LogRotationConfig) *lumberjack.Logger {
 func IsDaemonProcess() bool {
 	return os.Getenv("_TINGLY_BOX_DAEMON") == "1"
 }
+
+// buildDaemonArgs computes the argv for the re-exec'd daemon child. Daemonize
+// re-runs the current command, so a value the parent *resolved* rather than
+// received on the command line (e.g. a `restart` preserving the running port)
+// would be re-resolved by the child and drift back to the default. overrideArgs
+// is appended so the child sees the pinned flag; the CLI parser takes the last
+// occurrence, so this wins over any earlier value without needing to strip it.
+func buildDaemonArgs(args, overrideArgs []string) []string {
+	if len(overrideArgs) == 0 {
+		return args
+	}
+	out := make([]string, 0, len(args)+len(overrideArgs))
+	out = append(out, args...)
+	out = append(out, overrideArgs...)
+	return out
+}

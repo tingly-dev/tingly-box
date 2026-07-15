@@ -19,6 +19,7 @@ type FileLock struct {
 	pidFile  string // Separate PID file for Windows (can be read while lock is held)
 	file     *os.File
 	pid      int
+	portFile *PortFile
 }
 
 // NewFileLock creates a new file lock instance.
@@ -27,6 +28,7 @@ func NewFileLock(configDir string) *FileLock {
 	return &FileLock{
 		lockFile: filepath.Join(configDir, "tingly-server.lock"),
 		pidFile:  filepath.Join(configDir, "tingly-server.pid"), // Separate PID file
+		portFile: NewPortFile(configDir),
 	}
 }
 
@@ -89,9 +91,11 @@ func (fl *FileLock) Unlock() error {
 	closeErr := fl.file.Close()
 	fl.file = nil
 
-	// Remove the lock file and PID file (optional, keeps directory clean)
+	// Remove the lock file, PID file, and the associated runtime port file
+	// (all runtime artifacts of this lock; keeps the config directory clean).
 	_ = os.Remove(fl.lockFile)
 	_ = os.Remove(fl.pidFile)
+	_ = fl.portFile.Remove()
 
 	if closeErr != nil {
 		return fmt.Errorf("failed to close lock file: %w", closeErr)
@@ -162,4 +166,24 @@ func (fl *FileLock) GetPID() (int, error) {
 	}
 
 	return pid, nil
+}
+
+// WritePort records the port the running server is listening on. It is a
+// runtime artifact tied to this lock's lifetime: written after TryLock and
+// removed by Unlock (or RemovePort for a crashed server the stopper cleans up).
+func (fl *FileLock) WritePort(port int) error {
+	return fl.portFile.Write(port)
+}
+
+// ReadPort returns the port recorded by the running server. Callers must gate
+// on IsLocked() and treat any error as "port unknown" (fall back to config).
+func (fl *FileLock) ReadPort() (int, error) {
+	return fl.portFile.Read()
+}
+
+// RemovePort deletes the runtime port file. Unlock already does this for the
+// lock holder; the stop command uses it to clean up after a server that was
+// killed without releasing the lock itself.
+func (fl *FileLock) RemovePort() error {
+	return fl.portFile.Remove()
 }

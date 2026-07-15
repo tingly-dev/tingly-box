@@ -20,7 +20,7 @@ import (
 // to Claude Code so users do not need to insert a literal '--'.
 type CCmdKong struct {
 	Profile string   `kong:"flag,name='profile',help='Claude Code profile to use'"`
-	Port    int      `kong:"flag,name='port',help='Tingly-Box server port (default: from config or 12580)'"`
+	Port    int      `kong:"flag,name='port',help='Tingly-Box server port (default: detected from running server, else config or 12580)'"`
 	Args    []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }
 
@@ -72,10 +72,12 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 		scenarioPath = string(typ.ProfiledScenarioName(scenario, profileID))
 	}
 
-	// Build base URL and token
+	// Build base URL and token. Without an explicit --port, prefer the port
+	// the running server actually listens on (runtime port file) over the
+	// configured default, so `--port` at server start doesn't need repeating.
 	port := portOverride
 	if port == 0 {
-		port = appManager.GetServerPort()
+		port = appManager.GetRuntimeServerPort()
 	}
 	if port == 0 {
 		port = 12580
