@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Box,
     Paper,
@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { WaveSine as StreamIcon } from '@/components/icons';
 import { getThemeChartStyles, TOKEN_COLORS, formatNumber } from './chartStyles';
+import api from '@/services/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -262,10 +263,6 @@ const getLatencyColor = (ms: number, theme: any) => {
 interface TableSectionProps {
     records: UsageRecord[];
     total: number;
-    /** Number of records actually loaded from the server (page cap). */
-    loadedCount?: number;
-    /** Real total in range reported by the server. */
-    totalCount?: number;
     page: number;
     rowsPerPage: number;
     statusFilter: 'all' | 'success' | 'error';
@@ -275,11 +272,8 @@ interface TableSectionProps {
     onRowsPerPageChange: (r: number) => void;
 }
 
-function RequestTable({ records, total, loadedCount, totalCount, page, rowsPerPage, statusFilter, loading, onStatusFilterChange, onPageChange, onRowsPerPageChange }: TableSectionProps) {
+function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading, onStatusFilterChange, onPageChange, onRowsPerPageChange }: TableSectionProps) {
     const theme = useTheme();
-    // The server caps how many records one query returns; when the range holds
-    // more, say so instead of presenting the capped count as the real total.
-    const truncated = totalCount != null && loadedCount != null && totalCount > loadedCount;
 
     return (
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
@@ -288,9 +282,7 @@ function RequestTable({ records, total, loadedCount, totalCount, page, rowsPerPa
                 <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Requests
                     <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                        {!loading && (truncated
-                            ? `${totalCount.toLocaleString()} total · showing most recent ${loadedCount.toLocaleString()}`
-                            : `${total.toLocaleString()} total`)}
+                        {!loading && `${total.toLocaleString()} total`}
                     </Typography>
                 </Typography>
                 <ToggleButtonGroup
@@ -453,23 +445,93 @@ function RequestTable({ records, total, loadedCount, totalCount, page, rowsPerPa
 
 // ─── Main Export ─────────────────────────────────────────────────────────────
 
+/** Base query for the records endpoint (time window + dashboard filters). */
+export interface RecordsQueryParams {
+    start_time: string;
+    end_time: string;
+    provider: string;
+    model: string;
+    user: string;
+}
+
 interface RequestsViewProps {
+    /** Most recent records in range (capped sample) — feeds the charts, and
+     *  the table too when it covers the whole range. */
     records: UsageRecord[];
     loading: boolean;
     /** Real total in range from the server; records may be capped below it. */
     totalCount?: number;
+    /** Query the sample was fetched with; used to page the rest server-side. */
+    queryParams?: RecordsQueryParams | null;
 }
 
-export default function RequestsView({ records, loading, totalCount }: RequestsViewProps) {
+export default function RequestsView({ records, loading, totalCount, queryParams }: RequestsViewProps) {
     const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(50);
+
+    // When the sample holds every record in range, filter/paginate it locally
+    // (no extra requests). Otherwise the table switches to server-side paging
+    // so every record stays reachable instead of only the most recent slice.
+    const sampleComplete = totalCount == null || records.length >= totalCount;
+
+    const [serverRows, setServerRows] = useState<UsageRecord[]>([]);
+    const [serverTotal, setServerTotal] = useState(0);
+    const [serverLoading, setServerLoading] = useState(false);
+    const serverSeq = useRef(0);
+
+    // Back to the first page when the filters or the range start change —
+    // but not on every auto-refresh tick (only end_time moves there).
+    const resetKey = queryParams
+        ? `${queryParams.provider}|${queryParams.model}|${queryParams.user}|${queryParams.start_time}`
+        : '';
+    useEffect(() => {
+        setPage(0);
+    }, [resetKey]);
+
+    useEffect(() => {
+        if (sampleComplete || !queryParams) return;
+        const seq = ++serverSeq.current;
+        setServerLoading(true);
+        (async () => {
+            try {
+                const filters: Record<string, any> = {
+                    start_time: queryParams.start_time,
+                    end_time: queryParams.end_time,
+                    limit: rowsPerPage,
+                    offset: page * rowsPerPage,
+                };
+                if (queryParams.provider !== 'all') filters.provider = queryParams.provider;
+                if (queryParams.model !== 'all') filters.model = queryParams.model;
+                if (queryParams.user !== 'all') filters.user_id = queryParams.user;
+                // Status values are exactly 'success' | 'error' in the store,
+                // so the server-side equality filter matches the toggle 1:1.
+                if (statusFilter !== 'all') filters.status = statusFilter;
+                const result = await api.getUsageRecords(filters);
+                if (seq !== serverSeq.current) return;
+                if (result?.data) {
+                    setServerRows(result.data);
+                    setServerTotal(result.meta?.total ?? result.data.length);
+                }
+            } catch (error) {
+                console.error('Failed to load records page:', error);
+            } finally {
+                if (seq === serverSeq.current) {
+                    setServerLoading(false);
+                }
+            }
+        })();
+    }, [sampleComplete, queryParams, statusFilter, page, rowsPerPage]);
 
     const filtered = statusFilter === 'all'
         ? records
         : records.filter(r => statusFilter === 'success' ? r.status === 'success' : r.status !== 'success');
 
     const paged = filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
+
+    const tableRecords = sampleComplete ? paged : serverRows;
+    const tableTotal = sampleComplete ? filtered.length : serverTotal;
+    const tableLoading = sampleComplete ? loading && records.length === 0 : serverLoading;
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -478,17 +540,21 @@ export default function RequestsView({ records, loading, totalCount }: RequestsV
                 <TokenDonut records={records} />
                 <LatencyHistogram records={records} />
             </Box>
+            {!sampleComplete && totalCount != null && (
+                <Typography variant="caption" sx={{ color: 'text.secondary', mt: -1.5 }}>
+                    Charts reflect the most recent {records.length.toLocaleString()} of{' '}
+                    {totalCount.toLocaleString()} requests; the table below pages through all of them.
+                </Typography>
+            )}
 
             {/* Table */}
             <RequestTable
-                records={paged}
-                total={filtered.length}
-                loadedCount={records.length}
-                totalCount={totalCount}
+                records={tableRecords}
+                total={tableTotal}
                 page={page}
                 rowsPerPage={rowsPerPage}
                 statusFilter={statusFilter}
-                loading={loading && records.length === 0}
+                loading={tableLoading}
                 onStatusFilterChange={s => { setStatusFilter(s); setPage(0); }}
                 onPageChange={setPage}
                 onRowsPerPageChange={r => { setRowsPerPage(r); setPage(0); }}

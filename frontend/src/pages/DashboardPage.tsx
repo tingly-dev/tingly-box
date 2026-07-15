@@ -795,7 +795,12 @@ export default function DashboardPage() {
                                 <DailyTokenHistoryChart data={timeSeries} />
                             )
                         ) : (
-                            <RequestsView records={records} loading={recordsLoading} totalCount={recordsTotal} />
+                            <RequestsView
+                                records={records}
+                                loading={recordsLoading}
+                                totalCount={recordsTotal}
+                                queryParams={recordsParams}
+                            />
                         )}
                     </Box>
                 </Box>
