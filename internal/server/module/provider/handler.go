@@ -7,6 +7,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"time"
 
@@ -83,8 +84,10 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 		// Surface the credential fields so the edit form can round-trip them.
 		// Consistent with Token above, config and secret values are returned to
 		// the local admin UI in full (masking both is a future hardening).
+		// Clone: the response DTO must never alias the store-owned live map,
+		// or a future response-side redaction would corrupt stored secrets.
 		if p.Credential != nil {
-			resp.Credential = p.Credential.Fields
+			resp.Credential = maps.Clone(p.Credential.Fields)
 		}
 	case p.AuthType == typ.AuthTypeAPIKey, p.AuthType == "":
 		resp.Token = p.Token
@@ -156,16 +159,15 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		return
 	}
 
-	// Credential requirements differ by auth type:
-	//   - multi-field cloud creds (aws_sigv4/azure_key/gcp_sa) validate the bundle
-	//   - api_key requires a token unless NoKeyRequired
-	//   - oauth/vmodel carry their credentials out of band
+	// Credential requirements differ by auth type: multi-field cloud creds
+	// (aws_sigv4/azure_key/gcp_sa) validate the bundle; every other type keeps
+	// the pre-existing rule — a token is required unless NoKeyRequired.
 	if authType.IsMultiFieldCredential() {
 		if err := ai.ValidateCredential(authType, req.Credential); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 			return
 		}
-	} else if authType == typ.AuthTypeAPIKey && !req.NoKeyRequired && req.Token == "" {
+	} else if !req.NoKeyRequired && req.Token == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Token is required when No Key Required is false"})
 		return
 	}

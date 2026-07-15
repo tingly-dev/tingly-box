@@ -70,8 +70,12 @@ keys + validation live in `ai/credential.go` (`CredentialSchema`,
 ```
 aws_sigv4: region (req) · access_key_id + secret_access_key  OR  bearer_token · session_token (opt)
 gcp_sa:    project_id (req) · location (req) · service_account_json (req, secret)
-azure_key: endpoint (req) · api_version (req) · api_key (req, secret) · deployment (opt)
+azure_key: endpoint (req) · api_version (req) · api_key (req, secret)
 ```
+
+(No Azure `deployment` field: the azure adapter derives the deployment URL
+segment from the request's model name, so name the model after the deployment.
+A stored override the client never applies would be a dead knob.)
 
 - Secret keys (masked, never logged): `secret_access_key`, `session_token`,
   `bearer_token`, `api_key`, `service_account_json`. Config keys (region/project/
@@ -98,7 +102,15 @@ Wiring / gotchas:
   last so it wins on base URL + auth.
 - go-genai only auto-installs SA auth when it builds its own HTTP client; we pass
   our proxy/logging client, so `applyVertexToGenaiConfig` calls
-  `httptransport.AddAuthorizationMiddleware` — otherwise Vertex goes out unauthed.
+  `httptransport.AddAuthorizationMiddleware` — otherwise Vertex goes out unauthed
+  (fails closed if no HTTP client is set).
+- For gcp_sa the genai `HTTPOptions.BaseURL` is left **empty**: genai derives the
+  correct Vertex host from Location — incl. `global` (aiplatform.googleapis.com)
+  and multi-regional `us`/`eu` (aiplatform.<loc>.rep.googleapis.com) — only when
+  BaseURL is unset; forcing the stored APIBase would break those locations.
+- GCP credentials are cached by sha256(SA JSON) (`vertex_client.go`): clients are
+  rebuilt per request, so without the cache every request re-parses the SA key
+  and mints a fresh OAuth token (blocking round-trip to Google).
 - `ListModels` returns `ErrModelsEndpointNotSupported` for cloud → template fallback.
 - Known limit: `vertex.WithCredentials` installs its own HTTP client, so
   `provider.ProxyURL` is not honored on the Vertex-Anthropic path. Bedrock/Azure
@@ -121,7 +133,9 @@ Wiring / gotchas:
 - Picker: a **Cloud** section (`ConnectProviderDialog.tsx`), not a mode toggle.
   Cards are data-driven from templates via `serviceProviders.useCloudProviders()`;
   cloud templates are excluded from the API-key list (like OAuth). Selection kind
-  `{kind:'cloud', presetId}` → `useProviderDialog.onCloud`.
+  `{kind:'cloud', presetId}` → `useProviderDialog.onCloud`. Every surface that
+  renders the picker must handle the cloud kind — wired on `CredentialPage`,
+  `ConnectProviderFlow`, `Onboarding`, and scenario `TemplatePage`.
 - Dialog: `components/cloud/CloudProviderDialog.tsx` (separate from the
   protocol-slot `ProviderFormDialog`, like OAuth's `OAuthDialog`). Fields come from
   `cloudCredentialSchema.ts` (per-`auth_type` field schema + `buildCloudApiBase`,
@@ -169,6 +183,12 @@ verified against AWS/Google/Anthropic/Microsoft docs (Jul 2026): Bedrock
 - Cloud-aware **edit** flow + masked-secret round-trip (edit currently opens the
   generic form; responses return credentials in full).
 - **Test Connection** through the signed client path.
+- `GetAccessToken()` returns `""` for cloud types; the manual-header call sites
+  outside the client constructors (`internal/probe/sdkprobe.go` lightweight
+  probe, `internal/tbclient`) send unauthenticated requests for cloud providers.
+  A central "apply credential" seam would fix all of them at once.
+- Backend derivation of `api_base` from the bundle (today the frontend computes
+  it; a raw-API caller must replicate the URL convention).
 - Azure Entra token; AWS STS/assume-role/instance-profile; non-Claude Bedrock
   (Bedrock-native API); encrypt the credential column.
 

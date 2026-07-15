@@ -1,8 +1,6 @@
 package client
 
 import (
-	"fmt"
-
 	anthropicBedrock "github.com/anthropics/anthropic-sdk-go/bedrock"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	awsconfig "github.com/aws/aws-sdk-go-v2/aws"
@@ -31,10 +29,7 @@ func NewBedrockClient(provider *typ.Provider, model string, sessionID typ.Sessio
 // bedrockOption resolves the Bedrock adapter RequestOption from a provider's
 // AWS credential bundle.
 func bedrockOption(provider *typ.Provider) (anthropicOption.RequestOption, error) {
-	if provider.Credential == nil {
-		return nil, fmt.Errorf("provider %q: missing credential bundle for auth type %s", provider.Name, provider.AuthType)
-	}
-	if err := ai.ValidateCredential(provider.AuthType, provider.Credential.Fields); err != nil {
+	if err := validateCloudBundle(provider); err != nil {
 		return nil, err
 	}
 	return anthropicBedrock.WithConfig(awsConfigFromBundle(provider.Credential)), nil

@@ -26,7 +26,11 @@ const (
 	CredFieldAzureAPIKey     = "api_key"
 	CredFieldAzureEndpoint   = "endpoint"    // e.g. "https://my-res.openai.azure.com"
 	CredFieldAzureAPIVersion = "api_version" // e.g. "2024-10-21"
-	CredFieldAzureDeployment = "deployment"  // optional; when model name != deployment
+	// Note: no "deployment" field. The openai-go/azure adapter derives the
+	// deployment URL segment from the request's model name, so users whose
+	// deployment name differs from the model id should name the model after
+	// the deployment. A stored override the client never applies would be a
+	// dead knob.
 )
 
 // CredentialFieldSpec describes one field in a multi-field credential schema.
@@ -65,7 +69,6 @@ func CredentialSchema(a AuthType) []CredentialFieldSpec {
 			{Key: CredFieldAzureEndpoint, Required: true},
 			{Key: CredFieldAzureAPIVersion, Required: true},
 			{Key: CredFieldAzureAPIKey, Required: true, Secret: true},
-			{Key: CredFieldAzureDeployment},
 		}
 	}
 	return nil

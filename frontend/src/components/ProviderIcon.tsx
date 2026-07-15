@@ -34,6 +34,10 @@ import {
     Baichuan,
     Yi,
     Doubao,
+    Aws,
+    Bedrock,
+    Azure,
+    VertexAI,
 } from './BrandIcons';
 import type {SxProps, Theme} from '@mui/material';
 import {Box} from '@mui/material';
@@ -78,6 +82,12 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'stepfun': Stepfun,
     'xiaomimimo': Xiaomimimo,
     'xiaomi': Xiaomimimo,  // Alias for xiaomimimo
+
+    // Cloud platforms (Connect AI → Cloud section)
+    'aws': Aws,
+    'bedrock': Bedrock,
+    'azure': Azure,
+    'vertexai': VertexAI,
     'baidu': Baidu,
     'tencent': Tencent,
     'iflytek': IflytekCloud,

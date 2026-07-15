@@ -9,6 +9,7 @@ import RuleCard from '@/components/RuleCard.tsx';
 import ImportModal from '@/components/ImportModal';
 import ProviderFormDialog from '@/components/ProviderFormDialog';
 import ConnectProviderDialog from '@/components/ConnectProviderDialog';
+import CloudProviderDialog from '@/components/cloud/CloudProviderDialog';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import type {TemplatePageProps} from './TemplatePage.types';
@@ -199,7 +200,11 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
             void onProvidersLoad?.();
         },
         onImport: () => setShowImportModal(true),
+        onCloud: (presetId) => setCloudPresetId(presetId),
     });
+
+    // Cloud-credential dialog state (Bedrock/Vertex/Azure)
+    const [cloudPresetId, setCloudPresetId] = useState<string | null>(null);
 
     const handleAddApiKeyClick = useCallback(() => {
         handleConnectAIClick();
@@ -469,6 +474,15 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                 open={connectDialogOpen}
                 onClose={handleCloseConnect}
                 onSelect={handleConnectSelect}
+            />
+
+            <CloudProviderDialog
+                open={cloudPresetId !== null}
+                presetId={cloudPresetId}
+                onClose={() => setCloudPresetId(null)}
+                onSuccess={() => { void onProvidersLoad?.(); }}
+                onBack={handleConnectAIClick}
+                onNotification={showNotification}
             />
 
             <ProviderFormDialog

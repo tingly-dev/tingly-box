@@ -25,6 +25,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 import ProviderFormDialog, {type EnhancedProviderFormData} from '@/components/ProviderFormDialog';
 import {ProviderListContent, type ConnectSelection} from '@/components/ConnectProviderDialog';
 import OAuthDialog from '@/components/OAuthDialog';
+import CloudProviderDialog from '@/components/cloud/CloudProviderDialog';
 import PasteAndDetect from '@/components/onboarding/PasteAndDetect';
 import {api} from '@/services/api';
 import {buildProviderFormData} from '@/hooks/useProviderDialog';
@@ -58,6 +59,9 @@ const Onboarding: React.FC = () => {
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
 
+    // Cloud-credential dialog state (Bedrock/Vertex/Azure)
+    const [cloudPresetId, setCloudPresetId] = useState<string | null>(null);
+
     const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error' | 'info'}>({
         open: false,
         message: '',
@@ -83,6 +87,10 @@ const Onboarding: React.FC = () => {
         if (selection.kind === 'oauth') {
             setOAuthAutoStartId(selection.providerId);
             setOAuthDialogOpen(true);
+            return;
+        }
+        if (selection.kind === 'cloud') {
+            setCloudPresetId(selection.presetId);
             return;
         }
         if (selection.kind === 'import') return;
@@ -225,6 +233,14 @@ const Onboarding: React.FC = () => {
                     setOAuthAutoStartId(null);
                 }}
                 onSuccess={handleOAuthSuccess}
+            />
+
+            <CloudProviderDialog
+                open={cloudPresetId !== null}
+                presetId={cloudPresetId}
+                onClose={() => setCloudPresetId(null)}
+                onSuccess={() => setSuccessDialogOpen(true)}
+                onNotification={showMessage}
             />
 
             <Dialog

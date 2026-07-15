@@ -39,6 +39,10 @@ import IflytekCloudSvg from '@lobehub/icons-static-svg/icons/iflytekcloud.svg?ur
 import BaichuanSvg from '@lobehub/icons-static-svg/icons/baichuan.svg?url';
 import YiSvg from '@lobehub/icons-static-svg/icons/yi-color.svg?url';
 import DoubaoSvg from '@lobehub/icons-static-svg/icons/doubao.svg?url';
+import AwsSvg from '@lobehub/icons-static-svg/icons/aws.svg?url';
+import BedrockSvg from '@lobehub/icons-static-svg/icons/bedrock-color.svg?url';
+import AzureSvg from '@lobehub/icons-static-svg/icons/azure-color.svg?url';
+import VertexAISvg from '@lobehub/icons-static-svg/icons/vertexai-color.svg?url';
 
 import DingTalkSvg from '@/assets/icons/dingtalk.svg?url';
 import DiscordSvg from '@/assets/icons/discord.svg?url';
@@ -160,6 +164,10 @@ export const SiliconFlow = createBrandIcon(SiliconFlowSvg, 'SiliconFlow', false,
 export const Stepfun = createBrandIcon(StepfunSvg, 'Stepfun', false, true);
 export const Xiaomimimo = createBrandIcon(XiaomimimoSvg, 'Xiaomi Mimo', false, true);
 export const Baidu = createBrandIcon(BaiduSvg, 'Baidu');
+export const Aws = createBrandIcon(AwsSvg, 'AWS', false, true);
+export const Bedrock = createBrandIcon(BedrockSvg, 'Amazon Bedrock');
+export const Azure = createBrandIcon(AzureSvg, 'Azure');
+export const VertexAI = createBrandIcon(VertexAISvg, 'Vertex AI');
 export const Tencent = createBrandIcon(TencentSvg, 'Tencent', false, true);
 export const IflytekCloud = createBrandIcon(IflytekCloudSvg, 'iFlytek', false, true);
 export const Baichuan = createBrandIcon(BaichuanSvg, 'Baichuan', false, true);

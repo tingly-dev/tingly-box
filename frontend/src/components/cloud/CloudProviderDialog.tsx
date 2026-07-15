@@ -15,11 +15,13 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {api} from '../../services/api';
 import {getServiceProvider} from '@/services/serviceProviders';
 import ProviderIcon from '@/components/ProviderIcon';
-import {getCloudFields, buildCloudApiBase, type CloudField} from './cloudCredentialSchema';
+import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
+import {getCloudFields, buildCloudApiBase, validateCloudFields, type CloudField} from './cloudCredentialSchema';
 
 interface CloudProviderDialogProps {
     open: boolean;
@@ -46,19 +48,30 @@ interface CloudProviderDialogProps {
 const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
     open, presetId, onClose, onSuccess, onBack, onNotification,
 }) => {
+    const {t} = useTranslation();
     const template = presetId ? getServiceProvider(presetId) : null;
     const authType = template?.auth_type || '';
-    const fields = useMemo(() => getCloudFields(authType), [authType]);
+    const fields = getCloudFields(authType);
 
     const [name, setName] = useState('');
     const [values, setValues] = useState<Record<string, string>>({});
     const [reveal, setReveal] = useState<Record<string, boolean>>({});
     const [proxyUrl, setProxyUrl] = useState('');
+    const [useGlobalProxy, setUseGlobalProxy] = useState(false);
+    const [globalProxyUrl, setGlobalProxyUrl] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
     const displayName = template?.alias || template?.name || '';
+
+    // Fetch the global quick-proxy once so the proxy field offers it, same as
+    // the API-key form.
+    useEffect(() => {
+        api.getConfig().then((result: any) => {
+            setGlobalProxyUrl(result?.data?.http_transport?.global_proxy_url ?? '');
+        });
+    }, []);
 
     // Reset form whenever a new template is opened.
     useEffect(() => {
@@ -67,12 +80,11 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
             setValues({});
             setReveal({});
             setProxyUrl('');
+            setUseGlobalProxy(false);
             setError(null);
             setAdvancedOpen(false);
         }
     }, [open, presetId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const hasAdvanced = useMemo(() => fields.some((f) => f.advanced), [fields]);
 
     if (!template || !authType) return null;
 
@@ -81,22 +93,29 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
         setError(null);
     };
 
-    const missingRequired = fields
-        .filter((f) => f.required && !(values[f.key] || '').trim())
-        .map((f) => f.label);
-    const canSubmit = name.trim().length > 0 && missingRequired.length === 0 && !submitting;
+    const validationError = validateCloudFields(authType, values);
+    const canSubmit = name.trim().length > 0 && !validationError && !submitting;
+
+    const handleUseGlobalProxyChange = (checked: boolean) => {
+        setUseGlobalProxy(checked);
+        if (checked && globalProxyUrl) {
+            setProxyUrl(globalProxyUrl);
+        } else if (!checked) {
+            setProxyUrl('');
+        }
+    };
 
     const handleSubmit = async () => {
         if (!name.trim()) {
-            setError('Provider name is required');
+            setError(t('cloudDialog.nameRequired', {defaultValue: 'Provider name is required'}));
             return;
         }
-        if (missingRequired.length > 0) {
-            setError(`Missing required field(s): ${missingRequired.join(', ')}`);
+        if (validationError) {
+            setError(validationError);
             return;
         }
 
-        // Only send non-empty credential fields.
+        // Only send non-empty, trimmed credential fields.
         const credential: Record<string, string> = {};
         fields.forEach((f) => {
             const v = (values[f.key] || '').trim();
@@ -108,7 +127,7 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
         try {
             const result = await api.addProvider({
                 name: name.trim(),
-                api_base: buildCloudApiBase(authType, values),
+                api_base: buildCloudApiBase(authType, credential),
                 api_style: template.api_style,
                 auth_type: authType,
                 credential,
@@ -116,16 +135,16 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
                 enabled: true,
             });
             if (result?.success) {
-                onNotification?.('Provider connected successfully!', 'success');
+                onNotification?.(t('cloudDialog.connected', {defaultValue: 'Provider connected successfully!'}), 'success');
                 onSuccess();
                 onClose();
             } else {
-                const msg = result?.error || 'Failed to connect provider';
+                const msg = result?.error || t('cloudDialog.connectFailed', {defaultValue: 'Failed to connect provider'});
                 setError(msg);
-                onNotification?.(`Failed to connect provider: ${msg}`, 'error');
+                onNotification?.(`${t('cloudDialog.connectFailed', {defaultValue: 'Failed to connect provider'})}: ${msg}`, 'error');
             }
         } catch (e: any) {
-            setError(e?.message || 'Failed to connect provider');
+            setError(e?.message || t('cloudDialog.connectFailed', {defaultValue: 'Failed to connect provider'}));
         } finally {
             setSubmitting(false);
         }
@@ -191,29 +210,38 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
 
                     <TextField
                         size="small" fullWidth required
-                        label="Name"
+                        label={t('cloudDialog.name', {defaultValue: 'Name'})}
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                     />
 
                     {primaryFields.map(renderField)}
 
-                    {hasAdvanced && (
+                    <ProxyUrlField
+                        mode="add"
+                        proxyUrl={proxyUrl}
+                        onProxyUrlChange={(value) => {
+                            setProxyUrl(value);
+                            if (useGlobalProxy && value !== globalProxyUrl) {
+                                setUseGlobalProxy(false);
+                            }
+                        }}
+                        globalProxyUrl={globalProxyUrl}
+                        useGlobalProxy={useGlobalProxy}
+                        onUseGlobalProxyChange={handleUseGlobalProxyChange}
+                    />
+
+                    {advancedFields.length > 0 && (
                         <Box>
                             <Button size="small" variant="text" onClick={() => setAdvancedOpen((v) => !v)} sx={{px: 0}}>
-                                {advancedOpen ? 'Hide advanced' : 'Advanced (optional)'}
+                                {advancedOpen
+                                    ? t('cloudDialog.hideAdvanced', {defaultValue: 'Hide advanced'})
+                                    : t('cloudDialog.showAdvanced', {defaultValue: 'Advanced (optional)'})}
                             </Button>
                             {advancedOpen && (
                                 <Stack spacing={2.5} sx={{mt: 1.5}}>
                                     <Divider/>
                                     {advancedFields.map(renderField)}
-                                    <TextField
-                                        size="small" fullWidth
-                                        label="Proxy URL"
-                                        placeholder="http://localhost:7890"
-                                        value={proxyUrl}
-                                        onChange={(e) => setProxyUrl(e.target.value)}
-                                    />
                                 </Stack>
                             )}
                         </Box>
@@ -227,7 +255,7 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
                         startIcon={<ArrowBack fontSize="small"/>}
                         onClick={() => { onClose(); onBack(); }}
                     >
-                        Back
+                        {t('common.back', {defaultValue: 'Back'})}
                     </Button>
                 )}
                 <Box sx={{ml: 'auto'}}>
@@ -236,7 +264,9 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
                         disabled={!canSubmit}
                         onClick={handleSubmit}
                     >
-                        {submitting ? <CircularProgress size={20} thickness={4}/> : 'Connect'}
+                        {submitting
+                            ? <CircularProgress size={20} thickness={4}/>
+                            : t('cloudDialog.connect', {defaultValue: 'Connect'})}
                     </Button>
                 </Box>
             </DialogActions>

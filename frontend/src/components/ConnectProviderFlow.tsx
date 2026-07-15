@@ -1,6 +1,7 @@
 import ConnectProviderDialog, { type ConnectSelection } from '@/components/ConnectProviderDialog';
 import OAuthDialog from '@/components/OAuthDialog';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog';
+import CloudProviderDialog from '@/components/cloud/CloudProviderDialog';
 import { buildProviderFormData } from '@/hooks/useProviderDialog';
 import { useState, useCallback } from 'react';
 import { api } from '@/services/api';
@@ -23,6 +24,7 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
     const [optionalEditableToken, setOptionalEditableToken] = useState(false);
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
+    const [cloudPresetId, setCloudPresetId] = useState<string | null>(null);
     const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
         name: '', apiBase: '', apiStyle: undefined, token: '', enabled: true, noKeyRequired: false, proxyUrl: '',
     });
@@ -30,10 +32,14 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
     const handleConnectSelect = useCallback((selection: ConnectSelection) => {
         onClose();
 
-        // oauth / import are handled separately
+        // oauth / cloud / import are handled by their own dialogs
         if (selection.kind === 'oauth') {
             setOAuthAutoStartId(selection.providerId);
             setOAuthDialogOpen(true);
+            return;
+        }
+        if (selection.kind === 'cloud') {
+            setCloudPresetId(selection.presetId);
             return;
         }
         if (selection.kind === 'import') return;
@@ -115,6 +121,13 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
                     showNotification?.('Provider connected via OAuth!', 'success');
                     onProviderAdded?.();
                 }}
+            />
+            <CloudProviderDialog
+                open={cloudPresetId !== null}
+                presetId={cloudPresetId}
+                onClose={() => setCloudPresetId(null)}
+                onSuccess={() => onProviderAdded?.()}
+                onNotification={showNotification}
             />
         </>
     );

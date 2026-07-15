@@ -28,12 +28,18 @@ export function isCloudAuthType(authType?: string | null): boolean {
     return !!authType && (CLOUD_AUTH_TYPES as readonly string[]).includes(authType);
 }
 
-/** Credential field schema per cloud auth type (mirror of ai.CredentialSchema). */
+/**
+ * Credential field schema per cloud auth type (mirror of ai.CredentialSchema).
+ * AWS access key / secret are intentionally NOT flagged required: the backend
+ * accepts EITHER the key pair OR a Bedrock API key (bearer_token); that
+ * either/or rule lives in validateCloudFields below, matching
+ * ai.ValidateCredential.
+ */
 export const CLOUD_FIELDS: Record<string, CloudField[]> = {
     aws_sigv4: [
         {key: 'region', label: 'Region', type: 'text', required: true, placeholder: 'us-east-1'},
-        {key: 'access_key_id', label: 'Access Key ID', type: 'text', required: true, placeholder: 'AKIA…'},
-        {key: 'secret_access_key', label: 'Secret Access Key', type: 'password', required: true},
+        {key: 'access_key_id', label: 'Access Key ID', type: 'text', placeholder: 'AKIA…', helper: 'Leave empty when using a Bedrock API key (Advanced)'},
+        {key: 'secret_access_key', label: 'Secret Access Key', type: 'password'},
         {key: 'session_token', label: 'Session Token', type: 'password', advanced: true, helper: 'Optional — for temporary (STS) credentials'},
         {key: 'bearer_token', label: 'Bedrock API Key', type: 'password', advanced: true, helper: 'Optional — use instead of access key / secret'},
     ],
@@ -46,7 +52,6 @@ export const CLOUD_FIELDS: Record<string, CloudField[]> = {
         {key: 'endpoint', label: 'Endpoint', type: 'text', required: true, placeholder: 'https://my-resource.openai.azure.com'},
         {key: 'api_version', label: 'API Version', type: 'text', required: true, placeholder: '2024-10-21'},
         {key: 'api_key', label: 'API Key', type: 'password', required: true},
-        {key: 'deployment', label: 'Deployment', type: 'text', advanced: true, helper: 'Optional — when the model name differs from the deployment name'},
     ],
 };
 
@@ -55,18 +60,47 @@ export function getCloudFields(authType?: string | null): CloudField[] {
 }
 
 /**
+ * Validate trimmed credential values against the auth type's rules, mirroring
+ * ai.ValidateCredential (including AWS's keys-OR-bearer alternative). Returns a
+ * human-readable error, or null when the values are submittable.
+ */
+export function validateCloudFields(authType: string, v: Record<string, string>): string | null {
+    const fields = getCloudFields(authType);
+    const get = (k: string) => (v[k] || '').trim();
+    const missing = fields.filter((f) => f.required && !get(f.key)).map((f) => f.label);
+    if (missing.length > 0) {
+        return `Missing required field(s): ${missing.join(', ')}`;
+    }
+    if (authType === 'aws_sigv4') {
+        const hasKeys = !!get('access_key_id') && !!get('secret_access_key');
+        const hasBearer = !!get('bearer_token');
+        if (!hasKeys && !hasBearer) {
+            return 'Provide either Access Key ID + Secret Access Key, or a Bedrock API Key';
+        }
+    }
+    return null;
+}
+
+/**
  * The cloud SDK adapter derives the real endpoint from the credential fields,
  * but the create API still requires a non-empty api_base. Build a meaningful one
- * from the entered values so the provider list shows the actual host.
+ * from the (trimmed) values so the provider list shows the actual host. The GCP
+ * shape mirrors genai's Vertex host rules: "global" and the multi-regional
+ * "us"/"eu" locations have dedicated hosts.
  */
 export function buildCloudApiBase(authType: string, v: Record<string, string>): string {
+    const get = (k: string) => (v[k] || '').trim();
     switch (authType) {
         case 'aws_sigv4':
-            return `https://bedrock-runtime.${v.region || 'us-east-1'}.amazonaws.com`;
-        case 'gcp_sa':
-            return `https://${v.location || 'us-central1'}-aiplatform.googleapis.com`;
+            return `https://bedrock-runtime.${get('region')}.amazonaws.com`;
+        case 'gcp_sa': {
+            const loc = get('location');
+            if (loc === 'global') return 'https://aiplatform.googleapis.com';
+            if (loc === 'us' || loc === 'eu') return `https://aiplatform.${loc}.rep.googleapis.com`;
+            return `https://${loc}-aiplatform.googleapis.com`;
+        }
         case 'azure_key':
-            return v.endpoint || 'https://azure.openai.azure.com';
+            return get('endpoint');
         default:
             return '';
     }

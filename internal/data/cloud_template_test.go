@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -68,7 +69,7 @@ func TestCloudTemplatesResolveModels(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetModelsForProvider: %v", err)
 			}
-			if !contains(models, tc.wantModel) {
+			if !slices.Contains(models, tc.wantModel) {
 				t.Errorf("models %v do not contain %q", models, tc.wantModel)
 			}
 		})
@@ -96,19 +97,11 @@ func TestVertexDisambiguationByStyle(t *testing.T) {
 		t.Fatalf("gemini: %v", err)
 	}
 
-	if !contains(claudeModels, "claude-opus-4-8") || contains(claudeModels, "gemini-2.5-pro") {
+	if !slices.Contains(claudeModels, "claude-opus-4-8") || slices.Contains(claudeModels, "gemini-2.5-pro") {
 		t.Errorf("anthropic-style Vertex resolved wrong family: %v", claudeModels)
 	}
-	if !contains(geminiModels, "gemini-2.5-pro") || contains(geminiModels, "claude-opus-4-8") {
+	if !slices.Contains(geminiModels, "gemini-2.5-pro") || slices.Contains(geminiModels, "claude-opus-4-8") {
 		t.Errorf("google-style Vertex resolved wrong family: %v", geminiModels)
 	}
 }
 
-func contains(xs []string, want string) bool {
-	for _, x := range xs {
-		if x == want {
-			return true
-		}
-	}
-	return false
-}

@@ -74,6 +74,15 @@ func newGoogleClientFromHTTPClient(provider *typ.Provider, httpClient *http.Clie
 	httpOptions := genai.HTTPOptions{
 		BaseURL: provider.APIBase,
 	}
+	// Vertex (gcp_sa): leave BaseURL empty. genai derives the correct Vertex
+	// host from Backend/Location — including the special "global"
+	// (aiplatform.googleapis.com) and multi-regional "us"/"eu"
+	// (aiplatform.<loc>.rep.googleapis.com) hosts — but only when
+	// HTTPOptions.BaseURL is unset; a stored APIBase would override it with a
+	// possibly wrong host.
+	if provider.AuthType == typ.AuthTypeGCPVertex {
+		httpOptions.BaseURL = ""
+	}
 
 	config := &genai.ClientConfig{
 		APIKey:      provider.GetAccessToken(),

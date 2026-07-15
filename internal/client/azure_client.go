@@ -1,8 +1,6 @@
 package client
 
 import (
-	"fmt"
-
 	"github.com/openai/openai-go/v3/azure"
 	openaiOption "github.com/openai/openai-go/v3/option"
 
@@ -27,10 +25,7 @@ func NewAzureClient(provider *typ.Provider, model string, sessionID typ.SessionI
 // azureOptions resolves the Azure adapter RequestOptions from a provider's
 // Azure credential bundle.
 func azureOptions(provider *typ.Provider) ([]openaiOption.RequestOption, error) {
-	if provider.Credential == nil {
-		return nil, fmt.Errorf("provider %q: missing credential bundle for auth type %s", provider.Name, provider.AuthType)
-	}
-	if err := ai.ValidateCredential(provider.AuthType, provider.Credential.Fields); err != nil {
+	if err := validateCloudBundle(provider); err != nil {
 		return nil, err
 	}
 	return []openaiOption.RequestOption{
