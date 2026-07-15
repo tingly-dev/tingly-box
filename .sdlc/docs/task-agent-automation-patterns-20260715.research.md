@@ -233,6 +233,20 @@ task_id → agent + workspace_path + native_session_id
 
 ---
 
+## 8. 顺序步骤扩展决策
+
+复杂目标如果完全交给一次 native session 内部规划，会隐藏检查点、扩大失败重试范围，也让人工介入只能依赖自然语言上下文。首个扩展应采用“外部顺序骨架 + 步骤内部自主执行”：
+
+- TB 持久化有序步骤和当前游标；
+- 每一步对应一次 bounded execution；
+- Claude/Codex 仍决定该步骤内部的 model/tool turns；
+- `done` 推进游标，`continue` 与 `needs_input` 保持当前步骤；
+- 所有步骤复用 Task workspace 和 native session。
+
+这不是通用 workflow engine：不引入 DAG、分支、并行、子 Task 或步骤级调度。它只把已有“一轮一次结果”的 supervisor 语义外显成稳定、可观察、可介入的顺序检查点。
+
+---
+
 ## 参考资料
 
 - [OpenAI — Scheduled tasks](https://learn.chatgpt.com/docs/automations)
