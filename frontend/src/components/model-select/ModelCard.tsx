@@ -2,10 +2,18 @@ import { CheckCircle } from '@/components/icons';
 import { Box, Card, CardContent, CircularProgress, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
+import type { Provider } from '@/types/provider';
+import { ModelTestTrigger } from '../probe/ModelTestTrigger';
+import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
+import { ProbeDialog } from '../probe/ProbeDialog';
+import { useModelTestProbe } from '../probe/useModelTestProbe';
+import { ControlBar } from './ControlBar';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface ModelCardProps {
     model: string;
+    // Provider this model belongs to — needed to run an in-place test probe.
+    provider: Provider;
     isSelected: boolean;
     onClick: () => void;
     variant?: 'standard' | 'starred';
@@ -17,6 +25,7 @@ interface ModelCardProps {
 
 export default function ModelCard({
     model,
+    provider,
     isSelected,
     onClick,
     variant = 'standard',
@@ -25,6 +34,8 @@ export default function ModelCard({
     showNewBadge = false,
     description,
 }: ModelCardProps) {
+    const probe = useModelTestProbe();
+
     const getCardStyles = () => {
         const baseStyles = {
             width: '100%',
@@ -36,6 +47,12 @@ export default function ModelCard({
             position: 'relative' as const,
             outline: 'none',
             overflow: 'visible',
+            '& .control-bar': {
+                opacity: 0,
+            },
+            '&:hover .control-bar': {
+                opacity: loading ? 0 : 1,
+            },
         };
 
         if (variant === 'starred') {
@@ -74,6 +91,7 @@ export default function ModelCard({
     };
 
     return (
+        <>
         <Card sx={getCardStyles()} onClick={loading ? undefined : onClick}>
             <CardContent sx={{
                 py: 1,
@@ -162,7 +180,26 @@ export default function ModelCard({
                         NEW
                     </Box>
                 )}
+                {!loading && (
+                    <ControlBar>
+                        <ModelTestTrigger onOpen={probe.openDialog} />
+                    </ControlBar>
+                )}
+                {!loading && probe.result && (
+                    <ModelTestStatusBadge result={probe.result} onOpen={probe.openDialog} />
+                )}
             </CardContent>
         </Card>
+        <ProbeDialog
+            open={probe.dialogOpen}
+            onClose={probe.closeDialog}
+            targetType="provider"
+            targetId={provider.uuid}
+            targetName={provider.name}
+            model={model}
+            initialResult={probe.result ?? undefined}
+            onResult={probe.setResult}
+        />
+        </>
     );
 }

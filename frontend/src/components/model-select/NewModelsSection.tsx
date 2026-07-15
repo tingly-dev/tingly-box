@@ -1,9 +1,10 @@
 import { Close as CloseIcon } from '@/components/icons';
 import { Box, Divider, IconButton, Typography } from '@mui/material';
+import type { Provider } from '@/types/provider';
 import ModelCard from './ModelCard';
 
 export interface NewModelsSectionProps {
-    providerUuid: string;
+    provider: Provider;
     newModels: string[];
     selectedModel?: string;
     onModelSelect: (model: string) => void;
@@ -12,7 +13,7 @@ export interface NewModelsSectionProps {
 }
 
 export function NewModelsSection({
-    providerUuid,
+    provider,
     newModels,
     selectedModel,
     onModelSelect,
@@ -41,12 +42,13 @@ export function NewModelsSection({
             <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
                 {newModels.map((model) => (
                     <ModelCard
-                        key={model}
+                        key={`${provider.uuid}:${model}`}
                         model={model}
                         isSelected={selectedModel === model}
                         onClick={() => onModelSelect(model)}
                         variant="standard"
                         showNewBadge
+                        provider={provider}
                     />
                 ))}
             </Box>

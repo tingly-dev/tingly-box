@@ -27,8 +27,6 @@ interface ModelSelectTabProps {
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
     // Single provider mode props
     singleProvider?: Provider | null; // If provided, only show this provider
-    onTest?: (model: string) => void; // Callback for Test button
-    testing?: boolean; // Whether a test is in progress
 }
 
 function ModelSelectTabInner({
@@ -41,8 +39,6 @@ function ModelSelectTabInner({
     onProviderChange,
     onCustomModelSave,
     singleProvider,
-    onTest,
-    testing = false,
 }: ModelSelectTabProps) {
     const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
     const { providerModels, refreshingProviders, fetchModels, refreshModels } = useProviderModels();
@@ -204,8 +200,6 @@ function ModelSelectTabInner({
                         onModelSelect={handleModelSelect}
                         onCustomModelEdit={handleCustomModelEdit}
                         onCustomModelDelete={handleDeleteCustomModel}
-                        onTest={onTest}
-                        testing={testing}
                     />
                 );
             })()}
@@ -217,8 +211,12 @@ function ModelSelectTabInner({
 }
 
 export default function ModelSelectDialog(props: ModelSelectTabProps) {
-    // Create a unique key based on selected provider and model to force context reset when selection changes
-    const providerKey = `${props.selectedProvider || ''}-${props.selectedModel || ''}`;
+    // Reset internal tab/dialog state only when the underlying provider selection
+    // changes (a genuinely new session) — NOT on every model pick within the same
+    // session. selectedModel changes on every card click (e.g. while browsing/
+    // testing in ModelListDialog), and remounting on that would blow away
+    // per-card state like a model's persistent test-result badge.
+    const providerKey = props.selectedProvider || '';
     return (
         <ModelSelectProvider key={providerKey}>
             <ModelSelectTabInner {...props} />

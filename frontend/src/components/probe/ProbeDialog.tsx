@@ -46,6 +46,8 @@ interface ProbeDialogProps {
     testMode?: ProbeTestMode;
     /** Pre-computed result to show on open (e.g. from the quick test); re-run replaces it. */
     initialResult?: ProbeResult;
+    /** Called with every fresh result this dialog produces (including re-runs), so a caller holding its own copy (e.g. a card's persistent status badge) stays in sync. */
+    onResult?: (result: ProbeResult) => void;
 }
 
 // ── Constants / helpers ────────────────────────────────────────────────────
@@ -349,6 +351,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     model,
     testMode = 'streaming',
     initialResult,
+    onResult,
 }) => {
     const { t } = useTranslation();
     const [mode, setMode] = useState<ProbeTestMode>(testMode);
@@ -382,9 +385,11 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             message: defaultMessage(mode),
         };
 
-        setResult(await runProbe(body));
+        const res = await runProbe(body);
+        setResult(res);
         setIsLoading(false);
-    }, [targetType, scenario, targetId, model, direct, mode]);
+        onResult?.(res);
+    }, [targetType, scenario, targetId, model, direct, mode, onResult]);
 
     const handleCopy = () => {
         if (!result) return;

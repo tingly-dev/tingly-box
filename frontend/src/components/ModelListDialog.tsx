@@ -9,12 +9,9 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import api from '../services/api';
+import React, { useEffect, useState } from 'react';
 import ModelSelectDialog from './ModelSelectDialog.tsx';
-import { ProbeDialog } from './probe/ProbeDialog';
 import type { Provider } from '../types/provider';
-import type { ProbeResponse } from '@/types/probe';
 
 interface ModelListDialogProps {
     open: boolean;
@@ -24,94 +21,48 @@ interface ModelListDialogProps {
 
 const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
     const [selectedModel, setSelectedModel] = useState<string>('');
-    const [testing, setTesting] = useState(false);
-    const [probeDialogOpen, setProbeDialogOpen] = useState(false);
-    const [probeModel, setProbeModel] = useState<string>('');
 
-    // Ref to track if dialog is still open (to avoid showing results after closing)
-    const isDialogOpenRef = useRef(true);
-
-    // Reset when dialog closes
+    // Reset selection when dialog closes
     useEffect(() => {
         if (!open) {
-            isDialogOpenRef.current = false;
-            setTesting(false);
             setSelectedModel('');
-            setProbeDialogOpen(false);
-            setProbeModel('');
-        } else {
-            isDialogOpenRef.current = true;
         }
     }, [open]);
-
-    const handleTest = async (model: string) => {
-        if (!provider || testing) return;
-
-        setTesting(true);
-        setProbeModel(model);
-        setProbeDialogOpen(true);
-
-        // Note: ProbeDialog handles the API call internally
-        // We just need to open the dialog with the right parameters
-        setTesting(false);
-    };
-
-    const handleCloseProbeDialog = () => {
-        setProbeDialogOpen(false);
-        setProbeModel('');
-    };
 
     const handleClose = () => {
         onClose();
     };
 
     return (
-        <>
-            <Dialog
-                open={open}
-                onClose={handleClose}
-                maxWidth="lg"
-                fullWidth
-                PaperProps={{
-                    sx: { height: '80vh', display: 'flex', flexDirection: 'column' }
-                }}
-            >
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h6">Model List</Typography>
-                    <IconButton onClick={handleClose} size="small">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ p: 0 }}>
-                    <Box sx={{ height: '70vh', overflow: 'auto', p: 2 }}>
-                        <ModelSelectDialog
-                            providers={provider ? [provider] : []}
-                            selectedProvider={provider?.uuid}
-                            activeTab={provider?.uuid}
-                            selectedModel={selectedModel}
-                            onSelected={(option) => setSelectedModel(option.model || '')}
-                            onSelectionClear={() => setSelectedModel('')}
-                            singleProvider={provider}
-                            onTest={handleTest}
-                            testing={testing}
-                        />
-                    </Box>
-                </DialogContent>
-            </Dialog>
-
-            {/* Probe dialog */}
-            {provider && probeModel && (
-                <ProbeDialog
-                    open={probeDialogOpen}
-                    onClose={handleCloseProbeDialog}
-                    targetType="provider"
-                    targetId={provider.uuid}
-                    targetName={provider.name}
-                    model={probeModel}
-                    testMode="streaming"
-                />
-            )}
-        </>
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            maxWidth="lg"
+            fullWidth
+            PaperProps={{
+                sx: { height: '80vh', display: 'flex', flexDirection: 'column' }
+            }}
+        >
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6">Model List</Typography>
+                <IconButton onClick={handleClose} size="small">
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent sx={{ p: 0 }}>
+                <Box sx={{ height: '70vh', overflow: 'auto', p: 2 }}>
+                    <ModelSelectDialog
+                        providers={provider ? [provider] : []}
+                        selectedProvider={provider?.uuid}
+                        activeTab={provider?.uuid}
+                        selectedModel={selectedModel}
+                        onSelected={(option) => setSelectedModel(option.model || '')}
+                        onSelectionClear={() => setSelectedModel('')}
+                        singleProvider={provider}
+                    />
+                </Box>
+            </DialogContent>
+        </Dialog>
     );
 };
 

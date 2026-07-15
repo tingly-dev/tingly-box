@@ -3,6 +3,11 @@ import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, Dialog, D
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
+import { ModelTestTrigger } from '../probe/ModelTestTrigger';
+import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
+import { ProbeDialog } from '../probe/ProbeDialog';
+import { useModelTestProbe } from '../probe/useModelTestProbe';
+import { ControlBar } from './ControlBar';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface CustomModelCardProps {
@@ -27,6 +32,7 @@ export default function CustomModelCard({
     loading = false,
 }: CustomModelCardProps) {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const probe = useModelTestProbe();
 
     const handleCardClick = () => {
         if (!loading) {
@@ -140,84 +146,79 @@ export default function CustomModelCard({
                     />
                 )}
 
-                {/* Triangle badge in bottom-left corner */}
+                {/* Triangle badge in top-left corner — "category" info, alongside the
+                    NEW badge standard ModelCard shows in the same corner. */}
                 {!loading && (
                     <Tooltip title="Custom model" arrow>
                         <Box
                             sx={{
                                 position: 'absolute',
-                                bottom: 0,
+                                top: 0,
                                 left: 0,
                                 width: 20,
                                 height: 20,
                                 backgroundColor: 'primary.main',
-                                clipPath: 'polygon(0 100%, 100% 100%, 0 0)',
+                                clipPath: 'polygon(0 0, 100% 0, 0 100%)',
                                 cursor: 'help',
                             }}
                         />
                     </Tooltip>
                 )}
 
+                {/* Test status — persistent once a result exists, unlike the
+                    hover-only actions corner below. */}
+                {!loading && probe.result && (
+                    <ModelTestStatusBadge result={probe.result} onOpen={probe.openDialog} />
+                )}
+
                 {/* Control bar - visible on hover */}
-                <Box
-                    className="control-bar"
-                    sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        right: 0,
-                        height: 20,
-                        backgroundColor: 'grey.50',
-                        borderTop: 1,
-                        borderTopLeftRadius: 4,
-                        borderColor: 'grey.200',
-                        display: 'flex',
-                        alignItems: 'center',
-                        px: 0.5,
-                        opacity: loading ? 0 : 0,
-                        transition: 'opacity 0.2s',
-                        zIndex: 10,
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                    onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                >
-                    <IconButton
-                        size="small"
-                        onClick={handleEditClick}
-                        sx={{
-                            p: 0.3,
-                            color: 'text.secondary',
-                            '&:hover': {
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                                color: 'primary.main',
-                            }
-                        }}
-                        title="Edit custom model"
-                    >
-                        <EditIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                    <IconButton
-                        size="small"
-                        onClick={handleDeleteClick}
-                        sx={{
-                            p: 0.3,
-                            color: 'text.secondary',
-                            '&:hover': {
-                                backgroundColor: 'rgba(211, 47, 47, 0.08)',
-                                color: 'error.main',
-                            }
-                        }}
-                        title="Delete custom model"
-                    >
-                        <DeleteIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                </Box>
+                {!loading && (
+                    <ControlBar>
+                        <ModelTestTrigger onOpen={probe.openDialog} />
+                        <IconButton
+                            size="small"
+                            onClick={handleEditClick}
+                            sx={{
+                                p: 0.3,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                    backgroundColor: 'action.hover',
+                                    color: 'primary.main',
+                                }
+                            }}
+                            title="Edit custom model"
+                        >
+                            <EditIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            onClick={handleDeleteClick}
+                            sx={{
+                                p: 0.3,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                                    color: 'error.main',
+                                }
+                            }}
+                            title="Delete custom model"
+                        >
+                            <DeleteIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                    </ControlBar>
+                )}
             </Card>
+
+            <ProbeDialog
+                open={probe.dialogOpen}
+                onClose={probe.closeDialog}
+                targetType="provider"
+                targetId={provider.uuid}
+                targetName={provider.name}
+                model={model}
+                initialResult={probe.result ?? undefined}
+                onResult={probe.setResult}
+            />
 
             {/* Confirmation dialog for deleting custom model */}
             <Dialog

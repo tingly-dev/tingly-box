@@ -1,8 +1,9 @@
 import { Box, Divider, Typography } from '@mui/material';
+import type { Provider } from '@/types/provider';
 import ModelCard from './ModelCard';
 
 export interface RecentModelsSectionProps {
-    providerUuid: string;
+    provider: Provider;
     recentModels: string[];
     selectedModel?: string;
     onModelSelect: (model: string) => void;
@@ -10,7 +11,7 @@ export interface RecentModelsSectionProps {
 }
 
 export function RecentModelsSection({
-    providerUuid,
+    provider,
     recentModels,
     selectedModel,
     onModelSelect,
@@ -28,11 +29,12 @@ export function RecentModelsSection({
             <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
                 {recentModels.map((model) => (
                     <ModelCard
-                        key={model}
+                        key={`${provider.uuid}:${model}`}
                         model={model}
                         isSelected={selectedModel === model}
                         onClick={() => onModelSelect(model)}
                         variant="standard"
+                        provider={provider}
                     />
                 ))}
             </Box>

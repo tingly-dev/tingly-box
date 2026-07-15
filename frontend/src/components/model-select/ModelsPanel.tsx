@@ -1,7 +1,6 @@
 import { AddCircleOutline as AddCircleOutlineIcon } from '@/components/icons';
 import { NavigateBefore as NavigateBeforeIcon } from '@/components/icons';
 import { NavigateNext as NavigateNextIcon } from '@/components/icons';
-import { PlayArrow as PlayArrowIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Search as SearchIcon } from '@/components/icons';
 import { BugReport as BugReportIcon } from '@/components/icons';
@@ -83,8 +82,6 @@ export interface ModelsPanelProps {
     onModelSelect: (provider: Provider, model: string) => void;
     onCustomModelEdit: (provider: Provider, value?: string) => void;
     onCustomModelDelete: (provider: Provider, customModel: string) => void;
-    onTest?: (model: string) => void;
-    testing?: boolean;
 }
 
 export function ModelsPanel({
@@ -96,8 +93,6 @@ export function ModelsPanel({
     onModelSelect,
     onCustomModelEdit,
     onCustomModelDelete,
-    onTest,
-    testing = false,
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
@@ -266,17 +261,6 @@ export function ModelsPanel({
                                 Test New
                             </Button>
                         )}
-                        {onTest && (
-                            <Button
-                                variant="outlined"
-                                startIcon={testing ? <CircularProgress size={16} /> : <PlayArrowIcon />}
-                                onClick={() => selectedModel && onTest(selectedModel)}
-                                disabled={!selectedModel || testing}
-                                sx={{ height: 40, minWidth: 80 }}
-                            >
-                                {testing ? 'Testing...' : 'Test'}
-                            </Button>
-                        )}
                     </Stack>
 
                     {/* Search box */}
@@ -306,7 +290,7 @@ export function ModelsPanel({
                 {/* New Models Section */}
                 {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
                     <NewModelsSection
-                        providerUuid={provider.uuid}
+                        provider={provider}
                         newModels={newModels[provider.uuid].newModels}
                         selectedModel={isProviderSelected ? selectedModel : undefined}
                         onModelSelect={(model) => onModelSelect(provider, model)}
@@ -318,7 +302,7 @@ export function ModelsPanel({
                 {/* Recent Models Section */}
                 {recentModels[provider.uuid]?.length > 0 && (
                     <RecentModelsSection
-                        providerUuid={provider.uuid}
+                        provider={provider}
                         recentModels={recentModels[provider.uuid]}
                         selectedModel={isProviderSelected ? selectedModel : undefined}
                         onModelSelect={(model) => onModelSelect(provider, model)}
@@ -335,12 +319,13 @@ export function ModelsPanel({
                         <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
                             {providerModels[provider.uuid].star_models!.map((starModel) => (
                                 <ModelCard
-                                    key={starModel}
+                                    key={`${provider.uuid}:${starModel}`}
                                     model={starModel}
                                     isSelected={isProviderSelected && selectedModel === starModel}
                                     onClick={() => onModelSelect(provider, starModel)}
                                     variant="starred"
                                     description={getDescription(starModel)}
+                                    provider={provider}
                                 />
                             ))}
                         </Box>
@@ -365,7 +350,7 @@ export function ModelsPanel({
 
                                 return (
                                     <CustomModelCard
-                                        key={model}
+                                        key={`${provider.uuid}:${model}`}
                                         model={model}
                                         provider={provider}
                                         isSelected={isModelSelected}
@@ -378,12 +363,13 @@ export function ModelsPanel({
                             } else {
                                 return (
                                     <ModelCard
-                                        key={model}
+                                        key={`${provider.uuid}:${model}`}
                                         model={model}
                                         isSelected={isModelSelected}
                                         onClick={() => onModelSelect(provider, model)}
                                         variant="standard"
                                         description={getDescription(model)}
+                                        provider={provider}
                                     />
                                 );
                             }
