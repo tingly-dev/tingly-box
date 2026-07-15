@@ -40,6 +40,7 @@
 - The detail surface shows concrete workspace, session and resume command values.
 - The primary action is sending an instruction; stop and run-now remain visible secondary actions.
 - Disabling the experiment hides creation/navigation without locking existing Task URLs or cleanup actions.
+- Task visibility is persisted as the global experimental extension `extensions.task`; it is not registered as a scenario protocol flag.
 - Desktop page and creation dialog were visually verified at 1440×900 in the mock runtime.
 
 ## Deferred by design

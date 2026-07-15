@@ -4,6 +4,7 @@ import {Alert, Box, Chip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {api} from '../services/api';
+import {experimentalExtensions} from '@/services/experimentalExtensions';
 import {isFullEdition} from "@/utils/edition.ts";
 
 const SKILL_FEATURES = [
@@ -44,8 +45,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             const mcpResult = await api.getScenarioFlag('_global', 'mcp');
             setMCPEnabled(mcpResult?.data?.value || false);
 
-            const taskResult = await api.getScenarioFlag('_global', 'task');
-            setTaskEnabled(taskResult?.data?.value || false);
+            setTaskEnabled(await experimentalExtensions.getBoolean('task'));
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -110,9 +110,13 @@ const GlobalExperimentalFeatures: React.FC = () => {
 
     const toggleTask = () => {
         const newValue = !taskEnabled;
-        api.setScenarioFlag('_global', 'task', newValue).then((result) => {
-            if (result.success) { setTaskEnabled(newValue); refresh(); } else { loadFeatures(); }
-        }).catch(loadFeatures);
+        experimentalExtensions.setBoolean('task', newValue).then(() => {
+            setTaskEnabled(newValue);
+            refresh();
+        }).catch((error) => {
+            console.error('Failed to set Task extension:', error);
+            loadFeatures();
+        });
     };
 
     useEffect(() => {

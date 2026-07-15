@@ -900,7 +900,10 @@ const mockClaudeCodeProfiles = [
 // Counter for alternating probe responses
 let probeRequestCount = 0
 
-const mockGlobalFlags: Record<string, boolean> = { task: true, guardrails: false, mcp: false, skill_ide: false, skill_user: false }
+const mockGlobalFlags: Record<string, boolean> = { guardrails: false, mcp: false, skill_ide: false, skill_user: false }
+const mockScenarioConfigs: Record<string, any> = {
+    _global: { scenario: '_global', config_mode: 'unified', extensions: { task: true } },
+}
 
 const mockTasks: any[] = [
     { id: 'task-release', title: 'Watch release checks', goal: 'Monitor the release checks and summarize anything blocking the rollout.', agent: 'claude', status: 'needs_input', latest_result: { state: 'needs_input', summary: 'All checks passed except staging approval.', question: 'Staging is ready. Should I proceed with the production rollout?' }, workspace_path: '/Users/demo/.tingly-box/tasks/task-release/workspace', session_id: 'a27a39d1-12d1-44e1-9c5d-42dd28cf54e0', resume_command: 'claude --resume a27a39d1-12d1-44e1-9c5d-42dd28cf54e0', follow_up: { enabled: true, delay_seconds: 300, max_wake_ups: 20 }, wake_count: 3, created_at: new Date(Date.now() - 7200000).toISOString(), updated_at: new Date(Date.now() - 300000).toISOString() },
@@ -1403,14 +1406,15 @@ export const handlers = [
         const { scenario } = params as { scenario: string }
         return HttpResponse.json({
             success: true,
-            data: { scenario, config_mode: 'unified' },
+            data: mockScenarioConfigs[scenario] || { scenario, config_mode: 'unified' },
         })
     }),
 
     http.post('/api/v1/scenario/:scenario', async ({ params, request }) => {
         const { scenario } = params as { scenario: string }
         const body = await request.json() as any
-        return HttpResponse.json({ success: true, data: { scenario, ...body } })
+        mockScenarioConfigs[scenario] = { scenario, ...body }
+        return HttpResponse.json({ success: true, data: mockScenarioConfigs[scenario] })
     }),
 
     http.post('/api/v1/rule', async ({ request }) => {

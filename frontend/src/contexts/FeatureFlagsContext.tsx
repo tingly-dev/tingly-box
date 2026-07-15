@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '@/services/api';
+import { experimentalExtensions } from '@/services/experimentalExtensions';
 import { useAuth } from './AuthContext';
 
 interface FeatureFlagsContextType {
@@ -43,13 +44,13 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
-                api.getScenarioFlag('_global', 'task'),
+                experimentalExtensions.getBoolean('task'),
             ]);
             setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
-            setEnableTasks(taskResult?.data?.value || false);
+            setEnableTasks(taskResult);
         } catch (error) {
             // Silently fail - flags will default to false
             // Don't log to console to avoid noise during initial auth

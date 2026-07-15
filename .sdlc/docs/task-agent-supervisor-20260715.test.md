@@ -22,7 +22,7 @@ cd agentboot && GOCACHE=/tmp/tingly-box-bot-go-cache go vet ./codex
 git diff --check
 
 cd frontend
-pnpm exec oxlint src/pages/task/TaskPage.tsx src/pages/task/types.ts src/services/taskApi.ts src/contexts/FeatureFlagsContext.tsx src/components/GlobalExperimentalFeatures.tsx src/layout/useActivityItems.tsx src/App.tsx src/mocks/handlers.ts
+pnpm exec oxlint src/pages/task/TaskPage.tsx src/pages/task/types.ts src/services/taskApi.ts src/services/experimentalExtensions.ts src/contexts/FeatureFlagsContext.tsx src/components/GlobalExperimentalFeatures.tsx src/layout/useActivityItems.tsx src/App.tsx src/mocks/handlers.ts
 pnpm build:dev
 ```
 
@@ -45,6 +45,7 @@ All commands passed.
 - immediate/later/recurring creation flows and orthogonal continuous follow-up controls;
 - mock API flows for empty/loading/error-free visual development;
 - 1440×900 browser screenshots for the Task page and creation dialog.
+- regression interaction verifies Task reads and writes `_global.extensions.task`, never `/flag/task`, and immediately updates navigation in both directions.
 
 ## Existing unrelated repository failure
 

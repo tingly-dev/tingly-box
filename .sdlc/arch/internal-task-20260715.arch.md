@@ -57,7 +57,7 @@ Manager.Submit
 - `internal/data/db/store_manager.go`: 已 AutoMigrate `TaskRecord` 并暴露 `Tasks()`。
 - `internal/server/server.go`: 需要创建/start/stop Task manager 并注册 agent handler。
 - `agentboot/claude`: 可直接作为 Claude worker；需要新增平行 Codex driver/transport。
-- `frontend/src/contexts/FeatureFlagsContext.tsx` 与 `GlobalExperimentalFeatures.tsx`: `_global/task` 实验开关。
+- `frontend/src/contexts/FeatureFlagsContext.tsx` 与 `GlobalExperimentalFeatures.tsx`: `_global.extensions.task` 实验扩展开关；不是 scenario flag registry 成员。
 - `frontend/src/layout/useActivityItems.tsx` / `App.tsx`: 顶层 Task 导航与路由。
 - API 必须先在 backend 注册 swagger model；frontend 暂用 placeholder，等待 codegen。
 
