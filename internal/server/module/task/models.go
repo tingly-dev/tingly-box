@@ -15,6 +15,11 @@ type CreateRequest struct {
 	Recurrence     *coretask.RecurrenceSpec `json:"recurrence,omitempty"`
 	FollowUp       agenttask.FollowUpPolicy `json:"follow_up"`
 	TimeoutSeconds int                      `json:"timeout_seconds,omitempty"`
+	Steps          []CreateStep             `json:"steps,omitempty"`
+}
+
+type CreateStep struct {
+	Instruction string `json:"instruction" binding:"required"`
 }
 
 type WakeRequest struct {
@@ -46,6 +51,9 @@ type TaskView struct {
 	CreatedAt     time.Time                `json:"created_at"`
 	UpdatedAt     time.Time                `json:"updated_at"`
 	Recurrence    *coretask.RecurrenceSpec `json:"recurrence,omitempty"`
+	Steps         []agenttask.Step         `json:"steps,omitempty"`
+	CurrentStep   int                      `json:"current_step"`
+	StepOutcomes  []agenttask.StepOutcome  `json:"step_outcomes,omitempty"`
 }
 
 type TaskResponse struct {

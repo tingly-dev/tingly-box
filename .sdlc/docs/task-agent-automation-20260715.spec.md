@@ -227,7 +227,7 @@ type FollowUpPolicy struct {
 - `StepOutcomes` 只记录已完成步骤，按执行顺序追加。
 - 每轮 prompt 明确包含总目标、当前步骤和 `Do not start later steps` 边界。
 - 当前步骤 `done`：保存 outcome；有下一步时立即 reschedule 同一 Task，没有下一步时 complete。
-- 当前步骤 `continue`：仍停留在当前步骤，沿用 follow-up 策略。
+- 当前步骤 `continue`：仍停留在当前步骤；follow-up 可用时 reschedule，否则转 `needs_input` 等待 Run now 或指令。
 - 当前步骤 `needs_input` / error：仍停留在当前步骤。
 - 已完成顺序 Task 的 `Run now` 从第一步重新开始；带 instruction 的额外唤醒只执行该 instruction，不重放步骤。
 - cron 的下一次 occurrence 从第一步重新开始。

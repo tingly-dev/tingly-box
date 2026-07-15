@@ -72,6 +72,11 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "goal and a supported agent are required"})
 		return
 	}
+	steps, err := normalizeSteps(req.Steps)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	taskID := uuid.NewString()
 	workspace, err := agenttask.CreateWorkspace(h.configDir, taskID)
@@ -87,6 +92,7 @@ func (h *Handler) Create(c *gin.Context) {
 		WorkspacePath:  workspace,
 		FollowUp:       req.FollowUp,
 		TimeoutSeconds: req.TimeoutSeconds,
+		Steps:          steps,
 	}
 	payload.ApplyDefaults()
 	payloadJSON, err := json.Marshal(payload)
@@ -198,6 +204,7 @@ func toView(task *coretask.Task) (TaskView, error) {
 		FollowUp: payload.FollowUp, WakeCount: payload.WakeCount,
 		ScheduledAt: task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
+		Steps: payload.Steps, CurrentStep: payload.CurrentStep, StepOutcomes: payload.StepOutcomes,
 	}
 	if payload.SessionID != "" {
 		workspace := shellQuote(payload.WorkspacePath)
@@ -222,6 +229,28 @@ func toView(task *coretask.Task) (TaskView, error) {
 		view.Recurrence = &recurrence
 	}
 	return view, nil
+}
+
+func normalizeSteps(input []CreateStep) ([]agenttask.Step, error) {
+	if len(input) > agenttask.MaxSteps {
+		return nil, fmt.Errorf("steps cannot exceed %d", agenttask.MaxSteps)
+	}
+	steps := make([]agenttask.Step, 0, len(input))
+	for i, item := range input {
+		instruction := strings.TrimSpace(item.Instruction)
+		if instruction == "" {
+			return nil, fmt.Errorf("step %d instruction is required", i+1)
+		}
+		title := strings.TrimSpace(strings.SplitN(instruction, "\n", 2)[0])
+		runes := []rune(title)
+		if len(runes) > 80 {
+			title = string(runes[:80]) + "…"
+		}
+		steps = append(steps, agenttask.Step{
+			ID: fmt.Sprintf("step-%d", i+1), Title: title, Instruction: instruction,
+		})
+	}
+	return steps, nil
 }
 
 func shellQuote(value string) string {

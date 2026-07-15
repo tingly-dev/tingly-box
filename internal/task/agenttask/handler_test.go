@@ -354,6 +354,127 @@ func TestHandler_UnavailableAgentFails(t *testing.T) {
 	}
 }
 
+func TestHandler_SequentialStepsAdvanceOneRunAtATime(t *testing.T) {
+	workspace := mustWorkspace(t)
+	calls := 0
+	agent := &fakeAgent{available: true}
+	agent.execute = func(_ context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+		calls++
+		switch calls {
+		case 1:
+			if !strings.Contains(prompt, "Current step 1 of 2") || !strings.Contains(prompt, "Inspect the build") || strings.Contains(prompt, "Publish artifacts") {
+				t.Fatalf("first step prompt = %q", prompt)
+			}
+			if opts.Resume {
+				t.Fatal("first step unexpectedly resumed")
+			}
+			return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"build inspected"}</task_outcome>`}, nil, nil), nil
+		case 2:
+			if !strings.Contains(prompt, "Current step 2 of 2") || !strings.Contains(prompt, "Publish artifacts") || !opts.Resume {
+				t.Fatalf("second step call: prompt=%q opts=%+v", prompt, opts)
+			}
+			return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"artifacts published"}</task_outcome>`}, nil, nil), nil
+		default:
+			t.Fatalf("unexpected execution %d", calls)
+			return nil, nil
+		}
+	}
+
+	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
+	fixedNow := time.Date(2026, time.July, 15, 15, 0, 0, 0, time.UTC)
+	handler.now = func() time.Time { return fixedNow }
+	payload := Payload{
+		Goal: "Ship the release", Agent: AgentClaude, WorkspacePath: workspace,
+		Steps: []Step{
+			{ID: "step-1", Title: "Inspect", Instruction: "Inspect the build"},
+			{ID: "step-2", Title: "Publish", Instruction: "Publish artifacts"},
+		},
+	}
+
+	firstController := &fakeController{}
+	first, err := handler.Run(context.Background(), &task.Task{ID: uuid.NewString(), Type: TaskType, Payload: rawPayload(t, payload)}, firstController)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Outcome != task.OutcomeReschedule || first.NextRunAt == nil || !first.NextRunAt.Equal(fixedNow) {
+		t.Fatalf("first result = %+v", first)
+	}
+	checkpoint := firstController.decodedPayload(t)
+	if checkpoint.CurrentStep != 1 || len(checkpoint.StepOutcomes) != 1 || checkpoint.StepOutcomes[0].Result.Summary != "build inspected" {
+		t.Fatalf("first checkpoint = %+v", checkpoint)
+	}
+
+	secondController := &fakeController{}
+	second, err := handler.Run(context.Background(), &task.Task{ID: uuid.NewString(), Type: TaskType, Payload: rawPayload(t, checkpoint)}, secondController)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Outcome != task.OutcomeComplete {
+		t.Fatalf("second result = %+v", second)
+	}
+	checkpoint = secondController.decodedPayload(t)
+	if checkpoint.CurrentStep != 2 || len(checkpoint.StepOutcomes) != 2 || checkpoint.StepOutcomes[1].Result.Summary != "artifacts published" {
+		t.Fatalf("final checkpoint = %+v", checkpoint)
+	}
+}
+
+func TestHandler_SequentialContinueWithoutFollowUpPausesCurrentStep(t *testing.T) {
+	workspace := mustWorkspace(t)
+	agent := &fakeAgent{available: true, execute: func(_ context.Context, _ string, _ agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+		return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"continue","summary":"more work remains"}</task_outcome>`}, nil, nil), nil
+	}}
+	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
+	controller := &fakeController{}
+	result, err := handler.Run(context.Background(), &task.Task{
+		ID: uuid.NewString(), Type: TaskType,
+		Payload: rawPayload(t, Payload{
+			Goal: "Ship", Agent: AgentClaude, WorkspacePath: workspace,
+			Steps: []Step{{ID: "step-1", Title: "Inspect", Instruction: "Inspect the build"}},
+		}),
+	}, controller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != task.OutcomeNeedsInput || !strings.Contains(string(result.Result), "needs another run") {
+		t.Fatalf("result = %+v", result)
+	}
+	checkpoint := controller.decodedPayload(t)
+	if checkpoint.CurrentStep != 0 || len(checkpoint.StepOutcomes) != 0 {
+		t.Fatalf("checkpoint advanced unexpectedly: %+v", checkpoint)
+	}
+}
+
+func TestHandler_CompletedSequenceRestartsFromFirstStep(t *testing.T) {
+	workspace := mustWorkspace(t)
+	agent := &fakeAgent{available: true, execute: func(_ context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+		if !strings.Contains(prompt, "Current step 1 of 1") || !opts.Resume {
+			t.Fatalf("restart call: prompt=%q opts=%+v", prompt, opts)
+		}
+		return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"new result"}</task_outcome>`}, nil, nil), nil
+	}}
+	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
+	controller := &fakeController{}
+	step := Step{ID: "step-1", Title: "Inspect", Instruction: "Inspect the build"}
+	result, err := handler.Run(context.Background(), &task.Task{
+		ID: uuid.NewString(), Type: TaskType,
+		Payload: rawPayload(t, Payload{
+			Goal: "Ship", Agent: AgentClaude, WorkspacePath: workspace, SessionID: "session-1",
+			Steps: []Step{step}, CurrentStep: 1,
+			StepOutcomes: []StepOutcome{{StepID: step.ID, Result: Result{State: "done", Summary: "old result"}}},
+		}),
+	}, controller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != task.OutcomeComplete {
+		t.Fatalf("result = %+v", result)
+	}
+	checkpoint := controller.decodedPayload(t)
+	if checkpoint.CurrentStep != 1 || len(checkpoint.StepOutcomes) != 1 || checkpoint.StepOutcomes[0].Result.Summary != "new result" {
+		t.Fatalf("restart checkpoint = %+v", checkpoint)
+	}
+}
+
 func TestHandler_StartFailureDoesNotCheckpointNewSession(t *testing.T) {
 	workspace := mustWorkspace(t)
 	agent := &fakeAgent{available: true}

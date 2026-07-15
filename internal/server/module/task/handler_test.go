@@ -81,6 +81,40 @@ func TestCreate_RejectsUnsupportedAgent(t *testing.T) {
 	}
 }
 
+func TestCreate_NormalizesSequentialSteps(t *testing.T) {
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
+		"goal":"Ship the release",
+		"agent":"codex",
+		"steps":[
+			{"instruction":"Inspect the build\nand summarize failures"},
+			{"instruction":"Publish the artifacts"}
+		]
+	}`)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var decoded TaskResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Data.Steps) != 2 || decoded.Data.Steps[0].ID != "step-1" || decoded.Data.Steps[0].Title != "Inspect the build" || decoded.Data.CurrentStep != 0 {
+		t.Fatalf("steps = %+v", decoded.Data.Steps)
+	}
+}
+
+func TestCreate_RejectsBlankSequentialStep(t *testing.T) {
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
+		"goal":"Ship the release",
+		"agent":"codex",
+		"steps":[{"instruction":"   "}]
+	}`)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "step 1 instruction is required") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestWake_WithInstructionResumesPausedTask(t *testing.T) {
 	store := coretask.NewMemoryStore()
 	manager := coretask.NewManager(store)

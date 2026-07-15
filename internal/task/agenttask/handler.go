@@ -64,6 +64,13 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	if !agent.IsAvailable() {
 		return nil, fmt.Errorf("agent task: %s CLI is not available", payload.Agent)
 	}
+	if len(payload.Steps) > 0 && payload.CurrentStep == len(payload.Steps) && strings.TrimSpace(payload.PendingInput) == "" {
+		payload.CurrentStep = 0
+		payload.StepOutcomes = nil
+		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
+			return nil, err
+		}
+	}
 
 	resume := payload.SessionID != ""
 	sessionID := payload.SessionID
@@ -143,12 +150,20 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	normalized := parseOutcome(agentResult.TextOutput())
 	normalized.NativeSessionID = payload.SessionID
 	normalized.Artifacts = safeArtifacts(normalized.Artifacts)
-	return h.taskResult(payload, normalized)
+	return h.taskResult(ctx, ctl, &payload, normalized)
 }
 
 func nextPrompt(payload Payload, resume bool) string {
 	if strings.TrimSpace(payload.PendingInput) != "" {
+		if payload.HasCurrentStep() {
+			step := payload.Steps[payload.CurrentStep]
+			return fmt.Sprintf("Overall task goal:\n%s\n\nCurrent step %d of %d — %s\n%s\n\nUser instruction for this step:\n%s\n\nContinue only this step. Do not start later steps.", payload.Goal, payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, payload.PendingInput)
+		}
 		return payload.PendingInput
+	}
+	if payload.HasCurrentStep() {
+		step := payload.Steps[payload.CurrentStep]
+		return fmt.Sprintf("Overall task goal:\n%s\n\nCurrent step %d of %d — %s\n%s\n\nComplete only this step during this bounded execution. Do not start later steps. Report done when this step is complete.", payload.Goal, payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction)
 	}
 	if resume {
 		return "Continue working toward the existing task goal. Review the session context and current workspace before acting."
@@ -249,7 +264,7 @@ func (h *Handler) needsInputResult(ctx context.Context, ctl task.Controller, pay
 	return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
 }
 
-func (h *Handler) taskResult(payload Payload, result Result) (*task.TaskResult, error) {
+func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *Payload, result Result) (*task.TaskResult, error) {
 	data, err := json.Marshal(result)
 	if err != nil {
 		return nil, err
@@ -273,8 +288,31 @@ func (h *Handler) taskResult(payload Payload, result Result) (*task.TaskResult, 
 			next := h.now().Add(time.Duration(delay) * time.Second)
 			return &task.TaskResult{Outcome: task.OutcomeReschedule, Result: data, NextRunAt: &next}, nil
 		}
+		if payload.HasCurrentStep() {
+			result.State = "needs_input"
+			result.Question = "This step needs another run. Run now or send an instruction to continue."
+			data, err = json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
+		}
 		return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
 	case "done":
+		if payload.HasCurrentStep() {
+			step := payload.Steps[payload.CurrentStep]
+			payload.StepOutcomes = append(payload.StepOutcomes, StepOutcome{
+				StepID: step.ID, Result: result, CompletedAt: h.now(),
+			})
+			payload.CurrentStep++
+			if err := checkpointPayload(ctx, ctl, payload); err != nil {
+				return nil, err
+			}
+			if payload.HasCurrentStep() {
+				next := h.now()
+				return &task.TaskResult{Outcome: task.OutcomeReschedule, Result: data, NextRunAt: &next}, nil
+			}
+		}
 		return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
 	default:
 		return nil, fmt.Errorf("agent task: invalid normalized state %q", result.State)
