@@ -59,24 +59,38 @@ register. They are an implementation tour, not three separate products.
 
 ### tb-side: a plugin is a normal, tagged provider (implemented)
 
-**Design history, briefly, because it's instructive.** Two earlier iterations
-over-built this: first a persisted "plugin provider kind" with its own DB
-column and a distinct registration endpoint; then a full ephemeral service-
-discovery layer (in-memory registry, per-instance lease, heartbeat thread,
-TTL expiry, a `Config` hook consulted on every provider lookup) built to avoid
-leaving a stale DB row behind when a plugin process stopped. Both were removed.
-The reason: **tb already has liveness detection** — every `(rule, service)`
+**Design history, briefly, because it's instructive.** Three earlier
+iterations over-built this: first a persisted "plugin provider kind" with its
+own DB column and a distinct registration endpoint; then a full ephemeral
+service-discovery layer (in-memory registry, per-instance lease, heartbeat
+thread, TTL expiry, a `Config` hook consulted on every provider lookup) built
+to avoid leaving a stale DB row behind when a plugin process stopped; then,
+even after that was cut down to an idempotent upsert, the handler methods
+still lived directly on `*Server` in `internal/server/*.go`, coupling plugin
+registration — a self-contained concern whose only dependency is `*config.Config`
+— into the same file/struct as every other server concern. All three were
+fixed. The circuit-breaker point:
+
+**tb already has liveness detection** — every `(rule, service)`
 pair is covered by the existing per-service circuit breaker
 (`internal/loadbalance/breaker.go`). A dead plugin's first failed request trips
 it exactly like a dead real provider; traffic tier-fails-over automatically
 when a fallback tier is configured. Lease/heartbeat/TTL was reinventing that
 mechanism — distributed-service-discovery machinery for a problem tb doesn't
 have (a personal, single-operator box, not a multi-tenant cluster). See
-`git log` on this file's directory for the two removed designs if useful as a
+`git log` on this file's directory for the removed designs if useful as a
 cautionary reference.
 
-**What shipped instead — the minimal version:**
+**What shipped instead — the minimal version, in its own module:**
 
+- Lives in `internal/server/module/plugin/` (`handler.go` / `types.go` /
+  `routes.go`), matching the same pattern every other server concern already
+  uses (`module/provider`, `module/rule`, `module/providertemplate`, …):
+  a `Handler` struct constructed with only the dependencies it needs
+  (`NewHandler(cfg *config.Config)` — nothing else, since registration is just
+  provider + rule creation), and a `RegisterRoutes(group, handler)` mounted
+  from `server_webui_api.go`. Plugin logic no longer lives as methods on the
+  giant `*Server` struct.
 - A plugin is an ordinary provider (`APIStyle=openai`, `api_key`/`no_key`)
   carrying the tag `"plugin"` in the existing, generic `Provider.Tags` field.
   `Provider.IsPlugin()` checks for that tag. No new struct, no new DB column —

@@ -1,4 +1,4 @@
-package server
+package plugin
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 )
 
 // postJSON drives a gin handler with a JSON body and returns the recorder and
-// the parsed response envelope. Shared by the plugin endpoint tests.
+// the parsed response envelope.
 func postJSON(t *testing.T, h gin.HandlerFunc, body any) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -29,19 +29,19 @@ func postJSON(t *testing.T, h gin.HandlerFunc, body any) (*httptest.ResponseReco
 	return w, parsed
 }
 
-func newPluginTestServer(t *testing.T) *Server {
+func newTestHandler(t *testing.T) *Handler {
 	t.Helper()
 	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	if err != nil {
 		t.Fatalf("NewConfig: %v", err)
 	}
-	return &Server{config: cfg}
+	return NewHandler(cfg)
 }
 
 func TestRegisterPlugin_BindsRule(t *testing.T) {
-	s := newPluginTestServer(t)
+	h := newTestHandler(t)
 
-	w, resp := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	w, resp := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name:     "my-rag",
 		Endpoint: "http://127.0.0.1:8765/v1",
 		ModelID:  "plugin/my-rag",
@@ -64,7 +64,7 @@ func TestRegisterPlugin_BindsRule(t *testing.T) {
 	}
 
 	// The provider must be persisted and tagged as a plugin.
-	prov, err := s.config.GetProviderByUUID(providerUUID)
+	prov, err := h.config.GetProviderByUUID(providerUUID)
 	if err != nil {
 		t.Fatalf("GetProviderByUUID: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestRegisterPlugin_BindsRule(t *testing.T) {
 
 	// A rule must exist under the scenario whose single service is the plugin.
 	var found bool
-	for _, rule := range s.config.GetRequestConfigs() {
+	for _, rule := range h.config.GetRequestConfigs() {
 		if rule.GetScenario() == typ.ScenarioExperiment && rule.RequestModel == "plugin/my-rag" {
 			found = true
 			if len(rule.Services) != 1 || rule.Services[0].Provider != providerUUID {
@@ -88,9 +88,9 @@ func TestRegisterPlugin_BindsRule(t *testing.T) {
 }
 
 func TestRegisterPlugin_ProviderOnly(t *testing.T) {
-	s := newPluginTestServer(t)
+	h := newTestHandler(t)
 
-	_, resp := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	_, resp := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name:     "solo",
 		Endpoint: "http://127.0.0.1:9000/v1",
 	})
@@ -105,15 +105,15 @@ func TestRegisterPlugin_ProviderOnly(t *testing.T) {
 }
 
 func TestRegisterPlugin_ReregisterUpdatesInPlace(t *testing.T) {
-	s := newPluginTestServer(t)
+	h := newTestHandler(t)
 
-	_, first := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	_, first := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name: "my-rag", Endpoint: "http://127.0.0.1:8765/v1",
 	})
 	firstUUID := first["data"].(map[string]any)["provider_uuid"].(string)
 
 	// Re-register (e.g. the plugin process restarted on a different port).
-	_, second := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	_, second := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name: "my-rag", Endpoint: "http://127.0.0.1:9999/v1",
 	})
 	secondUUID := second["data"].(map[string]any)["provider_uuid"].(string)
@@ -122,7 +122,7 @@ func TestRegisterPlugin_ReregisterUpdatesInPlace(t *testing.T) {
 		t.Fatalf("re-register should update the same provider, got %s then %s", firstUUID, secondUUID)
 	}
 
-	prov, err := s.config.GetProviderByUUID(firstUUID)
+	prov, err := h.config.GetProviderByUUID(firstUUID)
 	if err != nil {
 		t.Fatalf("GetProviderByUUID: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestRegisterPlugin_ReregisterUpdatesInPlace(t *testing.T) {
 
 	// Exactly one provider named my-rag — no duplicate created.
 	count := 0
-	for _, p := range s.config.ListProviders() {
+	for _, p := range h.config.ListProviders() {
 		if p.Name == "my-rag" {
 			count++
 		}
@@ -143,15 +143,15 @@ func TestRegisterPlugin_ReregisterUpdatesInPlace(t *testing.T) {
 }
 
 func TestRegisterPlugin_ReregisterIsIdempotentForRule(t *testing.T) {
-	s := newPluginTestServer(t)
-	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	h := newTestHandler(t)
+	postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name: "p", Endpoint: "http://a/v1", Scenario: string(typ.ScenarioExperiment),
 	})
-	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name: "p", Endpoint: "http://b/v1", Scenario: string(typ.ScenarioExperiment),
 	})
 	count := 0
-	for _, rule := range s.config.GetRequestConfigs() {
+	for _, rule := range h.config.GetRequestConfigs() {
 		if rule.RequestModel == "plugin/p" {
 			count++
 		}
@@ -162,14 +162,14 @@ func TestRegisterPlugin_ReregisterIsIdempotentForRule(t *testing.T) {
 }
 
 func TestListPlugins_FiltersPluginTag(t *testing.T) {
-	s := newPluginTestServer(t)
+	h := newTestHandler(t)
 	// a normal provider
-	if err := s.config.AddProvider(&typ.Provider{
+	if err := h.config.AddProvider(&typ.Provider{
 		Name: "real", APIBase: "https://api.example.com/v1", APIStyle: "openai", Enabled: true,
 	}); err != nil {
 		t.Fatalf("AddProvider: %v", err)
 	}
-	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
+	postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
 		Name: "plug", Endpoint: "http://127.0.0.1:8765/v1", ModelID: "plugin/plug",
 		Scenario: string(typ.ScenarioExperiment),
 	})
@@ -177,7 +177,7 @@ func TestListPlugins_FiltersPluginTag(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-	s.ListPlugins(c)
+	h.ListPlugins(c)
 
 	var resp PluginsResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {

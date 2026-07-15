@@ -1,4 +1,12 @@
-package server
+// Package plugin handles HTTP endpoints for registering external plugin code
+// as a tingly-box upstream. A plugin is an ordinary OpenAI-compatible HTTP
+// provider tagged "plugin" (see typ.Provider.IsPlugin) — routing is
+// unchanged, and liveness is handled by the same per-service circuit breaker
+// that already protects every other provider. There is deliberately no
+// separate plugin lifecycle (lease/heartbeat/expiry): that would duplicate
+// the breaker for a single-operator box. If a plugin is retired, delete its
+// provider like any other, via the provider module's DELETE endpoint.
+package plugin
 
 import (
 	"net/http"
@@ -12,55 +20,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// RegisterPluginRequest registers external plugin code as a tingly-box upstream.
-// It is idempotent by name: calling it again (e.g. every time the plugin
-// process starts) updates the existing provider instead of duplicating it.
-type RegisterPluginRequest struct {
-	Name     string `json:"name" binding:"required" description:"Plugin / provider name" example:"my-rag"`
-	Endpoint string `json:"endpoint" binding:"required" description:"Plugin OpenAI base URL" example:"http://127.0.0.1:8765/v1"`
-	ModelID  string `json:"model_id,omitempty" description:"Model id the plugin advertises" example:"plugin/my-rag"`
-	Token    string `json:"token,omitempty" description:"Token tingly-box should send to the plugin (empty = no key)"`
-	Scenario string `json:"scenario,omitempty" description:"Scenario to bind a rule under; omit to create only the provider" example:"experiment"`
-	Tier     int    `json:"tier,omitempty" description:"Tier for the bound service (0 = highest priority)"`
+// Handler handles plugin registration HTTP requests. Its only dependency is
+// the shared config — plugin registration is just provider + rule creation,
+// so it needs nothing else from the server.
+type Handler struct {
+	config *config.Config
 }
 
-// RegisterPluginResponse reports what was created or updated.
-type RegisterPluginResponse struct {
-	ProviderUUID string `json:"provider_uuid"`
-	ModelID      string `json:"model_id"`
-	Scenario     string `json:"scenario,omitempty"`
-	RuleUUID     string `json:"rule_uuid,omitempty"`
-	// Ready is true when a rule is bound, so clients can select the model now.
-	Ready bool   `json:"ready"`
-	Note  string `json:"note,omitempty"`
-}
-
-// PluginInfo is a list view of a plugin provider.
-type PluginInfo struct {
-	UUID     string `json:"uuid"`
-	Name     string `json:"name"`
-	Endpoint string `json:"endpoint"`
-	ModelID  string `json:"model_id,omitempty"`
-}
-
-// PluginsResponse wraps the plugin list.
-type PluginsResponse struct {
-	Success bool         `json:"success"`
-	Data    []PluginInfo `json:"data"`
+// NewHandler creates a plugin Handler.
+func NewHandler(cfg *config.Config) *Handler {
+	return &Handler{config: cfg}
 }
 
 // RegisterPlugin creates or updates a plugin-tagged provider (and optionally
 // binds a rule to it) so "configure this rule with a plugin" is one call.
-//
-// A plugin provider is an ordinary OpenAI HTTP upstream — routing is
-// unchanged, and liveness is handled by the same per-service circuit breaker
-// that already protects every other provider: if the plugin process is down,
-// the first failed request trips the breaker and traffic tier-fails-over
-// (when a fallback tier is configured). There is deliberately no separate
-// registration lifecycle (lease/heartbeat/expiry) for plugins — that would
-// duplicate the breaker for a single-operator box. If a plugin is retired,
-// delete its provider like any other (DELETE /api/v2/providers/:uuid).
-func (s *Server) RegisterPlugin(c *gin.Context) {
+func (h *Handler) RegisterPlugin(c *gin.Context) {
 	var req RegisterPluginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
@@ -72,7 +46,7 @@ func (s *Server) RegisterPlugin(c *gin.Context) {
 		modelID = "plugin/" + req.Name
 	}
 
-	provider, err := s.upsertPluginProvider(req.Name, req.Endpoint, req.Token)
+	provider, err := h.upsertPluginProvider(req.Name, req.Endpoint, req.Token)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -89,7 +63,7 @@ func (s *Server) RegisterPlugin(c *gin.Context) {
 
 	// One-step bind: ensure the rule whose single service is this plugin.
 	if req.Scenario != "" {
-		ruleUUID, err := s.ensurePluginRule(req.Scenario, modelID, provider.UUID, req.Name, req.Tier)
+		ruleUUID, err := h.ensurePluginRule(req.Scenario, modelID, provider.UUID, req.Name, req.Tier)
 		if err != nil {
 			resp.Note = "Provider registered, but rule binding failed: " + err.Error()
 			c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
@@ -115,13 +89,13 @@ func (s *Server) RegisterPlugin(c *gin.Context) {
 // upsertPluginProvider creates a plugin-tagged provider, or updates the
 // endpoint/token of an existing one with the same name. Idempotent by name so
 // a plugin can safely re-register (e.g. on every process start).
-func (s *Server) upsertPluginProvider(name, endpoint, token string) (*typ.Provider, error) {
-	if existing, err := s.config.GetProviderByName(name); err == nil && existing.IsPlugin() {
+func (h *Handler) upsertPluginProvider(name, endpoint, token string) (*typ.Provider, error) {
+	if existing, err := h.config.GetProviderByName(name); err == nil && existing.IsPlugin() {
 		existing.APIBase = endpoint
 		existing.Token = token
 		existing.NoKeyRequired = token == ""
 		existing.Enabled = true
-		if err := s.config.UpdateProvider(existing.UUID, existing); err != nil {
+		if err := h.config.UpdateProvider(existing.UUID, existing); err != nil {
 			return nil, err
 		}
 		return existing, nil
@@ -139,7 +113,7 @@ func (s *Server) upsertPluginProvider(name, endpoint, token string) (*typ.Provid
 		Timeout:       constant.DefaultRequestTimeout,
 		Tags:          []string{typ.PluginTag},
 	}
-	if err := s.config.AddProvider(provider); err != nil {
+	if err := h.config.AddProvider(provider); err != nil {
 		return nil, err
 	}
 	return provider, nil
@@ -147,9 +121,9 @@ func (s *Server) upsertPluginProvider(name, endpoint, token string) (*typ.Provid
 
 // ListPlugins returns the plugin-tagged providers, with the model id(s) each
 // currently routes (derived from the rules bound to it) for display.
-func (s *Server) ListPlugins(c *gin.Context) {
+func (h *Handler) ListPlugins(c *gin.Context) {
 	modelsByProvider := map[string]string{}
-	for _, rule := range s.config.GetRequestConfigs() {
+	for _, rule := range h.config.GetRequestConfigs() {
 		for _, svc := range rule.Services {
 			if svc == nil {
 				continue
@@ -161,7 +135,7 @@ func (s *Server) ListPlugins(c *gin.Context) {
 	}
 
 	plugins := []PluginInfo{}
-	for _, p := range s.config.ListProviders() {
+	for _, p := range h.config.ListProviders() {
 		if !p.IsPlugin() {
 			continue
 		}
@@ -177,12 +151,12 @@ func (s *Server) ListPlugins(c *gin.Context) {
 
 // ensurePluginRule idempotently ensures a rule exists under scenario whose single
 // tier-service points at the given provider id for modelID. Returns the rule UUID.
-func (s *Server) ensurePluginRule(scenario, modelID, providerID, name string, tier int) (string, error) {
+func (h *Handler) ensurePluginRule(scenario, modelID, providerID, name string, tier int) (string, error) {
 	scn := typ.RuleScenario(scenario)
 	if !typ.CanBindRulesToScenario(scn) {
-		return "", &pluginBindError{"scenario " + scenario + " is not bindable"}
+		return "", &bindError{"scenario " + scenario + " is not bindable"}
 	}
-	for _, rule := range s.config.GetRequestConfigs() {
+	for _, rule := range h.config.GetRequestConfigs() {
 		if rule.GetScenario() == scn && rule.RequestModel == modelID {
 			return rule.UUID, nil // already bound (idempotent)
 		}
@@ -198,12 +172,12 @@ func (s *Server) ensurePluginRule(scenario, modelID, providerID, name string, ti
 			{Provider: providerID, Model: modelID, Weight: 1, Active: true, Tier: tier},
 		},
 	}
-	if err := s.config.AddRule(rule); err != nil {
+	if err := h.config.AddRule(rule); err != nil {
 		return "", err
 	}
 	return rule.UUID, nil
 }
 
-type pluginBindError struct{ msg string }
+type bindError struct{ msg string }
 
-func (e *pluginBindError) Error() string { return e.msg }
+func (e *bindError) Error() string { return e.msg }
