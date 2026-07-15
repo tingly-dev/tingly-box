@@ -26,6 +26,22 @@ like the PID lock file:
      use the recorded port;
   3. otherwise fall back to `GetServerPort()` (config / 12580 default).
 
+## Start vs. restart
+
+Binding a port and reading the runtime port are kept separate:
+
+- **`start` (and a `start` on a stopped box)** resolves its port purely from
+  `--port` → config → 12580. It never consults the port file, so a fresh
+  start is predictable and a stale file from a crash can't resurrect an old
+  port.
+- **`restart`** is a *real* restart: a bare `restart` continues on the port
+  the server is actually running on (read from the port file **before**
+  stopping, since stop removes it), instead of silently relocating to the
+  config default and breaking clients pointed at the live port. An explicit
+  `--port` still wins. Restart prints the port it continues on and how to
+  override it, so the otherwise-invisible sticky port is surfaced. To return
+  to the default, `stop` then `start`.
+
 ## Staleness
 
 A crashed server (SIGKILL) leaves the port file behind, but the flock is
