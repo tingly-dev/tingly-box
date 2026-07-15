@@ -94,7 +94,7 @@ not the production MCP normalization layer.
 | Beta Tool Provider | Injecting the exact enabled tools and returning their owned names | Executing calls or selecting providers |
 | MCP runtime | Tool discovery, visibility, Advisor/server-tool configuration | Model round lifecycle |
 | Servertool executor | Policy and actual tool execution | Protocol conversion or stream handling |
-| Continuation store | One provider/session-scoped mixed continuation segment | General conversation history |
+| Continuation store | Bounded provider/session-scoped mixed continuation segments, correlated by external tool-result IDs | General conversation history |
 | Bridge | Request conversion inward and response/event conversion outward for one call | Tool ownership and execution |
 | Provider Endpoint | One provider invocation in its concrete protocol | Tool continuation |
 | Provider Observer | One provider-native request/response exchange per invocation | Stage snapshots |
@@ -174,8 +174,18 @@ The following request:
 2. merges the client tool results with the stored internal results;
 3. resumes the provider conversation.
 
-The store is bounded, provider-scoped, and single-consume. The Stage itself
-does not know the storage key or routing identity.
+The store is bounded, provider-scoped, and single-consume. A session may have
+more than one pending segment; the current request consumes only the segment
+whose expected external tool IDs are present in the trailing client
+`tool_result` turn. An unrelated request leaves every segment untouched.
+
+Cross-request continuation requires an explicit user or
+`X-Tingly-Session-ID` identity. Client IP fallback is deliberately rejected:
+an IP address is not a conversation identity and may represent many users
+behind one NAT. Expired entries are swept during reads and writes, and a global
+capacity bound evicts the oldest expiry so abandoned continuations cannot grow
+without limit. The Stage itself does not know the storage key or routing
+identity.
 
 ## Streaming Lifecycle
 
@@ -321,15 +331,15 @@ must not disable usage, and disabling usage must not disable recording.
 Two commitment facts are independent:
 
 - output committed: a client-visible event has been written;
-- side effects committed: a server-owned tool succeeded.
+- side effects committed: execution crossed into the server-tool runtime.
 
-After a tool succeeds, later provider, conversion, or stream failures carry
-`SideEffectsCommitted=true`. The outer failover orchestrator must not restart
-the whole attempt on another provider after either commitment boundary.
-
-Failed tool execution produces a tool result marked as an error and does not by
-itself mark a successful side effect. Tool-specific retry or idempotency is a
-future extension and requires stable request/tool-call deduplication keys.
+After runtime dispatch begins, later tool, provider, conversion, or stream
+failures carry `SideEffectsCommitted=true`. A runtime may perform an external
+action and then lose its response, so treating only successful returns as the
+boundary could replay that action during failover. Validation, disabled-tool,
+and policy failures before dispatch do not commit side effects. The outer
+failover orchestrator must not restart the whole attempt on another provider
+after either commitment boundary.
 
 ## Production Activation
 
@@ -367,9 +377,16 @@ The production wiring checkpoint implements:
 6. verify through the real HTTP path with `harness matrix --stage --mcp` before
    calling the canary active.
 
-All six items are implemented. The first real-path canary is the V1→Beta
-promotion in complete and streaming modes through
-`harness matrix --mode=single --stage --mcp`.
+All six items are implemented. The owned-tool production-path matrix is:
+
+```bash
+go run ./cli/harness matrix --mode=single --stage --mcp \
+  --scenario=mcp_owned_tool
+```
+
+It covers all 13 registered source/target labels in complete and streaming
+modes. A selection that produces no executable cases is an error; an all-skip
+run can no longer report false success.
 
 ## Diagnostics and UX-First Review
 
@@ -397,7 +414,8 @@ Implemented and committed:
 
 - Beta complete and streaming Tool Loop;
 - exact owned/external/mixed tool classification;
-- provider-scoped mixed continuation;
+- provider-scoped mixed continuation correlated to the current external
+  tool-result turn, with explicit-session, TTL, and capacity bounds;
 - direct MCP runtime→Beta tool definitions;
 - reuse of the existing Anthropic adapter and servertool executor;
 - lossless V1 request promotion and V1→Beta Bridge;
@@ -407,7 +425,8 @@ Implemented and committed:
 - exact two-boundary production selection for all four ingress protocols;
 - production Beta Tool Loop assembly with MCP runtime, servertool executor,
   provider-scoped continuation, Guardrail ordering, and provider observation;
-- failover suppression after successful tool side effects;
+- failover suppression after server-tool runtime dispatch, including runtime
+  errors whose external side effects may already have happened;
 - real HTTP complete/stream V1→Beta MCP canary through `harness matrix`.
 - real HTTP owned-tool fixture, driven by raw HTTP plus the official Anthropic
   and OpenAI Go SDKs, proving provider round 1 → local execution → provider
@@ -436,6 +455,7 @@ Pending by design:
 - Later failures after tool success prevent failover replay.
 - V1 MCP requests are promoted to Beta; outward responses/events retain the
   current permissive V1 projection behavior.
-- `harness matrix --stage --mcp` traverses the production path and exposes the
-  concrete Stage path in debug logs.
+- `harness matrix --mode=single --stage --mcp
+  --scenario=mcp_owned_tool` executes all 26 complete/stream route cases with
+  no skips and exposes the concrete Stage path in debug logs.
 - Starting without `--stage` leaves current behavior unchanged.

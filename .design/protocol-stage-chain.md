@@ -27,7 +27,7 @@ lifecycle before the provider is called.
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for all four supported ingress protocols | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
-| 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, mixed continuation, recording, and side-effect-aware failover |
+| 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, tool-result-correlated mixed continuation, recording, and dispatch-aware failover |
 | 5 — Opt-in handler integration | Active | Existing handlers may select Stage only from the immutable `--stage` startup choice; default traffic remains legacy |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |
 
@@ -328,9 +328,11 @@ Anthropic may emit visible text or thinking before a later internal
 `tool_use`, so no prefix proves that the round is safe to release. Pure
 server-owned rounds are consumed internally; external rounds are replayed;
 mixed rounds execute only owned calls, hide their blocks, renumber remaining
-indexes, and retain a single-consume continuation segment. This correctness
-requirement is explicit; future TTFT optimization must not assume tool blocks
-arrive first.
+indexes, and retain a single-consume continuation segment correlated to the
+external tool-result IDs expected from the next client turn. Explicit session
+identity, TTL cleanup, and a capacity bound prevent cross-client splicing and
+unbounded abandoned state. This correctness requirement is explicit; future
+TTFT optimization must not assume tool blocks arrive first.
 
 MCP remains a tool catalog/runtime source. It now lists virtual tools directly
 as Beta tool definitions. `servertool.Executor` is reused through the existing
@@ -463,13 +465,15 @@ The in-process portion is complete. The Chat-native Stage established the
 lifecycle contracts; the Beta-native Stage now owns complete and streaming
 continuation using the existing Anthropic MCP adapter. The existing runtime
 injects Beta tools directly, the existing servertool executor is reused, and
-provider-scoped mixed continuation is typed and single-consume. V1 requests
+provider-scoped mixed continuation is typed, result-correlated, bounded, and
+single-consume. V1 requests
 enter Beta through JSON marshal/unmarshal of the V1 subset. Deterministic tests
 cover internal, external, and mixed ownership, max-round/side-effect
 boundaries, usage aggregation, stream close, composed V1→Beta execution, and
 RequestRecord multi-exchange behavior. Production selection now validates both
 exact boundaries before constructing the per-attempt topology, and the real
-HTTP harness covers V1 request promotion in complete and streaming modes.
+HTTP harness covers all 13 source/target labels in complete and streaming MCP
+owned-tool modes (26/26 executed, no skips).
 
 ### Phase 5 — Handler integration behind `--stage`
 
