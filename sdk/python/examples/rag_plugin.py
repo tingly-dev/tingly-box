@@ -1,12 +1,14 @@
 """A RAG plugin served as an OpenAI-compatible upstream for tingly-box.
 
-Run it (serves on :8765 AND self-registers with tb while running):
+Run it (serves on :8765 AND registers with tb on startup):
 
     pip install -e .                 # from sdk/python
     python examples/rag_plugin.py
 
-Registration is dynamic/ephemeral: the plugin leases a spot in tb, heartbeats to
-keep it, and deregisters on exit. Nothing is persisted.
+Registration is a one-shot, idempotent upsert by name — tb creates or updates
+this plugin's provider (and the rule, since `scenario` is set below). There is
+no heartbeat or lease; liveness is handled by tb's existing per-service circuit
+breaker like any other provider.
 
 Now `model="plugin/rag-demo"` from Claude Code, Cursor, the tb UI, or another
 `tingly.connect()` experiment routes here — with tb's guard rails, quota,

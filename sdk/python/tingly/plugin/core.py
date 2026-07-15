@@ -26,11 +26,14 @@ the Layer 3 design graph.
 from __future__ import annotations
 
 import threading
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from .manifest import Manifest
 from .server import Dispatch, HandlerResult, make_server
 from .types import ChatRequest
+
+if TYPE_CHECKING:
+    from ..config import Connection
 
 ChatHandler = Callable[[ChatRequest], HandlerResult]
 
@@ -58,8 +61,6 @@ class Plugin:
         self._handler: Optional[ChatHandler] = None
         self._clients: dict = {}  # scenario -> lazily-connected client
         self._httpd = None
-        self._lease = None  # runtime.Lease when dynamically registered
-        self._heartbeater = None
 
     # -- authoring -------------------------------------------------------
 
@@ -135,14 +136,20 @@ class Plugin:
         block: bool = True,
         register: bool = True,
         advertise_host: Optional[str] = None,
-        ttl_seconds: int = 30,
-        tb: Optional[Any] = None,
+        tb: Optional["Connection"] = None,
     ) -> int:
         """Run the plugin's HTTP server and (by default) register it with tb.
 
-        Dynamic registration is ephemeral: the plugin appears in tb only while it
-        runs — a background heartbeat keeps the lease, and it deregisters on
-        shutdown. ``tb`` may be a :class:`tingly.config.Connection` to point at a
+        Registration is a one-shot, idempotent upsert by name: tb creates or
+        updates a normal provider for this plugin (and the rule, if
+        ``scenario`` was set on the constructor). There is no heartbeat or
+        lease — once the plugin is registered it stays configured in tb until
+        someone deletes it, the same as any other provider. Liveness is
+        handled by tb's existing per-service circuit breaker: if the plugin
+        goes down, the next failed request trips it and traffic tier-fails-
+        over (when a fallback tier is configured).
+
+        ``tb`` may be a :class:`tingly.config.Connection` to point at a
         specific gateway / inject credentials (containers / CI / remote).
 
         Returns the bound port (resolved even when ``port=0``). ``block=False``
@@ -169,7 +176,7 @@ class Plugin:
             )
 
         if register:
-            self._register(advertise_host or host, bound, ttl_seconds, verbose)
+            self._register(advertise_host or host, bound, verbose)
 
         if not block:
             t = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -183,37 +190,23 @@ class Plugin:
             self.stop()
         return bound
 
-    def _register(self, host: str, port: int, ttl_seconds: int, verbose: bool) -> None:
-        from . import runtime
+    def _register(self, host: str, port: int, verbose: bool) -> None:
+        from .register import register
 
         endpoint = f"http://{host}:{port}/v1"
         try:
-            lease = runtime.register(
+            result = register(
                 self.name, endpoint, self.model_id,
-                scenario=self.scenario, token=self.api_key, ttl_seconds=ttl_seconds,
+                scenario=self.scenario, token=self.api_key,
             )
         except Exception as exc:  # noqa: BLE001 - registration is best-effort
             if verbose:
                 print(f"[tingly] plugin registration skipped: {exc}")
             return
-        self._lease = lease
-        self._heartbeater = runtime.Heartbeater(lease).start()
         if verbose:
-            print(
-                f"[tingly] registered '{self.name}' as model {lease.model_id!r}"
-                + (f" under scenario {lease.scenario!r}" if lease.scenario else "")
-                + f" (lease ttl={lease.ttl_seconds}s)"
-            )
+            print(f"[tingly] {result.note}")
 
     def stop(self) -> None:
-        if self._heartbeater is not None:
-            self._heartbeater.stop()
-            self._heartbeater = None
-        if self._lease is not None:
-            from . import runtime
-
-            runtime.deregister(self._lease)
-            self._lease = None
         if self._httpd is not None:
             self._httpd.shutdown()
             self._httpd = None

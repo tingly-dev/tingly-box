@@ -57,48 +57,52 @@ today's pieces — three verbs for the one rule⇄plugin relationship:
 The historical "Layer 1/2/3" headings below map exactly to connect / serve /
 register. They are an implementation tour, not three separate products.
 
-### tb-side: plugins are ephemeral, not a persisted provider kind
+### tb-side: a plugin is a normal, tagged provider (implemented)
 
-An earlier iteration persisted a plugin as a provider row (a `plugin_detail`
-column + a `POST /api/v2/plugins` "pin" path). That was removed: plugins are
-**dynamic/ephemeral** (see below), so there is no persisted plugin provider, no
-DB column, and no separate persistent endpoint. `ai.PluginDetail` +
-`Provider.IsPlugin()` survive only as an **in-memory marker** the registry sets
-on the synthesized provider (distinct from `AuthTypeVirtual`, the in-process
-`vmodel` path). A plugin is otherwise an ordinary OpenAI HTTP upstream, so
-**routing is unchanged**. "Pin" (durable opt-in) can return later as a flag if a
-real need appears.
+**Design history, briefly, because it's instructive.** Two earlier iterations
+over-built this: first a persisted "plugin provider kind" with its own DB
+column and a distinct registration endpoint; then a full ephemeral service-
+discovery layer (in-memory registry, per-instance lease, heartbeat thread,
+TTL expiry, a `Config` hook consulted on every provider lookup) built to avoid
+leaving a stale DB row behind when a plugin process stopped. Both were removed.
+The reason: **tb already has liveness detection** — every `(rule, service)`
+pair is covered by the existing per-service circuit breaker
+(`internal/loadbalance/breaker.go`). A dead plugin's first failed request trips
+it exactly like a dead real provider; traffic tier-fails-over automatically
+when a fallback tier is configured. Lease/heartbeat/TTL was reinventing that
+mechanism — distributed-service-discovery machinery for a problem tb doesn't
+have (a personal, single-operator box, not a multi-tenant cluster). See
+`git log` on this file's directory for the two removed designs if useful as a
+cautionary reference.
 
-### Plugin as runtime service (dynamic registration, implemented)
+**What shipped instead — the minimal version:**
 
-A plugin is a **runtime instance**, not a static config entry. It registers at
-startup, heartbeats to hold a lease, and is auto-removed when it stops/dies —
-nothing persisted. Differs from a standard provider (durable, operator-managed).
-
-- **In-memory `PluginRegistry`** on the Server (process-local, matching tb's
-  circuit-breaker stance — no shared store). Stable id from name (UUIDv5) so a
-  restart re-registers under the same id; rotating `lease_id` per register.
-- **Config hook** `EphemeralProviderResolver`: `GetProviderByUUID` /
-  `validateRuleServices` fall back to the registry, so **routing resolves live
-  plugins transparently** and an expired one simply isn't found → existing tier
-  failover routes to a tier-1 real model. The db layer stays pure persistence.
-- **DNS-style layering**: the rule (the durable "name") is ensured idempotently;
-  the instance (endpoint + liveness) is ephemeral. No live instance ⇒ failover.
-- Endpoints (apiV2): `POST /plugins/register` (leased; ensures rule),
-  `POST /plugins/heartbeat`, `POST /plugins/deregister`, `GET /plugins` (live
-  instances).
+- A plugin is an ordinary provider (`APIStyle=openai`, `api_key`/`no_key`)
+  carrying the tag `"plugin"` in the existing, generic `Provider.Tags` field.
+  `Provider.IsPlugin()` checks for that tag. No new struct, no new DB column —
+  Tags already round-trips through the provider store unconditionally.
+- **`POST /api/v2/plugins`** is an **idempotent upsert by name**: register once
+  at startup (and again on every restart) and it updates the same provider
+  instead of duplicating it. When `scenario` is given it also idempotently
+  ensures the rule. Response: `{provider_uuid, model_id, scenario, rule_uuid,
+  ready, note}`.
+- **`GET /api/v2/plugins`** lists plugin-tagged providers, deriving the display
+  model id from the rule(s) bound to each (no extra field needed).
+- **Retiring a plugin** is the same as retiring any other provider: delete it
+  in the tb UI. There is no separate lifecycle to reason about.
 
 **Active configuration** (SDK): `tingly.configure(url=, admin_token_env=)` /
 `Connection` inject the tb target + credentials at runtime (secrets by env
 reference), top-precedence in `config.resolve()` — for containers / CI / remote
-where there is no `~/.tingly-box`. `Plugin.serve(register=True, scenario=…,
-ttl_seconds=…, tb=Connection(...))` self-registers, heartbeats on a background
-thread, and deregisters on shutdown.
+where there is no `~/.tingly-box`. This part was cheap and answers a real need,
+so it stayed. `Plugin.serve(register=True, scenario=…, tb=Connection(...))`
+registers once at startup — no background thread, no lease to manage.
 
-Verified end-to-end (`examples/e2e_run.sh`): the plugin self-registers as a live
-`ephemeral` instance, a client call routes through it, and it calls back into tb
-— no network/keys. Remaining tb-side: rule-editor UI "plugin" kind (frontend),
-process supervisor, scoped inference tokens, fully-ephemeral binding.
+Verified end-to-end (`examples/e2e_run.sh`): the plugin registers once, a
+client call routes through it and back into tb (no network/keys); killing the
+plugin leaves its provider listed (same as any provider) and the next request
+fails with a plain connection error (add a tier-1 fallback to see failover
+instead); restarting the plugin upserts the same provider, no duplicate.
 
 
 ## Shape
@@ -117,7 +121,7 @@ sdk/python/
       server.py      #   stdlib OpenAI-compatible HTTP server (+ SSE)
       types.py       #   ChatRequest / Message
       manifest.py    #   tingly.toml read/write
-      runtime.py     #   dynamic register / heartbeat / deregister
+      register.py    #   one-shot, idempotent register with tb
     cli.py           # `tingly doctor` + `tingly plugin {init,run}`
     errors.py        # TinglyError hierarchy
 ```
@@ -379,15 +383,14 @@ CLI:
 
 ```
 tingly plugin init my-rag                 # scaffold my_rag_plugin.py + tingly.toml
-tingly plugin run my_rag_plugin.py        # serve it
-tingly plugin register my-rag \           # wire it into tb as a provider (Layer 3)
-   --url http://127.0.0.1:8765/v1 --model-id plugin/my-rag
+tingly plugin run my_rag_plugin.py        # serve it AND register with tb
 ```
 
-`register` uses the existing `POST /api/v1/providers` endpoint (admin token,
-resolved like `connect()`). Creating the *rule/service* that maps the model into
-a scenario is still a user/UI step — the provider is the part the SDK does
-idempotently.
+`run` (via `Plugin.serve()`) registers with `POST /api/v2/plugins` on startup —
+an idempotent upsert by name that creates/updates the provider *and* the rule
+(when `scenario` is set on the constructor) in one call. There is no separate
+`register` command: a one-shot register with nothing keeping it alive would be
+meaningless once ephemeral lifecycle was cut (see the "tb-side" section above).
 
 **Not yet built (tb-side):** a sub-process supervisor that boots plugins from
 their manifest (reuse `agentboot/process`), a `/plugins/<name>/*` reverse-proxy
@@ -431,10 +434,11 @@ via the in-process `vmodel` package.
 Wiring (no new gateway hot-path code — it's just a provider):
 
 1. **Plugin serves** `POST /v1/chat/completions` (Layer 2 `Plugin.serve()`).
-2. **Register a provider**: `{name:"my-rag", api_base:"http://127.0.0.1:<port>",
-   api_style:"openai", models:["plugin/my-rag"]}` — a *normal* provider, not
-   `AuthType=virtual`.
-3. **Bind a rule/service**: model `plugin/my-rag` → that provider.
+2. **Register**: `POST /api/v2/plugins {name:"my-rag", endpoint:"http://127.0.0.1:<port>/v1",
+   model_id:"plugin/my-rag", scenario:"experiment"}` creates a *normal* provider
+   (not `AuthType=virtual`, tagged `"plugin"`) — this is exactly what
+   `Plugin.serve()` does on startup.
+3. That same call **binds the rule/service**: model `plugin/my-rag` → that provider.
 4. Now `model:"plugin/my-rag"` from any client resolves through the same
    dispatcher as every other model. Put the plugin in tier 0 and a real model in
    tier 1 and tb fails over automatically when the plugin is down.

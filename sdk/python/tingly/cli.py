@@ -176,8 +176,8 @@ def main(argv: Optional[list] = None) -> int:
     psub = p_plugin.add_subparsers(dest="plugin_command")
     p_init = psub.add_parser("init", help="scaffold a starter plugin")
     p_init.add_argument("name", help="plugin name, e.g. my-rag")
-    # `run` serves the plugin AND self-registers with tb (heartbeat + deregister
-    # on exit), so there is no separate one-shot register command.
+    # `run` serves the plugin AND registers it with tb (idempotent upsert on
+    # start), so there is no separate one-shot register command.
     p_run = psub.add_parser("run", help="serve a plugin and register it with tb")
     p_run.add_argument("target", help="e.g. my_rag_plugin:plugin or my_rag_plugin.py")
 

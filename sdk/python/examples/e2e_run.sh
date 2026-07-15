@@ -56,8 +56,8 @@ curl -s "${UADMIN[@]}" -X POST "$BASE/api/v1/rule" -d "{
   \"services\":[{\"provider\":\"$VUUID\",\"model\":\"echo-model\",\"weight\":1,\"active\":true}]}" \
   | python3 -c "import sys,json;d=json.load(sys.stdin);print('   rule created:', d.get('success'), d.get('data',{}).get('uuid',''))"
 
-echo "== 4. start the plugin — it DYNAMICALLY self-registers with tb =="
-echo "   (serve(register=True) → POST /plugins/register + heartbeat; nothing persisted)"
+echo "== 4. start the plugin — it registers with tb once on startup =="
+echo "   (serve() → POST /api/v2/plugins, an idempotent upsert-by-name; no heartbeat)"
 TINGLY_BOX_URL="$BASE" TINGLY_BOX_TOKEN="$UTOK" \
   python3 "$SDK/examples/e2e_plugin.py" >/tmp/plugin_e2e.log 2>&1 &
 PLUG_PID=$!
@@ -67,7 +67,7 @@ for i in $(seq 1 40); do
 done
 curl -sf "http://127.0.0.1:8765/health" >/dev/null || { echo "plugin did not start"; cat /tmp/plugin_e2e.log; exit 1; }
 
-echo "== 5. tb sees the LIVE ephemeral instance (GET /api/v2/plugins) =="
+echo "== 5. tb sees the plugin provider (GET /api/v2/plugins) =="
 for i in $(seq 1 20); do
   LIST=$(curl -s "${UADMIN[@]}" "$BASE/api/v2/plugins")
   echo "$LIST" | grep -q 'rag-demo' && break
@@ -84,24 +84,33 @@ curl -s "${UMODEL[@]}" -X POST "$BASE/tingly/experiment/v1/chat/completions" -d 
 echo "== plugin log tail =="
 tail -6 /tmp/plugin_e2e.log
 
-echo "== 7. EPHEMERAL: kill the plugin → tb auto-removes it when the lease lapses =="
-echo "   (hard SIGKILL = simulate a crash; no graceful deregister, nothing persisted)"
+echo "== 7. NO SEPARATE LIFECYCLE: kill the plugin (simulated crash) =="
+echo "   (hard SIGKILL, no graceful shutdown — the provider is a normal DB row,"
+echo "    same as any other provider, so it does NOT disappear from the list)"
 kill -KILL "$PLUG_PID" 2>/dev/null
 PLUG_PID=""
-echo "   waiting for the 4s lease to expire..."
-for i in $(seq 1 20); do
-  LIST=$(curl -s "${UADMIN[@]}" "$BASE/api/v2/plugins")
-  echo "$LIST" | grep -q 'rag-demo' || break
-  sleep 0.5
-done
-echo "   GET /api/v2/plugins now: $LIST"
+LIST=$(curl -s "${UADMIN[@]}" "$BASE/api/v2/plugins")
+echo "   GET /api/v2/plugins still shows it: $LIST"
 
-echo "== 8. client call after the plugin is gone → instance no longer routable =="
-echo "   (the durable rule's only service is the dead plugin; a real setup would"
-echo "    keep a tier-1 real model and tier-failover here)"
+echo "== 8. client call after the plugin is dead =="
+echo "   (liveness is the SAME per-service circuit breaker every provider gets;"
+echo "    with no fallback tier configured on this rule the request just errors —"
+echo "    add a tier-1 real model to the rule and this would tier-failover instead)"
 curl -s "${UMODEL[@]}" -X POST "$BASE/tingly/experiment/v1/chat/completions" -d '{
   "model":"plugin/rag-demo",
   "messages":[{"role":"user","content":"still there?"}]}' \
   | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('error', d); print('   ->', (json.dumps(e) if isinstance(e,dict) else str(e))[:200])"
+
+echo "== 9. restart the plugin → re-register upserts the SAME provider (no duplicate) =="
+TINGLY_BOX_URL="$BASE" TINGLY_BOX_TOKEN="$UTOK" \
+  python3 "$SDK/examples/e2e_plugin.py" >/tmp/plugin_e2e_2.log 2>&1 &
+PLUG_PID=$!
+for i in $(seq 1 40); do
+  curl -sf "http://127.0.0.1:8765/health" >/dev/null 2>&1 && break
+  sleep 0.3
+done
+COUNT=$(curl -s "${UADMIN[@]}" "$BASE/api/v2/plugins" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(sum(1 for p in d['data'] if p['name']=='rag-demo'))")
+echo "   plugin providers named rag-demo after restart: $COUNT (expect 1)"
 
 echo "== done =="

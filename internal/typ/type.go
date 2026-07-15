@@ -345,8 +345,8 @@ type OAuthDetail = ai.OAuthDetail
 // Type alias for backward compatibility with common/provider
 type VModelDetail = ai.VModelDetail
 
-// PluginDetail marks a provider as backed by external plugin code.
-type PluginDetail = ai.PluginDetail
+// PluginTag marks a provider as backed by external plugin code (see Provider.IsPlugin).
+const PluginTag = ai.PluginTag
 
 // CredentialBundle holds multi-field credentials for non-bearer auth types
 // Type alias for backward compatibility with common/provider

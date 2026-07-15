@@ -76,12 +76,17 @@ if __name__ == "__main__":
 
 ```bash
 tingly plugin init my-rag                 # scaffold module + tingly.toml
-tingly plugin run my_rag_plugin.py        # serve AND register with tb (ephemeral)
+tingly plugin run my_rag_plugin.py        # serve AND register with tb
 ```
 
-`serve()` (and `tingly plugin run`) **dynamically registers** the plugin with tb
-while it runs — leased, heartbeated, and auto-removed on exit. Nothing is
-persisted; if the plugin stops, tb's lease expires and routing falls back.
+`serve()` (and `tingly plugin run`) registers the plugin with tb once at
+startup — an idempotent upsert-by-name, so restarting the plugin updates the
+same provider instead of duplicating it. There is no heartbeat or lease:
+liveness is handled by tb's existing per-service circuit breaker, the same
+mechanism that protects every other provider. If the plugin goes down, the
+next failed request trips the breaker and traffic tier-fails-over (when a
+fallback tier is configured). Retiring a plugin is the same as retiring any
+other provider — delete it in the tb UI.
 
 The server is stdlib-only (no FastAPI), supports streaming, and `plugin.llm`
 calls back into tb so the plugin reuses the gateway for its own LLM work.

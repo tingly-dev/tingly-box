@@ -400,32 +400,20 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
 	providermodule.RegisterRoutes(apiV2, providerHandler)
 
-	apiV2.GET("/plugins", s.ListPlugins,
-		swagger.WithDescription("List live (dynamically-registered) plugin instances"),
-		swagger.WithTags("plugins"),
-		swagger.WithResponseModel(PluginsResponse{}),
-	)
-
-	// Plugin lifecycle: register a live instance, keep it alive by heartbeat, and
-	// deregister on shutdown. Nothing is persisted — an expired instance simply
-	// falls out of routing (tier failover).
-	apiV2.POST("/plugins/register", s.RegisterPlugin,
-		swagger.WithDescription("Register a live, ephemeral plugin instance (leased)"),
+	// Plugin registration: a plugin is a provider tagged "plugin" (external
+	// OpenAI upstream). POST is an idempotent upsert-by-name that wires it in
+	// (provider + optional rule) in one step; liveness is handled by the same
+	// circuit breaker that covers every other provider — no separate lifecycle.
+	apiV2.POST("/plugins", s.RegisterPlugin,
+		swagger.WithDescription("Register (or update) external plugin code as an upstream, optionally binding a rule"),
 		swagger.WithTags("plugins"),
 		swagger.WithRequestModel(RegisterPluginRequest{}),
 		swagger.WithResponseModel(RegisterPluginResponse{}),
 	)
-	apiV2.POST("/plugins/heartbeat", s.HeartbeatPlugin,
-		swagger.WithDescription("Extend a plugin instance's lease"),
+	apiV2.GET("/plugins", s.ListPlugins,
+		swagger.WithDescription("List registered plugin providers"),
 		swagger.WithTags("plugins"),
-		swagger.WithRequestModel(PluginLeaseRequest{}),
-		swagger.WithResponseModel(gin.H{}),
-	)
-	apiV2.POST("/plugins/deregister", s.DeregisterPlugin,
-		swagger.WithDescription("Remove a live plugin instance immediately"),
-		swagger.WithTags("plugins"),
-		swagger.WithRequestModel(PluginLeaseRequest{}),
-		swagger.WithResponseModel(gin.H{}),
+		swagger.WithResponseModel(PluginsResponse{}),
 	)
 
 	// Provider template endpoints

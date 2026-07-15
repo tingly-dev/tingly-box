@@ -53,18 +53,13 @@ type VModelDetail struct {
 	LatencyProfile string   `json:"latency_profile,omitempty"`
 }
 
-// PluginDetail marks a provider as backed by external plugin code. It is an
-// in-memory marker only — plugins register dynamically and are never persisted,
-// so the synthesized provider carries this to identify plugin traffic. A plugin
-// is otherwise an ordinary OpenAI HTTP upstream (APIStyle=openai, api_key /
-// no_key), so there is NO routing change.
-//
-// Distinct from VModelDetail / AuthTypeVirtual (the in-process synthetic-model
+// PluginTag is the Provider.Tags value that marks a provider as backed by
+// external plugin code. A plugin provider is otherwise an ordinary OpenAI HTTP
+// upstream (APIStyle=openai, api_key / no_key) — there is NO routing change;
+// reusing the existing generic Tags field means plugin identity needs no new
+// persisted column. Distinct from AuthTypeVirtual (the in-process vmodel
 // path): a plugin runs out-of-process and is reached over HTTP.
-type PluginDetail struct {
-	// ModelID is the model id the plugin advertises (e.g. "plugin/my-rag").
-	ModelID string `json:"model_id,omitempty"`
-}
+const PluginTag = "plugin"
 
 // CredentialBundle holds the credential fields for multi-field auth types
 // (AWS SigV4, Azure, GCP Vertex). Fields is a generic, schema-validated
@@ -212,7 +207,6 @@ type Provider struct {
 	AuthType     AuthType          `json:"auth_type"`               // api_key, oauth, vmodel, aws_sigv4, azure_key, gcp_sa
 	OAuthDetail  *OAuthDetail      `json:"oauth_detail,omitempty"`  // OAuth credentials (only for oauth auth type)
 	VModelDetail *VModelDetail     `json:"vmodel_detail,omitempty"` // Virtual-model config (only for vmodel auth type)
-	PluginDetail *PluginDetail     `json:"plugin_detail,omitempty"` // Plugin config (set when this provider is backed by plugin code)
 	Credential   *CredentialBundle `json:"credential,omitempty"`    // Multi-field credentials (only for multi-field auth types)
 	Source       ProviderSource    `json:"source,omitempty"`        // "user" (default) or "builtin"
 
@@ -267,11 +261,19 @@ func (p *Provider) IsVirtual() bool {
 	return p != nil && p.AuthType == AuthTypeVirtual
 }
 
-// IsPlugin reports whether this provider is backed by external plugin code.
-// Plugin providers route as ordinary OpenAI HTTP upstreams; this is metadata
-// for UI grouping and lifecycle discovery only.
+// IsPlugin reports whether this provider is backed by external plugin code
+// (carries the PluginTag). Plugin providers route as ordinary OpenAI HTTP
+// upstreams; this is metadata for UI grouping only.
 func (p *Provider) IsPlugin() bool {
-	return p != nil && p.PluginDetail != nil
+	if p == nil {
+		return false
+	}
+	for _, tag := range p.Tags {
+		if tag == PluginTag {
+			return true
+		}
+	}
+	return false
 }
 
 // IsBuiltin reports whether this provider was seeded by the system and is
