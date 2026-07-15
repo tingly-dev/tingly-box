@@ -396,8 +396,9 @@ Implemented and committed:
   provider-scoped continuation, Guardrail ordering, and provider observation;
 - failover suppression after successful tool side effects;
 - real HTTP complete/stream V1→Beta MCP canary through `harness matrix`.
-- real HTTP owned-tool fixture proving provider round 1 → local execution →
-  provider round 2 → final response for Beta identity and V1→Beta→Chat;
+- real HTTP owned-tool fixture, driven by raw HTTP plus the official Anthropic
+  and OpenAI Go SDKs, proving provider round 1 → local execution → provider
+  round 2 → final response across all four ingress protocols;
 - normalized converted Anthropic events expose their wire payload to protocol
   assemblers, so cross-protocol streams remain interceptable by the Beta loop;
 - additional `servertool.ToolProvider` instances can enter through the formal
@@ -407,7 +408,6 @@ Pending by design:
 
 - optional strict Beta→V1 response/event validation, deferred until a concrete
   compatibility need appears;
-- official-client MCP canary;
 - default rollout and legacy removal.
 
 ## Acceptance Criteria for Production Wiring

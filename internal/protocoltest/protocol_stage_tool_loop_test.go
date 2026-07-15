@@ -58,46 +58,55 @@ func TestServerProtocolStageOwnedToolLoopHTTP(t *testing.T) {
 	}{
 		{name: "beta_native", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta},
 		{name: "v1_promoted_to_beta_then_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat},
+		{name: "chat_through_beta_to_anthropic", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta},
+		{name: "responses_through_beta_to_chat", source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			for _, streaming := range []bool{false, true} {
-				mode := "complete"
-				if streaming {
-					mode = "stream"
-				}
-				t.Run(mode, func(t *testing.T) {
+			clients := []Client{NewHTTPClient(), NewGoSDKClient()}
+			for _, client := range clients {
+				t.Run(client.Name(), func(t *testing.T) {
 					t.Parallel()
-					provider := &echoServertoolProvider{}
-					env := NewTestEnv(t,
-						NewTestEnvOptionWithProtocolStage(),
-						NewTestEnvOptionWithMCP(),
-						NewTestEnvOptionWithServertoolProviders(provider),
-					)
-					scenario := ownedToolLoopScenario()
-					env.SetupRoute(tt.source, tt.target, scenario)
+					for _, streaming := range []bool{false, true} {
+						mode := "complete"
+						if streaming {
+							mode = "stream"
+						}
+						t.Run(mode, func(t *testing.T) {
+							t.Parallel()
+							provider := &echoServertoolProvider{}
+							env := NewTestEnv(t,
+								NewTestEnvOptionWithProtocolStage(),
+								NewTestEnvOptionWithMCP(),
+								NewTestEnvOptionWithServertoolProviders(provider),
+								NewTestEnvOptionWithClient(client),
+							)
+							scenario := ownedToolLoopScenario()
+							env.SetupRoute(tt.source, tt.target, scenario)
 
-					result := env.SendAs(t, tt.source, tt.target, scenario, streaming)
-					if result.HTTPStatus != http.StatusOK {
-						t.Fatalf("status = %d, body = %s", result.HTTPStatus, result.RawBody)
-					}
-					if result.Content != "owned-tool-final" {
-						t.Fatalf("content = %q, want owned-tool-final; body = %s", result.Content, result.RawBody)
-					}
-					if len(result.ToolCalls) != 0 {
-						t.Fatalf("final response leaked %d tool calls", len(result.ToolCalls))
-					}
-					if env.VirtualCallCount() != 2 {
-						t.Fatalf("provider calls = %d, want 2", env.VirtualCallCount())
-					}
-					calls, arguments := provider.snapshot()
-					if calls != 1 {
-						t.Fatalf("local tool executions = %d, want 1", calls)
-					}
-					if arguments["q"] != "x" {
-						t.Fatalf("local tool arguments = %#v, want q=x", arguments)
+							result := env.SendAs(t, tt.source, tt.target, scenario, streaming)
+							if result.HTTPStatus != http.StatusOK {
+								t.Fatalf("status = %d, body = %s", result.HTTPStatus, result.RawBody)
+							}
+							if result.Content != "owned-tool-final" {
+								t.Fatalf("content = %q, want owned-tool-final; body = %s", result.Content, result.RawBody)
+							}
+							if len(result.ToolCalls) != 0 {
+								t.Fatalf("final response leaked %d tool calls", len(result.ToolCalls))
+							}
+							if env.VirtualCallCount() != 2 {
+								t.Fatalf("provider calls = %d, want 2", env.VirtualCallCount())
+							}
+							calls, arguments := provider.snapshot()
+							if calls != 1 {
+								t.Fatalf("local tool executions = %d, want 1", calls)
+							}
+							if arguments["q"] != "x" {
+								t.Fatalf("local tool arguments = %#v, want q=x", arguments)
+							}
+						})
 					}
 				})
 			}
