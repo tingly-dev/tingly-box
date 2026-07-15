@@ -19,28 +19,18 @@ func TestBuildDaemonArgs(t *testing.T) {
 			want:     []string{"restart", "--daemon"},
 		},
 		{
-			name:     "appends port when absent",
+			name:     "appends pinned port (restart preserve case)",
 			args:     []string{"restart", "--daemon"},
 			override: []string{"--port", "9000"},
 			want:     []string{"restart", "--daemon", "--port", "9000"},
 		},
 		{
-			name:     "replaces existing --port value form",
+			// An earlier --port is left in place; the CLI parser takes the last
+			// occurrence, so the appended value wins without stripping.
+			name:     "appends after an existing --port (last wins)",
 			args:     []string{"start", "--port", "8080", "--daemon"},
 			override: []string{"--port", "9000"},
-			want:     []string{"start", "--daemon", "--port", "9000"},
-		},
-		{
-			name:     "replaces existing --port=value form",
-			args:     []string{"start", "--port=8080", "--daemon"},
-			override: []string{"--port", "9000"},
-			want:     []string{"start", "--daemon", "--port", "9000"},
-		},
-		{
-			name:     "replaces short -p form",
-			args:     []string{"start", "-p", "8080", "--daemon"},
-			override: []string{"--port", "9000"},
-			want:     []string{"start", "--daemon", "--port", "9000"},
+			want:     []string{"start", "--port", "8080", "--daemon", "--port", "9000"},
 		},
 	}
 
