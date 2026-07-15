@@ -1146,14 +1146,14 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		return "", fmt.Errorf("failed to save provider: %w", err)
 	}
 
-	// Fetch models for the newly created OAuth provider
+	// Fetch models for the newly created OAuth provider. ResolveProviderModels
+	// falls back to the embedded template for issuers whose /models endpoint is
+	// unsupported (e.g. Codex), so the log reflects the real catalog size.
 	log.Printf("[OAuth] Fetching models for OAuth provider %s (%s)", providerName, providerUUID.String())
-	if err := h.config.FetchAndSaveProviderModels(providerUUID.String()); err != nil {
+	if resolved, err := h.config.ResolveProviderModels(true, providerUUID.String()); err != nil {
 		log.Printf("[OAuth] Warning: Failed to fetch models for OAuth provider %s: %v", providerName, err)
 	} else {
-		modelManager := h.config.GetModelManager()
-		models := modelManager.GetModels(providerUUID.String())
-		log.Printf("[OAuth] Successfully fetched %d models for OAuth provider %s", len(models), providerName)
+		log.Printf("[OAuth] Successfully fetched %d models for OAuth provider %s", len(resolved.Models), providerName)
 	}
 
 	// Log the successful provider creation

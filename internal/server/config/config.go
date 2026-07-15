@@ -2002,7 +2002,138 @@ func (c *Config) IsScenarioRecordingEnabled(scenario typ.RuleScenario) bool {
 	return c.GetScenarioRecordingMode(scenario) != typ.RecordingModeDisabled
 }
 
-// FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
+// ModelListSource identifies where a resolved model list came from. Its string
+// values match provider.ModelCacheSource so the HTTP layer can map directly.
+type ModelListSource string
+
+const (
+	ModelListSourceCache    ModelListSource = "db"       // served from the DB cache
+	ModelListSourceAPI      ModelListSource = "api"      // freshly fetched from upstream
+	ModelListSourceVModel   ModelListSource = "vmodel"   // virtual provider's static list
+	ModelListSourceTemplate ModelListSource = "template" // compile-time embedded fallback
+)
+
+// ResolvedModels is the effective model list for a provider plus provenance.
+type ResolvedModels struct {
+	Models      []string
+	Source      ModelListSource
+	LastUpdated string // formatted timestamp of the cached record; empty if unknown
+}
+
+// ResolveProviderModels returns the effective model list for a provider,
+// walking the full fallback chain in ONE place so every caller (HTTP read,
+// HTTP refresh, CLI, OAuth completion) sees identical behavior:
+//
+//	cache (DB) → VModel (virtual) → upstream API → embedded template
+//
+// When forceRefresh is false, a fresh-enough DB cache short-circuits the
+// chain; when true the cache is bypassed and upstream is re-queried (the
+// manual "refresh models" action). The returned list is canonically sorted.
+//
+// Template results are never persisted, so an improved embedded list takes
+// effect immediately and a template snapshot never pollutes a real cached
+// list. This method always fetches on a cache miss — callers that must not
+// touch the network (e.g. TUI render) should read the cache/template directly.
+func (c *Config) ResolveProviderModels(forceRefresh bool, uid string) (ResolvedModels, error) {
+	provider, provErr := c.GetProviderByUUID(uid)
+
+	finalize := func(models []string, src ModelListSource) ResolvedModels {
+		if provErr == nil {
+			SortProviderModels(provider, models)
+		}
+		lastUpdated := ""
+		if _, updated, exists := c.modelManager.GetProviderInfo(uid); exists {
+			lastUpdated = updated
+		}
+		return ResolvedModels{Models: models, Source: src, LastUpdated: lastUpdated}
+	}
+
+	// Step 1: DB cache (unless forcing a refresh).
+	if !forceRefresh {
+		if cached := c.modelManager.GetModels(uid); len(cached) > 0 {
+			return finalize(cached, ModelListSourceCache), nil
+		}
+	}
+
+	if provErr != nil {
+		return ResolvedModels{}, fmt.Errorf("provider with UUID %s not found: %w", uid, provErr)
+	}
+
+	// Step 2: VModel static list (virtual providers).
+	if provider.IsVirtual() {
+		var models []string
+		if provider.VModelDetail != nil {
+			models = provider.VModelDetail.Models
+		}
+		return finalize(models, ModelListSourceVModel), nil
+	}
+
+	// Step 3: Upstream API (persisted on success).
+	if err := c.fetchAndSaveAPIModels(provider); err == nil {
+		if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
+			return finalize(fresh, ModelListSourceAPI), nil
+		}
+	}
+
+	// Step 4: Embedded template fallback (live, never persisted). It is a
+	// last resort only — never merged into a non-empty real list, since the
+	// snapshot can still name models the upstream has retired.
+	if c.templateManager != nil {
+		if tmpl, err := c.templateManager.GetEmbeddedModelsForProvider(provider); err == nil && len(tmpl) > 0 {
+			return finalize(tmpl, ModelListSourceTemplate), nil
+		}
+	}
+
+	return finalize(nil, ModelListSourceTemplate), nil
+}
+
+// fetchAndSaveAPIModels queries the provider's upstream /models endpoint and,
+// on success, persists the sorted list (ModelSourceAPI). It returns an error
+// when the endpoint is unsupported or the call fails; the caller falls back to
+// the template. It never persists template data.
+func (c *Config) fetchAndSaveAPIModels(provider *typ.Provider) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	lister, closer, err := c.newModelLister(provider)
+	if closer != nil {
+		defer closer()
+	}
+	if err != nil || lister == nil {
+		logrus.Errorf("Failed to create client for provider %s: %v", provider.Name, err)
+		return fmt.Errorf("failed to create client for provider %s: %w", provider.Name, err)
+	}
+
+	models, apiErr := lister.ListModels(ctx)
+	if apiErr != nil {
+		if client.IsModelsEndpointNotSupported(apiErr) {
+			logrus.Infof("Provider %s does not support models endpoint, using template fallback", provider.Name)
+		} else {
+			logrus.Errorf("Failed to fetch models from API: %v", apiErr)
+		}
+		return apiErr
+	}
+	if len(models) == 0 {
+		return fmt.Errorf("provider %s returned no models", provider.Name)
+	}
+
+	// Persist the upstream list verbatim. It is authoritative for both
+	// additions and removals, so the embedded template snapshot must not be
+	// merged in here — that would resurrect retired models. Apply canonical
+	// ordering before persisting; the same sort is reapplied at the serving
+	// boundary so cached order is irrelevant.
+	SortProviderModels(provider, models)
+	return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
+}
+
+// FetchAndSaveProviderModels fetches a provider's models and persists API
+// results, warming the DB cache. It is retained for callers that only need to
+// trigger a fetch (e.g. TUI cache-warming); callers that need the effective
+// list should use ResolveProviderModels instead.
+//
+// Contract: returns nil when a real API list was persisted OR when the API is
+// unavailable but an embedded template exists to fall back on; returns an
+// error only when neither a real nor a template list can be produced.
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	provider, err := c.GetProviderByUUID(uid)
 	if err != nil {
@@ -2018,54 +2149,18 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	var models []string
-	var apiErr error
-
-	lister, closer, err := c.newModelLister(provider)
-	if err != nil {
-		apiErr = err
-	}
-	if closer != nil {
-		defer closer()
+	apiErr := c.fetchAndSaveAPIModels(provider)
+	if apiErr == nil {
+		return nil
 	}
 
-	if lister != nil {
-		models, apiErr = lister.ListModels(ctx)
-		if apiErr == nil && len(models) > 0 {
-			// Persist the upstream list verbatim. It is authoritative for both
-			// additions and removals, so the embedded template snapshot must
-			// not be merged in here — that would resurrect retired models.
-			// Apply canonical ordering before persisting; the same sort is
-			// reapplied at the serving boundary so cached order is irrelevant.
-			SortProviderModels(provider, models)
-			return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
-		}
-		if client.IsModelsEndpointNotSupported(apiErr) {
-			logrus.Infof("Provider %s does not support models endpoint, using template fallback", provider.Name)
-			apiErr = nil // Clear error to proceed to template fallback
-		} else {
-			logrus.Errorf("Failed to fetch models from API: %v", apiErr)
-		}
-	} else {
-		logrus.Errorf("Failed to create client for provider %s: %v", provider.Name, apiErr)
-	}
-
-	// API failed or not supported, fall back to compile-time embedded providers.json.
-	// Do not persist template data to DB — callers should use it directly without caching.
+	// API failed or not supported — success only if a template can cover it.
 	if c.templateManager != nil {
-		tmplModels, tmplErr := c.templateManager.GetEmbeddedModelsForProvider(provider)
-		if tmplErr == nil && len(tmplModels) > 0 {
-			return nil // signal success; caller uses GetEmbeddedModelsForProvider directly
+		if tmpl, tErr := c.templateManager.GetEmbeddedModelsForProvider(provider); tErr == nil && len(tmpl) > 0 {
+			return nil
 		}
 	}
-
-	if apiErr != nil {
-		return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", apiErr)
-	}
-	return fmt.Errorf("failed to fetch models (template fallback: not available)")
+	return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", apiErr)
 }
 
 // newModelLister builds the client used to list models for a provider.

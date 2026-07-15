@@ -24,39 +24,43 @@
 
 | 职责 | 位置 |
 |---|---|
-| 服务端点（读路径） | `GetProviderModelsByUUID` — `internal/server/module/provider/handler.go:454` |
-| 刷新端点（写路径） | `UpdateProviderModelsByUUID` — `handler.go:398` |
-| Fetch + 持久化逻辑 | `Config.FetchAndSaveProviderModels` — `internal/server/config/config.go:2006` |
-| 排序（serving 边界唯一真源） | `SortProviderModels` — `config.go:2126` |
+| **兜底链唯一真源（resolver）** | `Config.ResolveProviderModels(forceRefresh, uid)` — `internal/server/config/config.go` |
+| 上游 API fetch + 持久化（内部） | `Config.fetchAndSaveAPIModels` — `config.go` |
+| 缓存预热薄封装（不返回列表） | `Config.FetchAndSaveProviderModels` — `config.go` |
+| 服务端点（读路径） | `GetProviderModelsByUUID` — `internal/server/module/provider/handler.go` |
+| 刷新端点（写路径） | `UpdateProviderModelsByUUID` — `handler.go` |
+| 排序（serving 边界唯一真源） | `SortProviderModels` — `config.go` |
 | 缓存 manager（TTL=1h） | `ModelListManager` / `ModelCacheTTL` — `internal/data/model_list.go:14` |
 | 存储后端（SQLite/GORM） | `ModelStore` — `internal/data/db/provider_model.go`（PK 仅 `provider_uuid`） |
-| 内嵌模板兜底 | `TemplateManager.GetEmbeddedModelsForProvider` — `internal/data/provider_template.go:686` |
+| 内嵌模板兜底 | `TemplateManager.GetEmbeddedModelsForProvider` — `internal/data/provider_template.go` |
 | 响应里的来源标记 | `ModelCacheSource*` — `internal/server/module/provider/types.go` |
 
 ---
 
-## 3. 读路径最终设计（`GetProviderModelsByUUID`）
+## 3. 兜底链最终设计（`ResolveProviderModels`）
 
-分四步，逐级兜底。**模板只在前三步全部拿不到东西（列表为空）时才用。**
+**整条兜底链收敛在一个函数里**：`Config.ResolveProviderModels(forceRefresh bool, uid string) (ResolvedModels, error)`，返回 `{Models, Source, LastUpdated}`。所有调用方（HTTP 读、HTTP 刷新、CLI、OAuth 完成）都走它，行为完全一致。
 
 ```
-Step 1  DB 缓存（api 来源，1h TTL）           非空 → 直接返回，source=db
-Step 2a VModel 静态列表（虚拟 provider）       非空 → 返回，source=vmodel（永不过期）
-Step 2b 上游 API 实时 fetch（非虚拟）          成功非空 → 返回，source=api
-Step 3  内嵌模板兜底（仅当以上全空）           非空 → 返回，source=template
+Step 1  DB 缓存（1h TTL；forceRefresh=true 时跳过）   非空 → 返回，source=db
+Step 2  VModel 静态列表（虚拟 provider）              → 返回，source=vmodel（永不过期）
+Step 3  上游 API fetch（fetchAndSaveAPIModels，持久化） 成功非空 → 返回，source=api
+Step 4  内嵌模板兜底（live，不落库）                  非空 → 返回，source=template
 ```
 
-Step 3 的三条硬性约束（`handler.go` 内注释同步）：
+- **`forceRefresh` 是读路径与刷新路径的唯一区别**：读传 `false`（缓存优先），手动刷新传 `true`（跳过缓存、强制重查上游）。**只差一个 bool，两条路径再也无法漂移**（Bug #3 类问题从结构上消除）。
+- Step 4 三条硬约束：①仅当前面全空才用；②绝不并入非空列表（模板是会过期的编译期快照，并入会复活已淘汰模型）；③live 读取不落库（改进内嵌列表立即生效）。
+- 两个 HTTP handler 因此变得很薄——一行 `ResolveProviderModels(...)` + 组装响应。`expiresAt`（仅响应元数据）由 handler 的 `modelListExpiry(source)` 从 source 推导。
 
-1. **仅当 `len(models) == 0` 时才用模板** —— 绝不并入非空列表。
-2. **实时读取，不持久化** —— 不写回 DB。
-3. 命中模板时 `expiresAt` 设为 1h 后（仅用于响应元数据，不代表落库）。
+`ModelCacheSource` / `ModelListSource` 只有四个取值：`db` / `api` / `vmodel` / `template`。**没有 `merged`。**
 
-`ModelCacheSource` 只有四个取值：`db` / `api` / `vmodel` / `template`。**没有 `merged`。**
+> **`FetchAndSaveProviderModels` 仍保留**，但降级为"只预热缓存、不返回列表"的薄封装，供纯触发抓取的调用点使用（TUI 缓存预热、OAuth 重认证）。需要"生效列表"的调用点一律用 `ResolveProviderModels`。
+>
+> **TUI `availableModels`（`rule_mode.go`）刻意不并入 resolver**：它是渲染期"只读缓存+模板、绝不发网络"的语义，与 resolver"缓存缺失即抓取"不同。
 
 ---
 
-## 4. 两个历史 Bug 与教训
+## 4. 历史 Bug 与教训
 
 ### 4.1 Bug #1：兜底列表无法快速生效
 
@@ -82,6 +86,23 @@ Step 3 的三条硬性约束（`handler.go` 内注释同步）：
 **结论**：**模板绝不并入非空真实列表；上游非空即视为对增删都权威，原样透传。** 相关 helper、`merged` 来源常量、合并测试全部移除（PR 净删 111 行）。
 
 **安全边界由测试钉死**：`TestGetProviderModelsByUUID_ClaudeCode_NonEmptyCache_NotPollutedByTemplate` —— 缓存里一份缺了 `claude-opus-4-5` 的上游列表，接口原样返回，**不会**把模板里的该模型补回来。
+
+### 4.3 Bug #3：Codex 手动刷新返回空列表
+
+**现象**：Codex（issuer `codex`）provider 点"刷新模型列表"后返回 0 个模型，把原本能正常展示的列表清空。
+
+**根因**：`UpdateProviderModelsByUUID`（刷新端点）只做两件事——`FetchAndSaveProviderModels` + `GetModels`（读 DB）。对 Codex：
+- Codex 的 `/models` 端点不支持，`OpenAIClient.ListModels` 直接短路返回 `ErrModelsEndpointNotSupported`（`internal/client/openai.go`，守卫用 `GetIssuer()` 且额外判 `APIBase == CodexAPIBase`）；
+- `FetchAndSaveProviderModels` 清掉该错误、命中模板后 `return nil`（成功）**但不落库**；
+- 于是 `GetModels` 读 DB 得到空 → 刷新端点返回 `models_count: 0`。
+
+读路径（GET）没这个问题，因为它的 Step 3 会**实时**读模板兜底；但刷新路径当初漏了这一步。
+
+> 排查中一个被证伪的岔路：曾怀疑是"旧 provider 记录只设了 `OAuthDetail.ProviderType`、`Issuer` 为空"导致模板匹配（用裸 `.Issuer`）失败。但 provider store 存/取时会用 `GetIssuer()` 归一化（`provider_store.go` 存 `OAuthProviderType = GetIssuer()`、取时写回 `Issuer`），任何经过存储的记录 `Issuer` 都已补齐，所以这条不成立。**先复现再修**避免了误修。
+
+**修复**：最初把模板兜底抽成 `Handler.templateFallbackModels` 让两个 handler 共用（PR #1364）；随后**全面重构**把整条兜底链收敛进 `Config.ResolveProviderModels`（见 §3），两个 handler 只差一个 `forceRefresh` bool，`templateFallbackModels` 被移除。回归测试 `TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels`。
+
+> 重构同时修掉了 **3 个潜伏的同类 bug**：`agent_command.go`、`remote.go`、`oauth/handler.go` 当初都是 `FetchAndSave` + `GetModels` 且没补模板兜底，codex 场景同样会拿到空列表；迁到 `ResolveProviderModels` 后一并修复。
 
 ---
 

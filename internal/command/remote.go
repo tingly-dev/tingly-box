@@ -198,17 +198,19 @@ func promptForSmartGuideModel(reader *bufio.Reader, appManager *AppManager) (str
 	}
 
 	// Fetch models for the provider
-	modelManager := appManager.AppConfig().GetGlobalConfig().GetModelManager()
-	if modelManager == nil {
+	globalCfg := appManager.AppConfig().GetGlobalConfig()
+	if globalCfg.GetModelManager() == nil {
 		return "", "", fmt.Errorf("model manager not available")
 	}
 
-	// Try to fetch models from provider
-	if err := appManager.AppConfig().FetchAndSaveProviderModels(provider.UUID); err != nil {
+	// ResolveProviderModels walks the full fallback chain, so providers whose
+	// /models endpoint is unsupported (e.g. Codex) still return their catalog.
+	resolved, err := globalCfg.ResolveProviderModels(true, provider.UUID)
+	if err != nil {
 		logrus.WithError(err).Warn("Failed to fetch models from provider, using cached list")
 	}
 
-	models := modelManager.GetModels(provider.UUID)
+	models := resolved.Models
 	if len(models) == 0 {
 		// If no models found, let user enter manually
 		fmt.Println()

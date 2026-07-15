@@ -255,15 +255,16 @@ func promptForAgentConfig(reader *bufio.Reader, appManager *AppManager, req *age
 		req.Provider = provider.UUID
 	}
 
-	// Fetch models for the provider
-	if err := appManager.FetchAndSaveProviderModels(req.Provider); err != nil {
+	// Fetch models for the provider. ResolveProviderModels walks the full
+	// fallback chain, so providers whose /models endpoint is unsupported
+	// (e.g. Codex) still yield their embedded template catalog.
+	globalConfig := appManager.GetGlobalConfig()
+	resolved, err := globalConfig.ResolveProviderModels(true, req.Provider)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Failed to fetch models from provider: %v\n", err)
 		fmt.Fprintln(os.Stderr, "Using cached model list...")
 	}
-
-	// Get models from provider
-	globalConfig := appManager.GetGlobalConfig()
-	models := globalConfig.GetModelManager().GetModels(req.Provider)
+	models := resolved.Models
 
 	// Prompt for model if not specified
 	if req.Model == "" {

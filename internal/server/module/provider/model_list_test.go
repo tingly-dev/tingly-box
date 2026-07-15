@@ -97,6 +97,35 @@ func TestGetProviderModelsByUUID_Codex_EmptyCache_UsesTemplate(t *testing.T) {
 	assert.Contains(t, resp.Data.Models, "gpt-5.5")
 }
 
+// TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels is a regression
+// test for codex model-list refresh returning an empty list. The refresh
+// endpoint calls FetchAndSaveProviderModels (which, for codex, short-circuits
+// the unsupported /models endpoint and resolves to the embedded template
+// without persisting it) and then reads back from the DB cache. Since the
+// template is never persisted, a naive DB read yields zero models — the
+// endpoint must apply the same template fallback the GET path does.
+func TestUpdateProviderModelsByUUID_Codex_ReturnsTemplateModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := newTestConfigWithTemplates(t)
+	provider := newCodexOAuthProvider()
+	require.NoError(t, cfg.AddProvider(provider))
+
+	handler := NewHandler(cfg, nil)
+	router := gin.New()
+	router.POST("/provider-models/:uuid", handler.UpdateProviderModelsByUUID)
+
+	req, _ := http.NewRequest("POST", "/provider-models/"+provider.UUID, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp ProviderModelsResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.True(t, resp.Success)
+	assert.NotEmpty(t, resp.Data.Models, "codex refresh must fall back to template models, not return an empty list")
+	assert.Contains(t, resp.Data.Models, "gpt-5.5")
+}
+
 // TestGetProviderModelsByUUID_ClaudeCode_NonEmptyCache_NotPollutedByTemplate
 // pins the deprecation-safety guarantee: the embedded template is a
 // compile-time snapshot that can still list models the upstream has retired,
