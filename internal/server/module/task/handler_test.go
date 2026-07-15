@@ -119,3 +119,43 @@ func TestWake_WithInstructionResumesPausedTask(t *testing.T) {
 		t.Fatalf("updated status=%s payload=%+v", updated.Status, got)
 	}
 }
+
+func TestToView_ResumeCommandStartsInWorkspace(t *testing.T) {
+	tests := []struct {
+		name      string
+		agent     agenttask.AgentKind
+		workspace string
+		sessionID string
+		want      string
+	}{
+		{
+			name:  "claude",
+			agent: agenttask.AgentClaude, workspace: "/tmp/task workspace", sessionID: "session-1",
+			want: "cd '/tmp/task workspace' && claude --resume 'session-1'",
+		},
+		{
+			name:  "codex quotes shell values",
+			agent: agenttask.AgentCodex, workspace: "/tmp/user's task", sessionID: "thread-1",
+			want: "cd '/tmp/user'\"'\"'s task' && codex exec resume 'thread-1'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, err := json.Marshal(agenttask.Payload{
+				Version: 1, Goal: "Resume work", Agent: tt.agent,
+				WorkspacePath: tt.workspace, SessionID: tt.sessionID,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			view, err := toView(&coretask.Task{ID: "task-1", Payload: payload})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if view.ResumeCommand != tt.want {
+				t.Fatalf("resume command = %q, want %q", view.ResumeCommand, tt.want)
+			}
+		})
+	}
+}

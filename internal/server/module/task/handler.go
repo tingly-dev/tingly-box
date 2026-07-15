@@ -200,10 +200,12 @@ func toView(task *coretask.Task) (TaskView, error) {
 		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
 	}
 	if payload.SessionID != "" {
+		workspace := shellQuote(payload.WorkspacePath)
+		sessionID := shellQuote(payload.SessionID)
 		if payload.Agent == agenttask.AgentClaude {
-			view.ResumeCommand = "claude --resume " + payload.SessionID
+			view.ResumeCommand = fmt.Sprintf("cd %s && claude --resume %s", workspace, sessionID)
 		} else {
-			view.ResumeCommand = "codex exec resume " + payload.SessionID
+			view.ResumeCommand = fmt.Sprintf("cd %s && codex exec resume %s", workspace, sessionID)
 		}
 	}
 	if len(task.Result) > 0 {
@@ -220,6 +222,10 @@ func toView(task *coretask.Task) (TaskView, error) {
 		view.Recurrence = &recurrence
 	}
 	return view, nil
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func writeError(c *gin.Context, err error) {
