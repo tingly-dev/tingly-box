@@ -1,11 +1,11 @@
-# Test Report: Task Agent Supervisor Backend
+# Test Report: Task Agent Supervisor
 
 **Date:** 2026-07-15
-**Scope:** Task core, Claude/Codex workers, Task HTTP API, Server wiring
+**Scope:** Task core, Claude/Codex workers, Task HTTP API, Server wiring, experimental frontend
 
 ## Result
 
-PASS for the implemented backend slice.
+PASS for the implemented backend and frontend slices.
 
 ## Commands
 
@@ -20,6 +20,10 @@ GOCACHE=/tmp/tingly-box-bot-go-cache go test ./internal/server ./internal/server
 GOCACHE=/tmp/tingly-box-bot-go-cache go vet ./internal/task/... ./internal/server/module/task
 cd agentboot && GOCACHE=/tmp/tingly-box-bot-go-cache go vet ./codex
 git diff --check
+
+cd frontend
+pnpm exec oxlint src/pages/task/TaskPage.tsx src/pages/task/types.ts src/services/taskApi.ts src/contexts/FeatureFlagsContext.tsx src/components/GlobalExperimentalFeatures.tsx src/layout/useActivityItems.tsx src/App.tsx src/mocks/handlers.ts
+pnpm build:dev
 ```
 
 All commands passed.
@@ -36,8 +40,14 @@ All commands passed.
 - Codex safe CLI arguments, resume arguments, JSONL parsing, thread-ID capture and final text;
 - immediate Codex native-session checkpoint from thread.started;
 - API creation, unsupported-agent validation and paused-task instruction wake-up;
-- Server and servertest package compile.
+- Server and servertest package compile;
+- experimental flag, standalone navigation, grouped task list and actionable task detail;
+- immediate/later/recurring creation flows and orthogonal continuous follow-up controls;
+- mock API flows for empty/loading/error-free visual development;
+- 1440×900 browser screenshots for the Task page and creation dialog.
 
 ## Existing unrelated repository failure
 
 A broad `go test ./internal/... -run '^$'` was also attempted earlier. It is blocked by pre-existing mocks in `internal/remote_control/smart_guide/agent_integration_test.go` that still implement the old `HandleAnthropicStream` signature without `context.Context`. No Task code touches that package.
+
+The broad frontend `pnpm typecheck` is also blocked by existing generated-client and test-global errors outside the Task feature. The targeted Task lint and production-style development build pass.

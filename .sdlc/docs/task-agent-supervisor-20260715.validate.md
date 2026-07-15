@@ -1,4 +1,4 @@
-# Validation Report: Task Agent Supervisor Backend
+# Validation Report: Task Agent Supervisor
 
 **Date:** 2026-07-15
 **Spec:** `task-agent-automation-20260715.spec.md`
@@ -9,7 +9,7 @@
 - Claude vertical slice: implemented.
 - Codex driver/transport: implemented.
 - Swagger API and Server lifecycle: implemented.
-- Frontend experimental flag and Task page: pending.
+- Frontend experimental flag and Task page: implemented.
 - Real CLI end-to-end harness: pending.
 
 ## Architecture checks
@@ -31,9 +31,19 @@
 - Completed tasks remain wakeable.
 - `needs_input` remains actionable and receives a concrete instruction through the same Task.
 
+## UX-principle checks for the frontend
+
+- Tasks is a standalone top-level activity rather than being hidden under an implementation-oriented section.
+- The list is grouped around user questions: needs attention, active/scheduled and completed.
+- Scheduling and continuous follow-up are separate controls; there is no combined execution-mode picker.
+- The creation dialog starts with the goal and uses available agents as smart defaults.
+- The detail surface shows concrete workspace, session and resume command values.
+- The primary action is sending an instruction; stop and run-now remain visible secondary actions.
+- Disabling the experiment hides creation/navigation without locking existing Task URLs or cleanup actions.
+- Desktop page and creation dialog were visually verified at 1440×900 in the mock runtime.
+
 ## Deferred by design
 
-- Task page/navigation/experimental UI flag.
 - Opening workspace and native take-over shell actions.
 - Full execution history and Run table.
 - Page-level one-off approval UI.
