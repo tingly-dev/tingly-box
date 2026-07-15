@@ -653,6 +653,12 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 		if nextErr != nil {
 			result := stream.Result()
 			preserveProtocolStageSideEffectBoundary(c, nextErr, result.SideEffectsCommitted)
+			if errors.Is(nextErr, context.Canceled) || protocol.IsContextCanceled(nextErr) {
+				if result.Usage != nil {
+					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
+				}
+				return nextErr
+			}
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, nextErr)
 			} else {
@@ -713,6 +719,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 			protocol.MarkFirstToken(c)
 		}
 		protocolstream.OpenAISSE(c, chunk)
+		CommitFirstChunkIfGate(c.Writer)
 		flusher.Flush()
 	}
 
@@ -720,6 +727,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 		setProtocolStageSSEHeaders(c)
 	}
 	protocolstream.OpenAISSEDone(c)
+	CommitFirstChunkIfGate(c.Writer)
 	flusher.Flush()
 	result := stream.Result()
 	preserveProtocolStageSideEffectBoundary(c, nil, result.SideEffectsCommitted)

@@ -528,6 +528,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 			protocol.MarkFirstToken(c)
 		}
 		c.SSEvent(eventType, string(payload))
+		CommitFirstChunkIfGate(c.Writer)
 		flusher.Flush()
 	}
 

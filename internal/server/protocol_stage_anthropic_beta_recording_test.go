@@ -58,7 +58,10 @@ func TestProtocolStageAnthropicBetaCompleteRecordsProviderAndFinalBoundaries(t *
 
 func TestProtocolStageAnthropicBetaStreamRecordsProviderAndFinalBoundaries(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	response := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(response)
+	gate := newFirstChunkGate(c.Writer)
+	c.Writer = gate
 	c.Request = httptest.NewRequest("POST", "/v1/messages?beta=true", nil)
 	recorder := newBetaBoundaryRecorder(t)
 	events := []protocolstage.Event{
@@ -85,6 +88,8 @@ func TestProtocolStageAnthropicBetaStreamRecordsProviderAndFinalBoundaries(t *te
 		recorder,
 	)
 	require.NoError(t, err)
+	require.True(t, gate.Committed(), "the first valid Stage event must commit the failover gate")
+	require.NotEmpty(t, response.Body.String(), "committed Stage events must reach the real writer")
 
 	completed, first := recorder.Finish(nil)
 	require.True(t, first)

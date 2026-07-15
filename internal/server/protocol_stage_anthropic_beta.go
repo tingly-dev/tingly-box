@@ -433,6 +433,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 			protocol.MarkFirstToken(c)
 		}
 		c.SSEvent(eventType, string(payload))
+		CommitFirstChunkIfGate(c.Writer)
 		flusher.Flush()
 	}
 

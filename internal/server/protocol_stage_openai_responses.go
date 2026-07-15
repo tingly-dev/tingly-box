@@ -504,6 +504,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 			wrote = true
 		}
 		protocolstream.OpenAIResponsesEvent(c, eventType, payload)
+		CommitFirstChunkIfGate(c.Writer)
 		flusher.Flush()
 	}
 

@@ -260,11 +260,6 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 		return
 	}
 
-	scenario := GetTrackingContextScenario(c)
-	if ph.guardrailsEnabledForScenario(scenario) {
-		ApplyGuardrailsToAnthropicV1Request(c, ph.currentGuardrailsRuntime(), req.MessageNewParams, requestModel, provider)
-	}
-
 	// Determine target API type for protocol transformation detection
 	target := protocol.TypeAnthropicV1
 	switch provider.APIStyle {
@@ -299,6 +294,14 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 		stageRecording,
 	) {
 		return
+	}
+
+	// The Stage path owns Guardrail request and response processing as one
+	// full-duplex unit. Apply the legacy request mutation only after Stage
+	// selection declines the entire attempt, avoiding duplicate policy work.
+	scenario := GetTrackingContextScenario(c)
+	if ph.guardrailsEnabledForScenario(scenario) {
+		ApplyGuardrailsToAnthropicV1Request(c, ph.currentGuardrailsRuntime(), req.MessageNewParams, requestModel, provider)
 	}
 
 	reqCtx, err := ph.TransformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))

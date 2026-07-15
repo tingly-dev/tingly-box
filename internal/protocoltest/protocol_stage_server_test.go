@@ -543,6 +543,67 @@ func TestServerProtocolStageAnthropicV1GuardrailComplete(t *testing.T) {
 	}
 }
 
+func TestServerProtocolStageAnthropicV1GuardrailPreservesCredentialMask(t *testing.T) {
+	t.Parallel()
+
+	const (
+		secret = "sk-stage-secret"
+		alias  = "TINGLY_CRED_TOKEN_STAGE_TEST"
+	)
+	runtime := newProtocolStageGuardrails(func(_ context.Context, _ guardrailscore.Input) (guardrailscore.Result, error) {
+		return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
+	})
+	credentialCache := guardrails.BuildCredentialCache(
+		[]guardrailscore.ProtectedCredential{{
+			ID: "stage-credential", Name: "Stage credential", Type: guardrailscore.ProtectedCredentialTypeToken,
+			Secret: secret, AliasToken: alias, Enabled: true,
+		}},
+		[]string{string(typ.ScenarioAnthropic)},
+	)
+	runtime.SetCredentialCache(credentialCache)
+
+	env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(runtime))
+	// Server initialization refreshes the runtime cache from the test database;
+	// install this request fixture after boot so the live handler sees it.
+	env.rootServer.CurrentGuardrailsRuntime().SetCredentialCache(credentialCache)
+	scenario := Scenario{
+		Name: "credential_restore",
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic: {
+				NonStream: func() (int, []byte) {
+					return http.StatusOK, mustMarshal(map[string]any{
+						"id": "msg-credential", "type": "message", "role": "assistant",
+						"content": []map[string]any{{"type": "text", "text": alias}},
+						"model":   "provider-model", "stop_reason": "end_turn", "stop_sequence": nil,
+						"usage": map[string]any{"input_tokens": 1, "output_tokens": 1},
+					})
+				},
+			},
+		},
+	}
+	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, scenario)
+	model := env.findRouteModel(protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, scenario.Name)
+	path, body := buildRequest(protocol.TypeAnthropicV1, model, false)
+	var request map[string]any
+	if err := json.Unmarshal(body, &request); err != nil {
+		t.Fatalf("decode request: %v", err)
+	}
+	request["messages"] = []map[string]any{{"role": "user", "content": "use " + secret}}
+	body = mustMarshal(request)
+
+	resp, responseBody := sendProtocolStageProbe(t, env, path, body)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, responseBody)
+	}
+	if !strings.Contains(string(responseBody), secret) {
+		t.Fatalf("credential alias was not restored: %s", responseBody)
+	}
+	if strings.Contains(string(responseBody), alias) {
+		t.Fatalf("credential alias leaked to client: %s", responseBody)
+	}
+}
+
 func TestServerProtocolStageAnthropicV1GuardrailStream(t *testing.T) {
 	t.Parallel()
 
