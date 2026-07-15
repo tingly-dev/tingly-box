@@ -564,7 +564,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
-	if seg, ok := mcp.PopOpenAIContinuationSegment(typ.GetSessionID(c.Request.Context()), provider.UUID); ok {
+	if seg, ok := mcp.PopOpenAIContinuationSegment(typ.GetSessionID(c.Request.Context()), provider.UUID, req); ok {
 		req.Messages = append(append([]openai.ChatCompletionMessageParamUnion{}, seg...), req.Messages...)
 	}
 	// AlignToolMessagesForOpenAI is already performed by ConsistencyTransform

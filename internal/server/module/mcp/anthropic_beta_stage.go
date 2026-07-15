@@ -32,8 +32,8 @@ type AnthropicBetaStageExecutor interface {
 // A production implementation may bind one instance to a provider and derive
 // the session key from ctx; the Stage never knows that storage key.
 type AnthropicBetaContinuationStore interface {
-	Pop(ctx context.Context) ([]anthropic.BetaMessageParam, bool)
-	Put(ctx context.Context, segment []anthropic.BetaMessageParam)
+	Pop(ctx context.Context, request *anthropic.BetaMessageNewParams) ([]anthropic.BetaMessageParam, bool)
+	Put(ctx context.Context, segment []anthropic.BetaMessageParam, externalIDs []string)
 }
 
 type AnthropicBetaStageConfig struct {
@@ -149,7 +149,7 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 			if !ok || len(segment) == 0 {
 				return nil, stagetoolloop.WrapError(errors.New("Anthropic Beta ToolLoop built an empty mixed continuation"), sideEffectsCommitted)
 			}
-			e.stage.continuations.Put(runCtx, segment)
+			e.stage.continuations.Put(runCtx, segment, externalIDs)
 			filtered, filterErr := e.stage.adapter.FilterVirtualTools(message, external)
 			if filterErr != nil {
 				return nil, stagetoolloop.WrapError(filterErr, sideEffectsCommitted)
@@ -222,7 +222,7 @@ func (e *anthropicBetaToolLoopEndpoint) prepare(ctx context.Context, call protoc
 	}
 	prepared := call
 	if e.stage.continuations != nil {
-		if segment, ok := e.stage.continuations.Pop(ctx); ok {
+		if segment, ok := e.stage.continuations.Pop(ctx, cloned); ok {
 			continued, applyErr := e.stage.adapter.ApplyContinuation(cloned, segment)
 			if applyErr != nil {
 				return protocolstage.Call{}, nil, fmt.Errorf("apply Anthropic Beta ToolLoop continuation: %w", applyErr)
@@ -257,7 +257,8 @@ func (e *anthropicBetaToolLoopEndpoint) executeTools(
 		}
 		if err != nil {
 			result.IsError = true
-		} else {
+		}
+		if err == nil || result.Dispatched {
 			committed = true
 		}
 		results = append(results, result)

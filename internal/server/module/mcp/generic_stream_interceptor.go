@@ -615,7 +615,7 @@ func (i *GenericStreamInterceptor) handleMixed(response, req any) error {
 		return i.adapter.SendFinalMessage(i.c)
 	}
 	key := continuationKey(typ.GetSessionID(i.c.Request.Context()), i.provider.UUID, i.adapterID())
-	mixedContinuationStore.put(key, segment)
+	mixedContinuationStore.put(key, segment, externalIDs)
 
 	// Send final message (external tools already streamed to client)
 	return i.adapter.SendFinalMessage(i.c)
@@ -860,7 +860,7 @@ func (i *GenericStreamInterceptor) adapterID() string {
 func (i *GenericStreamInterceptor) applyStoredContinuation() {
 	sessionID := typ.GetSessionID(i.c.Request.Context())
 	key := continuationKey(sessionID, i.provider.UUID, i.adapterID())
-	segment, ok := mixedContinuationStore.pop(key)
+	segment, ok := mixedContinuationStore.pop(key, i.currentReq)
 	if !ok {
 		return
 	}

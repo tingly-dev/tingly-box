@@ -130,7 +130,7 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 			if !ok || len(segment) == 0 {
 				return protocolstage.Event{}, s.fail(errors.New("Anthropic Beta ToolLoop built an empty mixed continuation"))
 			}
-			s.endpoint.stage.continuations.Put(s.runCtx, segment)
+			s.endpoint.stage.continuations.Put(s.runCtx, segment, externalIDs)
 			filtered, filterErr := filterBetaStageStreamEvents(s.buffered, s.owned)
 			if filterErr != nil {
 				return protocolstage.Event{}, s.fail(filterErr)

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 
+	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
@@ -47,9 +48,10 @@ func (e *ServerToolExecutor) ExecuteToolWithContext(
 	}
 
 	result := ToolExecutionResult{
-		ToolUseID: tool.ID(),
-		Contents:  toolResult.Contents,
-		IsError:   err != nil || toolResult.IsError,
+		ToolUseID:  tool.ID(),
+		Contents:   toolResult.Contents,
+		IsError:    err != nil || toolResult.IsError,
+		Dispatched: err == nil || servertool.WasDispatched(err),
 	}
 	return nextCtx, result, err
 }

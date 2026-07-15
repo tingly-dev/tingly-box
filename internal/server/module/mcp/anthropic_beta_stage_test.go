@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	stagetoolloop "github.com/tingly-dev/tingly-box/internal/protocol/stage/toolloop"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestAnthropicV1TopologyRunsBetaToolLoop(t *testing.T) {
@@ -314,6 +315,28 @@ func TestAnthropicBetaStagePreservesSideEffectBoundaryAfterLaterFailure(t *testi
 	}
 }
 
+func TestAnthropicBetaStageTreatsPostDispatchToolErrorAsCommitted(t *testing.T) {
+	providerErr := errors.New("second round failed")
+	toolErr := errors.New("tool response was lost after dispatch")
+	terminal := &betaStageScriptedEndpoint{
+		responses: []*protocolstage.Response{{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-1", Name: "lookup"})}},
+		errors:    []error{nil, providerErr},
+	}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools: staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor: &fakeBetaStageExecutor{
+			results: map[string]ToolExecutionResult{"lookup": {Dispatched: true}},
+			errors:  map[string]error{"lookup": toolErr},
+		},
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	_, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if !errors.Is(err, providerErr) || !stagetoolloop.HasCommittedSideEffects(err) {
+		t.Fatalf("later error = %v, committed=%v", err, stagetoolloop.HasCommittedSideEffects(err))
+	}
+}
+
 func TestAnthropicBetaStageStreamHidesOwnedRoundAndContinues(t *testing.T) {
 	toolEvents := betaStageToolStreamEvents(betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup", Input: map[string]any{"q": "x"}})
 	textEvents := betaStageTextStreamEvents("done")
@@ -424,23 +447,26 @@ func TestAnthropicBetaStageStreamPreservesSideEffectBoundaryAfterLaterFailure(t 
 }
 
 func TestProviderBetaContinuationStoreIsProviderScopedAndSingleConsume(t *testing.T) {
-	ctx := context.Background()
+	ctx := typ.WithSessionID(context.Background(), typ.SessionID{Source: typ.SessionSourceHeader, Value: "session-a"})
 	first := NewProviderBetaContinuationStore("provider-a")
 	second := NewProviderBetaContinuationStore("provider-b")
 	segment := []anthropic.BetaMessageParam{{
 		Role:    anthropic.BetaMessageParamRoleAssistant,
 		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("stored")},
 	}}
-	first.Put(ctx, segment)
+	request := &anthropic.BetaMessageNewParams{Messages: []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu-external", "ok", false)),
+	}}
+	first.Put(ctx, segment, []string{"toolu-external"})
 
-	if _, ok := second.Pop(ctx); ok {
+	if _, ok := second.Pop(ctx, request); ok {
 		t.Fatal("continuation leaked across providers")
 	}
-	got, ok := first.Pop(ctx)
+	got, ok := first.Pop(ctx, request)
 	if !ok || len(got) != 1 {
 		t.Fatalf("stored continuation = %#v, ok=%v", got, ok)
 	}
-	if _, ok := first.Pop(ctx); ok {
+	if _, ok := first.Pop(ctx, request); ok {
 		t.Fatal("continuation was consumed more than once")
 	}
 }
@@ -467,14 +493,15 @@ type fakeBetaStageExecutor struct {
 }
 
 type memoryBetaStageContinuations struct {
-	segment []anthropic.BetaMessageParam
-	puts    int
-	pops    int
+	segment     []anthropic.BetaMessageParam
+	expectedIDs []string
+	puts        int
+	pops        int
 }
 
-func (s *memoryBetaStageContinuations) Pop(context.Context) ([]anthropic.BetaMessageParam, bool) {
+func (s *memoryBetaStageContinuations) Pop(_ context.Context, request *anthropic.BetaMessageNewParams) ([]anthropic.BetaMessageParam, bool) {
 	s.pops++
-	if len(s.segment) == 0 {
+	if len(s.segment) == 0 || !containsAll(continuationResultIDs(request), stringSet(s.expectedIDs)) {
 		return nil, false
 	}
 	segment := s.segment
@@ -482,9 +509,10 @@ func (s *memoryBetaStageContinuations) Pop(context.Context) ([]anthropic.BetaMes
 	return segment, true
 }
 
-func (s *memoryBetaStageContinuations) Put(_ context.Context, segment []anthropic.BetaMessageParam) {
+func (s *memoryBetaStageContinuations) Put(_ context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) {
 	s.puts++
 	s.segment = append([]anthropic.BetaMessageParam(nil), segment...)
+	s.expectedIDs = append([]string(nil), externalIDs...)
 }
 
 func (e *fakeBetaStageExecutor) ExecuteToolWithContext(ctx context.Context, tool Tool, _ []map[string]any) (context.Context, ToolExecutionResult, error) {
