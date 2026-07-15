@@ -125,6 +125,7 @@ func TestServerProtocolStageMCPGuardrailComposition(t *testing.T) {
 		target protocol.APIType
 	}{
 		{name: "v1_through_beta_to_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat},
+		{name: "chat_through_beta_to_chat", source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat},
 		{name: "responses_through_beta_to_chat", source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat},
 	}
 	for _, tt := range tests {

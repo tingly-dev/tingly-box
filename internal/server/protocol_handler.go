@@ -174,14 +174,15 @@ func (ph *ProtocolHandler) guardrailsEnabledForScenario(scenario string) bool {
 }
 
 // guardrailsEnabledForProtocolStage keeps new ingress support behind --stage
-// without broadening legacy scenario behavior. OpenAI Responses is the first
-// OpenAI ingress canary; Chat remains on its existing behavior until its own
-// Stage integration is implemented and verified.
+// without broadening legacy scenario behavior. OpenAI Chat and Responses use
+// this opt-in gate; legacy OpenAI paths retain their existing behavior.
 func (ph *ProtocolHandler) guardrailsEnabledForProtocolStage(scenario string, source protocol.APIType) bool {
-	if source == protocol.TypeOpenAIResponses {
+	switch source {
+	case protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses:
 		return GuardrailsConfiguredForScenario(ph.deps.Config, ph.currentGuardrailsRuntime(), scenario)
+	default:
+		return ph.guardrailsEnabledForScenario(scenario)
 	}
-	return ph.guardrailsEnabledForScenario(scenario)
 }
 
 func (ph *ProtocolHandler) mcpEnabled() bool {

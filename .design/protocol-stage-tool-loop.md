@@ -286,8 +286,8 @@ setting for stage order.
 
 Under `--stage`, V1 Guardrails independently promote the request to the Beta
 working protocol. With MCP enabled, both Beta-native stages compose at that
-same boundary. Responses ingress reaches the same ordering through its
-Responses→Beta Bridge and returns through the provider-side Bridge. V1
+same boundary. Chat and Responses ingress reach the same ordering through their
+source→Beta Bridges and return through the provider-side Bridge. V1
 promotion applies only to requests; outward V1 responses
 continue to use the existing permissive projection and do not establish a new
 strict Beta-to-V1 compatibility contract. Without `--stage`, V1 Guardrails

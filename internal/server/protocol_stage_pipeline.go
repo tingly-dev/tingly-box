@@ -16,10 +16,12 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
+	protocolguardrail "github.com/tingly-dev/tingly-box/internal/protocol/stage/guardrail"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/openaibridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
@@ -52,11 +54,13 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	stageRecording *protocolStageRequestRecording,
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
-	if mcpEnabled {
+	guardrailsEnabled := ph.guardrailsEnabledForProtocolStage(GetTrackingContextScenario(c), protocol.TypeOpenAIChat)
+	usesBetaStages := mcpEnabled || guardrailsEnabled
+	if usesBetaStages {
 		if !ph.shouldUseProtocolStageBetaChain(c, protocol.TypeOpenAIChat, target, protocolstage.AllBridgeCapabilities) {
 			return false
 		}
-		if ph.deps.MCPRuntime == nil {
+		if mcpEnabled && ph.deps.MCPRuntime == nil {
 			logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "MCP runtime is unavailable")
 			return false
 		}
@@ -116,6 +120,25 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 			preBase,
 			protocolStageTransformOptions(ph, c)...,
 		),
+	}
+	if guardrailsEnabled {
+		guardrailStage, guardrailErr := protocolguardrail.NewAnthropicBeta(protocolguardrail.AnthropicBetaConfig{
+			Runtime: ph.currentGuardrailsRuntime(),
+			BaseInput: BuildGuardrailsBaseInput(
+				c,
+				actualModel,
+				provider,
+				guardrailscore.DirectionRequest,
+				nil,
+			),
+			Observe: protocolStageGuardrailObserver(c),
+		})
+		if guardrailErr != nil {
+			requestErr = guardrailErr
+			ph.FailAttemptSetup(c, guardrailErr)
+			return true
+		}
+		stages = append(stages, guardrailStage)
 	}
 	if mcpEnabled {
 		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, false)

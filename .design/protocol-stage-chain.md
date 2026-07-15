@@ -7,7 +7,7 @@
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
 > Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
-> Anthropic Beta and promoted V1 requests can include the Beta-native Guardrail
+> All four supported ingress protocols can include the Beta-native Guardrail
 > Stage; unsupported routes remain on legacy. Request recording is
 > available on all twelve routes, including failover across Stage-compatible
 > services, with `recording_v2`.
@@ -25,7 +25,7 @@ lifecycle before the provider is called.
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
-| 3 — Guardrails canary | Complete for Anthropic Beta, promoted V1, and Responses sources | Request, complete response, and stream events; Beta, Chat, and Responses targets |
+| 3 — Guardrails canary | Complete for all four supported ingress protocols | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
 | 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, mixed continuation, recording, and side-effect-aware failover |
 | 5 — Opt-in handler integration | Active | Existing handlers may select Stage only from the immutable `--stage` startup choice; default traffic remains legacy |
@@ -41,9 +41,9 @@ Production route selection with `--stage`:
 | `anthropic_v1` | `anthropic_v1` | Stage | V1→Beta Guardrail; provider request uses Beta | V1→Beta Tool Loop; provider request uses Beta | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | V1→Beta Guardrail→Chat | V1→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `anthropic_v1` | `openai_responses` | Stage through V1→Responses Bridge | V1→Beta Guardrail→Responses | V1→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_chat` | `openai_chat` | Stage | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_chat` | `openai_chat` | Stage | Chat→Beta Guardrail→Chat | Chat→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Chat→Beta Guardrail | Chat→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Chat→Beta Guardrail→Responses | Chat→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_responses` | `openai_responses` | Stage | Responses→Beta Guardrail→Responses | Responses→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_responses` | `anthropic_beta` | Stage through Responses→Beta Bridge | Responses→Beta Guardrail | Responses→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Responses→Beta Guardrail→Chat | Responses→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
@@ -59,11 +59,11 @@ their existing Bridges. The earlier Chat-native Tool Loop remains a useful
 lifecycle proof; production MCP selection now uses the Beta-native topology
 behind the explicit `--stage` canary.
 
-The Responses Guardrail canary reads the existing Guardrails runtime and
-scenario/global feature flag through a Stage-specific gate. It does not add the
-`openai` scenario to the legacy Guardrails support list: doing so would change
-Chat or converted legacy behavior without `--stage`. That support declaration
-is deferred until Chat has its own independently verified Stage integration.
+The Chat and Responses Guardrail canaries read the existing Guardrails runtime
+and scenario/global feature flag through a Stage-specific gate. They do not add
+the `openai` scenario to the legacy Guardrails support list: doing so would
+change converted legacy behavior without `--stage`. The Stage-specific gate
+keeps the new OpenAI ingress behavior opt-in while preserving legacy rollback.
 
 ## Decision
 
@@ -650,9 +650,9 @@ The first feature canary composes `guardrail_anthropic_beta` at the Beta working
 boundary. `BuildTopology` inserts source→Beta above it and Beta→provider below
 it as required, so provider responses return to Beta before response policy
 runs. The same one-protocol Guardrail therefore covers native Beta, promoted
-V1, and Responses ingress across Beta-, Chat-, and Responses-backed providers
-in complete and stream modes. Real HTTP tests verify response blocking and
-streamed tool-use rewriting; `harness matrix --stage --guardrails` supplies an
+V1, Chat, and Responses ingress across Beta-, Chat-, and Responses-backed
+providers in complete and stream modes. Real HTTP tests verify response
+blocking and streamed tool-use rewriting; `harness matrix --stage --guardrails` supplies an
 allow-only runtime for full semantic compatibility matrices.
 
 Verification recorded for the Phase 3 checkpoint:
@@ -675,6 +675,16 @@ Verification recorded for the Responses Guardrail checkpoint:
   Loop and blocks only the final external tool call after one owned execution;
 - `harness matrix --mode=single --stage --guardrails
   --source=openai_responses --scenario=text --client=http` passes 6/6 cases.
+
+Verification recorded for the Chat Guardrail checkpoint:
+
+- real HTTP complete and stream tests cover Chat→Beta Guardrail→provider across
+  OpenAI Chat, Anthropic Beta, and OpenAI Responses targets;
+- the no-`--stage` negative test remains on legacy;
+- the shared MCP composition test covers Chat ingress and preserves
+  `Guardrail(ToolLoop(Provider))` ordering;
+- `harness matrix --mode=single --stage --guardrails --source=openai_chat
+  --scenario=text --client=http` passes 6/6 cases.
 
 Verification recorded for the native Responses checkpoint:
 

@@ -55,8 +55,8 @@ func GuardrailsEnabledForScenario(cfg *config.Config, runtime *guardrails.Guardr
 
 // GuardrailsConfiguredForScenario reports whether the runtime and feature flag
 // are active without applying the legacy scenario-support list. Protocol Stage
-// uses this narrower primitive while onboarding a new ingress protocol behind
-// --stage, before declaring that scenario supported by every legacy endpoint.
+// uses this narrower primitive to opt in new ingress behavior behind --stage
+// without declaring the same scenario supported by legacy endpoints.
 func GuardrailsConfiguredForScenario(cfg *config.Config, runtime *guardrails.Guardrails, scenario string) bool {
 	if runtime == nil || runtime.PolicyEngine() == nil || cfg == nil || !runtime.IsActive() {
 		return false
