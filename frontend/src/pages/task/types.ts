@@ -15,6 +15,18 @@ export interface TaskResult {
   native_session_id?: string;
 }
 
+export interface TaskStep {
+  id: string;
+  title: string;
+  instruction: string;
+}
+
+export interface StepOutcome {
+  step_id: string;
+  result: TaskResult;
+  completed_at: string;
+}
+
 export interface AgentTask {
   id: string;
   title: string;
@@ -35,6 +47,9 @@ export interface AgentTask {
   created_at: string;
   updated_at: string;
   recurrence?: { cron: string; timezone: string };
+  steps?: TaskStep[];
+  current_step: number;
+  step_outcomes?: StepOutcome[];
 }
 
 export interface AgentAvailability {
@@ -50,4 +65,5 @@ export interface CreateTaskInput {
   recurrence?: { cron: string; timezone: string };
   follow_up: FollowUpPolicy;
   timeout_seconds: number;
+  steps?: Array<{ instruction: string }>;
 }
