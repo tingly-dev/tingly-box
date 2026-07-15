@@ -27,8 +27,6 @@ interface ModelSelectTabProps {
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
     // Single provider mode props
     singleProvider?: Provider | null; // If provided, only show this provider
-    onTest?: (model: string) => void; // Callback for Test button
-    testing?: boolean; // Whether a test is in progress
 }
 
 function ModelSelectTabInner({
@@ -41,8 +39,6 @@ function ModelSelectTabInner({
     onProviderChange,
     onCustomModelSave,
     singleProvider,
-    onTest,
-    testing = false,
 }: ModelSelectTabProps) {
     const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
     const { providerModels, refreshingProviders, fetchModels, refreshModels } = useProviderModels();
@@ -204,8 +200,6 @@ function ModelSelectTabInner({
                         onModelSelect={handleModelSelect}
                         onCustomModelEdit={handleCustomModelEdit}
                         onCustomModelDelete={handleDeleteCustomModel}
-                        onTest={onTest}
-                        testing={testing}
                     />
                 );
             })()}

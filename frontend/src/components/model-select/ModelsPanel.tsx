@@ -1,7 +1,6 @@
 import { AddCircleOutline as AddCircleOutlineIcon } from '@/components/icons';
 import { NavigateBefore as NavigateBeforeIcon } from '@/components/icons';
 import { NavigateNext as NavigateNextIcon } from '@/components/icons';
-import { PlayArrow as PlayArrowIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Search as SearchIcon } from '@/components/icons';
 import { BugReport as BugReportIcon } from '@/components/icons';
@@ -83,8 +82,6 @@ export interface ModelsPanelProps {
     onModelSelect: (provider: Provider, model: string) => void;
     onCustomModelEdit: (provider: Provider, value?: string) => void;
     onCustomModelDelete: (provider: Provider, customModel: string) => void;
-    onTest?: (model: string) => void;
-    testing?: boolean;
 }
 
 export function ModelsPanel({
@@ -96,8 +93,6 @@ export function ModelsPanel({
     onModelSelect,
     onCustomModelEdit,
     onCustomModelDelete,
-    onTest,
-    testing = false,
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels, fetchModels } = useProviderModels();
@@ -264,17 +259,6 @@ export function ModelsPanel({
                                 title="Dev: Randomly mark some models as 'new' for testing"
                             >
                                 Test New
-                            </Button>
-                        )}
-                        {onTest && (
-                            <Button
-                                variant="outlined"
-                                startIcon={testing ? <CircularProgress size={16} /> : <PlayArrowIcon />}
-                                onClick={() => selectedModel && onTest(selectedModel)}
-                                disabled={!selectedModel || testing}
-                                sx={{ height: 40, minWidth: 80 }}
-                            >
-                                {testing ? 'Testing...' : 'Test'}
                             </Button>
                         )}
                     </Stack>
