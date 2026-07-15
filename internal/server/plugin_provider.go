@@ -154,7 +154,7 @@ func (s *Server) ensurePluginRule(scenario, modelID, providerID, name string, ti
 		RequestModel: modelID,
 		Description:  "Plugin: " + name,
 		Active:       true,
-		LBTactic:     typ.ParseTacticFromMap(loadbalance.TacticTier, nil),
+		LBTactic:     typ.NewDefaultTactic(loadbalance.TacticTier),
 		Services: []*loadbalance.Service{
 			{Provider: providerID, Model: modelID, Weight: 1, Active: true, Tier: tier},
 		},

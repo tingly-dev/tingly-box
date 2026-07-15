@@ -174,7 +174,6 @@ func TestRegisterScenario_RejectsConflictingDescriptor(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 func TestIsSimpleProfileAlias(t *testing.T) {
 	cases := []struct {
 		in   string
