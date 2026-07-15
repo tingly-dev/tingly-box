@@ -211,8 +211,12 @@ function ModelSelectTabInner({
 }
 
 export default function ModelSelectDialog(props: ModelSelectTabProps) {
-    // Create a unique key based on selected provider and model to force context reset when selection changes
-    const providerKey = `${props.selectedProvider || ''}-${props.selectedModel || ''}`;
+    // Reset internal tab/dialog state only when the underlying provider selection
+    // changes (a genuinely new session) — NOT on every model pick within the same
+    // session. selectedModel changes on every card click (e.g. while browsing/
+    // testing in ModelListDialog), and remounting on that would blow away
+    // per-card state like a model's persistent test-result badge.
+    const providerKey = props.selectedProvider || '';
     return (
         <ModelSelectProvider key={providerKey}>
             <ModelSelectTabInner {...props} />

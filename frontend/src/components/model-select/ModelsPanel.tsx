@@ -319,7 +319,7 @@ export function ModelsPanel({
                         <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
                             {providerModels[provider.uuid].star_models!.map((starModel) => (
                                 <ModelCard
-                                    key={starModel}
+                                    key={`${provider.uuid}:${starModel}`}
                                     model={starModel}
                                     isSelected={isProviderSelected && selectedModel === starModel}
                                     onClick={() => onModelSelect(provider, starModel)}
@@ -350,7 +350,7 @@ export function ModelsPanel({
 
                                 return (
                                     <CustomModelCard
-                                        key={model}
+                                        key={`${provider.uuid}:${model}`}
                                         model={model}
                                         provider={provider}
                                         isSelected={isModelSelected}
@@ -363,7 +363,7 @@ export function ModelsPanel({
                             } else {
                                 return (
                                     <ModelCard
-                                        key={model}
+                                        key={`${provider.uuid}:${model}`}
                                         model={model}
                                         isSelected={isModelSelected}
                                         onClick={() => onModelSelect(provider, model)}

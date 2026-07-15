@@ -1,34 +1,31 @@
 import React from 'react';
-import { CircularProgress, IconButton, Tooltip } from '@mui/material';
+import { IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Bolt as BoltIcon } from '@/components/icons';
 
 interface ModelTestTriggerProps {
-    running: boolean;
-    onRun: () => void;
+    onOpen: () => void;
 }
 
-// ModelTestTrigger: the bolt icon that kicks off a model test. Lives in the
-// card's hover-only control-bar (bottom-right, alongside Edit/Delete) — an
-// action, not a status, so it only shows up when the user is looking at this
-// card. Re-clickable even after a result exists, to re-run the test.
-export const ModelTestTrigger: React.FC<ModelTestTriggerProps> = ({ running, onRun }) => {
+// ModelTestTrigger: the bolt icon that opens the full ProbeDialog for this
+// model. Lives in the card's hover-only control-bar (bottom-right, alongside
+// Edit/Delete) — an action, not a status, so it only shows up when the user
+// is looking at this card. Deliberately opens the dialog rather than running
+// the probe inline — that's the established probe interaction (progress,
+// journey, and raw response all live in the dialog), not a quick silent run.
+export const ModelTestTrigger: React.FC<ModelTestTriggerProps> = ({ onOpen }) => {
     const { t } = useTranslation();
-
-    if (running) {
-        return <CircularProgress size={14} thickness={5} sx={{ mx: '3px' }} />;
-    }
 
     return (
         <Tooltip title={t('probe.quickTest')}>
             <IconButton
                 size="small"
-                onClick={onRun}
+                onClick={onOpen}
                 sx={{
                     p: 0.3,
                     color: 'text.secondary',
                     '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        backgroundColor: 'action.hover',
                         color: 'primary.main',
                     },
                 }}

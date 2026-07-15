@@ -29,7 +29,7 @@ export function RecentModelsSection({
             <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
                 {recentModels.map((model) => (
                     <ModelCard
-                        key={model}
+                        key={`${provider.uuid}:${model}`}
                         model={model}
                         isSelected={selectedModel === model}
                         onClick={() => onModelSelect(model)}

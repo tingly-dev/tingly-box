@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
 import { ModelTestTrigger } from '../probe/ModelTestTrigger';
 import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
+import { ProbeDialog } from '../probe/ProbeDialog';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
@@ -31,7 +32,7 @@ export default function CustomModelCard({
     loading = false,
 }: CustomModelCardProps) {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-    const probe = useModelTestProbe(provider.uuid, model);
+    const probe = useModelTestProbe();
 
     const handleCardClick = () => {
         if (!loading) {
@@ -167,21 +168,13 @@ export default function CustomModelCard({
                 {/* Test status — persistent once a result exists, unlike the
                     hover-only actions corner below. */}
                 {!loading && probe.result && (
-                    <ModelTestStatusBadge
-                        result={probe.result}
-                        providerUuid={provider.uuid}
-                        providerName={provider.name}
-                        model={model}
-                        dialogOpen={probe.dialogOpen}
-                        onOpenDialog={probe.openDialog}
-                        onCloseDialog={probe.closeDialog}
-                    />
+                    <ModelTestStatusBadge result={probe.result} onOpen={probe.openDialog} />
                 )}
 
                 {/* Control bar - visible on hover */}
                 {!loading && (
                     <ControlBar>
-                        <ModelTestTrigger running={probe.running} onRun={probe.run} />
+                        <ModelTestTrigger onOpen={probe.openDialog} />
                         <IconButton
                             size="small"
                             onClick={handleEditClick}
@@ -189,7 +182,7 @@ export default function CustomModelCard({
                                 p: 0.3,
                                 color: 'text.secondary',
                                 '&:hover': {
-                                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                                    backgroundColor: 'action.hover',
                                     color: 'primary.main',
                                 }
                             }}
@@ -215,6 +208,17 @@ export default function CustomModelCard({
                     </ControlBar>
                 )}
             </Card>
+
+            <ProbeDialog
+                open={probe.dialogOpen}
+                onClose={probe.closeDialog}
+                targetType="provider"
+                targetId={provider.uuid}
+                targetName={provider.name}
+                model={model}
+                initialResult={probe.result ?? undefined}
+                onResult={probe.setResult}
+            />
 
             {/* Confirmation dialog for deleting custom model */}
             <Dialog

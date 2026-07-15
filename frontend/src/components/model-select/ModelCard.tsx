@@ -5,6 +5,7 @@ import type { Theme } from '@mui/material/styles';
 import type { Provider } from '@/types/provider';
 import { ModelTestTrigger } from '../probe/ModelTestTrigger';
 import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
+import { ProbeDialog } from '../probe/ProbeDialog';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
@@ -33,7 +34,7 @@ export default function ModelCard({
     showNewBadge = false,
     description,
 }: ModelCardProps) {
-    const probe = useModelTestProbe(provider.uuid, model);
+    const probe = useModelTestProbe();
 
     const getCardStyles = () => {
         const baseStyles = {
@@ -90,6 +91,7 @@ export default function ModelCard({
     };
 
     return (
+        <>
         <Card sx={getCardStyles()} onClick={loading ? undefined : onClick}>
             <CardContent sx={{
                 py: 1,
@@ -180,21 +182,24 @@ export default function ModelCard({
                 )}
                 {!loading && (
                     <ControlBar>
-                        <ModelTestTrigger running={probe.running} onRun={probe.run} />
+                        <ModelTestTrigger onOpen={probe.openDialog} />
                     </ControlBar>
                 )}
                 {!loading && probe.result && (
-                    <ModelTestStatusBadge
-                        result={probe.result}
-                        providerUuid={provider.uuid}
-                        providerName={provider.name}
-                        model={model}
-                        dialogOpen={probe.dialogOpen}
-                        onOpenDialog={probe.openDialog}
-                        onCloseDialog={probe.closeDialog}
-                    />
+                    <ModelTestStatusBadge result={probe.result} onOpen={probe.openDialog} />
                 )}
             </CardContent>
         </Card>
+        <ProbeDialog
+            open={probe.dialogOpen}
+            onClose={probe.closeDialog}
+            targetType="provider"
+            targetId={provider.uuid}
+            targetName={provider.name}
+            model={model}
+            initialResult={probe.result ?? undefined}
+            onResult={probe.setResult}
+        />
+        </>
     );
 }
