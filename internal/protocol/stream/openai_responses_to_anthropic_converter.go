@@ -334,7 +334,11 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 			r.emitContentBlockDelta(r.state.textBlockIndex, anthropicTextDelta(textDelta.Delta))
 		case "function_call", "custom_tool_call", "mcp_call":
 			itemID := itemAdded.Item.ID
-			truncatedID := truncateToolCallID(itemID)
+			callID := itemAdded.Item.CallID
+			if callID == "" {
+				callID = itemID
+			}
+			truncatedID := truncateToolCallID(callID)
 			blockIndex := r.state.nextBlockIndex
 			r.state.nextBlockIndex++
 
@@ -548,7 +552,11 @@ func (r *responsesToAnthropicConverter) finalize(resp *responses.Response, stopR
 			continue
 		}
 
-		truncatedID := truncateToolCallID(itemID)
+		callID := outputItem.CallID
+		if callID == "" {
+			callID = itemID
+		}
+		truncatedID := truncateToolCallID(callID)
 		blockIndex := r.state.nextBlockIndex
 		r.state.nextBlockIndex++
 

@@ -105,7 +105,9 @@ func TestHandleResponsesToAnthropicV1Assembly_Golden(t *testing.T) {
 
 	toolBlock := content[1].(map[string]any)
 	assert.Equal(t, "tool_use", toolBlock["type"])
-	assert.Equal(t, "fc_1", toolBlock["id"])
+	// Anthropic tool_result correlation uses Responses call_id, while the
+	// response item id remains an internal stream assembly identifier.
+	assert.Equal(t, "call_1", toolBlock["id"])
 	assert.Equal(t, "get_weather", toolBlock["name"])
 	assert.Equal(t, map[string]any{"city": "Paris"}, toolBlock["input"])
 

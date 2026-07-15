@@ -3,7 +3,6 @@ package nonstream
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
@@ -43,7 +42,7 @@ func marshalOpenAIChatToAnthropic(chat *openai.ChatCompletion, model string) ([]
 		return nil, fmt.Errorf("convert OpenAI Chat response to Anthropic: response is nil")
 	}
 	result := wire.AnthropicMsgWire{
-		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
+		ID:           "msg_" + uuid.NewString(),
 		Type:         "message",
 		Role:         "assistant",
 		Content:      []interface{}{},
@@ -87,6 +86,8 @@ func marshalOpenAIChatToAnthropic(chat *openai.ChatCompletion, model string) ([]
 		}
 		if choice.FinishReason == "tool_calls" {
 			result.StopReason = "tool_use"
+		} else if choice.FinishReason == "length" {
+			result.StopReason = "max_tokens"
 		}
 		break
 	}
@@ -115,7 +116,7 @@ func ConvertOpenAIChatToAnthropicBeta(chat *openai.ChatCompletion, model string)
 		return nil, fmt.Errorf("convert OpenAI Chat response to Anthropic beta: response is nil")
 	}
 	result := wire.AnthropicMsgWire{
-		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
+		ID:           "msg_" + uuid.NewString(),
 		Type:         "message",
 		Role:         "assistant",
 		Content:      []interface{}{},
@@ -158,6 +159,8 @@ func ConvertOpenAIChatToAnthropicBeta(chat *openai.ChatCompletion, model string)
 		}
 		if choice.FinishReason == "tool_calls" {
 			result.StopReason = string(anthropic.BetaStopReasonToolUse)
+		} else if choice.FinishReason == "length" {
+			result.StopReason = string(anthropic.BetaStopReasonMaxTokens)
 		}
 		break
 	}
@@ -206,7 +209,7 @@ func HandleResponsesToAnthropicBeta(rs *responses.Response, model string) anthro
 			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
 				arguments = make(map[string]interface{})
 			}
-			contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(output.ID, arguments, output.Name))
+			contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(responsesToolCallID(output), arguments, output.Name))
 			wire.StopReason = string(anthropic.BetaStopReasonToolUse)
 		}
 	}
@@ -216,6 +219,13 @@ func HandleResponsesToAnthropicBeta(rs *responses.Response, model string) anthro
 			if content.Type == "reasoning_text" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
 			}
+		}
+	}
+	if rs.Status == "incomplete" {
+		if rs.IncompleteDetails.Reason == "content_filter" {
+			wire.StopReason = string(anthropic.BetaStopReasonRefusal)
+		} else {
+			wire.StopReason = string(anthropic.BetaStopReasonMaxTokens)
 		}
 	}
 
@@ -268,7 +278,7 @@ func HandleResponsesToAnthropicV1(rs *responses.Response, model string) anthropi
 			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
 				arguments = make(map[string]interface{})
 			}
-			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(output.ID, arguments, output.Name))
+			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(responsesToolCallID(output), arguments, output.Name))
 			wire.StopReason = "tool_use"
 		}
 	}
@@ -278,6 +288,13 @@ func HandleResponsesToAnthropicV1(rs *responses.Response, model string) anthropi
 			if content.Type == "reasoning_text" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
 			}
+		}
+	}
+	if rs.Status == "incomplete" {
+		if rs.IncompleteDetails.Reason == "content_filter" {
+			wire.StopReason = "refusal"
+		} else {
+			wire.StopReason = "max_tokens"
 		}
 	}
 
@@ -296,6 +313,13 @@ func HandleResponsesToAnthropicV1(rs *responses.Response, model string) anthropi
 	var msg anthropic.Message
 	json.Unmarshal(jsonBytes, &msg)
 	return msg
+}
+
+func responsesToolCallID(output responses.ResponseOutputItemUnion) string {
+	if output.CallID != "" {
+		return output.CallID
+	}
+	return output.ID
 }
 
 // resolveResponsesArguments extracts the arguments string from a Responses API output item.
