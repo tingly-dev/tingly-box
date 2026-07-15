@@ -8,6 +8,7 @@ interface FeatureFlagsContextType {
     skillIde: boolean;
     enableGuardrails: boolean;
     enableMCP: boolean;
+    enableTasks: boolean;
     loading: boolean;
     refresh: () => void;
 }
@@ -32,20 +33,23 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const [skillIde, setSkillIde] = useState(false);
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [enableMCP, setEnableMCP] = useState(false);
+    const [enableTasks, setEnableTasks] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const loadFlags = async () => {
         try {
-            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult] = await Promise.all([
+            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, taskResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_user'),
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
+                api.getScenarioFlag('_global', 'task'),
             ]);
             setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
+            setEnableTasks(taskResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
             // Don't log to console to avoid noise during initial auth
@@ -67,7 +71,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     };
 
     return (
-        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, enableMCP, loading, refresh }}>
+        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableGuardrails, enableMCP, enableTasks, loading, refresh }}>
             {children}
         </FeatureFlagsContext.Provider>
     );

@@ -1,5 +1,5 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
-import { Psychology as IconBrain, Shield as IconShield, SettingsApplications } from '@/components/icons';
+import { Psychology as IconBrain, Shield as IconShield, SettingsApplications, EventNote } from '@/components/icons';
 import {Alert, Box, Chip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -19,6 +19,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [mcpEnabled, setMCPEnabled] = useState(false);
+    const [taskEnabled, setTaskEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const {refresh} = useFeatureFlags();
 
@@ -42,6 +43,9 @@ const GlobalExperimentalFeatures: React.FC = () => {
             // Load MCP flag
             const mcpResult = await api.getScenarioFlag('_global', 'mcp');
             setMCPEnabled(mcpResult?.data?.value || false);
+
+            const taskResult = await api.getScenarioFlag('_global', 'task');
+            setTaskEnabled(taskResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -102,6 +106,13 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 console.error('Failed to set MCP:', err);
                 loadFeatures();
             });
+    };
+
+    const toggleTask = () => {
+        const newValue = !taskEnabled;
+        api.setScenarioFlag('_global', 'task', newValue).then((result) => {
+            if (result.success) { setTaskEnabled(newValue); refresh(); } else { loadFeatures(); }
+        }).catch(loadFeatures);
     };
 
     useEffect(() => {
@@ -197,6 +208,14 @@ const GlobalExperimentalFeatures: React.FC = () => {
                         {t('system.experimentalFeatures.mcpEnabledInfo')}
                     </Typography>
                 </Alert>
+            )}
+
+            {featureRow(
+                <EventNote sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.tasks', { defaultValue: 'Tasks' }),
+                t('system.experimentalFeatures.enableTasks', { defaultValue: 'Schedule Claude Code or Codex to work in a persistent workspace' }),
+                taskEnabled,
+                toggleTask,
             )}
 
         </Box>
