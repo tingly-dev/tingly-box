@@ -13,9 +13,11 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
+	protocolguardrail "github.com/tingly-dev/tingly-box/internal/protocol/stage/guardrail"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
@@ -45,6 +47,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	stageRecording *protocolStageRequestRecording,
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
+	guardrailsEnabled := ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c))
 	stageTarget := target
 	if mcpEnabled && target == protocol.TypeAnthropicV1 {
 		stageTarget = protocol.TypeAnthropicBeta
@@ -60,7 +63,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	} else if !ph.shouldUseProtocolStage(c, protocol.TypeAnthropicV1, stageTarget, protocolstage.AllBridgeCapabilities) {
 		return false
 	}
-	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
+	if guardrailsEnabled && !mcpEnabled {
 		logProtocolStageFallback(c, protocol.TypeAnthropicV1, target, "Guardrails still use the legacy Anthropic V1 lifecycle")
 		return false
 	}
@@ -108,6 +111,28 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 			clientTransforms,
 			protocolStageTransformOptions(ph, c)...,
 		),
+	}
+	if guardrailsEnabled {
+		// MCP has already promoted the V1 request into the Beta working
+		// protocol. Reuse the Beta Guardrail at that stable boundary; V1
+		// requests without MCP remain on their complete legacy lifecycle.
+		guardrailStage, guardrailErr := protocolguardrail.NewAnthropicBeta(protocolguardrail.AnthropicBetaConfig{
+			Runtime: ph.currentGuardrailsRuntime(),
+			BaseInput: BuildGuardrailsBaseInput(
+				c,
+				actualModel,
+				provider,
+				guardrailscore.DirectionRequest,
+				nil,
+			),
+			Observe: protocolStageGuardrailObserver(c),
+		})
+		if guardrailErr != nil {
+			requestErr = guardrailErr
+			ph.FailAttemptSetup(c, guardrailErr)
+			return true
+		}
+		stages = append(stages, guardrailStage)
 	}
 	if mcpEnabled {
 		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, false)

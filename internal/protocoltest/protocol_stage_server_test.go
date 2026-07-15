@@ -33,6 +33,13 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		wantResponseModel bool
 	}{
 		{name: "default chat route legacy", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, wantHeader: "legacy"},
+		{
+			name:       "default v1 MCP Guardrail route remains legacy",
+			opts:       []TestEnvOption{NewTestEnvOptionWithMCP(), NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime())},
+			source:     protocol.TypeAnthropicV1,
+			target:     protocol.TypeOpenAIChat,
+			wantHeader: "legacy",
+		},
 		{name: "stage chat nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
 		{name: "stage chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage"},
 		{name: "stage chat to responses nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIResponses, wantHeader: "stage", wantResponseModel: true},
@@ -84,6 +91,17 @@ func TestServerProtocolStageSelection(t *testing.T) {
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
 			source:     protocol.TypeOpenAIResponses,
 			target:     protocol.TypeOpenAIResponses,
+			wantHeader: "stage",
+		},
+		{
+			name: "stage v1 composes MCP and Guardrail through beta",
+			opts: []TestEnvOption{
+				NewTestEnvOptionWithProtocolStage(),
+				NewTestEnvOptionWithMCP(),
+				NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime()),
+			},
+			source:     protocol.TypeAnthropicV1,
+			target:     protocol.TypeOpenAIChat,
 			wantHeader: "stage",
 		},
 	}

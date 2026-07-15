@@ -284,6 +284,10 @@ Consequences:
 This order is fixed by product semantics. Phase 4 does not introduce a user
 setting for stage order.
 
+V1 uses this composition only when MCP has already promoted its request to the
+Beta working protocol. Guardrails-only V1 retains the legacy lifecycle; the
+presence of Guardrails never performs an independent V1 cutover.
+
 ## Recording and Usage
 
 `RequestRecord` and `UsageRecord` remain separate concerns.
@@ -338,6 +342,10 @@ Selection is per provider attempt:
 
 Once a Stage attempt begins, it never falls back into legacy mid-attempt.
 Rollback is a restart without `--stage`.
+
+Compatibility never activates this path by itself: MCP enablement, Guardrails,
+and a complete Beta topology are necessary feature conditions, but the
+process-level `--stage` choice remains the first and mandatory gate.
 
 The production wiring checkpoint implements:
 
