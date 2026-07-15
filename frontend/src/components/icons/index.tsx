@@ -140,6 +140,7 @@ import {
     IconFileText,
     IconDeviceRemote,
     IconZoomIn,
+    IconCloud,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -318,6 +319,7 @@ export const Circle = tablerMui(IconCircleFilled);
 export const Handyman = tablerMui(IconTools);
 export const Server = tablerMui(IconServer);
 export const CloudDownload = tablerMui(IconWorldDownload);
+export const Cloud = tablerMui(IconCloud);
 
 // --- Communication -----------------------------------------------------------
 export const MessageReport = tablerMui(IconMessageReport);

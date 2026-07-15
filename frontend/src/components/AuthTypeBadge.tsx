@@ -23,6 +23,12 @@ export const AuthTypeBadge = ({ authType, sx = {} }: AuthTypeBadgeProps) => {
                 return 'Basic';
             case 'vmodel':
                 return 'Virtual';
+            case 'aws_sigv4':
+                return 'Bedrock';
+            case 'gcp_sa':
+                return 'Vertex';
+            case 'azure_key':
+                return 'Azure';
             default:
                 return authType || 'Unknown';
         }

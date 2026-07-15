@@ -1,5 +1,6 @@
-import {Add, Close, Computer, Key, Login, Search, Language, Description, Upload} from '@/components/icons';
+import {Add, Close, Cloud, Computer, Key, Login, Search, Language, Description, Upload} from '@/components/icons';
 import RegionBadge from './RegionBadge';
+import {CLOUD_PRESETS} from './cloud/cloudCredentialSchema';
 import {
     Box,
     Card,
@@ -26,6 +27,7 @@ export type ConnectSelection =
     | {kind: 'key'; provider: UniqueProvider}
     | {kind: 'oauth'; providerId: string}
     | {kind: 'local'; provider: UniqueProvider}
+    | {kind: 'cloud'; presetId: string}
     | {kind: 'custom'}
     | {kind: 'import'};
 
@@ -45,13 +47,14 @@ interface ProviderListContentProps {
     wide?: boolean; // If true, use wider grid layout (2-3 columns)
 }
 
-type Accent = 'custom' | 'oauth' | 'key' | 'local';
+type Accent = 'custom' | 'oauth' | 'key' | 'local' | 'cloud';
 
 const ACCENT: Record<Accent, string> = {
     custom: 'secondary.main',
     oauth: 'success.main',
     key: 'primary.main',
     local: 'warning.main',
+    cloud: 'info.main',
 };
 
 const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: number; accent: Accent}> = ({
@@ -70,7 +73,7 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
                     width: 26, height: 26, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color,
-                    bgcolor: (theme) => alpha(theme.palette[accent === 'key' ? 'primary' : accent === 'oauth' ? 'success' : accent === 'local' ? 'warning' : 'secondary'].main, 0.12),
+                    bgcolor: (theme) => alpha(theme.palette[accent === 'key' ? 'primary' : accent === 'oauth' ? 'success' : accent === 'local' ? 'warning' : accent === 'cloud' ? 'info' : 'secondary'].main, 0.12),
                 }}
             >
                 {icon}
@@ -240,6 +243,9 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
         ? oauthProviders.filter((p) => `${p.name} ${p.displayName} ${p.id}`.toLowerCase().includes(needle.toLowerCase()))
         : oauthProviders;
     const showCustom = !needle || 'custom endpoint import'.includes(needle);
+    const filteredCloud = needle
+        ? CLOUD_PRESETS.filter((p) => `${p.name} ${p.subtitle} ${p.authType}`.toLowerCase().includes(needle.toLowerCase()))
+        : CLOUD_PRESETS;
 
     // Group key providers by region (CN vs Global vs Self-hosted)
     const {cnKeyProviders, globalKeyProviders, selfHostedProviders} = useMemo(() => {
@@ -263,11 +269,12 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     const selfHostedBadge = {label: 'Self-hosted', color: '#e37400', bg: '#fef3e0'};
     const cnBadge = {label: 'CN', color: '#d93025', bg: '#fce8e6'};
     const globalBadge = {label: 'Global', color: '#1967d2', bg: '#e8f0fe'};
+    const cloudBadge = {label: 'Cloud', color: '#1a73e8', bg: '#e8f0fe'};
 
     const protocolMeta = (p: UniqueProvider) =>
         [p.supportsOpenAI && 'OpenAI', p.supportsAnthropic && 'Anthropic'].filter(Boolean).join(' · ') || 'Custom API';
 
-    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && selfHostedProviders.length === 0 && !showCustom;
+    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && selfHostedProviders.length === 0 && filteredCloud.length === 0 && !showCustom;
 
     return (
         <Box>
@@ -341,6 +348,24 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                     badge={oauthBadge}
                                     showDetails={showDetails}
                                     onClick={() => onSelect({kind: 'oauth', providerId: p.id})}
+                                />
+                            ))}
+                        </CardGrid>
+                    </>
+                )}
+
+                {filteredCloud.length > 0 && (
+                    <>
+                        <SectionHeader icon={<Cloud fontSize="small"/>} title="Cloud" count={filteredCloud.length} accent="cloud"/>
+                        <CardGrid wide={wide}>
+                            {filteredCloud.map((p) => (
+                                <ProviderCard
+                                    key={`cloud-${p.id}`}
+                                    icon={<ProviderIcon identifier={p.icon} size={26}/>}
+                                    name={p.name}
+                                    meta={p.subtitle}
+                                    badge={cloudBadge}
+                                    onClick={() => onSelect({kind: 'cloud', presetId: p.id})}
                                 />
                             ))}
                         </CardGrid>

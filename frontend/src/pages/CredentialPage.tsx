@@ -7,6 +7,7 @@ import OAuthTable from '@/components/OAuthTable.tsx';
 import PageHeader from '@/components/PageHeader';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
+import CloudProviderDialog from '@/components/cloud/CloudProviderDialog';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
@@ -50,6 +51,9 @@ const CredentialPage = () => {
     const [showImportModal, setShowImportModal] = useState(false);
     const [importing, setImporting] = useState(false);
 
+    // Cloud-credential add flow (Bedrock/Vertex/Azure) — its own dialog, like OAuth.
+    const [cloudPresetId, setCloudPresetId] = useState<string | null>(null);
+
     useEffect(() => { loadProviders(); }, []);
 
     const { quotaData, refreshing, refreshQuota } = useProviderQuota(providers, { fetchOnMount: true });
@@ -79,6 +83,7 @@ const CredentialPage = () => {
             setOAuthAutoStartId(providerId);
             setOAuthDialogOpen(true);
         },
+        onCloud: (presetId) => setCloudPresetId(presetId),
     });
 
     const loadProviders = async () => {
@@ -246,6 +251,15 @@ const CredentialPage = () => {
 
             {/* Unified provider picker */}
             <ConnectProviderDialog open={connectDialogOpen} onClose={handleCloseConnect} onSelect={handleConnectSelect}/>
+
+            <CloudProviderDialog
+                open={cloudPresetId !== null}
+                presetId={cloudPresetId}
+                onClose={() => setCloudPresetId(null)}
+                onSuccess={loadProviders}
+                onBack={handleConnectAIClick}
+                onNotification={showNotification}
+            />
 
             {/* OAuth Add Dialog */}
             <OAuthDialog open={oauthDialogOpen} autoStartProviderId={oauthAutoStartId} reauthProviderUuid={oauthReauthUuid} onClose={() => { setOAuthDialogOpen(false); setOAuthAutoStartId(null); setOAuthReauthUuid(null); }} onSuccess={handleOAuthSuccess}/>

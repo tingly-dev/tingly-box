@@ -9,6 +9,8 @@ interface UseProviderDialogOptions {
     onImport?: () => void;
     /** Invoked when the user picks an OAuth sign-in provider. */
     onOAuth?: (providerId: string) => void;
+    /** Invoked when the user picks a cloud-credential provider (Bedrock/Vertex/Azure). */
+    onCloud?: (presetId: string) => void;
 }
 
 // ── Shared: ConnectSelection → form data ────────────────────────────
@@ -37,7 +39,7 @@ const emptyForm = (apiStyle?: 'openai' | 'anthropic'): EnhancedProviderFormData 
  * Returns null when the picker result doesn't open the form (oauth / import).
  */
 export function buildProviderFormData(selection: ConnectSelection): ConnectFormResult | null {
-    if (selection.kind === 'oauth' || selection.kind === 'import') {
+    if (selection.kind === 'oauth' || selection.kind === 'import' || selection.kind === 'cloud') {
         return null;
     }
 
@@ -89,7 +91,7 @@ export const useProviderDialog = (
     showNotification: (message: string, severity: 'success' | 'error') => void,
     options: UseProviderDialogOptions = {}
 ): UseProviderDialogReturn => {
-    const { defaultApiStyle, onProviderAdded, onImport, onOAuth } = options;
+    const { defaultApiStyle, onProviderAdded, onImport, onOAuth, onCloud } = options;
 
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
     const [connectDialogOpen, setConnectDialogOpen] = useState(false);
@@ -118,16 +120,17 @@ export const useProviderDialog = (
 
         const built = buildProviderFormData(selection);
         if (!built) {
-            // oauth / import — handled by caller via other dialogs
+            // oauth / import / cloud — handled by caller via their own dialogs
             if (selection.kind === 'oauth') onOAuth?.(selection.providerId);
             if (selection.kind === 'import') onImport?.();
+            if (selection.kind === 'cloud') onCloud?.(selection.presetId);
             return;
         }
 
         setProviderFormData(built.formData);
         setOptionalEditableToken(built.optionalEditableToken);
         setProviderDialogOpen(true);
-    }, [defaultApiStyle, onImport, onOAuth]);
+    }, [defaultApiStyle, onImport, onOAuth, onCloud]);
 
     const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();

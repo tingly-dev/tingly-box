@@ -250,32 +250,38 @@ leave a frontend placeholder and tell the user codegen must run. Also give
 
 Ref: `.design/connect-ai-flow.md`, `.design/ux-principles.md`.
 
-### 8.1 Picker — a new section, not a new mode
+### 8.1 Picker — a new section, not a new mode (implemented)
 
-The picker already groups Custom / OAuth / Self-hosted / API-key
-(`ConnectProviderDialog.tsx:24`). Add a **"Cloud"** section (Bedrock / Vertex /
-Azure cards) with a distinct badge. Selecting a card carries a new
-`ConnectSelection` kind `cloud` with the target `auth_type` + `api_style`
-pre-filled from the template — consistent with how `key`/`local` pre-fill.
-Do **not** add a separate top-level mode toggle (UX principle: eliminate mode
-pickers).
+The picker groups Custom / OAuth / **Cloud** / Self-hosted / API-key
+(`ConnectProviderDialog.tsx`). The Cloud section lists Bedrock / Vertex-Claude /
+Vertex-Gemini / Azure cards with an info-tinted badge. Selecting a card carries a
+new `ConnectSelection` kind `{kind:'cloud', presetId}`. No top-level mode toggle
+(UX principle: eliminate mode pickers). Per decision #1, Vertex is split into two
+cards ("Vertex — Claude" `api_style=anthropic`, "Vertex — Gemini"
+`api_style=google`) so routing is unambiguous.
 
-### 8.2 Form — per-cloud field sets
+### 8.2 Form — a dedicated dialog, not the protocol-slot form (implemented)
 
-`ProviderFormDialog` renders the credential fields for the chosen `auth_type`
-(driven by a small field-schema map, mirroring §5). Concrete-value inputs, not
-aliases (UX principle):
+Cloud credentials do not fit `ProviderFormDialog` (built around protocol slots +
+a single bearer token), so — mirroring how OAuth uses its own `OAuthDialog` —
+cloud providers get **`components/cloud/CloudProviderDialog.tsx`**, driven by a
+per-cloud field schema in **`components/cloud/cloudCredentialSchema.ts`** (the
+frontend mirror of `ai.CredentialSchema`; field keys must match). Concrete-value
+inputs, not aliases; secrets are password fields with a reveal toggle; optional
+fields (session/bearer token, deployment, proxy) sit under an Advanced divider.
+The dialog computes a meaningful `api_base` from the fields (adapter ignores it,
+but the create API requires it) and POSTs `{name, api_style, auth_type,
+credential, ...}` via `api.addProvider`.
 
-- **Bedrock**: Access Key ID, Secret Access Key (password), Session Token
-  (optional, advanced), Region (select of known Bedrock regions). Or a "Use
-  Bedrock API key" toggle → single bearer field.
-- **Vertex**: Project ID, Location (select), Service Account JSON (multiline /
-  file drop, password-masked once set). Model-family (Claude / Gemini) chooses
-  `api_style` — surface it explicitly since it changes routing.
-- **Azure**: Endpoint, API Version, API Key (password), Deployment (optional).
+Wiring: `useProviderDialog` routes the `cloud` kind to an `onCloud(presetId)`
+callback (like `onOAuth`/`onImport`); `CredentialPage` opens the dialog.
+`AuthTypeBadge` renders Bedrock/Vertex/Azure labels for the list.
 
-Masking round-trip: on edit, secrets come back masked; an unchanged masked field
-must not overwrite the stored secret (handler treats empty/sentinel as "keep").
+**Not yet done (frontend):** editing an existing cloud provider still opens the
+generic edit form; a cloud-aware edit path (and the masked-secret round-trip)
+plus a signed Test-Connection are the remaining follow-ups. Cloud presets are
+currently defined in `cloudCredentialSchema.ts` rather than seeded from
+`providers.json` (Phase 4).
 
 ### 8.3 Badges + types
 
