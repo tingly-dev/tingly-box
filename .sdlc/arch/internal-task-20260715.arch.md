@@ -8,7 +8,7 @@
 
 ## Overview
 
-`internal/task` 是一个已实现但尚未接入产品的单进程持久任务队列。它提供延时触发、按 key 串行、取消、重试和启动恢复；当前状态机面向短作业，成功后一定终结，不支持同一 Task 睡眠后再次唤醒或等待人工输入。
+`internal/task` 已演进并接入实验性 Task 产品面。它提供延时/重复触发、按 workspace 串行、取消、重试、显式 reschedule、等待人工输入和启动恢复；agent Task 在同一 workspace/native session 中执行 bounded runs，并可通过 Payload 游标顺序推进多个显式步骤。
 
 ## Components
 
@@ -30,8 +30,9 @@ Manager.Submit
   → TaskStore.Create(status=pending)
   → Scheduler.FindDueTasks
   → dispatchTask(serialization key)
-  → Handler.Run
-  → succeeded / failed / cancelled / retry pending
+  → Agent Handler.Run(current step or free goal)
+  → complete / reschedule / needs_input / failed / cancelled
+  → checkpoint native session + optional step cursor/outcome
 ```
 
 ## Key Patterns
@@ -41,16 +42,14 @@ Manager.Submit
 - `UpdateStatus` 部分更新避免并发 goroutine 全量覆盖记录。
 - `agentboot.ExecutionHandle` 已支持流事件、审批/问答响应、取消与最终结果。
 - Claude adapter 已支持固定 `SessionID` 的创建和 `--resume`。
+- 顺序步骤存放在版本化 agent Payload；`done` 原子 checkpoint outcome 并推进游标，下一步骤复用同一 Task 行。
 
 ## Constraints / Gaps
 
-- `agentboot.AgentType` 当前只有 Claude；Codex runtime 尚不存在，只有 `ai/agent` 中的配置支持。
-- Handler 成功后 Manager 固定写 `succeeded`，无法返回 `sleeping` / `needs_input`。
-- `TaskStatus.IsTerminal` 与 `Wait` 假定 interrupted 是终态。
-- restart 将 running 一律标记 interrupted；没有自动按 native session 恢复。
-- `Recurrence` 与 `ParentTaskID` 尚未使用，注释假设 recurring child 模型，未被生产验证。
-- `internal/task.Manager` 尚未在 server lifecycle、HTTP API 或 frontend 中接线。
-- 当前 `Attempt/MaxAttempts` 混合“失败重试”和“业务轮次”风险；agent wake-up iteration 不应复用 retry attempt。
+- restart 仍将 running 标记 interrupted；用户通过 Run now 从持久化 session/workspace/step cursor 恢复。
+- 没有独立 Run 表或完整执行历史；步骤只保存完成结果，最近一轮仍使用 Task.Result。
+- 步骤仅支持顺序推进；没有 DAG、分支、并行或步骤级 agent/schedule/retry。
+- native session 丢失时明确失败，不自动创建替代 session。
 
 ## Integration Points
 
@@ -63,4 +62,4 @@ Manager.Submit
 
 ## Recommended Evolution
 
-保留 `internal/task` 作为产品 Task 的起点，修改其完成协议，使一次 handler execution 可以返回 `done`、`sleep` 或 `needs_input`。不要先创建独立 automation/run engine；执行历史在真实产品需求出现后再拆。
+继续以单 Task 行和显式 outcome 作为产品边界。顺序步骤保持为 Payload 内的轻量游标；只有出现跨 Task 依赖、并行或完整审计需求时，才评估独立 Run/workflow 层。

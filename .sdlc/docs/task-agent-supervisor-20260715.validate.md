@@ -10,12 +10,14 @@
 - Codex driver/transport: implemented.
 - Swagger API and Server lifecycle: implemented.
 - Frontend experimental flag and Task page: implemented.
+- Sequential steps: implemented for ordered, same-agent, same-workspace execution.
 - Real CLI end-to-end harness: pending.
 
 ## Architecture checks
 
 - Reuses `internal/task`; no Automation/Run/Engine Task hierarchy added.
 - Reuses the single Task row for cron and supervisor wake-ups.
+- Stores ordered steps, cursor and completed outcomes in the versioned agent Payload; no child Task or Run table added.
 - TB owns configuration, scheduling, workspace and lifecycle.
 - Claude/Codex own their native session stores; TB stores only the session ID.
 - Stable workspace is generated before Submit and is also the serialization key.
@@ -36,6 +38,8 @@
 - Tasks is a standalone top-level activity rather than being hidden under an implementation-oriented section.
 - The list is grouped around user questions: needs attention, active/scheduled and completed.
 - Scheduling and continuous follow-up are separate controls; there is no combined execution-mode picker.
+- Steps are added inline below the goal; there is no simple/sequential mode picker.
+- Detail answers which steps are done, which one is current and what comes next before showing execution metadata.
 - The creation dialog starts with the goal and uses available agents as smart defaults.
 - The detail surface shows concrete workspace, session and resume command values.
 - The primary action is sending an instruction; stop and run-now remain visible secondary actions.
@@ -49,3 +53,4 @@
 - Full execution history and Run table.
 - Page-level one-off approval UI.
 - Real credentialed Claude/Codex end-to-end tests.
+- DAG, branching, parallel steps and per-step execution settings.

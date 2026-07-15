@@ -40,11 +40,14 @@ All commands passed.
 - Codex safe CLI arguments, resume arguments, JSONL parsing, thread-ID capture and final text;
 - immediate Codex native-session checkpoint from thread.started;
 - API creation, unsupported-agent validation and paused-task instruction wake-up;
+- sequential step normalization, one-run-at-a-time prompts, durable outcome checkpoints, automatic advancement and completed-sequence restart;
+- `continue` without follow-up pauses the current step instead of silently completing the sequence;
 - Server and servertest package compile;
 - experimental flag, standalone navigation, grouped task list and actionable task detail;
 - immediate/later/recurring creation flows and orthogonal continuous follow-up controls;
 - mock API flows for empty/loading/error-free visual development;
-- 1440×900 browser screenshots for the Task page and creation dialog.
+- 1440×1000 browser screenshots for sequential detail and the two-step creation dialog;
+- browser assertion confirms Create sends only ordered `steps[].instruction` inputs and renders normalized steps after creation;
 - regression interaction verifies Task reads and writes `_global.extensions.task`, never `/flag/task`, and immediately updates navigation in both directions.
 
 ## Existing unrelated repository failure
