@@ -24,6 +24,7 @@ type ProtocolStageSelector struct {
 func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 	registry, err := stage.NewBridgeRegistry(
 		stage.NewIdentityBridge(protocol.TypeAnthropicV1),
+		anthropicbridge.NewV1ToBeta(),
 		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{}),
 		anthropicbridge.NewV1ToOpenAIResponses(anthropicbridge.ResponsesOptions{}),
 		stage.NewIdentityBridge(protocol.TypeAnthropicBeta),
@@ -40,6 +41,29 @@ func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 		panic(fmt.Sprintf("construct Protocol Stage selector: %v", err))
 	}
 	return &ProtocolStageSelector{enabled: enabled, registry: registry}
+}
+
+// ShouldUseBetaToolLoop returns true only when both explicit boundaries around
+// the Beta-native Tool Loop are capability-complete. Checking the two exact
+// hops prevents a direct source->target Bridge from accidentally claiming that
+// a source->Beta->target topology is available.
+func (s *ProtocolStageSelector) ShouldUseBetaToolLoop(
+	source, target protocol.APIType,
+	required stage.Capabilities,
+) (bool, error) {
+	if !s.Enabled() {
+		return false, nil
+	}
+	if s.registry == nil {
+		return false, fmt.Errorf("Protocol Stage registry is nil")
+	}
+	if _, err := s.registry.ResolveRegistered(source, protocol.TypeAnthropicBeta, required); err != nil {
+		return false, fmt.Errorf("Beta Tool Loop ingress: %w", err)
+	}
+	if _, err := s.registry.ResolveRegistered(protocol.TypeAnthropicBeta, target, required); err != nil {
+		return false, fmt.Errorf("Beta Tool Loop provider boundary: %w", err)
+	}
+	return true, nil
 }
 
 // Enabled reports the immutable server-start choice.

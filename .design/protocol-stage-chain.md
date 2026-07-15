@@ -1,14 +1,14 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–3 and the in-process Phase 4 Tool Loop implementation are
-> complete additively. The Beta-native Tool Loop, MCP/runtime adapters, V1→Beta
-> ingress Bridge, and recording proof are ready, but the Tool Loop is not
-> connected to production handlers yet.
+> Status: Phases 1–4 are active additively behind `--stage`. The Beta-native
+> Tool Loop is connected to production handlers with exact two-boundary
+> selection, V1 request promotion, MCP/runtime + servertool adapters, recording,
+> and side-effect-aware failover.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
 > Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
-> Anthropic Beta requests can include the Beta-native Guardrail Stage; MCP,
-> unsupported routes, and V1 Guardrails remain on legacy. Request recording is
+> Anthropic Beta requests can include the Beta-native Guardrail Stage;
+> unsupported routes and V1 Guardrails remain on legacy. Request recording is
 > available on all twelve routes, including failover across Stage-compatible
 > services, with `recording_v2`.
 >
@@ -27,7 +27,7 @@ lifecycle before the provider is called.
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
-| 4 — Tool Loop canary | In-process implementation complete; production canary pending | Beta-native complete/stream Tool Loop, direct MCP/runtime + servertool adapters, V1→Beta ingress, mixed continuation, and recording are tested; no production routing yet |
+| 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, mixed continuation, recording, and side-effect-aware failover |
 | 5 — Integration/default rollout | Partial | Opt-in handler integration exists; default rollout is intentionally deferred |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |
 
@@ -35,18 +35,18 @@ Production route selection with `--stage`:
 
 | Client protocol | Provider protocol | Plain request | Guardrails enabled | MCP enabled | Protocol recording |
 | --- | --- | --- | --- | --- | --- |
-| `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Legacy | Stage `RequestRecord`, including failover, when every active service is Stage-compatible; otherwise Legacy |
-| `anthropic_beta` | `openai_chat` | Stage through Beta→Chat Bridge | Stage with the same Beta Guardrail | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_beta` | `openai_responses` | Stage through Beta→Responses Bridge | Stage with the same Beta Guardrail | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_v1` | `anthropic_v1` | Stage | Legacy | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_v1` | `openai_responses` | Stage through V1→Responses Bridge | Legacy | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_chat` | `openai_chat` | Stage | Not a supported Guardrails scenario | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Not a supported Guardrails scenario | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_responses` | `openai_responses` | Stage | Not attached on the Responses handler | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_responses` | `anthropic_beta` | Stage through Responses→Beta Bridge | Not attached on the Responses handler | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Not attached on the Responses handler | Legacy | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Beta Tool Loop | Stage `RequestRecord`, including failover, when every active service is Stage-compatible; otherwise Legacy |
+| `anthropic_beta` | `openai_chat` | Stage through Beta→Chat Bridge | Stage with the same Beta Guardrail | Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_beta` | `openai_responses` | Stage through Beta→Responses Bridge | Stage with the same Beta Guardrail | Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_v1` | `anthropic_v1` | Stage | Legacy | V1→Beta Tool Loop; provider request uses Beta | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy | V1→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_v1` | `openai_responses` | Stage through V1→Responses Bridge | Legacy | V1→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_chat` | `openai_chat` | Stage | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_responses` | `openai_responses` | Stage | Not attached on the Responses handler | Responses→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_responses` | `anthropic_beta` | Stage through Responses→Beta Bridge | Not attached on the Responses handler | Responses→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Not attached on the Responses handler | Responses→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | Any other pair | Any | Legacy | Legacy | Legacy | Legacy |
 
 The planned protocol-pair rollout is complete: the three provider-facing
@@ -56,8 +56,8 @@ The production candidate now uses Anthropic Beta as the Tool Loop working
 protocol because Beta has the complete MCP/server-tool surface. V1 requests
 enter it through the lossless V1→Beta promotion Bridge; Chat and Responses use
 their existing Bridges. The earlier Chat-native Tool Loop remains a useful
-lifecycle proof, but production selection still treats MCP as legacy until the
-Beta-native topology is wired behind an explicit canary.
+lifecycle proof; production MCP selection now uses the Beta-native topology
+behind the explicit `--stage` canary.
 
 ## Decision
 
@@ -68,10 +68,10 @@ client protocol to the stage protocol and the stage protocol to the selected
 provider protocol.
 
 The foundations were deliberately built旁路 before handler integration. The
-current canaries connect only the route and Guardrail combinations listed in
-Current Status, behind `--stage`; MCP, server-tool loops, rules containing an
-unsupported provider protocol, and every unsupported combination retain
-whole-request legacy ownership.
+current canaries connect only the route, Guardrail, and Tool Loop combinations
+listed in Current Status, behind `--stage`; rules containing an unsupported
+provider protocol and every unsupported combination retain whole-request
+legacy ownership.
 
 ## Why This Change
 
@@ -461,9 +461,9 @@ provider-scoped mixed continuation is typed and single-consume. V1 requests
 enter Beta through JSON marshal/unmarshal of the V1 subset. Deterministic tests
 cover internal, external, and mixed ownership, max-round/side-effect
 boundaries, usage aggregation, stream close, composed V1→Beta execution, and
-RequestRecord multi-exchange behavior. The next step is intentionally a
-production boundary change: register/build this topology in handler selection
-and validate the real server path. It is not included in this checkpoint.
+RequestRecord multi-exchange behavior. Production selection now validates both
+exact boundaries before constructing the per-attempt topology, and the real
+HTTP harness covers V1 request promotion in complete and streaming modes.
 
 ### Phase 5 — Handler integration and default rollout
 
@@ -477,17 +477,16 @@ has resolved the concrete target protocol but before legacy Base conversion.
 `--stage` is immutable for the server process. The Stage path reuses client
 preparation, target consistency, rule, and vendor transforms as native protocol
 stages; the provider endpoint and HTTP adapter retain their existing ownership.
-Unsupported protocol pairs and MCP-enabled requests remain on legacy. Once a
-Stage attempt has started, it is never replayed through legacy.
+Unsupported protocol pairs and incomplete MCP topologies remain on legacy.
+Once a Stage attempt has started, it is never replayed through legacy.
 
 The native and bridged routes are explicitly enumerated in Current Status;
 registration is always per exact source/target pair.
 `anthropic_v1` remains a separate protocol with its own request, response,
-stream, terminal, and identity registration; it does not inherit Beta's
-identity or Bridge registrations. These routes stay on legacy whenever MCP or
-V2 protocol recording owns part of the request/response lifecycle. All twelve
-registered routes may use Stage recording with failover when every active
-service resolves to a registered provider protocol and MCP is disabled. The
+stream, terminal, and identity registration. MCP promotes only its request into
+the Beta Tool Loop. V1 Guardrails remain on legacy. All twelve registered
+routes may use Stage recording with failover when every active service resolves
+to a registered provider protocol. The
 request scope emits one record; each attempt appends one ordered exchange.
 Guardrails are native only on Beta-source routes; V1 Guardrails still select
 the entire legacy pipeline.

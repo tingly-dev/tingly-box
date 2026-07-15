@@ -19,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/openaibridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
@@ -50,20 +51,16 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 	ruleFlags typ.RuleFlags,
 	stageRecording *protocolStageRequestRecording,
 ) bool {
-	if !ph.shouldUseProtocolStage(
-		c,
-		protocol.TypeOpenAIChat,
-		target,
-		protocolstage.AllBridgeCapabilities,
-	) {
-		return false
-	}
-
-	// The generic MCP transform/tool loop has not moved behind a Stage yet.
-	// Keeping the whole request on legacy is safer than silently omitting tool
-	// injection or executing tools through two owners.
-	if ph.mcpEnabled() {
-		logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "MCP runtime still uses the legacy pipeline")
+	mcpEnabled := ph.mcpEnabled()
+	if mcpEnabled {
+		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeOpenAIChat, target, protocolstage.AllBridgeCapabilities) {
+			return false
+		}
+		if ph.deps.MCPRuntime == nil {
+			logProtocolStageFallback(c, protocol.TypeOpenAIChat, target, "MCP runtime is unavailable")
+			return false
+		}
+	} else if !ph.shouldUseProtocolStage(c, protocol.TypeOpenAIChat, target, protocolstage.AllBridgeCapabilities) {
 		return false
 	}
 	// The response-roundtrip header is an explicit legacy diagnostic. Preserve
@@ -119,6 +116,17 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 			preBase,
 			protocolStageTransformOptions(ph, c)...,
 		),
+	}
+	if mcpEnabled {
+		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, false)
+		if toolLoopErr != nil {
+			requestErr = toolLoopErr
+			ph.FailAttemptSetup(c, toolLoopErr)
+			return true
+		}
+		stages = append(stages, toolLoop)
+	}
+	stages = append(stages,
 		newProtocolTransformStage(
 			"provider_finalize",
 			target,
@@ -132,7 +140,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 			),
 			protocolStageTransformOptions(ph, c)...,
 		),
-	}
+	)
 	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
 		Terminal:             terminal,
 		Stages:               stages,
@@ -171,6 +179,7 @@ func (ph *ProtocolHandler) protocolStageOpenAIChatTarget(
 ) (protocolstage.Endpoint, *protocolstage.BridgeRegistry, error) {
 	registry, err := protocolstage.NewBridgeRegistry(
 		protocolstage.NewIdentityBridge(protocol.TypeOpenAIChat),
+		protocolstage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		openaibridge.NewChatToAnthropicBeta(openaibridge.AnthropicOptions{
 			DefaultMaxTokens:   4096,
 			DisableStreamUsage: disableStreamUsage,
@@ -180,6 +189,14 @@ func (ph *ProtocolHandler) protocolStageOpenAIChatTarget(
 			DefaultMaxTokens:   4096,
 			DisableStreamUsage: disableStreamUsage,
 			ResponseModel:      responseModel,
+		}),
+		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{
+			Compatible:         true,
+			DisableStreamUsage: disableStreamUsage,
+			ResponseModel:      responseModel,
+		}),
+		anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{
+			ResponseModel: responseModel,
 		}),
 	)
 	if err != nil {
@@ -506,6 +523,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
 ) error {
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -514,6 +532,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatComplete(
 		ph.failRequest(c, recorder, err, "Protocol Stage provider request failed")
 		return err
 	}
+	preserveProtocolStageSideEffectBoundary(c, nil, response.SideEffectsCommitted)
 	value, err := protocolStageChatResponseMap(response.Value)
 	if err != nil {
 		ph.failRequest(c, recorder, err, "Protocol Stage response conversion failed")
@@ -586,6 +605,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -609,6 +629,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 		}
 		if nextErr != nil {
 			result := stream.Result()
+			preserveProtocolStageSideEffectBoundary(c, nextErr, result.SideEffectsCommitted)
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, nextErr)
 			} else {
@@ -633,6 +654,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 		if chunkErr != nil {
 			streamErr := chunkErr
 			result := stream.Result()
+			preserveProtocolStageSideEffectBoundary(c, streamErr, result.SideEffectsCommitted)
 			if result.Usage != nil && result.Usage.HasUsage() {
 				ph.trackUsageWithTokenUsage(c, result.Usage, streamErr)
 			} else {
@@ -677,6 +699,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIChatStream(
 	protocolstream.OpenAISSEDone(c)
 	flusher.Flush()
 	result := stream.Result()
+	preserveProtocolStageSideEffectBoundary(c, nil, result.SideEffectsCommitted)
 	if result.Usage != nil && result.Usage.HasUsage() {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}

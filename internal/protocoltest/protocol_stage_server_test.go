@@ -29,6 +29,7 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		target            protocol.APIType
 		streaming         bool
 		wantHeader        string
+		wantUpstream      protocol.APIType
 		wantResponseModel bool
 	}{
 		{name: "default chat route legacy", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, wantHeader: "legacy"},
@@ -57,25 +58,33 @@ func TestServerProtocolStageSelection(t *testing.T) {
 		{name: "stage responses to chat nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, wantHeader: "stage", wantResponseModel: true},
 		{name: "stage responses to chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat, streaming: true, wantHeader: "stage", wantResponseModel: true},
 		{
-			name:       "stage beta keeps MCP on legacy",
+			name:       "stage beta runs MCP tool loop",
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
 			source:     protocol.TypeAnthropicBeta,
 			target:     protocol.TypeAnthropicBeta,
-			wantHeader: "legacy",
+			wantHeader: "stage",
 		},
 		{
-			name:       "stage v1 keeps MCP on legacy",
+			name:         "stage v1 promotes MCP request to beta",
+			opts:         []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
+			source:       protocol.TypeAnthropicV1,
+			target:       protocol.TypeAnthropicV1,
+			wantHeader:   "stage",
+			wantUpstream: protocol.TypeAnthropicBeta,
+		},
+		{
+			name:       "stage chat runs MCP tool loop",
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
-			source:     protocol.TypeAnthropicV1,
-			target:     protocol.TypeAnthropicV1,
-			wantHeader: "legacy",
+			source:     protocol.TypeOpenAIChat,
+			target:     protocol.TypeOpenAIChat,
+			wantHeader: "stage",
 		},
 		{
-			name:       "stage responses keeps MCP on legacy",
+			name:       "stage responses runs MCP tool loop",
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
 			source:     protocol.TypeOpenAIResponses,
 			target:     protocol.TypeOpenAIResponses,
-			wantHeader: "legacy",
+			wantHeader: "stage",
 		},
 	}
 	for _, tt := range tests {
@@ -108,8 +117,12 @@ func TestServerProtocolStageSelection(t *testing.T) {
 			if got := resp.Header.Get("X-Tingly-Protocol-Pipeline"); got != tt.wantHeader {
 				t.Fatalf("pipeline header = %q, want %q", got, tt.wantHeader)
 			}
-			if got := resp.Header.Get("X-Tingly-Upstream-API"); got != string(tt.target) {
-				t.Fatalf("upstream API = %q", got)
+			wantUpstream := tt.wantUpstream
+			if wantUpstream == "" {
+				wantUpstream = tt.target
+			}
+			if got := resp.Header.Get("X-Tingly-Upstream-API"); got != string(wantUpstream) {
+				t.Fatalf("upstream API = %q, want %q", got, wantUpstream)
 			}
 			if tt.wantResponseModel && !strings.Contains(string(responseBody), `"model":"`+model+`"`) {
 				t.Fatalf("response does not expose request model %q: %s", model, responseBody)

@@ -42,3 +42,32 @@ func TestProtocolStageSelector(t *testing.T) {
 		})
 	}
 }
+
+func TestProtocolStageSelectorBetaToolLoop(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		enabled bool
+		source  protocol.APIType
+		target  protocol.APIType
+		want    bool
+		wantErr bool
+	}{
+		{name: "disabled", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta},
+		{name: "beta identity", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, want: true},
+		{name: "v1 promoted to beta", enabled: true, source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicBeta, want: true},
+		{name: "chat through beta to chat", enabled: true, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIChat, want: true},
+		{name: "responses through beta to responses", enabled: true, source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIResponses, want: true},
+		{name: "beta cannot target v1", enabled: true, source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicV1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := NewProtocolStageSelector(tt.enabled).ShouldUseBetaToolLoop(tt.source, tt.target, stage.AllBridgeCapabilities)
+			if got != tt.want || (err != nil) != tt.wantErr {
+				t.Fatalf("ShouldUseBetaToolLoop() = %v, %v; want %v, error=%v", got, err, tt.want, tt.wantErr)
+			}
+		})
+	}
+}

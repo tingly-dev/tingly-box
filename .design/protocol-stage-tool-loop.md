@@ -1,7 +1,8 @@
 # Protocol Stage Tool Loop
 
-> Status: focused Phase 4 design. The in-process Beta implementation and its
-> adapters are complete; production handler selection is intentionally pending.
+> Status: Phase 4 canary active behind `--stage`. The in-process Beta
+> implementation, production handler selection, and real HTTP harness path are
+> complete; default rollout remains deferred.
 >
 > Canonical scope: MCP and server-tool model loops expressed as one
 > `anthropic_beta` Protocol Stage. The broader chain and rollout remain defined
@@ -337,7 +338,7 @@ Selection is per provider attempt:
 Once a Stage attempt begins, it never falls back into legacy mid-attempt.
 Rollback is a restart without `--stage`.
 
-The production wiring checkpoint must:
+The production wiring checkpoint implements:
 
 1. replace the current unconditional MCP→legacy selection with an exact
    topology eligibility check;
@@ -352,7 +353,9 @@ The production wiring checkpoint must:
 6. verify through the real HTTP path with `harness matrix --stage --mcp` before
    calling the canary active.
 
-The current implementation deliberately stops before item 1.
+All six items are implemented. The first real-path canary is the V1→Beta
+promotion in complete and streaming modes through
+`harness matrix --mode=single --stage --mcp`.
 
 ## Diagnostics and UX-First Review
 
@@ -386,14 +389,18 @@ Implemented and committed:
 - lossless V1 request promotion and V1→Beta Bridge;
 - complete/stream RequestRecord multi-exchange proof;
 - composed V1→Beta Tool Loop tests;
-- dormant 54-cell Bridge matrix including V1→Beta and V1→Beta Stage→Chat.
+- dormant 54-cell Bridge matrix including V1→Beta and V1→Beta Stage→Chat;
+- exact two-boundary production selection for all four ingress protocols;
+- production Beta Tool Loop assembly with MCP runtime, servertool executor,
+  provider-scoped continuation, Guardrail ordering, and provider observation;
+- failover suppression after successful tool side effects;
+- real HTTP complete/stream V1→Beta MCP canary through `harness matrix`.
 
 Pending by design:
 
 - optional strict Beta→V1 response/event validation, deferred until a concrete
   compatibility need appears;
-- production handler/selector wiring for `--stage + MCP`;
-- real-path MCP matrix and official-client canary;
+- owned-tool real-path fixture and official-client MCP canary;
 - default rollout and legacy removal.
 
 ## Acceptance Criteria for Production Wiring

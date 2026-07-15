@@ -385,12 +385,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
-	server.mcpRuntime.SetClientPool(server.clientPool)
 	// Auto-register built-in tools (e.g., webtools) if not already present
 	if err := mcpruntime.RegisterBuiltinTools(cfg.GetMCPRuntimeConfig, cfg.SetToolConfig); err != nil {
 		logrus.WithError(err).Warn("mcp: failed to register builtin tools")
 	}
+	// Construct the runtime after registration so a first-run config has the
+	// same usable MCP dependency graph as subsequent restarts.
+	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	server.mcpRuntime.SetClientPool(server.clientPool)
 
 	// Register adviser as virtual tool if configured
 	server.registerAdviserFromConfig()

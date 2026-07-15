@@ -108,11 +108,12 @@ func isRetryableStatus(status int) bool {
 //     (valid only while uncommitted).
 type firstChunkGate struct {
 	gin.ResponseWriter
-	real      gin.ResponseWriter
-	buf       bytes.Buffer
-	hdr       http.Header
-	status    int
-	committed bool
+	real                 gin.ResponseWriter
+	buf                  bytes.Buffer
+	hdr                  http.Header
+	status               int
+	committed            bool
+	sideEffectsCommitted bool
 }
 
 func newFirstChunkGate(w gin.ResponseWriter) *firstChunkGate {
@@ -200,6 +201,24 @@ func (g *firstChunkGate) Written() bool {
 // committed, retry is impossible — bytes have left the process.
 func (g *firstChunkGate) Committed() bool {
 	return g.committed
+}
+
+// SideEffectsCommitted reports whether retrying the attempt could replay an
+// already successful server-owned operation, even though no bytes reached the
+// client yet.
+func (g *firstChunkGate) SideEffectsCommitted() bool {
+	return g.sideEffectsCommitted
+}
+
+// MarkSideEffectsCommittedIfGate records an irreversible in-process action on
+// the active failover gate. It intentionally does not flush buffered output.
+func MarkSideEffectsCommittedIfGate(w gin.ResponseWriter) bool {
+	gate, ok := w.(*firstChunkGate)
+	if !ok {
+		return false
+	}
+	gate.sideEffectsCommitted = true
+	return true
 }
 
 // CommitFirstChunk is the producer's "first real chunk arrived" signal.
@@ -408,6 +427,16 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			fields["routed_model"] = model
 			fields["routed_provider"] = provider.Name
 			logrus.WithContext(c.Request.Context()).WithFields(fields).Infof("[failover] succeeded on attempt %d with %s/%s", i+1, provider.UUID, model)
+			return
+		}
+		if gate.SideEffectsCommitted() {
+			fields := failoverLogFields(c, rule, provider, model, serviceID)
+			fields["stage"] = "failover_side_effect_boundary"
+			fields["attempt"] = i + 1
+			fields["active_services"] = len(activeServices)
+			fields["status"] = gate.Status()
+			logrus.WithContext(c.Request.Context()).WithFields(fields).
+				Warn("[failover] retry stopped because tool side effects were committed")
 			return
 		}
 		status := gate.Status()

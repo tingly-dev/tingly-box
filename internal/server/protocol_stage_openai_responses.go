@@ -18,6 +18,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/responsesbridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
@@ -45,16 +46,16 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	maxAllowed int,
 	stageRecording *protocolStageRequestRecording,
 ) bool {
-	if !ph.shouldUseProtocolStage(
-		c,
-		protocol.TypeOpenAIResponses,
-		target,
-		protocolstage.AllBridgeCapabilities,
-	) {
-		return false
-	}
-	if ph.mcpEnabled() {
-		logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "MCP runtime still uses the legacy pipeline")
+	mcpEnabled := ph.mcpEnabled()
+	if mcpEnabled {
+		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeOpenAIResponses, target, protocolstage.AllBridgeCapabilities) {
+			return false
+		}
+		if ph.deps.MCPRuntime == nil {
+			logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "MCP runtime is unavailable")
+			return false
+		}
+	} else if !ph.shouldUseProtocolStage(c, protocol.TypeOpenAIResponses, target, protocolstage.AllBridgeCapabilities) {
 		return false
 	}
 	if scenarioConfig.IsRecordingEnable() && stageRecording == nil {
@@ -84,6 +85,17 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 			RulePreBaseTransforms(ruleFlags),
 			options...,
 		),
+	}
+	if mcpEnabled {
+		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, false)
+		if toolLoopErr != nil {
+			requestErr = toolLoopErr
+			ph.FailAttemptSetup(c, toolLoopErr)
+			return true
+		}
+		stages = append(stages, toolLoop)
+	}
+	stages = append(stages,
 		newProtocolTransformStage(
 			"provider_finalize",
 			target,
@@ -97,7 +109,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 			),
 			options...,
 		),
-	}
+	)
 	terminal, registry, err := ph.protocolStageOpenAIResponsesTarget(target, provider, actualModel, responseModel, maxAllowed)
 	if err != nil {
 		requestErr = err
@@ -154,8 +166,16 @@ func (ph *ProtocolHandler) protocolStageOpenAIResponsesTarget(
 	})
 	registry, err := protocolstage.NewBridgeRegistry(
 		protocolstage.NewIdentityBridge(protocol.TypeOpenAIResponses),
+		protocolstage.NewIdentityBridge(protocol.TypeAnthropicBeta),
 		responsesToBeta,
 		responsesToChat,
+		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{
+			Compatible:    true,
+			ResponseModel: responseModel,
+		}),
+		anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{
+			ResponseModel: responseModel,
+		}),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build OpenAI Responses Protocol Stage registry: %w", err)
@@ -300,6 +320,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesComplete(
 ) error {
 	result, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -308,6 +329,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesComplete(
 		ph.failRequest(c, nil, err, "OpenAI Responses Protocol Stage provider request failed")
 		return err
 	}
+	preserveProtocolStageSideEffectBoundary(c, nil, result.SideEffectsCommitted)
 	body, err := protocolStageOpenAIResponsesValueJSON(result.Value, responseModel)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)
@@ -384,6 +406,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -407,6 +430,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 		}
 		if nextErr != nil {
 			result := stream.Result()
+			preserveProtocolStageSideEffectBoundary(c, nextErr, result.SideEffectsCommitted)
 			if errors.Is(nextErr, context.Canceled) || protocol.IsContextCanceled(nextErr) {
 				if result.Usage != nil {
 					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
@@ -436,6 +460,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 		eventType, payload, eventErr := protocolStageOpenAIResponsesEventJSON(event.Value, responseModel)
 		if eventErr != nil {
 			streamErr := fmt.Errorf("OpenAI Responses Protocol Stage stream emitted %T: %w", event.Value, eventErr)
+			preserveProtocolStageSideEffectBoundary(c, streamErr, stream.Result().SideEffectsCommitted)
 			if !wrote {
 				ph.FailAttemptSetup(c, streamErr)
 			} else {
@@ -460,6 +485,7 @@ func (ph *ProtocolHandler) serveProtocolStageOpenAIResponsesStream(
 	}
 
 	result := stream.Result()
+	preserveProtocolStageSideEffectBoundary(c, nil, result.SideEffectsCommitted)
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}

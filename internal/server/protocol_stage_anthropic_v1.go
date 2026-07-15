@@ -28,7 +28,8 @@ import (
 )
 
 // tryProtocolStageAnthropicV1 selects only explicitly registered V1-source
-// routes. It deliberately does not reinterpret a V1 request as Anthropic Beta.
+// routes. MCP requests promote to the Beta working protocol; plain requests
+// retain their existing concrete provider protocol.
 func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	c *gin.Context,
 	req *protocol.AnthropicMessagesRequest,
@@ -43,11 +44,20 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	recorder *recording.ProtocolRecorder,
 	stageRecording *protocolStageRequestRecording,
 ) bool {
-	if !ph.shouldUseProtocolStage(c, protocol.TypeAnthropicV1, target, protocolstage.AllBridgeCapabilities) {
-		return false
+	mcpEnabled := ph.mcpEnabled()
+	stageTarget := target
+	if mcpEnabled && target == protocol.TypeAnthropicV1 {
+		stageTarget = protocol.TypeAnthropicBeta
 	}
-	if ph.mcpEnabled() {
-		logProtocolStageFallback(c, protocol.TypeAnthropicV1, target, "MCP runtime still uses the legacy pipeline")
+	if mcpEnabled {
+		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeAnthropicV1, stageTarget, protocolstage.AllBridgeCapabilities) {
+			return false
+		}
+		if ph.deps.MCPRuntime == nil {
+			logProtocolStageFallback(c, protocol.TypeAnthropicV1, stageTarget, "MCP runtime is unavailable")
+			return false
+		}
+	} else if !ph.shouldUseProtocolStage(c, protocol.TypeAnthropicV1, stageTarget, protocolstage.AllBridgeCapabilities) {
 		return false
 	}
 	if ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c)) {
@@ -67,17 +77,17 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	}
 
 	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
-		setProbeUpstreamHeadersForTarget(c, target, rule, provider)
+		setProbeUpstreamHeadersForTarget(c, stageTarget, rule, provider)
 		c.Header(protocolPipelineHeader, "stage")
 	}
 
 	scenarioFlags, clientTransforms := protocolStageAnthropicV1ClientTransforms(scenarioConfig, ruleFlags)
 	providerTransforms := appendProtocolStageTransforms(
-		[]transform.Transform{transform.NewConsistencyTransform(target)},
+		[]transform.Transform{transform.NewConsistencyTransform(stageTarget)},
 		RulePreVendorTransforms(ruleFlags),
 		[]transform.Transform{vendorTransformShared},
 	)
-	terminal, registry, err := ph.protocolStageAnthropicV1Target(target, provider, actualModel, responseModel, scenarioFlags)
+	terminal, registry, err := ph.protocolStageAnthropicV1Target(stageTarget, provider, actualModel, responseModel, scenarioFlags)
 	if err != nil {
 		requestErr = err
 		ph.FailAttemptSetup(c, err)
@@ -98,16 +108,27 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 			clientTransforms,
 			protocolStageTransformOptions(ph, c)...,
 		),
+	}
+	if mcpEnabled {
+		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, false)
+		if toolLoopErr != nil {
+			requestErr = toolLoopErr
+			ph.FailAttemptSetup(c, toolLoopErr)
+			return true
+		}
+		stages = append(stages, toolLoop)
+	}
+	stages = append(stages,
 		newProtocolTransformStage(
 			"provider_finalize",
-			target,
+			stageTarget,
 			provider,
 			scenarioFlags,
 			isStreaming,
 			providerTransforms,
 			protocolStageTransformOptions(ph, c)...,
 		),
-	}
+	)
 	endpoint, err := protocolstage.BuildTopology(protocolstage.TopologyConfig{
 		Terminal:             terminal,
 		Stages:               stages,
@@ -121,7 +142,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 		return true
 	}
 
-	logProtocolStageEntry(c, protocol.TypeAnthropicV1, target, stages, isStreaming)
+	logProtocolStageEntry(c, protocol.TypeAnthropicV1, stageTarget, stages, isStreaming)
 
 	call := protocolstage.Call{
 		Request: req.MessageNewParams,
@@ -151,12 +172,22 @@ func (ph *ProtocolHandler) protocolStageAnthropicV1Target(
 	disableStreamUsage := scenarioFlags != nil && scenarioFlags.SkipUsage
 	registry, err := protocolstage.NewBridgeRegistry(
 		protocolstage.NewIdentityBridge(protocol.TypeAnthropicV1),
+		protocolstage.NewIdentityBridge(protocol.TypeAnthropicBeta),
+		anthropicbridge.NewV1ToBeta(),
 		anthropicbridge.NewV1ToOpenAIChat(anthropicbridge.ChatOptions{
 			Compatible:         true,
 			DisableStreamUsage: disableStreamUsage,
 			ResponseModel:      responseModel,
 		}),
 		anthropicbridge.NewV1ToOpenAIResponses(anthropicbridge.ResponsesOptions{
+			ResponseModel: responseModel,
+		}),
+		anthropicbridge.NewBetaToOpenAIChat(anthropicbridge.ChatOptions{
+			Compatible:         true,
+			DisableStreamUsage: disableStreamUsage,
+			ResponseModel:      responseModel,
+		}),
+		anthropicbridge.NewBetaToOpenAIResponses(anthropicbridge.ResponsesOptions{
 			ResponseModel: responseModel,
 		}),
 	)
@@ -166,6 +197,8 @@ func (ph *ProtocolHandler) protocolStageAnthropicV1Target(
 	switch target {
 	case protocol.TypeAnthropicV1:
 		return &anthropicV1ProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
+	case protocol.TypeAnthropicBeta:
+		return &anthropicBetaProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeOpenAIChat:
 		return &openAIChatProviderEndpoint{ph: ph, provider: provider, model: actualModel}, registry, nil
 	case protocol.TypeOpenAIResponses:
@@ -314,6 +347,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Complete(
 ) error {
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -322,6 +356,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Complete(
 		ph.failRequest(c, recorder, err, "Anthropic V1 Protocol Stage provider request failed")
 		return err
 	}
+	preserveProtocolStageSideEffectBoundary(c, nil, response.SideEffectsCommitted)
 	message, ok := response.Value.(*anthropic.Message)
 	if !ok || message == nil {
 		responseErr := fmt.Errorf("Anthropic V1 Protocol Stage response has type %T", response.Value)
@@ -391,6 +426,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -416,6 +452,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 		}
 		if nextErr != nil {
 			result := stream.Result()
+			preserveProtocolStageSideEffectBoundary(c, nextErr, result.SideEffectsCommitted)
 			if errors.Is(nextErr, context.Canceled) || protocol.IsContextCanceled(nextErr) {
 				if result.Usage != nil {
 					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
@@ -442,6 +479,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 		eventType, payload, eventErr := protocolStageAnthropicV1EventJSON(event.Value, responseModel)
 		if eventErr != nil {
 			streamErr := fmt.Errorf("Anthropic V1 Protocol Stage stream emitted %T", event.Value)
+			preserveProtocolStageSideEffectBoundary(c, eventErr, stream.Result().SideEffectsCommitted)
 			if !wrote {
 				ph.FailAttemptSetup(c, errors.Join(streamErr, eventErr))
 			} else {
@@ -474,11 +512,13 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicV1Stream(
 		setProtocolStageAnthropicSSEHeaders(c)
 	}
 	if sawMessageStart && !sawMessageStop {
+		preserveProtocolStageSideEffectBoundary(c, nil, stream.Result().SideEffectsCommitted)
 		protocolstream.MarshalAndSendErrorEvent(c, "upstream stream ended before completion", "stream_error", "incomplete_stream")
 		flusher.Flush()
 		return errors.New("Anthropic V1 Protocol Stage stream ended before message_stop")
 	}
 	result := stream.Result()
+	preserveProtocolStageSideEffectBoundary(c, nil, result.SideEffectsCommitted)
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}

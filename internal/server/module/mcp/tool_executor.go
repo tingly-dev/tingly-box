@@ -14,7 +14,6 @@ type ServerToolExecutor struct {
 // ToolExecutorServer defines the server methods needed for tool execution
 type ToolExecutorServer interface {
 	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error)
-	CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error)
 }
 
 func NewServerToolExecutor(s ToolExecutorServer) *ServerToolExecutor {

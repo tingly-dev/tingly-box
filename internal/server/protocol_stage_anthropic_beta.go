@@ -42,20 +42,16 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 	recorder *recording.ProtocolRecorder,
 	stageRecording *protocolStageRequestRecording,
 ) bool {
-	if !ph.shouldUseProtocolStage(
-		c,
-		protocol.TypeAnthropicBeta,
-		target,
-		protocolstage.AllBridgeCapabilities,
-	) {
-		return false
-	}
-
-	// These features still own parts of the legacy Beta lifecycle. Keep the
-	// entire attempt on legacy until each one is represented by a native Stage;
-	// partial execution would silently omit tool-loop or recording work.
-	if ph.mcpEnabled() {
-		logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "MCP runtime still uses the legacy pipeline")
+	mcpEnabled := ph.mcpEnabled()
+	if mcpEnabled {
+		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeAnthropicBeta, target, protocolstage.AllBridgeCapabilities) {
+			return false
+		}
+		if ph.deps.MCPRuntime == nil {
+			logProtocolStageFallback(c, protocol.TypeAnthropicBeta, target, "MCP runtime is unavailable")
+			return false
+		}
+	} else if !ph.shouldUseProtocolStage(c, protocol.TypeAnthropicBeta, target, protocolstage.AllBridgeCapabilities) {
 		return false
 	}
 	if recorder != nil || stageRecording != nil {
@@ -127,6 +123,15 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 			return true
 		}
 		stages = append(stages, guardrailStage)
+	}
+	if mcpEnabled {
+		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, HasNativeAdvisorBeta(req))
+		if toolLoopErr != nil {
+			requestErr = toolLoopErr
+			ph.FailAttemptSetup(c, toolLoopErr)
+			return true
+		}
+		stages = append(stages, toolLoop)
 	}
 	stages = append(stages,
 		newProtocolTransformStage(
@@ -260,6 +265,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaComplete(
 ) error {
 	response, err := endpoint.Complete(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -268,6 +274,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaComplete(
 		ph.failRequest(c, recorder, err, "Anthropic Beta Protocol Stage provider request failed")
 		return err
 	}
+	preserveProtocolStageSideEffectBoundary(c, nil, response.SideEffectsCommitted)
 	message, ok := response.Value.(*anthropic.BetaMessage)
 	if !ok || message == nil {
 		responseErr := fmt.Errorf("Anthropic Beta Protocol Stage response has type %T", response.Value)
@@ -347,6 +354,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 	}
 	stream, err := endpoint.Stream(c.Request.Context(), call)
 	if err != nil {
+		preserveProtocolStageSideEffectBoundary(c, err, false)
 		var setupErr *protocolStageSetupError
 		if errors.As(err, &setupErr) {
 			ph.FailAttemptSetup(c, setupErr)
@@ -372,6 +380,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 		}
 		if nextErr != nil {
 			result := stream.Result()
+			preserveProtocolStageSideEffectBoundary(c, nextErr, result.SideEffectsCommitted)
 			if errors.Is(nextErr, context.Canceled) || protocol.IsContextCanceled(nextErr) {
 				if result.Usage != nil {
 					ph.trackUsageWithTokenUsage(c, result.Usage, nil)
@@ -398,6 +407,7 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 		eventType, payload, eventErr := protocolStageAnthropicBetaEventJSON(event.Value, responseModel)
 		if eventErr != nil {
 			streamErr := fmt.Errorf("Anthropic Beta Protocol Stage stream emitted %T", event.Value)
+			preserveProtocolStageSideEffectBoundary(c, eventErr, stream.Result().SideEffectsCommitted)
 			if !wrote {
 				ph.FailAttemptSetup(c, errors.Join(streamErr, eventErr))
 			} else {
@@ -430,11 +440,13 @@ func (ph *ProtocolHandler) serveProtocolStageAnthropicBetaStream(
 		setProtocolStageAnthropicSSEHeaders(c)
 	}
 	if sawMessageStart && !sawMessageStop {
+		preserveProtocolStageSideEffectBoundary(c, nil, stream.Result().SideEffectsCommitted)
 		protocolstream.MarshalAndSendErrorEvent(c, "upstream stream ended before completion", "stream_error", "incomplete_stream")
 		flusher.Flush()
 		return errors.New("Anthropic Beta Protocol Stage stream ended before message_stop")
 	}
 	result := stream.Result()
+	preserveProtocolStageSideEffectBoundary(c, nil, result.SideEffectsCommitted)
 	if result.Usage != nil {
 		ph.trackUsageWithTokenUsage(c, result.Usage, nil)
 	}

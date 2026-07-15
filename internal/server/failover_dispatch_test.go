@@ -239,6 +239,29 @@ func TestFirstChunkGate_FlushNoopUntilCommitted(t *testing.T) {
 	}
 }
 
+func TestFirstChunkGate_SideEffectsStopRetryWithoutFlushing(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	gate := newFirstChunkGate(c.Writer)
+
+	gate.WriteHeader(http.StatusInternalServerError)
+	_, _ = gate.Write([]byte("later provider round failed"))
+	if !MarkSideEffectsCommittedIfGate(gate) {
+		t.Fatal("MarkSideEffectsCommittedIfGate() = false")
+	}
+	if !gate.SideEffectsCommitted() {
+		t.Fatal("side effects were not recorded")
+	}
+	if gate.Committed() || recorder.Body.Len() != 0 {
+		t.Fatalf("marking side effects flushed output: committed=%v body=%q", gate.Committed(), recorder.Body.String())
+	}
+
+	gate.CommitIfBuffered()
+	if recorder.Code != http.StatusInternalServerError || recorder.Body.String() != "later provider round failed" {
+		t.Fatalf("committed response = %d %q", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestIsRetryableStatus(t *testing.T) {
 	cases := []struct {
 		code int

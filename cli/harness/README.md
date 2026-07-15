@@ -75,6 +75,7 @@ go build -o harness ./cli/harness
 ./harness matrix --mode=single --stage --source=openai_chat --target=openai_chat  # native Chat Stage path
 ./harness matrix --mode=single --stage --source=anthropic_v1 --target=openai_responses  # V1→Responses Stage path
 ./harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta  # native Beta Stage path
+./harness matrix --mode=single --stage --mcp --source=anthropic_v1 --target=anthropic_v1  # real V1→Beta Tool Loop path
 
 # Tier A through real client stacks (--client; see .design/harness-matrix.md
 # "Client drivers"): official Go SDKs in-process, or real Python/Node SDKs
