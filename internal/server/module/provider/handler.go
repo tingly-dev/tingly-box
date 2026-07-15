@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -33,6 +34,16 @@ type Handler struct {
 // not configured.
 func NewHandler(cfg *config.Config, qm providerquota.Manager) *Handler {
 	return &Handler{config: cfg, quotaManager: qm}
+}
+
+// isKnownAuthType reports whether s is an auth type the provider API accepts.
+func isKnownAuthType(a typ.AuthType) bool {
+	switch a {
+	case typ.AuthTypeAPIKey, typ.AuthTypeOAuth, typ.AuthTypeVirtual,
+		typ.AuthTypeAWSSigV4, typ.AuthTypeAzureKey, typ.AuthTypeGCPVertex:
+		return true
+	}
+	return false
 }
 
 // maskForResponse masks sensitive data and returns a safe ProviderResponse.
@@ -57,8 +68,8 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 		resp.VModelDetail = p.VModelDetail
 	}
 
-	switch p.AuthType {
-	case typ.AuthTypeOAuth:
+	switch {
+	case p.AuthType == typ.AuthTypeOAuth:
 		if p.OAuthDetail != nil {
 			resp.OAuthDetail = &typ.OAuthDetail{
 				AccessToken:  p.OAuthDetail.AccessToken,
@@ -68,7 +79,14 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 				ExpiresAt:    p.OAuthDetail.ExpiresAt,
 			}
 		}
-	case typ.AuthTypeAPIKey, "":
+	case p.AuthType.IsMultiFieldCredential():
+		// Surface the credential fields so the edit form can round-trip them.
+		// Consistent with Token above, config and secret values are returned to
+		// the local admin UI in full (masking both is a future hardening).
+		if p.Credential != nil {
+			resp.Credential = p.Credential.Fields
+		}
+	case p.AuthType == typ.AuthTypeAPIKey, p.AuthType == "":
 		resp.Token = p.Token
 	}
 
@@ -115,12 +133,6 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		return
 	}
 
-	// Custom validation: token is required unless NoKeyRequired is true.
-	if !req.NoKeyRequired && req.Token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Token is required when No Key Required is false"})
-		return
-	}
-
 	// Connectivity verification is intentionally NOT enforced here: provider
 	// keys can be added regardless of probe results (some providers don't
 	// support every endpoint). Connection testing is available separately as
@@ -134,6 +146,28 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 	}
 	if req.AuthType == "" {
 		req.AuthType = string(typ.AuthTypeAPIKey)
+	}
+
+	// Reject unknown auth types up front so a typo can't create an inert
+	// provider that copies an arbitrary auth_type through verbatim.
+	authType := typ.AuthType(req.AuthType)
+	if !isKnownAuthType(authType) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("Unsupported auth_type %q", req.AuthType)})
+		return
+	}
+
+	// Credential requirements differ by auth type:
+	//   - multi-field cloud creds (aws_sigv4/azure_key/gcp_sa) validate the bundle
+	//   - api_key requires a token unless NoKeyRequired
+	//   - oauth/vmodel carry their credentials out of band
+	if authType.IsMultiFieldCredential() {
+		if err := ai.ValidateCredential(authType, req.Credential); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	} else if authType == typ.AuthTypeAPIKey && !req.NoKeyRequired && req.Token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Token is required when No Key Required is false"})
+		return
 	}
 
 	// Dual-mode constraints: optional dual base URLs are only valid for
@@ -176,8 +210,15 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		Enabled:          true, // always make new provider enabled
 		ProxyURL:         req.ProxyURL,
 		UserAgent:        req.UserAgent,
-		AuthType:         typ.AuthType(req.AuthType),
+		AuthType:         authType,
 		Timeout:          constant.DefaultRequestTimeout,
+	}
+
+	// Attach the multi-field credential bundle and clear any stray token so the
+	// two credential shapes never coexist on one row.
+	if authType.IsMultiFieldCredential() {
+		p.Credential = &typ.CredentialBundle{Fields: req.Credential}
+		p.Token = ""
 	}
 
 	if err = h.config.AddProvider(p); err != nil {
@@ -291,6 +332,16 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	}
 	if req.Token != nil && *req.Token != "" {
 		p.Token = *req.Token
+	}
+	// Replace the whole credential bundle when provided. The edit UI resends the
+	// complete map (the read path returns it in full), so a non-empty map is a
+	// full replacement; a nil map leaves the stored credentials untouched.
+	if p.AuthType.IsMultiFieldCredential() && len(req.Credential) > 0 {
+		if err := ai.ValidateCredential(p.AuthType, req.Credential); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		p.Credential = &typ.CredentialBundle{Fields: req.Credential}
 	}
 	if req.NoKeyRequired != nil {
 		p.NoKeyRequired = *req.NoKeyRequired

@@ -5547,8 +5547,15 @@
           },
           "auth_type": {
             "type": "string",
-            "description": "Auth type: api_key or oauth (default: api_key)",
+            "description": "Auth type: api_key, oauth, aws_sigv4, azure_key, or gcp_sa (default: api_key)",
             "example": "api_key"
+          },
+          "credential": {
+            "type": "object",
+            "description": "Cloud credential fields (aws_sigv4/azure_key/gcp_sa)",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "enabled": {
             "type": "boolean",
@@ -8466,6 +8473,13 @@
             "description": "Field auth_type",
             "example": "api_key"
           },
+          "credential": {
+            "type": "object",
+            "description": "Field credential",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "enabled": {
             "type": "boolean",
             "description": "Field enabled",
@@ -10206,6 +10220,13 @@
           "api_style": {
             "type": "string",
             "description": "New API style"
+          },
+          "credential": {
+            "type": "object",
+            "description": "Replacement cloud credential fields (aws_sigv4/azure_key/gcp_sa)",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "enabled": {
             "type": "boolean",
