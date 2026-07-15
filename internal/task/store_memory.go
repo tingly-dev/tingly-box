@@ -171,19 +171,37 @@ func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[
 		case "error":
 			t.Error = v.(string)
 		case "result":
-			if sv, ok := v.(string); ok && sv != "" {
-				t.Result = json.RawMessage(sv)
+			if sv, ok := v.(string); ok {
+				if sv == "" {
+					t.Result = nil
+				} else {
+					t.Result = json.RawMessage(sv)
+				}
+			}
+		case "payload":
+			if sv, ok := v.(string); ok {
+				if sv == "" {
+					t.Payload = nil
+				} else {
+					t.Payload = json.RawMessage(sv)
+				}
 			}
 		case "started_at":
-			if ts, ok := v.(time.Time); ok {
+			if v == nil {
+				t.StartedAt = nil
+			} else if ts, ok := v.(time.Time); ok {
 				t.StartedAt = &ts
 			}
 		case "finished_at":
-			if ts, ok := v.(time.Time); ok {
+			if v == nil {
+				t.FinishedAt = nil
+			} else if ts, ok := v.(time.Time); ok {
 				t.FinishedAt = &ts
 			}
 		case "cancelled_at":
-			if ts, ok := v.(time.Time); ok {
+			if v == nil {
+				t.CancelledAt = nil
+			} else if ts, ok := v.(time.Time); ok {
 				t.CancelledAt = &ts
 			}
 		case "scheduled_at":

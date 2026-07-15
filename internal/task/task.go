@@ -12,6 +12,7 @@ const (
 	StatusPending     TaskStatus = "pending"
 	StatusQueued      TaskStatus = "queued"
 	StatusRunning     TaskStatus = "running"
+	StatusNeedsInput  TaskStatus = "needs_input"
 	StatusSucceeded   TaskStatus = "succeeded"
 	StatusFailed      TaskStatus = "failed"
 	StatusCancelled   TaskStatus = "cancelled"
@@ -53,19 +54,40 @@ type Task struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 
-	// Recurrence holds cron spec JSON. Reserved for Phase 4; nil in Phase 1.
+	// Recurrence holds a RecurrenceSpec. A recurring task reuses this record
+	// and materializes its next occurrence in ScheduledAt.
 	Recurrence json.RawMessage
-	// ParentTaskID links a recurring child instance to its recurrence parent.
+	// ParentTaskID is retained for storage compatibility with the original
+	// task prototype. The current recurrence model does not create child tasks.
 	ParentTaskID string
 }
 
-// TaskResult is returned by Handler.Run on success.
+// OutcomeKind tells the manager how a successful handler invocation should
+// advance the task. The zero value is treated as OutcomeComplete for backward
+// compatibility with existing handlers.
+type OutcomeKind string
+
+const (
+	OutcomeComplete   OutcomeKind = "complete"
+	OutcomeReschedule OutcomeKind = "reschedule"
+	OutcomeNeedsInput OutcomeKind = "needs_input"
+)
+
+// TaskResult is returned by Handler.Run on success. A handler can complete
+// the task, reschedule the same task for another bounded invocation, or pause
+// it until an external caller supplies input and wakes it explicitly.
 type TaskResult struct {
-	Result json.RawMessage
+	Outcome   OutcomeKind
+	Result    json.RawMessage
+	NextRunAt *time.Time
 }
 
 // SubmitRequest describes the parameters for creating a new task.
 type SubmitRequest struct {
+	// ID may be supplied by a trusted service that must derive durable
+	// resources (such as a workspace) before the task becomes schedulable.
+	// Empty lets Manager generate the UUID as usual.
+	ID               string
 	Type             string
 	OwnerType        string
 	OwnerID          string
@@ -74,6 +96,7 @@ type SubmitRequest struct {
 	Payload          json.RawMessage
 	MaxAttempts      int        // defaults to 1 if zero or negative
 	ScheduledAt      *time.Time // nil = run as soon as possible
+	Recurrence       json.RawMessage
 }
 
 // ListFilter restricts the result set of Manager.List.

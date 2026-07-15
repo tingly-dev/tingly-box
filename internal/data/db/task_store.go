@@ -33,9 +33,11 @@ type TaskRecord struct {
 	StartedAt        *time.Time `gorm:"column:started_at"`
 	FinishedAt       *time.Time `gorm:"column:finished_at"`
 	CancelledAt      *time.Time `gorm:"column:cancelled_at"`
-	// Recurrence and ParentTaskID are reserved for Phase 4 (recurring tasks).
-	Recurrence   string `gorm:"column:recurrence;type:text"`
-	ParentTaskID string `gorm:"column:parent_task_id;size:64"`
+	// Recurrence stores the schedule definition. ParentTaskID is retained for
+	// compatibility with the original task prototype; recurrence now reuses the
+	// same task row instead of creating child tasks.
+	Recurrence   string    `gorm:"column:recurrence;type:text"`
+	ParentTaskID string    `gorm:"column:parent_task_id;size:64"`
 	CreatedAt    time.Time `gorm:"column:created_at;index:idx_tasks_owner;index:idx_tasks_key_status"`
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 }

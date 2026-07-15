@@ -44,6 +44,23 @@ func waitDone(t *testing.T, mgr task.Manager, taskID string) *task.Task {
 	return tk
 }
 
+func waitStatus(t *testing.T, mgr task.Manager, taskID string, want task.TaskStatus) *task.Task {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		tk, err := mgr.Get(context.Background(), taskID)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", taskID, err)
+		}
+		if tk.Status == want {
+			return tk
+		}
+		time.Sleep(testPoll)
+	}
+	t.Fatalf("task %s did not reach %s", taskID, want)
+	return nil
+}
+
 // funcHandler is a Handler that delegates Run to a closure.
 type funcHandler struct {
 	typ string
@@ -134,6 +151,129 @@ func TestRun_Success(t *testing.T) {
 	}
 	if done.Attempt != 1 {
 		t.Errorf("want attempt=1, got %d", done.Attempt)
+	}
+}
+
+func TestRun_RescheduleSameTask(t *testing.T) {
+	mgr, _ := newManager(t)
+
+	var calls int
+	var mu sync.Mutex
+	mustRegister(t, mgr, &funcHandler{
+		typ: "reschedule",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			calls++
+			if calls == 1 {
+				next := time.Now().Add(3 * testPoll)
+				return &task.TaskResult{
+					Outcome:   task.OutcomeReschedule,
+					NextRunAt: &next,
+					Result:    json.RawMessage(`{"state":"continue"}`),
+				}, nil
+			}
+			return &task.TaskResult{Outcome: task.OutcomeComplete}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "reschedule", MaxAttempts: 3})
+	done := waitDone(t, mgr, tk.ID)
+
+	if done.Status != task.StatusSucceeded {
+		t.Fatalf("want succeeded, got %s", done.Status)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 2 {
+		t.Fatalf("want 2 bounded invocations, got %d", calls)
+	}
+	if done.Attempt != 1 {
+		t.Fatalf("retry attempt should reset between successful wakes, got %d", done.Attempt)
+	}
+}
+
+func TestRun_NeedsInputThenWake(t *testing.T) {
+	mgr, _ := newManager(t)
+
+	var calls int
+	mustRegister(t, mgr, &funcHandler{
+		typ: "interactive",
+		fn: func(ctx context.Context, tk *task.Task, ctl task.Controller) (*task.TaskResult, error) {
+			calls++
+			if calls == 1 {
+				if err := ctl.UpdatePayload(ctx, json.RawMessage(`{"session_id":"native-1"}`)); err != nil {
+					return nil, err
+				}
+				return &task.TaskResult{
+					Outcome: task.OutcomeNeedsInput,
+					Result:  json.RawMessage(`{"question":"approve?"}`),
+				}, nil
+			}
+			if string(tk.Payload) != `{"session_id":"native-1","answer":"yes"}` {
+				t.Fatalf("second invocation got payload %s", tk.Payload)
+			}
+			return &task.TaskResult{}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "interactive"})
+	waiting := waitStatus(t, mgr, tk.ID, task.StatusNeedsInput)
+	if waiting.Status.IsTerminal() {
+		t.Fatal("needs_input must remain actionable")
+	}
+	if string(waiting.Payload) != `{"session_id":"native-1"}` {
+		t.Fatalf("checkpointed payload = %s", waiting.Payload)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*testPoll)
+	defer cancel()
+	if _, err := mgr.Wait(ctx, tk.ID); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Wait on needs_input should block, got %v", err)
+	}
+
+	updated := json.RawMessage(`{"session_id":"native-1","answer":"yes"}`)
+	if err := mgr.UpdatePayload(context.Background(), tk.ID, updated); err != nil {
+		t.Fatalf("UpdatePayload: %v", err)
+	}
+	if err := mgr.Wake(context.Background(), tk.ID, time.Time{}); err != nil {
+		t.Fatalf("Wake: %v", err)
+	}
+	done := waitDone(t, mgr, tk.ID)
+	if done.Status != task.StatusSucceeded || calls != 2 {
+		t.Fatalf("want succeeded after second invocation, status=%s calls=%d", done.Status, calls)
+	}
+}
+
+func TestRun_InvalidOutcomeFails(t *testing.T) {
+	mgr, _ := newManager(t)
+	mustRegister(t, mgr, &funcHandler{
+		typ: "invalid-outcome",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			return &task.TaskResult{Outcome: task.OutcomeKind("mystery")}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "invalid-outcome"})
+	done := waitDone(t, mgr, tk.ID)
+	if done.Status != task.StatusFailed || done.Error == "" {
+		t.Fatalf("want failed with error, got status=%s error=%q", done.Status, done.Error)
+	}
+}
+
+func TestRun_RescheduleRequiresNextRunAt(t *testing.T) {
+	mgr, _ := newManager(t)
+	mustRegister(t, mgr, &funcHandler{
+		typ: "invalid-reschedule",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			return &task.TaskResult{Outcome: task.OutcomeReschedule}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "invalid-reschedule"})
+	done := waitDone(t, mgr, tk.ID)
+	if done.Status != task.StatusFailed || done.Error == "" {
+		t.Fatalf("want failed with error, got status=%s error=%q", done.Status, done.Error)
 	}
 }
 
@@ -281,6 +421,70 @@ func TestCancel_Terminal(t *testing.T) {
 	err := mgr.Cancel(context.Background(), tk.ID, "too late")
 	if !errors.Is(err, task.ErrNotCancellable) {
 		t.Errorf("want ErrNotCancellable, got %v", err)
+	}
+}
+
+func TestCancel_NeedsInput(t *testing.T) {
+	mgr, _ := newManager(t)
+	mustRegister(t, mgr, &funcHandler{
+		typ: "needs-input",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			return &task.TaskResult{Outcome: task.OutcomeNeedsInput}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "needs-input"})
+	waitStatus(t, mgr, tk.ID, task.StatusNeedsInput)
+	if err := mgr.Cancel(context.Background(), tk.ID, "stopped"); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	done := waitDone(t, mgr, tk.ID)
+	if done.Status != task.StatusCancelled {
+		t.Fatalf("want cancelled, got %s", done.Status)
+	}
+}
+
+func TestWake_RunningReturnsConflict(t *testing.T) {
+	mgr, _ := newManager(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	mustRegister(t, mgr, &funcHandler{
+		typ: "wake-conflict",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			close(started)
+			<-release
+			return &task.TaskResult{}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "wake-conflict"})
+	<-started
+	if err := mgr.Wake(context.Background(), tk.ID, time.Time{}); !errors.Is(err, task.ErrNotWakeable) {
+		t.Fatalf("want ErrNotWakeable, got %v", err)
+	}
+	close(release)
+	waitDone(t, mgr, tk.ID)
+}
+
+func TestWake_TerminalSchedulesAgain(t *testing.T) {
+	mgr, _ := newManager(t)
+	var calls int
+	mustRegister(t, mgr, &funcHandler{
+		typ: "wake-again",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			calls++
+			return &task.TaskResult{}, nil
+		},
+	})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "wake-again"})
+	waitDone(t, mgr, tk.ID)
+	if err := mgr.Wake(context.Background(), tk.ID, time.Time{}); err != nil {
+		t.Fatalf("Wake: %v", err)
+	}
+	waitStatus(t, mgr, tk.ID, task.StatusSucceeded)
+	if calls != 2 {
+		t.Fatalf("want 2 invocations, got %d", calls)
 	}
 }
 
@@ -696,7 +900,7 @@ func TestTaskStatus_IsTerminal(t *testing.T) {
 		task.StatusCancelled, task.StatusInterrupted,
 	}
 	nonTerminal := []task.TaskStatus{
-		task.StatusPending, task.StatusQueued, task.StatusRunning,
+		task.StatusPending, task.StatusQueued, task.StatusRunning, task.StatusNeedsInput,
 	}
 	for _, s := range terminal {
 		if !s.IsTerminal() {

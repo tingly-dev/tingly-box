@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -33,6 +34,15 @@ type Manager interface {
 	// Wait polls until taskID reaches a terminal status or ctx is cancelled.
 	// Useful for callers (e.g. HTTP handlers) that need a synchronous result.
 	Wait(ctx context.Context, taskID string) (*Task, error)
+
+	// Wake schedules an existing non-running task for another invocation. A
+	// zero time means immediately. Running and queued tasks return
+	// ErrNotWakeable so a native session can never be resumed concurrently.
+	Wake(ctx context.Context, taskID string, at time.Time) error
+
+	// UpdatePayload checkpoints handler- or API-owned durable task state
+	// without exposing the Store to higher layers.
+	UpdatePayload(ctx context.Context, taskID string, payload json.RawMessage) error
 
 	// Start runs restart recovery and launches the scheduler goroutine.
 	Start(ctx context.Context) error
@@ -98,8 +108,24 @@ func (m *taskManager) Submit(ctx context.Context, req SubmitRequest) (*Task, err
 		maxAttempts = 1
 	}
 	now := time.Now()
+	taskID := req.ID
+	if taskID == "" {
+		taskID = uuid.NewString()
+	} else if _, err := uuid.Parse(taskID); err != nil {
+		return nil, fmt.Errorf("task: invalid ID: %w", err)
+	}
+	scheduledAt := req.ScheduledAt
+	if len(req.Recurrence) > 0 {
+		next, err := NextOccurrence(req.Recurrence, now)
+		if err != nil {
+			return nil, err
+		}
+		if scheduledAt == nil {
+			scheduledAt = &next
+		}
+	}
 	t := &Task{
-		ID:               uuid.New().String(),
+		ID:               taskID,
 		Type:             req.Type,
 		Status:           StatusPending,
 		OwnerType:        req.OwnerType,
@@ -108,7 +134,8 @@ func (m *taskManager) Submit(ctx context.Context, req SubmitRequest) (*Task, err
 		SerializationKey: req.SerializationKey,
 		Payload:          req.Payload,
 		MaxAttempts:      maxAttempts,
-		ScheduledAt:      req.ScheduledAt,
+		ScheduledAt:      scheduledAt,
+		Recurrence:       req.Recurrence,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -119,6 +146,9 @@ func (m *taskManager) Submit(ctx context.Context, req SubmitRequest) (*Task, err
 }
 
 func (m *taskManager) Cancel(ctx context.Context, taskID string, reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	t, err := m.store.Get(ctx, taskID)
 	if err != nil {
 		return err
@@ -128,7 +158,7 @@ func (m *taskManager) Cancel(ctx context.Context, taskID string, reason string) 
 	case StatusRunning:
 		m.registry.cancel(taskID)
 		// The runner goroutine detects ctx cancellation and writes status=cancelled.
-	case StatusPending, StatusQueued:
+	case StatusPending, StatusQueued, StatusNeedsInput:
 		if err := m.store.UpdateStatus(ctx, taskID, map[string]interface{}{
 			"status":       string(StatusCancelled),
 			"cancelled_at": now,
@@ -169,6 +199,38 @@ func (m *taskManager) Wait(ctx context.Context, taskID string) (*Task, error) {
 		case <-time.After(m.waitInterval):
 		}
 	}
+}
+
+func (m *taskManager) Wake(ctx context.Context, taskID string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	t, err := m.store.Get(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	if t.Status == StatusRunning || t.Status == StatusQueued {
+		return ErrNotWakeable
+	}
+	if at.IsZero() {
+		at = time.Now()
+	}
+	return m.store.UpdateStatus(ctx, taskID, map[string]interface{}{
+		"status":       string(StatusPending),
+		"scheduled_at": at,
+		"started_at":   nil,
+		"finished_at":  nil,
+		"cancelled_at": nil,
+		"attempt":      0,
+		"error":        "",
+	})
+}
+
+func (m *taskManager) UpdatePayload(ctx context.Context, taskID string, payload json.RawMessage) error {
+	if _, err := m.store.Get(ctx, taskID); err != nil {
+		return err
+	}
+	return m.store.UpdateStatus(ctx, taskID, map[string]interface{}{"payload": string(payload)})
 }
 
 func (m *taskManager) Start(ctx context.Context) error {
@@ -250,7 +312,7 @@ func (m *taskManager) dispatchTask(ctx context.Context, t *Task) {
 	go m.runTask(taskCtx, cancel, t)
 }
 
-// runTask executes the handler and writes the terminal status to the DB.
+// runTask executes one handler invocation and writes its next durable state.
 func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t *Task) {
 	defer func() {
 		cancel()
@@ -302,11 +364,76 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 	if result != nil && len(result.Result) > 0 {
 		resultJSON = string(result.Result)
 	}
-	_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
-		"status":      string(StatusSucceeded),
-		"finished_at": now,
-		"result":      resultJSON,
-	})
+	outcome := OutcomeComplete
+	if result != nil && result.Outcome != "" {
+		outcome = result.Outcome
+	}
+
+	switch outcome {
+	case OutcomeComplete:
+		if len(t.Recurrence) > 0 {
+			next, err := NextOccurrence(t.Recurrence, now)
+			if err != nil {
+				_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+					"status":      string(StatusFailed),
+					"finished_at": now,
+					"error":       err.Error(),
+					"result":      resultJSON,
+				})
+				return
+			}
+			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+				"status":       string(StatusPending),
+				"finished_at":  nil,
+				"scheduled_at": next,
+				"attempt":      0,
+				"result":       resultJSON,
+				"error":        "",
+			})
+			return
+		}
+		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+			"status":       string(StatusSucceeded),
+			"finished_at":  now,
+			"scheduled_at": nil,
+			"result":       resultJSON,
+			"error":        "",
+		})
+	case OutcomeReschedule:
+		if result == nil || result.NextRunAt == nil {
+			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+				"status":      string(StatusFailed),
+				"finished_at": now,
+				"error":       ErrInvalidOutcome.Error() + ": reschedule requires NextRunAt",
+				"result":      resultJSON,
+			})
+			return
+		}
+		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+			"status":       string(StatusPending),
+			"scheduled_at": *result.NextRunAt,
+			"finished_at":  nil,
+			"attempt":      0,
+			"result":       resultJSON,
+			"error":        "",
+		})
+	case OutcomeNeedsInput:
+		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+			"status":       string(StatusNeedsInput),
+			"scheduled_at": nil,
+			"finished_at":  nil,
+			"attempt":      0,
+			"result":       resultJSON,
+			"error":        "",
+		})
+	default:
+		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+			"status":      string(StatusFailed),
+			"finished_at": now,
+			"error":       fmt.Sprintf("%s: %q", ErrInvalidOutcome, outcome),
+			"result":      resultJSON,
+		})
+	}
 }
 
 // onTaskFinished is called after a task's goroutine exits. It wakes the next
