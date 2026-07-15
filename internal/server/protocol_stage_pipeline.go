@@ -53,7 +53,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIChat(
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
 	if mcpEnabled {
-		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeOpenAIChat, target, protocolstage.AllBridgeCapabilities) {
+		if !ph.shouldUseProtocolStageBetaChain(c, protocol.TypeOpenAIChat, target, protocolstage.AllBridgeCapabilities) {
 			return false
 		}
 		if ph.deps.MCPRuntime == nil {

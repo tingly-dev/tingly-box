@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/gin-gonic/gin"
 	protocol "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
@@ -43,11 +44,11 @@ func NewProtocolStageSelector(enabled bool) *ProtocolStageSelector {
 	return &ProtocolStageSelector{enabled: enabled, registry: registry}
 }
 
-// ShouldUseBetaToolLoop returns true only when both explicit boundaries around
-// the Beta-native Tool Loop are capability-complete. Checking the two exact
-// hops prevents a direct source->target Bridge from accidentally claiming that
-// a source->Beta->target topology is available.
-func (s *ProtocolStageSelector) ShouldUseBetaToolLoop(
+// ShouldUseBetaStageChain returns true only when both explicit boundaries
+// around the Beta working protocol are capability-complete. Checking the two
+// exact hops prevents a direct source->target Bridge from accidentally claiming
+// that a source->Beta->target topology is available.
+func (s *ProtocolStageSelector) ShouldUseBetaStageChain(
 	source, target protocol.APIType,
 	required stage.Capabilities,
 ) (bool, error) {
@@ -58,12 +59,28 @@ func (s *ProtocolStageSelector) ShouldUseBetaToolLoop(
 		return false, fmt.Errorf("Protocol Stage registry is nil")
 	}
 	if _, err := s.registry.ResolveRegistered(source, protocol.TypeAnthropicBeta, required); err != nil {
-		return false, fmt.Errorf("Beta Tool Loop ingress: %w", err)
+		return false, fmt.Errorf("Beta Stage ingress: %w", err)
 	}
 	if _, err := s.registry.ResolveRegistered(protocol.TypeAnthropicBeta, target, required); err != nil {
-		return false, fmt.Errorf("Beta Tool Loop provider boundary: %w", err)
+		return false, fmt.Errorf("Beta Stage provider boundary: %w", err)
 	}
 	return true, nil
+}
+
+func (ph *ProtocolHandler) shouldUseProtocolStageBetaChain(
+	c *gin.Context,
+	source, target protocol.APIType,
+	required stage.Capabilities,
+) bool {
+	selector := ph.protocolStageSelector
+	if selector == nil {
+		return false
+	}
+	useStage, selectionErr := selector.ShouldUseBetaStageChain(source, target, required)
+	if !useStage && selector.Enabled() && selectionErr != nil {
+		logProtocolStageFallback(c, source, target, selectionErr.Error())
+	}
+	return useStage
 }
 
 // Enabled reports the immutable server-start choice.

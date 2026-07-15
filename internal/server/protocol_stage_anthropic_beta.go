@@ -44,7 +44,7 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicBeta(
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
 	if mcpEnabled {
-		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeAnthropicBeta, target, protocolstage.AllBridgeCapabilities) {
+		if !ph.shouldUseProtocolStageBetaChain(c, protocol.TypeAnthropicBeta, target, protocolstage.AllBridgeCapabilities) {
 			return false
 		}
 		if ph.deps.MCPRuntime == nil {

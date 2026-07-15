@@ -6,29 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	stagetoolloop "github.com/tingly-dev/tingly-box/internal/protocol/stage/toolloop"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	servertransform "github.com/tingly-dev/tingly-box/internal/server/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-func (ph *ProtocolHandler) shouldUseProtocolStageBetaToolLoop(
-	c *gin.Context,
-	source, target protocol.APIType,
-	required protocolstage.Capabilities,
-) bool {
-	selector := ph.protocolStageSelector
-	if selector == nil {
-		return false
-	}
-	useStage, selectionErr := selector.ShouldUseBetaToolLoop(source, target, required)
-	if !useStage && selector.Enabled() && selectionErr != nil {
-		logProtocolStageFallback(c, source, target, selectionErr.Error())
-	}
-	return useStage
-}
 
 func (ph *ProtocolHandler) newProtocolStageBetaToolLoop(
 	c *gin.Context,

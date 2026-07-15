@@ -284,9 +284,12 @@ Consequences:
 This order is fixed by product semantics. Phase 4 does not introduce a user
 setting for stage order.
 
-V1 uses this composition only when MCP has already promoted its request to the
-Beta working protocol. Guardrails-only V1 retains the legacy lifecycle; the
-presence of Guardrails never performs an independent V1 cutover.
+Under `--stage`, V1 Guardrails independently promote the request to the Beta
+working protocol. With MCP enabled, both Beta-native stages compose at that
+same boundary. This promotion applies only to requests; outward V1 responses
+continue to use the existing permissive projection and do not establish a new
+strict Beta-to-V1 compatibility contract. Without `--stage`, V1 Guardrails
+retain the complete legacy lifecycle.
 
 ## Recording and Usage
 

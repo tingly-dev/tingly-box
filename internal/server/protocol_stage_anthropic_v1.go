@@ -30,8 +30,8 @@ import (
 )
 
 // tryProtocolStageAnthropicV1 selects only explicitly registered V1-source
-// routes. MCP requests promote to the Beta working protocol; plain requests
-// retain their existing concrete provider protocol.
+// routes. MCP and Guardrail requests promote to the Beta working protocol;
+// plain requests retain their existing concrete provider protocol.
 func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 	c *gin.Context,
 	req *protocol.AnthropicMessagesRequest,
@@ -48,23 +48,20 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
 	guardrailsEnabled := ph.guardrailsEnabledForScenario(GetTrackingContextScenario(c))
+	usesBetaStages := mcpEnabled || guardrailsEnabled
 	stageTarget := target
-	if mcpEnabled && target == protocol.TypeAnthropicV1 {
+	if usesBetaStages && target == protocol.TypeAnthropicV1 {
 		stageTarget = protocol.TypeAnthropicBeta
 	}
-	if mcpEnabled {
-		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeAnthropicV1, stageTarget, protocolstage.AllBridgeCapabilities) {
+	if usesBetaStages {
+		if !ph.shouldUseProtocolStageBetaChain(c, protocol.TypeAnthropicV1, stageTarget, protocolstage.AllBridgeCapabilities) {
 			return false
 		}
-		if ph.deps.MCPRuntime == nil {
+		if mcpEnabled && ph.deps.MCPRuntime == nil {
 			logProtocolStageFallback(c, protocol.TypeAnthropicV1, stageTarget, "MCP runtime is unavailable")
 			return false
 		}
 	} else if !ph.shouldUseProtocolStage(c, protocol.TypeAnthropicV1, stageTarget, protocolstage.AllBridgeCapabilities) {
-		return false
-	}
-	if guardrailsEnabled && !mcpEnabled {
-		logProtocolStageFallback(c, protocol.TypeAnthropicV1, target, "Guardrails still use the legacy Anthropic V1 lifecycle")
 		return false
 	}
 	if recorder != nil || stageRecording != nil {
@@ -113,9 +110,10 @@ func (ph *ProtocolHandler) tryProtocolStageAnthropicV1(
 		),
 	}
 	if guardrailsEnabled {
-		// MCP has already promoted the V1 request into the Beta working
-		// protocol. Reuse the Beta Guardrail at that stable boundary; V1
-		// requests without MCP remain on their complete legacy lifecycle.
+		// Promote only the V1 request into the Beta working protocol and
+		// reuse the Beta-native Guardrail. Outward V1 response compatibility
+		// remains the existing permissive projection rather than a new strict
+		// Beta-to-V1 contract.
 		guardrailStage, guardrailErr := protocolguardrail.NewAnthropicBeta(protocolguardrail.AnthropicBetaConfig{
 			Runtime: ph.currentGuardrailsRuntime(),
 			BaseInput: BuildGuardrailsBaseInput(

@@ -48,7 +48,7 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
 	if mcpEnabled {
-		if !ph.shouldUseProtocolStageBetaToolLoop(c, protocol.TypeOpenAIResponses, target, protocolstage.AllBridgeCapabilities) {
+		if !ph.shouldUseProtocolStageBetaChain(c, protocol.TypeOpenAIResponses, target, protocolstage.AllBridgeCapabilities) {
 			return false
 		}
 		if ph.deps.MCPRuntime == nil {

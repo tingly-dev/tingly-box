@@ -43,7 +43,7 @@ func TestProtocolStageSelector(t *testing.T) {
 	}
 }
 
-func TestProtocolStageSelectorBetaToolLoop(t *testing.T) {
+func TestProtocolStageSelectorBetaStageChain(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -64,9 +64,9 @@ func TestProtocolStageSelectorBetaToolLoop(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := NewProtocolStageSelector(tt.enabled).ShouldUseBetaToolLoop(tt.source, tt.target, stage.AllBridgeCapabilities)
+			got, err := NewProtocolStageSelector(tt.enabled).ShouldUseBetaStageChain(tt.source, tt.target, stage.AllBridgeCapabilities)
 			if got != tt.want || (err != nil) != tt.wantErr {
-				t.Fatalf("ShouldUseBetaToolLoop() = %v, %v; want %v, error=%v", got, err, tt.want, tt.wantErr)
+				t.Fatalf("ShouldUseBetaStageChain() = %v, %v; want %v, error=%v", got, err, tt.want, tt.wantErr)
 			}
 		})
 	}

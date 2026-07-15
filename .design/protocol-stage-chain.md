@@ -1,14 +1,14 @@
 # Protocol Stage Chain
 
-> Status: Phases 1–5 are active additively behind `--stage`. The Beta-native
-> Tool Loop is connected to production handlers with exact two-boundary
-> selection, V1 request promotion, MCP/runtime + servertool adapters, recording,
-> and side-effect-aware failover.
+> Status: Phases 1–5 are active additively behind `--stage`. The Beta working
+> boundary is connected to production handlers with exact two-boundary
+> selection, V1 request promotion, Beta-native Guardrail and Tool Loop stages,
+> MCP/runtime + servertool adapters, recording, and side-effect-aware failover.
 > `tingly-box start --stage` selects the supported Chat/Beta/V1 production
 > routes plus OpenAI Responses → Responses/Anthropic Beta/OpenAI Chat,
 > Anthropic Beta/V1 → OpenAI Responses, and OpenAI Chat identity/Beta/Responses.
-> Anthropic Beta requests can include the Beta-native Guardrail Stage;
-> unsupported routes and V1 Guardrails remain on legacy. Request recording is
+> Anthropic Beta and promoted V1 requests can include the Beta-native Guardrail
+> Stage; unsupported routes remain on legacy. Request recording is
 > available on all twelve routes, including failover across Stage-compatible
 > services, with `recording_v2`.
 >
@@ -25,7 +25,7 @@ lifecycle before the provider is called.
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
-| 3 — Guardrails canary | Complete for Anthropic Beta source | Request, complete response, and stream events; Beta, Chat, and Responses targets |
+| 3 — Guardrails canary | Complete for Anthropic Beta and promoted V1 sources | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
 | 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, mixed continuation, recording, and side-effect-aware failover |
 | 5 — Opt-in handler integration | Active | Existing handlers may select Stage only from the immutable `--stage` startup choice; default traffic remains legacy |
@@ -38,9 +38,9 @@ Production route selection with `--stage`:
 | `anthropic_beta` | `anthropic_beta` | Stage | Stage with `guardrail_anthropic_beta` | Beta Tool Loop | Stage `RequestRecord`, including failover, when every active service is Stage-compatible; otherwise Legacy |
 | `anthropic_beta` | `openai_chat` | Stage through Beta→Chat Bridge | Stage with the same Beta Guardrail | Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `anthropic_beta` | `openai_responses` | Stage through Beta→Responses Bridge | Stage with the same Beta Guardrail | Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_v1` | `anthropic_v1` | Stage | Legacy alone; Beta Guardrail when MCP also promotes the request | V1→Beta Tool Loop; provider request uses Beta | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | Legacy alone; Beta Guardrail when MCP also promotes the request | V1→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `anthropic_v1` | `openai_responses` | Stage through V1→Responses Bridge | Legacy alone; Beta Guardrail when MCP also promotes the request | V1→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_v1` | `anthropic_v1` | Stage | V1→Beta Guardrail; provider request uses Beta | V1→Beta Tool Loop; provider request uses Beta | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_v1` | `openai_chat` | Stage through V1→Chat Bridge | V1→Beta Guardrail→Chat | V1→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `anthropic_v1` | `openai_responses` | Stage through V1→Responses Bridge | V1→Beta Guardrail→Responses | V1→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_chat` | `openai_chat` | Stage | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
@@ -489,15 +489,15 @@ or compatible protocol pair may enable Stage when that startup choice is false.
 The native and bridged routes are explicitly enumerated in Current Status;
 registration is always per exact source/target pair.
 `anthropic_v1` remains a separate protocol with its own request, response,
-stream, terminal, and identity registration. MCP promotes only its request into
-the Beta Tool Loop. Guardrails-only V1 remains on legacy; when MCP has already
-established the Beta working boundary, the same opt-in chain may place the Beta
-Guardrail outside the Tool Loop. All twelve registered
-routes may use Stage recording with failover when every active service resolves
-to a registered provider protocol. The
-request scope emits one record; each attempt appends one ordered exchange.
-Guardrails are native on Beta-source routes and on V1 requests already promoted
-by MCP. Guardrails-only V1 still selects the entire legacy pipeline.
+stream, terminal, and identity registration. MCP and Guardrails promote only
+its request into their shared Beta working boundary. When both are enabled, the
+same opt-in chain places the Beta Guardrail outside the Tool Loop. All twelve
+registered routes may use Stage recording with failover when every active
+service resolves to a registered provider protocol. The request scope emits one
+record; each attempt appends one ordered exchange.
+Guardrails are native on Beta-source routes and on V1 requests promoted at the
+Beta boundary. Without `--stage`, Guardrails-only V1 still selects the entire
+legacy pipeline.
 
 ### Phase 6 — Legacy removal
 
@@ -631,9 +631,10 @@ adapter therefore remains unchanged. Chat identity uses an explicit identity
 registration; the outer adapter accepts both provider SDK values and
 Bridge-produced wire DTOs, then applies the same public-model rewrite.
 V1 → Responses uses the same Responses provider boundary but a distinct V1
-Bridge registration and typed V1 response recovery. V1 Guardrails, MCP, and
+Bridge registration and typed V1 response recovery. Under `--stage`, V1
+Guardrails and MCP promote requests through the Beta working boundary;
 unsupported feature combinations continue to select the entire legacy
-lifecycle before Stage starts; protocol recording is available on the twelve
+lifecycle before Stage starts. Protocol recording is available on the twelve
 registered routes under its separate opt-in gate.
 Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
