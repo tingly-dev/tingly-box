@@ -1,0 +1,236 @@
+package taskapi
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/agentboot"
+	coretask "github.com/tingly-dev/tingly-box/internal/task"
+	"github.com/tingly-dev/tingly-box/internal/task/agenttask"
+)
+
+type Handler struct {
+	manager   coretask.Manager
+	configDir string
+	agents    map[agenttask.AgentKind]agentboot.Agent
+}
+
+func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent) *Handler {
+	return &Handler{manager: manager, configDir: configDir, agents: agents}
+}
+
+func (h *Handler) List(c *gin.Context) {
+	tasks, err := h.manager.List(c.Request.Context(), coretask.ListFilter{Type: agenttask.TaskType, Limit: 200})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	views := make([]TaskView, 0, len(tasks))
+	for i := range tasks {
+		view, err := toView(&tasks[i])
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		views = append(views, view)
+	}
+	c.JSON(http.StatusOK, TaskListResponse{Data: views})
+}
+
+func (h *Handler) Get(c *gin.Context) {
+	task, err := h.manager.Get(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if task.Type != agenttask.TaskType {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	view, err := toView(task)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, TaskResponse{Data: view})
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	var req CreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Goal = strings.TrimSpace(req.Goal)
+	if req.Goal == "" || !req.Agent.IsValid() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "goal and a supported agent are required"})
+		return
+	}
+
+	taskID := uuid.NewString()
+	workspace, err := agenttask.CreateWorkspace(h.configDir, taskID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	payload := agenttask.Payload{
+		Version:        1,
+		Title:          strings.TrimSpace(req.Title),
+		Goal:           req.Goal,
+		Agent:          req.Agent,
+		WorkspacePath:  workspace,
+		FollowUp:       req.FollowUp,
+		TimeoutSeconds: req.TimeoutSeconds,
+	}
+	payload.ApplyDefaults()
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	var recurrence json.RawMessage
+	if req.Recurrence != nil {
+		recurrence, err = json.Marshal(req.Recurrence)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+	}
+	created, err := h.manager.Submit(c.Request.Context(), coretask.SubmitRequest{
+		ID:               taskID,
+		Type:             agenttask.TaskType,
+		Source:           "webui",
+		SerializationKey: workspace,
+		Payload:          payloadJSON,
+		MaxAttempts:      1,
+		ScheduledAt:      req.ScheduledAt,
+		Recurrence:       recurrence,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, _ := toView(created)
+	c.JSON(http.StatusCreated, TaskResponse{Data: view})
+}
+
+func (h *Handler) Wake(c *gin.Context) {
+	var req WakeRequest
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	ctx := c.Request.Context()
+	task, err := h.manager.Get(ctx, c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if task.Type != agenttask.TaskType {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	if instruction := strings.TrimSpace(req.Instruction); instruction != "" {
+		if task.Status != coretask.StatusNeedsInput && !task.Status.IsTerminal() {
+			c.JSON(http.StatusConflict, gin.H{"error": "instruction can only be sent to a paused or finished task"})
+			return
+		}
+		var payload agenttask.Payload
+		if err := json.Unmarshal(task.Payload, &payload); err != nil {
+			writeError(c, err)
+			return
+		}
+		payload.PendingInput = instruction
+		data, _ := json.Marshal(payload)
+		if err := h.manager.UpdatePayload(ctx, task.ID, data); err != nil {
+			writeError(c, err)
+			return
+		}
+	}
+	if err := h.manager.Wake(ctx, task.ID, time.Time{}); err != nil {
+		writeError(c, err)
+		return
+	}
+	updated, err := h.manager.Get(ctx, task.ID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, _ := toView(updated)
+	c.JSON(http.StatusOK, TaskResponse{Data: view})
+}
+
+func (h *Handler) Stop(c *gin.Context) {
+	if err := h.manager.Cancel(c.Request.Context(), c.Param("id"), "stopped by user"); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) Agents(c *gin.Context) {
+	data := make([]AgentAvailability, 0, 2)
+	for _, kind := range []agenttask.AgentKind{agenttask.AgentClaude, agenttask.AgentCodex} {
+		agent := h.agents[kind]
+		data = append(data, AgentAvailability{Agent: kind, Available: agent != nil && agent.IsAvailable()})
+	}
+	c.JSON(http.StatusOK, AgentListResponse{Data: data})
+}
+
+func toView(task *coretask.Task) (TaskView, error) {
+	var payload agenttask.Payload
+	if err := json.Unmarshal(task.Payload, &payload); err != nil {
+		return TaskView{}, fmt.Errorf("decode task %s payload: %w", task.ID, err)
+	}
+	view := TaskView{
+		ID: task.ID, Title: payload.Title, Goal: payload.Goal, Agent: payload.Agent,
+		Status: task.Status, Progress: task.Progress, Error: task.Error,
+		WorkspacePath: payload.WorkspacePath, SessionID: payload.SessionID,
+		FollowUp: payload.FollowUp, WakeCount: payload.WakeCount,
+		ScheduledAt: task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
+	}
+	if payload.SessionID != "" {
+		if payload.Agent == agenttask.AgentClaude {
+			view.ResumeCommand = "claude --resume " + payload.SessionID
+		} else {
+			view.ResumeCommand = "codex exec resume " + payload.SessionID
+		}
+	}
+	if len(task.Result) > 0 {
+		var result agenttask.Result
+		if err := json.Unmarshal(task.Result, &result); err == nil {
+			view.LatestResult = &result
+		}
+	}
+	if len(task.Recurrence) > 0 {
+		var recurrence coretask.RecurrenceSpec
+		if err := json.Unmarshal(task.Recurrence, &recurrence); err != nil {
+			return TaskView{}, err
+		}
+		view.Recurrence = &recurrence
+	}
+	return view, nil
+}
+
+func writeError(c *gin.Context, err error) {
+	status := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, coretask.ErrNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, coretask.ErrNotWakeable), errors.Is(err, coretask.ErrNotCancellable):
+		status = http.StatusConflict
+	case errors.Is(err, coretask.ErrInvalidRecurrence):
+		status = http.StatusBadRequest
+	}
+	c.JSON(status, gin.H{"error": err.Error()})
+}

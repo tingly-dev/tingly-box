@@ -32,9 +32,11 @@ import (
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
+	taskapi "github.com/tingly-dev/tingly-box/internal/server/module/task"
 	"github.com/tingly-dev/tingly-box/internal/server/module/tokenrefresh"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
+	coretask "github.com/tingly-dev/tingly-box/internal/task"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/visionproxy"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -146,6 +148,12 @@ type Server struct {
 
 	// quota manager for provider quota tracking
 	quotaManager providerQuotaModule.Manager
+
+	// taskManager owns durable scheduling; taskAPI exposes the narrow agent
+	// Task product surface. Both stay active independently of the UI flag so
+	// existing tasks remain recoverable when the experiment is hidden.
+	taskManager coretask.Manager
+	taskAPI     *taskapi.Handler
 
 	// options
 	enableUI    bool
@@ -430,6 +438,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize virtual model service
 	server.virtualModelService = virtualserver.NewService()
 	logrus.Debugf("Virtual model service initialized with default models")
+
+	server.initTaskRuntime()
 
 	// Seed builtin virtual-model providers (idempotent). These become first-class
 	// rows in the provider store so they show up in the standard UI and dispatch

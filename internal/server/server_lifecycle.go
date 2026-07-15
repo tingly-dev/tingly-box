@@ -311,6 +311,12 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 	}
 
+	if s.taskManager != nil {
+		if err := s.taskManager.Stop(ctx); err != nil {
+			logrus.WithError(err).Warn("Failed to stop task manager")
+		}
+	}
+
 	// Close all database stores via StoreManager
 	if s.config.StoreManager() != nil {
 		if err := s.config.StoreManager().Close(); err != nil {
