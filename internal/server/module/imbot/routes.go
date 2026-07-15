@@ -189,6 +189,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	router.GET("/imbot-settings/:uuid/weixin/qr-status", qrHandler.QRStatus,
 		swagger.WithTags("imbot-settings", "weixin"),
 		swagger.WithDescription("Polls Weixin QR code login status"),
+		swagger.WithQueryRequired("qrcode_id", "string", "QR code session identifier"),
 		swagger.WithResponseModel(QRStatusResponse{}),
 	)
 

@@ -450,7 +450,7 @@ func structQueryParams(modelType reflect.Type) []queryParamSpec {
 		parameters = append(parameters, queryParamSpec{
 			Name:        paramName,
 			Description: fmt.Sprintf("Query parameter %s", paramName),
-			Required:    strings.Contains(field.Tag.Get("binding"), "required"),
+			Required:    hasValidationRule(field.Tag.Get("binding"), "required"),
 			Type:        paramType,
 			Format:      paramFormat,
 		})

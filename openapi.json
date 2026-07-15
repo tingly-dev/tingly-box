@@ -493,7 +493,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsBuiltinsResponse"
                 }
               }
             }
@@ -515,7 +515,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsConfigResponse"
                 }
               }
             }
@@ -529,13 +529,24 @@
         "summary": "Update guardrails config and reload engine",
         "description": "Update guardrails config and reload engine",
         "operationId": "apiV1GuardrailsConfigPut",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsConfigUpdateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsConfigUpdateResponse"
                 }
               }
             }
@@ -551,13 +562,24 @@
         "summary": "Create a protected credential for guardrails pseudonymization",
         "description": "Create a protected credential for guardrails pseudonymization",
         "operationId": "apiV1GuardrailsCredentialPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/protectedCredentialCreateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/protectedCredentialMutationResponse"
                 }
               }
             }
@@ -590,7 +612,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/protectedCredentialDetailEnvelope"
                 }
               }
             }
@@ -615,13 +637,24 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/protectedCredentialUpdateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/protectedCredentialMutationResponse"
                 }
               }
             }
@@ -652,7 +685,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/protectedCredentialDeleteResponse"
                 }
               }
             }
@@ -674,7 +707,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/protectedCredentialsListResponse"
                 }
               }
             }
@@ -690,13 +723,24 @@
         "summary": "Export one or more imported guardrails policy fragments",
         "description": "Export one or more imported guardrails policy fragments",
         "operationId": "apiV1GuardrailsFragmentExportPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsFragmentExportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsFragmentExportResponse"
                 }
               }
             }
@@ -712,13 +756,24 @@
         "summary": "Import one or more guardrails policies into the shared custom fragment",
         "description": "Import one or more guardrails policies into the shared custom fragment",
         "operationId": "apiV1GuardrailsFragmentImportPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsFragmentImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsFragmentImportResponse"
                 }
               }
             }
@@ -734,13 +789,24 @@
         "summary": "Create a new guardrails group and reload engine",
         "description": "Create a new guardrails group and reload engine",
         "operationId": "apiV1GuardrailsGroupPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsGroupCreateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsGroupUpdateResponse"
                 }
               }
             }
@@ -767,13 +833,24 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsGroupUpdateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsGroupUpdateResponse"
                 }
               }
             }
@@ -804,7 +881,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsGroupUpdateResponse"
                 }
               }
             }
@@ -826,7 +903,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsHistoryResponse"
                 }
               }
             }
@@ -846,7 +923,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsSuccessResponse"
                 }
               }
             }
@@ -862,13 +939,24 @@
         "summary": "Create a new guardrails policy and reload engine",
         "description": "Create a new guardrails policy and reload engine",
         "operationId": "apiV1GuardrailsPolicyPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsPolicyCreateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsPolicyUpdateResponse"
                 }
               }
             }
@@ -895,13 +983,24 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsPolicyUpdateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsPolicyUpdateResponse"
                 }
               }
             }
@@ -932,7 +1031,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsPolicyUpdateResponse"
                 }
               }
             }
@@ -948,13 +1047,24 @@
         "summary": "List downloadable guardrails policies from a remote registry",
         "description": "List downloadable guardrails policies from a remote registry",
         "operationId": "apiV1GuardrailsRegistryGet",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "Set to 1 to refresh the registry cache",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsRegistryResponse"
                 }
               }
             }
@@ -970,13 +1080,24 @@
         "summary": "Download a guardrails policy from a remote registry into the local guardrails directory",
         "description": "Download a guardrails policy from a remote registry into the local guardrails directory",
         "operationId": "apiV1GuardrailsRegistryInstallPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/guardrailsRegistryInstallRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsRegistryInstallResponse"
                 }
               }
             }
@@ -998,7 +1119,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/guardrailsReloadResponse"
                 }
               }
             }
@@ -1759,6 +1880,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "qrcode_id",
+            "in": "query",
+            "description": "QR code session identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1933,13 +2063,24 @@
         "summary": "Register a new MCP client",
         "description": "Register a new MCP client",
         "operationId": "apiV1McpClientPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClientRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClientResponse"
                 }
               }
             }
@@ -1972,7 +2113,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClientResponse"
                 }
               }
             }
@@ -1997,13 +2138,24 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClientRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClientResponse"
                 }
               }
             }
@@ -2034,7 +2186,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClientResponse"
                 }
               }
             }
@@ -2067,7 +2219,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClientResponse"
                 }
               }
             }
@@ -2089,7 +2241,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClientListResponse"
                 }
               }
             }
@@ -2125,6 +2277,17 @@
         "summary": "Set global MCP runtime configuration",
         "description": "Set global MCP runtime configuration",
         "operationId": "apiV1McpConfigPut",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPRuntimeConfigRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2147,13 +2310,24 @@
         "summary": "Execute an MCP tool for testing",
         "description": "Execute an MCP tool for testing",
         "operationId": "apiV1McpExecutePost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteToolRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExecuteToolResponse"
                 }
               }
             }
@@ -2186,7 +2360,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/InstallCommandResponse"
                 }
               }
             }
@@ -2656,6 +2830,44 @@
         "summary": "List recent model requests, one row per correlation id, joining the HTTP access log, model-request stage logs and smart-routing traces. Supports 'limit', 'scenario', 'provider' and 'status' filters.",
         "description": "List recent model requests, one row per correlation id, joining the HTTP access log, model-request stage logs and smart-routing traces. Supports 'limit', 'scenario', 'provider' and 'status' filters.",
         "operationId": "apiV1RequestsGet",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of requests (default 100, max 1000)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Exact scenario filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Exact provider filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Exact HTTP status filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3562,6 +3774,17 @@
         "summary": "Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return.",
         "description": "Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return.",
         "operationId": "apiV1SystemLogsGet",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of recent entries (default 100, max 1000)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3590,7 +3813,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SystemLogLevelResponse"
                 }
               }
             }
@@ -3604,13 +3827,24 @@
         "summary": "Set the minimum log level for system logs",
         "description": "Set the minimum log level for system logs",
         "operationId": "apiV1SystemLogsLevelPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemLogLevelRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SystemLogLevelResponse"
                 }
               }
             }
@@ -3686,6 +3920,262 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tokens": {
+      "get": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "List shared API tokens",
+        "description": "List shared API tokens",
+        "operationId": "apiV1TokensGet",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Query parameter user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "enabled",
+            "in": "query",
+            "description": "Query parameter enabled",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Query parameter limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Query parameter offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Create a shared API token",
+        "description": "Create a shared API token",
+        "operationId": "apiV1TokensPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tokens/{token_id}": {
+      "get": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Get a shared API token",
+        "description": "Get a shared API token",
+        "operationId": "apiV1TokensToken_idGet",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APITokenInfo"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Delete a shared API token",
+        "description": "Delete a shared API token",
+        "operationId": "apiV1TokensToken_idDelete",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tokens/{token_id}/disable": {
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Disable a shared API token",
+        "description": "Disable a shared API token",
+        "operationId": "apiV1TokensToken_idDisablePut",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tokens/{token_id}/enable": {
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Enable a shared API token",
+        "description": "Enable a shared API token",
+        "operationId": "apiV1TokensToken_idEnablePut",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tokens/{token_id}/regenerate": {
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Regenerate a shared API token",
+        "description": "Regenerate a shared API token",
+        "operationId": "apiV1TokensToken_idRegeneratePost",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreateResponse"
                 }
               }
             }
@@ -4115,6 +4605,28 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vmodel/available-models": {
+      "get": {
+        "tags": [
+          "vmodel"
+        ],
+        "summary": "List virtual models registered in the in-process registries, grouped by protocol",
+        "description": "List virtual models registered in the in-process registries, grouped by protocol",
+        "operationId": "apiV1VmodelAvailable-modelsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailableModelsResponse"
                 }
               }
             }
@@ -4887,6 +5399,48 @@
   },
   "components": {
     "schemas": {
+      "APITokenInfo": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Field created_by"
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Field display_name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_used_at"
+          },
+          "token_id": {
+            "type": "string",
+            "description": "Field token_id"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Field user_id"
+          }
+        },
+        "required": [
+          "token_id",
+          "user_id",
+          "display_name",
+          "enabled",
+          "created_at"
+        ]
+      },
       "ActionHistoryEntry": {
         "type": "object",
         "properties": {
@@ -4895,15 +5449,12 @@
             "description": "Field action"
           },
           "details": {
-            "type": "object",
             "description": "Field details"
           },
           "fields": {
             "type": "object",
             "description": "Field fields",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "level": {
             "type": "string",
@@ -4949,6 +5500,25 @@
           "total",
           "actions"
         ]
+      },
+      "ActionSelector": {
+        "type": "object",
+        "properties": {
+          "exclude": {
+            "type": "array",
+            "description": "Field exclude",
+            "items": {
+              "type": "string"
+            }
+          },
+          "include": {
+            "type": "array",
+            "description": "Field include",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "AddSkillLocationRequest": {
         "type": "object",
@@ -5163,7 +5733,6 @@
           }
         },
         "required": [
-          "installStatusLine",
           "preferences"
         ]
       },
@@ -5330,6 +5899,46 @@
           "message"
         ]
       },
+      "AvailableModelEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id",
+            "example": "vm-claude-haiku"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Field protocol",
+            "example": "anthropic"
+          }
+        },
+        "required": [
+          "id",
+          "protocol"
+        ]
+      },
+      "AvailableModelsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/AvailableModelEntry"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
       "ClaudeCodePrefs": {
         "type": "object",
         "properties": {
@@ -5427,6 +6036,48 @@
           }
         }
       },
+      "ClientListResponse": {
+        "type": "object",
+        "properties": {
+          "clients": {
+            "type": "array",
+            "description": "Field clients",
+            "items": {
+              "$ref": "#/components/schemas/MCPClient"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "ClientResponse": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "$ref": "#/components/schemas/MCPClient"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "CodexConfigPreviewResponse": {
         "type": "object",
         "properties": {
@@ -5486,6 +6137,40 @@
           }
         }
       },
+      "Config": {
+        "type": "object",
+        "properties": {
+          "error_strategy": {
+            "type": "string",
+            "description": "Field error_strategy"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Field groups",
+            "items": {
+              "$ref": "#/components/schemas/PolicyGroup"
+            }
+          },
+          "imports": {
+            "type": "array",
+            "description": "Field imports",
+            "items": {
+              "type": "string"
+            }
+          },
+          "policies": {
+            "type": "array",
+            "description": "Field policies",
+            "items": {
+              "$ref": "#/components/schemas/Policy"
+            }
+          },
+          "strategy": {
+            "type": "string",
+            "description": "Field strategy"
+          }
+        }
+      },
       "ConfigInfo": {
         "type": "object",
         "properties": {
@@ -5520,6 +6205,95 @@
         "required": [
           "success",
           "data"
+        ]
+      },
+      "CreateClientRequest": {
+        "type": "object",
+        "properties": {
+          "allowed_extra_headers": {
+            "type": "array",
+            "description": "Field allowed_extra_headers",
+            "items": {
+              "type": "string"
+            }
+          },
+          "args": {
+            "type": "array",
+            "description": "Field args",
+            "items": {
+              "type": "string"
+            }
+          },
+          "auth_type": {
+            "type": "string",
+            "description": "Field auth_type"
+          },
+          "connection_string": {
+            "type": "string",
+            "description": "Field connection_string"
+          },
+          "connection_type": {
+            "type": "string",
+            "description": "Field connection_type"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Field cwd"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "env": {
+            "type": "object",
+            "description": "Field env",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "description": "Field headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "is_ping_available": {
+            "type": "boolean",
+            "description": "Field is_ping_available"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "oauth_config": {
+            "$ref": "#/components/schemas/MCPOAuthConfig"
+          },
+          "proxy_url": {
+            "type": "string",
+            "description": "Field proxy_url"
+          },
+          "stdio_config": {
+            "$ref": "#/components/schemas/MCPStdioConfig"
+          },
+          "tools_to_auto_execute": {
+            "type": "array",
+            "description": "Field tools_to_auto_execute",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools_to_execute": {
+            "type": "array",
+            "description": "Field tools_to_execute",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "connection_type"
         ]
       },
       "CreateProviderRequest": {
@@ -5594,7 +6368,6 @@
         "type": "object",
         "properties": {
           "data": {
-            "type": "object",
             "description": "Field data"
           },
           "message": {
@@ -5957,9 +6730,6 @@
         },
         "required": [
           "target_type",
-          "rule_uuid",
-          "provider_uuid",
-          "model",
           "test_mode"
         ]
       },
@@ -5981,6 +6751,89 @@
           "success"
         ]
       },
+      "Entry": {
+        "type": "object",
+        "properties": {
+          "alias_hits": {
+            "type": "array",
+            "description": "Field alias_hits",
+            "items": {
+              "type": "string"
+            }
+          },
+          "block_message": {
+            "type": "string",
+            "description": "Field block_message"
+          },
+          "command_name": {
+            "type": "string",
+            "description": "Field command_name"
+          },
+          "credential_names": {
+            "type": "array",
+            "description": "Field credential_names",
+            "items": {
+              "type": "string"
+            }
+          },
+          "credential_refs": {
+            "type": "array",
+            "description": "Field credential_refs",
+            "items": {
+              "type": "string"
+            }
+          },
+          "direction": {
+            "type": "string",
+            "description": "Field direction"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "phase": {
+            "type": "string",
+            "description": "Field phase"
+          },
+          "preview": {
+            "type": "string",
+            "description": "Field preview"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Field provider"
+          },
+          "reasons": {
+            "type": "array",
+            "description": "Field reasons",
+            "items": {
+              "$ref": "#/components/schemas/PolicyResult"
+            }
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field time"
+          },
+          "verdict": {
+            "type": "string",
+            "description": "Field verdict"
+          }
+        },
+        "required": [
+          "time",
+          "scenario",
+          "model",
+          "provider",
+          "direction",
+          "phase",
+          "verdict"
+        ]
+      },
       "ErrorDetail": {
         "type": "object",
         "properties": {
@@ -5995,6 +6848,53 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "ExecuteToolRequest": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "Field arguments",
+            "additionalProperties": {}
+          },
+          "client_id": {
+            "type": "string",
+            "description": "Field client_id"
+          },
+          "tool_name": {
+            "type": "string",
+            "description": "Field tool_name"
+          }
+        },
+        "required": [
+          "client_id",
+          "tool_name"
+        ]
+      },
+      "ExecuteToolResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "execution_time": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field execution_time"
+          },
+          "result": {
+            "type": "string",
+            "description": "Field result"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
         ]
       },
       "ExportProviderResponse": {
@@ -6356,9 +7256,7 @@
       },
       "H": {
         "type": "object",
-        "additionalProperties": {
-          "type": "object"
-        }
+        "additionalProperties": {}
       },
       "HealthInfoResponse": {
         "type": "object",
@@ -6389,7 +7287,6 @@
         "type": "object",
         "properties": {
           "data": {
-            "type": "object",
             "description": "Field data"
           },
           "success": {
@@ -6657,6 +7554,26 @@
           "message"
         ]
       },
+      "InstallCommandResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "install_command": {
+            "type": "string",
+            "description": "Field install_command"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "LatestVersionInfo": {
         "type": "object",
         "properties": {
@@ -6912,16 +7829,12 @@
           "data": {
             "type": "object",
             "description": "Field data",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "fields": {
             "type": "object",
             "description": "Field fields",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "level": {
             "type": "string",
@@ -6964,6 +7877,35 @@
           "logs"
         ]
       },
+      "MCPClient": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/MCPSourceConfig"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "tools": {
+            "type": "array",
+            "description": "Field tools",
+            "items": {
+              "$ref": "#/components/schemas/MCPTool"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "config",
+          "tools",
+          "state"
+        ]
+      },
       "MCPOAuthConfig": {
         "type": "object",
         "properties": {
@@ -7004,6 +7946,27 @@
             "type": "string",
             "description": "Field mode"
           },
+          "request_timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field request_timeout"
+          },
+          "sources": {
+            "type": "array",
+            "description": "Field sources",
+            "items": {
+              "$ref": "#/components/schemas/MCPSourceConfig"
+            }
+          },
+          "strip_disabled_mcp_tools": {
+            "type": "boolean",
+            "description": "Field strip_disabled_mcp_tools"
+          }
+        }
+      },
+      "MCPRuntimeConfigRequest": {
+        "type": "object",
+        "properties": {
           "request_timeout": {
             "type": "integer",
             "format": "int64",
@@ -7186,6 +8149,22 @@
           "command"
         ]
       },
+      "MCPTool": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "MemStatsResponse": {
         "type": "object",
         "properties": {
@@ -7364,9 +8343,7 @@
           "fields": {
             "type": "object",
             "description": "Field fields",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "level": {
             "type": "string",
@@ -7649,9 +8626,7 @@
           "extra_fields": {
             "type": "object",
             "description": "Field extra_fields",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "issuer": {
             "type": "string",
@@ -8137,9 +9112,7 @@
           "categories": {
             "type": "object",
             "description": "Field categories",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "platforms": {
             "type": "array",
@@ -8157,6 +9130,171 @@
           "success",
           "platforms",
           "categories"
+        ]
+      },
+      "Policy": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Field groups",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "match": {
+            "$ref": "#/components/schemas/PolicyMatch"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "verdict": {
+            "type": "string",
+            "description": "Field verdict"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "enabled",
+          "match"
+        ]
+      },
+      "PolicyGroup": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "severity": {
+            "type": "string",
+            "description": "Field severity"
+          }
+        },
+        "required": [
+          "id",
+          "enabled"
+        ]
+      },
+      "PolicyMatch": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/ActionSelector"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "description": "Field case_sensitive"
+          },
+          "credential_refs": {
+            "type": "array",
+            "description": "Field credential_refs",
+            "items": {
+              "type": "string"
+            }
+          },
+          "match_mode": {
+            "type": "string",
+            "description": "Field match_mode"
+          },
+          "min_matches": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field min_matches"
+          },
+          "pattern_mode": {
+            "type": "string",
+            "description": "Field pattern_mode"
+          },
+          "patterns": {
+            "type": "array",
+            "description": "Field patterns",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resources": {
+            "$ref": "#/components/schemas/ResourceMatcher"
+          },
+          "terms": {
+            "type": "array",
+            "description": "Field terms",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tool_names": {
+            "type": "array",
+            "description": "Field tool_names",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PolicyResult": {
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "description": "Field evidence",
+            "additionalProperties": {}
+          },
+          "policy_id": {
+            "type": "string",
+            "description": "Field policy_id"
+          },
+          "policy_name": {
+            "type": "string",
+            "description": "Field policy_name"
+          },
+          "policy_type": {
+            "type": "string",
+            "description": "Field policy_type"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          },
+          "verdict": {
+            "type": "string",
+            "description": "Field verdict"
+          }
+        },
+        "required": [
+          "policy_id",
+          "policy_name",
+          "policy_type",
+          "verdict"
         ]
       },
       "ProbeResult": {
@@ -8275,9 +9413,7 @@
           "input": {
             "type": "object",
             "description": "Field input",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "name": {
             "type": "string",
@@ -8303,8 +9439,7 @@
           }
         },
         "required": [
-          "name",
-          "unified"
+          "name"
         ]
       },
       "ProfileUpdateRequest": {
@@ -8318,11 +9453,7 @@
             "type": "boolean",
             "description": "Field unified"
           }
-        },
-        "required": [
-          "name",
-          "unified"
-        ]
+        }
       },
       "ProviderImportInfo": {
         "type": "object",
@@ -8889,6 +10020,26 @@
           "message"
         ]
       },
+      "ResourceMatcher": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Field mode"
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          },
+          "values": {
+            "type": "array",
+            "description": "Field values",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "RestoreConfigResponse": {
         "type": "object",
         "properties": {
@@ -9080,7 +10231,6 @@
         "type": "object",
         "properties": {
           "data": {
-            "type": "object",
             "description": "Field data"
           },
           "success": {
@@ -9140,9 +10290,7 @@
           "extensions": {
             "type": "object",
             "description": "Field extensions",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "flags": {
             "$ref": "#/components/schemas/ScenarioFlags"
@@ -9408,6 +10556,46 @@
           "success",
           "data"
         ]
+      },
+      "Scope": {
+        "type": "object",
+        "properties": {
+          "content_types": {
+            "type": "array",
+            "description": "Field content_types",
+            "items": {
+              "type": "string"
+            }
+          },
+          "directions": {
+            "type": "array",
+            "description": "Field directions",
+            "items": {
+              "type": "string"
+            }
+          },
+          "models": {
+            "type": "array",
+            "description": "Field models",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scenarios": {
+            "type": "array",
+            "description": "Field scenarios",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "ServerActionResponse": {
         "type": "object",
@@ -9876,9 +11064,7 @@
           "fields": {
             "type": "object",
             "description": "Field fields",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "additionalProperties": {}
           },
           "level": {
             "type": "string",
@@ -9898,6 +11084,34 @@
           "time",
           "level",
           "message"
+        ]
+      },
+      "SystemLogLevelRequest": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "description": "Field level"
+          }
+        },
+        "required": [
+          "level"
+        ]
+      },
+      "SystemLogLevelResponse": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "description": "Field level"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          }
+        },
+        "required": [
+          "level"
         ]
       },
       "SystemLogsResponse": {
@@ -9925,7 +11139,6 @@
         "type": "object",
         "properties": {
           "params": {
-            "type": "object",
             "description": "Field params"
           },
           "type": {
@@ -10145,6 +11358,51 @@
           "source"
         ]
       },
+      "TokenCreateRequest": {
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "description": "Field display_name"
+          }
+        },
+        "required": [
+          "display_name"
+        ]
+      },
+      "TokenCreateResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Field display_name"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          },
+          "token_id": {
+            "type": "string",
+            "description": "Field token_id"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Field user_id"
+          }
+        },
+        "required": [
+          "token",
+          "token_id",
+          "user_id",
+          "display_name",
+          "created_at"
+        ]
+      },
       "TokenInfo": {
         "type": "object",
         "properties": {
@@ -10169,6 +11427,50 @@
           "valid"
         ]
       },
+      "TokenListQuery": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field limit"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field offset"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Field user_id"
+          }
+        }
+      },
+      "TokenListResponse": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "description": "Field tokens",
+            "items": {
+              "$ref": "#/components/schemas/APITokenInfo"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total"
+          }
+        },
+        "required": [
+          "tokens",
+          "total"
+        ]
+      },
       "TokenResponse": {
         "type": "object",
         "properties": {
@@ -10187,6 +11489,80 @@
           "token",
           "type"
         ]
+      },
+      "UpdateClientRequest": {
+        "type": "object",
+        "properties": {
+          "allowed_extra_headers": {
+            "type": "array",
+            "description": "Field allowed_extra_headers",
+            "items": {
+              "type": "string"
+            }
+          },
+          "auth_type": {
+            "type": "string",
+            "description": "Field auth_type"
+          },
+          "connection_string": {
+            "type": "string",
+            "description": "Field connection_string"
+          },
+          "connection_type": {
+            "type": "string",
+            "description": "Field connection_type"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "env": {
+            "type": "object",
+            "description": "Field env",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "description": "Field headers",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "is_ping_available": {
+            "type": "boolean",
+            "description": "Field is_ping_available"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "oauth_config": {
+            "$ref": "#/components/schemas/MCPOAuthConfig"
+          },
+          "proxy_url": {
+            "type": "string",
+            "description": "Field proxy_url"
+          },
+          "stdio_config": {
+            "$ref": "#/components/schemas/MCPStdioConfig"
+          },
+          "tools_to_auto_execute": {
+            "type": "array",
+            "description": "Field tools_to_auto_execute",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools_to_execute": {
+            "type": "array",
+            "description": "Field tools_to_execute",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "UpdateProviderRequest": {
         "type": "object",
@@ -10950,6 +12326,798 @@
           "message",
           "type"
         ]
+      },
+      "guardrailsBuiltinsResponse": {
+        "type": "object",
+        "properties": {
+          "policies": {
+            "type": "array",
+            "description": "Field policies",
+            "items": {
+              "$ref": "#/components/schemas/Policy"
+            }
+          }
+        },
+        "required": [
+          "policies"
+        ]
+      },
+      "guardrailsConfigResponse": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "Field exists"
+          },
+          "imports": {
+            "type": "array",
+            "description": "Field imports",
+            "items": {
+              "$ref": "#/components/schemas/guardrailsImportRef"
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "supported_scenarios": {
+            "type": "array",
+            "description": "Field supported_scenarios",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "exists",
+          "content",
+          "config",
+          "supported_scenarios"
+        ]
+      },
+      "guardrailsConfigUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "guardrailsConfigUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "rule_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field rule_count"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "path",
+          "rule_count"
+        ]
+      },
+      "guardrailsFragmentExportFile": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "policy_ids": {
+            "type": "array",
+            "description": "Field policy_ids",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "content"
+        ]
+      },
+      "guardrailsFragmentExportRequest": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "description": "Field paths",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "paths"
+        ]
+      },
+      "guardrailsFragmentExportResponse": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "description": "Field files",
+            "items": {
+              "$ref": "#/components/schemas/guardrailsFragmentExportFile"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "files"
+        ]
+      },
+      "guardrailsFragmentImportRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "file_name": {
+            "type": "string",
+            "description": "Field file_name"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "guardrailsFragmentImportResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "policy_ids": {
+            "type": "array",
+            "description": "Field policy_ids",
+            "items": {
+              "type": "string"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "path",
+          "policy_ids"
+        ]
+      },
+      "guardrailsGroupCreateRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "severity": {
+            "type": "string",
+            "description": "Field severity"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "guardrailsGroupUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "severity": {
+            "type": "string",
+            "description": "Field severity"
+          }
+        }
+      },
+      "guardrailsGroupUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "group_id": {
+            "type": "string",
+            "description": "Field group_id"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "path",
+          "group_id"
+        ]
+      },
+      "guardrailsHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "guardrailsImportRef": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "policy_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field policy_count"
+          },
+          "policy_ids": {
+            "type": "array",
+            "description": "Field policy_ids",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "policy_count"
+        ]
+      },
+      "guardrailsPolicyCreateRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Field groups",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "match": {
+            "$ref": "#/components/schemas/PolicyMatch"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "verdict": {
+            "type": "string",
+            "description": "Field verdict"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "match"
+        ]
+      },
+      "guardrailsPolicyUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Field groups",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "match": {
+            "$ref": "#/components/schemas/PolicyMatch"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "verdict": {
+            "type": "string",
+            "description": "Field verdict"
+          }
+        }
+      },
+      "guardrailsPolicyUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "policy_id": {
+            "type": "string",
+            "description": "Field policy_id"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "path",
+          "policy_id"
+        ]
+      },
+      "guardrailsRegistryEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          }
+        },
+        "required": [
+          "id",
+          "path"
+        ]
+      },
+      "guardrailsRegistryInstallRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "guardrailsRegistryInstallResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "policy_id": {
+            "type": "string",
+            "description": "Field policy_id"
+          },
+          "registry_url": {
+            "type": "string",
+            "description": "Field registry_url"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "registry_url",
+          "path",
+          "policy_id"
+        ]
+      },
+      "guardrailsRegistryResponse": {
+        "type": "object",
+        "properties": {
+          "policies": {
+            "type": "array",
+            "description": "Field policies",
+            "items": {
+              "$ref": "#/components/schemas/guardrailsRegistryEntry"
+            }
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "url",
+          "policies"
+        ]
+      },
+      "guardrailsReloadResponse": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "rule_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field rule_count"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "path",
+          "rule_count"
+        ]
+      },
+      "guardrailsSuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "protectedCredentialCreateRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Field secret"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "secret"
+        ]
+      },
+      "protectedCredentialDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "credential_id": {
+            "type": "string",
+            "description": "Field credential_id"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "credential_id"
+        ]
+      },
+      "protectedCredentialDetailEnvelope": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/protectedCredentialDetailResponse"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "protectedCredentialDetailResponse": {
+        "type": "object",
+        "properties": {
+          "alias_token": {
+            "type": "string",
+            "description": "Field alias_token"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Field created_at"
+          },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Field secret"
+          },
+          "secret_mask": {
+            "type": "string",
+            "description": "Field secret_mask"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "alias_token",
+          "enabled",
+          "secret_mask"
+        ]
+      },
+      "protectedCredentialMutationResponse": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/protectedCredentialResponse"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "credential"
+        ]
+      },
+      "protectedCredentialResponse": {
+        "type": "object",
+        "properties": {
+          "alias_token": {
+            "type": "string",
+            "description": "Field alias_token"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Field created_at"
+          },
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "secret_mask": {
+            "type": "string",
+            "description": "Field secret_mask"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "alias_token",
+          "enabled",
+          "secret_mask"
+        ]
+      },
+      "protectedCredentialUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Field description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Field secret"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Field tags",
+            "items": {
+              "type": "string"
+            }
+          },
+          "type": {
+            "type": "string",
+            "description": "Field type"
+          }
+        }
+      },
+      "protectedCredentialsListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/protectedCredentialResponse"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
       }
     },
     "securitySchemes": {
@@ -11068,8 +13236,16 @@
       "description": "Operations related to token"
     },
     {
+      "name": "tokens",
+      "description": "Operations related to tokens"
+    },
+    {
       "name": "usage",
       "description": "Operations related to usage"
+    },
+    {
+      "name": "vmodel",
+      "description": "Operations related to vmodel"
     },
     {
       "name": "weixin",

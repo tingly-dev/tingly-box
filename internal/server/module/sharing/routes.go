@@ -1,16 +1,41 @@
 package sharing
 
-import "github.com/gin-gonic/gin"
+import "github.com/tingly-dev/tingly-box/swagger"
 
 // RegisterRoutes wires all token management endpoints onto the given group.
-func RegisterRoutes(group *gin.RouterGroup, h *Handler) {
-	tokens := group.Group("/tokens")
-
-	tokens.POST("", h.Create)
-	tokens.GET("", h.List)
-	tokens.GET("/:token_id", h.Get)
-	tokens.DELETE("/:token_id", h.Delete)
-	tokens.PUT("/:token_id/enable", h.Enable)
-	tokens.PUT("/:token_id/disable", h.Disable)
-	tokens.POST("/:token_id/regenerate", h.Regenerate)
+func RegisterRoutes(group *swagger.RouteGroup, h *Handler) {
+	group.POST("/tokens", h.Create,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Create a shared API token"),
+		swagger.WithRequestModel(TokenCreateRequest{}),
+		swagger.WithResponseModel(TokenCreateResponse{}),
+	)
+	group.GET("/tokens", h.List,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("List shared API tokens"),
+		swagger.WithQueryModel(TokenListQuery{}),
+		swagger.WithResponseModel(TokenListResponse{}),
+	)
+	group.GET("/tokens/:token_id", h.Get,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Get a shared API token"),
+		swagger.WithResponseModel(APITokenInfo{}),
+	)
+	group.DELETE("/tokens/:token_id", h.Delete,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Delete a shared API token"),
+	)
+	group.PUT("/tokens/:token_id/enable", h.Enable,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Enable a shared API token"),
+	)
+	group.PUT("/tokens/:token_id/disable", h.Disable,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Disable a shared API token"),
+	)
+	group.POST("/tokens/:token_id/regenerate", h.Regenerate,
+		swagger.WithTags("tokens"),
+		swagger.WithDescription("Regenerate a shared API token"),
+		swagger.WithResponseModel(TokenCreateResponse{}),
+	)
 }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { api } from '../services/api';
 import { authEvents } from '../services/authState';
+import { getControlApiClient } from '../services/openapi';
 import {
     Dialog,
     DialogTitle,
@@ -143,14 +144,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 // Validate token by making a test API call to the validate endpoint
                 if (finalToken && finalToken.trim() !== '') {
                     try {
-                        const response = await fetch('/api/v1/auth/validate', {
+                        const client = await getControlApiClient();
+                        const result = await client.GET('/api/v1/auth/validate', {
                             headers: {
                                 'Authorization': `Bearer ${finalToken}`,
-                                'Content-Type': 'application/json',
                             },
                         });
 
-                        if (response.ok) {
+                        if (result.response.ok) {
                             // Token is valid
                             setToken(finalToken);
                             await api.initialize();

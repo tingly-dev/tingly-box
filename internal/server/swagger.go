@@ -13,8 +13,10 @@ import (
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
+	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -70,6 +72,11 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	apiV1 := manager.NewGroup("api", "v1", "")
 	apiV1.Router.Use(s.getUserAuthMiddleware())
 	oauthmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), s.oauthHandler)
+	virtualmodelmodule.RegisterRoutes(
+		apiV1,
+		s.getUserAuthMiddleware(),
+		virtualmodelmodule.NewHandler(s.virtualModelService),
+	)
 	// Register callback routes (unauthenticated)
 	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
 
@@ -102,6 +109,10 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// MCP runtime API routes
 	mcpHandler := mcpmodule.NewHandler(cfg)
 	mcpmodule.RegisterRoutes(apiV1, mcpHandler, mcpHandler.GetLocalHandler(), mcpHandler.GetTransportHandler())
+
+	// Schema generation only references these handlers, so no live token store
+	// is required here.
+	sharing.RegisterRoutes(apiV1, sharing.NewHandler(nil))
 
 	// Provider quota API routes
 	// Note: skipped for OpenAPI generation as quotaManager is not available

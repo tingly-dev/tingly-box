@@ -1,10 +1,14 @@
 // API service layer for communicating with the backend
 
 import TinglyService from "@/bindings";
-import type {paths} from '@/client';
+import type {components} from '@/client';
 import {getApiBaseUrl} from '../utils/protocol';
-// Import openapi-fetch
-import createClient from 'openapi-fetch';
+import {
+    controlApi,
+    getControlApiClient as getClient,
+    getControlApiHeaders as getAuthHeaders,
+    resetControlApiClient as resetClient,
+} from './openapi';
 
 // Get user auth token for UI and control API from localStorage
 const getUserAuthToken = (): string | null => {
@@ -34,94 +38,6 @@ const getRemoteCCAuthToken = async (): Promise<string | null> => {
 const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
 };
-
-// Create the typed client with base URL
-const createApiClient = async () => {
-    const basePath = await getApiBaseUrl();
-    return createClient<paths>({baseUrl: basePath});
-};
-
-// Global client instance (lazily initialized)
-let client: ReturnType<typeof createClient<paths>> | null = null;
-let clientInitPromise: Promise<ReturnType<typeof createClient<paths>>> | null = null;
-
-// Get the client singleton
-const getClient = async () => {
-    if (!clientInitPromise) {
-        clientInitPromise = createApiClient().then((c) => {
-            client = c;
-            return c;
-        });
-    }
-    return clientInitPromise;
-};
-
-// Reset client (e.g., when token changes)
-const resetClient = () => {
-    client = null;
-    clientInitPromise = null;
-};
-
-// Helper to get auth headers
-const getAuthHeaders = async (): Promise<Record<string, string>> => {
-    const token = getUserAuthToken();
-
-    // Try to get token from GUI if available
-    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
-        const svc = TinglyService;
-        if (svc) {
-            try {
-                const guiToken = await svc.GetUserAuthToken();
-                if (guiToken) {
-                    return {'Authorization': `Bearer ${guiToken}`};
-                }
-            } catch (err) {
-                console.error('Failed to get GUI token:', err);
-            }
-        }
-    }
-
-    if (token) {
-        return {'Authorization': `Bearer ${token}`};
-    }
-    return {};
-};
-
-// Lightweight fetch helper for endpoints not covered by codegen
-async function uiAPI(path: string, options: RequestInit = {}): Promise<any> {
-    const fullUrl = path.startsWith('/api/v1') ? path : `/api/v1${path}`;
-
-    // Use the same auth logic as getAuthHeaders for consistency
-    let token = getUserAuthToken();
-
-    // Try to get token from GUI if available
-    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
-        const svc = TinglyService;
-        if (svc) {
-            try {
-                const guiToken = await svc.GetUserAuthToken();
-                if (guiToken) {
-                    token = guiToken;
-                }
-            } catch (err) {
-                console.error('Failed to get GUI token for uiAPI:', err);
-            }
-        }
-    }
-
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...options.headers as Record<string, string>,
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    try {
-        const response = await fetch(fullUrl, {headers, ...options});
-        return await response.json();
-    } catch (error) {
-        return {success: false, error: (error as Error).message};
-    }
-}
 
 // Fetch helper for model API endpoints (OpenAI/Anthropic compatible)
 async function modelAPI(url: string, options: RequestInit = {}): Promise<any> {
@@ -326,21 +242,8 @@ export const api = {
     },
 
     // List virtual models registered in the in-process registries.
-    // NOTE: /api/v1/vmodel/available-models is not yet in the OpenAPI spec; raw fetch is intentional.
     getAvailableVirtualModels: async (): Promise<any> => {
-        try {
-            const headers = await getAuthHeaders();
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/vmodel/available-models`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...headers,
-                },
-            });
-            return await response.json();
-        } catch (error: any) {
-            return {success: false, error: error.message};
-        }
+        return controlApi((client, headers) => client.GET('/api/v1/vmodel/available-models', {headers}));
     },
 
     // Server control
@@ -447,10 +350,6 @@ export const api = {
                 headers,
                 body: data
             });
-            if (response.error) {
-                const errBody = response.error as any;
-                return {success: false, error: errBody?.error || 'Request failed'};
-            }
             return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};
@@ -486,10 +385,8 @@ export const api = {
         }
     },
 
-    // PLACEHOLDER: replace with codegen client once openapi schema is regenerated.
-    // Backend: GET /api/v1/rule/flags/registry returns { success, data: FlagSpec[] }
     getRuleFlagRegistry: async (): Promise<any> => {
-        return uiAPI('/rule/flags/registry', {method: 'GET'});
+        return controlApi((client, headers) => client.GET('/api/v1/rule/flags/registry', {headers}));
     },
 
     // Imports providers from a base64/JSONL export bundle.
@@ -528,68 +425,88 @@ export const api = {
 
     // Scenario API
     getScenarios: async (): Promise<any> => {
-        return uiAPI('/scenarios');
+        return controlApi((client, headers) => client.GET('/api/v1/scenarios', {headers}));
     },
 
     getScenarioConfig: async (scenario: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}`);
+        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}', {
+            headers,
+            params: {path: {scenario}},
+        }));
     },
 
     setScenarioConfig: async (scenario: string, config: any): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}`, {
-            method: 'POST',
-            body: JSON.stringify(config),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}', {
+            headers,
+            params: {path: {scenario}},
+            body: config,
+        }));
     },
 
     getScenarioFlag: async (scenario: string, flag: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/flag/${flag}`);
+        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/flag/{flag}', {
+            headers,
+            params: {path: {scenario, flag}},
+        }));
     },
 
     setScenarioFlag: async (scenario: string, flag: string, value: boolean): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/flag/${flag}`, {
-            method: 'PUT',
-            body: JSON.stringify({value}),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/flag/{flag}', {
+            headers,
+            params: {path: {scenario, flag}},
+            body: {value},
+        }));
     },
 
     getScenarioStringFlag: async (scenario: string, flag: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/string-flag/${flag}`);
+        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/string-flag/{flag}', {
+            headers,
+            params: {path: {scenario, flag}},
+        }));
     },
 
     setScenarioStringFlag: async (scenario: string, flag: string, value: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/string-flag/${flag}`, {
-            method: 'PUT',
-            body: JSON.stringify({value}),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/string-flag/{flag}', {
+            headers,
+            params: {path: {scenario, flag}},
+            body: {value},
+        }));
     },
 
     getScenarioIntFlag: async (scenario: string, flag: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/int-flag/${flag}`);
+        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/int-flag/{flag}', {
+            headers,
+            params: {path: {scenario, flag}},
+        }));
     },
 
     setScenarioIntFlag: async (scenario: string, flag: string, value: number): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/int-flag/${flag}`, {
-            method: 'PUT',
-            body: JSON.stringify({value}),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/int-flag/{flag}', {
+            headers,
+            params: {path: {scenario, flag}},
+            body: {value},
+        }));
     },
 
     // Scenario descriptors (includes supports_profiles flag)
     getScenarioDescriptors: async (): Promise<any> => {
-        return uiAPI('/scenario-descriptors');
+        return controlApi((client, headers) => client.GET('/api/v1/scenario-descriptors', {headers}));
     },
 
     // Profile API
     getProfiles: async (scenario: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/profiles`);
+        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/profiles', {
+            headers,
+            params: {path: {scenario}},
+        }));
     },
 
     createProfile: async (scenario: string, name: string, unified?: boolean): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/profiles`, {
-            method: 'POST',
-            body: JSON.stringify({name, unified}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/profiles', {
+            headers,
+            params: {path: {scenario}},
+            body: {name, unified},
+        }));
     },
 
     updateProfile: async (scenario: string, id: string, name: string, unified?: boolean): Promise<any> => {
@@ -600,124 +517,133 @@ export const api = {
         if (unified !== undefined) {
             body.unified = unified;
         }
-        return uiAPI(`/scenario/${scenario}/profiles/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(body),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/profiles/{id}', {
+            headers,
+            params: {path: {scenario, id}},
+            body,
+        }));
     },
 
     deleteProfile: async (scenario: string, id: string): Promise<any> => {
-        return uiAPI(`/scenario/${scenario}/profiles/${id}`, {
-            method: 'DELETE',
-        });
+        return controlApi((client, headers) => client.DELETE('/api/v1/scenario/{scenario}/profiles/{id}', {
+            headers,
+            params: {path: {scenario, id}},
+        }));
     },
 
     // Guardrails API
     getGuardrailsConfig: async (): Promise<any> => {
-        return uiAPI('/guardrails/config');
+        return controlApi((client, headers) => client.GET('/api/v1/guardrails/config', {headers}));
     },
     getGuardrailsBuiltins: async (): Promise<any> => {
-        return uiAPI('/guardrails/builtins');
+        return controlApi((client, headers) => client.GET('/api/v1/guardrails/builtins', {headers}));
     },
     getGuardrailsRegistry: async (forceRefresh = false): Promise<any> => {
-        const query = forceRefresh ? '?refresh=1' : '';
-        return uiAPI(`/guardrails/registry${query}`);
+        return controlApi((client, headers) => client.GET('/api/v1/guardrails/registry', {
+            headers,
+            params: {query: {refresh: forceRefresh ? '1' : undefined}},
+        }));
     },
     installGuardrailsRegistryPolicy: async (id: string): Promise<any> => {
-        return uiAPI('/guardrails/registry/install', {
-            method: 'POST',
-            body: JSON.stringify({id}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/registry/install', {
+            headers,
+            body: {id},
+        }));
     },
     getGuardrailsCredentials: async (): Promise<any> => {
-        return uiAPI('/guardrails/credentials');
+        return controlApi((client, headers) => client.GET('/api/v1/guardrails/credentials', {headers}));
     },
     getGuardrailsCredential: async (credentialId: string): Promise<any> => {
-        return uiAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`);
+        return controlApi((client, headers) => client.GET('/api/v1/guardrails/credential/{id}', {
+            headers,
+            params: {path: {id: credentialId}},
+        }));
     },
     createGuardrailsCredential: async (payload: any): Promise<any> => {
-        return uiAPI('/guardrails/credential', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/credential', {
+            headers,
+            body: payload,
+        }));
     },
     updateGuardrailsCredential: async (credentialId: string, payload: any): Promise<any> => {
-        return uiAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/guardrails/credential/{id}', {
+            headers,
+            params: {path: {id: credentialId}},
+            body: payload,
+        }));
     },
     deleteGuardrailsCredential: async (credentialId: string): Promise<any> => {
-        return uiAPI(`/guardrails/credential/${encodeURIComponent(credentialId)}`, {
-            method: 'DELETE',
-        });
+        return controlApi((client, headers) => client.DELETE('/api/v1/guardrails/credential/{id}', {
+            headers,
+            params: {path: {id: credentialId}},
+        }));
     },
     getGuardrailsHistory: async (): Promise<any> => {
-        return uiAPI('/guardrails/history');
+        return controlApi((client, headers) => client.GET('/api/v1/guardrails/history', {headers}));
     },
     clearGuardrailsHistory: async (): Promise<any> => {
-        return uiAPI('/guardrails/history', {
-            method: 'DELETE',
-        });
+        return controlApi((client, headers) => client.DELETE('/api/v1/guardrails/history', {headers}));
     },
     createGuardrailsPolicy: async (payload: any): Promise<any> => {
-        return uiAPI('/guardrails/policy', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/policy', {
+            headers,
+            body: payload,
+        }));
     },
     updateGuardrailsPolicy: async (policyId: string, payload: any): Promise<any> => {
-        return uiAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/guardrails/policy/{id}', {
+            headers,
+            params: {path: {id: policyId}},
+            body: payload,
+        }));
     },
     deleteGuardrailsPolicy: async (policyId: string): Promise<any> => {
-        return uiAPI(`/guardrails/policy/${encodeURIComponent(policyId)}`, {
-            method: 'DELETE',
-        });
+        return controlApi((client, headers) => client.DELETE('/api/v1/guardrails/policy/{id}', {
+            headers,
+            params: {path: {id: policyId}},
+        }));
     },
     createGuardrailsGroup: async (payload: any): Promise<any> => {
-        return uiAPI('/guardrails/group', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/group', {
+            headers,
+            body: payload,
+        }));
     },
     updateGuardrailsGroup: async (groupId: string, payload: any): Promise<any> => {
-        return uiAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/guardrails/group/{id}', {
+            headers,
+            params: {path: {id: groupId}},
+            body: payload,
+        }));
     },
     deleteGuardrailsGroup: async (groupId: string): Promise<any> => {
-        return uiAPI(`/guardrails/group/${encodeURIComponent(groupId)}`, {
-            method: 'DELETE',
-        });
+        return controlApi((client, headers) => client.DELETE('/api/v1/guardrails/group/{id}', {
+            headers,
+            params: {path: {id: groupId}},
+        }));
     },
 
     updateGuardrailsConfig: async (content: string): Promise<any> => {
-        return uiAPI('/guardrails/config', {
-            method: 'PUT',
-            body: JSON.stringify({content}),
-        });
+        return controlApi((client, headers) => client.PUT('/api/v1/guardrails/config', {
+            headers,
+            body: {content},
+        }));
     },
     importGuardrailsFragment: async (content: string, fileName?: string): Promise<any> => {
-        return uiAPI('/guardrails/fragment/import', {
-            method: 'POST',
-            body: JSON.stringify({content, file_name: fileName}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/fragment/import', {
+            headers,
+            body: {content, file_name: fileName},
+        }));
     },
     exportGuardrailsFragments: async (paths: string[]): Promise<any> => {
-        return uiAPI('/guardrails/fragment/export', {
-            method: 'POST',
-            body: JSON.stringify({paths}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/fragment/export', {
+            headers,
+            body: {paths},
+        }));
     },
 
     reloadGuardrailsConfig: async (): Promise<any> => {
-        return uiAPI('/guardrails/reload', {
-            method: 'POST',
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/guardrails/reload', {headers}));
     },
 
     probeModel: async (uuid: string, model: string): Promise<any> => {
@@ -838,20 +764,6 @@ export const api = {
     }),
     listOpenAIModels: (): Promise<any> => modelAPI('/openai/v1/models'),
     listAnthropicModels: (): Promise<any> => modelAPI('/anthropic/v1/models'),
-
-
-    // Service management within rules
-    addServiceToRule: (ruleName: string, serviceData: any): Promise<any> => uiAPI(`/rule/${ruleName}/services`, {
-        method: 'POST',
-        body: JSON.stringify(serviceData),
-    }),
-    updateServiceInRule: (ruleName: string, serviceIndex: number, serviceData: any): Promise<any> => uiAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
-        method: 'PUT',
-        body: JSON.stringify(serviceData),
-    }),
-    deleteServiceFromRule: (ruleName: string, serviceIndex: number): Promise<any> => uiAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
-        method: 'DELETE',
-    }),
     // Token management
     setUserToken: (token: string): void => {
         localStorage.setItem('user_auth_token', token);
@@ -993,9 +905,6 @@ export const api = {
                 headers,
                 body: data as any
             });
-            if (response.error) {
-                return {success: false, error: 'Request failed', data: response.error};
-            }
             return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};
@@ -1086,23 +995,18 @@ export const api = {
     // var name (e.g. ANTHROPIC_MODEL), and the backend writes them straight
     // into ~/.claude/settings.json under "env".
     applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean, defaultMode: string = 'acceptEdits'): Promise<any> => {
-        return uiAPI('/config/apply/claude', {
-            method: 'POST',
-            body: JSON.stringify({preferences, installStatusLine, defaultMode}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/config/apply/claude', {
+            headers,
+            body: {preferences, installStatusLine, defaultMode},
+        }));
     },
 
     applyOpenCodeConfig: async (): Promise<any> => {
-        return uiAPI('/config/apply/opencode', {
-            method: 'POST',
-            body: JSON.stringify({}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/config/apply/opencode', {headers}));
     },
 
     getOpenCodeConfigPreview: async (): Promise<any> => {
-        return uiAPI('/config/preview/opencode', {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/config/preview/opencode', {headers}));
     },
 
     applyCodexConfig: async (
@@ -1111,9 +1015,6 @@ export const api = {
         authMode?: 'apikey' | 'chatgpt' | 'hybrid',
         oauthProviderUuid?: string,
     ): Promise<any> => {
-        // Uses the typed codegen client (openapi-fetch) rather than uiAPI, which
-        // is being retired. The endpoint is swagger-registered as
-        // POST /api/v1/config/apply/codex (ApplyCodexConfigRequest).
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
@@ -1172,10 +1073,10 @@ export const api = {
         createBackup?: boolean;
         dryRun?: boolean;
     } = {}): Promise<any> => {
-        return uiAPI('/codex/import/openai', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/codex/import/openai', {
+            headers,
+            body: payload,
+        }));
     },
 
     // ============================================
@@ -1663,7 +1564,7 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/imbot-admin/restart/{uuid}' as any, {
+            const response = await client.POST('/api/v1/imbot-admin/restart/{uuid}', {
                 headers,
                 params: {path: {uuid}}
             });
@@ -1794,48 +1695,54 @@ export const api = {
 
     // Start Weixin QR login flow
     weixinQRStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
-            method: 'POST',
-            body: JSON.stringify({bot_uuid: botUUID, bot_platform: platform, bot_name: botName}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/imbot-settings/{uuid}/weixin/qr-start', {
+            headers,
+            params: {path: {uuid: botUUID}},
+            body: {bot_uuid: botUUID, bot_platform: platform, bot_name: botName},
+        }));
     },
 
     // Poll Weixin QR login status
     weixinQRStatus: async (botUUID: string, qrCodeId: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-status?qrcode_id=${qrCodeId}`, {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/imbot-settings/{uuid}/weixin/qr-status', {
+            headers,
+            params: {path: {uuid: botUUID}, query: {qrcode_id: qrCodeId}},
+        }));
     },
 
     // Cancel Weixin QR login flow
     weixinQRCancel: async (botUUID: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-cancel`, {
-            method: 'POST',
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/imbot-settings/{uuid}/weixin/qr-cancel', {
+            headers,
+            params: {path: {uuid: botUUID}},
+        }));
     },
 
     // ========== Feishu/Lark One-Click Registration API ==========
 
     // Start Feishu/Lark one-click app registration; returns a QR verification link
     feishuRegStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${botUUID}/feishu/qr-start`, {
-            method: 'POST',
-            body: JSON.stringify({bot_uuid: botUUID, bot_platform: platform, bot_name: botName}),
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/imbot-settings/{uuid}/feishu/qr-start', {
+            headers,
+            params: {path: {uuid: botUUID}},
+            body: {bot_uuid: botUUID, bot_platform: platform, bot_name: botName},
+        }));
     },
 
     // Poll Feishu/Lark one-click registration status
     feishuRegStatus: async (botUUID: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${botUUID}/feishu/qr-status`, {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/imbot-settings/{uuid}/feishu/qr-status', {
+            headers,
+            params: {path: {uuid: botUUID}},
+        }));
     },
 
     // Cancel a pending Feishu/Lark one-click registration
     feishuRegCancel: async (botUUID: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${botUUID}/feishu/qr-cancel`, {
-            method: 'POST',
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/imbot-settings/{uuid}/feishu/qr-cancel', {
+            headers,
+            params: {path: {uuid: botUUID}},
+        }));
     },
 
     // ========== System Configuration API ==========
@@ -1871,150 +1778,69 @@ export const api = {
 
     // Get MCP runtime config
     getMCPConfig: async (): Promise<any> => {
-        return uiAPI('/mcp/config', {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/mcp/config', {headers}));
     },
 
     // Set MCP runtime config
-    setMCPConfig: async (config: {
-        sources?: Array<{
-            id?: string;
-            enabled?: boolean;
-            transport?: string;
-            endpoint?: string;
-            headers?: Record<string, string>;
-            tools?: string[];
-            command?: string;
-            args?: string[];
-            cwd?: string;
-            env?: Record<string, string>;
-            proxy_url?: string;
-            visibility?: 'client' | 'server';
-            advisor?: {
-                base_url?: string;
-                model?: string;
-                api_key?: string;
-                max_uses_per_request?: number;
-                max_tokens?: number;
-            };
-        }>;
-        request_timeout?: number;
-        strip_disabled_mcp_tools?: boolean;
-    }): Promise<any> => {
-        return uiAPI('/mcp/config', {
-            method: 'PUT',
-            body: JSON.stringify(config),
-        });
-    },
-
-    // Probe models from an arbitrary OpenAI-compatible endpoint
-    probeModels: async (baseUrl: string, apiKey?: string): Promise<{ success: boolean; models?: string[]; error?: string }> => {
-        return uiAPI('/probe-models', {
-            method: 'POST',
-            body: JSON.stringify({ base_url: baseUrl, api_key: apiKey || '' }),
-        });
+    setMCPConfig: async (config: components['schemas']['MCPRuntimeConfigRequest']): Promise<any> => {
+        return controlApi((client, headers) => client.PUT('/api/v1/mcp/config', {
+            headers,
+            body: config,
+        }));
     },
 
     // List all registered MCP clients
     listMCPClients: async (): Promise<any> => {
-        return uiAPI('/mcp/clients', {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/mcp/clients', {headers}));
     },
 
     // Get a specific MCP client by ID
     getMCPClient: async (id: string): Promise<any> => {
-        return uiAPI(`/mcp/client/${id}`, {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/mcp/client/{id}', {
+            headers,
+            params: {path: {id}},
+        }));
     },
 
     // Create a new MCP client
-    createMCPClient: async (data: {
-        name: string;
-        connection_type: 'stdio' | 'http' | 'sse';
-        enabled?: boolean;
-        stdio_config?: {
-            command: string;
-            args?: string[];
-            cwd?: string;
-            env?: string[];
-        };
-        connection_string?: string;
-        auth_type?: 'none' | 'headers' | 'oauth';
-        headers?: Record<string, string>;
-        oauth_config?: {
-            client_id: string;
-            client_secret?: string;
-            authorize_url: string;
-            token_url: string;
-            scopes?: string[];
-        };
-        tools_to_execute?: string[];
-        tools_to_auto_execute?: string[];
-        allowed_extra_headers?: string[];
-        proxy_url?: string;
-        env?: Record<string, string>;
-    }): Promise<any> => {
-        return uiAPI('/mcp/client', {
-            method: 'POST',
-            body: JSON.stringify(data),
-        });
+    createMCPClient: async (data: components['schemas']['CreateClientRequest']): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/mcp/client', {
+            headers,
+            body: data,
+        }));
     },
 
     // Update an MCP client
-    updateMCPClient: async (id: string, data: {
-        name?: string;
-        connection_type?: 'stdio' | 'http' | 'sse';
-        enabled?: boolean;
-        stdio_config?: {
-            command?: string;
-            args?: string[];
-            cwd?: string;
-            env?: string[];
-        };
-        connection_string?: string;
-        auth_type?: 'none' | 'headers' | 'oauth';
-        headers?: Record<string, string>;
-        oauth_config?: {
-            client_id?: string;
-            client_secret?: string;
-            authorize_url?: string;
-            token_url?: string;
-            scopes?: string[];
-        };
-        tools_to_execute?: string[];
-        tools_to_auto_execute?: string[];
-        allowed_extra_headers?: string[];
-        proxy_url?: string;
-        env?: Record<string, string>;
-    }): Promise<any> => {
-        return uiAPI(`/mcp/client/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(data),
-        });
+    updateMCPClient: async (id: string, data: components['schemas']['UpdateClientRequest']): Promise<any> => {
+        return controlApi((client, headers) => client.PUT('/api/v1/mcp/client/{id}', {
+            headers,
+            params: {path: {id}},
+            body: data,
+        }));
     },
 
     // Delete an MCP client
     deleteMCPClient: async (id: string): Promise<any> => {
-        return uiAPI(`/mcp/client/${id}`, {
-            method: 'DELETE',
-        });
+        return controlApi((client, headers) => client.DELETE('/api/v1/mcp/client/{id}', {
+            headers,
+            params: {path: {id}},
+        }));
     },
 
     // Reconnect an MCP client
     reconnectMCPClient: async (id: string): Promise<any> => {
-        return uiAPI(`/mcp/client/${id}/reconnect`, {
-            method: 'POST',
-        });
+        return controlApi((client, headers) => client.POST('/api/v1/mcp/client/{id}/reconnect', {
+            headers,
+            params: {path: {id}},
+        }));
     },
 
     // Get install command for an MCP client
     getMCPInstallCommand: async (name: string): Promise<any> => {
-        return uiAPI(`/mcp/install/${name}`, {
-            method: 'GET',
-        });
+        return controlApi((client, headers) => client.GET('/api/v1/mcp/install/{name}', {
+            headers,
+            params: {path: {name}},
+        }));
     },
 
     // ========== MCP Tool Testing API ==========
@@ -2031,14 +1857,14 @@ export const api = {
         executionTime?: number;
     }> => {
         try {
-            return uiAPI('/mcp/execute', {
-                method: 'POST',
-                body: JSON.stringify({
+            return controlApi((client, headers) => client.POST('/api/v1/mcp/execute', {
+                headers,
+                body: {
                     client_id: clientId,
                     tool_name: toolName,
                     arguments: args,
-                }),
-            });
+                },
+            }));
         } catch (error: any) {
             return {
                 success: false,
@@ -2058,99 +1884,67 @@ export const api = {
         limit?: number;
         offset?: number;
     }): Promise<any> => {
-        try {
-            const client = await getClient();
-            const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/tokens', {
+        const data = await controlApi((client, headers) => client.GET('/api/v1/tokens', {
                 headers,
-                params: {query: params as any}
-            });
-            // openapi-fetch returns { data, error, response }
-            if (response.error) {
-                return {success: false, error: response.error};
-            }
-            return {success: true, data: response.data};
-        } catch (error: any) {
-            return {success: false, error: error.message};
+                params: {query: params}
+            }));
+        if (data?.success === false) {
+            return data;
         }
+        return {success: true, data};
     },
 
     // Get a specific API token
     getAPIToken: async (tokenId: string): Promise<any> => {
-        try {
-            const client = await getClient();
-            const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/tokens/{token_id}', {
+        const data = await controlApi((client, headers) => client.GET('/api/v1/tokens/{token_id}', {
                 headers,
                 params: {path: {token_id: tokenId}}
-            });
-            if (response.error) {
-                return {success: false, error: response.error};
-            }
-            return {success: true, data: response.data};
-        } catch (error: any) {
-            return {success: false, error: error.message};
+            }));
+        if (data?.success === false) {
+            return data;
         }
+        return {success: true, data};
     },
 
     // Create a new API token
     createAPIToken: async (data: {
         display_name: string;
-        expires_in_days?: number;
     }): Promise<any> => {
-        try {
-            const client = await getClient();
-            const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/tokens', {
+        const response = await controlApi((client, headers) => client.POST('/api/v1/tokens', {
                 headers,
                 body: data
-            });
-            if (response.error) {
-                return {success: false, error: response.error};
-            }
-            return {success: true, data: response.data};
-        } catch (error: any) {
-            return {success: false, error: error.message};
+            }));
+        if (response?.success === false) {
+            return response;
         }
+        return {success: true, data: response};
     },
 
     // Delete an API token
     deleteAPIToken: async (tokenId: string): Promise<any> => {
-        try {
-            const client = await getClient();
-            const headers = await getAuthHeaders();
-            const response = await client.DELETE('/api/v1/tokens/{token_id}', {
+        const data = await controlApi((client, headers) => client.DELETE('/api/v1/tokens/{token_id}', {
                 headers,
                 params: {path: {token_id: tokenId}}
-            });
-            if (response.error) {
-                return {success: false, error: response.error};
-            }
-            return {success: true, data: response.data};
-        } catch (error: any) {
-            return {success: false, error: error.message};
+            }));
+        if (data?.success === false) {
+            return data;
         }
+        return {success: true, data};
     },
 
     // Enable an API token
     setAPITokenEnabled: async (tokenId: string, enabled: boolean): Promise<any> => {
-        try {
-            const client = await getClient();
-            const headers = await getAuthHeaders();
-            const endpoint = enabled
+        const endpoint = enabled
                 ? '/api/v1/tokens/{token_id}/enable'
                 : '/api/v1/tokens/{token_id}/disable';
-            const response = await client.PUT(endpoint, {
+        const data = await controlApi((client, headers) => client.PUT(endpoint, {
                 headers,
                 params: {path: {token_id: tokenId}}
-            });
-            if (response.error) {
-                return {success: false, error: response.error};
-            }
-            return {success: true, data: response.data};
-        } catch (error: any) {
-            return {success: false, error: error.message};
+            }));
+        if (data?.success === false) {
+            return data;
         }
+        return {success: true, data};
     },
 };
 

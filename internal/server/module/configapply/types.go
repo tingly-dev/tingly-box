@@ -12,7 +12,7 @@ import (
 // written under "env" in ~/.claude/settings.json. `installStatusLine`
 // is orthogonal — it just toggles the statusLine stanza in settings.json.
 type ApplyClaudeConfigRequest struct {
-	InstallStatusLine bool                   `json:"installStatusLine"`
+	InstallStatusLine bool                   `json:"installStatusLine,omitempty"`
 	Preferences       *agent.ClaudeCodePrefs `json:"preferences"`
 	DefaultMode       string                 `json:"defaultMode,omitempty"`
 }

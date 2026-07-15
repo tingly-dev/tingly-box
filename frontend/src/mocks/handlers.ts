@@ -84,6 +84,15 @@ const mockSystemLogs = [
     { time: '', level: 'error', message: 'background quota refresh failed: context deadline exceeded', fields: { component: 'quota' } },
 ]
 
+const mockGuardrailsGroups: Array<{
+    id: string
+    name: string
+    enabled: boolean
+    severity: string
+}> = [
+    { id: 'default', name: 'Default', enabled: true, severity: 'high' },
+]
+
 // ============================================
 // Mock Providers (v2 API with uuid)
 // ============================================
@@ -1479,6 +1488,7 @@ export const handlers = [
         return HttpResponse.json({
             success: true,
             config: {
+                groups: mockGuardrailsGroups,
                 policies: [
                     {
                         id: 'policy-001',
@@ -1519,6 +1529,52 @@ export const handlers = [
                 { path: '/etc/tingly/guardrails/enterprise.yml', name: 'Enterprise Rules', policy_count: 8 },
             ],
         })
+    }),
+
+    http.post('/api/v1/guardrails/group', async ({ request }) => {
+        const group = await request.json() as { id?: string; name?: string; enabled?: boolean; severity?: string }
+        if (!group.id) {
+            return HttpResponse.json({ success: false, error: 'Group ID is required' }, { status: 400 })
+        }
+        const nextGroup = {
+            id: group.id,
+            name: group.name || group.id,
+            enabled: group.enabled ?? true,
+            severity: group.severity || 'medium',
+        }
+        const existingIndex = mockGuardrailsGroups.findIndex((item) => item.id === group.id)
+        if (existingIndex >= 0) {
+            mockGuardrailsGroups[existingIndex] = nextGroup
+        } else {
+            mockGuardrailsGroups.push(nextGroup)
+        }
+        return HttpResponse.json({ success: true, group: nextGroup })
+    }),
+
+    http.put('/api/v1/guardrails/group/:id', async ({ params, request }) => {
+        const group = await request.json() as { id?: string; name?: string; enabled?: boolean; severity?: string }
+        const groupID = String(params.id)
+        const existingIndex = mockGuardrailsGroups.findIndex((item) => item.id === groupID)
+        if (existingIndex < 0) {
+            return HttpResponse.json({ success: false, error: 'Group not found' }, { status: 404 })
+        }
+        const nextGroup = {
+            ...mockGuardrailsGroups[existingIndex],
+            ...group,
+            id: group.id || groupID,
+        }
+        mockGuardrailsGroups[existingIndex] = nextGroup
+        return HttpResponse.json({ success: true, group: nextGroup })
+    }),
+
+    http.delete('/api/v1/guardrails/group/:id', ({ params }) => {
+        const groupID = String(params.id)
+        const existingIndex = mockGuardrailsGroups.findIndex((item) => item.id === groupID)
+        if (existingIndex < 0) {
+            return HttpResponse.json({ success: false, error: 'Group not found' }, { status: 404 })
+        }
+        mockGuardrailsGroups.splice(existingIndex, 1)
+        return HttpResponse.json({ success: true })
     }),
 
     http.get('/api/v1/guardrails/history', () => {

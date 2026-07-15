@@ -293,6 +293,11 @@ type SystemLogLevelRequest struct {
 	Level string `json:"level" binding:"required"`
 }
 
+type SystemLogLevelResponse struct {
+	Message string `json:"message,omitempty"`
+	Level   string `json:"level"`
+}
+
 // SetSystemLogLevel sets the minimum log level for system logs
 func (h *WebHandler) SetSystemLogLevel(c *gin.Context) {
 	if h.deps.MultiLogger == nil {

@@ -6,6 +6,7 @@ import AILogViewer, {
     type ModelRequestSummary,
     type RequestFilters,
 } from '@/components/AILogViewer.tsx';
+import { getControlApiClient, getControlApiHeaders } from '@/services/openapi';
 
 interface LogExplorerProps {
     // When set, the scenario filter is initialized to this value but can be changed/cleared by the user.
@@ -13,45 +14,47 @@ interface LogExplorerProps {
     initialScenario?: string;
 }
 
-const getAuthHeader = () => ({
-    Authorization: `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
-});
-
 const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
     const [tab, setTab] = useState(0);
 
     const getRequests = useCallback(async (params?: RequestFilters) => {
-        const q = new URLSearchParams();
-        if (params?.limit) q.append('limit', String(params.limit));
-        if (params?.scenario) q.append('scenario', params.scenario);
-        if (params?.provider) q.append('provider', params.provider);
-        if (params?.status) q.append('status', params.status);
-
-        const res = await fetch(`/api/v1/requests?${q}`, { headers: getAuthHeader() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const [client, headers] = await Promise.all([getControlApiClient(), getControlApiHeaders()]);
+        const result = await client.GET('/api/v1/requests', {
+            headers,
+            params: {query: {
+                limit: params?.limit,
+                scenario: params?.scenario,
+                provider: params?.provider,
+                status: params?.status,
+            }},
+        });
+        if (!result.response.ok) throw new Error(`HTTP ${result.response.status}`);
+        const data = result.data!;
         return { total: data.total || 0, requests: (data.requests || []) as ModelRequestSummary[] };
     }, []);
 
     const getRequestDetail = useCallback(async (id: string): Promise<ModelRequestDetail | null> => {
-        const res = await fetch(`/api/v1/requests/${encodeURIComponent(id)}`, { headers: getAuthHeader() });
-        if (!res.ok) {
-            if (res.status === 404) return null;
-            throw new Error(`HTTP ${res.status}`);
+        const [client, headers] = await Promise.all([getControlApiClient(), getControlApiHeaders()]);
+        const result = await client.GET('/api/v1/requests/{id}', {
+            headers,
+            params: {path: {id}},
+        });
+        if (!result.response.ok) {
+            if (result.response.status === 404) return null;
+            throw new Error(`HTTP ${result.response.status}`);
         }
-        return (await res.json()) as ModelRequestDetail;
+        return result.data as ModelRequestDetail;
     }, []);
 
     const getSystemLogs = useCallback(
         async (params?: { limit?: number; level?: string; since?: string }) => {
-            const q = new URLSearchParams();
-            if (params?.limit) q.append('limit', String(params.limit));
-            if (params?.level) q.append('level', params.level);
-            if (params?.since) q.append('since', params.since);
-
-            const res = await fetch(`/api/v1/system/logs?${q}`, { headers: getAuthHeader() });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+            const [client, headers] = await Promise.all([getControlApiClient(), getControlApiHeaders()]);
+            const result = await client.GET('/api/v1/system/logs', {
+                headers,
+                params: {query: {limit: params?.limit}},
+            });
+            if (!result.response.ok) throw new Error(`HTTP ${result.response.status}`);
+            const data = result.data!;
             return { total: data.total || 0, logs: data.logs || [] };
         },
         [],

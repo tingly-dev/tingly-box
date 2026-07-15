@@ -9,6 +9,14 @@ type TokenCreateRequest struct {
 	DisplayName string `json:"display_name" binding:"required"`
 }
 
+// TokenListQuery describes the optional filters accepted by GET /tokens.
+type TokenListQuery struct {
+	UserID  string `form:"user_id" json:"user_id,omitempty"`
+	Enabled *bool  `form:"enabled" json:"enabled,omitempty"`
+	Limit   int    `form:"limit" json:"limit,omitempty"`
+	Offset  int    `form:"offset" json:"offset,omitempty"`
+}
+
 // TokenCreateResponse is returned after a token is created or regenerated.
 type TokenCreateResponse struct {
 	Token       string    `json:"token"`

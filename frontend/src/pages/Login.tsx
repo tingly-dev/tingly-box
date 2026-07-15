@@ -3,6 +3,7 @@ import { Alert, Box, Button, Container, Paper, TextField, Typography } from '@mu
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { getControlApiClient } from '../services/openapi';
 
 const Login: React.FC = () => {
     const { t } = useTranslation();
@@ -24,14 +25,14 @@ const Login: React.FC = () => {
         setError('');
 
         try {
-            const response = await fetch('/api/v1/auth/validate', {
+            const client = await getControlApiClient();
+            const result = await client.GET('/api/v1/auth/validate', {
                 headers: {
                     'Authorization': `Bearer ${urlToken}`,
-                    'Content-Type': 'application/json',
                 },
             });
 
-            if (response.ok) {
+            if (result.response.ok) {
                 await login(urlToken);
                 sessionStorage.removeItem('redirectAfterLogin');
                 // Use window.location.href to trigger a full page reload
@@ -66,14 +67,14 @@ const Login: React.FC = () => {
 
         try {
             // Validate the token by making a test API call to the validate endpoint
-            const response = await fetch('/api/v1/auth/validate', {
+            const client = await getControlApiClient();
+            const result = await client.GET('/api/v1/auth/validate', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
                 },
             });
 
-            if (response.ok) {
+            if (result.response.ok) {
                 await login(token);
                 // Clear the saved redirect path
                 sessionStorage.removeItem('redirectAfterLogin');

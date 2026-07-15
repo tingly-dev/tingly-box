@@ -2,6 +2,7 @@ import { Stack, Switch, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import LogExplorer from '@/components/LogExplorer';
 import UnifiedCard from '@/components/UnifiedCard';
+import { controlApi } from '@/services/openapi';
 
 const LogsPage = () => {
     const [debugMode, setDebugMode] = useState(false);
@@ -13,13 +14,8 @@ const LogsPage = () => {
 
     const fetchDebugMode = async () => {
         try {
-            const response = await fetch('/api/v1/system/logs/level', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
+            const data = await controlApi((client, headers) => client.GET('/api/v1/system/logs/level', {headers}));
+            if (data?.success !== false) {
                 setDebugMode(data.level === 'debug');
             }
         } catch (error) {
@@ -31,15 +27,11 @@ const LogsPage = () => {
         const newDebugMode = event.target.checked;
         setLoadingDebug(true);
         try {
-            const response = await fetch('/api/v1/system/logs/level', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
-                },
-                body: JSON.stringify({ level: newDebugMode ? 'debug' : 'info' }),
-            });
-            if (response.ok) {
+            const data = await controlApi((client, headers) => client.POST('/api/v1/system/logs/level', {
+                headers,
+                body: {level: newDebugMode ? 'debug' : 'info'},
+            }));
+            if (data?.success !== false) {
                 setDebugMode(newDebugMode);
             }
         } catch (error) {
