@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Box, Paper, Tooltip, Typography } from '@mui/material';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Box, Paper, Skeleton, Tooltip, Typography } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { format } from 'date-fns';
 import api from '@/services/api';
@@ -8,8 +8,9 @@ import { type DailyUsage, TokenHeatmap } from './TokenHeatmap';
 // The activity heatmap is a fixed, long-window overview: it always shows the
 // last N days regardless of the dashboard's selected range, mirroring the
 // GitHub contribution-graph convention (a full year → 52 week columns, which
-// also gives the grid the right proportions for the wide chart pane). Only
-// the Provider filter is shared with the rest of the dashboard.
+// also gives the grid the right proportions for the wide chart pane). The
+// Provider / Model / Identity filters are shared with the rest of the
+// dashboard; only the time range is fixed.
 const HEATMAP_DAYS = 365;
 
 const toLocalISOString = (date: Date): string => {
@@ -29,14 +30,23 @@ const getLocalMidnight = (date: Date): Date =>
 interface DashboardHeatmapSectionProps {
     /** Provider uuid filter, or 'all'. Shared with the rest of the dashboard. */
     provider: string;
+    /** Model filter, or 'all'. Shared with the rest of the dashboard. */
+    model?: string;
+    /** Identity (user_id) filter, or 'all'. Shared with the rest of the dashboard. */
+    user?: string;
     /** Bumping this triggers a refetch (e.g. on manual refresh). */
     refreshKey?: number;
 }
 
-export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: DashboardHeatmapSectionProps) {
+export default function DashboardHeatmapSection({ provider, model = 'all', user = 'all', refreshKey = 0 }: DashboardHeatmapSectionProps) {
     const [dailyData, setDailyData] = useState<DailyUsage[]>([]);
+    const [loading, setLoading] = useState(true);
+    // Monotonic sequence to drop out-of-order responses when filters change
+    // faster than requests complete (same pattern as DashboardPage.loadData).
+    const requestSeq = useRef(0);
 
-    const loadData = useCallback(async (providerFilter: string) => {
+    const loadData = useCallback(async (providerFilter: string, modelFilter: string, userFilter: string) => {
+        const seq = ++requestSeq.current;
         try {
             const todayStart = getLocalMidnight(new Date());
             const startTime = new Date(todayStart);
@@ -52,8 +62,17 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
             if (providerFilter && providerFilter !== 'all') {
                 params.provider = providerFilter;
             }
+            if (modelFilter && modelFilter !== 'all') {
+                params.model = modelFilter;
+            }
+            if (userFilter && userFilter !== 'all') {
+                params.user_id = userFilter;
+            }
 
             const result = await api.getUsageTimeSeries(params);
+            if (seq !== requestSeq.current) {
+                return;
+            }
 
             const dataMap = new Map<string, { inputTokens: number; outputTokens: number; cacheTokens: number }>();
             if (result?.data) {
@@ -87,12 +106,16 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
             setDailyData(daily);
         } catch (error) {
             console.error('Failed to load heatmap data:', error);
+        } finally {
+            if (seq === requestSeq.current) {
+                setLoading(false);
+            }
         }
     }, []);
 
     useEffect(() => {
-        loadData(provider);
-    }, [loadData, provider, refreshKey]);
+        loadData(provider, model, user);
+    }, [loadData, provider, model, user, refreshKey]);
 
     return (
         // Standard dashboard card (same style as RequestsView / Usage by
@@ -122,7 +145,7 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
                     · Last 12 months
                 </Typography>
                 <Tooltip
-                    title={`Fixed ${HEATMAP_DAYS}-day window — not affected by the range selector (the Provider filter still applies).`}
+                    title={`Fixed ${HEATMAP_DAYS}-day window — not affected by the range selector (the Provider / Model / Identity filters still apply).`}
                     arrow
                 >
                     <InfoIcon sx={{ fontSize: 15, color: 'text.disabled', cursor: 'default' }} />
@@ -130,7 +153,11 @@ export default function DashboardHeatmapSection({ provider, refreshKey = 0 }: Da
             </Box>
 
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                {dailyData.length > 0 ? (
+                {loading && dailyData.length === 0 ? (
+                    // First load: a grid-shaped skeleton instead of flashing
+                    // the "No activity" empty state before data arrives.
+                    <Skeleton variant="rounded" height={160} sx={{ borderRadius: 1.5 }} />
+                ) : dailyData.length > 0 ? (
                     <TokenHeatmap data={dailyData} />
                 ) : (
                     <Box sx={{ py: 6, color: 'text.secondary', textAlign: 'center' }}>

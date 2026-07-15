@@ -141,7 +141,7 @@ export default function DashboardPage() {
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
 
     // Chart view mode: the trend chart ('summary'), the per-request list
-    // ('requests', hourly ranges only), or the fixed 180-day activity heatmap
+    // ('requests', hourly ranges only), or the fixed 12-month activity heatmap
     // ('activity').
     const [viewMode, setViewMode] = useState<'summary' | 'requests' | 'activity'>('summary');
     // "By Request" only exists for hourly ranges; fall back to the trend if a
@@ -149,7 +149,20 @@ export default function DashboardPage() {
     const effectiveViewMode = viewMode === 'requests' && !isHourlyRange ? 'summary' : viewMode;
     const [records, setRecords] = useState<UsageRecord[]>([]);
     const [recordsLoading, setRecordsLoading] = useState(false);
-    const [recordsTimeParams, setRecordsTimeParams] = useState<{ start_time: string; end_time: string } | null>(null);
+    // Real total in range from the server (records itself is capped at 500).
+    const [recordsTotal, setRecordsTotal] = useState(0);
+    // Full parameter set for the records query (time window + filters),
+    // written by loadData after each load. A fresh object per load means the
+    // requests-view effect refires exactly once per dashboard load — records
+    // used to be fetched twice per filter change (once from the filter deps,
+    // once from the new time params).
+    const [recordsParams, setRecordsParams] = useState<{
+        start_time: string;
+        end_time: string;
+        provider: string;
+        model: string;
+        user: string;
+    } | null>(null);
 
     const buildTimeParams = useCallback((provider: string, model: string, user: string, range: TimeRange) => {
         const now = new Date();
@@ -233,7 +246,9 @@ export default function DashboardPage() {
             const params = buildTimeParams(provider, model, user, range);
 
             const [statsResult, timeSeriesResult] = await Promise.all([
-                api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
+                // limit is the server-side max (1000): the stat-card totals are
+                // summed from these groups, so a low limit silently under-counts.
+                api.getUsageStats({ ...params, group_by: 'model', limit: 1000 }),
                 api.getUsageTimeSeries({ ...params, interval: config.interval }),
             ]);
 
@@ -250,8 +265,8 @@ export default function DashboardPage() {
                 setTimeSeries(timeSeriesResult.data);
             }
 
-            // Store time params for records loading
-            setRecordsTimeParams({ start_time: params.start_time, end_time: params.end_time });
+            // Store the records query params for the requests view
+            setRecordsParams({ start_time: params.start_time, end_time: params.end_time, provider, model, user });
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         } finally {
@@ -262,37 +277,44 @@ export default function DashboardPage() {
         }
     }, [buildTimeParams]);
 
-    const loadRecords = useCallback(async (
-        timeParams: { start_time: string; end_time: string } | null,
-        provider: string,
-        model: string,
-        user: string,
-    ) => {
-        if (!timeParams) return;
+    // Same out-of-order protection as loadData: without it, a slow earlier
+    // response could overwrite the requests view after a newer one landed.
+    const recordsSeq = useRef(0);
+
+    const loadRecords = useCallback(async (params: typeof recordsParams) => {
+        if (!params) return;
+        const seq = ++recordsSeq.current;
         setRecordsLoading(true);
         try {
             const filters: Record<string, any> = {
-                ...timeParams,
+                start_time: params.start_time,
+                end_time: params.end_time,
                 limit: 500,
                 offset: 0,
             };
-            if (provider !== 'all') {
-                filters.provider = provider;
+            if (params.provider !== 'all') {
+                filters.provider = params.provider;
             }
-            if (model !== 'all') {
-                filters.model = model;
+            if (params.model !== 'all') {
+                filters.model = params.model;
             }
-            if (user !== 'all') {
-                filters.user_id = user;
+            if (params.user !== 'all') {
+                filters.user_id = params.user;
             }
             const result = await api.getUsageRecords(filters);
+            if (seq !== recordsSeq.current) {
+                return;
+            }
             if (result?.data) {
                 setRecords(result.data);
+                setRecordsTotal(result.meta?.total ?? result.data.length);
             }
         } catch (error) {
             console.error('Failed to load records:', error);
         } finally {
-            setRecordsLoading(false);
+            if (seq === recordsSeq.current) {
+                setRecordsLoading(false);
+            }
         }
     }, []);
 
@@ -311,48 +333,44 @@ export default function DashboardPage() {
         }
     }, [isHourlyRange]);
 
-    // Load records when entering requests view or time/provider/model changes
+    // Load records when entering the requests view or when a dashboard load
+    // publishes new query params (filters are carried inside recordsParams).
     useEffect(() => {
         if (viewMode === 'requests') {
-            loadRecords(recordsTimeParams, selectedProvider, selectedModel, selectedUser);
+            loadRecords(recordsParams);
         }
-    }, [viewMode, recordsTimeParams, selectedProvider, selectedModel, selectedUser, loadRecords]);
+    }, [viewMode, recordsParams, loadRecords]);
 
     // Reset model pagination when filters or data change
     useEffect(() => {
         setModelsPage(0);
     }, [stats, selectedProvider, selectedModel, selectedUser]);
 
-    // Reset filters if selected provider/model no longer exists in current data
+    // Reset a selection only when it disappears from the configured metadata
+    // (a deleted provider / sharing key). Checking against the already-filtered
+    // stats used to wipe BOTH provider and model back to "all" whenever a
+    // combination simply had no data in the selected range.
     useEffect(() => {
-        if (selectedProvider !== 'all') {
-            const providerExists = stats.some(s => s.provider_uuid === selectedProvider);
-            if (!providerExists) {
-                setSelectedProvider('all');
-            }
-        }
-        if (selectedModel !== 'all') {
-            const modelExists = stats.some(s => (s.model || s.key) === selectedModel);
-            if (!modelExists) {
-                setSelectedModel('all');
-            }
+        if (selectedProvider !== 'all' && providers.length > 0 && !providers.some((p) => p.uuid === selectedProvider)) {
+            setSelectedProvider('all');
         }
         if (selectedUser !== 'all' && !usageIdentities.some((identity) => identity.userId === selectedUser)) {
             setSelectedUser('all');
         }
-    }, [stats, usageIdentities, selectedProvider, selectedModel, selectedUser]);
+    }, [providers, usageIdentities, selectedProvider, selectedUser]);
 
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
+                // loadData refreshes charts and, via the fresh recordsParams
+                // object it publishes, the requests view. Bump the heatmap key
+                // too — the Activity view used to go stale under auto-refresh.
                 loadData(selectedProvider, selectedModel, selectedUser, timeRange);
-                if (viewMode === 'requests') {
-                    loadRecords(recordsTimeParams, selectedProvider, selectedModel, selectedUser);
-                }
+                setHeatmapRefresh((n) => n + 1);
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider, selectedModel, selectedUser, timeRange, viewMode, loadRecords, recordsTimeParams]);
+    }, [autoRefresh, loadData, selectedProvider, selectedModel, selectedUser, timeRange]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -367,10 +385,6 @@ export default function DashboardPage() {
     const totalOutputTokens = stats.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0);
     const totalCacheTokens = stats.reduce((sum, s) => sum + (s.cache_input_tokens || 0), 0);
     const totalTokens = totalInputTokens + totalOutputTokens + totalCacheTokens;
-
-    // Calculate average latency (weighted by request count)
-    const totalLatencyWeight = stats.reduce((sum, s) => sum + (s.avg_latency_ms || 0) * (s.request_count || 0), 0);
-    const avgLatency = totalRequests > 0 ? totalLatencyWeight / totalRequests : 0;
 
     // Calculate error rate
     const totalErrors = stats.reduce((sum, s) => sum + (s.error_count || 0), 0);
@@ -400,7 +414,9 @@ export default function DashboardPage() {
         return totalB - totalA;
     });
 
-    const tokenChartData = sortedStats.slice(0, 10).map((stat) => {
+    // Full list (not top-10): the panel paginates, and its "N total" label
+    // must reflect the real model count.
+    const tokenChartData = sortedStats.map((stat) => {
         const provider = stat.provider_name || 'Unknown';
         const model = stat.model || stat.key || 'Unknown';
         const label = `${provider} - ${model}`;
@@ -414,6 +430,12 @@ export default function DashboardPage() {
             cacheTokens: stat.cache_input_tokens || 0,
         };
     });
+
+    // Bars are scaled against the biggest model; sortedStats is descending by
+    // total tokens, so the first entry is the max.
+    const maxModelTokens = tokenChartData.length > 0
+        ? tokenChartData[0].inputTokens + tokenChartData[0].outputTokens + (tokenChartData[0].cacheTokens || 0)
+        : 0;
 
     // Group providers by auth_type for the dropdown
     const authTypeLabel = (authType: string): string => {
@@ -429,14 +451,22 @@ export default function DashboardPage() {
 
     const AUTH_TYPE_ORDER = ['oauth', 'api_key', 'bearer_token', 'basic_auth', 'vmodel'];
 
-    const groupedProviderOptions = useMemo(() => {
-        // Extract provider UUIDs that exist in current stats data
-        const providerUuidsInData = new Set(
-            stats
-                .map(s => s.provider_uuid)
-                .filter((uuid): uuid is string => uuid != null && uuid !== '')
-        );
+    // Providers that appear in the data — snapshotted only while no provider
+    // is selected. Deriving this from the live (already filtered) stats
+    // collapsed the dropdown to just the selected provider, forcing a
+    // clear-filters round-trip to switch to a different one.
+    const [providerUuidsInData, setProviderUuidsInData] = useState<Set<string>>(() => new Set());
+    useEffect(() => {
+        if (selectedProvider === 'all') {
+            setProviderUuidsInData(new Set(
+                stats
+                    .map(s => s.provider_uuid)
+                    .filter((uuid): uuid is string => uuid != null && uuid !== '')
+            ));
+        }
+    }, [stats, selectedProvider]);
 
+    const groupedProviderOptions = useMemo(() => {
         const groups: Record<string, Provider[]> = {};
         providers
             .filter(p => providerUuidsInData.has(p.uuid))  // Only include providers in current data
@@ -456,27 +486,27 @@ export default function DashboardPage() {
                 label: authTypeLabel(authType),
                 providers: groups[authType],
             }));
-    }, [providers, stats]);
+    }, [providers, providerUuidsInData]);
 
-    // Extract unique models from stats, sorted by usage
-    const modelOptions = useMemo(() => {
-        const modelMap = new Map<string, { model: string; providerName: string; totalTokens: number }>();
+    // Unique models from stats, sorted by usage — same snapshot pattern as the
+    // provider options: only recompute while no model is selected, so sibling
+    // models stay selectable after picking one.
+    const [modelOptions, setModelOptions] = useState<string[]>([]);
+    useEffect(() => {
+        if (selectedModel !== 'all') return;
+        const modelMap = new Map<string, { model: string; totalTokens: number }>();
         stats.forEach((stat) => {
             const model = stat.model || stat.key || 'Unknown';
             const totalTokens = (stat.total_input_tokens || 0) + (stat.total_output_tokens || 0) + (stat.cache_input_tokens || 0);
             const existing = modelMap.get(model);
             if (!existing || totalTokens > existing.totalTokens) {
-                modelMap.set(model, {
-                    model,
-                    providerName: stat.provider_name || 'Unknown',
-                    totalTokens,
-                });
+                modelMap.set(model, { model, totalTokens });
             }
         });
-        return Array.from(modelMap.values())
+        setModelOptions(Array.from(modelMap.values())
             .sort((a, b) => b.totalTokens - a.totalTokens)
-            .map((m) => m.model);
-    }, [stats]);
+            .map((m) => m.model));
+    }, [stats, selectedModel]);
 
     const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all' || selectedUser !== 'all';
 
@@ -541,7 +571,6 @@ export default function DashboardPage() {
                     value={selectedModel}
                     label="Model"
                     onChange={(e) => setSelectedModel(e.target.value)}
-                    disabled={!stats.length}
                     sx={{
                         borderRadius: 2,
                         '& .MuiOutlinedInput-input': { py: 1 },
@@ -753,7 +782,12 @@ export default function DashboardPage() {
                         </Box>
 
                         {effectiveViewMode === 'activity' ? (
-                            <DashboardHeatmapSection provider={selectedProvider} refreshKey={heatmapRefresh} />
+                            <DashboardHeatmapSection
+                                provider={selectedProvider}
+                                model={selectedModel}
+                                user={selectedUser}
+                                refreshKey={heatmapRefresh}
+                            />
                         ) : effectiveViewMode === 'summary' ? (
                             timeRange === 'today' || timeRange === 'yesterday' ? (
                                 <HourlyTokenHistoryChart data={timeSeries} />
@@ -761,7 +795,7 @@ export default function DashboardPage() {
                                 <DailyTokenHistoryChart data={timeSeries} />
                             )
                         ) : (
-                            <RequestsView records={records} loading={recordsLoading} />
+                            <RequestsView records={records} loading={recordsLoading} totalCount={recordsTotal} />
                         )}
                     </Box>
                 </Box>
@@ -803,8 +837,7 @@ export default function DashboardPage() {
                                         .map((item, index) => {
                                             const globalIndex = modelsPage * modelsPerPage + index;
                                             const totalTokens = item.inputTokens + item.outputTokens + (item.cacheTokens || 0);
-                                            const maxTokens = Math.max(...tokenChartData.map(d => d.inputTokens + d.outputTokens + (d.cacheTokens || 0)));
-                                            const percentage = maxTokens > 0 ? (totalTokens / maxTokens) * 100 : 0;
+                                            const percentage = maxModelTokens > 0 ? (totalTokens / maxModelTokens) * 100 : 0;
 
                                 return (
                                     <Tooltip

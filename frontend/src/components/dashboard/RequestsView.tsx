@@ -262,6 +262,10 @@ const getLatencyColor = (ms: number, theme: any) => {
 interface TableSectionProps {
     records: UsageRecord[];
     total: number;
+    /** Number of records actually loaded from the server (page cap). */
+    loadedCount?: number;
+    /** Real total in range reported by the server. */
+    totalCount?: number;
     page: number;
     rowsPerPage: number;
     statusFilter: 'all' | 'success' | 'error';
@@ -271,8 +275,11 @@ interface TableSectionProps {
     onRowsPerPageChange: (r: number) => void;
 }
 
-function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading, onStatusFilterChange, onPageChange, onRowsPerPageChange }: TableSectionProps) {
+function RequestTable({ records, total, loadedCount, totalCount, page, rowsPerPage, statusFilter, loading, onStatusFilterChange, onPageChange, onRowsPerPageChange }: TableSectionProps) {
     const theme = useTheme();
+    // The server caps how many records one query returns; when the range holds
+    // more, say so instead of presenting the capped count as the real total.
+    const truncated = totalCount != null && loadedCount != null && totalCount > loadedCount;
 
     return (
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
@@ -281,7 +288,9 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                 <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                     Requests
                     <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                        {!loading && `${total.toLocaleString()} total`}
+                        {!loading && (truncated
+                            ? `${totalCount.toLocaleString()} total · showing most recent ${loadedCount.toLocaleString()}`
+                            : `${total.toLocaleString()} total`)}
                     </Typography>
                 </Typography>
                 <ToggleButtonGroup
@@ -447,9 +456,11 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
 interface RequestsViewProps {
     records: UsageRecord[];
     loading: boolean;
+    /** Real total in range from the server; records may be capped below it. */
+    totalCount?: number;
 }
 
-export default function RequestsView({ records, loading }: RequestsViewProps) {
+export default function RequestsView({ records, loading, totalCount }: RequestsViewProps) {
     const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(50);
@@ -472,6 +483,8 @@ export default function RequestsView({ records, loading }: RequestsViewProps) {
             <RequestTable
                 records={paged}
                 total={filtered.length}
+                loadedCount={records.length}
+                totalCount={totalCount}
                 page={page}
                 rowsPerPage={rowsPerPage}
                 statusFilter={statusFilter}

@@ -76,9 +76,11 @@ const computeStreaks = (allDays: string[], valueByDate: Map<string, number>) => 
     return { longestStreak, currentStreak };
 };
 
-// Get Monday-based weekday (0 = Monday, 6 = Sunday)
+// Get Monday-based weekday (0 = Monday, 6 = Sunday).
+// Parse as local time (T00:00:00) — a bare YYYY-MM-DD is parsed as UTC
+// midnight, which shifts the weekday by one in timezones behind UTC.
 const getMondayBasedWeekday = (dateStr: string): number => {
-    const date = new Date(dateStr);
+    const date = new Date(`${dateStr}T00:00:00`);
     const sundayBased = date.getDay();
     return (sundayBased + 6) % 7;
 };
@@ -195,6 +197,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
     // week columns, clamped to a sane range. Falls back to horizontal scroll
     // below the minimum.
     const containerRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const [cellSize, setCellSize] = useState(12);
     const weekCount = weeks.length;
     useEffect(() => {
@@ -210,6 +213,17 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
         return () => observer.disconnect();
     }, [weekCount]);
 
+    // When the grid is wider than the pane (horizontal scroll active), start
+    // scrolled to the right so the most recent weeks are visible — matching
+    // where the user's attention is (GitHub does the same).
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        if (el.scrollWidth > el.clientWidth) {
+            el.scrollLeft = el.scrollWidth - el.clientWidth;
+        }
+    }, [weekCount, cellSize]);
+
     return (
         // Outer box measures the available width and centers the group.
         <Box ref={containerRef} sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
@@ -217,12 +231,16 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                 width, so the composition holds together instead of scattering
                 across the pane. */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxWidth: '100%', minWidth: 0 }}>
-                <Box sx={{ overflowX: 'auto', overflowY: 'hidden', pb: 0.5 }}>
+                <Box ref={scrollRef} sx={{ overflowX: 'auto', overflowY: 'hidden', pb: 0.5 }}>
+                    {/* The label column is the same fixed width the cell-size
+                        calculation assumes, so the grid fits the measured pane
+                        exactly — a max-content column can differ by a few px
+                        and leave a phantom scrollbar that flickers on resize. */}
                     <Box
                         sx={{
                             display: 'grid',
                             gap: `${CELL_GAP}px`,
-                            gridTemplateColumns: `max-content repeat(${weeks.length}, ${cellSize}px)`,
+                            gridTemplateColumns: `${DAY_LABEL_WIDTH - CELL_GAP}px repeat(${weeks.length}, ${cellSize}px)`,
                             gridTemplateRows: `repeat(8, ${cellSize}px)`,
                         }}
                     >
@@ -384,13 +402,18 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 border: cellBorder,
                                                 borderRadius: '3px',
                                                 cursor: 'default',
-                                                transition: 'transform 0.1s, opacity 0.1s',
+                                                transition: 'opacity 0.1s',
+                                                // Highlight with outline/opacity only. A hover
+                                                // transform: scale() extends the scrollable
+                                                // overflow of the overflowX container, so edge
+                                                // cells made the scrollbar flicker in and out
+                                                // and the grid jump under the cursor.
                                                 '&:hover': {
-                                                    transform: 'scale(1.25)',
-                                                    opacity: 0.9,
-                                                    outline: '1px solid',
+                                                    opacity: 0.85,
+                                                    outline: '1.5px solid',
                                                     outlineColor: 'text.primary',
                                                     outlineOffset: '1px',
+                                                    zIndex: 1,
                                                 },
                                                 p: 0,
                                             }}
