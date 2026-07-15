@@ -8,8 +8,8 @@ const mockModelRequests = [
         request_id: 'req-anthropic-ok',
         time: '',
         scenario: 'anthropic',
-        request_model: 'claude-sonnet-4',
-        routed_model: 'claude-sonnet-4-20250514',
+        request_model: 'claude-sonnet-5',
+        routed_model: 'claude-sonnet-5',
         provider: 'Anthropic',
         method: 'POST',
         path: '/anthropic/v1/messages',
@@ -23,8 +23,8 @@ const mockModelRequests = [
         request_id: 'req-openai-routed',
         time: '',
         scenario: 'openai',
-        request_model: 'gpt-4o',
-        routed_model: 'claude-sonnet-4-20250514',
+        request_model: 'gpt-5.6-sol',
+        routed_model: 'claude-sonnet-5',
         provider: 'Anthropic',
         method: 'POST',
         path: '/openai/v1/chat/completions',
@@ -38,8 +38,8 @@ const mockModelRequests = [
         request_id: 'req-openai-fail',
         time: '',
         scenario: 'openai',
-        request_model: 'gpt-4o',
-        routed_model: 'gpt-4o',
+        request_model: 'gpt-5.6-sol',
+        routed_model: 'gpt-5.6-sol',
         provider: 'OpenAI',
         method: 'POST',
         path: '/openai/v1/chat/completions',
@@ -53,20 +53,20 @@ const mockModelRequests = [
 
 const mockRequestEvents: Record<string, Array<{ source: string; level: string; stage?: string; message: string; fields?: Record<string, any> }>> = {
     'req-anthropic-ok': [
-        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-4-20250514', trace: [{ rule_index: 0, description: 'route sonnet', matched: true, ops: [{ position: 'model', operation: 'equals', matched: true, reason: 'model == claude-sonnet-4' }] }] } },
+        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-5', trace: [{ rule_index: 0, description: 'route sonnet', matched: true, ops: [{ position: 'model', operation: 'equals', matched: true, reason: 'model == claude-sonnet-5' }] }] } },
         { source: 'model_request', level: 'info', stage: 'transform', message: 'anthropic passthrough (no conversion)' },
         { source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
         { source: 'http', level: 'info', message: 'POST /anthropic/v1/messages 200', fields: { status: 200, latency: 1840000000, method: 'POST', path: '/anthropic/v1/messages' } },
     ],
     'req-openai-routed': [
-        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 1, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-4-20250514', trace: [{ rule_index: 0, description: 'keep gpt', matched: false, ops: [{ position: 'model', operation: 'equals', matched: false, reason: 'model != gpt-3.5' }] }, { rule_index: 1, description: 'upgrade to sonnet', matched: true, ops: [{ position: 'model', operation: 'prefix', matched: true, reason: 'model startswith gpt-4' }] }] } },
+        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 1, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-5', trace: [{ rule_index: 0, description: 'keep gpt', matched: false, ops: [{ position: 'model', operation: 'equals', matched: false, reason: 'model != gpt-5.6-terra' }] }, { rule_index: 1, description: 'upgrade to sonnet', matched: true, ops: [{ position: 'model', operation: 'prefix', matched: true, reason: 'model startswith gpt-5.6' }] }] } },
         { source: 'model_request', level: 'warning', stage: 'transform', message: 'dropped unsupported field: logprobs' },
         { source: 'model_request', level: 'info', stage: 'transform', message: 'openai chat -> anthropic messages' },
         { source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
         { source: 'http', level: 'info', message: 'POST /openai/v1/chat/completions 200', fields: { status: 200, latency: 2210000000, method: 'POST', path: '/openai/v1/chat/completions' } },
     ],
     'req-openai-fail': [
-        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'OpenAI', selected_model: 'gpt-4o' } },
+        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'OpenAI', selected_model: 'gpt-5.6-sol' } },
         { source: 'model_request', level: 'error', stage: 'upstream', message: 'upstream call failed: 502 Bad Gateway', fields: { status: 502, provider: 'OpenAI', error: 'bad gateway' } },
         { source: 'http', level: 'error', message: 'POST /openai/v1/chat/completions 502', fields: { status: 502, latency: 740000000, method: 'POST', path: '/openai/v1/chat/completions', error: 'upstream error' } },
     ],
@@ -87,80 +87,105 @@ const mockSystemLogs = [
 // ============================================
 // Mock Providers (v2 API with uuid)
 // ============================================
-const mockV2Providers = [
+interface MockProviderCatalogEntry {
+    provider: {
+        uuid: string
+        name: string
+        api_base: string
+        api_style: string
+        auth_type: string
+        token: string
+        enabled: boolean
+        proxy_url: string
+        api_base_openai: string | null
+        api_base_anthropic: string | null
+    }
+    models: string[]
+}
+
+// One source of truth for standard provider metadata and its available models.
+// Rules and provider-model endpoints are validated against this catalog below.
+const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
     {
-        uuid: 'mock-provider-anthropic',
-        name: 'Anthropic',
-        api_base: 'https://api.anthropic.com',
-        api_style: 'anthropic',
-        auth_type: 'api_key',
-        token: 'sk-ant-****abcd',
-        enabled: true,
-        proxy_url: '',
-        api_base_openai: null,
-        api_base_anthropic: null,
+        provider: {
+            uuid: 'mock-provider-anthropic', name: 'Anthropic',
+            api_base: 'https://api.anthropic.com', api_style: 'anthropic', auth_type: 'api_key',
+            token: 'sk-ant-****abcd', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: 'https://api.anthropic.com',
+        },
+        models: [
+            'claude-sonnet-5', 'claude-opus-4-8', 'claude-fable-5',
+            'claude-haiku-4-5',
+        ],
     },
     {
-        uuid: 'mock-provider-openai',
-        name: 'OpenAI',
-        api_base: 'https://api.openai.com/v1',
-        api_style: 'openai',
-        auth_type: 'api_key',
-        token: 'sk-****efgh',
-        enabled: true,
-        proxy_url: '',
-        api_base_openai: null,
-        api_base_anthropic: null,
+        provider: {
+            uuid: 'mock-provider-openai', name: 'OpenAI',
+            api_base: 'https://api.openai.com/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'sk-****efgh', enabled: true, proxy_url: '',
+            api_base_openai: 'https://api.openai.com/v1', api_base_anthropic: null,
+        },
+        models: [
+            'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
+            'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini',
+            'o3', 'o3-mini', 'gpt-image-1',
+        ],
     },
     {
-        uuid: 'mock-provider-openrouter',
-        name: 'OpenRouter',
-        api_base: 'https://openrouter.ai/api/v1',
-        api_style: 'openai',
-        auth_type: 'api_key',
-        token: 'sk-or-****ijkl',
-        enabled: false,
-        proxy_url: '',
-        api_base_openai: null,
-        api_base_anthropic: null,
+        provider: {
+            uuid: 'mock-provider-gemini', name: 'Google Gemini',
+            api_base: 'https://generativelanguage.googleapis.com/v1beta/openai', api_style: 'openai', auth_type: 'api_key',
+            token: 'AIza****uvwx', enabled: true, proxy_url: '',
+            api_base_openai: 'https://generativelanguage.googleapis.com/v1beta/openai', api_base_anthropic: null,
+        },
+        models: [
+            'gemini-3.1-pro-preview', 'gemini-3.5-flash',
+            'gemini-2.5-flash-lite',
+        ],
     },
     {
-        uuid: 'mock-provider-glm',
-        name: 'GLM',
-        api_base: 'https://open.bigmodel.cn/api/paas/v4',
-        api_style: 'anthropic',
-        auth_type: 'api_key',
-        token: 'glm-****mnop',
-        enabled: true,
-        proxy_url: '',
-        api_base_openai: null,
-        api_base_anthropic: null,
+        provider: {
+            uuid: 'mock-provider-qwen', name: 'Alibaba Dashscope',
+            api_base: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'sk-qwen-****uvwx', enabled: true, proxy_url: '',
+            api_base_openai: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', api_base_anthropic: null,
+        },
+        models: ['qwen3.5-plus', 'qwen3-max', 'qwen3-coder-next', 'qwen3-coder-plus'],
     },
     {
-        uuid: 'mock-provider-deepseek',
-        name: 'Deepseek',
-        api_base: 'https://api.deepseek.com/v1',
-        api_style: 'openai',
-        auth_type: 'api_key',
-        token: 'sk-ds-****qrst',
-        enabled: true,
-        proxy_url: '',
-        api_base_openai: 'https://api.deepseek.com/v1',
-        api_base_anthropic: 'https://api.deepseek.com/anthropic',
+        provider: {
+            uuid: 'mock-provider-deepseek', name: 'DeepSeek',
+            api_base: 'https://api.deepseek.com/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'sk-ds-****qrst', enabled: true, proxy_url: '',
+            api_base_openai: 'https://api.deepseek.com/v1', api_base_anthropic: 'https://api.deepseek.com/anthropic',
+        },
+        models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
     },
     {
-        uuid: 'mock-provider-gemini',
-        name: 'Gemini',
-        api_base: 'https://generativelanguage.googleapis.com/v1beta/openai',
-        api_style: 'openai',
-        auth_type: 'api_key',
-        token: 'AIza****uvwx',
-        enabled: true,
-        proxy_url: '',
-        api_base_openai: null,
-        api_base_anthropic: null,
+        provider: {
+            uuid: 'mock-provider-zai', name: 'Z.ai',
+            api_base: 'https://api.z.ai/api/paas/v4', api_style: 'openai', auth_type: 'api_key',
+            token: 'zai-****yzab', enabled: true, proxy_url: '',
+            api_base_openai: 'https://api.z.ai/api/paas/v4', api_base_anthropic: 'https://api.z.ai/api/anthropic',
+        },
+        models: ['glm-5.1', 'glm-5-turbo', 'glm-5'],
     },
-    // ── Virtual-model (vmodel) providers ─────────────────────────────────
+    {
+        provider: {
+            uuid: 'mock-provider-openrouter', name: 'OpenRouter',
+            api_base: 'https://openrouter.ai/api/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'sk-or-****ijkl', enabled: false, proxy_url: '',
+            api_base_openai: 'https://openrouter.ai/api/v1', api_base_anthropic: null,
+        },
+        models: [
+            'anthropic/claude-sonnet-5', 'openai/gpt-5.6-sol',
+            'deepseek/deepseek-v4-pro', 'qwen/qwen3.5-plus',
+            'google/gemini-3.1-pro-preview',
+        ],
+    },
+]
+
+const mockVirtualProviders = [
     {
         uuid: 'mock-vmodel-tingly',
         name: 'tingly',
@@ -173,7 +198,7 @@ const mockV2Providers = [
         api_base_openai: null,
         api_base_anthropic: null,
         vmodel_detail: {
-            models: ['claude-sonnet-4-5', 'claude-opus-4-5', 'gpt-4o', 'gpt-4o-mini', 'deepseek-v4-flash'],
+            models: ['claude-sonnet-5', 'claude-opus-4-8', 'gpt-5.6-sol', 'qwen3.5-plus', 'deepseek-v4-pro', 'glm-5.1'],
         },
     },
     {
@@ -203,7 +228,7 @@ const mockV2Providers = [
         api_base_openai: null,
         api_base_anthropic: null,
         vmodel_detail: {
-            models: ['claude-3-7-sonnet-latest', 'claude-opus-4-5', 'claude-haiku-4-5'],
+            models: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5'],
         },
     },
     {
@@ -218,10 +243,22 @@ const mockV2Providers = [
         api_base_openai: null,
         api_base_anthropic: null,
         vmodel_detail: {
-            models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+            models: ['gemini-3.1-pro-preview', 'gemini-3.5-flash'],
         },
     },
 ]
+
+const getMockProviders = () => [
+    ...mockStandardProviderCatalog.map(({ provider }) => provider),
+    ...mockVirtualProviders,
+]
+
+const getMockProviderModels = (uuid: string): string[] => {
+    const standardProvider = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
+    if (standardProvider) return standardProvider.models
+
+    return mockVirtualProviders.find((provider) => provider.uuid === uuid)?.vmodel_detail.models ?? []
+}
 
 // ============================================
 // Mock Rules per scenario
@@ -231,32 +268,31 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-openai-1',
             scenario: 'openai',
-            request_model: 'gpt-4o',
+            request_model: 'gpt-5.6-sol',
             response_model: '',
             active: true,
-            description: 'Route gpt-4o to Anthropic claude-opus-4-7',
+            description: 'Route gpt-5.6-sol to Anthropic claude-opus-4-8',
             flags: { cursor_compat: true, thinking_effort: 'high' },
-            services: [{ uuid: 'svc-o1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
+            services: [{ uuid: 'svc-o1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-openai-2',
             scenario: 'openai',
-            request_model: 'gpt-4o-mini[1m]',
+            request_model: 'gpt-5.6-luna',
             response_model: '',
             active: true,
-            description: 'Route gpt-4o-mini to Deepseek',
-            flags: { context_1m: true },
+            description: 'Route gpt-5.6-luna to Deepseek',
             services: [{ uuid: 'svc-o2', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-openai-3',
             scenario: 'openai',
-            request_model: 'gpt-3.5-turbo',
+            request_model: 'gpt-5.6-terra',
             response_model: '',
             active: true,
             description: '',
             services: [
-                { uuid: 'svc-o3a', provider: 'mock-provider-glm', model: 'glm-4-flash', weight: 1, active: true },
+                { uuid: 'svc-o3a', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true },
                 { uuid: 'svc-o3b', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true },
             ],
         },
@@ -265,29 +301,28 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-ant-1',
             scenario: 'anthropic',
-            request_model: 'claude-opus-4-7',
+            request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
-            description: 'Opus 4.7 → GLM',
-            services: [{ uuid: 'svc-a1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+            description: 'Opus 4.8 → GLM 5.1',
+            services: [{ uuid: 'svc-a1', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-ant-2',
             scenario: 'anthropic',
-            request_model: 'claude-sonnet-4-6',
+            request_model: 'claude-sonnet-5',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-a2', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+            services: [{ uuid: 'svc-a2', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-ant-3',
             scenario: 'anthropic',
-            request_model: 'claude-haiku-4-5[1m]',
+            request_model: 'claude-haiku-4-5',
             response_model: '',
             active: true,
             description: '',
-            flags: { context_1m: true },
             services: [{ uuid: 'svc-a3', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true }],
         },
     ],
@@ -297,18 +332,18 @@ const mockV1Rules: Record<string, any[]> = {
             // Demonstrates smart routing with fabric conditions + tiered default fallback.
             uuid: 'builtin:claude_code:cc',
             scenario: 'claude_code',
-            request_model: 'claude-sonnet-4-6',
+            request_model: 'claude-sonnet-5',
             response_model: '',
             active: true,
             description: 'Smart routing + tiered fallback',
             flags: { claude_code_compat: true, clean_header: true, skip_usage: true, session_affinity: 3600 },
             // Default providers in 3 tiers: T0 primary, T1 secondary, T2 budget
             services: [
-                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true, tier: 0 },
-                { uuid: 'svc-cc-t0-b', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true, tier: 0 },
-                { uuid: 'svc-cc-t1-a', provider: 'mock-provider-gemini', model: 'gemini-2.0-flash', weight: 1, active: true, tier: 1 },
+                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t0-b', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t1-a', provider: 'mock-provider-gemini', model: 'gemini-3.5-flash', weight: 1, active: true, tier: 1 },
                 { uuid: 'svc-cc-t2-a', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true, tier: 2 },
-                { uuid: 'svc-cc-t2-b', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true, tier: 2 },
+                { uuid: 'svc-cc-t2-b', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true, tier: 2 },
             ],
             smart_enabled: true,
             smart_routing: [
@@ -322,21 +357,21 @@ const mockV1Rules: Record<string, any[]> = {
                     uuid: 'smart-cc-bi-cmp',
                     description: 'Compact → GLM cheap summarisation',
                     ops: [{ uuid: 'op-cc-bi-cmp', position: 'agent.claude_code', operation: 'equals', value: 'compact' }],
-                    services: [{ uuid: 'svc-sm-cc-bi-cmp', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+                    services: [{ uuid: 'svc-sm-cc-bi-cmp', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
                 },
                 {
                     uuid: 'smart-cc-bi-tok',
                     description: 'Large context ≥ 60k tokens → Gemini',
                     ops: [{ uuid: 'op-cc-bi-tok', position: 'token', operation: 'ge', value: '60000' }],
-                    services: [{ uuid: 'svc-sm-cc-bi-tok', provider: 'mock-provider-gemini', model: 'gemini-2.0-flash', weight: 1, active: true }],
+                    services: [{ uuid: 'svc-sm-cc-bi-tok', provider: 'mock-provider-gemini', model: 'gemini-3.5-flash', weight: 1, active: true }],
                 },
                 {
                     uuid: 'smart-cc-bi-default',
                     description: 'Default (unconditional fallback)',
                     ops: [],
                     services: [
-                        { uuid: 'svc-sm-cc-bi-def-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
-                        { uuid: 'svc-sm-cc-bi-def-b', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true },
+                        { uuid: 'svc-sm-cc-bi-def-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true },
+                        { uuid: 'svc-sm-cc-bi-def-b', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true },
                     ],
                 },
             ],
@@ -344,12 +379,12 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-cc-smart',
             scenario: 'claude_code',
-            request_model: 'claude-sonnet-4-6',
+            request_model: 'claude-sonnet-5',
             response_model: '',
             active: true,
             description: 'Smart routing by agent kind',
             services: [
-                { uuid: 'svc-cc-default-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
+                { uuid: 'svc-cc-default-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true },
             ],
             smart_enabled: true,
             smart_routing: [
@@ -363,7 +398,7 @@ const mockV1Rules: Record<string, any[]> = {
                     uuid: 'smart-cc-compact',
                     description: 'Compact → GLM (cheap summarisation)',
                     ops: [{ uuid: 'op-cc-cmp', position: 'agent.claude_code', operation: 'equals', value: 'compact' }],
-                    services: [{ uuid: 'svc-sm-cc-cmp', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+                    services: [{ uuid: 'svc-sm-cc-cmp', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
                 },
                 {
                     uuid: 'smart-cc-large-ctx',
@@ -376,13 +411,13 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-cc-direct',
             scenario: 'claude_code',
-            request_model: 'claude-opus-4-7',
+            request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
             description: 'Direct load-balance across Anthropic + GLM',
             services: [
-                { uuid: 'svc-cc-dir-a', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true },
-                { uuid: 'svc-cc-dir-b', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true },
+                { uuid: 'svc-cc-dir-a', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true },
+                { uuid: 'svc-cc-dir-b', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true },
             ],
         },
     ],
@@ -390,30 +425,30 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-cd-1',
             scenario: 'claude_desktop',
-            request_model: 'claude-sonnet-4-6',
+            request_model: 'claude-sonnet-5',
             response_model: '',
             active: true,
-            description: 'Claude Desktop - Sonnet 4.6 model for balanced performance',
+            description: 'Claude Desktop - Sonnet 5 for balanced performance',
             flags: { context_1m: true },
             services: [{ uuid: 'svc-cd4', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-cd-2',
             scenario: 'claude_desktop',
-            request_model: 'claude-opus-4-6',
+            request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
-            description: 'Claude Desktop - Opus 4.6 model for complex tasks',
-            services: [{ uuid: 'svc-cd2', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+            description: 'Claude Desktop - Opus 4.8 for complex tasks',
+            services: [{ uuid: 'svc-cd2', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-cd-3',
             scenario: 'claude_desktop',
-            request_model: 'claude-opus-4-7',
+            request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
-            description: 'Claude Desktop - Opus 4.7 model for advanced reasoning',
-            services: [{ uuid: 'svc-cd3', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+            description: 'Claude Desktop - Opus 4.8 for advanced reasoning',
+            services: [{ uuid: 'svc-cd3', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-cd-4',
@@ -422,29 +457,29 @@ const mockV1Rules: Record<string, any[]> = {
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-cd1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+            services: [{ uuid: 'svc-cd1', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
         },
     ],
     codex: [
         {
             uuid: 'mock-rule-codex-1',
             scenario: 'codex',
-            request_model: 'codex-mini-latest',
+            request_model: 'gpt-5.6-luna',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-cx1', provider: 'mock-provider-openai', model: 'gpt-4o-mini', weight: 1, active: true }],
+            services: [{ uuid: 'svc-cx1', provider: 'mock-provider-openai', model: 'gpt-5.6-luna', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-codex-2',
             scenario: 'codex',
-            request_model: 'o4-mini',
+            request_model: 'gpt-5.6-terra',
             response_model: '',
             active: true,
             description: '',
             services: [
-                { uuid: 'svc-cx2a', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true },
-                { uuid: 'svc-cx2b', provider: 'mock-provider-gemini', model: 'gemini-2.5-pro', weight: 1, active: true },
+                { uuid: 'svc-cx2a', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true },
+                { uuid: 'svc-cx2b', provider: 'mock-provider-gemini', model: 'gemini-3.1-pro-preview', weight: 1, active: true },
             ],
         },
     ],
@@ -452,22 +487,103 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-agent-1',
             scenario: 'agent',
-            request_model: 'claude-opus-4-7',
+            request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-ag1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
+            services: [{ uuid: 'svc-ag1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-agent-2',
             scenario: 'agent',
-            request_model: 'gpt-4o',
+            request_model: 'gpt-5.6-sol',
             response_model: '',
             active: true,
             description: '',
             services: [
-                { uuid: 'svc-ag2a', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true },
-                { uuid: 'svc-ag2b', provider: 'mock-provider-gemini', model: 'gemini-2.5-pro', weight: 1, active: true },
+                { uuid: 'svc-ag2a', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true },
+                { uuid: 'svc-ag2b', provider: 'mock-provider-gemini', model: 'gemini-3.1-pro-preview', weight: 1, active: true },
+            ],
+        },
+    ],
+    team: [
+        {
+            uuid: 'mock-rule-team-claude-opus',
+            scenario: 'team',
+            request_model: 'claude-opus-4-8',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-team-claude-opus', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true },
+            ],
+        },
+        {
+            uuid: 'mock-rule-team-claude-sonnet',
+            scenario: 'team',
+            request_model: 'claude-sonnet-5',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-team-claude-sonnet', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true },
+            ],
+        },
+        {
+            uuid: 'mock-rule-team-gpt',
+            scenario: 'team',
+            request_model: 'gpt-5.6-sol',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-team-gpt', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true },
+            ],
+        },
+        {
+            uuid: 'mock-rule-team-qwen',
+            scenario: 'team',
+            request_model: 'qwen3.5-plus',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-team-qwen', provider: 'mock-provider-qwen', model: 'qwen3.5-plus', weight: 1, active: true },
+            ],
+        },
+        {
+            uuid: 'mock-rule-team-deepseek',
+            scenario: 'team',
+            request_model: 'deepseek-v4-pro',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-team-deepseek', provider: 'mock-provider-deepseek', model: 'deepseek-v4-pro', weight: 1, active: true },
+            ],
+        },
+        {
+            uuid: 'mock-rule-team-glm',
+            scenario: 'team',
+            request_model: 'glm-5.1',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-team-glm', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true },
+            ],
+        },
+    ],
+    imagegen: [
+        {
+            uuid: 'mock-rule-imagegen-openai',
+            scenario: 'imagegen',
+            request_model: 'gpt-image-1',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-imagegen-openai', provider: 'mock-provider-openai', model: 'gpt-image-1', weight: 1, active: true },
             ],
         },
     ],
@@ -475,44 +591,123 @@ const mockV1Rules: Record<string, any[]> = {
         {
             uuid: 'mock-rule-vsc-1',
             scenario: 'vscode',
-            request_model: 'claude-sonnet-4-6',
+            request_model: 'claude-sonnet-5',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-vs1', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true }],
+            services: [{ uuid: 'svc-vs1', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true }],
         },
     ],
     xcode: [
         {
             uuid: 'mock-rule-xc-1',
             scenario: 'xcode',
-            request_model: 'claude-sonnet-4-6',
+            request_model: 'claude-sonnet-5',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-xc1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+            services: [{ uuid: 'svc-xc1', provider: 'mock-provider-zai', model: 'glm-5.1', weight: 1, active: true }],
         },
     ],
     opencode: [
         {
             uuid: 'mock-rule-oc-1',
             scenario: 'opencode',
-            request_model: 'claude-opus-4-7',
+            request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-oc1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
+            services: [{ uuid: 'svc-oc1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true }],
         },
         {
             uuid: 'mock-rule-oc-2',
             scenario: 'opencode',
-            request_model: 'gpt-4o',
+            request_model: 'gpt-5.6-sol',
             response_model: '',
             active: true,
             description: '',
-            services: [{ uuid: 'svc-oc2', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true }],
+            services: [{ uuid: 'svc-oc2', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true }],
         },
     ],
+}
+
+const getMockRuleServiceErrors = (scenario: string, rule: any): string[] => {
+    const errors: string[] = []
+    const serviceGroups = [
+        rule.services ?? [],
+        ...(rule.smart_routing ?? []).map((smartRule: any) => smartRule.services ?? []),
+    ]
+
+    serviceGroups.flat().forEach((service: any) => {
+        const provider = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === service.provider)
+        if (!provider) {
+            errors.push(`${scenario}/${rule.uuid}: unknown provider ${service.provider}`)
+        } else if (!provider.models.includes(service.model)) {
+            errors.push(`${scenario}/${rule.uuid}: ${service.model} is not offered by ${service.provider}`)
+        }
+    })
+
+    return errors
+}
+
+const getMockRuleErrors = (scenario: string, rule: any, validateRequestModel = false): string[] => {
+    const errors = getMockRuleServiceErrors(scenario, rule)
+    const catalogModels = new Set(mockStandardProviderCatalog.flatMap(({ models }) => models))
+    if (validateRequestModel && rule.request_model && rule.request_model !== '*' && !catalogModels.has(rule.request_model)) {
+        errors.push(`${scenario}/${rule.uuid}: request model ${rule.request_model} is not in the catalog`)
+    }
+    return errors
+}
+
+const validateMockRuleCatalog = () => {
+    const errors: string[] = []
+    const providerUuids = new Set<string>()
+
+    mockStandardProviderCatalog.forEach(({ provider, models }) => {
+        if (providerUuids.has(provider.uuid)) {
+            errors.push(`duplicate provider UUID ${provider.uuid}`)
+        }
+        providerUuids.add(provider.uuid)
+
+        const uniqueModels = new Set(models)
+        if (uniqueModels.size !== models.length) {
+            errors.push(`${provider.uuid}: duplicate model entries`)
+        }
+    })
+
+    Object.entries(mockV1Rules).forEach(([scenario, rules]) => {
+        rules.forEach((rule) => {
+            errors.push(...getMockRuleErrors(scenario, rule, true))
+        })
+    })
+
+    if (errors.length > 0) {
+        throw new Error(`Invalid mock provider catalog:\n${errors.join('\n')}`)
+    }
+}
+
+validateMockRuleCatalog()
+
+const getMockRulesForScenario = (scenario: string): any[] => {
+    if (!mockV1Rules[scenario] && scenario.startsWith('claude_code:')) {
+        const profileId = scenario.slice('claude_code:'.length)
+        mockV1Rules[scenario] = [
+            {
+                uuid: `mock-rule-cc-${profileId}-1`,
+                scenario,
+                request_model: 'claude-sonnet-5',
+                response_model: '',
+                active: true,
+                description: `Profile ${profileId} - Smart routing rule`,
+                flags: { claude_code_compat: true, clean_header: true },
+                services: [
+                    { uuid: `svc-cc-${profileId}-1`, provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true },
+                ],
+            },
+        ]
+    }
+
+    return mockV1Rules[scenario] ?? []
 }
 
 // ============================================
@@ -692,55 +887,6 @@ const mockClaudeCodeProfiles = [
         updated_at: '2024-02-01T00:00:00Z',
     },
 ]
-
-const mockRules = {
-    tingly: {
-        provider: "openai",
-        model: "gpt-3.5-turbo"
-    }
-}
-
-const mockProviders = [
-    {
-        name: "openai",
-        api_base: "https://api.openai.com",
-        api_style: "openai",
-        enabled: true
-    },
-    {
-        name: "anthropic",
-        api_base: "https://api.anthropic.com",
-        api_style: "anthropic",
-        enabled: true
-    }
-]
-
-const mockProviderModels = {
-    "openai": {
-        models: [
-            "gpt-4",
-            "gpt-3.5-turbo",
-            "gpt-4-turbo"
-        ]
-    },
-    "anthropic": {
-        models: [
-            "claude-3-opus",
-            "claude-3-sonnet",
-            "claude-3-haiku"
-        ]
-    }
-}
-
-const mockDefaults = {
-    request_configs: [
-        {
-            name: "tingly",
-            provider: "openai",
-            model: "gpt-3.5-turbo"
-        }
-    ]
-}
 
 // Counter for alternating probe responses
 let probeRequestCount = 0
@@ -1005,278 +1151,6 @@ export const handlers = [
         }, { status: 404 })
     }),
 
-    // Rules API endpoints
-    http.get('/api/rules', () => {
-        return HttpResponse.json({
-            success: true,
-            data: mockRules
-        })
-    }),
-
-    http.get('/api/rules/:name', ({ params }) => {
-        const { name } = params
-        if (mockRules[name as keyof typeof mockRules]) {
-            return HttpResponse.json({
-                success: true,
-                data: mockRules[name as keyof typeof mockRules]
-            })
-        }
-        return HttpResponse.json({
-            success: false,
-            error: `Rule '${name}' not found`
-        }, { status: 404 })
-    }),
-
-    http.post('/api/rules/:name', async ({ params, request }) => {
-        const { name } = params
-        const body = await request.json() as any
-        mockRules[name as keyof typeof mockRules] = body
-        return HttpResponse.json({
-            success: true,
-            data: mockRules[name as keyof typeof mockRules]
-        })
-    }),
-
-    // Providers API endpoints
-    http.get('/api/providers', () => {
-        return HttpResponse.json({
-            success: true,
-            data: mockProviders
-        })
-    }),
-
-    // ── v2 provider models by UUID (used by ModelSelectDialog) ───────────────
-    http.get('/api/v2/provider-models/:uuid', ({ params }) => {
-        const { uuid } = params as { uuid: string }
-        const modelMap: Record<string, string[]> = {
-            'mock-provider-anthropic': [
-                'claude-opus-4-7',
-                'claude-opus-4-6',
-                'claude-sonnet-4-6',
-                'claude-sonnet-4-5',
-                'claude-haiku-4-5',
-                'claude-opus-4-5',
-                'claude-3-7-sonnet-latest',
-                'claude-3-5-haiku-latest',
-                'claude-3-5-sonnet-latest',
-                'claude-fable-5',
-            ],
-            'mock-provider-openai': [
-                'gpt-4o',
-                'gpt-4o-mini',
-                'gpt-4-turbo',
-                'gpt-4',
-                'gpt-3.5-turbo',
-                'o1',
-                'o1-mini',
-                'o3',
-                'o3-mini',
-                'gpt-5-codex',
-                'gpt-5.1-codex',
-                'gpt-5.1-codex-max',
-                'gpt-5.1-codex-mini',
-                'gpt-5.2-codex',
-                'gpt-5.3-codex',
-                'gpt-5.4',
-                'gpt-5.4-mini',
-                'gpt-5.5',
-            ],
-            'mock-provider-codex': [
-                'gpt-5-codex',
-                'gpt-5.1-codex',
-                'gpt-5.1-codex-max',
-                'gpt-5.1-codex-mini',
-                'gpt-5.2-codex',
-                'gpt-5.3-codex',
-                'gpt-5.4',
-                'gpt-5.4-mini',
-                'gpt-5.5',
-            ],
-            'mock-provider-openrouter': [
-                'deepseek/deepseek-v4-flash',
-                'deepseek/deepseek-v4-pro',
-                'google/gemini-2.5-pro',
-                'google/gemini-2.5-flash',
-                'meta-llama/llama-4-maverick',
-                'qwen/qwen3-235b-a22b',
-            ],
-            'mock-provider-deepseek': [
-                'deepseek-v4-flash',
-                'deepseek-v4-pro',
-            ],
-            'mock-provider-gemini': [
-                'gemini-2.5-pro',
-                'gemini-2.5-flash',
-                'gemini-2.5-flash-lite',
-                'gemini-2.0-flash',
-                'gemini-1.5-pro',
-                'gemini-1.5-flash',
-            ],
-            'mock-provider-glm': [
-                'glm-4.7',
-                'glm-4.6',
-                'glm-4.5',
-                'glm-4.5-air',
-            ],
-        }
-        const models = modelMap[uuid] ?? []
-        return HttpResponse.json({ success: true, data: { models } })
-    }),
-
-    http.get('/api/provider-models', () => {
-        return HttpResponse.json({
-            success: true,
-            data: mockProviderModels
-        })
-    }),
-
-    http.post('/api/provider-models/:name', ({ params }) => {
-        const { name } = params
-        if (mockProviderModels[name as keyof typeof mockProviderModels]) {
-            return HttpResponse.json({
-                success: true,
-                data: mockProviderModels[name as keyof typeof mockProviderModels]
-            })
-        }
-        return HttpResponse.json({
-            success: false,
-            error: `API Key '${name}' not found`
-        }, { status: 404 })
-    }),
-
-    http.get('/api/defaults', () => {
-        return HttpResponse.json({
-            success: true,
-            data: mockDefaults
-        })
-    }),
-
-    http.post('/api/defaults', async ({ request }) => {
-        const body = await request.json() as any
-        mockDefaults.request_configs = body.request_configs || []
-        return HttpResponse.json({
-            success: true,
-            data: mockDefaults
-        })
-    }),
-
-    http.post('/api/probe', () => {
-        probeRequestCount++
-        const currentRule = mockRules.tingly
-
-        const mockRequest = {
-            messages: [
-                {
-                    role: "user",
-                    content: "hi"
-                }
-            ],
-            model: currentRule.model,
-            max_tokens: 100,
-            temperature: 0.7
-        }
-
-        const processingTime = Math.floor(Math.random() * 1000) + 500
-        const isSuccess = probeRequestCount % 2 === 1
-
-        if (isSuccess) {
-            const mockResponses = {
-                openai: "Hello! I'm your AI assistant powered by OpenAI. How can I help you today? This is a mock response confirming that your rule configuration is working correctly.",
-                anthropic: "Hi there! I'm your AI assistant powered by Anthropic. I'm responding to your simple 'hi' message to validate that your rule configuration is functioning properly.",
-                default: `Hello! This is a mock response from the probe API, confirming that your rule configuration with provider '${currentRule.provider}' and model '${currentRule.model}' is working correctly.`
-            }
-
-            const mockResponse = mockResponses[currentRule.provider as keyof typeof mockResponses] || mockResponses.default
-
-            return HttpResponse.json({
-                success: true,
-                data: {
-                    request: {
-                        ...mockRequest,
-                        provider: currentRule.provider,
-                        timestamp: new Date().toISOString(),
-                        processing_time_ms: processingTime
-                    },
-                    response: {
-                        content: mockResponse,
-                        model: currentRule.model,
-                        provider: currentRule.provider,
-                        usage: {
-                            prompt_tokens: 10,
-                            completion_tokens: 25,
-                            total_tokens: 35
-                        },
-                        finish_reason: "stop"
-                    },
-                    rule_tested: {
-                        name: "tingly",
-                        provider: currentRule.provider,
-                        model: currentRule.model,
-                        timestamp: new Date().toISOString()
-                    },
-                    test_result: {
-                        success: true,
-                        message: "Rule configuration is valid and working correctly"
-                    }
-                }
-            })
-        } else {
-            const errorTypes = [
-                "Authentication failed",
-                "Rate limit exceeded",
-                "Model not available",
-                "Connection timeout",
-                "Invalid API key"
-            ]
-
-            const randomError = errorTypes[Math.floor(Math.random() * errorTypes.length)]
-
-            return HttpResponse.json({
-                success: false,
-                error: {
-                    code: "PROBE_FAILED",
-                    message: randomError,
-                    details: {
-                        provider: currentRule.provider,
-                        model: currentRule.model,
-                        timestamp: new Date().toISOString(),
-                        processing_time_ms: processingTime
-                    }
-                },
-                data: {
-                    request: {
-                        ...mockRequest,
-                        provider: currentRule.provider,
-                        timestamp: new Date().toISOString(),
-                        processing_time_ms: processingTime
-                    },
-                    response: {
-                        content: null,
-                        model: currentRule.model,
-                        provider: currentRule.provider,
-                        usage: {
-                            prompt_tokens: 0,
-                            completion_tokens: 0,
-                            total_tokens: 0
-                        },
-                        finish_reason: "error",
-                        error: randomError
-                    },
-                    rule_tested: {
-                        name: "tingly",
-                        provider: currentRule.provider,
-                        model: currentRule.model,
-                        timestamp: new Date().toISOString()
-                    },
-                    test_result: {
-                        success: false,
-                        message: `Probe failed: ${randomError}`
-                    }
-                }
-            }, { status: 500 })
-        }
-    }),
-
     // Health + version — polled by HealthContext / the sidebar; without these
     // the mock UI keeps popping the "Connection Lost" dialog.
     http.get('/api/v1/info/health', () => HttpResponse.json({ health: true })),
@@ -1314,24 +1188,14 @@ export const handlers = [
                 prompt_tokens: 21,
                 completion_tokens: 14,
                 total_tokens: 35,
-                selected_provider: 'Mock Provider',
-                selected_model: 'mock-model-mini',
+                selected_provider: 'Anthropic',
+                selected_model: 'claude-opus-4-8',
                 routing_source: 'load_balancer',
-                upstream_api: 'openai_chat',
-                upstream_url: 'https://api.mock-provider.dev/v1/chat/completions',
-                matched_rule_desc: 'Mock Rule',
+                upstream_api: 'anthropic_message',
+                upstream_url: 'https://api.anthropic.com/v1/messages',
+                matched_rule_desc: 'Route gpt-5.6-sol to Anthropic claude-opus-4-8',
                 applied_flags: '',
             },
-        })
-    }),
-
-    http.get('/api/status', () => {
-        return HttpResponse.json({
-            success: true,
-            data: {
-                status: "mock",
-                message: "Running with mock data"
-            }
         })
     }),
 
@@ -1351,13 +1215,13 @@ export const handlers = [
     http.get('/api/v2/providers', () => {
         return HttpResponse.json({
             success: true,
-            data: mockV2Providers,
+            data: getMockProviders(),
         })
     }),
 
     http.get('/api/v2/providers/:uuid', ({ params }) => {
-        const { uuid } = params
-        const provider = mockV2Providers.find(p => p.uuid === uuid)
+        const { uuid } = params as { uuid: string }
+        const provider = getMockProviders().find((provider) => provider.uuid === uuid)
         if (provider) {
             return HttpResponse.json({ success: true, data: provider })
         }
@@ -1372,8 +1236,62 @@ export const handlers = [
             token: body.token || '',
             enabled: true,
         }
-        mockV2Providers.push(newProvider)
+        mockStandardProviderCatalog.push({ provider: newProvider, models: body.models ?? [] })
         return HttpResponse.json({ success: true, data: newProvider })
+    }),
+
+    http.put('/api/v2/providers/:uuid', async ({ params, request }) => {
+        const { uuid } = params as { uuid: string }
+        const body = await request.json() as any
+        const catalogEntry = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
+        const virtualProvider = mockVirtualProviders.find((provider) => provider.uuid === uuid)
+        const provider = catalogEntry?.provider ?? virtualProvider
+        if (!provider) return HttpResponse.json({ success: false, error: 'Not found' }, { status: 404 })
+
+        Object.assign(provider, body, { uuid })
+        return HttpResponse.json({ success: true, data: provider })
+    }),
+
+    http.post('/api/v2/providers/:uuid/toggle', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        const provider = getMockProviders().find((provider) => provider.uuid === uuid)
+        if (!provider) return HttpResponse.json({ success: false, error: 'Not found' }, { status: 404 })
+
+        provider.enabled = !provider.enabled
+        return HttpResponse.json({ success: true, data: provider })
+    }),
+
+    http.delete('/api/v2/providers/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        const standardIndex = mockStandardProviderCatalog.findIndex(({ provider }) => provider.uuid === uuid)
+        if (standardIndex >= 0) {
+            mockStandardProviderCatalog.splice(standardIndex, 1)
+            return HttpResponse.json({ success: true })
+        }
+
+        const virtualIndex = mockVirtualProviders.findIndex((provider) => provider.uuid === uuid)
+        if (virtualIndex >= 0) {
+            mockVirtualProviders.splice(virtualIndex, 1)
+            return HttpResponse.json({ success: true })
+        }
+
+        return HttpResponse.json({ success: false, error: 'Not found' }, { status: 404 })
+    }),
+
+    http.get('/api/v2/provider-models/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        if (!getMockProviders().some((provider) => provider.uuid === uuid)) {
+            return HttpResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
+        }
+        return HttpResponse.json({ success: true, data: { models: getMockProviderModels(uuid) } })
+    }),
+
+    http.post('/api/v2/provider-models/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        if (!getMockProviders().some((provider) => provider.uuid === uuid)) {
+            return HttpResponse.json({ success: false, error: 'Provider not found' }, { status: 404 })
+        }
+        return HttpResponse.json({ success: true, data: { models: getMockProviderModels(uuid) } })
     }),
 
     // ============================================
@@ -1450,52 +1368,7 @@ export const handlers = [
         const url = new URL(request.url)
         const scenario = url.searchParams.get('scenario')
 
-        if (scenario === 'imagegen') {
-            return HttpResponse.json({
-                success: true,
-                data: [
-                    {
-                        uuid: 'mock-imagegen-1',
-                        request_model: 'gpt-image-1',
-                        scenario: 'imagegen',
-                        disabled: false,
-                        services: [{ provider: 'mock', model: 'gpt-image-1' }],
-                    },
-                    {
-                        uuid: 'mock-imagegen-2',
-                        request_model: 'dall-e-3',
-                        scenario: 'imagegen',
-                        disabled: false,
-                        services: [{ provider: 'mock', model: 'dall-e-3' }],
-                    },
-                ],
-            })
-        }
-
-        // Handle profile-specific rules (e.g., claude_code:p1)
-        if (scenario?.startsWith('claude_code:')) {
-            const profileId = scenario.split(':')[1];
-            // Return mock rules for the specific profile
-            return HttpResponse.json({
-                success: true,
-                data: [
-                    {
-                        uuid: `mock-rule-cc-${profileId}-1`,
-                        scenario: `claude_code:${profileId}`,
-                        request_model: 'claude-sonnet-4-6',
-                        response_model: '',
-                        active: true,
-                        description: `Profile ${profileId} - Smart routing rule`,
-                        flags: { claude_code_compat: true, clean_header: true },
-                        services: [
-                            { uuid: `svc-cc-${profileId}-1`, provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
-                        ],
-                    },
-                ],
-            })
-        }
-
-        const rules = scenario ? (mockV1Rules[scenario] ?? []) : []
+        const rules = scenario ? getMockRulesForScenario(scenario) : []
         return HttpResponse.json({ success: true, data: rules })
     }),
 
@@ -1514,6 +1387,28 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: { scenario, ...body } })
     }),
 
+    http.post('/api/v1/rule', async ({ request }) => {
+        const body = await request.json() as any
+        const scenario = body.scenario?.trim()
+        if (!scenario) {
+            return HttpResponse.json({ success: false, error: 'Scenario is required' }, { status: 400 })
+        }
+
+        const rule = {
+            ...body,
+            uuid: body.uuid || `mock-rule-${Date.now()}`,
+            scenario,
+        }
+        const errors = getMockRuleErrors(scenario, rule)
+        if (errors.length > 0) {
+            return HttpResponse.json({ success: false, error: errors.join('; ') }, { status: 400 })
+        }
+
+        if (!mockV1Rules[scenario]) mockV1Rules[scenario] = []
+        mockV1Rules[scenario].push(rule)
+        return HttpResponse.json({ success: true, data: rule })
+    }),
+
     http.get('/api/v1/rule/:uuid', ({ params }) => {
         const { uuid } = params as { uuid: string }
         for (const rules of Object.values(mockV1Rules)) {
@@ -1526,11 +1421,16 @@ export const handlers = [
     http.post('/api/v1/rule/:uuid', async ({ params, request }) => {
         const { uuid } = params as { uuid: string }
         const body = await request.json() as any
-        for (const rules of Object.values(mockV1Rules)) {
+        for (const [scenario, rules] of Object.entries(mockV1Rules)) {
             const idx = rules.findIndex((r) => r.uuid === uuid)
             if (idx >= 0) {
-                rules[idx] = { ...rules[idx], ...body }
-                return HttpResponse.json({ success: true, data: rules[idx] })
+                const rule = { ...rules[idx], ...body, uuid, scenario }
+                const errors = getMockRuleErrors(scenario, rule)
+                if (errors.length > 0) {
+                    return HttpResponse.json({ success: false, error: errors.join('; ') }, { status: 400 })
+                }
+                rules[idx] = rule
+                return HttpResponse.json({ success: true, data: rule })
             }
         }
         return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
@@ -1681,10 +1581,10 @@ export const handlers = [
             success: true,
             data: [
                 {
-                    key: 'anthropic/claude-sonnet-4-5',
+                    key: 'anthropic/claude-sonnet-5',
                     provider_uuid: 'mock-provider-anthropic',
                     provider_name: 'Anthropic',
-                    model: 'claude-sonnet-4-5',
+                    model: 'claude-sonnet-5',
                     scenario: 'claude_code',
                     request_count: 1842,
                     total_tokens: 25920000,
@@ -1697,10 +1597,10 @@ export const handlers = [
                     streamed_count: 1800,
                 },
                 {
-                    key: 'anthropic/claude-opus-4-5',
+                    key: 'anthropic/claude-opus-4-8',
                     provider_uuid: 'mock-provider-anthropic',
                     provider_name: 'Anthropic',
-                    model: 'claude-opus-4-5',
+                    model: 'claude-opus-4-8',
                     scenario: 'claude_code',
                     request_count: 420,
                     total_tokens: 8180000,
@@ -1713,10 +1613,10 @@ export const handlers = [
                     streamed_count: 415,
                 },
                 {
-                    key: 'openai/gpt-4o',
+                    key: 'openai/gpt-5.6-sol',
                     provider_uuid: 'mock-provider-openai',
                     provider_name: 'OpenAI',
-                    model: 'gpt-4o',
+                    model: 'gpt-5.6-sol',
                     scenario: 'openai',
                     request_count: 938,
                     total_tokens: 6720000,
@@ -1729,10 +1629,10 @@ export const handlers = [
                     streamed_count: 920,
                 },
                 {
-                    key: 'openai/gpt-4o-mini',
+                    key: 'openai/gpt-5.6-luna',
                     provider_uuid: 'mock-provider-openai',
                     provider_name: 'OpenAI',
-                    model: 'gpt-4o-mini',
+                    model: 'gpt-5.6-luna',
                     scenario: 'openai',
                     request_count: 2150,
                     total_tokens: 4310000,
@@ -1845,10 +1745,10 @@ export const handlers = [
         const statusFilter = url.searchParams.get('status') || ''
 
         const models = [
-            { provider_name: 'Anthropic', model: 'claude-sonnet-4-5', scenario: 'claude_code', streamed: true, cacheHitRatio: 0.97 },
-            { provider_name: 'Anthropic', model: 'claude-opus-4-5',   scenario: 'claude_code', streamed: true, cacheHitRatio: 0.94 },
-            { provider_name: 'OpenAI',    model: 'gpt-4o',            scenario: 'openai',      streamed: true, cacheHitRatio: 0.91 },
-            { provider_name: 'OpenAI',    model: 'gpt-4o-mini',       scenario: 'openai',      streamed: false, cacheHitRatio: 0.90 },
+            { provider_name: 'Anthropic', model: 'claude-sonnet-5', scenario: 'claude_code', streamed: true, cacheHitRatio: 0.97 },
+            { provider_name: 'Anthropic', model: 'claude-opus-4-8',   scenario: 'claude_code', streamed: true, cacheHitRatio: 0.94 },
+            { provider_name: 'OpenAI',    model: 'gpt-5.6-sol',            scenario: 'openai',      streamed: true, cacheHitRatio: 0.91 },
+            { provider_name: 'OpenAI',    model: 'gpt-5.6-luna',       scenario: 'openai',      streamed: false, cacheHitRatio: 0.90 },
             { provider_name: 'OpenRouter', model: 'deepseek/deepseek-v4-pro', scenario: 'agent', streamed: true, cacheHitRatio: 0.18 },
         ]
 
@@ -1986,7 +1886,7 @@ export const handlers = [
                     default_cwd: '/home/user/projects',
                     default_agent: 'claude_code',
                     smartguide_provider: 'mock-provider-anthropic',
-                    smartguide_model: 'claude-sonnet-4-5',
+                    smartguide_model: 'claude-sonnet-5',
                     chat_id: '123456789',
                     created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: { token: 'mock-bot-token-****' },
@@ -2000,7 +1900,7 @@ export const handlers = [
                     default_cwd: '/home/user/workspace',
                     default_agent: 'claude_code',
                     smartguide_provider: 'mock-provider-openai',
-                    smartguide_model: 'gpt-4o',
+                    smartguide_model: 'gpt-5.6-sol',
                     chat_id: 'C0123456789',
                     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: {},
@@ -2014,7 +1914,7 @@ export const handlers = [
                     default_cwd: '/home/user/dev',
                     default_agent: 'claude_code',
                     smartguide_provider: 'mock-provider-anthropic',
-                    smartguide_model: 'claude-opus-4-5',
+                    smartguide_model: 'claude-opus-4-8',
                     chat_id: '',
                     created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: { token: 'mock-discord-token-****' },
@@ -2035,7 +1935,7 @@ export const handlers = [
                 default_cwd: '/home/user/projects',
                 default_agent: 'claude_code',
                 smartguide_provider: 'mock-provider-anthropic',
-                smartguide_model: 'claude-sonnet-4-5',
+                smartguide_model: 'claude-sonnet-5',
                 created_at: new Date().toISOString(),
                 auth: {},
             },
@@ -2300,7 +2200,7 @@ export const handlers = [
         const authMode: string = body?.authMode || 'apikey'
         const writeCatalog: boolean = body?.writeCatalog !== false
         const prefs = (body?.preferences || {}) as Record<string, string>
-        const models = ['gpt-5.1-codex', 'codex-mini-latest']
+        const models = ['gpt-5.6-sol', 'gpt-5.6-luna']
         const baseUrl = 'http://localhost:3000/tingly/codex'
         const token = 'tb-mock-model-token'
 
@@ -2364,7 +2264,7 @@ export const handlers = [
                     : 'Updated ~/.codex/auth.json',
             },
             catalogWritten: writeCatalog && authMode !== 'chatgpt',
-            models: ['gpt-5.1-codex', 'codex-mini-latest'],
+            models: ['gpt-5.6-sol', 'gpt-5.6-luna'],
             message: 'Codex configuration applied',
         })
     }),
