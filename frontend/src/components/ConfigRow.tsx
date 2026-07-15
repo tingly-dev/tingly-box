@@ -108,20 +108,32 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
         : { maxWidth };
 
     return (
-        <Box sx={{display: 'flex', alignItems: 'center', gap: 3, ...widthStyle}}>
+        <Box
+            sx={{
+                display: 'grid',
+                alignItems: 'center',
+                columnGap: {xs: 1, sm: 3},
+                rowGap: {xs: 0.5, sm: 0},
+                gridTemplateColumns: {
+                    xs: 'minmax(0, 1fr) auto',
+                    sm: '168px minmax(0, 1fr) auto',
+                },
+                ...widthStyle,
+            }}
+        >
             {/* Left: Tabs (with | separator if multiple) */}
-            <Box sx={{minWidth: { xs: 80, sm: 120, md: 150, lg: 200 }}}>
+            <Box sx={{gridColumn: {xs: '1 / -1', sm: '1'}, minWidth: 0}}>
                 {leftContent}
             </Box>
 
             {/* Center: Content */}
-            <Box sx={{flex: 1, minWidth: 0, overflow: 'hidden'}}>
+            <Box sx={{gridColumn: {xs: '1', sm: '2'}, minWidth: 0, overflow: 'hidden'}}>
                 {currentTab?.content}
             </Box>
 
             {/* Right: Actions */}
             {currentTab?.actions && (
-                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0, ml: 'auto'}}>
+                <Stack direction="row" spacing={0.5} sx={{gridColumn: {xs: '2', sm: '3'}, justifySelf: 'end'}}>
                     {currentTab.actions}
                 </Stack>
             )}

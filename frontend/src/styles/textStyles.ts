@@ -16,7 +16,7 @@ export const copyableTextStyle: SxProps<Theme> = {
         textDecoration: 'underline',
         backgroundColor: 'action.hover',
     },
-    padding: 1,
+    py: 1,
     borderRadius: 1,
     transition: 'all 0.2s ease-in-out',
 };
