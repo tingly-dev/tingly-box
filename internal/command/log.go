@@ -49,7 +49,7 @@ func (l *LogCmdKong) Run(appManager *AppManager) error {
 
 	port := l.Port
 	if port == 0 {
-		port = appConfig.GetServerPort()
+		port = appManager.GetRuntimeServerPort()
 	}
 	host := l.Host
 	if host == "" {

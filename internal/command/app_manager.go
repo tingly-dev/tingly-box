@@ -9,6 +9,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/lock"
 )
 
 // AppManager manages all application state and operations.
@@ -220,6 +221,23 @@ func (am *AppManager) GetRuleByUUID(uuid string) *typ.Rule {
 
 // GetServerPort returns the configured server port.
 func (am *AppManager) GetServerPort() int {
+	return am.appConfig.GetServerPort()
+}
+
+// GetRuntimeServerPort returns the port the running server is actually
+// listening on. The server port is intentionally not persisted in the config
+// file, so a server started with --port would be invisible to other CLI
+// processes; the server therefore records its port in a runtime port file
+// next to the PID lock. When the server is running (lock held) and the port
+// file is readable, that port wins; otherwise this falls back to the
+// configured port.
+func (am *AppManager) GetRuntimeServerPort() int {
+	configDir := am.appConfig.ConfigDir()
+	if lock.NewFileLock(configDir).IsLocked() {
+		if port, err := lock.NewPortFile(configDir).Read(); err == nil {
+			return port
+		}
+	}
 	return am.appConfig.GetServerPort()
 }
 

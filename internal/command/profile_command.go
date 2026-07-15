@@ -30,7 +30,7 @@ import (
 type ProfileCmdKong struct {
 	List      bool     `kong:"flag,name='list',help='List all profiles (non-interactive)'"`
 	Show      bool     `kong:"flag,name='show',help='Show profile details instead of launching'"`
-	Port      int      `kong:"flag,name='port',help='Connect to tingly-box on the specified port (default: from config)'"`
+	Port      int      `kong:"flag,name='port',help='Connect to tingly-box on the specified port (default: detected from running server, else config)'"`
 	ProfileID string   `kong:"arg,optional,help='Profile name or ID to launch Claude Code with'"`
 	Args      []string `kong:"arg,optional,passthrough='all',help='Additional arguments to pass to Claude Code (e.g., --model opus)'"`
 }

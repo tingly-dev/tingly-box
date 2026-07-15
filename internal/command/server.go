@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -123,7 +124,7 @@ func (o *OpenCmdKong) Run(appManager *AppManager) error {
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
 	if fileLock.IsLocked() {
-		port := appConfig.GetServerPort()
+		port := appManager.GetRuntimeServerPort()
 		globalConfig := appManager.GetGlobalConfig()
 
 		host := opts.Host
@@ -203,7 +204,7 @@ func runStatusCmd(appManager *AppManager) error {
 	fmt.Printf("Server Status: ")
 	if serverRunning {
 		fmt.Printf("Running\n")
-		port := appConfig.GetServerPort()
+		port := appManager.GetRuntimeServerPort()
 		fmt.Printf("Port: %d\n", port)
 		fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/tingly/openai/v1/chat/completions\n", port)
 		fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/tingly/anthropic/v1/messages\n", port)
@@ -491,7 +492,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 
 	// Check if server is already running using file lock (BEFORE port check)
 	if fileLock.IsLocked() {
-		fmt.Printf("Server is already running on port %d\n", port)
+		fmt.Printf("Server is already running on port %d\n", appManager.GetRuntimeServerPort())
 		fmt.Println("Use 'tingly-box restart' to restart the server")
 		fmt.Println("Use 'tingly-box stop' to stop it")
 
@@ -531,6 +532,14 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 	}
 	fmt.Printf("Lock acquired: %s\n", fileLock.GetLockFilePath())
 
+	// Record the actual listening port next to the PID lock so other CLI
+	// processes (cc/profile/log/status/open) can discover it — the port is
+	// intentionally not persisted in the config file.
+	portFile := lock.NewPortFile(appConfig.ConfigDir())
+	if err := portFile.Write(port); err != nil {
+		logrus.Warnf("Failed to record server port: %v", err)
+	}
+
 	serverManager := NewServerManager(
 		appConfig,
 		server.WithDebug(opts.EnableDebug),
@@ -547,6 +556,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 			continue
 		}
 		if err := hook(serverManager); err != nil {
+			_ = portFile.Remove()
 			fileLock.Unlock()
 			return err
 		}
@@ -572,6 +582,7 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		if !daemon.IsDaemonProcess() {
 			// Fork and detach - this call exits the parent process
 			if err := daemon.Daemonize(); err != nil {
+				_ = portFile.Remove()
 				fileLock.Unlock()
 				return fmt.Errorf("failed to daemonize: %w", err)
 			}
@@ -591,16 +602,19 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 	select {
 	case err := <-serverErr:
 		// Release lock on error
+		_ = portFile.Remove()
 		fileLock.Unlock()
 		return fmt.Errorf("server stopped unexpectedly: %w", err)
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
 		// Release lock on shutdown
+		_ = portFile.Remove()
 		fileLock.Unlock()
 		return serverManager.Stop()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
 		// Release lock on shutdown
+		_ = portFile.Remove()
 		fileLock.Unlock()
 		return serverManager.Stop()
 	}
@@ -615,6 +629,13 @@ func CreateAppManagerForDir(configDir string) (*AppManager, error) {
 		return nil, fmt.Errorf("failed to create app config for directory %s: %w", configDir, err)
 	}
 	return NewAppManagerWithConfig(appConfig), nil
+}
+
+// removeRuntimePortFile removes the runtime port file that lives next to the
+// given PID lock. Used by the stopping process after the lock is released,
+// when the server was killed without a chance to clean up itself.
+func removeRuntimePortFile(fileLock *lock.FileLock) {
+	_ = lock.NewPortFile(filepath.Dir(fileLock.GetLockFilePath())).Remove()
 }
 
 // doStopServerWithFileLock stops the server using the provided file lock
