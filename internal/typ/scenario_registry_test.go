@@ -209,6 +209,8 @@ func TestValidateProfileName(t *testing.T) {
 
 	invalid := []string{
 		"",           // empty
+		"default",    // reserved settings filename
+		"DEFAULT",    // reserved on case-insensitive filesystems
 		"my profile", // space
 		"a:b",        // separator
 		"a/b",        // path separator

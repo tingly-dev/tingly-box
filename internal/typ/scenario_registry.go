@@ -290,14 +290,17 @@ func looksLikeProfileID(name string) bool {
 // the constraint to the write path is the primary defense: every stored
 // profile is then guaranteed routable by name, and IsSimpleProfileAlias on the
 // routing path only has to guard legacy data created before this check. The
-// "p"<digits> shape is additionally reserved here so a name can never collide
-// with the auto-generated ID namespace.
+// "default" and the "p"<digits> ID shape are additionally reserved so user
+// names cannot collide with system-managed profile identities.
 func ValidateProfileName(name string) error {
 	if name == "" {
 		return fmt.Errorf("profile name must not be empty")
 	}
 	if !IsSimpleProfileAlias(name) {
 		return fmt.Errorf("profile name %q must contain only letters, digits, '-' and '_' so it can be used directly in a route like '/tingly/<scenario>:%s'", name, name)
+	}
+	if strings.EqualFold(name, "default") {
+		return fmt.Errorf("profile name %q is reserved for the local default profile", name)
 	}
 	if looksLikeProfileID(name) {
 		return fmt.Errorf("profile name %q is reserved: it has the shape of an auto-generated profile ID — choose a different name", name)

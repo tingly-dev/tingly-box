@@ -276,16 +276,70 @@ target a model name routed by a different gateway on the same proxy
 URL — without forcing the form to surface concepts ("rule", "service",
 "provider") that are normally hidden one level below.
 
-### 5.6 Profiles (out of scope for the form)
+### 5.6 Profile settings are derived artifacts
 
-The profile system at `/agent/claude_code/profile/:profileId` uses
+The profile system at `/agent/claude_code/profile/:profileId` uses the
 scenario string `claude_code:<profileId>` and its **own** set of rules
-(short names like `default`/`haiku` instead of `tingly/cc-*`). Profile
-launches go through `tingly-box cc --profile <id>`, which has a separate
-env-generation path in `internal/command/cc_command.go:generateCCEnv`.
-The Quick Config modal is intentionally only mounted on the default
-(non-profile) page; profile env is materialized by the CLI subcommand at
-launch time, not written to global `~/.claude/settings.json`.
+(short names like `default`/`haiku` instead of `tingly/cc-*`). The Quick
+Config modal remains scoped to the default page; profile env is generated
+by `GenerateCCEnv` and materialized by `BuildCCProfileSettings`.
+
+There is deliberately no second profile manifest under the Claude
+directory. The sources of truth are:
+
+- global config for profile ID, name, mode, rules, and routing flags;
+- `~/.claude/settings.json` for the user's current local Claude settings.
+
+Everything under `~/.tingly-box/claude/` is a deterministic runtime
+artifact that can be rebuilt from those sources. Code must only derive a
+path from config; it must never scan or parse directory names to reconstruct
+profile metadata.
+
+The materialized layout keeps the stable ID and human name visible without
+symlinks or another `profiles/` nesting layer:
+
+```text
+~/.tingly-box/claude/
+├── default/
+│   ├── settings.json
+│   └── statusline.sh
+├── p1--work/
+│   ├── settings.json
+│   └── statusline.sh
+└── p2--deepseek/
+    ├── settings.json
+    └── statusline.sh
+```
+
+`default/` is a synthetic local profile. It maps the current
+`~/.claude/settings.json` into a Tingly-specific launch artifact; it is not a
+link to, and never modifies, the user's original file. A named profile uses
+`<profileID>--<profileName>/`. Legacy names that are not filesystem-safe fall
+back to the stable ID-only directory until renamed.
+
+On every materialization, `settings.json` is rebuilt from the current local
+settings (or `{}` if the local file no longer exists), then receives the
+generated env and profile-local `statusline.sh` command. This reset is
+important: a previously generated artifact must never become an accidental
+second source of truth.
+
+Profile CRUD follows the same derived-artifact rule:
+
+- **Create/run:** materialize the current config into its computed directory.
+- **Rename:** materialize the new directory first; only after success remove
+  the old generated files. A case-only rename is guarded with `os.SameFile`
+  for case-insensitive filesystems.
+- **Delete:** remove only the known generated files (`settings.json` and
+  `statusline.sh`), then remove the directory if empty. User-added files are
+  preserved; cleanup never uses recursive deletion.
+- **Migration:** after a successful build, remove the old flat
+  `<profileID>.json`, `statusline-<profileID>.sh`, and an owned legacy name
+  symlink. No new links are created, so the layout works consistently across
+  macOS, Linux, and Windows.
+
+Artifact directories themselves must be real directories, not symlinks. Both
+write and cleanup paths reject a symlink at the computed profile directory so
+profile operations cannot escape `~/.tingly-box/claude/`.
 
 ---
 

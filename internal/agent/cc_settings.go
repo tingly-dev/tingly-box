@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -96,21 +94,22 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 	return env
 }
 
-// BuildCCProfileSettings creates or updates the Claude Code profile settings
-// file at ~/.tingly-box/claude/<profileID>.json. It copies ~/.claude/settings.json
-// as a base (if it exists), installs the shared status line script, generates a
-// per-profile wrapper script, and merges the tingly env vars.
+// BuildCCProfileSettings materializes one derived Claude Code profile under
+// ~/.tingly-box/claude/. The local/default profile lives at default/, while a
+// named profile lives at <profileID>--<profileName>/ so both its stable identity
+// and human name are visible without aliases or platform-specific links.
 //
-// profileName, if non-empty and different from profileID, also gets a
-// human-readable symlink (e.g. ds.json -> p1.json) so the profile is
-// browsable by name, not just by its opaque ID. Pass "" to skip.
-//
-// Returns the path to the written file.
+// Config remains the source of truth. The directory contains only rebuildable
+// runtime artifacts: settings.json and its statusline.sh wrapper.
 func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map[string]string) (string, error) {
-	profileDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
-	destPath := filepath.Join(profileDir, profileID+".json")
+	rootDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
+	artifactDir, err := ccProfileArtifactDir(rootDir, profileID, profileName)
+	if err != nil {
+		return "", err
+	}
+	destPath := filepath.Join(artifactDir, "settings.json")
 
-	if err := os.MkdirAll(profileDir, 0755); err != nil {
+	if err := ensureCCProfileArtifactDir(artifactDir); err != nil {
 		return "", fmt.Errorf("failed to create profile directory: %w", err)
 	}
 
@@ -120,12 +119,17 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 	srcPath := filepath.Join(homeDir, ".claude", "settings.json")
-	if data, err := os.ReadFile(srcPath); err == nil {
-		if err := os.WriteFile(destPath, data, 0644); err != nil {
-			return "", fmt.Errorf("failed to copy user settings: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return "", fmt.Errorf("failed to read user settings: %w", err)
+	baseSettings := []byte("{}")
+	if data, readErr := os.ReadFile(srcPath); readErr == nil {
+		baseSettings = data
+	} else if !os.IsNotExist(readErr) {
+		return "", fmt.Errorf("failed to read user settings: %w", readErr)
+	}
+	// Always reset the derived file to the current local source (or an empty
+	// object when that source no longer exists) before applying profile values.
+	// This prevents generated artifacts from becoming a second source of truth.
+	if err := os.WriteFile(destPath, baseSettings, 0644); err != nil {
+		return "", fmt.Errorf("failed to copy user settings: %w", err)
 	}
 
 	// Install the base status line script (shared across profiles).
@@ -134,7 +138,7 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 	}
 
 	// Generate per-profile wrapper script that sets TINGLY_SCENARIO.
-	wrapperPath, err := buildCCProfileStatusLineScript(profileDir, profileID, scenarioPath)
+	wrapperPath, err := buildCCProfileStatusLineScript(artifactDir, profileID, scenarioPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create status line wrapper: %w", err)
 	}
@@ -152,90 +156,113 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 		return "", fmt.Errorf("failed to apply settings: %s", result.Message)
 	}
 
-	if err := syncProfileNameSymlink(profileDir, profileID, profileName, ""); err != nil {
-		// Non-fatal: the ID-named settings file is already usable; the alias is
-		// a convenience for browsing ~/.tingly-box/claude/.
-		logrus.WithError(err).Warn("failed to sync profile name symlink")
-	}
+	removeLegacyCCProfileArtifacts(rootDir, profileID, profileName)
 
 	return destPath, nil
 }
 
-// SyncProfileNameSymlink (re)points a human-readable symlink at the profile's
-// ID-named settings file, e.g. ~/.tingly-box/claude/ds.json -> p1.json, so the
-// profile is browsable by name instead of only by its opaque "p1" ID.
-//
-// name may be empty (unnamed/default profile) or equal to profileID (nothing
-// to alias) — both are no-ops. oldName, if non-empty and different from name,
-// has its stale symlink removed first (rename case).
-func SyncProfileNameSymlink(profileID, name, oldName string) error {
-	profileDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
-	return syncProfileNameSymlink(profileDir, profileID, name, oldName)
+func ccProfileArtifactDir(rootDir, profileID, profileName string) (string, error) {
+	if profileID == "default" {
+		return filepath.Join(rootDir, "default"), nil
+	}
+	if !typ.IsSimpleProfileAlias(profileID) {
+		return "", fmt.Errorf("invalid Claude Code profile ID %q", profileID)
+	}
+	if err := typ.ValidateProfileName(profileName); err != nil {
+		// Legacy names created before validation remain runnable from config, but
+		// use the stable ID-only directory until the user gives them a safe name.
+		return filepath.Join(rootDir, profileID), nil
+	}
+	return filepath.Join(rootDir, profileID+"--"+profileName), nil
 }
 
-func syncProfileNameSymlink(profileDir, profileID, name, oldName string) error {
-	target := profileID + ".json"
-
-	if oldName != "" && oldName != name {
-		removeProfileNameSymlink(profileDir, profileID, oldName)
+func ensureCCProfileArtifactDir(artifactDir string) error {
+	info, err := os.Lstat(artifactDir)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(artifactDir, 0755)
 	}
-
-	if name == "" || name == profileID {
-		return nil
+	if err != nil {
+		return err
 	}
-
-	linkPath := filepath.Join(profileDir, name+".json")
-
-	// If something already occupies linkPath and it isn't our symlink, leave it
-	// alone rather than clobbering an unrelated file.
-	if info, err := os.Lstat(linkPath); err == nil {
-		if info.Mode()&os.ModeSymlink == 0 {
-			return fmt.Errorf("cannot create profile symlink: %s already exists and is not a symlink", linkPath)
-		}
-		if existing, err := os.Readlink(linkPath); err == nil && existing == target {
-			return nil // already correct
-		}
-		if err := os.Remove(linkPath); err != nil {
-			return fmt.Errorf("failed to replace stale profile symlink: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to stat profile symlink: %w", err)
-	}
-
-	if err := os.Symlink(target, linkPath); err != nil {
-		return fmt.Errorf("failed to create profile symlink: %w", err)
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("profile artifact path is not a managed directory: %s", artifactDir)
 	}
 	return nil
 }
 
-// RemoveProfileNameSymlink removes the name-based symlink for a profile, if any.
-func RemoveProfileNameSymlink(profileID, name string) {
-	profileDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
-	removeProfileNameSymlink(profileDir, profileID, name)
+// RemoveCCProfileArtifacts removes only files generated by Tingly-Box for the
+// selected profile. If users added anything else to the directory, it is left
+// in place rather than recursively deleted.
+func RemoveCCProfileArtifacts(profileID, profileName string) error {
+	rootDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
+	return removeCCProfileArtifacts(rootDir, profileID, profileName)
 }
 
-func removeProfileNameSymlink(profileDir, profileID, name string) {
-	if name == "" || name == profileID {
+// RemoveRenamedCCProfileArtifacts removes the old derived directory after the
+// new one has been materialized. os.SameFile protects case-only renames on
+// case-insensitive filesystems, where both spellings identify the same path.
+func RemoveRenamedCCProfileArtifacts(profileID, oldName, newName string) error {
+	rootDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
+	return removeRenamedCCProfileArtifacts(rootDir, profileID, oldName, newName)
+}
+
+func removeRenamedCCProfileArtifacts(rootDir, profileID, oldName, newName string) error {
+	oldDir, oldErr := ccProfileArtifactDir(rootDir, profileID, oldName)
+	newDir, newErr := ccProfileArtifactDir(rootDir, profileID, newName)
+	if oldErr == nil && newErr == nil {
+		oldInfo, oldStatErr := os.Stat(oldDir)
+		newInfo, newStatErr := os.Stat(newDir)
+		if oldStatErr == nil && newStatErr == nil && os.SameFile(oldInfo, newInfo) {
+			return nil
+		}
+	}
+	return removeCCProfileArtifacts(rootDir, profileID, oldName)
+}
+
+func removeCCProfileArtifacts(rootDir, profileID, profileName string) error {
+	artifactDir, err := ccProfileArtifactDir(rootDir, profileID, profileName)
+	if err == nil {
+		if info, statErr := os.Lstat(artifactDir); statErr == nil && (info.Mode()&os.ModeSymlink != 0 || !info.IsDir()) {
+			return fmt.Errorf("refusing to clean unmanaged Claude Code profile path: %s", artifactDir)
+		} else if statErr != nil && !os.IsNotExist(statErr) {
+			return fmt.Errorf("failed to inspect Claude Code profile directory: %w", statErr)
+		}
+		for _, name := range []string{"settings.json", "statusline.sh"} {
+			if removeErr := os.Remove(filepath.Join(artifactDir, name)); removeErr != nil && !os.IsNotExist(removeErr) {
+				return fmt.Errorf("failed to remove Claude Code profile artifact %s: %w", name, removeErr)
+			}
+		}
+		if removeErr := os.Remove(artifactDir); removeErr != nil && !os.IsNotExist(removeErr) {
+			// A non-empty directory contains user files; preserving it is expected.
+			if entries, readErr := os.ReadDir(artifactDir); readErr != nil || len(entries) == 0 {
+				return fmt.Errorf("failed to remove Claude Code profile directory: %w", removeErr)
+			}
+		}
+	}
+
+	removeLegacyCCProfileArtifacts(rootDir, profileID, profileName)
+	return nil
+}
+
+func removeLegacyCCProfileArtifacts(rootDir, profileID, profileName string) {
+	_ = os.Remove(filepath.Join(rootDir, profileID+".json"))
+	_ = os.Remove(filepath.Join(rootDir, "statusline-"+profileID+".sh"))
+
+	if profileName == "" || !typ.IsSimpleProfileAlias(profileName) {
 		return
 	}
-	linkPath := filepath.Join(profileDir, name+".json")
-	info, err := os.Lstat(linkPath)
-	if err != nil {
-		return // nothing to remove
-	}
-	// Only remove it if it's actually a symlink pointing at this profile's
-	// settings file — never touch a real file that happens to share the name.
-	if info.Mode()&os.ModeSymlink == 0 {
+	aliasPath := filepath.Join(rootDir, profileName+".json")
+	info, err := os.Lstat(aliasPath)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
 		return
 	}
-	if target, err := os.Readlink(linkPath); err != nil || target != profileID+".json" {
-		return
+	if target, readErr := os.Readlink(aliasPath); readErr == nil && target == profileID+".json" {
+		_ = os.Remove(aliasPath)
 	}
-	_ = os.Remove(linkPath)
 }
 
 func buildCCProfileStatusLineScript(profileDir, profileID, scenarioPath string) (string, error) {
-	wrapperPath := filepath.Join(profileDir, fmt.Sprintf("statusline-%s.sh", profileID))
+	wrapperPath := filepath.Join(profileDir, "statusline.sh")
 
 	content := fmt.Sprintf("#!/bin/bash\n"+
 		"# Per-profile status line wrapper for Claude Code\n"+

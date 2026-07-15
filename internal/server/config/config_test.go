@@ -281,7 +281,7 @@ func TestCreateProfile_RejectsNonURLFriendlyName(t *testing.T) {
 	}
 	scenario := typ.RuleScenario("claude_code")
 
-	for _, bad := range []string{"my profile", "a:b", "a/b", "", " mine", "p1", "p07"} {
+	for _, bad := range []string{"my profile", "a:b", "a/b", "", " mine", "default", "DEFAULT", "p1", "p07"} {
 		if _, err := cfg.CreateProfile(scenario, bad, true); err == nil {
 			t.Errorf("CreateProfile(%q) = nil error, want rejection", bad)
 		}
