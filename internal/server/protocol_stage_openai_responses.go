@@ -16,9 +16,11 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/anthropicbridge"
+	protocolguardrail "github.com/tingly-dev/tingly-box/internal/protocol/stage/guardrail"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/responsesbridge"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
@@ -47,11 +49,13 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 	stageRecording *protocolStageRequestRecording,
 ) bool {
 	mcpEnabled := ph.mcpEnabled()
-	if mcpEnabled {
+	guardrailsEnabled := ph.guardrailsEnabledForProtocolStage(GetTrackingContextScenario(c), protocol.TypeOpenAIResponses)
+	usesBetaStages := mcpEnabled || guardrailsEnabled
+	if usesBetaStages {
 		if !ph.shouldUseProtocolStageBetaChain(c, protocol.TypeOpenAIResponses, target, protocolstage.AllBridgeCapabilities) {
 			return false
 		}
-		if ph.deps.MCPRuntime == nil {
+		if mcpEnabled && ph.deps.MCPRuntime == nil {
 			logProtocolStageFallback(c, protocol.TypeOpenAIResponses, target, "MCP runtime is unavailable")
 			return false
 		}
@@ -85,6 +89,25 @@ func (ph *ProtocolHandler) tryProtocolStageOpenAIResponses(
 			RulePreBaseTransforms(ruleFlags),
 			options...,
 		),
+	}
+	if guardrailsEnabled {
+		guardrailStage, guardrailErr := protocolguardrail.NewAnthropicBeta(protocolguardrail.AnthropicBetaConfig{
+			Runtime: ph.currentGuardrailsRuntime(),
+			BaseInput: BuildGuardrailsBaseInput(
+				c,
+				actualModel,
+				provider,
+				guardrailscore.DirectionRequest,
+				nil,
+			),
+			Observe: protocolStageGuardrailObserver(c),
+		})
+		if guardrailErr != nil {
+			requestErr = guardrailErr
+			ph.FailAttemptSetup(c, guardrailErr)
+			return true
+		}
+		stages = append(stages, guardrailStage)
 	}
 	if mcpEnabled {
 		toolLoop, toolLoopErr := ph.newProtocolStageBetaToolLoop(c, provider, false)

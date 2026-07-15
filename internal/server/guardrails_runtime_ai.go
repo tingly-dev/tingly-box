@@ -47,10 +47,18 @@ func GuardrailsSupportsScenario(scenario string) bool {
 // GuardrailsEnabledForScenario centralizes feature-flag checks so protocol
 // handlers do not repeat scenario/global guardrails gating logic.
 func GuardrailsEnabledForScenario(cfg *config.Config, runtime *guardrails.Guardrails, scenario string) bool {
-	if runtime == nil || runtime.PolicyEngine() == nil || cfg == nil || !runtime.IsActive() {
+	if !GuardrailsSupportsScenario(scenario) {
 		return false
 	}
-	if !GuardrailsSupportsScenario(scenario) {
+	return GuardrailsConfiguredForScenario(cfg, runtime, scenario)
+}
+
+// GuardrailsConfiguredForScenario reports whether the runtime and feature flag
+// are active without applying the legacy scenario-support list. Protocol Stage
+// uses this narrower primitive while onboarding a new ingress protocol behind
+// --stage, before declaring that scenario supported by every legacy endpoint.
+func GuardrailsConfiguredForScenario(cfg *config.Config, runtime *guardrails.Guardrails, scenario string) bool {
+	if runtime == nil || runtime.PolicyEngine() == nil || cfg == nil || !runtime.IsActive() {
 		return false
 	}
 	return cfg.GetScenarioFlag(typ.RuleScenario(scenario), config.ExtensionGuardrails) ||

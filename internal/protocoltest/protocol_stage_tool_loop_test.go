@@ -116,48 +116,61 @@ func TestServerProtocolStageOwnedToolLoopHTTP(t *testing.T) {
 	}
 }
 
-func TestServerProtocolStageV1MCPGuardrailComposition(t *testing.T) {
+func TestServerProtocolStageMCPGuardrailComposition(t *testing.T) {
 	t.Parallel()
 
-	for _, streaming := range []bool{false, true} {
-		mode := "complete"
-		if streaming {
-			mode = "stream"
-		}
-		t.Run(mode, func(t *testing.T) {
+	tests := []struct {
+		name   string
+		source protocol.APIType
+		target protocol.APIType
+	}{
+		{name: "v1_through_beta_to_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat},
+		{name: "responses_through_beta_to_chat", source: protocol.TypeOpenAIResponses, target: protocol.TypeOpenAIChat},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			provider := &echoServertoolProvider{}
-			guardrailRuntime := newProtocolStageGuardrails(func(_ context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
-				if input.Direction == guardrailscore.DirectionResponse && input.Content.Command != nil {
-					return protocolStageBlockedResult("external tool denied"), nil
+			for _, streaming := range []bool{false, true} {
+				mode := "complete"
+				if streaming {
+					mode = "stream"
 				}
-				return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
-			})
-			env := NewTestEnv(t,
-				NewTestEnvOptionWithProtocolStage(),
-				NewTestEnvOptionWithMCP(),
-				NewTestEnvOptionWithGuardrails(guardrailRuntime),
-				NewTestEnvOptionWithServertoolProviders(provider),
-			)
-			scenario := ownedThenExternalToolScenario()
-			env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, scenario)
+				t.Run(mode, func(t *testing.T) {
+					t.Parallel()
+					provider := &echoServertoolProvider{}
+					guardrailRuntime := newProtocolStageGuardrails(func(_ context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
+						if input.Direction == guardrailscore.DirectionResponse && input.Content.Command != nil {
+							return protocolStageBlockedResult("external tool denied"), nil
+						}
+						return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
+					})
+					env := NewTestEnv(t,
+						NewTestEnvOptionWithProtocolStage(),
+						NewTestEnvOptionWithMCP(),
+						NewTestEnvOptionWithGuardrails(guardrailRuntime),
+						NewTestEnvOptionWithServertoolProviders(provider),
+					)
+					scenario := ownedThenExternalToolScenario()
+					env.SetupRoute(tt.source, tt.target, scenario)
 
-			result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, scenario, streaming)
-			if result.HTTPStatus != http.StatusOK {
-				t.Fatalf("status = %d, body = %s", result.HTTPStatus, result.RawBody)
-			}
-			if !strings.Contains(result.Content, "Blocked by guardrails") {
-				t.Fatalf("final response was not blocked: content=%q body=%s", result.Content, result.RawBody)
-			}
-			if len(result.ToolCalls) != 0 {
-				t.Fatalf("blocked external tool leaked in final response: %#v", result.ToolCalls)
-			}
-			if env.VirtualCallCount() != 2 {
-				t.Fatalf("provider calls = %d, want 2", env.VirtualCallCount())
-			}
-			calls, _ := provider.snapshot()
-			if calls != 1 {
-				t.Fatalf("local tool executions = %d, want 1", calls)
+					result := env.SendAs(t, tt.source, tt.target, scenario, streaming)
+					if result.HTTPStatus != http.StatusOK {
+						t.Fatalf("status = %d, body = %s", result.HTTPStatus, result.RawBody)
+					}
+					if !strings.Contains(result.Content, "Blocked by guardrails") {
+						t.Fatalf("final response was not blocked: content=%q body=%s", result.Content, result.RawBody)
+					}
+					if len(result.ToolCalls) != 0 {
+						t.Fatalf("blocked external tool leaked in final response: %#v", result.ToolCalls)
+					}
+					if env.VirtualCallCount() != 2 {
+						t.Fatalf("provider calls = %d, want 2", env.VirtualCallCount())
+					}
+					calls, _ := provider.snapshot()
+					if calls != 1 {
+						t.Fatalf("local tool executions = %d, want 1", calls)
+					}
+				})
 			}
 		})
 	}

@@ -25,7 +25,7 @@ lifecycle before the provider is called.
 | --- | --- | --- |
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
-| 3 — Guardrails canary | Complete for Anthropic Beta and promoted V1 sources | Request, complete response, and stream events; Beta, Chat, and Responses targets |
+| 3 — Guardrails canary | Complete for Anthropic Beta, promoted V1, and Responses sources | Request, complete response, and stream events; Beta, Chat, and Responses targets |
 | 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
 | 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, mixed continuation, recording, and side-effect-aware failover |
 | 5 — Opt-in handler integration | Active | Existing handlers may select Stage only from the immutable `--stage` startup choice; default traffic remains legacy |
@@ -44,9 +44,9 @@ Production route selection with `--stage`:
 | `openai_chat` | `openai_chat` | Stage | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_chat` | `anthropic_beta` | Stage through Chat→Beta Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | `openai_chat` | `openai_responses` | Stage through Chat→Responses Bridge | Not a supported Guardrails scenario | Chat→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_responses` | `openai_responses` | Stage | Not attached on the Responses handler | Responses→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_responses` | `anthropic_beta` | Stage through Responses→Beta Bridge | Not attached on the Responses handler | Responses→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
-| `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Not attached on the Responses handler | Responses→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_responses` | `openai_responses` | Stage | Responses→Beta Guardrail→Responses | Responses→Beta Tool Loop→Responses | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_responses` | `anthropic_beta` | Stage through Responses→Beta Bridge | Responses→Beta Guardrail | Responses→Beta Tool Loop | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
+| `openai_responses` | `openai_chat` | Stage through Responses→Chat Bridge | Responses→Beta Guardrail→Chat | Responses→Beta Tool Loop→Chat | Stage `RequestRecord` for a compatible service set; otherwise Legacy |
 | Any other pair | Any | Legacy | Legacy | Legacy | Legacy |
 
 The planned protocol-pair rollout is complete: the three provider-facing
@@ -58,6 +58,12 @@ enter it through the lossless V1→Beta promotion Bridge; Chat and Responses use
 their existing Bridges. The earlier Chat-native Tool Loop remains a useful
 lifecycle proof; production MCP selection now uses the Beta-native topology
 behind the explicit `--stage` canary.
+
+The Responses Guardrail canary reads the existing Guardrails runtime and
+scenario/global feature flag through a Stage-specific gate. It does not add the
+`openai` scenario to the legacy Guardrails support list: doing so would change
+Chat or converted legacy behavior without `--stage`. That support declaration
+is deferred until Chat has its own independently verified Stage integration.
 
 ## Decision
 
@@ -640,14 +646,14 @@ Capability-missing pairs, feature-owned legacy lifecycles,
 and the explicit response-roundtrip diagnostic remain on legacy. Debug routing
 exposes the concrete `X-Tingly-Protocol-Pipeline: stage|legacy` decision.
 
-The first feature canary composes `guardrail_anthropic_beta` between Beta client
-preparation and provider finalization. On Beta → Chat, `BuildTopology` inserts
-the Beta → Chat Bridge below the Guardrail, so provider responses are converted
-back to Beta before response policy runs. The same one-protocol Guardrail
-therefore covers native Beta and Chat-backed Beta calls in complete and stream
-modes. The real HTTP tests verify blocking on both targets and streamed tool-use
-rewriting; `harness matrix --stage --guardrails` supplies an allow-only runtime
-for full semantic compatibility matrices.
+The first feature canary composes `guardrail_anthropic_beta` at the Beta working
+boundary. `BuildTopology` inserts source→Beta above it and Beta→provider below
+it as required, so provider responses return to Beta before response policy
+runs. The same one-protocol Guardrail therefore covers native Beta, promoted
+V1, and Responses ingress across Beta-, Chat-, and Responses-backed providers
+in complete and stream modes. Real HTTP tests verify response blocking and
+streamed tool-use rewriting; `harness matrix --stage --guardrails` supplies an
+allow-only runtime for full semantic compatibility matrices.
 
 Verification recorded for the Phase 3 checkpoint:
 
@@ -659,6 +665,16 @@ Verification recorded for the Phase 3 checkpoint:
 - `harness matrix --mode=single --stage --guardrails
   --source=anthropic_beta` reports 72 cases: 66 passed, 6 expected
   streaming-only skips, and 0 failures.
+
+Verification recorded for the Responses Guardrail checkpoint:
+
+- real HTTP complete and stream tests cover Responses→Beta Guardrail→provider
+  across Responses, Anthropic Beta, and OpenAI Chat targets;
+- the no-`--stage` negative test remains on legacy;
+- the MCP composition test proves the Guardrail remains outside the Beta Tool
+  Loop and blocks only the final external tool call after one owned execution;
+- `harness matrix --mode=single --stage --guardrails
+  --source=openai_responses --scenario=text --client=http` passes 6/6 cases.
 
 Verification recorded for the native Responses checkpoint:
 

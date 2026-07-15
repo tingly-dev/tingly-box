@@ -47,6 +47,13 @@ func TestServerProtocolStageSelection(t *testing.T) {
 			target:     protocol.TypeOpenAIChat,
 			wantHeader: "legacy",
 		},
+		{
+			name:       "default responses Guardrail route remains legacy",
+			opts:       []TestEnvOption{NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime())},
+			source:     protocol.TypeOpenAIResponses,
+			target:     protocol.TypeOpenAIChat,
+			wantHeader: "legacy",
+		},
 		{name: "stage chat nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, wantHeader: "stage"},
 		{name: "stage chat stream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, streaming: true, wantHeader: "stage"},
 		{name: "stage chat to responses nonstream", opts: []TestEnvOption{NewTestEnvOptionWithProtocolStage()}, source: protocol.TypeOpenAIChat, target: protocol.TypeOpenAIResponses, wantHeader: "stage", wantResponseModel: true},
@@ -120,6 +127,27 @@ func TestServerProtocolStageSelection(t *testing.T) {
 			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithMCP()},
 			source:     protocol.TypeOpenAIResponses,
 			target:     protocol.TypeOpenAIResponses,
+			wantHeader: "stage",
+		},
+		{
+			name:       "stage responses runs Guardrail through beta to responses",
+			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime())},
+			source:     protocol.TypeOpenAIResponses,
+			target:     protocol.TypeOpenAIResponses,
+			wantHeader: "stage",
+		},
+		{
+			name:       "stage responses runs Guardrail through beta",
+			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime())},
+			source:     protocol.TypeOpenAIResponses,
+			target:     protocol.TypeAnthropicBeta,
+			wantHeader: "stage",
+		},
+		{
+			name:       "stage responses runs Guardrail through beta to chat",
+			opts:       []TestEnvOption{NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime())},
+			source:     protocol.TypeOpenAIResponses,
+			target:     protocol.TypeOpenAIChat,
 			wantHeader: "stage",
 		},
 		{
@@ -526,6 +554,83 @@ func TestServerProtocolStageAnthropicV1GuardrailStream(t *testing.T) {
 			}
 			if strings.Contains(string(responseBody), `"type":"tool_use"`) {
 				t.Fatalf("blocked tool_use leaked to client: %s", responseBody)
+			}
+		})
+	}
+}
+
+func TestServerProtocolStageOpenAIResponsesGuardrailComplete(t *testing.T) {
+	t.Parallel()
+
+	for _, target := range []protocol.APIType{protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat} {
+		target := target
+		t.Run(string(target), func(t *testing.T) {
+			t.Parallel()
+			runtime := newProtocolStageGuardrails(func(_ context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
+				if input.Direction == guardrailscore.DirectionResponse {
+					return protocolStageBlockedResult("response denied"), nil
+				}
+				return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
+			})
+			env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(runtime))
+			scenario := TextScenario()
+			env.SetupRoute(protocol.TypeOpenAIResponses, target, scenario)
+			model := env.findRouteModel(protocol.TypeOpenAIResponses, target, scenario.Name)
+			path, body := buildRequest(protocol.TypeOpenAIResponses, model, false)
+
+			resp, responseBody := sendProtocolStageProbe(t, env, path, body)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d: %s", resp.StatusCode, responseBody)
+			}
+			if got := resp.Header.Get("X-Tingly-Protocol-Pipeline"); got != "stage" {
+				t.Fatalf("pipeline header = %q, want stage", got)
+			}
+			if got := resp.Header.Get("X-Tingly-Upstream-API"); got != string(target) {
+				t.Fatalf("upstream API = %q, want %q", got, target)
+			}
+			if !strings.Contains(string(responseBody), "Blocked by guardrails") {
+				t.Fatalf("response was not blocked: %s", responseBody)
+			}
+		})
+	}
+}
+
+func TestServerProtocolStageOpenAIResponsesGuardrailStream(t *testing.T) {
+	t.Parallel()
+
+	for _, target := range []protocol.APIType{protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat} {
+		target := target
+		t.Run(string(target), func(t *testing.T) {
+			t.Parallel()
+			runtime := newProtocolStageGuardrails(func(_ context.Context, input guardrailscore.Input) (guardrailscore.Result, error) {
+				if input.Direction == guardrailscore.DirectionResponse && input.Content.Command != nil {
+					return protocolStageBlockedResult("command denied"), nil
+				}
+				return guardrailscore.Result{Verdict: guardrailscore.VerdictAllow}, nil
+			})
+			env := NewTestEnv(t, NewTestEnvOptionWithProtocolStage(), NewTestEnvOptionWithGuardrails(runtime))
+			scenario := StreamingToolUseScenario()
+			env.SetupRoute(protocol.TypeOpenAIResponses, target, scenario)
+			model := env.findRouteModel(protocol.TypeOpenAIResponses, target, scenario.Name)
+			path, body := buildRequest(protocol.TypeOpenAIResponses, model, true)
+
+			resp, responseBody := sendProtocolStageProbe(t, env, path, body)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d: %s", resp.StatusCode, responseBody)
+			}
+			if got := resp.Header.Get("X-Tingly-Protocol-Pipeline"); got != "stage" {
+				t.Fatalf("pipeline header = %q, want stage", got)
+			}
+			if got := resp.Header.Get("X-Tingly-Upstream-API"); got != string(target) {
+				t.Fatalf("upstream API = %q, want %q", got, target)
+			}
+			if !strings.Contains(string(responseBody), "Blocked by guardrails") {
+				t.Fatalf("stream was not blocked: %s", responseBody)
+			}
+			if strings.Contains(string(responseBody), `"type":"function_call"`) {
+				t.Fatalf("blocked function call leaked to client: %s", responseBody)
 			}
 		})
 	}
