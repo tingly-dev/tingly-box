@@ -2,13 +2,17 @@ import { CheckCircle } from '@/components/icons';
 import { Box, Card, CardContent, CircularProgress, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
+import type { Provider } from '@/types/provider';
 import { ModelTestTrigger } from '../probe/ModelTestTrigger';
 import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
+import { ControlBar } from './ControlBar';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface ModelCardProps {
     model: string;
+    // Provider this model belongs to — needed to run an in-place test probe.
+    provider: Provider;
     isSelected: boolean;
     onClick: () => void;
     variant?: 'standard' | 'starred';
@@ -16,15 +20,11 @@ interface ModelCardProps {
     loading?: boolean;
     showNewBadge?: boolean;
     description?: string; // Model description from API
-    // Provider this model belongs to — needed to run an in-place test probe.
-    // Optional so call sites that haven't been updated yet degrade gracefully
-    // (no test action rendered).
-    providerUuid?: string;
-    providerName?: string;
 }
 
 export default function ModelCard({
     model,
+    provider,
     isSelected,
     onClick,
     variant = 'standard',
@@ -32,10 +32,8 @@ export default function ModelCard({
     loading = false,
     showNewBadge = false,
     description,
-    providerUuid,
-    providerName,
 }: ModelCardProps) {
-    const probe = useModelTestProbe(providerUuid || '', model);
+    const probe = useModelTestProbe(provider.uuid, model);
 
     const getCardStyles = () => {
         const baseStyles = {
@@ -180,42 +178,16 @@ export default function ModelCard({
                         NEW
                     </Box>
                 )}
-                {!loading && providerUuid && (
-                    <Box
-                        className="control-bar"
-                        sx={{
-                            position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            height: 20,
-                            backgroundColor: 'grey.50',
-                            borderTop: 1,
-                            borderTopLeftRadius: 4,
-                            borderColor: 'grey.200',
-                            display: 'flex',
-                            alignItems: 'center',
-                            px: 0.5,
-                            opacity: 0,
-                            transition: 'opacity 0.2s',
-                            zIndex: 10,
-                        }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                        }}
-                        onMouseDown={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                        }}
-                    >
+                {!loading && (
+                    <ControlBar>
                         <ModelTestTrigger running={probe.running} onRun={probe.run} />
-                    </Box>
+                    </ControlBar>
                 )}
-                {!loading && providerUuid && probe.result && (
+                {!loading && probe.result && (
                     <ModelTestStatusBadge
                         result={probe.result}
-                        providerUuid={providerUuid}
-                        providerName={providerName || ''}
+                        providerUuid={provider.uuid}
+                        providerName={provider.name}
                         model={model}
                         dialogOpen={probe.dialogOpen}
                         onOpenDialog={probe.openDialog}

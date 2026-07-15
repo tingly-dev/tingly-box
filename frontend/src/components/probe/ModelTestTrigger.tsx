@@ -5,7 +5,7 @@ import { Bolt as BoltIcon } from '@/components/icons';
 
 interface ModelTestTriggerProps {
     running: boolean;
-    onRun: (e: React.MouseEvent) => void;
+    onRun: () => void;
 }
 
 // ModelTestTrigger: the bolt icon that kicks off a model test. Lives in the

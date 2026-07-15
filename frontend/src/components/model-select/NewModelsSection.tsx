@@ -1,10 +1,10 @@
 import { Close as CloseIcon } from '@/components/icons';
 import { Box, Divider, IconButton, Typography } from '@mui/material';
+import type { Provider } from '@/types/provider';
 import ModelCard from './ModelCard';
 
 export interface NewModelsSectionProps {
-    providerUuid: string;
-    providerName: string;
+    provider: Provider;
     newModels: string[];
     selectedModel?: string;
     onModelSelect: (model: string) => void;
@@ -13,8 +13,7 @@ export interface NewModelsSectionProps {
 }
 
 export function NewModelsSection({
-    providerUuid,
-    providerName,
+    provider,
     newModels,
     selectedModel,
     onModelSelect,
@@ -49,8 +48,7 @@ export function NewModelsSection({
                         onClick={() => onModelSelect(model)}
                         variant="standard"
                         showNewBadge
-                        providerUuid={providerUuid}
-                        providerName={providerName}
+                        provider={provider}
                     />
                 ))}
             </Box>

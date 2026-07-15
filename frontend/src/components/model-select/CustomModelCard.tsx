@@ -6,6 +6,7 @@ import type { Provider } from '../../types/provider.ts';
 import { ModelTestTrigger } from '../probe/ModelTestTrigger';
 import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
+import { ControlBar } from './ControlBar';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface CustomModelCardProps {
@@ -178,65 +179,41 @@ export default function CustomModelCard({
                 )}
 
                 {/* Control bar - visible on hover */}
-                <Box
-                    className="control-bar"
-                    sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        right: 0,
-                        height: 20,
-                        backgroundColor: 'grey.50',
-                        borderTop: 1,
-                        borderTopLeftRadius: 4,
-                        borderColor: 'grey.200',
-                        display: 'flex',
-                        alignItems: 'center',
-                        px: 0.5,
-                        opacity: loading ? 0 : 0,
-                        transition: 'opacity 0.2s',
-                        zIndex: 10,
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                    onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                >
-                    <ModelTestTrigger running={probe.running} onRun={probe.run} />
-                    <IconButton
-                        size="small"
-                        onClick={handleEditClick}
-                        sx={{
-                            p: 0.3,
-                            color: 'text.secondary',
-                            '&:hover': {
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                                color: 'primary.main',
-                            }
-                        }}
-                        title="Edit custom model"
-                    >
-                        <EditIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                    <IconButton
-                        size="small"
-                        onClick={handleDeleteClick}
-                        sx={{
-                            p: 0.3,
-                            color: 'text.secondary',
-                            '&:hover': {
-                                backgroundColor: 'rgba(211, 47, 47, 0.08)',
-                                color: 'error.main',
-                            }
-                        }}
-                        title="Delete custom model"
-                    >
-                        <DeleteIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                </Box>
+                {!loading && (
+                    <ControlBar>
+                        <ModelTestTrigger running={probe.running} onRun={probe.run} />
+                        <IconButton
+                            size="small"
+                            onClick={handleEditClick}
+                            sx={{
+                                p: 0.3,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                                    color: 'primary.main',
+                                }
+                            }}
+                            title="Edit custom model"
+                        >
+                            <EditIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            onClick={handleDeleteClick}
+                            sx={{
+                                p: 0.3,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                                    color: 'error.main',
+                                }
+                            }}
+                            title="Delete custom model"
+                        >
+                            <DeleteIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                    </ControlBar>
+                )}
             </Card>
 
             {/* Confirmation dialog for deleting custom model */}

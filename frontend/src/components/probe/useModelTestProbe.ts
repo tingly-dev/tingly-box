@@ -19,9 +19,7 @@ export function useModelTestProbe(providerUuid: string, model: string) {
         };
     }, []);
 
-    const run = useCallback(async (e?: { stopPropagation(): void; preventDefault(): void }) => {
-        e?.stopPropagation();
-        e?.preventDefault();
+    const run = useCallback(async () => {
         setRunning(true);
         setResult(null);
         const res = await runProbe({
