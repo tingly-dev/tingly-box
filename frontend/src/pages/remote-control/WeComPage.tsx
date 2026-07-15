@@ -1,16 +1,3 @@
-import PlatformBotPage from './PlatformBotPage';
-import { getPlatformGuide } from '@/constants/platformGuides';
+import { createPlatformBotPage } from './createPlatformBotPage';
 
-const WeComPage = () => {
-    const config = getPlatformGuide('wecom');
-
-    return (
-        <PlatformBotPage
-            platformId="wecom"
-            platformName={config?.name || 'WeCom (企业微信)'}
-            platformGuide={config?.guide}
-        />
-    );
-};
-
-export default WeComPage;
+export default createPlatformBotPage('wecom', 'WeCom (企业微信)');

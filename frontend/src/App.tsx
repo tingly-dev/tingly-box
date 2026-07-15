@@ -54,7 +54,6 @@ import SkillPage from './pages/prompt/SkillPage';
 import CommandPage from './pages/prompt/CommandPage';
 import RemoteCoderPage from './pages/remote-coder/RemoteCoderPage';
 import RemoteCoderSessionsPage from './pages/remote-coder/RemoteCoderSessionsPage';
-import AgentPage from './pages/remote-control/AgentPage';
 import TelegramPage from './pages/remote-control/TelegramPage';
 import FeishuPage from './pages/remote-control/FeishuPage';
 import LarkPage from './pages/remote-control/LarkPage';
@@ -232,7 +231,6 @@ function AppContent() {
                     <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
                     {/* Remote Control routes */}
                     <Route path="/remote-control" element={<Navigate to="/remote-control/weixin" replace />} />
-                    <Route path="/remote-control/agent" element={<AgentPage />} />
                     {/* Platform-specific bot pages */}
                     <Route path="/remote-control/telegram" element={<TelegramPage />} />
                     <Route path="/remote-control/feishu" element={<FeishuPage />} />

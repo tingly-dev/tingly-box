@@ -16,6 +16,7 @@ import { Visibility, VisibilityOff, OpenInNew, CheckCircle as CheckCircleIcon, Q
 import { type FieldSpec } from '@/types/bot.ts';
 import { WeixinQRAuth } from './WeixinQRAuth.tsx';
 import { FeishuQRAuth } from './FeishuQRAuth.tsx';
+import { useTranslation } from 'react-i18next';
 
 interface BotAuthFormProps {
     platform: string;
@@ -29,23 +30,26 @@ interface BotAuthFormProps {
     onBindingComplete?: (botUUID: string) => void; // Callback with real bot UUID after QR binding
 }
 
-// OAuth platform help links
-const oauthHelpLinks: Record<string, { url: string; label: string }> = {
+// OAuth platform help links. The i18n key is derived from the platform id
+// (remoteControl.authForm.helpLinks.<platform>); defaultLabel is the English
+// fallback used until that key resolves via t() at render time, since this
+// map itself is module-scope and can't call the translation hook.
+const oauthHelpLinks: Record<string, { url: string; defaultLabel: string }> = {
     dingtalk: {
         url: 'https://open.dingtalk.com/document/orgapp/obtain-the-appkey-and-appsecret-of-an-internal-app',
-        label: 'DingTalk Developer Docs',
+        defaultLabel: 'DingTalk Developer Docs',
     },
     feishu: {
         url: 'https://open.feishu.cn/document/home/introduction-to-feishu-platform/',
-        label: 'Feishu Developer Docs',
+        defaultLabel: 'Feishu Developer Docs',
     },
     lark: {
         url: 'https://open.larksuite.com/document/home/introduction-to-lark-platform/',
-        label: 'Lark Developer Docs',
+        defaultLabel: 'Lark Developer Docs',
     },
     wecom: {
         url: 'https://work.weixin.qq.com/wework_admin/frame#/aiHelper/list',
-        label: 'WeCom Admin Console',
+        defaultLabel: 'WeCom Admin Console',
     },
 };
 
@@ -60,6 +64,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
     botName,
     onBindingComplete,
 }) => {
+    const { t } = useTranslation();
     const [visibleFields, setVisibleFields] = React.useState<Record<string, boolean>>({});
     const [showQR, setShowQR] = React.useState(false);
 
@@ -82,7 +87,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
             return (
                 <Box sx={{ p: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>
-                        Weixin QR Code Binding
+                        {t('remoteControl.authForm.weixinBindingTitle', { defaultValue: 'Weixin QR Code Binding' })}
                     </Typography>
                     <Box
                         sx={{
@@ -97,18 +102,18 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                             <Stack direction="row" alignItems="center" spacing={1}>
                                 <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
                                 <Typography variant="body2" color="success.main" fontWeight={500}>
-                                    Weixin account bound
+                                    {t('remoteControl.authForm.weixinAccountBound', { defaultValue: 'Weixin account bound' })}
                                 </Typography>
                             </Stack>
                             {authData.bot_id && (
                                 <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>Bot ID:</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>{t('remoteControl.authForm.botId', { defaultValue: 'Bot ID:' })}</Typography>
                                     <Chip label={authData.bot_id} size="small" variant="outlined" />
                                 </Stack>
                             )}
                             {authData.user_id && (
                                 <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>User ID:</Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>{t('remoteControl.authForm.userId', { defaultValue: 'User ID:' })}</Typography>
                                     <Chip label={authData.user_id} size="small" variant="outlined" />
                                 </Stack>
                             )}
@@ -120,7 +125,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                                 disabled={disabled}
                                 sx={{ alignSelf: 'flex-start', mt: 0.5 }}
                             >
-                                Re-bind Account
+                                {t('remoteControl.authForm.rebindAccount', { defaultValue: 'Re-bind Account' })}
                             </Button>
                         </Stack>
                     </Box>
@@ -146,7 +151,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
         return (
             <Box sx={{ p: 2, bgcolor: 'warning.main', borderRadius: 1 }}>
                 <Typography variant="body2" color="warning.contrastText">
-                    No auth fields defined for this platform.
+                    {t('remoteControl.authForm.noFieldsDefined', { defaultValue: 'No auth fields defined for this platform.' })}
                 </Typography>
             </Box>
         );
@@ -159,7 +164,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
             <Box>
                 {authType === 'oauth' && (
                     <Typography variant="body2" color="text.secondary">
-                        Enter your App credentials from the developer console.
+                        {t('remoteControl.authForm.oauthIntro', { defaultValue: 'Enter your App credentials from the developer console.' })}
                         {helpLink && (
                             <Link
                                 href={helpLink.url}
@@ -167,7 +172,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                                 rel="noopener noreferrer"
                                 sx={{ ml: 1, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
                             >
-                                {helpLink.label}
+                                {t(`remoteControl.authForm.helpLinks.${platform}`, { defaultValue: helpLink.defaultLabel })}
                                 <OpenInNew fontSize="inherit" />
                             </Link>
                         )}
@@ -190,7 +195,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                         type={field.secret && !isVisible ? 'password' : 'text'}
                         required={field.required}
                         disabled={disabled}
-                        helperText={field.helperText || (field.secret ? 'This will be stored securely' : '')}
+                        helperText={field.helperText || (field.secret ? t('remoteControl.authForm.storedSecurely', { defaultValue: 'This will be stored securely' }) : '')}
                         slotProps={{
                             inputLabel: { shrink: true },
                             input: field.secret ? {
@@ -225,9 +230,9 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                 >
                     <ToggleButton value="qr">
                         <QrCodeIcon fontSize="small" sx={{ mr: 0.5 }} />
-                        One-click (scan QR)
+                        {t('remoteControl.authForm.scanQrOption', { defaultValue: 'One-click (scan QR)' })}
                     </ToggleButton>
-                    <ToggleButton value="manual">Enter manually</ToggleButton>
+                    <ToggleButton value="manual">{t('remoteControl.authForm.manualOption', { defaultValue: 'Enter manually' })}</ToggleButton>
                 </ToggleButtonGroup>
                 {feishuMode === 'qr' ? (
                     <FeishuQRAuth

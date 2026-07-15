@@ -7,6 +7,7 @@ import {
     Typography,
 } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface BotPlatformSelectorProps {
     value: string;
@@ -23,13 +24,15 @@ export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
     disabled = false,
     loading = false,
 }) => {
+    const { t } = useTranslation();
+
     // Show loading state
     if (loading) {
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1 }}>
                 <CircularProgress size={16} />
                 <Typography variant="body2" color="text.secondary">
-                    Loading platforms...
+                    {t('remoteControl.platformSelector.loading', { defaultValue: 'Loading platforms...' })}
                 </Typography>
             </Box>
         );
@@ -40,7 +43,7 @@ export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
         return (
             <Box sx={{ p: 1 }}>
                 <Typography variant="body2" color="text.secondary">
-                    No platforms available. Make sure the remote-control service is running.
+                    {t('remoteControl.platformSelector.empty', { defaultValue: 'No platforms available. Make sure the remote-control service is running.' })}
                 </Typography>
             </Box>
         );

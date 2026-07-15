@@ -25,7 +25,8 @@ export default {
     "direct": "Direct",
     "theme": "主题",
     "openClaw": "OpenClaw",
-    "prompt": "提示词"
+    "prompt": "提示词",
+    "and": "和"
   },
   "layout": {
     "appTitle": "Tingly Box",
@@ -1125,5 +1126,245 @@ export default {
     "editTooltip": "管理可见的智能应用",
     // Scenario descriptions intentionally omitted — falls back to English. Do not add Chinese translations here.
     "descriptions": {}
+  },
+  "remoteControl": {
+    "bots": {
+      "title": "{{platform}} Bot",
+      "configuredCount": "已配置 {{count}} 个 Bot",
+      "addBot": "添加 Bot",
+      "emptyTitle": "尚未配置 {{platform}} Bot",
+      "emptyDescription": "配置 {{platform}} Bot 以启用远程控制聊天集成。",
+      "addPlatformBot": "添加 {{platform}} Bot"
+    },
+    "dialog": {
+      "addTitle": "添加 Bot 配置",
+      "editTitle": "编辑 Bot 配置",
+      "platform": "平台",
+      "alias": "别名",
+      "aliasHelper": "可选：为此 Bot 配置设置一个便于识别的名称。",
+      "proxyUrl": "代理地址",
+      "proxyUrlHelper": "可选的 HTTP/HTTPS 代理，用于 Bot 的 API 请求。",
+      "chatIdLock": "Chat ID 锁定",
+      "chatIdLockHelper": "可选：设置后，仅该 Chat ID 可以使用此 Bot。",
+      "bashAllowlist": "Bash 命令白名单",
+      "bashAllowlistHelper": "允许执行的 /bash 子命令。默认：cd、ls、pwd。",
+      "cancel": "取消",
+      "save": "保存配置",
+      "saving": "保存中..."
+    },
+    "card": {
+      "disableBot": "停用 Bot",
+      "enableBot": "启用 Bot",
+      "restartBot": "重启 Bot",
+      "enableToRestart": "启用 Bot 后才能重启",
+      "edit": "编辑",
+      "delete": "删除",
+      "noModelConfigured": "尚未配置模型 - 点击选择模型",
+      "chatId": "Chat ID：{{id}}",
+      "proxyLabel": "代理：",
+      "allowlistLabel": "白名单：",
+      "deleteTitle": "删除 Bot 配置",
+      "deleteConfirm": "确定要删除「{{name}}」吗？此操作无法撤销。"
+    },
+    "notify": {
+      "loadFailed": "加载 Bot 配置失败",
+      "unboundReuse": "发现一个未绑定的 Bot，将复用它进行扫码绑定",
+      "unknownPlatform": "未知平台：{{platform}}",
+      "qrBindRequired": "请先完成微信扫码绑定后再保存",
+      "missingFields": "缺少必填字段：{{fields}}",
+      "saveFailed": "保存 Bot 配置失败",
+      "botUpdated": "Bot 更新成功。",
+      "botCreated": "Bot 创建成功。",
+      "botEnabled": "Bot 已启用",
+      "botDisabled": "Bot 已停用",
+      "toggleFailed": "切换 Bot 状态失败：{{error}}",
+      "toggleFailedGeneric": "切换 Bot 状态失败",
+      "botRestarted": "Bot 已重启",
+      "restartFailed": "重启 Bot 失败：{{error}}",
+      "restartFailedGeneric": "重启 Bot 失败",
+      "botDeleted": "Bot 删除成功",
+      "deleteFailed": "删除 Bot 失败：{{error}}",
+      "deleteFailedGeneric": "删除 Bot 失败",
+      "cwdUpdateFailed": "更新工作目录失败",
+      "modelUpdated": "Bot 模型配置已更新",
+      "modelUpdateFailed": "更新 Bot 配置失败"
+    },
+    "guide": {
+      "title": "{{platform}} 配置指南",
+      "showMore": "展开",
+      "showLess": "收起"
+    },
+    "platformSelector": {
+      "loading": "正在加载平台列表...",
+      "empty": "暂无可用平台，请确认远程控制服务是否正常运行。"
+    },
+    "authForm": {
+      "weixinBindingTitle": "微信扫码绑定",
+      "weixinAccountBound": "微信账号已绑定",
+      "botId": "Bot ID：",
+      "userId": "User ID：",
+      "rebindAccount": "重新绑定账号",
+      "noFieldsDefined": "该平台未定义认证字段。",
+      "oauthIntro": "请在开发者控制台中获取并填写 App 凭据。",
+      "storedSecurely": "该信息将被安全存储",
+      "scanQrOption": "一键创建（扫码）",
+      "manualOption": "手动填写",
+      "helpLinks": {
+        "dingtalk": "钉钉开放平台文档",
+        "feishu": "飞书开放平台文档",
+        "lark": "Lark 开发者文档",
+        "wecom": "企业微信管理后台"
+      }
+    },
+    "modelDialog": {
+      "title": "配置 SmartGuide 模型"
+    },
+    "pairing": {
+      "label": "配对码：",
+      "expiresIn": "{{time}} 后过期",
+      "expired": "已过期",
+      "hide": "隐藏",
+      "reveal": "显示",
+      "copy": "复制",
+      "rotateTooltip": "轮换（当前配对码将失效）",
+      "noActiveCode": "暂无有效配对码 —— Bot 可能已停止运行，或该配对码已被使用。点击「轮换」生成新的配对码。",
+      "copied": "配对指令已复制",
+      "copyFailed": "复制失败 —— 请检查剪贴板权限",
+      "rotated": "配对码已轮换",
+      "rotateFailed": "轮换失败",
+      "fetchFailed": "获取配对码失败"
+    },
+    "weixinQr": {
+      "uuidRequired": "缺少 Bot UUID",
+      "startFailed": "启动扫码登录失败",
+      "statusFailed": "查询扫码状态失败",
+      "initializing": "正在初始化微信扫码绑定...",
+      "scanTitle": "扫描二维码完成绑定",
+      "step1": "1. 使用手机微信扫描二维码",
+      "step2": "2. 确认以完成绑定",
+      "refreshQr": "刷新二维码",
+      "scannedWaiting": "二维码已扫描！请在微信中确认...",
+      "successTitle": "微信绑定成功！",
+      "successBody": "你的 Bot 已连接到微信。",
+      "expiredWarning": "二维码已过期，请刷新后重试。",
+      "getNewQr": "获取新的二维码",
+      "errorFallback": "微信绑定过程中发生错误",
+      "retry": "重试",
+      "headerLabel": "微信扫码绑定"
+    },
+    "feishuQr": {
+      "uuidRequired": "缺少 Bot UUID",
+      "startFailed": "启动一键创建失败",
+      "statusFailed": "查询注册状态失败",
+      "registrationFailed": "注册失败",
+      "preparing": "正在准备{{label}}一键创建...",
+      "scanTitle": "扫码创建你的{{label}}应用",
+      "step1": "1. 使用手机{{label}}扫描二维码",
+      "step2": "2. 确认授权 —— 应用、权限和事件将自动为你创建",
+      "refreshQr": "刷新二维码",
+      "createdTitle": "{{label}}应用创建成功！",
+      "createdBody": "凭据已自动保存，你的 Bot 已就绪。",
+      "expiredWarning": "二维码已过期，请获取新的二维码。",
+      "getNewQr": "获取新的二维码",
+      "deniedWarning": "已在{{label}}中拒绝授权。",
+      "tryAgain": "重试",
+      "errorFallback": "{{label}}注册过程中发生错误",
+      "headerLabel": "{{label}} 一键创建应用"
+    },
+    "guides": {
+      "comingSoon": "{{platform}} Bot 集成功能正在开发中，敬请期待！",
+      "telegram": {
+        "description": "广受欢迎的云端即时通讯服务",
+        "tip": "提示：请根据网络访问需要配置流量代理。",
+        "step1Title": "1. 创建 Bot",
+        "step1Open": "打开 Telegram，搜索",
+        "step1Send": "发送",
+        "step1SendTail": "，按提示操作并复制生成的 Token",
+        "step2Title": "2. 添加 Bot",
+        "step2Text": "点击上方「添加 Bot」按钮，粘贴 Token 即可创建你的 Bot。"
+      },
+      "feishuFamily": {
+        "step1Title": "1. 扫码创建（推荐）",
+        "step1TextBefore": "点击上方「添加 Bot」，选择",
+        "oneClickOption": "一键创建（扫码）",
+        "step2Title": "2. 或手动创建",
+        "step2LogIn": "并登录",
+        "step2Configure": "填写应用名称并确认 —— Bot 能力、权限、事件与长连接模式均已为你预先配置",
+        "step2CopyBefore": "复制生成的",
+        "step2CopyAfterBefore": "，然后通过「添加 Bot」→"
+      },
+      "feishu": {
+        "description": "企业协作平台",
+        "tip": "提示：飞书使用 WebSocket 长连接，无需公网 IP。请根据需要配置流量代理。",
+        "step1TextAfter": "，使用飞书手机客户端扫描二维码。应用、权限和事件将自动创建，凭据也会自动为你保存。",
+        "step2Open": "打开",
+        "step2LinkLabel": "飞书一键创建应用"
+      },
+      "lark": {
+        "description": "飞书的海外版本",
+        "tip": "提示：Lark 使用 WebSocket 长连接，无需公网 IP。请根据需要配置流量代理。",
+        "step1TextAfter": "，使用 Lark 手机客户端扫描二维码。应用、权限和事件将自动创建，凭据也会自动为你保存。",
+        "step2LinkLabel": "Lark 一键创建应用"
+      },
+      "dingtalk": {
+        "description": "企业沟通与协作",
+        "tip": "提示：钉钉使用 Stream 模式，无需公网 IP。请根据需要配置流量代理。",
+        "step1Title": "1. 创建钉钉 Bot",
+        "step1Visit": "访问",
+        "step1LinkLabel": "钉钉开放平台",
+        "step1CreateApp": "创建新应用 - 添加机器人能力",
+        "step1Config": "配置：",
+        "step1StreamMode": "开启",
+        "step1Permissions": "权限：添加发送消息所需的必要权限",
+        "step1GetKeys": "在「凭证与基础信息」中获取 AppKey（Client ID）和 AppSecret（Client Secret）",
+        "step1Publish": "发布应用",
+        "step2Text": "点击上方「添加 Bot」按钮，填写 App Key 和 App Secret 即可创建你的 Bot。"
+      },
+      "weixin": {
+        "description": "中国最流行的即时通讯平台",
+        "betaLabel": "Beta：",
+        "betaText": "微信集成目前处于 Beta 阶段，如遇到问题欢迎反馈。",
+        "step1Title": "1. 安装最新版微信",
+        "step1TextBefore": "请确认你的设备已安装最新版本的",
+        "step1TextAfter": "。",
+        "step2Text": "点击上方「添加 Bot」按钮，使用微信扫描二维码绑定账号。"
+      },
+      "wecom": {
+        "description": "企业微信通讯平台",
+        "tip": "提示：企业微信 AI Bot 使用 WebSocket 长连接，无需公网 IP。",
+        "step1Title": "1. 打开企业微信管理后台",
+        "step1GoTo": "前往",
+        "step1LinkLabel": "企业微信管理后台 → AI 助手",
+        "step1AndClick": "并点击",
+        "createBot": "创建机器人",
+        "createManually": "手动创建",
+        "step2Title": "2. 通过 API 方式创建",
+        "step2TextBefore": "滚动到页面底部并点击",
+        "step2LinkLabel": "通过 API 方式创建",
+        "step3Title": "3. 配置 Bot",
+        "step3VisibleScope": "可见范围：",
+        "step3VisibleScopeText": "设置谁可以使用该 Bot",
+        "step3ApiConfig": "API 配置：",
+        "step3ApiConfigTextBefore": "在连接方式中选择",
+        "step3LongConnection": "长连接",
+        "step3SecretBefore": "在密钥部分点击",
+        "step3ClickToRetrieve": "点击获取",
+        "step3SecretAfter": "—— 保存",
+        "step3Permissions": "权限：",
+        "step3PermissionsTextBefore": "按需配置后点击",
+        "step3Save": "保存",
+        "step4Title": "4. 添加 Bot",
+        "step4Text": "点击上方「添加 Bot」，填写 Bot ID 和 Secret 完成连接。"
+      },
+      "qq": {
+        "description": "腾讯即时通讯平台"
+      },
+      "discord": {
+        "description": "语音、视频与文字通讯平台"
+      },
+      "slack": {
+        "description": "企业沟通协作平台"
+      }
+    }
   }
 };

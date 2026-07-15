@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Dialog, DialogTitle, DialogContent, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider';
 import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ModelSelectDialog from '@/components/ModelSelectDialog';
@@ -15,6 +16,7 @@ interface BotModelDialogOptions {
 
 export const useBotModelDialog = (options: BotModelDialogOptions) => {
     const { bot, providers, onUpdate, onClose } = options;
+    const { t } = useTranslation();
 
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -71,7 +73,7 @@ export const useBotModelDialog = (options: BotModelDialogOptions) => {
                 }}
             >
                 <DialogTitle sx={{ textAlign: 'center' }}>
-                    <Typography variant="h6">Configure SmartGuide Model</Typography>
+                    <Typography variant="h6">{t('remoteControl.modelDialog.title', { defaultValue: 'Configure SmartGuide Model' })}</Typography>
                 </DialogTitle>
                 <DialogContent>
                     <ModelSelectDialog

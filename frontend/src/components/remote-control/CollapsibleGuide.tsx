@@ -2,14 +2,19 @@ import { KeyboardArrowDown, KeyboardArrowUp } from '@/components/icons';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import UnifiedCard from '@/components/UnifiedCard';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface CollapsibleGuideProps {
     platformName: string;
     platformGuide?: React.ReactNode;
+    /** Default to expanded when the platform has no bots yet - first-time
+        setup is exactly when the guide is needed most. */
+    defaultExpanded?: boolean;
 }
 
-const CollapsibleGuide: React.FC<CollapsibleGuideProps> = ({ platformName, platformGuide }) => {
-    const [expanded, setExpanded] = useState(false);
+const CollapsibleGuide: React.FC<CollapsibleGuideProps> = ({ platformName, platformGuide, defaultExpanded = false }) => {
+    const { t } = useTranslation();
+    const [expanded, setExpanded] = useState(defaultExpanded);
 
     const handleToggle = () => {
         setExpanded(!expanded);
@@ -17,7 +22,7 @@ const CollapsibleGuide: React.FC<CollapsibleGuideProps> = ({ platformName, platf
 
     return (
         <UnifiedCard
-            title={`${platformName} Setup Guide`}
+            title={t('remoteControl.guide.title', { defaultValue: '{{platform}} Setup Guide', platform: platformName })}
             size="full"
             sx={{ mb: 2 }}
         >
@@ -69,7 +74,9 @@ const CollapsibleGuide: React.FC<CollapsibleGuideProps> = ({ platformName, platf
                         },
                     }}
                 >
-                    {expanded ? 'Show Less' : 'Show More'}
+                    {expanded
+                        ? t('remoteControl.guide.showLess', { defaultValue: 'Show Less' })
+                        : t('remoteControl.guide.showMore', { defaultValue: 'Show More' })}
                 </Button>
             </Box>
         </UnifiedCard>

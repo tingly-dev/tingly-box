@@ -18,6 +18,7 @@ import type {Provider} from '@/types/provider';
 import RemoteControlGraph from './RemoteControlGraph';
 import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 
 const RULE_GRAPH_STYLES = {
     header: { paddingX: 16, paddingY: 6 },
@@ -92,6 +93,7 @@ const BotCard: React.FC<BotCardProps> = ({
     isToggling = false,
     isRestarting = false,
 }) => {
+    const {t} = useTranslation();
     const isActive = bot.enabled ?? true;
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -117,12 +119,12 @@ const BotCard: React.FC<BotCardProps> = ({
                     </Tooltip>
                     {bot.name && <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>}
                     {isActive && !(bot.smartguide_provider && bot.smartguide_model) && (
-                        <Tooltip title="No model configured - click to select a model">
+                        <Tooltip title={t('remoteControl.card.noModelConfigured', { defaultValue: 'No model configured - click to select a model' })}>
                             <WarningIcon sx={{fontSize: '1.1rem', color: 'warning.main'}}/>
                         </Tooltip>
                     )}
                     {bot.chat_id && (
-                        <Tooltip title={`Chat ID: ${bot.chat_id}`}>
+                        <Tooltip title={t('remoteControl.card.chatId', { defaultValue: 'Chat ID: {{id}}', id: bot.chat_id })}>
                             <Typography variant="caption" sx={{
                                 color: 'text.secondary', overflow: 'hidden',
                                 textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px',
@@ -133,22 +135,22 @@ const BotCard: React.FC<BotCardProps> = ({
                     )}
                 </Box>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
-                    <Tooltip title={isActive ? 'Disable Bot' : 'Enable Bot'}>
+                    <Tooltip title={isActive ? t('remoteControl.card.disableBot', { defaultValue: 'Disable Bot' }) : t('remoteControl.card.enableBot', { defaultValue: 'Enable Bot' })}>
                         <Switch checked={isActive} onChange={() => onBotToggle()} size="small" color="success" disabled={isToggling}/>
                     </Tooltip>
-                    <Tooltip title={isActive ? 'Restart Bot' : 'Enable bot to restart'}>
+                    <Tooltip title={isActive ? t('remoteControl.card.restartBot', { defaultValue: 'Restart Bot' }) : t('remoteControl.card.enableToRestart', { defaultValue: 'Enable bot to restart' })}>
                         <span>
                             <IconButton size="small" color="primary" onClick={onRestart} disabled={!isActive || isToggling || isRestarting}>
                                 <RestartIcon fontSize="small"/>
                             </IconButton>
                         </span>
                     </Tooltip>
-                    <Tooltip title="Edit">
+                    <Tooltip title={t('remoteControl.card.edit', { defaultValue: 'Edit' })}>
                         <IconButton size="small" color="primary" onClick={onEdit} disabled={isToggling || isRestarting}>
                             <EditIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
-                    <Tooltip title="Delete">
+                    <Tooltip title={t('remoteControl.card.delete', { defaultValue: 'Delete' })}>
                         <IconButton size="small" color="error" onClick={handleDeleteClick} disabled={isToggling || isRestarting}>
                             <DeleteIcon fontSize="small"/>
                         </IconButton>
@@ -175,14 +177,14 @@ const BotCard: React.FC<BotCardProps> = ({
                         {bot.proxy_url && (
                             <Tooltip title={bot.proxy_url}>
                                 <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: 'monospace'}}>
-                                    Proxy: {bot.proxy_url}
+                                    {t('remoteControl.card.proxyLabel', { defaultValue: 'Proxy:' })} {bot.proxy_url}
                                 </Typography>
                             </Tooltip>
                         )}
                         {bot.bash_allowlist && bot.bash_allowlist.length > 0 && (
                             <Tooltip title={bot.bash_allowlist.join(', ')}>
                                 <Typography variant="caption" sx={{color: 'text.secondary'}}>
-                                    Allowlist: <span style={{fontFamily: 'monospace'}}>{bot.bash_allowlist.join(', ')}</span>
+                                    {t('remoteControl.card.allowlistLabel', { defaultValue: 'Allowlist:' })} <span style={{fontFamily: 'monospace'}}>{bot.bash_allowlist.join(', ')}</span>
                                 </Typography>
                             </Tooltip>
                         )}
@@ -198,13 +200,13 @@ const BotCard: React.FC<BotCardProps> = ({
                     width: 400, maxWidth: '80vw',
                     bgcolor: 'background.paper', boxShadow: 24, p: 4, borderRadius: 2,
                 }}>
-                    <Typography variant="h6" sx={{mb: 2}}>Delete Bot Configuration</Typography>
+                    <Typography variant="h6" sx={{mb: 2}}>{t('remoteControl.card.deleteTitle', { defaultValue: 'Delete Bot Configuration' })}</Typography>
                     <Typography variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to delete "{bot.name || bot.platform}"? This action cannot be undone.
+                        {t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: bot.name || bot.platform })}
                     </Typography>
                     <Box sx={{display: 'flex', gap: 2, justifyContent: 'flex-end'}}>
-                        <Button onClick={() => setDeleteModalOpen(false)} color="inherit">Cancel</Button>
-                        <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
+                        <Button onClick={() => setDeleteModalOpen(false)} color="inherit">{t('remoteControl.dialog.cancel', { defaultValue: 'Cancel' })}</Button>
+                        <Button onClick={handleConfirmDelete} color="error" variant="contained">{t('remoteControl.card.delete', { defaultValue: 'Delete' })}</Button>
                     </Box>
                 </Box>
             </Modal>
