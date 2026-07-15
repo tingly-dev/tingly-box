@@ -35,7 +35,23 @@ interface Provider {
 
 interface APIToken {
     user_id?: string;
+    display_name?: string;
+    enabled?: boolean;
 }
+
+interface UsageIdentity {
+    userId: string;
+    label: string;
+    type: 'owner' | 'sharing_key';
+    enabled: boolean;
+}
+
+const MAIN_ACCOUNT_USER_ID = 'admin';
+
+const shortenUserId = (userId: string): string => {
+    if (userId.length <= 12) return userId;
+    return `${userId.slice(0, 4)}…${userId.slice(-4)}`;
+};
 
 type TimeRange = 'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
 
@@ -113,7 +129,9 @@ export default function DashboardPage() {
     const [stats, setStats] = useState<AggregatedStat[]>([]);
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
-    const [sharingUsers, setSharingUsers] = useState<string[]>([]);
+    const [usageIdentities, setUsageIdentities] = useState<UsageIdentity[]>([
+        { userId: MAIN_ACCOUNT_USER_ID, label: 'Main account', type: 'owner', enabled: true },
+    ]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
     const [selectedModel, setSelectedModel] = useState<string>('all');
     const [selectedUser, setSelectedUser] = useState<string>('all');
@@ -186,12 +204,22 @@ export default function DashboardPage() {
             }
             if (tokensResult?.success && tokensResult?.data) {
                 const tokens: APIToken[] = Array.isArray(tokensResult.data) ? tokensResult.data : tokensResult.data.tokens || [];
-                const users = Array.from(new Set<string>(
-                    tokens
-                        .map((token) => token.user_id)
-                        .filter((userId): userId is string => Boolean(userId))
-                )).sort((a, b) => a.localeCompare(b));
-                setSharingUsers(users);
+                const sharingKeysByUserId = new Map<string, UsageIdentity>();
+                tokens.forEach((token) => {
+                    if (!token.user_id) return;
+                    sharingKeysByUserId.set(token.user_id, {
+                        userId: token.user_id,
+                        label: token.display_name?.trim() || 'Unnamed Sharing Key',
+                        type: 'sharing_key',
+                        enabled: token.enabled !== false,
+                    });
+                });
+                const sharingKeys = Array.from(sharingKeysByUserId.values())
+                    .sort((a, b) => a.label.localeCompare(b.label));
+                setUsageIdentities([
+                    { userId: MAIN_ACCOUNT_USER_ID, label: 'Main account', type: 'owner', enabled: true },
+                    ...sharingKeys,
+                ]);
             }
         } catch (error) {
             console.error('Failed to load dashboard filter options:', error);
@@ -309,10 +337,10 @@ export default function DashboardPage() {
                 setSelectedModel('all');
             }
         }
-        if (selectedUser !== 'all' && !sharingUsers.includes(selectedUser)) {
+        if (selectedUser !== 'all' && !usageIdentities.some((identity) => identity.userId === selectedUser)) {
             setSelectedUser('all');
         }
-    }, [stats, sharingUsers, selectedProvider, selectedModel, selectedUser]);
+    }, [stats, usageIdentities, selectedProvider, selectedModel, selectedUser]);
 
     useEffect(() => {
         if (autoRefresh) {
@@ -452,6 +480,10 @@ export default function DashboardPage() {
 
     const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all' || selectedUser !== 'all';
 
+    const selectedIdentityLabel = selectedUser === 'all'
+        ? 'All identities'
+        : usageIdentities.find((identity) => identity.userId === selectedUser)?.label || shortenUserId(selectedUser);
+
     const handleClearFilters = () => {
         setSelectedProvider('all');
         setSelectedModel('all');
@@ -524,22 +556,40 @@ export default function DashboardPage() {
                 </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 180 } }}>
-                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>User</InputLabel>
+            <FormControl size="small" sx={{ minWidth: { xs: 160, sm: 200 } }}>
+                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>Identity</InputLabel>
                 <Select
                     value={selectedUser}
-                    label="User"
+                    label="Identity"
                     onChange={(e) => setSelectedUser(e.target.value)}
-                    disabled={!sharingUsers.length}
+                    renderValue={() => selectedIdentityLabel}
                     sx={{
                         borderRadius: 2,
                         '& .MuiOutlinedInput-input': { py: 1 },
                     }}
                 >
-                    <MenuItem value="all">All Users</MenuItem>
-                    {sharingUsers.map((userId) => (
-                        <MenuItem key={userId} value={userId}>
-                            {userId}
+                    <MenuItem value="all">All identities</MenuItem>
+                    <ListSubheader>Account</ListSubheader>
+                    {usageIdentities.filter((identity) => identity.type === 'owner').map((identity) => (
+                        <MenuItem key={identity.userId} value={identity.userId}>
+                            {identity.label}
+                        </MenuItem>
+                    ))}
+                    {usageIdentities.some((identity) => identity.type === 'sharing_key') && (
+                        <ListSubheader>Sharing Keys</ListSubheader>
+                    )}
+                    {usageIdentities.filter((identity) => identity.type === 'sharing_key').map((identity) => (
+                        <MenuItem key={identity.userId} value={identity.userId}>
+                            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
+                                <Typography variant="body2" noWrap>
+                                    {identity.label}{!identity.enabled ? ' (disabled)' : ''}
+                                </Typography>
+                                <Tooltip title={identity.userId} placement="right">
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', flexShrink: 0 }}>
+                                        {shortenUserId(identity.userId)}
+                                    </Typography>
+                                </Tooltip>
+                            </Box>
                         </MenuItem>
                     ))}
                 </Select>
