@@ -186,6 +186,15 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                     ),
                                     actions: (
                                         <>
+                                            <Tooltip title={t('claudeCode.profile.copyCommand')} arrow>
+                                                <IconButton
+                                                    size="small"
+                                                    aria-label={t('claudeCode.profile.copyCommand')}
+                                                    onClick={() => copyToClipboard(ccCommand, 'command')}
+                                                >
+                                                    <ContentCopyIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
                                             <Tooltip title="Use npx command">
                                                 <IconButton
                                                     size="small"

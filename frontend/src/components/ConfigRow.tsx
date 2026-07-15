@@ -115,7 +115,7 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
             </Box>
 
             {/* Center: Content */}
-            <Box sx={{flex: 1, minWidth: 0}}>
+            <Box sx={{flex: 1, minWidth: 0, overflow: 'hidden'}}>
                 {currentTab?.content}
             </Box>
 
