@@ -260,6 +260,25 @@ type protectedCredentialMutationResponse struct {
 	Credential protectedCredentialResponse `json:"credential"`
 }
 
+type protectedCredentialDetailEnvelope struct {
+	Success bool                              `json:"success"`
+	Data    protectedCredentialDetailResponse `json:"data"`
+}
+
+type protectedCredentialDeleteResponse struct {
+	Success      bool   `json:"success"`
+	CredentialID string `json:"credential_id"`
+}
+
+type guardrailsHistoryResponse struct {
+	Success bool                    `json:"success"`
+	Data    []guardrailsutils.Entry `json:"data"`
+}
+
+type guardrailsSuccessResponse struct {
+	Success bool `json:"success"`
+}
+
 // Leave the remote registry unset until the dedicated policy repository is
 // ready. The API will surface this as an unavailable registry instead of
 // coupling guardrails downloads to the main code repository.

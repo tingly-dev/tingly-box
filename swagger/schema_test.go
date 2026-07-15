@@ -99,6 +99,18 @@ func TestSchemaFlattensEmbeddedStructs(t *testing.T) {
 	assert.NotContains(t, gen.collected, "PtrBase")
 }
 
+func TestSchemaFlattensUnexportedEmbeddedStruct(t *testing.T) {
+	type embedded struct {
+		Value string `json:"value"`
+	}
+	type Model struct {
+		embedded
+	}
+
+	schema := newSchemaGen(VersionV3).modelSchema(Model{})
+	assert.Contains(t, schema.Properties, "value")
+}
+
 // []byte marshals as a base64 string; json.RawMessage is arbitrary JSON.
 func TestSchemaByteSliceAndRawMessage(t *testing.T) {
 	type Model struct {
@@ -116,6 +128,22 @@ func TestSchemaByteSliceAndRawMessage(t *testing.T) {
 	assert.Empty(t, raw.Type)
 	assert.Empty(t, raw.Ref)
 	assert.Nil(t, raw.Items)
+}
+
+func TestSchemaRequiredIfIsNotUnconditionallyRequired(t *testing.T) {
+	type Model struct {
+		Conditional string         `json:"conditional,omitempty" binding:"required_if=Kind special"`
+		Required    string         `json:"required,omitempty" binding:"required"`
+		Metadata    map[string]any `json:"metadata,omitempty"`
+	}
+
+	schema := newSchemaGen(VersionV3).modelSchema(Model{})
+	assert.NotContains(t, schema.Required, "conditional")
+	assert.Contains(t, schema.Required, "required")
+	metadata := schema.Properties["metadata"]
+	if assert.NotNil(t, metadata.AdditionalProperties) {
+		assert.Empty(t, metadata.AdditionalProperties.Type)
+	}
 }
 
 // Map values that are anonymous structs must be inlined, not emitted as a

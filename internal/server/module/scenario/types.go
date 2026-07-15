@@ -26,13 +26,13 @@ type ScenarioUpdateRequest struct {
 // ProfileCreateRequest represents the request to create or rename a profile
 type ProfileCreateRequest struct {
 	Name    string `json:"name" binding:"required"`
-	Unified bool   `json:"unified"` // Optional, defaults to false (separate mode)
+	Unified bool   `json:"unified,omitempty"` // Optional, defaults to false (separate mode)
 }
 
 // ProfileUpdateRequest represents the request to update a profile
 type ProfileUpdateRequest struct {
-	Name    string `json:"name"`
-	Unified *bool  `json:"unified"` // Pointer to distinguish zero from unset; nil = no change
+	Name    string `json:"name,omitempty"`
+	Unified *bool  `json:"unified,omitempty"` // Pointer to distinguish zero from unset; nil = no change
 }
 
 // ScenariosResponse represents the response for getting all scenarios
@@ -66,6 +66,6 @@ type ScenarioUpdateResponse struct {
 
 // ScenarioDescriptorsResponse represents the response for listing scenario descriptors
 type ScenarioDescriptorsResponse struct {
-	Success bool                      `json:"success" example:"true"`
-	Data    []typ.ScenarioDescriptor  `json:"data"`
+	Success bool                     `json:"success" example:"true"`
+	Data    []typ.ScenarioDescriptor `json:"data"`
 }

@@ -95,9 +95,9 @@ func (g *schemaGen) addStructFields(schema *Schema, t reflect.Type) {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
-		// Skip non-exported fields (embedded types are exported when the type
-		// name is; PkgPath is empty for them)
-		if field.PkgPath != "" {
+		// encoding/json promotes exported fields from anonymous embedded structs,
+		// including unexported helper types used for response composition.
+		if field.PkgPath != "" && !field.Anonymous {
 			continue
 		}
 
@@ -124,7 +124,7 @@ func (g *schemaGen) addStructFields(schema *Schema, t reflect.Type) {
 		// A field is required when binding says so, or when it is not marked
 		// omitempty (it always appears in the marshaled JSON).
 		bindingTag := field.Tag.Get("binding")
-		if strings.Contains(bindingTag, "required") || !hasJSONOption(jsonTag, "omitempty") {
+		if hasValidationRule(bindingTag, "required") || !hasJSONOption(jsonTag, "omitempty") {
 			schema.Required = append(schema.Required, propName)
 		}
 	}
@@ -216,10 +216,21 @@ func (g *schemaGen) typeSchema(t reflect.Type) Schema {
 		g.collect(t)
 		return Schema{Ref: g.refPrefix + t.Name()}
 	case reflect.Interface:
-		return Schema{Type: "object"}
+		// An interface value may contain any valid JSON value. Leaving the schema
+		// empty keeps generated clients from narrowing it to an empty object.
+		return Schema{}
 	default:
 		return Schema{Type: "object"}
 	}
+}
+
+func hasValidationRule(tag, rule string) bool {
+	for _, item := range strings.Split(tag, ",") {
+		if strings.TrimSpace(item) == rule {
+			return true
+		}
+	}
+	return false
 }
 
 // collect records a named struct type so buildDefinitions emits it.

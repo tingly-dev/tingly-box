@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	sharing "github.com/tingly-dev/tingly-box/internal/server/module/sharing"
+	"github.com/tingly-dev/tingly-box/swagger"
 )
 
 // setupMiddleware configures server middleware
@@ -161,7 +162,8 @@ func (s *Server) UseTokenManagementEndpoints() {
 		return
 	}
 
-	api := s.engine.Group("/api/v1")
-	api.Use(s.getUserAuthMiddleware())
+	manager := swagger.NewRouteManager(s.engine)
+	api := manager.NewGroup("api", "v1", "")
+	api.Router.Use(s.getUserAuthMiddleware())
 	sharing.RegisterRoutes(api, sharing.NewHandler(store))
 }
