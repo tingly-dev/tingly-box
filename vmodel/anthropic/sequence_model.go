@@ -7,21 +7,21 @@ import (
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
-// RequestResolver is implemented by virtual models whose served behaviour
-// varies per request (e.g. SequenceModel). The virtualserver handler calls
-// ResolveRequest exactly once per request to obtain the concrete, stateless
-// model that serves it — after which all existing dispatch machinery
-// (ErrorInjection, HandleAnthropic, the mid-stream gate) works unchanged.
-type RequestResolver interface {
-	ResolveRequest() VirtualModel
+// Snapshotter is implemented by virtual models whose served behaviour varies
+// per request (e.g. SequenceModel). The virtualserver handler calls Snapshot
+// exactly once per request to obtain the concrete, stateless model that
+// serves it — after which all existing dispatch machinery (ErrorInjection,
+// HandleAnthropic, the mid-stream gate) works unchanged.
+type Snapshotter interface {
+	Snapshot() VirtualModel
 }
 
-// ResolveRequest returns the concrete model to serve a single request with.
-// If vm advances per request it is resolved to a stateless snapshot; otherwise
-// vm is returned unchanged. Callers must invoke this once per request.
-func ResolveRequest(vm VirtualModel) VirtualModel {
-	if r, ok := vm.(RequestResolver); ok {
-		return r.ResolveRequest()
+// Snapshot returns the concrete model to serve a single request with. If vm
+// advances per request it is resolved to a stateless snapshot; otherwise vm
+// is returned unchanged. Callers must invoke this once per request.
+func Snapshot(vm VirtualModel) VirtualModel {
+	if s, ok := vm.(Snapshotter); ok {
+		return s.Snapshot()
 	}
 	return vm
 }
@@ -38,8 +38,8 @@ type SequenceModel struct {
 
 // Compile-time interface checks.
 var (
-	_ VirtualModel    = (*SequenceModel)(nil)
-	_ RequestResolver = (*SequenceModel)(nil)
+	_ VirtualModel = (*SequenceModel)(nil)
+	_ Snapshotter  = (*SequenceModel)(nil)
 )
 
 // NewSequenceModel constructs an Anthropic-protocol sequence model from cfg.
@@ -64,7 +64,8 @@ func NewSequenceModel(cfg *vmodel.SequenceConfig) *SequenceModel {
 // driven purely by a list of status codes, e.g.
 // NewStatusSequence("flaky", "Flaky", 200, 200, 429). Success content and error
 // type/message come from module defaults; build a SequenceConfig and call
-// NewSequenceModel when you need per-step content, repeats, or no-loop.
+// NewSequenceModel when you need per-step content, repeats, or a non-default
+// OnExhaust policy.
 func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 	return NewSequenceModel(&vmodel.SequenceConfig{
 		ID:    id,
@@ -73,9 +74,9 @@ func NewStatusSequence(id, name string, statuses ...int) *SequenceModel {
 	})
 }
 
-// ResolveRequest advances the sequence and returns the MockModel snapshot for
-// this request. This is the single point at which the cursor advances.
-func (m *SequenceModel) ResolveRequest() VirtualModel {
+// Snapshot advances the sequence and returns the MockModel snapshot for this
+// request. This is the single point at which the cursor advances.
+func (m *SequenceModel) Snapshot() VirtualModel {
 	step := m.seq.Next()
 	return NewMockModel(&MockModelConfig{
 		ID:          m.ID,
@@ -89,12 +90,12 @@ func (m *SequenceModel) ResolveRequest() VirtualModel {
 
 // HandleAnthropic delegates to a freshly resolved snapshot so direct (non-
 // handler) consumers still get one step per call. The production handler
-// resolves via ResolveRequest first and never reaches this path.
+// resolves via Snapshot first and never reaches this path.
 func (m *SequenceModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequest) (VModelResponse, error) {
-	return m.ResolveRequest().HandleAnthropic(req)
+	return m.Snapshot().HandleAnthropic(req)
 }
 
 // HandleAnthropicStream mirrors HandleAnthropic for the streaming path.
 func (m *SequenceModel) HandleAnthropicStream(ctx context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
-	return m.ResolveRequest().HandleAnthropicStream(ctx, req, emit)
+	return m.Snapshot().HandleAnthropicStream(ctx, req, emit)
 }

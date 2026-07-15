@@ -72,7 +72,7 @@ the wire shape.
   fields, one fact, kept in sync by hand at three call sites
   (`resolve`'s success/error branches and `exhaustedStep`). Auditing actual
   callers showed the field was read only by tests; the production dispatch
-  path (`SequenceModel.ResolveRequest`) never touched it, only `Content` and
+  path (`SequenceModel.Snapshot`) never touched it, only `Content` and
   `Error`. Replaced the stored field with a method,
   `func (r ResolvedStep) HTTPStatus() int`, that derives 200-or-`Error.Status`
   on read — one source of truth, no construction site can let the two drift.
@@ -85,6 +85,14 @@ keeps the door open for a future config-file- or API-driven sequence without
 committing to that surface now. If that surface never materializes, the tags
 should be removed rather than left as unexercised scaffolding.
 
+- **`RequestResolver`/`ResolveRequest` → `Snapshotter`/`Snapshot`.** The
+  original name read, at the call site (`vm = ResolveRequest(vm)`), as if it
+  parsed or validated the incoming HTTP request — the actual subject is `vm`,
+  not the request: "give me the model instance that serves this one request."
+  Renamed to the noun the method actually returns — a stateless, one-shot
+  model snapshot — following the Go "verb+er" interface convention
+  (`io.Closer`, `fmt.Stringer`).
+
 ### Per-request resolution — the key decision
 
 The registry holds **one** shared model instance, but a sequence inherently
@@ -96,13 +104,13 @@ inside any one of those would desync the others.
 Instead, `SequenceModel` implements a new per-protocol optional interface:
 
 ```go
-type RequestResolver interface { ResolveRequest() VirtualModel }
+type Snapshotter interface { Snapshot() VirtualModel }
 ```
 
-The handler calls `vm = ResolveRequest(vm)` **once**, immediately after registry
+The handler calls `vm = Snapshot(vm)` **once**, immediately after registry
 lookup. For a sequence model this atomically advances the cursor
 (`atomic.Uint64`) and returns a plain, stateless `MockModel` snapshot carrying
-that step's content or `ErrorInjection`. For every other model `ResolveRequest`
+that step's content or `ErrorInjection`. For every other model `Snapshot`
 is the identity. After this single line, **all existing dispatch machinery
 works unchanged** — there is no sequence-specific code anywhere in the handler.
 
@@ -118,7 +126,7 @@ Consequences:
 
 `SequenceModel` still implements the protocol `Handle*` methods (delegating to a
 freshly resolved snapshot) so direct, non-handler consumers — `protocoltest`,
-benchmarks — get one step per call without going through `ResolveRequest`. The
+benchmarks — get one step per call without going through `Snapshot`. The
 two paths are mutually exclusive, so the cursor advances exactly once per
 request either way.
 
@@ -146,6 +154,6 @@ demos). Bespoke programs are constructed directly via `NewSequenceModel`.
   `ResolvedStep`, `defaultErrorMeta`, `DefaultSequenceConfigs`.
 - `vmodel/types.go` — `VirtualModelTypeSequence`.
 - `vmodel/{anthropic,openai}/sequence_model.go` — `SequenceModel`,
-  `RequestResolver`, `ResolveRequest`.
-- `vmodel/virtualserver/handler.go` — one `ResolveRequest` call per entrypoint.
+  `Snapshotter`, `Snapshot`.
+- `vmodel/virtualserver/handler.go` — one `Snapshot` call per entrypoint.
 - `vmodel/{anthropic,openai}/defaults.go` — demo registration.

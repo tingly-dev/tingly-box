@@ -492,7 +492,7 @@ Use the factories — `Steps(...)` for the common status-only case, `Step(status
 // Quickest path: a status-only model in one call.
 m := anthropic.NewStatusSequence("flaky-provider", "Flaky Provider", 200, 200, 429)
 
-// Equivalent, when you also want delay / description / no-loop:
+// Equivalent, when you also want delay / description / OnExhaust:
 m = anthropic.NewSequenceModel(&vmodel.SequenceConfig{
     ID:    "flaky-provider",
     Name:  "Flaky Provider",
@@ -523,8 +523,8 @@ The factory ladder, simplest → most explicit:
 
 The registry holds **one** shared instance, but a sequence inherently has a
 cursor. Rather than thread per-request state through the handler, a
-`SequenceModel` implements `RequestResolver`: the virtualserver handler calls
-`ResolveRequest()` **exactly once per request**, which atomically advances the
+`SequenceModel` implements `Snapshotter`: the virtualserver handler calls
+`Snapshot()` **exactly once per request**, which atomically advances the
 cursor and returns a plain stateless `MockModel` snapshot for that step. From
 that point on every existing dispatch path — `ExtractErrorInjection`, the
 `Handle*` methods, the mid-stream gate — works unchanged. The atomic cursor is
