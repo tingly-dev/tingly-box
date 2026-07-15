@@ -3,6 +3,7 @@ import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, Dialog, D
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
+import { ModelTestButton } from '../probe/ModelTestButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface CustomModelCardProps {
@@ -186,6 +187,7 @@ export default function CustomModelCard({
                         e.preventDefault();
                     }}
                 >
+                    <ModelTestButton providerUuid={provider.uuid} providerName={provider.name} model={model} />
                     <IconButton
                         size="small"
                         onClick={handleEditClick}

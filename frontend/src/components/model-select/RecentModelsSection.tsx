@@ -3,6 +3,7 @@ import ModelCard from './ModelCard';
 
 export interface RecentModelsSectionProps {
     providerUuid: string;
+    providerName: string;
     recentModels: string[];
     selectedModel?: string;
     onModelSelect: (model: string) => void;
@@ -11,6 +12,7 @@ export interface RecentModelsSectionProps {
 
 export function RecentModelsSection({
     providerUuid,
+    providerName,
     recentModels,
     selectedModel,
     onModelSelect,
@@ -33,6 +35,8 @@ export function RecentModelsSection({
                         isSelected={selectedModel === model}
                         onClick={() => onModelSelect(model)}
                         variant="standard"
+                        providerUuid={providerUuid}
+                        providerName={providerName}
                     />
                 ))}
             </Box>

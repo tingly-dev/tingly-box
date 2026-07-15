@@ -307,6 +307,7 @@ export function ModelsPanel({
                 {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
                     <NewModelsSection
                         providerUuid={provider.uuid}
+                        providerName={provider.name}
                         newModels={newModels[provider.uuid].newModels}
                         selectedModel={isProviderSelected ? selectedModel : undefined}
                         onModelSelect={(model) => onModelSelect(provider, model)}
@@ -319,6 +320,7 @@ export function ModelsPanel({
                 {recentModels[provider.uuid]?.length > 0 && (
                     <RecentModelsSection
                         providerUuid={provider.uuid}
+                        providerName={provider.name}
                         recentModels={recentModels[provider.uuid]}
                         selectedModel={isProviderSelected ? selectedModel : undefined}
                         onModelSelect={(model) => onModelSelect(provider, model)}
@@ -341,6 +343,8 @@ export function ModelsPanel({
                                     onClick={() => onModelSelect(provider, starModel)}
                                     variant="starred"
                                     description={getDescription(starModel)}
+                                    providerUuid={provider.uuid}
+                                    providerName={provider.name}
                                 />
                             ))}
                         </Box>
@@ -384,6 +388,8 @@ export function ModelsPanel({
                                         onClick={() => onModelSelect(provider, model)}
                                         variant="standard"
                                         description={getDescription(model)}
+                                        providerUuid={provider.uuid}
+                                        providerName={provider.name}
                                     />
                                 );
                             }

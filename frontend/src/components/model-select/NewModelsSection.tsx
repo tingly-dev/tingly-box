@@ -4,6 +4,7 @@ import ModelCard from './ModelCard';
 
 export interface NewModelsSectionProps {
     providerUuid: string;
+    providerName: string;
     newModels: string[];
     selectedModel?: string;
     onModelSelect: (model: string) => void;
@@ -13,6 +14,7 @@ export interface NewModelsSectionProps {
 
 export function NewModelsSection({
     providerUuid,
+    providerName,
     newModels,
     selectedModel,
     onModelSelect,
@@ -47,6 +49,8 @@ export function NewModelsSection({
                         onClick={() => onModelSelect(model)}
                         variant="standard"
                         showNewBadge
+                        providerUuid={providerUuid}
+                        providerName={providerName}
                     />
                 ))}
             </Box>

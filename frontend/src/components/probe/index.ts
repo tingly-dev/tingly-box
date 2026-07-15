@@ -1,3 +1,4 @@
+export { ModelTestButton } from './ModelTestButton';
 export { ProbeDialog } from './ProbeDialog';
 export { ProbeMenu } from './ProbeMenu';
 export { QuickProbeButton } from './QuickProbeButton';

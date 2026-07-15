@@ -2,6 +2,7 @@ import { CheckCircle } from '@/components/icons';
 import { Box, Card, CardContent, CircularProgress, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
+import { ModelTestButton } from '../probe/ModelTestButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface ModelCardProps {
@@ -13,6 +14,11 @@ interface ModelCardProps {
     loading?: boolean;
     showNewBadge?: boolean;
     description?: string; // Model description from API
+    // Provider this model belongs to — needed to run an in-place test probe.
+    // Optional so call sites that haven't been updated yet degrade gracefully
+    // (no test action rendered).
+    providerUuid?: string;
+    providerName?: string;
 }
 
 export default function ModelCard({
@@ -24,6 +30,8 @@ export default function ModelCard({
     loading = false,
     showNewBadge = false,
     description,
+    providerUuid,
+    providerName,
 }: ModelCardProps) {
     const getCardStyles = () => {
         const baseStyles = {
@@ -36,6 +44,12 @@ export default function ModelCard({
             position: 'relative' as const,
             outline: 'none',
             overflow: 'visible',
+            '& .control-bar': {
+                opacity: 0,
+            },
+            '&:hover .control-bar': {
+                opacity: loading ? 0 : 1,
+            },
         };
 
         if (variant === 'starred') {
@@ -160,6 +174,37 @@ export default function ModelCard({
                         }}
                     >
                         NEW
+                    </Box>
+                )}
+                {!loading && providerUuid && (
+                    <Box
+                        className="control-bar"
+                        sx={{
+                            position: 'absolute',
+                            bottom: 0,
+                            right: 0,
+                            height: 20,
+                            backgroundColor: 'grey.50',
+                            borderTop: 1,
+                            borderTopLeftRadius: 4,
+                            borderColor: 'grey.200',
+                            display: 'flex',
+                            alignItems: 'center',
+                            px: 0.5,
+                            opacity: 0,
+                            transition: 'opacity 0.2s',
+                            zIndex: 10,
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }}
+                    >
+                        <ModelTestButton providerUuid={providerUuid} providerName={providerName || ''} model={model} />
                     </Box>
                 )}
             </CardContent>
