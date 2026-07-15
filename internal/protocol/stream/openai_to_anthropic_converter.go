@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -29,6 +30,17 @@ type anthropicStreamEvent struct {
 type AnthropicEvent struct {
 	Type string
 	Data any
+}
+
+// RawJSON returns the protocol payload rather than the transport wrapper.
+// Protocol-owned assemblers use this to reconstruct converted streams without
+// mistaking the Type/Data carrier itself for an Anthropic wire event.
+func (e AnthropicEvent) RawJSON() string {
+	raw, err := json.Marshal(e.Data)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 // AsAnthropicEvent exposes an event emitted by an Anthropic stream converter.

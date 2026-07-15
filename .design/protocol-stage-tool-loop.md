@@ -118,6 +118,7 @@ The concrete implementation names are part of the design vocabulary:
 | `AnthropicBetaContinuationStore` | Typed Beta mixed-continuation interface |
 | `ProtocolStageBetaToolProvider` | Server adapter from MCP runtime to the Stage provider |
 | `ProviderBetaContinuationStore` | Provider/session-scoped bounded store implementation |
+| `WithServertoolProviders` | Server option for registering additional in-process tool providers across startup and config reload |
 
 Ownership is an exact per-request snapshot returned by the tool provider. It is
 not inferred from an MCP name prefix. A client tool and a server tool with the
@@ -395,12 +396,18 @@ Implemented and committed:
   provider-scoped continuation, Guardrail ordering, and provider observation;
 - failover suppression after successful tool side effects;
 - real HTTP complete/stream V1→Beta MCP canary through `harness matrix`.
+- real HTTP owned-tool fixture proving provider round 1 → local execution →
+  provider round 2 → final response for Beta identity and V1→Beta→Chat;
+- normalized converted Anthropic events expose their wire payload to protocol
+  assemblers, so cross-protocol streams remain interceptable by the Beta loop;
+- additional `servertool.ToolProvider` instances can enter through the formal
+  server option and survive config-driven pipeline rebuilds.
 
 Pending by design:
 
 - optional strict Beta→V1 response/event validation, deferred until a concrete
   compatibility need appears;
-- owned-tool real-path fixture and official-client MCP canary;
+- official-client MCP canary;
 - default rollout and legacy removal.
 
 ## Acceptance Criteria for Production Wiring

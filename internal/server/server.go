@@ -113,7 +113,8 @@ type Server struct {
 	mcpRuntime *mcpruntime.Runtime
 
 	// servertool pipeline — owns virtual tool providers and hook list
-	servertoolPipeline *servertool.Pipeline
+	servertoolPipeline  *servertool.Pipeline
+	servertoolProviders []servertool.ToolProvider
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -562,35 +563,41 @@ func (s *Server) Cancel() context.CancelFunc {
 	return s.cancel
 }
 
-// registerAdviserFromConfig reads the MCP config and registers the adviser
-// virtual tool if an enabled advisor source is found.
+// registerAdviserFromConfig rebuilds the servertool pipeline from configured
+// tools plus providers supplied by ServerOption. Rebuilding both groups keeps
+// injected providers available across config hot reloads.
 func (s *Server) registerAdviserFromConfig() {
+	pipeline := servertool.NewPipeline()
+	advisorRegistered := false
+
 	mcpCfg := s.mcpRuntime.GetConfig()
-	if mcpCfg == nil {
-		s.servertoolPipeline = servertool.NewPipeline()
-		return
+	if mcpCfg != nil {
+		for _, source := range mcpCfg.Sources {
+			if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
+				continue
+			}
+			advisorCfg := *source.Advisor
+
+			if advisorCfg.ProviderResolver == nil {
+				advisorCfg.ProviderResolver = s.config.GetProviderByUUID
+			}
+
+			pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
+			advisorRegistered = true
+			break
+		}
 	}
-	for _, source := range mcpCfg.Sources {
-		if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
-			continue
+	for _, provider := range s.servertoolProviders {
+		if provider != nil {
+			pipeline.Register(provider)
 		}
-		advisorCfg := *source.Advisor
+	}
+	pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
+	s.servertoolPipeline = pipeline
 
-		if advisorCfg.ProviderResolver == nil {
-			advisorCfg.ProviderResolver = s.config.GetProviderByUUID
-		}
-
-		pipeline := servertool.NewPipeline()
-		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
-		pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
-		s.servertoolPipeline = pipeline
-
+	if advisorRegistered {
 		logrus.Info("mcp: registered adviser via servertool pipeline")
-		return
 	}
-
-	// No advisor configured — empty pipeline.
-	s.servertoolPipeline = servertool.NewPipeline()
 }
 
 // setupConfigWatcher initializes the configuration hot-reload watcher

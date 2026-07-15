@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -67,6 +68,30 @@ func TestCommonStreamAssemblerAnthropicBetaFromJSON(t *testing.T) {
 	message, ok := result.(*anthropic.BetaMessage)
 	require.True(t, ok)
 	require.Equal(t, "msg-beta", string(message.ID))
+}
+
+func TestCommonStreamAssemblerAnthropicBetaFromConvertedEvent(t *testing.T) {
+	assembler, err := NewStreamAssembler(protocol.TypeAnthropicBeta)
+	require.NoError(t, err)
+
+	event := protocolstream.AnthropicEvent{
+		Type: "message_start",
+		Data: map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id": "msg-converted-beta", "type": "message", "role": "assistant",
+				"content": []any{}, "model": "claude-beta", "stop_reason": nil, "stop_sequence": nil,
+				"usage": map[string]any{"input_tokens": 1, "output_tokens": 0},
+			},
+		},
+	}
+	require.NoError(t, assembler.Add(event))
+
+	result, err := assembler.Finish()
+	require.NoError(t, err)
+	message, ok := result.(*anthropic.BetaMessage)
+	require.True(t, ok)
+	require.Equal(t, "msg-converted-beta", string(message.ID))
 }
 
 func TestCommonStreamAssemblerOpenAIChatAcceptsWireDTO(t *testing.T) {
