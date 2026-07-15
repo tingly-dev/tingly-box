@@ -42,6 +42,34 @@ Binding a port and reading the runtime port are kept separate:
   override it, so the otherwise-invisible sticky port is surfaced. To return
   to the default, `stop` then `start`.
 
+### Daemon mode
+
+`Daemonize()` backgrounds the server by re-exec'ing the process with its own
+`os.Args`. A port the parent *resolved* (a preserved `restart` port, or a
+config port) is not on that command line, so the detached child would
+re-resolve and drift back to the default. The parent therefore pins the
+resolved port by appending `--port <n>` to the child's args; the CLI parser
+takes the last occurrence, so it wins without stripping any earlier value.
+
+## Behavior matrix
+
+| Command | Server state | Resulting port | Reads port file |
+| --- | --- | --- | :---: |
+| `start` | stopped | config → 12580 | no |
+| `start --port N` | stopped | **N** | no |
+| `start` | running | reports "already running" (shows live port) | display only |
+| `restart` | running on X | **continues on X** | yes (before stop) |
+| `restart --port N` | running on X | **N** | no |
+| `restart` | stopped | config → 12580 | no |
+| `restart --daemon` (bare) | running on X | **continues on X** | yes |
+| `stop` + `start` | — | config → 12580 | no |
+| `cc` / `profile` / `log` / `status` / `open` | running on X | **X** while lock held, else config | yes |
+| any | stale file, not running | config → 12580 | ignored |
+
+Invariant: an explicit `--port` always wins; binding never reads the port
+file; only readers and `restart` continuation do, and only while the lock is
+held.
+
 ## Staleness
 
 A crashed server (SIGKILL) leaves the port file behind, but the flock is
