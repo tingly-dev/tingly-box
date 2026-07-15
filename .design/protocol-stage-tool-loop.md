@@ -246,30 +246,23 @@ manual field copying.
 
 ### Response direction
 
-Beta→V1 response/event conversion is lossless only when the output remains in
-the V1 subset. Beta-only examples include MCP/Advisor/fallback/compaction
-blocks, Beta-only stop reasons, context-management deltas, and extended usage
-details.
+The compatibility guarantee stops at request promotion. Beta→V1 complete
+responses and stream events keep the existing permissive JSON projection in
+this phase; they are not checked against a maintained V1 response subset.
+Beta-only output may therefore lack equivalent V1 typed semantics.
 
-Therefore production V1 + MCP activation requires one of these explicit
-solutions:
+This is an explicit scope decision rather than a production blocker for the
+V1-with-MCP canary. Strict response/event subset validation is deferred until
+a concrete compatibility requirement or production evidence justifies it.
 
-1. validate complete responses and full stream rounds against a maintained V1
-   subset before emitting anything, then fail closed; or
-2. exclude every feature/provider combination that can produce Beta-only
-   outward content and express that restriction as a Bridge capability.
+This decision does not make the Bridge unconditional bidirectional
+compatibility. In particular, a provider whose concrete protocol is
+`anthropic_v1` still cannot sit below the Beta Tool Loop without a separately
+designed Beta→V1 request Bridge.
 
-The preferred solution is explicit subset validation because it keeps the
-boundary local and testable. Until it exists:
-
-- V1→Beta remains valid for in-process topology and request conversion tests;
-- the Bridge must not be treated as unconditional Beta→V1 compatibility;
-- production `anthropic_v1` requests with MCP remain on legacy;
-- a provider whose concrete protocol is `anthropic_v1` cannot sit below the
-  Beta Tool Loop without a separately designed Beta→V1 request Bridge.
-
-SDK regeneration must rerun a maintained V1/Beta field and union compatibility
-suite; representative examples alone are not a forward-compatibility proof.
+SDK regeneration must continue to verify V1→Beta request compatibility. A
+future strict response contract would require its own maintained response and
+event compatibility suite.
 
 ## Guardrail Ordering
 
@@ -352,7 +345,8 @@ The production wiring checkpoint must:
    continuation store for each attempt;
 3. compose Guardrail, Tool Loop, provider Bridge, Provider Observer, and
    terminal endpoint in the documented order;
-4. retain legacy for V1 clients until V1-subset egress validation exists;
+4. promote V1 MCP requests to Beta while preserving the current permissive
+   Beta→V1 response/event projection;
 5. add a debug-level entry naming `tool_loop_anthropic_beta` and every concrete
    protocol boundary;
 6. verify through the real HTTP path with `harness matrix --stage --mcp` before
@@ -389,14 +383,15 @@ Implemented and committed:
 - provider-scoped mixed continuation;
 - direct MCP runtime→Beta tool definitions;
 - reuse of the existing Anthropic adapter and servertool executor;
-- lossless V1 request projection and V1→Beta Bridge;
+- lossless V1 request promotion and V1→Beta Bridge;
 - complete/stream RequestRecord multi-exchange proof;
 - composed V1→Beta Tool Loop tests;
 - dormant 54-cell Bridge matrix including V1→Beta and V1→Beta Stage→Chat.
 
 Pending by design:
 
-- V1-subset response/event validation;
+- optional strict Beta→V1 response/event validation, deferred until a concrete
+  compatibility need appears;
 - production handler/selector wiring for `--stage + MCP`;
 - real-path MCP matrix and official-client canary;
 - default rollout and legacy removal.
@@ -412,7 +407,8 @@ Pending by design:
 - Usage and source-visible model remain correct across hidden rounds.
 - Tool name collisions fail before the provider call.
 - Later failures after tool success prevent failover replay.
-- V1 clients either pass explicit subset validation or remain on legacy.
+- V1 MCP requests are promoted to Beta; outward responses/events retain the
+  current permissive V1 projection behavior.
 - `harness matrix --stage --mcp` traverses the production path and exposes the
   concrete Stage path in debug logs.
 - Starting without `--stage` leaves current behavior unchanged.

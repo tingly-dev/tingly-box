@@ -53,10 +53,10 @@ The planned protocol-pair rollout is complete: the three provider-facing
 protocols (Beta, Chat, and Responses) are available from each supported source,
 while Anthropic V1 remains deliberately distinct and native only to V1 clients.
 The production candidate now uses Anthropic Beta as the Tool Loop working
-protocol because Beta has the complete MCP/server-tool surface. V1 enters it
-through the lossless V1→Beta subset Bridge; Chat and Responses use their
-existing Bridges. The earlier Chat-native Tool Loop remains a useful lifecycle
-proof, but production selection still treats MCP as legacy until the
+protocol because Beta has the complete MCP/server-tool surface. V1 requests
+enter it through the lossless V1→Beta promotion Bridge; Chat and Responses use
+their existing Bridges. The earlier Chat-native Tool Loop remains a useful
+lifecycle proof, but production selection still treats MCP as legacy until the
 Beta-native topology is wired behind an explicit canary.
 
 ## Decision
@@ -296,8 +296,8 @@ HTTP.
 
 The focused Phase 4 contract is
 [`protocol-stage-tool-loop.md`](./protocol-stage-tool-loop.md). This section is
-the architectural summary; the focused document owns lifecycle, V1-subset,
-activation, and acceptance details.
+the architectural summary; the focused document owns lifecycle, V1 request
+promotion, activation, and acceptance details.
 
 The Tool Loop Stage owns:
 
@@ -587,8 +587,8 @@ The following foundations are implemented under `internal/protocol/stage`:
 - monotonic propagation of usage/model fallback and committed side effects;
 - complete and streaming in-memory multi-hop harnesses.
 
-Bidirectional Anthropic Beta/OpenAI Chat Bridges and the lossless V1→Beta
-subset Bridge are implemented. Their response directions expose
+Bidirectional Anthropic Beta/OpenAI Chat Bridges and the V1→Beta request
+promotion Bridge are implemented. Their response directions expose
 transport-neutral complete and stream conversion entrypoints while existing
 `Handle*` functions remain the production wrappers. The dormant 54-cell Bridge
 matrix includes concrete V1 → Beta-native Stage → Chat and Chat → Beta-native

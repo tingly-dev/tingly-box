@@ -14,9 +14,10 @@ import (
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 )
 
-// NewV1ToBeta returns the lossless Anthropic v1 -> Beta subset Bridge. Request
-// and reverse response/event conversion use their shared JSON wire shape, so
-// additions to the v1 SDK surface do not require parallel field mappings here.
+// NewV1ToBeta returns an Anthropic v1 -> Beta Bridge. V1 request promotion is
+// the guaranteed compatibility direction because the V1 request is a Beta wire
+// subset. Reverse response/event projection intentionally remains permissive;
+// Beta-only output may not have equivalent V1 typed semantics.
 func NewV1ToBeta() stage.Bridge { return v1ToBetaBridge{} }
 
 type v1ToBetaBridge struct{}
@@ -70,6 +71,9 @@ type v1ToBetaSession struct {
 
 func (s *v1ToBetaSession) TargetCall() stage.Call { return s.targetCall }
 
+// TODO: Add strict Beta-output subset validation only if a lossless V1 response
+// contract becomes necessary. This phase intentionally leaves responses and
+// stream events unconstrained and preserves the existing JSON projection.
 func (s *v1ToBetaSession) ConvertComplete(_ context.Context, response *stage.Response) (*stage.Response, error) {
 	if s.operation != stage.OperationComplete {
 		return nil, fmt.Errorf("convert Anthropic Beta response to v1: session was opened for %s", s.operation)
