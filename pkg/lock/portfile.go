@@ -67,8 +67,3 @@ func (pf *PortFile) Remove() error {
 	}
 	return nil
 }
-
-// Path returns the port file path for debugging purposes.
-func (pf *PortFile) Path() string {
-	return pf.path
-}

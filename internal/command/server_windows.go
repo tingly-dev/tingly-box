@@ -45,7 +45,7 @@ func stopServerWithFileLock(fileLock *lock.FileLock) error {
 		if !fileLock.IsLocked() {
 			// TerminateProcess gives the server no chance to clean up its
 			// runtime port file, so remove it from the stopping side.
-			removeRuntimePortFile(fileLock)
+			_ = fileLock.RemovePort()
 			return nil
 		}
 		time.Sleep(1 * time.Second)

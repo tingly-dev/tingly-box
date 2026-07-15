@@ -232,9 +232,9 @@ func (am *AppManager) GetServerPort() int {
 // file is readable, that port wins; otherwise this falls back to the
 // configured port.
 func (am *AppManager) GetRuntimeServerPort() int {
-	configDir := am.appConfig.ConfigDir()
-	if lock.NewFileLock(configDir).IsLocked() {
-		if port, err := lock.NewPortFile(configDir).Read(); err == nil {
+	fileLock := lock.NewFileLock(am.appConfig.ConfigDir())
+	if fileLock.IsLocked() {
+		if port, err := fileLock.ReadPort(); err == nil {
 			return port
 		}
 	}

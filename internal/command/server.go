@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -534,9 +533,10 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 
 	// Record the actual listening port next to the PID lock so other CLI
 	// processes (cc/profile/log/status/open) can discover it — the port is
-	// intentionally not persisted in the config file.
-	portFile := lock.NewPortFile(appConfig.ConfigDir())
-	if err := portFile.Write(port); err != nil {
+	// intentionally not persisted in the config file. The lock owns this
+	// runtime artifact and removes it on Unlock, so no per-exit-path cleanup
+	// is needed here.
+	if err := fileLock.WritePort(port); err != nil {
 		logrus.Warnf("Failed to record server port: %v", err)
 	}
 
@@ -556,7 +556,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 			continue
 		}
 		if err := hook(serverManager); err != nil {
-			_ = portFile.Remove()
 			fileLock.Unlock()
 			return err
 		}
@@ -582,7 +581,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		if !daemon.IsDaemonProcess() {
 			// Fork and detach - this call exits the parent process
 			if err := daemon.Daemonize(); err != nil {
-				_ = portFile.Remove()
 				fileLock.Unlock()
 				return fmt.Errorf("failed to daemonize: %w", err)
 			}
@@ -601,20 +599,17 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
 	case err := <-serverErr:
-		// Release lock on error
-		_ = portFile.Remove()
+		// Release lock on error (also removes the runtime port file)
 		fileLock.Unlock()
 		return fmt.Errorf("server stopped unexpectedly: %w", err)
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
-		// Release lock on shutdown
-		_ = portFile.Remove()
+		// Release lock on shutdown (also removes the runtime port file)
 		fileLock.Unlock()
 		return serverManager.Stop()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
-		// Release lock on shutdown
-		_ = portFile.Remove()
+		// Release lock on shutdown (also removes the runtime port file)
 		fileLock.Unlock()
 		return serverManager.Stop()
 	}
@@ -629,13 +624,6 @@ func CreateAppManagerForDir(configDir string) (*AppManager, error) {
 		return nil, fmt.Errorf("failed to create app config for directory %s: %w", configDir, err)
 	}
 	return NewAppManagerWithConfig(appConfig), nil
-}
-
-// removeRuntimePortFile removes the runtime port file that lives next to the
-// given PID lock. Used by the stopping process after the lock is released,
-// when the server was killed without a chance to clean up itself.
-func removeRuntimePortFile(fileLock *lock.FileLock) {
-	_ = lock.NewPortFile(filepath.Dir(fileLock.GetLockFilePath())).Remove()
 }
 
 // doStopServerWithFileLock stops the server using the provided file lock
