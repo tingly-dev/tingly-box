@@ -91,6 +91,13 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 			logrus.Errorf("Unsupported oauth issuer: %s", issuer)
 			return nil
 		}
+	} else if provider.AuthType == typ.AuthTypeAzureKey {
+		// GPT / o-series on Azure OpenAI (api-key auth).
+		client, err = NewAzureClient(provider, model, sessionID)
+		if err != nil {
+			logrus.WithContext(ctx).Errorf("Failed to create Azure client for provider %s: %v", provider.Name, err)
+			return nil
+		}
 	} else {
 		client, err = NewOpenAIClient(provider, model, sessionID)
 		if err != nil {
@@ -133,18 +140,21 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	var err error
 
 	// Check if this is a Claude Code OAuth provider
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
+	switch {
+	case provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode:
 		client, err = NewClaudeClient(provider, model, sessionID)
-		if err != nil {
-			logrus.WithContext(ctx).Errorf("Failed to create Claude client for provider %s: %v", provider.Name, err)
-			return nil
-		}
-	} else {
+	case provider.AuthType == typ.AuthTypeAWSSigV4:
+		// Claude on Amazon Bedrock (SigV4 / Bedrock bearer token).
+		client, err = NewBedrockClient(provider, model, sessionID)
+	case provider.AuthType == typ.AuthTypeGCPVertex:
+		// Claude on GCP Vertex AI (service-account OAuth2).
+		client, err = NewVertexAnthropicClient(provider, model, sessionID)
+	default:
 		client, err = NewAnthropicClient(provider, model, sessionID)
-		if err != nil {
-			logrus.WithContext(ctx).Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
-			return nil
-		}
+	}
+	if err != nil {
+		logrus.WithContext(ctx).Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
+		return nil
 	}
 
 	if p.recordSink != nil && p.recordSink.IsEnabled() {

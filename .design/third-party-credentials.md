@@ -161,50 +161,42 @@ gin handler
    → forwarding.Forward*                              unchanged
 ```
 
-### 6.1 New file: `internal/client/cloud_credential.go`
+### 6.1 Per-cloud client files (mirrors `codex_client.go` / `kimi_client.go`)
 
-A single translator: `CredentialBundle` + `auth_type` + `api_style` → the SDK
-option(s) or genai config to apply. This keeps every SDK-specific detail in one
-seam and out of the pool/constructors.
+Each cloud gets its own `xx_client.go`, consistent with the existing
+per-provider client convention. Each file owns exactly one cloud's credential
+translation + thin constructor; the generic `AnthropicClient` / `OpenAIClient` /
+`GoogleClient` remain the SDK-call surface, so there is no interface-method
+duplication (the cloud files wrap the base constructors via `extraOptions`).
 
-```go
-// resolveAnthropicCloudOption returns the SDK RequestOption for a multi-field
-// Anthropic provider (Bedrock or Vertex), or nil for non-cloud providers.
-func resolveAnthropicCloudOption(ctx, p *typ.Provider) (anthropicOption.RequestOption, error)
+- `internal/client/bedrock_client.go` — `NewBedrockClient` → `NewAnthropicClient(…, bedrockOption(p))`; `awsConfigFromBundle` builds `aws.Config` with static creds (or `BearerAuthTokenProvider` when `bearer_token` set) → `bedrock.WithConfig`.
+- `internal/client/vertex_client.go` — `NewVertexAnthropicClient` → `NewAnthropicClient(…, vertexAnthropicOption(p))` via `vertex.WithCredentials`; **and** `applyVertexToGenaiConfig` for the Gemini path (go-genai has no request-option seam, so it mutates the config).
+- `internal/client/azure_client.go` — `NewAzureClient` → `NewOpenAIClient(…, azureOptions(p)…)` via `azure.WithEndpoint` + `azure.WithAPIKey`.
+- Shared field-key constants + `ValidateCredential` live in `ai/credential.go` (reused by the future handler for validation + masking).
 
-// resolveOpenAICloudOptions → []option.RequestOption for azure_key.
-func resolveOpenAICloudOptions(p *typ.Provider) ([]option.RequestOption, error)
+### 6.2 Constructor changes (generic clients stay generic)
 
-// applyVertexToGenaiConfig mutates a *genai.ClientConfig for gcp_sa + google.
-func applyVertexToGenaiConfig(ctx, p *typ.Provider, cfg *genai.ClientConfig) error
-```
+- `openai.go:56` / `anthropic.go:56`: **skip the base `WithAPIKey(GetAccessToken())`
+  when `p.AuthType.IsMultiFieldCredential()`** (it would only plant an empty
+  bearer/x-api-key header). The cloud adapter option — passed in by the per-cloud
+  constructor through the existing `extraOptions ...RequestOption` param — is
+  applied last, so it wins on base URL + auth. The SigV4 caveat holds: we register
+  no *body-mutating* SDK middleware after the adapter, so the signature stays valid
+  (our UA/logging/proxy live on the `http.Client` transport, not SDK middleware).
+- `google.go:35`: add a `p.AuthType == AuthTypeGCPVertex` branch calling
+  `applyVertexToGenaiConfig` (in `vertex_client.go`) before `genai.NewClient`.
+  go-genai only auto-installs SA auth when it builds the HTTP client itself, so
+  the Vertex path calls `httptransport.AddAuthorizationMiddleware` to layer the
+  OAuth2 bearer onto our proxy/logging client.
 
-- **Bedrock**: build `aws.Config{Region, Credentials: credentials.NewStaticCredentialsProvider(id, secret, session)}` (or `BearerAuthTokenProvider` when `bearer_token` set) → `bedrock.WithConfig(cfg)`.
-- **Vertex-Anthropic**: `google.CredentialsFromJSON(ctx, []byte(sa_json), vertexScope)` → `vertex.WithCredentials(ctx, location, project, creds)`.
-- **Azure**: `azure.WithEndpoint(endpoint, api_version)` + `azure.WithAPIKey(api_key)`.
-- **Vertex-Gemini**: set `cfg.Backend = BackendVertexAI; cfg.Project; cfg.Location; cfg.Credentials`.
+### 6.3 Pool wiring (parallels the OAuth-issuer switches)
 
-### 6.2 Constructor changes
+`pool.go` dispatches by auth type exactly like the existing Codex/Kimi/ClaudeCode
+issuer switches:
 
-- `openai.go:56` / `anthropic.go:56`: when `p.AuthType.IsMultiFieldCredential()`,
-  **skip the base `WithAPIKey(GetAccessToken())`** (it would inject an empty key)
-  and pass the resolved cloud option(s) as the last-applied option so they win.
-  The SigV4 warning matters: **body/header-mutating middleware must be registered
-  before** `bedrock.WithConfig`, and our transport chain (UA, logging, proxy) is
-  on the `http.Client` transport, not SDK middleware, so ordering holds — but the
-  Bedrock middleware re-signs after body normalization, so we must not mutate the
-  body in a *later* SDK middleware. We register none, so we are safe.
-- `google.go:35`: add the Vertex branch calling `applyVertexToGenaiConfig` before
-  `genai.NewClient`.
-
-### 6.3 Pool wiring
-
-In `pool.go`, extend the three selectors so multi-field providers still land on
-the base client (they do today, since they are not OAuth), but route through the
-cloud-option path. Simplest: no new client *type* — `NewOpenAIClient` /
-`NewAnthropicClient` / `NewGoogleClient` internally consult
-`IsMultiFieldCredential()`. This mirrors how dual-URL and UA layering already live
-inside the constructors rather than the pool.
+- `GetAnthropicClient`: `aws_sigv4 → NewBedrockClient`, `gcp_sa → NewVertexAnthropicClient`, else `NewAnthropicClient`.
+- `GetOpenAIClient`: `azure_key → NewAzureClient`, else `NewOpenAIClient`.
+- `newGoogleClientForProvider`: `gcp_sa` falls through to `NewGoogleClient`, which applies the Vertex config internally.
 
 ### 6.4 Proxy / transport interaction
 
@@ -387,11 +379,14 @@ Claude/Gemini IDs, Azure deployments) with `ModelCacheSourceTemplate`
 |---|---|
 | `ai/provider.go:13-70,205` | Auth types, `CredentialBundle`, `Provider.Credential` — reused as-is |
 | `internal/data/db/provider_store.go:121,188,255,514` | Persist bundle — reused as-is |
-| `internal/client/cloud_credential.go` | **New** — bundle → SDK option/config translator |
-| `internal/client/openai.go:56` | Azure option injection; skip empty `WithAPIKey` |
-| `internal/client/anthropic.go:56` | Bedrock/Vertex option injection |
+| `ai/credential.go` | **New** — canonical field keys, `CredentialSchema`, `ValidateCredential`, `IsSecretCredentialField` (shared by client + handler) |
+| `internal/client/bedrock_client.go` | **New** — `NewBedrockClient` + `awsConfigFromBundle` (SigV4 / bearer) |
+| `internal/client/vertex_client.go` | **New** — `NewVertexAnthropicClient` + `applyVertexToGenaiConfig` (Claude & Gemini on Vertex) |
+| `internal/client/azure_client.go` | **New** — `NewAzureClient` + `azureOptions` |
+| `internal/client/openai.go:56` | Skip empty `WithAPIKey` for multi-field |
+| `internal/client/anthropic.go:56` | Skip empty `WithAPIKey` for multi-field |
 | `internal/client/google.go:35` | Vertex `BackendVertexAI` branch |
-| `internal/client/pool.go:63,124,169` | Selector awareness of multi-field creds |
+| `internal/client/pool.go:63,124,169` | Dispatch to per-cloud clients by auth type |
 | `internal/server/module/provider/types.go` | Add `credential` to req/resp |
 | `internal/server/module/provider/handler.go:39,111,248` | Mask/create/update credential; auth_type whitelist |
 | `internal/data/providers.json` + `provider_template.go:83,103` | Cloud templates; `credential_schema`; region semantics |

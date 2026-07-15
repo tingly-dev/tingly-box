@@ -82,6 +82,15 @@ func newGoogleClientFromHTTPClient(provider *typ.Provider, httpClient *http.Clie
 	}
 
 	ctx := context.Background()
+
+	// Vertex-Gemini providers (gcp_sa) switch the genai backend to Vertex AI
+	// and authenticate with the service account instead of an API key.
+	if provider.AuthType == typ.AuthTypeGCPVertex {
+		if err := applyVertexToGenaiConfig(ctx, provider, config); err != nil {
+			return nil, err
+		}
+	}
+
 	client, err := genai.NewClient(ctx, config)
 	if err != nil {
 		return nil, err

@@ -55,9 +55,13 @@ type OpenAIClient struct {
 // NewOpenAIClient creates a new OpenAI client wrapper
 func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...option.RequestOption) (*OpenAIClient, error) {
 	options := []option.RequestOption{
-		option.WithAPIKey(provider.GetAccessToken()),
 		option.WithBaseURL(provider.APIBase),
 		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
+	}
+	// Azure providers authenticate via the azure adapter's api-key header
+	// (appended last), not a bearer token; skip the empty base WithAPIKey.
+	if !provider.AuthType.IsMultiFieldCredential() {
+		options = append(options, option.WithAPIKey(provider.GetAccessToken()))
 	}
 
 	// Create HTTP client with session-bound transport
@@ -207,6 +211,15 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 		return nil, &ErrModelsEndpointNotSupported{
 			Provider: c.provider.Name,
 			Reason:   "ChatGPT backend API does not support /models endpoint",
+		}
+	}
+	// Cloud-credential providers (Azure OpenAI) don't expose the plain /models
+	// endpoint at the manual URL/auth shape below; fall back to the template
+	// model list instead of issuing an unsigned request.
+	if c.provider.AuthType.IsMultiFieldCredential() {
+		return nil, &ErrModelsEndpointNotSupported{
+			Provider: c.provider.Name,
+			Reason:   "cloud-credential providers use template model lists",
 		}
 	}
 
