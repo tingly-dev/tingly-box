@@ -2,7 +2,9 @@ import { CheckCircle } from '@/components/icons';
 import { Box, Card, CardContent, CircularProgress, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
-import { ModelTestButton } from '../probe/ModelTestButton';
+import { ModelTestTrigger } from '../probe/ModelTestTrigger';
+import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
+import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface ModelCardProps {
@@ -33,6 +35,8 @@ export default function ModelCard({
     providerUuid,
     providerName,
 }: ModelCardProps) {
+    const probe = useModelTestProbe(providerUuid || '', model);
+
     const getCardStyles = () => {
         const baseStyles = {
             width: '100%',
@@ -204,8 +208,19 @@ export default function ModelCard({
                             e.preventDefault();
                         }}
                     >
-                        <ModelTestButton providerUuid={providerUuid} providerName={providerName || ''} model={model} />
+                        <ModelTestTrigger running={probe.running} onRun={probe.run} />
                     </Box>
+                )}
+                {!loading && providerUuid && probe.result && (
+                    <ModelTestStatusBadge
+                        result={probe.result}
+                        providerUuid={providerUuid}
+                        providerName={providerName || ''}
+                        model={model}
+                        dialogOpen={probe.dialogOpen}
+                        onOpenDialog={probe.openDialog}
+                        onCloseDialog={probe.closeDialog}
+                    />
                 )}
             </CardContent>
         </Card>

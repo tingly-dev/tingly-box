@@ -3,7 +3,9 @@ import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, Dialog, D
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
-import { ModelTestButton } from '../probe/ModelTestButton';
+import { ModelTestTrigger } from '../probe/ModelTestTrigger';
+import { ModelTestStatusBadge } from '../probe/ModelTestStatusBadge';
+import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface CustomModelCardProps {
@@ -28,6 +30,7 @@ export default function CustomModelCard({
     loading = false,
 }: CustomModelCardProps) {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const probe = useModelTestProbe(provider.uuid, model);
 
     const handleCardClick = () => {
         if (!loading) {
@@ -141,22 +144,37 @@ export default function CustomModelCard({
                     />
                 )}
 
-                {/* Triangle badge in bottom-left corner */}
+                {/* Triangle badge in top-left corner — "category" info, alongside the
+                    NEW badge standard ModelCard shows in the same corner. */}
                 {!loading && (
                     <Tooltip title="Custom model" arrow>
                         <Box
                             sx={{
                                 position: 'absolute',
-                                bottom: 0,
+                                top: 0,
                                 left: 0,
                                 width: 20,
                                 height: 20,
                                 backgroundColor: 'primary.main',
-                                clipPath: 'polygon(0 100%, 100% 100%, 0 0)',
+                                clipPath: 'polygon(0 0, 100% 0, 0 100%)',
                                 cursor: 'help',
                             }}
                         />
                     </Tooltip>
+                )}
+
+                {/* Test status — persistent once a result exists, unlike the
+                    hover-only actions corner below. */}
+                {!loading && probe.result && (
+                    <ModelTestStatusBadge
+                        result={probe.result}
+                        providerUuid={provider.uuid}
+                        providerName={provider.name}
+                        model={model}
+                        dialogOpen={probe.dialogOpen}
+                        onOpenDialog={probe.openDialog}
+                        onCloseDialog={probe.closeDialog}
+                    />
                 )}
 
                 {/* Control bar - visible on hover */}
@@ -187,7 +205,7 @@ export default function CustomModelCard({
                         e.preventDefault();
                     }}
                 >
-                    <ModelTestButton providerUuid={provider.uuid} providerName={provider.name} model={model} />
+                    <ModelTestTrigger running={probe.running} onRun={probe.run} />
                     <IconButton
                         size="small"
                         onClick={handleEditClick}
