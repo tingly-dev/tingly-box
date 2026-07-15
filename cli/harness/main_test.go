@@ -165,6 +165,30 @@ func TestMatrixCmdBridgeModeRejectsUnsupportedFeatures(t *testing.T) {
 	}
 }
 
+func TestMatrixCmdRejectsFiltersWithNoExecutableCases(t *testing.T) {
+	cmd := &MatrixCmd{
+		Mode:      "single",
+		Client:    "http",
+		Scenarios: []string{"does_not_exist"},
+	}
+	err := cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "no executable test cases") {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
+func TestMatrixCmdOwnedToolScenarioRequiresStageAndMCP(t *testing.T) {
+	cmd := &MatrixCmd{
+		Mode:      "single",
+		Client:    "http",
+		Scenarios: []string{"mcp_owned_tool"},
+	}
+	err := cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "requires both --stage and --mcp") {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
 func TestProviderTestCmdReturnsNotImplemented(t *testing.T) {
 	var p ProviderTestCmd
 	err := p.Run()

@@ -37,6 +37,7 @@ type Matrix struct {
 	BatchCount           int    // Number of times to run each test
 	MCPEnabled           bool   // Enable MCP feature flag in test env
 	ProtocolStageEnabled bool   // Enable the production Protocol Stage selector
+	MCPStageCoverage     bool   // Install the owned-tool fixture and servertool provider
 	GuardrailsEnabled    bool   // Enable an allow-only Guardrails runtime in the test env
 	Client               Client // Client driver (nil = raw HTTP default)
 }
@@ -192,6 +193,21 @@ func (m *Matrix) WithProtocolStage() *Matrix {
 	return out
 }
 
+// WithMCPStageCoverage adds the stateful owned-tool scenario and its local
+// servertool provider. It is intentionally opt-in because ordinary protocol
+// scenarios should not silently gain an executable server-owned tool.
+func (m *Matrix) WithMCPStageCoverage() *Matrix {
+	out := m.clone()
+	out.MCPStageCoverage = true
+	for _, scenario := range out.Scenarios {
+		if scenario.Name == MCPStageOwnedToolScenarioName {
+			return out
+		}
+	}
+	out.Scenarios = append(out.Scenarios, newMCPStageOwnedToolScenario())
+	return out
+}
+
 // WithGuardrails enables an active allow-only Guardrails runtime. Matrix
 // scenarios retain their normal semantics while exercising feature topology.
 func (m *Matrix) WithGuardrails() *Matrix {
@@ -218,6 +234,9 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 	}
 	if m.ProtocolStageEnabled {
 		opts = append(opts, NewTestEnvOptionWithProtocolStage())
+	}
+	if m.MCPStageCoverage {
+		opts = append(opts, NewTestEnvOptionWithServertoolProviders(newMatrixEchoServertoolProvider()))
 	}
 	if m.GuardrailsEnabled {
 		opts = append(opts, NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime()))

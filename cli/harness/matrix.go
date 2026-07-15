@@ -70,6 +70,9 @@ func (*MatrixCmd) Help() string {
   harness matrix --mode=single --stage --source=openai_responses --target=openai_chat
   harness matrix --mode=single --stage --source=anthropic_beta --target=openai_responses
 
+  # Exercise every production Stage route with a server-owned MCP tool loop
+  harness matrix --mode=single --stage --mcp --scenario=mcp_owned_tool
+
   # Exercise the opt-in Beta identity RequestRecord canary and retain artifacts
   harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta --record-dir=/tmp/tingly-records
 
@@ -137,6 +140,9 @@ func (m *MatrixCmd) Run() error {
 	if m.Mode == "bridges" && m.RecordDir != "" {
 		return fmt.Errorf("--mode=bridges does not support --record-dir (the Bridge matrix runs in-process without HTTP recording)")
 	}
+	if contains(m.Scenarios, protocoltest.MCPStageOwnedToolScenarioName) && (!m.MCPEnabled || !m.StageEnabled) {
+		return fmt.Errorf("--scenario=%s requires both --stage and --mcp", protocoltest.MCPStageOwnedToolScenarioName)
+	}
 
 	client, err := resolveClient(m.Client)
 	if err != nil {
@@ -145,6 +151,9 @@ func (m *MatrixCmd) Run() error {
 
 	// Build matrix with filters
 	matrix := protocoltest.DefaultMatrix()
+	if m.MCPEnabled && m.StageEnabled {
+		matrix = matrix.WithMCPStageCoverage()
+	}
 	if client != nil {
 		matrix = matrix.WithClient(client)
 	}
@@ -227,6 +236,15 @@ func (m *MatrixCmd) Run() error {
 		logrus.Warnf("skipping bridges section: in-process Bridge validation has no --client=%s transport", m.Client)
 	}
 	results := filterResults(combined, m)
+	executed := 0
+	for _, result := range results {
+		if !result.Skipped {
+			executed++
+		}
+	}
+	if executed == 0 {
+		return fmt.Errorf("no executable test cases matched the selected matrix filters")
+	}
 
 	// Output results
 	if m.JsonOutput {
