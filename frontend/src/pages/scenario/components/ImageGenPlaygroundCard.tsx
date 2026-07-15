@@ -148,7 +148,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     alignItems: 'stretch',
                 }}
             >
-                <Stack spacing={2}>
+                <Stack
+                    spacing={2}
+                    sx={{
+                        minWidth: 0,
+                        height: { xs: 'auto', md: 420 },
+                    }}
+                >
                     {noModels && !loadingRules && (
                         <Alert severity="info" variant="outlined">
                             {t('playground.noImageModels', {
@@ -185,6 +191,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         value={prompt}
                         onChange={(event) => setPrompt(event.target.value)}
                         disabled={noModels}
+                        sx={{
+                            flex: { xs: 'initial', md: 1 },
+                            minHeight: 0,
+                            '& .MuiInputBase-root': {
+                                height: { xs: 'auto', md: '100%' },
+                                alignItems: 'flex-start',
+                            },
+                            '& .MuiInputBase-inputMultiline': {
+                                height: { md: '100% !important' },
+                                overflow: { md: 'auto !important' },
+                            },
+                        }}
                     />
 
                     <Box
@@ -257,6 +275,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
                 <Box
                     sx={{
+                        minWidth: 0,
                         minHeight: { xs: 320, md: 420 },
                         height: { xs: 'auto', md: 420 },
                         maxHeight: { xs: 560, md: 420 },
