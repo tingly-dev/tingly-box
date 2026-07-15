@@ -17,12 +17,13 @@ import {
 } from '@mui/material';
 import React, {useEffect, useMemo, useState} from 'react';
 import {api} from '../../services/api';
+import {getServiceProvider} from '@/services/serviceProviders';
 import ProviderIcon from '@/components/ProviderIcon';
-import {getCloudPreset, type CloudField} from './cloudCredentialSchema';
+import {getCloudFields, buildCloudApiBase, type CloudField} from './cloudCredentialSchema';
 
 interface CloudProviderDialogProps {
     open: boolean;
-    /** Preset id chosen in the picker (see cloudCredentialSchema). */
+    /** Cloud template id chosen in the picker (e.g. "aws-bedrock"). */
     presetId: string | null;
     onClose: () => void;
     onSuccess: () => void;
@@ -37,11 +38,17 @@ interface CloudProviderDialogProps {
  * than a single bearer token, so they get their own form instead of being
  * crammed into the protocol-slot ProviderFormDialog — the same separation OAuth
  * providers already have with OAuthDialog.
+ *
+ * The card identity (name, icon, api_style, models) is data-driven from the
+ * backend provider template; only the credential field schema is code, keyed by
+ * the template's auth_type (see cloudCredentialSchema).
  */
 const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
     open, presetId, onClose, onSuccess, onBack, onNotification,
 }) => {
-    const preset = presetId ? getCloudPreset(presetId) : undefined;
+    const template = presetId ? getServiceProvider(presetId) : null;
+    const authType = template?.auth_type || '';
+    const fields = useMemo(() => getCloudFields(authType), [authType]);
 
     const [name, setName] = useState('');
     const [values, setValues] = useState<Record<string, string>>({});
@@ -49,32 +56,32 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
     const [proxyUrl, setProxyUrl] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
 
-    // Reset form whenever a new preset is opened.
+    const displayName = template?.alias || template?.name || '';
+
+    // Reset form whenever a new template is opened.
     useEffect(() => {
-        if (open && preset) {
-            setName(preset.name);
+        if (open && template) {
+            setName(template.alias || template.name || '');
             setValues({});
             setReveal({});
             setProxyUrl('');
             setError(null);
+            setAdvancedOpen(false);
         }
     }, [open, presetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const hasAdvanced = useMemo(
-        () => !!preset?.fields.some((f) => f.advanced),
-        [preset],
-    );
-    const [advancedOpen, setAdvancedOpen] = useState(false);
+    const hasAdvanced = useMemo(() => fields.some((f) => f.advanced), [fields]);
 
-    if (!preset) return null;
+    if (!template || !authType) return null;
 
     const setValue = (key: string, v: string) => {
         setValues((prev) => ({...prev, [key]: v}));
         setError(null);
     };
 
-    const missingRequired = preset.fields
+    const missingRequired = fields
         .filter((f) => f.required && !(values[f.key] || '').trim())
         .map((f) => f.label);
     const canSubmit = name.trim().length > 0 && missingRequired.length === 0 && !submitting;
@@ -91,7 +98,7 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
 
         // Only send non-empty credential fields.
         const credential: Record<string, string> = {};
-        preset.fields.forEach((f) => {
+        fields.forEach((f) => {
             const v = (values[f.key] || '').trim();
             if (v) credential[f.key] = v;
         });
@@ -101,9 +108,9 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
         try {
             const result = await api.addProvider({
                 name: name.trim(),
-                api_base: preset.buildApiBase(values),
-                api_style: preset.apiStyle,
-                auth_type: preset.authType,
+                api_base: buildCloudApiBase(authType, values),
+                api_style: template.api_style,
+                auth_type: authType,
                 credential,
                 proxy_url: proxyUrl.trim() || undefined,
                 enabled: true,
@@ -158,8 +165,8 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
         );
     };
 
-    const primaryFields = preset.fields.filter((f) => !f.advanced);
-    const advancedFields = preset.fields.filter((f) => f.advanced);
+    const primaryFields = fields.filter((f) => !f.advanced);
+    const advancedFields = fields.filter((f) => f.advanced);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
@@ -167,11 +174,13 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
             <DialogTitle sx={{flexShrink: 0}}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1.25}}>
                     <Box sx={{width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                        <ProviderIcon identifier={preset.icon} size={24}/>
+                        <ProviderIcon identifier={template.icon || template.id} size={24}/>
                     </Box>
                     <Box sx={{flex: 1, minWidth: 0}}>
-                        <Typography variant="h6" sx={{lineHeight: 1.2}}>{preset.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">{preset.subtitle}</Typography>
+                        <Typography variant="h6" sx={{lineHeight: 1.2}}>{displayName}</Typography>
+                        {template.description && (
+                            <Typography variant="caption" color="text.secondary">{template.description}</Typography>
+                        )}
                     </Box>
                     <IconButton aria-label="close" onClick={onClose} size="small"><Close/></IconButton>
                 </Box>

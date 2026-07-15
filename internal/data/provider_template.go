@@ -94,6 +94,13 @@ type ProviderTemplate struct {
 	BaseURLOpenAI    string `json:"base_url_openai,omitempty"`
 	BaseURLAnthropic string `json:"base_url_anthropic,omitempty"`
 
+	// APIStyle explicitly declares the provider protocol ("openai" | "anthropic"
+	// | "google"). Optional: when empty the style is inferred from which base URL
+	// is set. Cloud templates that share a canonical_domain but differ by model
+	// family (Vertex Claude vs Vertex Gemini) set this so template matching can
+	// disambiguate them by the provider's APIStyle.
+	APIStyle string `json:"api_style,omitempty"`
+
 	// CHANGED: Models now include context/max_output directly (Schema V2)
 	Models []ModelInfo `json:"models"`
 
@@ -531,9 +538,12 @@ func ValidateTemplate(tmpl *ProviderTemplate) error {
 	if tmpl.Name == "" {
 		return fmt.Errorf("template name is required")
 	}
-	// OAuth templates (auth_type == "oauth") don't require base_url
-	// Non-OAuth templates must have at least one base URL
-	if tmpl.AuthType != "oauth" && tmpl.BaseURLOpenAI == "" && tmpl.BaseURLAnthropic == "" {
+	// OAuth templates (auth_type == "oauth") and cloud multi-field credential
+	// templates (aws_sigv4/gcp_sa/azure_key) don't require a base URL — their
+	// endpoint is derived from the credential (region/project/endpoint) at
+	// connect time. Every other template must carry at least one base URL.
+	isCloud := typ.AuthType(tmpl.AuthType).IsMultiFieldCredential()
+	if tmpl.AuthType != "oauth" && !isCloud && tmpl.BaseURLOpenAI == "" && tmpl.BaseURLAnthropic == "" {
 		return fmt.Errorf("at least one base URL is required for non-OAuth templates")
 	}
 	// OAuth templates must have oauth_provider field set
@@ -566,9 +576,13 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 		return nil
 	}
 
-	// NEW: Try matching by canonical_domain first (Schema V2)
+	// NEW: Try matching by canonical_domain first (Schema V2). When a template
+	// declares an explicit APIStyle (cloud templates sharing a domain, e.g.
+	// Vertex Claude vs Gemini), it must also match the provider's style so the
+	// right model family is chosen.
 	if result := tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
-		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain)
+		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain) &&
+			(tmpl.APIStyle == "" || tmpl.APIStyle == string(provider.APIStyle))
 	}); result != nil {
 		return result
 	}
@@ -717,7 +731,8 @@ func (tm *TemplateManager) findEmbeddedTemplateByProvider(provider *typ.Provider
 	}
 
 	if result := tm.searchEmbedded(func(tmpl *ProviderTemplate) bool {
-		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain)
+		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain) &&
+			(tmpl.APIStyle == "" || tmpl.APIStyle == string(provider.APIStyle))
 	}); result != nil {
 		return result
 	}

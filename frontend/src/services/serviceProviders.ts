@@ -1,5 +1,6 @@
 import api from "@/services/api.ts";
 import React from "react";
+import {isCloudAuthType} from "@/components/cloud/cloudCredentialSchema";
 
 export interface ServiceProvider {
     id: string;
@@ -18,9 +19,11 @@ export interface ServiceProvider {
     pricing_doc: string;
     base_url_openai?: string;
     base_url_anthropic?: string;
+    api_style?: string; // Explicit protocol ("openai" | "anthropic" | "google"); cloud templates set this
     auth_type?: string;
     oauth_provider?: string;
     icon?: string; // Icon identifier for Lobe Icons (e.g., "openai", "anthropic")
+    type?: string;  // Provider type: "official" | "reseller" | "self-hosted" | "cloud" | ...
 }
 
 export interface ServiceProviderOption {
@@ -160,6 +163,9 @@ export interface UniqueProvider {
     icon?: string; // Icon identifier for Lobe Icons
     region?: 'cn' | 'global' | 'self-hosted'; // Derived region grouping for UI
     type?: string; // Provider type: "official" | "reseller" | "self-hosted" | etc.
+    authType?: string; // "aws_sigv4" | "gcp_sa" | "azure_key" | ...; carried for cloud grouping
+    apiStyle?: string; // Explicit protocol for cloud providers ("anthropic" | "openai" | "google")
+    description?: string; // Short description, used as card subtitle for cloud providers
 }
 
 // Heuristic classification of a provider into "cn" (China) or "global".
@@ -192,6 +198,13 @@ export function getAllUniqueProviders(): UniqueProvider[] {
             return;
         }
 
+        // Skip cloud-credential providers (Bedrock/Vertex/Azure) - they have their
+        // own "Cloud" picker section and dialog (getCloudProviders), not the
+        // protocol-slot API-key form.
+        if (isCloudAuthType(sp.auth_type)) {
+            return;
+        }
+
         // Use provider.id as the dedup key. When the source dictionary has
         // two entries with the same id (e.g. a coding-plan variant keyed
         // differently but sharing the logical id), the first one seen wins.
@@ -219,6 +232,37 @@ export function getAllUniqueProviders(): UniqueProvider[] {
     const providers = Array.from(seen.values());
     providers.sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
     return providers;
+}
+
+// Cloud-credential providers (Bedrock / Vertex / Azure) for the "Cloud" picker
+// section. Sourced from templates whose auth_type is a multi-field cloud type;
+// carries authType, apiStyle and description so the cloud dialog can build the
+// right credential form. Kept separate from getAllUniqueProviders, which
+// deliberately excludes these from the protocol-slot API-key list.
+export function getCloudProviders(): UniqueProvider[] {
+    const serviceProviders = getServiceProvidersSync();
+    const out: UniqueProvider[] = [];
+    Object.values(serviceProviders).forEach((provider: any) => {
+        const sp = provider as ServiceProvider;
+        if (!isCloudAuthType(sp.auth_type)) return;
+        out.push({
+            id: sp.id,
+            name: sp.name,
+            alias: sp.alias,
+            supportsOpenAI: false,
+            supportsAnthropic: false,
+            website: sp.website,
+            apiDoc: sp.api_doc,
+            icon: sp.icon,
+            region: 'global',
+            type: sp.type,
+            authType: sp.auth_type,
+            apiStyle: sp.api_style,
+            description: sp.description,
+        });
+    });
+    out.sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
+    return out;
 }
 
 // Unified search function for provider templates.
@@ -261,4 +305,18 @@ export function useProviderTemplates(): UniqueProvider[] {
     }, []);
 
     return getAllUniqueProviders();
+}
+
+// Reactive accessor for cloud-credential provider templates (Cloud picker section).
+export function useCloudProviders(): UniqueProvider[] {
+    const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+
+    React.useEffect(() => {
+        const unsubscribe = subscribeToProviders(() => {
+            forceUpdate();
+        });
+        return unsubscribe;
+    }, []);
+
+    return getCloudProviders();
 }

@@ -277,11 +277,15 @@ Wiring: `useProviderDialog` routes the `cloud` kind to an `onCloud(presetId)`
 callback (like `onOAuth`/`onImport`); `CredentialPage` opens the dialog.
 `AuthTypeBadge` renders Bedrock/Vertex/Azure labels for the list.
 
+The picker cloud cards are **data-driven from the backend templates** (Phase 4):
+`serviceProviders.getCloudProviders()` / `useCloudProviders()` surface templates
+whose `auth_type` is a cloud type; `cloudCredentialSchema.ts` keeps only the
+per-`auth_type` field schema + `buildCloudApiBase`, and `CloudProviderDialog`
+resolves the template by id and the fields by its `auth_type`.
+
 **Not yet done (frontend):** editing an existing cloud provider still opens the
 generic edit form; a cloud-aware edit path (and the masked-secret round-trip)
-plus a signed Test-Connection are the remaining follow-ups. Cloud presets are
-currently defined in `cloudCredentialSchema.ts` rather than seeded from
-`providers.json` (Phase 4).
+plus a signed Test-Connection are the remaining follow-ups.
 
 ### 8.3 Badges + types
 
@@ -318,6 +322,21 @@ Cloud templates also can't fetch a live model list the usual way (no public
 Claude/Gemini IDs, Azure deployments) with `ModelCacheSourceTemplate`
 (`provider/types.go:99`). Quota fetch stays "no public API" like
 `vertexai.go:46`.
+
+**Implemented (Phase 4):** four cloud templates in `providers.json`
+(`aws-bedrock`, `gcp-vertex-claude`, `gcp-vertex-gemini`, `azure-openai`) carry
+`auth_type`, an explicit `api_style`, a `canonical_domain`, and seeded model
+lists (IDs verified against AWS/Google/Anthropic/Microsoft official docs, July
+2026). `ProviderTemplate` gains an `APIStyle` field, and
+`findTemplateByProvider` now matches `canonical_domain` **and** `api_style` — so
+the two Vertex templates (same `aiplatform.googleapis.com` domain) resolve to
+the right model family by the provider's style. `ValidateTemplate` no longer
+requires a base URL for cloud (or OAuth) templates. Since `GetProviderTemplates`
+serializes the full template map, the new fields reach the frontend with no
+schema/codegen change. The computed `api_base` the dialog sends
+(`bedrock-runtime.<region>…`, `<location>-aiplatform.googleapis.com`, the Azure
+endpoint) matches each template's `canonical_domain`, so the model list resolves
+after connect. Covered by `internal/data/cloud_template_test.go`.
 
 ---
 
@@ -359,9 +378,11 @@ Claude/Gemini IDs, Azure deployments) with `ModelCacheSourceTemplate`
    `task codegen`. Validation helper on `CredentialBundle`.
 3. **Frontend:** picker Cloud section, per-cloud form schema, badges, masking
    round-trip, Test Connection, brand icons.
-4. **Templates:** Bedrock/Vertex/Azure entries in `providers.json` with
-   `credential_schema` + seeded model lists.
-5. **Follow-ups:** Azure Entra token; AWS STS/assume-role; non-Claude Bedrock;
+4. **Templates (done):** Bedrock/Vertex-Claude/Vertex-Gemini/Azure entries in
+   `providers.json` with `api_style` + seeded model lists; `api_style`-aware
+   template matching; frontend cloud cards data-driven from these templates.
+5. **Follow-ups:** cloud-aware edit path + masked-secret round-trip; signed
+   Test-Connection; Azure Entra token; AWS STS/assume-role; non-Claude Bedrock;
    encrypt-at-rest for the credential column.
 
 ---
