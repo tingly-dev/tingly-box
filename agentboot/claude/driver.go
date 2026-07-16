@@ -203,6 +203,7 @@ func (d *Driver) buildArgs(
 		MaxTurns:             opts.MaxTurns,
 		CustomSystemPrompt:   opts.CustomSystemPrompt,
 		AppendSystemPrompt:   opts.AppendSystemPrompt,
+		AvailableTools:       opts.AvailableTools,
 		AllowedTools:         opts.AllowedTools,
 		DisallowedTools:      opts.DisallowedTools,
 		MCPServers:           opts.MCPServers,

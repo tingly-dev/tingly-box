@@ -77,6 +77,15 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	execution := agenttask.DefaultExecutionPolicy(req.Agent)
+	if req.Execution != nil {
+		execution = *req.Execution
+		execution.ApplyDefaults(req.Agent, false)
+	}
+	if err := execution.Validate(req.Agent, false); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	taskID := uuid.NewString()
 	workspace, err := agenttask.CreateWorkspace(h.configDir, taskID)
@@ -85,7 +94,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	payload := agenttask.Payload{
-		Version:        1,
+		Version:        2,
 		Title:          strings.TrimSpace(req.Title),
 		Goal:           req.Goal,
 		Agent:          req.Agent,
@@ -93,6 +102,7 @@ func (h *Handler) Create(c *gin.Context) {
 		FollowUp:       req.FollowUp,
 		TimeoutSeconds: req.TimeoutSeconds,
 		Steps:          steps,
+		Execution:      execution,
 	}
 	payload.ApplyDefaults()
 	payloadJSON, err := json.Marshal(payload)
@@ -145,9 +155,10 @@ func (h *Handler) Wake(c *gin.Context) {
 		writeError(c, coretask.ErrNotFound)
 		return
 	}
-	if instruction := strings.TrimSpace(req.Instruction); instruction != "" {
+	instruction := strings.TrimSpace(req.Instruction)
+	if instruction != "" || req.ExecutionOverride != nil {
 		if task.Status != coretask.StatusNeedsInput && !task.Status.IsTerminal() {
-			c.JSON(http.StatusConflict, gin.H{"error": "instruction can only be sent to a paused or finished task"})
+			c.JSON(http.StatusConflict, gin.H{"error": "instruction or execution override can only be sent to a paused or finished task"})
 			return
 		}
 		var payload agenttask.Payload
@@ -155,7 +166,18 @@ func (h *Handler) Wake(c *gin.Context) {
 			writeError(c, err)
 			return
 		}
-		payload.PendingInput = instruction
+		if instruction != "" {
+			payload.PendingInput = instruction
+		}
+		if req.ExecutionOverride != nil {
+			override := *req.ExecutionOverride
+			override.ApplyDefaults(payload.Agent, false)
+			if err := override.Validate(payload.Agent, false); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			payload.PendingExecution = &override
+		}
 		data, _ := json.Marshal(payload)
 		if err := h.manager.UpdatePayload(ctx, task.ID, data); err != nil {
 			writeError(c, err)
@@ -187,7 +209,17 @@ func (h *Handler) Agents(c *gin.Context) {
 	data := make([]AgentAvailability, 0, 2)
 	for _, kind := range []agenttask.AgentKind{agenttask.AgentClaude, agenttask.AgentCodex} {
 		agent := h.agents[kind]
-		data = append(data, AgentAvailability{Agent: kind, Available: agent != nil && agent.IsAvailable()})
+		item := AgentAvailability{Agent: kind, Available: agent != nil && agent.IsAvailable()}
+		if kind == agenttask.AgentClaude {
+			item.LaunchProfiles = []agenttask.LaunchProfile{agenttask.LaunchClaudePlan, agenttask.LaunchClaudeManual, agenttask.LaunchClaudeEdits}
+			item.DefaultProfile = agenttask.LaunchClaudeEdits
+			item.ToolFiltering = true
+			item.InteractiveControl = true
+		} else {
+			item.LaunchProfiles = []agenttask.LaunchProfile{agenttask.LaunchCodexReadOnly, agenttask.LaunchCodexWorkspace}
+			item.DefaultProfile = agenttask.LaunchCodexWorkspace
+		}
+		data = append(data, item)
 	}
 	c.JSON(http.StatusOK, AgentListResponse{Data: data})
 }
@@ -197,6 +229,7 @@ func toView(task *coretask.Task) (TaskView, error) {
 	if err := json.Unmarshal(task.Payload, &payload); err != nil {
 		return TaskView{}, fmt.Errorf("decode task %s payload: %w", task.ID, err)
 	}
+	payload.ApplyDefaults()
 	view := TaskView{
 		ID: task.ID, Title: payload.Title, Goal: payload.Goal, Agent: payload.Agent,
 		Status: task.Status, Progress: task.Progress, Error: task.Error,
@@ -205,14 +238,25 @@ func toView(task *coretask.Task) (TaskView, error) {
 		ScheduledAt: task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
 		Steps: payload.Steps, CurrentStep: payload.CurrentStep, StepOutcomes: payload.StepOutcomes,
+		Execution: payload.Execution,
 	}
 	if payload.SessionID != "" {
 		workspace := shellQuote(payload.WorkspacePath)
 		sessionID := shellQuote(payload.SessionID)
 		if payload.Agent == agenttask.AgentClaude {
 			view.ResumeCommand = fmt.Sprintf("cd %s && claude --resume %s", workspace, sessionID)
+			if mode := payload.Execution.ClaudePermissionMode(); mode != "" {
+				view.ResumeCommand += " --permission-mode " + shellQuote(mode)
+			}
+			if tools := payload.Execution.ClaudeTools(); len(tools) > 0 {
+				view.ResumeCommand += " --tools " + shellQuote(strings.Join(tools, ","))
+			}
 		} else {
-			view.ResumeCommand = fmt.Sprintf("cd %s && codex exec resume %s", workspace, sessionID)
+			view.ResumeCommand = fmt.Sprintf("cd %s && codex exec", workspace)
+			if sandbox := payload.Execution.CodexSandboxMode(); sandbox != "" {
+				view.ResumeCommand += " -s " + shellQuote(sandbox)
+			}
+			view.ResumeCommand += " resume " + sessionID
 		}
 	}
 	if len(task.Result) > 0 {

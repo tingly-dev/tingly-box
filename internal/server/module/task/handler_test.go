@@ -58,6 +58,9 @@ func TestCreate_GeneratesStableWorkspaceAndTask(t *testing.T) {
 	if view.Status != coretask.StatusPending || view.Agent != agenttask.AgentClaude {
 		t.Fatalf("view = %+v", view)
 	}
+	if view.Execution.LaunchProfile != agenttask.LaunchClaudeEdits {
+		t.Fatalf("execution = %+v", view.Execution)
+	}
 	if !strings.HasPrefix(view.WorkspacePath, wantParent+string(filepath.Separator)) {
 		t.Fatalf("workspace %q is not under %q", view.WorkspacePath, wantParent)
 	}
@@ -77,6 +80,18 @@ func TestCreate_RejectsUnsupportedAgent(t *testing.T) {
 		"agent":"other"
 	}`)
 	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestCreate_RejectsUnsupportedExecutionPolicy(t *testing.T) {
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
+		"goal":"Do work",
+		"agent":"codex",
+		"execution":{"launch_profile":"workspace_write","tools":["terminal"]}
+	}`)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "does not support per-task tool filtering") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
@@ -154,6 +169,41 @@ func TestWake_WithInstructionResumesPausedTask(t *testing.T) {
 	}
 }
 
+func TestWake_AcceptsOneRunExecutionOverride(t *testing.T) {
+	store := coretask.NewMemoryStore()
+	manager := coretask.NewManager(store)
+	payload, _ := json.Marshal(agenttask.Payload{
+		Version: 2, Goal: "Inspect", Agent: agenttask.AgentClaude,
+		WorkspacePath: t.TempDir(), Execution: agenttask.DefaultExecutionPolicy(agenttask.AgentClaude),
+	})
+	task, err := manager.Submit(context.Background(), coretask.SubmitRequest{Type: agenttask.TaskType, Payload: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(context.Background(), task.ID, map[string]interface{}{"status": string(coretask.StatusNeedsInput)}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(manager, t.TempDir(), nil)
+	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks/"+task.ID+"/wake", `{
+		"execution_override":{"launch_profile":"plan","tools":["files_read"]}
+	}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	updated, err := manager.Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got agenttask.Payload
+	if err := json.Unmarshal(updated.Payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.PendingExecution == nil || got.PendingExecution.LaunchProfile != agenttask.LaunchClaudePlan {
+		t.Fatalf("payload = %+v", got)
+	}
+}
+
 func TestToView_ResumeCommandStartsInWorkspace(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -189,6 +239,45 @@ func TestToView_ResumeCommandStartsInWorkspace(t *testing.T) {
 			}
 			if view.ResumeCommand != tt.want {
 				t.Fatalf("resume command = %q, want %q", view.ResumeCommand, tt.want)
+			}
+		})
+	}
+}
+
+func TestToView_ResumeCommandIncludesExecutionPolicy(t *testing.T) {
+	tests := []struct {
+		name     string
+		payload  agenttask.Payload
+		contains []string
+	}{
+		{
+			name: "Claude tools and permission mode",
+			payload: agenttask.Payload{
+				Version: 2, Goal: "Work", Agent: agenttask.AgentClaude, WorkspacePath: "/tmp/task", SessionID: "session-1",
+				Execution: agenttask.ExecutionPolicy{LaunchProfile: agenttask.LaunchClaudeManual, Tools: []agenttask.ToolCapability{agenttask.ToolFilesRead, agenttask.ToolTerminal}},
+			},
+			contains: []string{"--permission-mode 'manual'", "--tools 'Read,Glob,Grep,Bash'"},
+		},
+		{
+			name: "Codex sandbox",
+			payload: agenttask.Payload{
+				Version: 2, Goal: "Inspect", Agent: agenttask.AgentCodex, WorkspacePath: "/tmp/task", SessionID: "thread-1",
+				Execution: agenttask.ExecutionPolicy{LaunchProfile: agenttask.LaunchCodexReadOnly},
+			},
+			contains: []string{"codex exec -s 'read-only' resume 'thread-1'"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, _ := json.Marshal(tt.payload)
+			view, err := toView(&coretask.Task{ID: "task-1", Payload: data})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, value := range tt.contains {
+				if !strings.Contains(view.ResumeCommand, value) {
+					t.Fatalf("resume command %q does not contain %q", view.ResumeCommand, value)
+				}
 			}
 		})
 	}

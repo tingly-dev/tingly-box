@@ -79,7 +79,9 @@ type ExecutionOptions struct {
 	// Execution control
 	MaxTurns int
 
-	// Tool filtering (per-execution override)
+	// Tool filtering (per-execution override). AvailableTools controls which
+	// built-in tools the agent can see; AllowedTools is an approval allow-list.
+	AvailableTools  []string
 	AllowedTools    []string
 	DisallowedTools []string
 
@@ -93,6 +95,8 @@ type ExecutionOptions struct {
 
 	// Permission mode (per-execution override)
 	PermissionMode string
+	// SandboxMode is an agent-specific per-execution sandbox override.
+	SandboxMode string
 
 	// Settings path (per-execution override)
 	SettingsPath string

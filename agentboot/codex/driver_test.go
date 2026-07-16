@@ -76,3 +76,30 @@ func TestDriverPrepare_RejectsSelectedNewThreadID(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestDriverPrepare_PerRunSandboxOverride(t *testing.T) {
+	driver := NewDriver(DefaultConfig())
+	spec, err := driver.Prepare(context.Background(), "inspect", agentboot.ExecutionOptions{
+		ProjectPath:  t.TempDir(),
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+		SandboxMode:  "read-only",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(spec.Command, `sandbox_mode="read-only"`) {
+		t.Fatalf("command = %q", spec.Command)
+	}
+}
+
+func TestDriverPrepare_RejectsUnsafeSandboxOverride(t *testing.T) {
+	driver := NewDriver(DefaultConfig())
+	_, err := driver.Prepare(context.Background(), "work", agentboot.ExecutionOptions{
+		ProjectPath:  t.TempDir(),
+		OutputFormat: agentboot.OutputFormatStreamJSON,
+		SandboxMode:  "danger-full-access",
+	})
+	if err == nil || !strings.Contains(err.Error(), "unsupported task sandbox mode") {
+		t.Fatalf("error = %v", err)
+	}
+}

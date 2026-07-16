@@ -88,6 +88,13 @@ func (d *Driver) Prepare(_ context.Context, prompt string, opts agentboot.Execut
 	if !info.IsDir() {
 		return nil, fmt.Errorf("codex: project path is not a directory")
 	}
+	sandboxMode := config.SandboxMode
+	if opts.SandboxMode != "" {
+		if opts.SandboxMode != "read-only" && opts.SandboxMode != "workspace-write" {
+			return nil, fmt.Errorf("codex: unsupported task sandbox mode %q", opts.SandboxMode)
+		}
+		sandboxMode = opts.SandboxMode
+	}
 
 	prompt = composePrompt(prompt, opts.CustomSystemPrompt, opts.AppendSystemPrompt)
 	args := []string{"exec"}
@@ -99,7 +106,7 @@ func (d *Driver) Prepare(_ context.Context, prompt string, opts agentboot.Execut
 	}
 	args = append(args,
 		"-c", "approval_policy="+strconv.Quote(config.ApprovalPolicy),
-		"-c", "sandbox_mode="+strconv.Quote(config.SandboxMode),
+		"-c", "sandbox_mode="+strconv.Quote(sandboxMode),
 		"--json",
 	)
 	if config.SkipGitRepoCheck {

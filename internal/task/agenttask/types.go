@@ -27,6 +27,145 @@ func (k AgentKind) IsValid() bool {
 	return k == AgentClaude || k == AgentCodex
 }
 
+type LaunchProfile string
+
+const (
+	LaunchLegacyInherited LaunchProfile = "legacy_inherited"
+	LaunchClaudePlan      LaunchProfile = "plan"
+	LaunchClaudeManual    LaunchProfile = "manual"
+	LaunchClaudeEdits     LaunchProfile = "accept_edits"
+	LaunchCodexReadOnly   LaunchProfile = "read_only"
+	LaunchCodexWorkspace  LaunchProfile = "workspace_write"
+)
+
+type ToolCapability string
+
+const (
+	ToolFilesRead  ToolCapability = "files_read"
+	ToolFilesWrite ToolCapability = "files_write"
+	ToolTerminal   ToolCapability = "terminal"
+	ToolWeb        ToolCapability = "web"
+)
+
+type ExecutionPolicy struct {
+	LaunchProfile LaunchProfile    `json:"launch_profile"`
+	Tools         []ToolCapability `json:"tools,omitempty"`
+}
+
+func DefaultExecutionPolicy(agent AgentKind) ExecutionPolicy {
+	switch agent {
+	case AgentClaude:
+		return ExecutionPolicy{
+			LaunchProfile: LaunchClaudeEdits,
+			Tools:         []ToolCapability{ToolFilesRead, ToolFilesWrite, ToolTerminal},
+		}
+	case AgentCodex:
+		return ExecutionPolicy{LaunchProfile: LaunchCodexWorkspace}
+	default:
+		return ExecutionPolicy{}
+	}
+}
+
+func (p *ExecutionPolicy) ApplyDefaults(agent AgentKind, legacy bool) {
+	if p.LaunchProfile == "" {
+		if legacy {
+			p.LaunchProfile = LaunchLegacyInherited
+		} else {
+			*p = DefaultExecutionPolicy(agent)
+		}
+	}
+	if p.Tools == nil && agent == AgentClaude && p.LaunchProfile != LaunchLegacyInherited {
+		if p.LaunchProfile == LaunchClaudePlan {
+			p.Tools = []ToolCapability{ToolFilesRead}
+		} else {
+			p.Tools = []ToolCapability{ToolFilesRead, ToolFilesWrite, ToolTerminal}
+		}
+	}
+}
+
+func (p ExecutionPolicy) Validate(agent AgentKind, allowLegacy bool) error {
+	if p.LaunchProfile == LaunchLegacyInherited {
+		if allowLegacy {
+			return nil
+		}
+		return errors.New("legacy_inherited cannot be selected for a new run")
+	}
+	switch agent {
+	case AgentClaude:
+		switch p.LaunchProfile {
+		case LaunchClaudePlan, LaunchClaudeManual, LaunchClaudeEdits:
+		default:
+			return fmt.Errorf("unsupported Claude launch profile %q", p.LaunchProfile)
+		}
+		if len(p.Tools) == 0 {
+			return errors.New("Claude execution requires at least one tool capability")
+		}
+		seen := make(map[ToolCapability]struct{}, len(p.Tools))
+		for _, tool := range p.Tools {
+			switch tool {
+			case ToolFilesRead, ToolFilesWrite, ToolTerminal, ToolWeb:
+			default:
+				return fmt.Errorf("unsupported tool capability %q", tool)
+			}
+			if _, exists := seen[tool]; exists {
+				return fmt.Errorf("duplicate tool capability %q", tool)
+			}
+			seen[tool] = struct{}{}
+		}
+	case AgentCodex:
+		if p.LaunchProfile != LaunchCodexReadOnly && p.LaunchProfile != LaunchCodexWorkspace {
+			return fmt.Errorf("unsupported Codex launch profile %q", p.LaunchProfile)
+		}
+		if len(p.Tools) != 0 {
+			return errors.New("Codex does not support per-task tool filtering")
+		}
+	default:
+		return fmt.Errorf("unsupported agent %q", agent)
+	}
+	return nil
+}
+
+func (p ExecutionPolicy) ClaudePermissionMode() string {
+	switch p.LaunchProfile {
+	case LaunchClaudePlan:
+		return "plan"
+	case LaunchClaudeManual:
+		return "manual"
+	case LaunchClaudeEdits:
+		return "acceptEdits"
+	default:
+		return ""
+	}
+}
+
+func (p ExecutionPolicy) ClaudeTools() []string {
+	var tools []string
+	for _, capability := range p.Tools {
+		switch capability {
+		case ToolFilesRead:
+			tools = append(tools, "Read", "Glob", "Grep")
+		case ToolFilesWrite:
+			tools = append(tools, "Write", "Edit")
+		case ToolTerminal:
+			tools = append(tools, "Bash")
+		case ToolWeb:
+			tools = append(tools, "WebSearch", "WebFetch")
+		}
+	}
+	return tools
+}
+
+func (p ExecutionPolicy) CodexSandboxMode() string {
+	switch p.LaunchProfile {
+	case LaunchCodexReadOnly:
+		return "read-only"
+	case LaunchCodexWorkspace:
+		return "workspace-write"
+	default:
+		return ""
+	}
+}
+
 type FollowUpPolicy struct {
 	Enabled      bool `json:"enabled"`
 	DelaySeconds int  `json:"delay_seconds"`
@@ -46,24 +185,31 @@ type StepOutcome struct {
 }
 
 type Payload struct {
-	Version        int            `json:"version"`
-	Title          string         `json:"title"`
-	Goal           string         `json:"goal"`
-	Agent          AgentKind      `json:"agent"`
-	WorkspacePath  string         `json:"workspace_path"`
-	SessionID      string         `json:"session_id,omitempty"`
-	PendingInput   string         `json:"pending_input,omitempty"`
-	FollowUp       FollowUpPolicy `json:"follow_up"`
-	WakeCount      int            `json:"wake_count"`
-	TimeoutSeconds int            `json:"timeout_seconds"`
-	Steps          []Step         `json:"steps,omitempty"`
-	CurrentStep    int            `json:"current_step,omitempty"`
-	StepOutcomes   []StepOutcome  `json:"step_outcomes,omitempty"`
+	Version          int              `json:"version"`
+	Title            string           `json:"title"`
+	Goal             string           `json:"goal"`
+	Agent            AgentKind        `json:"agent"`
+	WorkspacePath    string           `json:"workspace_path"`
+	SessionID        string           `json:"session_id,omitempty"`
+	PendingInput     string           `json:"pending_input,omitempty"`
+	FollowUp         FollowUpPolicy   `json:"follow_up"`
+	WakeCount        int              `json:"wake_count"`
+	TimeoutSeconds   int              `json:"timeout_seconds"`
+	Execution        ExecutionPolicy  `json:"execution"`
+	PendingExecution *ExecutionPolicy `json:"pending_execution,omitempty"`
+	Steps            []Step           `json:"steps,omitempty"`
+	CurrentStep      int              `json:"current_step,omitempty"`
+	StepOutcomes     []StepOutcome    `json:"step_outcomes,omitempty"`
 }
 
 func (p *Payload) ApplyDefaults() {
+	legacy := p.Version == 1
 	if p.Version == 0 {
-		p.Version = 1
+		p.Version = 2
+	}
+	p.Execution.ApplyDefaults(p.Agent, legacy)
+	if p.PendingExecution != nil {
+		p.PendingExecution.ApplyDefaults(p.Agent, false)
 	}
 	if p.FollowUp.DelaySeconds <= 0 {
 		p.FollowUp.DelaySeconds = DefaultFollowUpDelaySeconds
@@ -77,7 +223,7 @@ func (p *Payload) ApplyDefaults() {
 }
 
 func (p Payload) Validate() error {
-	if p.Version != 1 {
+	if p.Version != 1 && p.Version != 2 {
 		return fmt.Errorf("unsupported payload version %d", p.Version)
 	}
 	if strings.TrimSpace(p.Goal) == "" {
@@ -88,6 +234,14 @@ func (p Payload) Validate() error {
 	}
 	if strings.TrimSpace(p.WorkspacePath) == "" {
 		return errors.New("workspace_path is required")
+	}
+	if err := p.Execution.Validate(p.Agent, true); err != nil {
+		return fmt.Errorf("invalid execution policy: %w", err)
+	}
+	if p.PendingExecution != nil {
+		if err := p.PendingExecution.Validate(p.Agent, false); err != nil {
+			return fmt.Errorf("invalid pending execution policy: %w", err)
+		}
 	}
 	if p.WakeCount < 0 {
 		return errors.New("wake_count cannot be negative")

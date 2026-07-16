@@ -136,6 +136,9 @@ func TestHandler_ClaudeDoneCreatesSession(t *testing.T) {
 		if opts.ProjectPath != workspace || !strings.Contains(opts.AppendSystemPrompt, outcomeOpenTag) {
 			t.Fatalf("execution options not wired: %+v", opts)
 		}
+		if opts.PermissionMode != "acceptEdits" || len(opts.AvailableTools) != 6 || opts.AvailableTools[5] != "Bash" {
+			t.Fatalf("execution policy not wired: %+v", opts)
+		}
 		output := `finished
 <task_outcome>{"state":"done","summary":"all good","artifacts":["report.md","../secret","/etc/passwd"]}</task_outcome>`
 		return controlledHandle(nil, &agentboot.Result{Format: agentboot.OutputFormatText, Output: output}, nil, nil), nil
@@ -230,6 +233,9 @@ func TestHandler_CodexCheckpointsThreadStarted(t *testing.T) {
 	agent.execute = func(_ context.Context, _ string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
 		if opts.SessionID != "" || opts.Resume {
 			t.Fatalf("new Codex thread must not preselect an id: %+v", opts)
+		}
+		if opts.SandboxMode != "workspace-write" {
+			t.Fatalf("Codex sandbox = %q", opts.SandboxMode)
 		}
 		events := []agentboot.StreamEvent{
 			agentboot.MessageEvent{Raw: fakeSessionMessage("thread-1")},

@@ -74,6 +74,10 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 
 	resume := payload.SessionID != ""
 	sessionID := payload.SessionID
+	execution := payload.Execution
+	if payload.PendingExecution != nil {
+		execution = *payload.PendingExecution
+	}
 	if payload.Agent == AgentClaude && !resume {
 		sessionID = uuid.NewString()
 	}
@@ -97,6 +101,9 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		Resume:               resume,
 		AppendSystemPrompt:   outcomeSystemAppendix,
 		PermissionPromptTool: "stdio",
+		AvailableTools:       execution.ClaudeTools(),
+		PermissionMode:       execution.ClaudePermissionMode(),
+		SandboxMode:          execution.CodexSandboxMode(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("agent task: start %s: %w", payload.Agent, err)
@@ -109,6 +116,10 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	}
 	if payload.PendingInput != "" {
 		payload.PendingInput = ""
+		checkpointAfterStart = true
+	}
+	if payload.PendingExecution != nil {
+		payload.PendingExecution = nil
 		checkpointAfterStart = true
 	}
 	if checkpointAfterStart {
