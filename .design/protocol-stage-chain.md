@@ -26,7 +26,7 @@ lifecycle before the provider is called.
 | 1 — Endpoint/Stage foundation | Complete | Contracts, ordering, stream ownership, and per-call state |
 | 2 — Bridges and production routes | Complete for planned protocol surface | Twelve opt-in routes listed below |
 | 3 — Guardrails canary | Complete for all four supported ingress protocols | Request, complete response, and stream events; Beta, Chat, and Responses targets |
-| 3b — Request recording rollout | Complete for all twelve Stage routes and failover | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; Stage-compatible services, no MCP |
+| 3b — Request recording rollout | Complete for Stage routes, failover, and MCP multi-round calls | Original input, ordered provider exchanges, and final complete/stream response through the existing sink; persisted MCP matrix covers all 26 route/mode cases |
 | 4 — Tool Loop canary | Active behind `--stage` | Exact source→Beta→provider topology, complete/stream Tool Loop, V1 request promotion, tool-result-correlated mixed continuation, recording, and dispatch-aware failover |
 | 5 — Opt-in handler integration | Active | Existing handlers may select Stage only from the immutable `--stage` startup choice; default traffic remains legacy |
 | 6 — Legacy removal | Not started | No legacy feature path has been removed |

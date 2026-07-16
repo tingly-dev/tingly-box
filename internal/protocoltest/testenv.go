@@ -271,6 +271,16 @@ func (env *TestEnv) VirtualURL() string { return env.virtual.URL() }
 // VirtualCallCount returns the number of requests received by the virtual server.
 func (env *TestEnv) VirtualCallCount() int { return env.virtual.CallCount() }
 
+// ForceFlushRecordings waits until the real gateway has exported every queued
+// recording artifact. It is safe to call repeatedly while the harness server
+// remains active, allowing each matrix case to verify its own persisted record.
+func (env *TestEnv) ForceFlushRecordings(ctx context.Context) error {
+	if env == nil || env.rootServer == nil {
+		return nil
+	}
+	return env.rootServer.ForceFlushRecordings(ctx)
+}
+
 // SetupRoute configures a gateway rule that routes source protocol requests
 // to the virtual server acting as a target protocol provider.
 //

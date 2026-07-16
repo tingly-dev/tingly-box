@@ -73,6 +73,9 @@ func (*MatrixCmd) Help() string {
   # Exercise every production Stage route with a server-owned MCP tool loop
   harness matrix --mode=single --stage --mcp --scenario=mcp_owned_tool
 
+  # Persist and automatically validate RequestRecord boundaries for every MCP round
+  harness matrix --mode=single --stage --mcp --scenario=mcp_owned_tool --record-dir=/tmp/tingly-mcp-records
+
   # Exercise the opt-in Beta identity RequestRecord canary and retain artifacts
   harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta --record-dir=/tmp/tingly-records
 
@@ -253,6 +256,9 @@ func (m *MatrixCmd) Run() error {
 		}
 	} else {
 		printTable(results, verbose)
+		if m.RecordDir != "" && m.StageEnabled && m.MCPEnabled && contains(m.Scenarios, protocoltest.MCPStageOwnedToolScenarioName) {
+			fmt.Printf("\n📼 RequestRecord artifacts verified: %d case(s) in %s\n", executed, m.RecordDir)
+		}
 	}
 
 	// Determine exit code

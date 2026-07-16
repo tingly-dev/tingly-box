@@ -427,7 +427,9 @@ Implemented and committed:
   provider-scoped continuation, Guardrail ordering, and provider observation;
 - failover suppression after server-tool runtime dispatch, including runtime
   errors whose external side effects may already have happened;
-- real HTTP complete/stream V1→Beta MCP canary through `harness matrix`.
+- real HTTP complete/stream V1→Beta MCP canary through `harness matrix`;
+- persisted real-HTTP RequestRecord validation across all 26 owned-tool route
+  cases, proving original input, two provider exchanges, and final output;
 - real HTTP owned-tool fixture, driven by raw HTTP plus the official Anthropic
   and OpenAI Go SDKs, proving provider round 1 → local execution → provider
   round 2 → final response across all four ingress protocols;
