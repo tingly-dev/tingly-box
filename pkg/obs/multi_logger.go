@@ -126,13 +126,13 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 		JSONMaxBackups: 3,
 		JSONMaxAge:     7,
 
-		// Default memory sink sizes - reduced to limit memory usage
+		// Default memory sink sizes - kept small to limit memory usage
 		MemorySinkConfig: map[LogSource]MemorySinkConfig{
-			LogSourceHTTP:         {MaxEntries: 50}, // HTTP requests: high volume, reduced from 1000
-			LogSourceSystem:       {MaxEntries: 50}, // System logs: medium volume, reduced from 500
-			LogSourceAction:       {MaxEntries: 50}, // User actions: low volume, reduced from 100
-			LogSourceSmartRouting: {MaxEntries: 50}, // Smart routing evaluations: per-request, reduced from 500
-			LogSourceModelRequest: {MaxEntries: 50}, // Model request stages: reduced from 1000
+			LogSourceHTTP:         {MaxEntries: defaultMemorySinkEntries},
+			LogSourceSystem:       {MaxEntries: defaultMemorySinkEntries},
+			LogSourceAction:       {MaxEntries: defaultMemorySinkEntries},
+			LogSourceSmartRouting: {MaxEntries: defaultMemorySinkEntries},
+			LogSourceModelRequest: {MaxEntries: defaultMemorySinkEntries},
 		},
 	}
 }
@@ -239,9 +239,8 @@ func (m *MultiLogger) GetMemorySink(source LogSource) *MemoryLogHook {
 		return sink
 	}
 
-	// Create with default size based on source
-	defaultSize := m.getDefaultMemorySinkSize(source)
-	return m.getOrCreateMemorySink(source, defaultSize)
+	// Create with the default size
+	return m.getOrCreateMemorySink(source, defaultMemorySinkEntries)
 }
 
 // getOrCreateMemorySink creates or returns an existing memory sink
@@ -259,23 +258,11 @@ func (m *MultiLogger) getOrCreateMemorySink(source LogSource, maxEntries int) *M
 	return sink
 }
 
-// getDefaultMemorySinkSize returns the default memory sink size for a source
-func (m *MultiLogger) getDefaultMemorySinkSize(source LogSource) int {
-	switch source {
-	case LogSourceHTTP:
-		return 1000
-	case LogSourceSystem:
-		return 500
-	case LogSourceAction:
-		return 100
-	case LogSourceSmartRouting:
-		return 500
-	case LogSourceModelRequest:
-		return 1000
-	default:
-		return 100
-	}
-}
+// defaultMemorySinkEntries is the per-source memory sink capacity. Entries can
+// retain multi-KB field payloads, so this is kept deliberately small to bound
+// memory usage; it is the single source of truth for both the default config
+// and lazily created sinks.
+const defaultMemorySinkEntries = 50
 
 // SetLevel sets the minimum log level for all loggers
 func (m *MultiLogger) SetLevel(level logrus.Level) {
@@ -312,10 +299,16 @@ func (m *MultiLogger) Write(p []byte) (n int, err error) {
 
 // WriteEntry writes a structured log entry to the JSON log and memory sink
 func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
+	// Snapshot the level and drop the lock before any marshaling or I/O:
+	// the JSON logger (lumberjack) and the memory sinks are internally
+	// synchronized, so holding m.mu across them would only serialize the
+	// hot logging path against itself.
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	level := m.level
+	jsonLogger := m.jsonLogger
+	m.mu.RUnlock()
 
-	if entry.Level > m.level {
+	if entry.Level > level {
 		return nil
 	}
 
@@ -366,7 +359,7 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 	}
 
 	// Write to JSON log
-	if _, err := m.jsonLogger.Write(append(jsonData, '\n')); err != nil {
+	if _, err := jsonLogger.Write(append(jsonData, '\n')); err != nil {
 		return fmt.Errorf("failed to write to JSON log: %w", err)
 	}
 

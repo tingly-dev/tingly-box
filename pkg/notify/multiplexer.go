@@ -79,12 +79,16 @@ func (m *Multiplexer) Send(ctx context.Context, notification *Notification) ([]*
 		go func(idx int, provider Provider, config *ProviderConfig) {
 			defer wg.Done()
 			result, err := m.sendWithRetry(ctx, provider, config, notification)
-			if err != nil {
+			// Never store a nil result: the error check below dereferences
+			// every entry, and providers may return (nil, err) or even (nil, nil).
+			if result == nil {
 				result = &Result{
 					Provider: provider.Name(),
 					Success:  false,
 					Error:    err,
 				}
+			} else if err != nil && result.Error == nil {
+				result.Error = err
 			}
 			results[idx] = result
 		}(i, p, configs[i])
@@ -215,6 +219,10 @@ func (m *Multiplexer) AddProviderWithConfig(provider Provider, config *ProviderC
 
 	if config == nil {
 		config = &ProviderConfig{Timeout: 30 * time.Second}
+	} else {
+		// Copy so later mutations by the caller can't race with in-flight sends.
+		cfg := *config
+		config = &cfg
 	}
 	if config.Name == "" {
 		config.Name = name

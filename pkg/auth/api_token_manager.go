@@ -16,15 +16,14 @@ type APITokenClaims struct {
 
 // APITokenManager handles JWT token generation and validation for multi-tenant API tokens
 type APITokenManager struct {
-	secretKey     []byte
-	signingMethod string // Store as string to avoid type issues
-	issuer        string
+	secretKey []byte
+	issuer    string
 }
 
 // APITokenManagerConfig holds configuration for APITokenManager
 type APITokenManagerConfig struct {
 	SecretKey     string
-	SigningMethod string // "HS256" or "RS256"
+	SigningMethod string // Only "HS256" is supported (default)
 	Issuer        string // Default: "tingly-box"
 }
 
@@ -34,13 +33,10 @@ func NewAPITokenManager(config APITokenManagerConfig) (*APITokenManager, error) 
 		return nil, fmt.Errorf("secret key cannot be empty")
 	}
 
-	// Validate signing method
-	signingMethod := config.SigningMethod
-	if signingMethod == "" {
-		signingMethod = "HS256"
-	}
-	if signingMethod != "HS256" && signingMethod != "RS256" {
-		return nil, fmt.Errorf("unsupported signing method: %s (must be HS256 or RS256)", signingMethod)
+	// Validate signing method. Only HS256 is supported: the manager holds a
+	// shared secret, which asymmetric methods like RS256 cannot sign with.
+	if config.SigningMethod != "" && config.SigningMethod != "HS256" {
+		return nil, fmt.Errorf("unsupported signing method: %s (must be HS256)", config.SigningMethod)
 	}
 
 	// Default issuer
@@ -50,20 +46,9 @@ func NewAPITokenManager(config APITokenManagerConfig) (*APITokenManager, error) 
 	}
 
 	return &APITokenManager{
-		secretKey:     []byte(config.SecretKey),
-		signingMethod: signingMethod,
-		issuer:        issuer,
+		secretKey: []byte(config.SecretKey),
+		issuer:    issuer,
 	}, nil
-}
-
-// getSigningMethod returns the jwt.SigningMethod based on the algorithm string
-func (m *APITokenManager) getSigningMethod() jwt.SigningMethod {
-	switch m.signingMethod {
-	case "RS256":
-		return jwt.SigningMethodRS256
-	default:
-		return jwt.SigningMethodHS256
-	}
 }
 
 // GenerateToken generates a JWT token for a user
@@ -88,7 +73,7 @@ func (m *APITokenManager) GenerateToken(userUUID, tokenID string, expiresAt time
 		},
 	}
 
-	token := jwt.NewWithClaims(m.getSigningMethod(), claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(m.secretKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
@@ -99,11 +84,9 @@ func (m *APITokenManager) GenerateToken(userUUID, tokenID string, expiresAt time
 
 // ValidateToken validates a JWT token and returns claims
 func (m *APITokenManager) ValidateToken(tokenString string) (*APITokenClaims, error) {
-	expectedMethod := m.getSigningMethod()
-
 	token, err := jwt.ParseWithClaims(tokenString, &APITokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Verify signing method
-		if token.Method.Alg() != expectedMethod.Alg() {
+		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return m.secretKey, nil

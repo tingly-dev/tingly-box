@@ -37,12 +37,6 @@ import (
 	"time"
 )
 
-// Model is the interface that all models must implement.
-// Use a pointer to your model type as the type parameter.
-type Model interface {
-	any // Allows any type as a model
-}
-
 // StoreData represents the JSON file structure.
 // Version allows for future schema migrations.
 type StoreData[T any] struct {
@@ -154,7 +148,12 @@ func (s *Store[T]) load() error {
 func (s *Store[T]) save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveLocked()
+}
 
+// saveLocked writes the current data to disk atomically.
+// Caller must hold s.mu.
+func (s *Store[T]) saveLocked() error {
 	if !s.dirty {
 		return nil // No changes to save
 	}
@@ -190,7 +189,7 @@ func (s *Store[T]) Close() error {
 	return s.save()
 }
 
-// Get retrieves a value by key. Returns the value and true if found, nil and false otherwise.
+// Get retrieves a value by key. Returns nil if the key is not found.
 func (s *Store[T]) Get(key string) *T {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -312,6 +311,10 @@ func (s *Store[T]) Clear() error {
 // Update updates a value using the provided function.
 // The function receives the current value (or nil if not found) and returns the new value.
 // If the function returns nil, the key is deleted.
+//
+// fn runs while the store's write lock is held so the read-modify-write is
+// atomic. It MUST NOT call back into this store (Get, Set, Update, ...) —
+// the lock is not reentrant and doing so deadlocks.
 func (s *Store[T]) Update(key string, fn func(*T) *T) error {
 	if fn == nil {
 		return fmt.Errorf("update function is required")
@@ -356,7 +359,7 @@ func (s *Store[T]) GetUpdated() time.Time {
 // ForceSave saves the data even if not marked as dirty.
 func (s *Store[T]) ForceSave() error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.dirty = true
-	s.mu.Unlock()
-	return s.save()
+	return s.saveLocked()
 }

@@ -42,7 +42,7 @@ func main() {
 			IconEmoji: ":robot_face:",
 		}),
 		&notify.ProviderConfig{
-			RetryCount: 3,       // Retry up to 3 times
+			RetryCount: 3,               // Retry up to 3 times
 			RetryDelay: 2 * time.Second, // Wait 2 seconds between retries
 			Timeout:    30 * time.Second,
 		},
@@ -83,14 +83,14 @@ func main() {
 	// Example 2: Warning notification
 	fmt.Println("\nSending warning notification...")
 	results, err = notifier.Send(ctx, &notify.Notification{
-		Title:   "High Memory Usage",
-		Message: "Server memory usage has exceeded 80% threshold",
-		Level:   notify.LevelWarning,
+		Title:    "High Memory Usage",
+		Message:  "Server memory usage has exceeded 80% threshold",
+		Level:    notify.LevelWarning,
 		Category: "infrastructure",
-		Tags:    []string{"memory", "alert"},
+		Tags:     []string{"memory", "alert"},
 		Metadata: map[string]interface{}{
-			"server":   "prod-web-01",
-			"usage":    "85%",
+			"server":    "prod-web-01",
+			"usage":     "85%",
 			"threshold": "80%",
 		},
 	})
@@ -99,11 +99,11 @@ func main() {
 	// Example 3: Critical error with links
 	fmt.Println("\nSending critical notification...")
 	results, err = notifier.Send(ctx, &notify.Notification{
-		Title:   "Database Connection Failed",
-		Message: "Unable to connect to primary database. Failover initiated.",
-		Level:   notify.LevelCritical,
+		Title:    "Database Connection Failed",
+		Message:  "Unable to connect to primary database. Failover initiated.",
+		Level:    notify.LevelCritical,
 		Category: "database",
-		Tags:    []string{"critical", "outage"},
+		Tags:     []string{"critical", "outage"},
 		Links: []notify.Link{
 			{Text: "View Dashboard", URL: "https://dashboard.example.com"},
 			{Text: "Runbook", URL: "https://wiki.example.com/db-failover"},
@@ -152,72 +152,3 @@ func printResults(results []*notify.Result, err error) {
 			status, r.Provider, r.Error, r.Latency)
 	}
 }
-
-// Helper function to create a notification builder pattern
-func NewNotification() *NotificationBuilder {
-	return &NotificationBuilder{
-		n: &notify.Notification{
-			Metadata: make(map[string]interface{}),
-		},
-	}
-}
-
-// NotificationBuilder provides a fluent interface for building notifications
-type NotificationBuilder struct {
-	n *notify.Notification
-}
-
-func (b *NotificationBuilder) Title(title string) *NotificationBuilder {
-	b.n.Title = title
-	return b
-}
-
-func (b *NotificationBuilder) Message(message string) *NotificationBuilder {
-	b.n.Message = message
-	return b
-}
-
-func (b *NotificationBuilder) Level(level notify.Level) *NotificationBuilder {
-	b.n.Level = level
-	return b
-}
-
-func (b *NotificationBuilder) Category(category string) *NotificationBuilder {
-	b.n.Category = category
-	return b
-}
-
-func (b *NotificationBuilder) Tags(tags ...string) *NotificationBuilder {
-	b.n.Tags = append(b.n.Tags, tags...)
-	return b
-}
-
-func (b *NotificationBuilder) Metadata(key string, value interface{}) *NotificationBuilder {
-	b.n.Metadata[key] = value
-	return b
-}
-
-func (b *NotificationBuilder) Link(text, url string) *NotificationBuilder {
-	b.n.Links = append(b.n.Links, notify.Link{Text: text, URL: url})
-	return b
-}
-
-func (b *NotificationBuilder) Image(url string) *NotificationBuilder {
-	b.n.ImageURL = url
-	return b
-}
-
-func (b *NotificationBuilder) Build() *notify.Notification {
-	return b.n
-}
-
-// Example usage of builder:
-// notifier.Send(ctx, NewNotification().
-//     Title("Alert").
-//     Message("Something happened").
-//     Level(notify.LevelError).
-//     Category("system").
-//     Tags("alert", "error").
-//     Metadata("server", "prod-1").
-//     Link("Dashboard", "https://dash.example.com").
-//     Build())

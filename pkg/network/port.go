@@ -7,17 +7,10 @@ import (
 	"time"
 )
 
-// IsPortAvailable checks if a port is available for listening
+// IsPortAvailable checks if a port is available for listening on all interfaces
 func IsPortAvailable(port int) bool {
-	address := ":" + strconv.Itoa(port)
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		// Port is not available
-		return false
-	}
-	// Successfully bound to port, now close and report as available
-	listener.Close()
-	return true
+	available, _ := IsPortAvailableWithInfo("", port)
+	return available
 }
 
 // IsPortAvailableWithInfo checks if a port is available and returns detailed info

@@ -2,15 +2,14 @@
 package discord
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/pkg/notify"
+	"github.com/tingly-dev/tingly-box/pkg/notify/internal/httpx"
 )
 
 // Config holds Discord provider configuration
@@ -87,34 +86,19 @@ func (p *Provider) Send(ctx context.Context, notification *notify.Notification) 
 	// Build webhook payload
 	payload := p.buildPayload(notification)
 
-	body, err := json.Marshal(payload)
+	status, body, err := httpx.DoJSON(ctx, p.client, "POST", p.config.WebhookURL, nil, payload, 4<<10)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, err
 	}
-
-	// Send to Discord webhook
-	req, err := http.NewRequestWithContext(ctx, "POST", p.config.WebhookURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
 
 	// Discord returns 204 No Content on success
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var errBody bytes.Buffer
-		_, _ = errBody.ReadFrom(resp.Body)
+	if status < 200 || status >= 300 {
+		sendErr := fmt.Errorf("discord returned status %d: %s", status, body)
 		return &notify.Result{
 			Provider: p.name,
 			Success:  false,
-			Error:    fmt.Errorf("discord returned status %d: %s", resp.StatusCode, errBody.String()),
-		}, fmt.Errorf("discord returned status %d: %s", resp.StatusCode, errBody.String())
+			Error:    sendErr,
+		}, sendErr
 	}
 
 	return &notify.Result{
@@ -188,25 +172,25 @@ func (p *Provider) buildPayload(notification *notify.Notification) map[string]in
 	payload["embeds"] = []map[string]interface{}{embed}
 
 	// Add links as components (buttons)
-// Discord allows max 5 buttons per action row
-if len(notification.Links) > 0 {
-	components := []map[string]interface{}{}
+	// Discord allows max 5 buttons per action row
+	if len(notification.Links) > 0 {
+		components := []map[string]interface{}{}
 
-	// Split links into rows of 5 buttons each
-	const maxButtonsPerRow = 5
-	for i := 0; i < len(notification.Links); i += maxButtonsPerRow {
-		end := i + maxButtonsPerRow
-		if end > len(notification.Links) {
-			end = len(notification.Links)
+		// Split links into rows of 5 buttons each
+		const maxButtonsPerRow = 5
+		for i := 0; i < len(notification.Links); i += maxButtonsPerRow {
+			end := i + maxButtonsPerRow
+			if end > len(notification.Links) {
+				end = len(notification.Links)
+			}
+			components = append(components, map[string]interface{}{
+				"type":       1, // Action Row
+				"components": p.buildButtons(notification.Links[i:end]),
+			})
 		}
-		components = append(components, map[string]interface{}{
-			"type": 1, // Action Row
-			"components": p.buildButtons(notification.Links[i:end]),
-		})
-	}
 
-	payload["components"] = components
-}
+		payload["components"] = components
+	}
 
 	return payload
 }

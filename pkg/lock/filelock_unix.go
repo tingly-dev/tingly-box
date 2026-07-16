@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"golang.org/x/sys/unix"
 )
@@ -14,7 +15,10 @@ import (
 // globalLockRegistry keeps FileLock references from being garbage collected.
 // On Unix, if the FileLock struct is GC'd, the file descriptor is closed
 // and the flock() lock is released even though the process is still running.
-var globalLockRegistry = make(map[*FileLock]bool)
+var (
+	globalLockRegistryMu sync.Mutex
+	globalLockRegistry   = make(map[*FileLock]bool)
+)
 
 // FileLock manages exclusive file locking for single-instance enforcement.
 // The lock is automatically released when the process dies, even if it crashes.
@@ -57,17 +61,30 @@ func (fl *FileLock) TryLock() error {
 	// Store current PID for stop command
 	fl.pid = os.Getpid()
 	if _, err := fl.file.Seek(0, 0); err != nil {
+		fl.releaseAndClose()
 		return fmt.Errorf("failed to seek lock file: %w", err)
 	}
 	if _, err := fl.file.WriteString(strconv.Itoa(fl.pid) + "\n"); err != nil {
+		fl.releaseAndClose()
 		return fmt.Errorf("failed to write PID to lock file: %w", err)
 	}
 
 	// Register this lock globally to prevent garbage collection
 	// On Unix, if the FileLock is GC'd, the file is closed and lock is released
+	globalLockRegistryMu.Lock()
 	globalLockRegistry[fl] = true
+	globalLockRegistryMu.Unlock()
 
 	return nil
+}
+
+// releaseAndClose drops the flock and closes the file handle, leaving the
+// lock available for the next caller. Used on post-acquire error paths so a
+// failed TryLock never leaks the fd or keeps the lock held.
+func (fl *FileLock) releaseAndClose() {
+	_ = unix.Flock(int(fl.file.Fd()), unix.LOCK_UN)
+	_ = fl.file.Close()
+	fl.file = nil
 }
 
 // Unlock releases the file lock.
@@ -78,7 +95,9 @@ func (fl *FileLock) Unlock() error {
 	}
 
 	// Unregister from global registry
+	globalLockRegistryMu.Lock()
 	delete(globalLockRegistry, fl)
+	globalLockRegistryMu.Unlock()
 
 	// Release the flock
 	_ = unix.Flock(int(fl.file.Fd()), unix.LOCK_UN)
@@ -118,56 +137,8 @@ func (fl *FileLock) IsLocked() bool {
 	return false
 }
 
-// GetLockFilePath returns the lock file path for debugging purposes.
-func (fl *FileLock) GetLockFilePath() string {
-	return fl.lockFile
-}
-
 // GetPID returns the PID stored in the lock file.
 // Returns error if the lock file doesn't exist or contains invalid data.
 func (fl *FileLock) GetPID() (int, error) {
-	data, err := os.ReadFile(fl.lockFile)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read lock file: %w", err)
-	}
-
-	if len(data) == 0 {
-		return 0, fmt.Errorf("lock file is empty")
-	}
-
-	// Find newline and take first line only
-	pidStr := string(data)
-	for i, c := range pidStr {
-		if c == '\n' {
-			pidStr = pidStr[:i]
-			break
-		}
-	}
-
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid PID in lock file: %w", err)
-	}
-
-	return pid, nil
-}
-
-// WritePort records the port the running server is listening on. It is a
-// runtime artifact tied to this lock's lifetime: written after TryLock and
-// removed by Unlock (or RemovePort for a crashed server the stopper cleans up).
-func (fl *FileLock) WritePort(port int) error {
-	return fl.portFile.Write(port)
-}
-
-// ReadPort returns the port recorded by the running server. Callers must gate
-// on IsLocked() and treat any error as "port unknown" (fall back to config).
-func (fl *FileLock) ReadPort() (int, error) {
-	return fl.portFile.Read()
-}
-
-// RemovePort deletes the runtime port file. Unlock already does this for the
-// lock holder; the stop command uses it to clean up after a server that was
-// killed without releasing the lock itself.
-func (fl *FileLock) RemovePort() error {
-	return fl.portFile.Remove()
+	return readPIDFile(fl.lockFile, "lock file")
 }
