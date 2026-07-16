@@ -288,6 +288,17 @@ func (m *taskManager) Stop(_ context.Context) error {
 // It either launches the task immediately (key is free) or marks it queued.
 func (m *taskManager) dispatchTask(ctx context.Context, t *Task) {
 	m.mu.Lock()
+	current, err := m.store.Get(ctx, t.ID)
+	if err != nil {
+		m.mu.Unlock()
+		logrus.WithError(err).WithField("taskID", t.ID).Warn("task: failed to reload before dispatch")
+		return
+	}
+	if current.Status != StatusPending && current.Status != StatusQueued {
+		m.mu.Unlock()
+		return
+	}
+	t = current
 
 	// If the serialization key is held, mark queued and enqueue.
 	if t.SerializationKey != "" && m.registry.isLocked(t.SerializationKey) {

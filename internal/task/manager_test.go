@@ -324,6 +324,33 @@ func TestUpdatePayload_RejectsRunningAndQueuedTasks(t *testing.T) {
 	}
 }
 
+func TestUpdatePayload_BeforeRunUsesLatestDefinition(t *testing.T) {
+	mgr, _ := newManager(t)
+	seen := make(chan string, 1)
+	mustRegister(t, mgr, &funcHandler{
+		typ: "editable",
+		fn: func(_ context.Context, running *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			seen <- string(running.Payload)
+			return &task.TaskResult{}, nil
+		},
+	})
+	start := time.Now().Add(5 * testPoll)
+	created := mustSubmit(t, mgr, task.SubmitRequest{
+		Type: "editable", Payload: json.RawMessage(`{"goal":"old"}`), ScheduledAt: &start,
+	})
+	if err := mgr.UpdatePayload(context.Background(), created.ID, json.RawMessage(`{"goal":"new"}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case payload := <-seen:
+		if payload != `{"goal":"new"}` {
+			t.Fatalf("run payload = %s", payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("task did not run")
+	}
+}
+
 func TestRun_RescheduleRequiresNextRunAt(t *testing.T) {
 	mgr, _ := newManager(t)
 	mustRegister(t, mgr, &funcHandler{
