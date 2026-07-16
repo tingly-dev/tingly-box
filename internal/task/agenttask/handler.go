@@ -200,18 +200,22 @@ func nextPrompt(payload Payload, resume bool) string {
 	if strings.TrimSpace(payload.PendingInput) != "" {
 		if payload.HasCurrentStep() {
 			step := payload.Steps[payload.CurrentStep]
-			return fmt.Sprintf("Overall task goal:\n%s\n\nCurrent step %d of %d — %s\n%s\n\nUser instruction for this step:\n%s\n\nContinue only this step. Do not start later steps.", payload.Goal, payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, payload.PendingInput)
+			return appendRunContext(payload.Goal, fmt.Sprintf("Current step %d of %d — %s\n%s\n\nUser instruction for this step:\n%s\n\nContinue only this step. Do not start later steps.", payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, payload.PendingInput))
 		}
-		return fmt.Sprintf("Task goal:\n%s\n\nAdditional instruction for this run:\n%s\n\nContinue working toward the task goal using this instruction. Report the bounded run outcome when finished.", payload.Goal, payload.PendingInput)
+		return appendRunContext(payload.Goal, fmt.Sprintf("Additional instruction for this run:\n%s\n\nContinue working toward the task goal using this instruction. Report the bounded run outcome when finished.", payload.PendingInput))
 	}
 	if payload.HasCurrentStep() {
 		step := payload.Steps[payload.CurrentStep]
-		return fmt.Sprintf("Overall task goal:\n%s\n\nCurrent step %d of %d — %s\n%s\n\nComplete only this step during this bounded execution. Do not start later steps. Report done when this step is complete.", payload.Goal, payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction)
+		return appendRunContext(payload.Goal, fmt.Sprintf("Current step %d of %d — %s\n%s\n\nComplete only this step during this bounded execution. Do not start later steps. Report done when this step is complete.", payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction))
 	}
 	if resume {
-		return fmt.Sprintf("Task goal:\n%s\n\nContinue working toward this current task goal. Review the session context and current workspace before acting.", payload.Goal)
+		return appendRunContext(payload.Goal, "Continue working toward the task goal. Review the session context and current workspace before acting.")
 	}
 	return payload.Goal
+}
+
+func appendRunContext(goal, context string) string {
+	return goal + "\n\n---\n\nTingly Box run context:\n" + context
 }
 
 type nativeSessionMessage interface {

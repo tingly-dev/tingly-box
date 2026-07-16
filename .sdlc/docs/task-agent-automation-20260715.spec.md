@@ -268,7 +268,7 @@ type FollowUpPolicy struct {
 
 `PendingInput` 成功交给 worker 后清空。
 
-每次 Run 的 user prompt 都显式包含当前 `Goal`，不能只依赖 native session 的历史上下文。无步骤 Task 的 resume prompt 组合为 `Goal + 本次 Instruction（若有）+ continue 边界`；顺序 Task 组合为 `Goal + 当前 Step + 本次 Instruction（若有）+ 不得提前执行后续步骤的边界`。因此编辑 Goal 后，同一个 native session 的下一 Run 会明确收到新 Goal，而不是静默沿用旧主题。
+每次 Run 的 user prompt 都显式包含当前 `Goal`，不能只依赖 native session 的历史上下文。最终 prompt 必须以持久化 Goal 原文开头，`prompt[0:len(goal)] == goal`；TB 不得在 Goal 前增加 label/preamble，也不得重排或改写 Goal 内容。首次无步骤 Run 的 prompt 完全等于 Goal；只有 resume、Step 或本次 Instruction 存在时，才在 Goal 之后追加 TB run context。无步骤 Task 的 resume prompt 组合为 `Goal + 本次 Instruction（若有）+ continue 边界`；顺序 Task 组合为 `Goal + 当前 Step + 本次 Instruction（若有）+ 不得提前执行后续步骤的边界`。
 
 顺序步骤约束：
 
