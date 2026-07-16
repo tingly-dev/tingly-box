@@ -193,6 +193,68 @@ Handler（run 级唯一执行契约，即现有 task.Handler 的演进）:
 - 交互升级（后期）：Handler 声明 `interactive` 能力后，run 内的提问经由
   task scenario 插件走 `channel.Prompt`（§6.4），人答复后续跑。
 
+### 5.1 与 remote / agentboot 的整合：attendance 是一条轴，不是两套栈
+
+**现状是同一段逻辑的三份拷贝**，都在"驱动 agentboot、处理 Ask/Approval、
+归一化结果"：
+
+1. `internal/remote_control/bot` 的 `AgentExecutor`（ClaudeCode/SmartGuide）
+   ——attended：Ask/Approval 经 `IMPrompter` 推到 IM 等人答。
+2. feat/task 的 `agenttask.Handler.consumeEvents`——unattended：**徒手
+   重写了 `agentboot.RunWithPrompter` 的事件循环**，把"拒绝并暂停"内联
+   在 switch 里，而不是实现一个拒绝型 `Prompter`。
+3. `agentboot.RunWithPrompter(handle, prompter, sink)` 本身——规范实现，
+   却只有 remote 侧在用。
+
+而 `remote/channel/autochannel` 早已证明"无人值守"在 channel 层就是一个
+**Policy**（OnPermission: allow/deny，OnQuestion: auto-first/cancel，
+默认全拒）。也就是说：**attended / unattended 不是 task 栈与 remote 栈的
+区别，而是同一次 run 的 attendance 轴上的两个取值，落点是换一个
+Prompter**（ux #4：正交轴分离）。
+
+**目标形态——一次 run 的完整参数化：**
+
+```
+Run = agentboot.Execute(workspace, prompt, agent, ExecutionPolicy, session)
+      × Prompter（attendance 轴）:
+        - attended:    IMPrompter（channel.Prompt → IM，等人）        ← 今日 remote
+        - unattended:  PausingPrompter（按 Policy 拒绝，记录首个
+                       Ask/Approval 为 needs_input/handoff 并取消）   ← 今日 agenttask
+        - escalating:  先投递绑定的 imchannel（带超时），无人应答
+                       回落 pause                                     ← Phase 3，纯组合
+```
+
+落地动作（按依赖序）：
+
+1. **前置**：完成 `.design/smart-guide-on-claude-code.md`（SmartGuide →
+   受限 Claude Code profile）。之后 "executor" 严格 = agentboot AgentType ×
+   ExecutionPolicy，不再有第二个 runtime。
+2. **抽公共 run 核**：`agenttask` 的事件循环删掉，改用
+   `RunWithPrompter` + 一个 ~50 行的 `PausingPrompter`（包 autochannel
+   Policy，记录暂停原因）。remote 侧 `ClaudeCodeExecutor` 与 task 的
+   ClaudeCode Handler 收敛为同一段启动/归一化代码（放 agentboot service
+   层或新的薄 `agentrun` 包——它不是框架，是把三份 ~200 行合成一份）。
+3. **ExecutionPolicy 一种类型**：task 创建时的无人值守边界（tools
+   allowlist / permission mode / sandbox）与 remote 的 per-chat 设置
+   （yolo/verbose 等）是同一个对象的两处来源，统一定义、快照进 TaskRun。
+4. **session 统一**：`remote/session.Manager` 已实现 agentboot 的
+   `session.Store`；task 不再把 session ID 只埋在 payload 里，统一经
+   session.Manager 存取（payload 只留引用）。native handoff、
+   "Take over" 因此与 remote 的会话列表天然互通。
+5. **AgentRouter 反向收敛**（原 Phase 4）：IM 消息不再直接执行，而是
+   创建 trigger=manual、attendance=当前 chat 的 task——IM 交互从此进入
+   统一的 run 历史与成本归因，"单 chat 单执行"限制被引擎的
+   SerializationKey 排队取代。
+
+**反向收益**：整合不只是 task 借 remote 的能力——remote 的交互式会话也
+因此获得 run 历史、成本归因和 board 上的可见性；两个板块共享"最近在
+跑什么"的同一份事实。
+
+**anti-套娃自检**：这里没有新框架、没有新抽象层——Prompter、channel、
+interaction、session.Store 全部已存在；做的唯一一件事是删掉两份重复的
+事件循环和两套 ExecutionPolicy 表达，让 attendance 成为参数。若未来发现
+需要为整合发明新的中间层，回到 §2 的判断句重新审视。
+
 ## 6. 落到现有代码
 
 ### 6.1 复用休眠的 run 引擎（不动内核）
@@ -282,10 +344,15 @@ run 面板内（ux #12）。
    ——做完这一步，三个差异化点（跨 executor、成本可见、远程可达）全部成立。
 2. **Phase 2 — 多步与循环**：steps / when 解释器；repeat（until + max）；
    budget guardrail。
-3. **Phase 3 — 人机回路**：交互升级（run 中途经 IM 提问）；事件 trigger
-   （webhook / IM / gateway 事件）。
+3. **Phase 3 — 人机回路**：交互升级 = 换用 escalating Prompter
+   （§5.1，纯组合，无新机制）；事件 trigger（webhook / IM / gateway 事件）。
 4. **Phase 4 — 入口收敛**：IM AgentRouter 改造为 task 入口（IM 指令 =
-   创建 trigger=manual 的 task），移除单 chat 单执行限制。
+   创建 trigger=manual、attendance=当前 chat 的 task），单 chat 单执行
+   限制由 SerializationKey 排队取代（§5.1 第 5 步）。
+
+横切依赖：§5.1 的整合第 1–2 步（SmartGuide 退役、run 核收敛到
+`RunWithPrompter`）应在 Phase 1 实现 ClaudeCode Handler 时一并完成——
+晚做意味着先再写一份第四拷贝、再删。
 
 ## 9. 明确不做（上限即特性）
 
