@@ -40,6 +40,10 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithDescription("Run now, run again, or run with a one-time instruction"),
 		swagger.WithRequestModel(WakeRequest{}),
 		swagger.WithResponseModel(TaskResponse{}))
+	router.GET("/tasks/:id/usage", handler.Usage,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Aggregated gateway token usage attributed to this task's runs"),
+		swagger.WithResponseModel(TaskUsageResponse{}))
 	router.POST("/tasks/:id/stop", handler.Stop,
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Stop an agent task"))

@@ -13,19 +13,55 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	coretask "github.com/tingly-dev/tingly-box/internal/task"
 	"github.com/tingly-dev/tingly-box/internal/task/agenttask"
 	"github.com/tingly-dev/tingly-box/internal/task/shelltask"
 )
 
+// UsageReader is the slice of the usage store the task board needs for
+// per-task cost attribution. Nil when usage tracking is unavailable.
+type UsageReader interface {
+	GetTaskUsageTotals(taskID string) (*db.TaskUsageTotals, error)
+}
+
 type Handler struct {
 	manager   coretask.Manager
 	configDir string
 	agents    map[agenttask.AgentKind]agentboot.Agent
+	usage     UsageReader
 }
 
-func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent) *Handler {
-	return &Handler{manager: manager, configDir: configDir, agents: agents}
+func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent, usage UsageReader) *Handler {
+	return &Handler{manager: manager, configDir: configDir, agents: agents, usage: usage}
+}
+
+// Usage returns gateway usage attributed to one task's runs.
+func (h *Handler) Usage(c *gin.Context) {
+	ctx := c.Request.Context()
+	task, err := h.manager.Get(ctx, c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if !isBoardTask(task.Type) {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	view := TaskUsageView{TaskID: task.ID}
+	if h.usage != nil {
+		totals, err := h.usage.GetTaskUsageTotals(task.ID)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		view = TaskUsageView{
+			TaskID: task.ID, Requests: totals.Requests,
+			InputTokens: totals.InputTokens, OutputTokens: totals.OutputTokens,
+			CacheInputTokens: totals.CacheInputTokens, TotalTokens: totals.TotalTokens,
+		}
+	}
+	c.JSON(http.StatusOK, TaskUsageResponse{Data: view})
 }
 
 func (h *Handler) List(c *gin.Context) {

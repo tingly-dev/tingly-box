@@ -119,3 +119,12 @@ export interface TaskRun {
   created_at: string;
   updated_at: string;
 }
+
+export interface TaskUsage {
+  task_id: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_input_tokens: number;
+  total_tokens: number;
+}

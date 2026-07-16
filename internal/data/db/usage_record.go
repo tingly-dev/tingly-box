@@ -24,6 +24,11 @@ type UsageRecord struct {
 	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
 	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
 	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
+	// TaskID / RunID attribute gateway traffic to a task-board run. They are
+	// populated from the X-Tingly-Task-Id / X-Tingly-Run-Id request headers
+	// that task executors inject into their agent CLI environment.
+	TaskID       string    `gorm:"column:task_id;index:idx_task"`
+	RunID        string    `gorm:"column:run_id"`
 	RequestModel string    `gorm:"column:request_model"`
 	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
@@ -681,4 +686,30 @@ func rateFloat(numerator, denominator int64) float64 {
 		return 0
 	}
 	return float64(numerator) / float64(denominator)
+}
+
+// TaskUsageTotals aggregates gateway usage attributed to one task.
+type TaskUsageTotals struct {
+	TaskID           string `json:"task_id"`
+	Requests         int64  `json:"requests"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheInputTokens int64  `json:"cache_input_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+}
+
+// GetTaskUsageTotals sums usage records attributed to taskID.
+func (us *UsageStore) GetTaskUsageTotals(taskID string) (*TaskUsageTotals, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+
+	totals := &TaskUsageTotals{TaskID: taskID}
+	err := us.db.Model(&UsageRecord{}).
+		Select("COUNT(*) AS requests, COALESCE(SUM(input_tokens),0) AS input_tokens, COALESCE(SUM(output_tokens),0) AS output_tokens, COALESCE(SUM(cache_input_tokens),0) AS cache_input_tokens, COALESCE(SUM(total_tokens),0) AS total_tokens").
+		Where("task_id = ?", taskID).
+		Scan(totals).Error
+	if err != nil {
+		return nil, err
+	}
+	return totals, nil
 }

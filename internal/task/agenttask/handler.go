@@ -88,6 +88,7 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	}
 
 	prompt := nextPrompt(payload, resume)
+	runCtl, _ := ctl.(task.RunController)
 	var env []string
 	if h.envResolver != nil {
 		resolved, err := h.envResolver(ctx, payload.Agent)
@@ -95,6 +96,16 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 			return nil, fmt.Errorf("agent task: resolve environment: %w", err)
 		}
 		env = resolved
+	}
+	if payload.Agent == AgentClaude {
+		// Attribute this run's gateway traffic to the task/run so usage
+		// tracking can aggregate per-run token cost (design §6.6). The CLI
+		// forwards these on every request via ANTHROPIC_CUSTOM_HEADERS.
+		attribution := "X-Tingly-Task-Id: " + t.ID
+		if runCtl != nil {
+			attribution += "\nX-Tingly-Run-Id: " + runCtl.RunID()
+		}
+		env = append(env, "ANTHROPIC_CUSTOM_HEADERS="+attribution)
 	}
 
 	handle, err := agent.Execute(ctx, prompt, agentboot.ExecutionOptions{
@@ -113,7 +124,6 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	if err != nil {
 		return nil, fmt.Errorf("agent task: start %s: %w", payload.Agent, err)
 	}
-	runCtl, _ := ctl.(task.RunController)
 	appendRuntimeEvent(ctx, runCtl, "run_started", fmt.Sprintf("Started unattended %s run", payload.Agent), eventData(map[string]any{
 		"launch_profile": execution.LaunchProfile, "tools": execution.Tools,
 	}))

@@ -359,6 +359,8 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 		Scenario:     scenario,
 		RequestModel: requestModel,
 		UserID:       GetUserIDFromContext(c), // Uses user_id or enterprise_user_id
+		TaskID:       strings.TrimSpace(c.GetHeader("X-Tingly-Task-Id")),
+		RunID:        strings.TrimSpace(c.GetHeader("X-Tingly-Run-Id")),
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 		TotalTokens:  inputTokens + outputTokens,
@@ -400,6 +402,8 @@ func (s *Server) recordDetailedUsageWithTokenUsage(c *gin.Context, rule *typ.Rul
 		Scenario:         scenario,
 		RequestModel:     requestModel,
 		UserID:           GetUserIDFromContext(c), // Uses user_id or enterprise_user_id
+		TaskID:           strings.TrimSpace(c.GetHeader("X-Tingly-Task-Id")),
+		RunID:            strings.TrimSpace(c.GetHeader("X-Tingly-Run-Id")),
 		InputTokens:      usage.InputTokens,
 		OutputTokens:     usage.OutputTokens,
 		CacheInputTokens: usage.CacheInputTokens,

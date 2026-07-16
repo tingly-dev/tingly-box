@@ -57,6 +57,6 @@ func (s *Server) initTaskRuntime() {
 	}
 
 	s.taskManager = manager
-	s.taskAPI = taskapi.NewHandler(manager, s.config.ConfigDir, agents)
+	s.taskAPI = taskapi.NewHandler(manager, s.config.ConfigDir, agents, s.config.StoreManager().Usage())
 	logrus.Debug("Task runtime initialized")
 }

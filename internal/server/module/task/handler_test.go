@@ -50,7 +50,7 @@ func TestGet_SurfacesOnlyActiveRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	router := testRouter(handler)
 	response := performJSON(t, router, http.MethodGet, "/tasks/"+created.ID, "")
 	if response.Code != http.StatusOK {
@@ -95,7 +95,7 @@ func TestRuns_ReturnsExecutionHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodGet, "/tasks/"+created.ID+"/runs", "")
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -121,7 +121,7 @@ func performJSON(t *testing.T, router http.Handler, method, path, body string) *
 func TestCreate_GeneratesStableWorkspaceAndTask(t *testing.T) {
 	configDir := t.TempDir()
 	manager := coretask.NewManager(coretask.NewMemoryStore())
-	handler := NewHandler(manager, configDir, nil)
+	handler := NewHandler(manager, configDir, nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
 		"title":"Build report",
 		"goal":"Generate a report",
@@ -177,7 +177,7 @@ func TestCreate_UsesCanonicalExistingWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := coretask.NewManager(coretask.NewMemoryStore())
-	response := performJSON(t, testRouter(NewHandler(manager, configDir, nil)), http.MethodPost, "/tasks", string(request))
+	response := performJSON(t, testRouter(NewHandler(manager, configDir, nil, nil)), http.MethodPost, "/tasks", string(request))
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -229,7 +229,7 @@ func TestCreate_RejectsInvalidExistingWorkspace(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+			handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil, nil)
 			response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", string(request))
 			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "workspace") {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -239,7 +239,7 @@ func TestCreate_RejectsInvalidExistingWorkspace(t *testing.T) {
 }
 
 func TestCreate_RejectsUnsupportedAgent(t *testing.T) {
-	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
 		"goal":"Do work",
 		"agent":"other"
@@ -270,7 +270,7 @@ func TestUpdate_EditsDurableDefinitionAndPreservesRuntimeState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response := performJSON(t, testRouter(NewHandler(manager, t.TempDir(), nil)), http.MethodPatch, "/tasks/"+created.ID, `{"title":" New title ","goal":" New goal "}`)
+	response := performJSON(t, testRouter(NewHandler(manager, t.TempDir(), nil, nil)), http.MethodPatch, "/tasks/"+created.ID, `{"title":" New title ","goal":" New goal "}`)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -307,7 +307,7 @@ func TestUpdate_ValidatesGoalAndState(t *testing.T) {
 			if err := store.UpdateStatus(context.Background(), created.ID, map[string]interface{}{"status": string(status)}); err != nil {
 				t.Fatal(err)
 			}
-			response := performJSON(t, testRouter(NewHandler(manager, t.TempDir(), nil)), http.MethodPatch, "/tasks/"+created.ID, `{"goal":"New goal"}`)
+			response := performJSON(t, testRouter(NewHandler(manager, t.TempDir(), nil, nil)), http.MethodPatch, "/tasks/"+created.ID, `{"goal":"New goal"}`)
 			if response.Code != http.StatusConflict {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
@@ -320,7 +320,7 @@ func TestUpdate_ValidatesGoalAndState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	for _, body := range []string{`{}`, `{"goal":"   "}`} {
 		response := performJSON(t, testRouter(handler), http.MethodPatch, "/tasks/"+created.ID, body)
 		if response.Code != http.StatusBadRequest {
@@ -330,7 +330,7 @@ func TestUpdate_ValidatesGoalAndState(t *testing.T) {
 }
 
 func TestCreate_RejectsUnsupportedExecutionPolicy(t *testing.T) {
-	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
 		"goal":"Do work",
 		"agent":"codex",
@@ -342,7 +342,7 @@ func TestCreate_RejectsUnsupportedExecutionPolicy(t *testing.T) {
 }
 
 func TestCreate_NormalizesSequentialSteps(t *testing.T) {
-	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
 		"goal":"Ship the release",
 		"agent":"codex",
@@ -364,7 +364,7 @@ func TestCreate_NormalizesSequentialSteps(t *testing.T) {
 }
 
 func TestCreate_RejectsBlankSequentialStep(t *testing.T) {
-	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+	handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", `{
 		"goal":"Ship the release",
 		"agent":"codex",
@@ -394,7 +394,7 @@ func TestWake_WithInstructionResumesPausedTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks/"+task.ID+"/wake", `{
 		"instruction":"Use staging"
 	}`)
@@ -429,7 +429,7 @@ func TestWake_AcceptsOneRunExecutionOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks/"+task.ID+"/wake", `{
 		"execution_override":{"launch_profile":"plan","tools":["files_read"]}
 	}`)
@@ -506,7 +506,7 @@ func TestToView_ResumeCommandIsInteractiveNativeHandoff(t *testing.T) {
 
 func TestCreate_ShellTask(t *testing.T) {
 	manager := coretask.NewManager(coretask.NewMemoryStore())
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	router := testRouter(handler)
 
 	workspace := t.TempDir()
@@ -540,7 +540,7 @@ func TestCreate_ShellTask(t *testing.T) {
 
 func TestCreate_ShellTaskRejectsAgentOnlyOptions(t *testing.T) {
 	manager := coretask.NewManager(coretask.NewMemoryStore())
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	router := testRouter(handler)
 
 	body := `{"goal":"echo hi","agent":"shell","steps":[{"instruction":"x"}]}`
@@ -552,7 +552,7 @@ func TestCreate_ShellTaskRejectsAgentOnlyOptions(t *testing.T) {
 
 func TestWake_ShellTaskRejectsInstruction(t *testing.T) {
 	manager := coretask.NewManager(coretask.NewMemoryStore())
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	router := testRouter(handler)
 
 	created := performJSON(t, router, http.MethodPost, "/tasks", `{"goal":"true","agent":"shell","workspace_path":"`+t.TempDir()+`"}`)
@@ -568,7 +568,7 @@ func TestWake_ShellTaskRejectsInstruction(t *testing.T) {
 
 func TestAgents_IncludesShellExecutor(t *testing.T) {
 	manager := coretask.NewManager(coretask.NewMemoryStore())
-	handler := NewHandler(manager, t.TempDir(), nil)
+	handler := NewHandler(manager, t.TempDir(), nil, nil)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/agents", handler.Agents)

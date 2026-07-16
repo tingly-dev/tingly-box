@@ -103,6 +103,21 @@ type RunView struct {
 	UpdatedAt      time.Time                 `json:"updated_at"`
 }
 
+// TaskUsageView aggregates gateway usage attributed to one task via the
+// X-Tingly-Task-Id header its runs inject.
+type TaskUsageView struct {
+	TaskID           string `json:"task_id"`
+	Requests         int64  `json:"requests"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheInputTokens int64  `json:"cache_input_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+}
+
+type TaskUsageResponse struct {
+	Data TaskUsageView `json:"data"`
+}
+
 type RunResponse struct {
 	Data RunView `json:"data"`
 }
