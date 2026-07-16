@@ -98,6 +98,10 @@ func TestTaskStore_TaskRunRoundTripAndRecovery(t *testing.T) {
 	if err != nil || got.Status != task.RunStatusWaitingApproval || string(got.Input) != string(run.Input) || got.PendingControl == nil || len(got.Events) != 1 {
 		t.Fatalf("run=%+v err=%v", got, err)
 	}
+	waiting, err := sm.Tasks().ListRuns(ctx, task.RunListFilter{Status: []task.RunStatus{task.RunStatusWaitingApproval}})
+	if err != nil || len(waiting) != 1 || waiting[0].ID != run.ID {
+		t.Fatalf("filtered runs=%+v err=%v", waiting, err)
+	}
 	if err := sm.Tasks().MarkInterruptedOnStartup(ctx); err != nil {
 		t.Fatal(err)
 	}

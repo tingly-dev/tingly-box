@@ -58,6 +58,13 @@ func (s *TaskStore) ListRuns(ctx context.Context, filter task.RunListFilter) ([]
 	if filter.TaskID != "" {
 		query = query.Where("task_id = ?", filter.TaskID)
 	}
+	if len(filter.Status) > 0 {
+		statuses := make([]string, len(filter.Status))
+		for i := range filter.Status {
+			statuses[i] = string(filter.Status[i])
+		}
+		query = query.Where("status IN ?", statuses)
+	}
 	query = query.Order("created_at DESC")
 	if filter.Limit > 0 {
 		query = query.Limit(filter.Limit)

@@ -263,9 +263,16 @@ func (s *MemoryStore) GetRun(_ context.Context, taskID, runID string) (*TaskRun,
 func (s *MemoryStore) ListRuns(_ context.Context, filter RunListFilter) ([]TaskRun, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	statuses := make(map[RunStatus]bool, len(filter.Status))
+	for _, status := range filter.Status {
+		statuses[status] = true
+	}
 	result := make([]TaskRun, 0)
 	for _, run := range s.runs {
 		if filter.TaskID != "" && run.TaskID != filter.TaskID {
+			continue
+		}
+		if len(statuses) > 0 && !statuses[run.Status] {
 			continue
 		}
 		result = append(result, *cloneRun(run))

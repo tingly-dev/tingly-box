@@ -37,7 +37,12 @@ func (h *Handler) List(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	runs, err := h.manager.ListRuns(c.Request.Context(), coretask.RunListFilter{Limit: 500})
+	runs, err := h.manager.ListRuns(c.Request.Context(), coretask.RunListFilter{
+		Status: []coretask.RunStatus{
+			coretask.RunStatusRunning, coretask.RunStatusWaitingApproval, coretask.RunStatusWaitingInput,
+		},
+		Limit: 500,
+	})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -168,7 +173,7 @@ func (h *Handler) RespondControl(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
-		if strings.Contains(err.Error(), "action must") || strings.Contains(err.Error(), "answer is required") || strings.Contains(err.Error(), "unsupported control") {
+		if errors.Is(err, agenttask.ErrInvalidControlDecision) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

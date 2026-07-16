@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	ErrControlNotActive = errors.New("task control is not active")
-	ErrControlAnswered  = errors.New("task control was already answered")
+	ErrControlNotActive       = errors.New("task control is not active")
+	ErrControlAnswered        = errors.New("task control was already answered")
+	ErrInvalidControlDecision = errors.New("invalid task control decision")
 )
 
 type ControlDecision struct {
@@ -88,17 +89,17 @@ func validateDecision(kind task.ControlKind, decision ControlDecision) error {
 	switch kind {
 	case task.ControlKindApproval:
 		if decision.Action != "approve" && decision.Action != "deny" {
-			return errors.New("approval action must be approve or deny")
+			return fmt.Errorf("%w: approval action must be approve or deny", ErrInvalidControlDecision)
 		}
 	case task.ControlKindQuestion:
 		if decision.Action != "answer" && decision.Action != "deny" {
-			return errors.New("question action must be answer or deny")
+			return fmt.Errorf("%w: question action must be answer or deny", ErrInvalidControlDecision)
 		}
 		if decision.Action == "answer" && strings.TrimSpace(decision.Answer) == "" {
-			return errors.New("question answer is required")
+			return fmt.Errorf("%w: question answer is required", ErrInvalidControlDecision)
 		}
 	default:
-		return errors.New("unsupported control kind")
+		return fmt.Errorf("%w: unsupported control kind", ErrInvalidControlDecision)
 	}
 	return nil
 }
@@ -162,7 +163,7 @@ func (b *ControlBroker) await(
 	_ = ctl.UpdateProgress(ctx, controlSummary(control))
 	_ = ctl.AppendRunEvent(ctx, task.RunEvent{
 		ID: uuid.NewString(), Kind: "control_requested", Summary: controlSummary(control),
-		Data: mustJSON(control), CreatedAt: now,
+		CreatedAt: now,
 	})
 
 	timer := time.NewTimer(b.timeout)
@@ -279,9 +280,4 @@ func sanitizeControlValue(value any) any {
 	default:
 		return value
 	}
-}
-
-func mustJSON(value any) json.RawMessage {
-	data, _ := json.Marshal(value)
-	return data
 }

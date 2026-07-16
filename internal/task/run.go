@@ -73,6 +73,7 @@ type TaskRun struct {
 
 type RunListFilter struct {
 	TaskID string
+	Status []RunStatus
 	Limit  int
 	Offset int
 }
