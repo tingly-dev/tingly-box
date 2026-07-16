@@ -212,16 +212,31 @@ Handler（run 级唯一执行契约，即现有 task.Handler 的演进）:
 区别，而是同一次 run 的 attendance 轴上的两个取值，落点是换一个
 Prompter**（ux #4：正交轴分离）。
 
-**目标形态——一次 run 的完整参数化：**
+**先厘清层次，避免与 Task/TaskRun 混淆**（ux #3）：本节统一的是
+TaskRun 之下的**机制层**——"run 核"，即一次 CLI 进程的驱动方式；它不
+触碰领域层的 Task/TaskRun 拆分，反而把这个拆分推广到 remote（第 5 步）：
 
 ```
-Run = agentboot.Execute(workspace, prompt, agent, ExecutionPolicy, session)
-      × Prompter（attendance 轴）:
-        - attended:    IMPrompter（channel.Prompt → IM，等人）        ← 今日 remote
-        - unattended:  PausingPrompter（按 Policy 拒绝，记录首个
-                       Ask/Approval 为 needs_input/handoff 并取消）   ← 今日 agenttask
-        - escalating:  先投递绑定的 imchannel（带超时），无人应答
-                       回落 pause                                     ← Phase 3，纯组合
+Task      （长期单元：goal/trigger/steps/policy）        ← 领域层：定义与调度
+  └── TaskRun（一次有界调用的持久记录）                    ← 领域层：实例与审计
+        └── run 核（agentboot.Execute × Prompter）＝本节   ← 机制层：怎么执行
+              └── agentboot（子进程驱动）
+```
+
+一条 TaskRun 恰好对应 run 核的一次调用（1:1；重试的每个 attempt 是
+新 TaskRun）。remote 今天**直接裸调机制层**，不留领域层记录；整合后
+同样经过 Task/TaskRun。
+
+**目标形态——run 核的完整参数化：**
+
+```
+run 核 = agentboot.Execute(workspace, prompt, agent, ExecutionPolicy, session)
+         × Prompter（attendance 轴）:
+           - attended:    IMPrompter（channel.Prompt → IM，等人）        ← 今日 remote
+           - unattended:  PausingPrompter（按 Policy 拒绝，记录首个
+                          Ask/Approval 为 needs_input/handoff 并取消）   ← 今日 agenttask
+           - escalating:  先投递绑定的 imchannel（带超时），无人应答
+                          回落 pause                                     ← Phase 3，纯组合
 ```
 
 落地动作（按依赖序）：
