@@ -30,11 +30,16 @@ const runStatusMeta: Record<TaskRunStatus, { label: string; color: 'default' | '
 
 const profileMeta: Record<LaunchProfile, { label: string; description: string }> = {
   legacy_inherited: { label: 'Inherited', description: 'Use the CLI configuration already installed on this machine.' },
-  claude_plan: { label: 'Review only', description: 'Claude can inspect and propose a plan, but cannot change the workspace.' },
-  claude_manual: { label: 'Ask before actions', description: 'Claude pauses for approval when an action requires permission.' },
-  claude_accept_edits: { label: 'Edit workspace', description: 'Workspace edits are allowed; other protected actions still ask.' },
-  codex_read_only: { label: 'Review only', description: 'Codex runs in its read-only sandbox.' },
-  codex_workspace_write: { label: 'Edit workspace', description: 'Codex can write inside this task workspace.' },
+  plan: { label: 'Review only', description: 'Claude can inspect and propose a plan, but cannot change the workspace.' },
+  manual: { label: 'Ask before actions', description: 'Claude pauses for approval when an action requires permission.' },
+  accept_edits: { label: 'Edit workspace', description: 'Workspace edits are allowed; other protected actions still ask.' },
+  read_only: { label: 'Review only', description: 'Codex runs in its read-only sandbox.' },
+  workspace_write: { label: 'Edit workspace', description: 'Codex can write inside this task workspace.' },
+};
+
+const getProfileMeta = (profile: string) => profileMeta[profile as LaunchProfile] || {
+  label: profile.replaceAll('_', ' '),
+  description: `The CLI will start with the ${profile} profile.`,
 };
 
 const toolMeta: Record<ToolCapability, string> = {
@@ -42,8 +47,8 @@ const toolMeta: Record<ToolCapability, string> = {
 };
 
 const defaultExecution = (agent: TaskAgent): ExecutionPolicy => agent === 'claude'
-  ? { launch_profile: 'claude_accept_edits', tools: ['files_read', 'files_write', 'terminal'] }
-  : { launch_profile: 'codex_workspace_write' };
+  ? { launch_profile: 'accept_edits', tools: ['files_read', 'files_write', 'terminal'] }
+  : { launch_profile: 'workspace_write' };
 
 const formatTime = (value?: string) => value ? new Intl.DateTimeFormat(undefined, {
   month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -85,7 +90,7 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
 
   const chooseProfile = (profile: LaunchProfile) => {
     setExecution((current) => {
-      if (profile === 'claude_plan') {
+      if (profile === 'plan') {
         return { launch_profile: profile, tools: (current.tools || []).filter((tool) => tool !== 'files_write') };
       }
       return { ...current, launch_profile: profile };
@@ -147,13 +152,13 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
           <Typography variant="caption" color="text.secondary">This applies when the CLI starts. Individual approvals appear on the task while it is running.</Typography>
           <ToggleButtonGroup exclusive value={execution.launch_profile} onChange={(_, value) => value && chooseProfile(value)} fullWidth size="small" sx={{ mt: 1.25 }}>
             {(agentInfo(agent)?.launch_profiles || (agent === 'claude'
-              ? ['claude_plan', 'claude_manual', 'claude_accept_edits']
-              : ['codex_read_only', 'codex_workspace_write'])).map((profile) => <ToggleButton key={profile} value={profile} sx={{ textTransform: 'none' }}>
-                {profileMeta[profile].label}
+              ? ['plan', 'manual', 'accept_edits']
+              : ['read_only', 'workspace_write'])).map((profile) => <ToggleButton key={profile} value={profile} sx={{ textTransform: 'none' }}>
+                {getProfileMeta(profile).label}
               </ToggleButton>)}
           </ToggleButtonGroup>
           <Alert icon={<Security fontSize="inherit" />} severity="info" sx={{ mt: 1.25 }}>
-            {profileMeta[execution.launch_profile].description}
+            {getProfileMeta(execution.launch_profile).description}
           </Alert>
         </Box>
         {agent === 'claude' ? <Box>
@@ -161,7 +166,7 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
           <FormGroup row sx={{ mt: 0.5 }}>
             {(Object.keys(toolMeta) as ToolCapability[]).map((tool) => <FormControlLabel key={tool} label={toolMeta[tool]} control={<Checkbox
               size="small" checked={execution.tools?.includes(tool) || false}
-              disabled={tool === 'files_write' && execution.launch_profile === 'claude_plan'}
+              disabled={tool === 'files_write' && execution.launch_profile === 'plan'}
               onChange={() => toggleTool(tool)}
             />} />)}
           </FormGroup>
@@ -251,7 +256,7 @@ function ExecutionSummary({ task }: { task: AgentTask }) {
   const execution = task.execution || defaultExecution(task.agent);
   return <Box sx={{ minWidth: 200 }}>
     <Typography variant="overline" color="text.secondary">Access at launch</Typography>
-    <Typography variant="body2">{profileMeta[execution.launch_profile]?.label || execution.launch_profile}</Typography>
+    <Typography variant="body2">{getProfileMeta(execution.launch_profile).label}</Typography>
     <Typography variant="caption" color="text.secondary" fontFamily="monospace">{execution.launch_profile}</Typography>
     {execution.tools?.length ? <Typography variant="body2" sx={{ mt: 0.75 }}>{execution.tools.map((tool) => toolMeta[tool] || tool).join(' · ')}</Typography> : null}
   </Box>;
@@ -272,7 +277,7 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={0.5}>
             <Box>
               <Stack direction="row" spacing={1} alignItems="center"><Typography variant="subtitle2">{title}</Typography><Chip size="small" label={meta.label} color={meta.color} variant="outlined" /></Stack>
-              <Typography variant="caption" color="text.secondary">{formatTime(run.started_at)} · {profileMeta[run.execution.launch_profile]?.label || run.execution.launch_profile}</Typography>
+              <Typography variant="caption" color="text.secondary">{formatTime(run.started_at)} · {getProfileMeta(run.execution.launch_profile).label}</Typography>
             </Box>
             {run.finished_at && <Typography variant="caption" color="text.secondary">Finished {formatTime(run.finished_at)}</Typography>}
           </Stack>

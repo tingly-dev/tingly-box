@@ -1,7 +1,7 @@
 export type TaskAgent = 'claude' | 'codex';
 export type TaskStatus = 'pending' | 'queued' | 'running' | 'needs_input' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
 export type TaskRunStatus = 'running' | 'waiting_approval' | 'waiting_input' | 'succeeded' | 'rescheduled' | 'needs_input' | 'failed' | 'cancelled' | 'interrupted';
-export type LaunchProfile = 'legacy_inherited' | 'claude_plan' | 'claude_manual' | 'claude_accept_edits' | 'codex_read_only' | 'codex_workspace_write';
+export type LaunchProfile = 'legacy_inherited' | 'plan' | 'manual' | 'accept_edits' | 'read_only' | 'workspace_write';
 export type ToolCapability = 'files_read' | 'files_write' | 'terminal' | 'web';
 
 export interface ExecutionPolicy {
