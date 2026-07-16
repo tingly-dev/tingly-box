@@ -7,12 +7,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// reconcileInterval is deliberately low-frequency: state changes are applied
-// at their source (web API handlers start/stop bots inline; the CLI pokes
+// reconcileInterval paces the safety-net loop. State changes are applied at
+// their source (web API handlers start/stop bots inline; the CLI pokes
 // POST /api/v1/imbot-admin/reload after writing the shared settings store),
-// so this loop is only a safety net for crashed bots and direct store edits
-// that bypassed both paths.
-const reconcileInterval = 5 * time.Minute
+// so this loop only covers crashed bots and direct store edits that bypassed
+// both paths. One minute keeps that worst-case recovery delay short; a no-op
+// pass is one SQLite read plus an in-memory compare and stays silent, so the
+// frequency is essentially free.
+const reconcileInterval = time.Minute
 
 // periodicBotSync reconciles bot runtime state with stored settings.
 //

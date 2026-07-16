@@ -34,11 +34,14 @@ correctness.**
    "run `remote start …`".
 
 2. **The polling loop stays, but as a backstop** (`background.go`):
-   one immediate sync at startup, then a 5-minute reconcile. It is no longer
+   one immediate sync at startup, then a 1-minute reconcile. It is no longer
    the propagation path; it exists for self-healing — `Sync()` restarts
    enabled-but-not-running bots, which is also the crash-recovery mechanism —
    and for direct store edits that bypass both the API and the CLI helper.
-   Removing it entirely would silently lose crash recovery.
+   Removing it entirely would silently lose crash recovery. The interval
+   bounds worst-case crash recovery at ~1 minute; a no-op pass is one SQLite
+   read plus an in-memory compare and logs nothing, so the frequency itself
+   is essentially free.
 
 3. **Silence when idle**: the loop no longer logs successful no-op passes;
    `bot.Manager.Sync` already logs each bot it actually starts or stops.
