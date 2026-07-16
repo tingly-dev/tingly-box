@@ -123,7 +123,7 @@ func NewMeterSetup(ctx context.Context, cfg *Config, stores *StoreRefs) (*MeterS
 
 	// Create meter and token tracker
 	meter := meterProvider.Meter("tingly-box")
-	tracker, err := tracker.NewTokenTracker(meter)
+	tokenTracker, err := tracker.NewTokenTracker(meter)
 	if err != nil {
 		// Shutdown meter provider on error
 		_ = meterProvider.Shutdown(ctx)
@@ -131,14 +131,11 @@ func NewMeterSetup(ctx context.Context, cfg *Config, stores *StoreRefs) (*MeterS
 		return nil, fmt.Errorf("failed to create token tracker: %w", err)
 	}
 
-	// Create tracer
-	tracer := NewTracer(tracerProvider)
-
 	return &MeterSetup{
 		meterProvider:  meterProvider,
 		tracerProvider: tracerProvider,
-		tracker:        tracker,
-		tracer:         tracer,
+		tracker:        tokenTracker,
+		tracer:         NewTracer(tracerProvider),
 	}, nil
 }
 

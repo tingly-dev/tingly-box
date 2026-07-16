@@ -227,20 +227,26 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 	// e2e retains 823KB/request forever; without it, 0.5KB/request.
 	// Latency is recorded as the requestDuration histogram VALUE instead.
 
+	// Build the attribute set once and reuse it for every instrument below;
+	// metric.WithAttributes would re-sort and re-deduplicate the same slice
+	// on each call. NewSet may reorder commonAttrs, which is fine — sets are
+	// order-insensitive and the values are unchanged.
+	commonOpt := metric.WithAttributeSet(attribute.NewSet(commonAttrs...))
+
 	// Record input tokens
 	if opts.InputTokens > 0 {
-		tt.inputTokens.Add(ctx, int64(opts.InputTokens), metric.WithAttributes(commonAttrs...))
+		tt.inputTokens.Add(ctx, int64(opts.InputTokens), commonOpt)
 	}
 
 	// Record output tokens
 	if opts.OutputTokens > 0 {
-		tt.outputTokens.Add(ctx, int64(opts.OutputTokens), metric.WithAttributes(commonAttrs...))
+		tt.outputTokens.Add(ctx, int64(opts.OutputTokens), commonOpt)
 	}
 
 	// Record total tokens
 	totalTokens := opts.InputTokens + opts.OutputTokens
 	if totalTokens > 0 {
-		tt.totalTokens.Add(ctx, int64(totalTokens), metric.WithAttributes(commonAttrs...))
+		tt.totalTokens.Add(ctx, int64(totalTokens), commonOpt)
 	}
 
 	// Record cache tokens. slices.Clone before append: two appends off the
@@ -248,25 +254,25 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 	// second could overwrite the first's token_type element.
 	if opts.CacheInputTokens > 0 {
 		cacheAttrs := append(slices.Clone(commonAttrs), attrLLMTokenType.String("cache"))
-		tt.cacheInputTokens.Add(ctx, int64(opts.CacheInputTokens), metric.WithAttributes(cacheAttrs...))
+		tt.cacheInputTokens.Add(ctx, int64(opts.CacheInputTokens), metric.WithAttributeSet(attribute.NewSet(cacheAttrs...)))
 	}
 
 	// Record system tokens
 	if opts.SystemTokens > 0 {
 		systemAttrs := append(slices.Clone(commonAttrs), attrLLMTokenType.String("system"))
-		tt.systemTokens.Add(ctx, int64(opts.SystemTokens), metric.WithAttributes(systemAttrs...))
+		tt.systemTokens.Add(ctx, int64(opts.SystemTokens), metric.WithAttributeSet(attribute.NewSet(systemAttrs...)))
 	}
 
 	// Record request count
-	tt.requestCount.Add(ctx, 1, metric.WithAttributes(commonAttrs...))
+	tt.requestCount.Add(ctx, 1, commonOpt)
 
 	// Record request duration
 	if opts.LatencyMs > 0 {
-		tt.requestDuration.Record(ctx, float64(opts.LatencyMs), metric.WithAttributes(commonAttrs...))
+		tt.requestDuration.Record(ctx, float64(opts.LatencyMs), commonOpt)
 	}
 
 	// Record error if status is "error"
 	if opts.Status == "error" {
-		tt.requestError.Add(ctx, 1, metric.WithAttributes(commonAttrs...))
+		tt.requestError.Add(ctx, 1, commonOpt)
 	}
 }
