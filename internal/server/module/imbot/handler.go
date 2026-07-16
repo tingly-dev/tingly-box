@@ -603,7 +603,10 @@ func (h *Handler) Reload(c *gin.Context) {
 	}
 
 	logrus.Info("Bot configuration reloaded via admin API")
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	// Include per-bot status so callers (e.g. the CLI poke after `remote add`)
+	// can report what actually happened: Sync swallows individual start
+	// failures by design, so success alone doesn't mean every bot is up.
+	c.JSON(http.StatusOK, gin.H{"success": true, "bots": h.botMgr.GetStatus()})
 }
 
 // StopAll stops all running bots (delegates to BotManager)
