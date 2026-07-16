@@ -508,28 +508,32 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			"result":       resultJSON,
 			"error":        "",
 		})
-	case OutcomeNeedsInput:
+	case OutcomeNeedsInput, OutcomeHandoff:
+		status := StatusNeedsInput
 		runStatus = RunStatusNeedsInput
+		if outcome == OutcomeHandoff {
+			status = StatusHandoff
+			runStatus = RunStatusHandoff
+		}
 		finishRun()
-		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
-			"status":       string(StatusNeedsInput),
+		updates := map[string]interface{}{
+			"status":       string(status),
 			"scheduled_at": nil,
 			"finished_at":  nil,
 			"attempt":      0,
 			"result":       resultJSON,
 			"error":        "",
-		})
-	case OutcomeHandoff:
-		runStatus = RunStatusHandoff
-		finishRun()
-		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
-			"status":       string(StatusHandoff),
-			"scheduled_at": nil,
-			"finished_at":  nil,
-			"attempt":      0,
-			"result":       resultJSON,
-			"error":        "",
-		})
+		}
+		// A paused recurring task must not lose its schedule: keep the next
+		// occurrence visible. The scheduler dispatches only pending tasks,
+		// so due ticks are skipped (not queued) while the task waits for a
+		// human, and the miss stays observable (scheduled_at in the past).
+		if len(t.Recurrence) > 0 {
+			if next, nerr := NextOccurrence(t.Recurrence, now); nerr == nil {
+				updates["scheduled_at"] = next
+			}
+		}
+		_ = m.store.UpdateStatus(context.Background(), t.ID, updates)
 	default:
 		runStatus = RunStatusFailed
 		runError = fmt.Sprintf("%s: %q", ErrInvalidOutcome, outcome)

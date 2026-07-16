@@ -119,3 +119,39 @@ func TestRun_RecurringCompleteReusesTask(t *testing.T) {
 		t.Fatalf("recurrence should reuse one task row, got %v", ids(all))
 	}
 }
+
+func TestRun_RecurringPauseKeepsNextOccurrence(t *testing.T) {
+	mgr, _ := newManager(t)
+	run := make(chan struct{}, 1)
+	mustRegister(t, mgr, &funcHandler{
+		typ: "recurring-pause",
+		fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+			run <- struct{}{}
+			return &task.TaskResult{Outcome: task.OutcomeNeedsInput}, nil
+		},
+	})
+
+	now := time.Now()
+	tk := mustSubmit(t, mgr, task.SubmitRequest{
+		Type:        "recurring-pause",
+		ScheduledAt: &now,
+		Recurrence:  json.RawMessage(`{"cron":"0 0 * * *","timezone":"UTC"}`),
+	})
+
+	select {
+	case <-run:
+	case <-time.After(3 * time.Second):
+		t.Fatal("recurring task did not run")
+	}
+	waiting := waitStatus(t, mgr, tk.ID, task.StatusNeedsInput)
+	if waiting.ScheduledAt == nil || !waiting.ScheduledAt.After(time.Now()) {
+		t.Fatalf("paused recurring task lost its next occurrence: %v", waiting.ScheduledAt)
+	}
+	// The scheduler dispatches only pending tasks, so the kept schedule must
+	// not relaunch the paused task.
+	select {
+	case <-run:
+		t.Fatal("paused task was dispatched again")
+	case <-time.After(300 * time.Millisecond):
+	}
+}
