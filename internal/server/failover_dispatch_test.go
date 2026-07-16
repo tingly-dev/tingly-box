@@ -241,7 +241,14 @@ func TestIsRetryableStatus(t *testing.T) {
 		{502, true},
 		{503, true},
 		{504, true},
-		{501, false}, // not in the gateway-error set
+		// The whole 5xx range is retryable: error forwarding propagates the
+		// upstream's status verbatim, so provider-specific codes must not
+		// slip through the failover net. 529 is Anthropic's overloaded_error
+		// (the original escape); 52x also covers Cloudflare-fronted providers.
+		{529, true},
+		{520, true},
+		{599, true},
+		{501, true}, // heterogeneous fallback may well implement what this tier didn't
 	}
 	for _, tc := range cases {
 		if got := isRetryableStatus(tc.code); got != tc.want {

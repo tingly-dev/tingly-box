@@ -49,7 +49,7 @@ func TestSharedDefaultMocksIncludesErrorModels(t *testing.T) {
 
 func TestExtendedErrorSpecs(t *testing.T) {
 	specs := ExtendedErrorSpecs()
-	require.Len(t, specs, 5, "Should have 5 extended error specs")
+	require.Len(t, specs, 6, "Should have 6 extended error specs")
 
 	// Test authentication error
 	auth401 := findSpec(t, specs, "virtual-fail-auth-401")
@@ -71,6 +71,13 @@ func TestExtendedErrorSpecs(t *testing.T) {
 	assert.Equal(t, ErrorCategoryOverloaded, unavailable.ErrorCategory)
 	assert.True(t, unavailable.IsRetryable, "503 should be retryable")
 
+	// Test 529 Anthropic overloaded
+	overloaded := findSpec(t, specs, "virtual-fail-529")
+	require.NotNil(t, overloaded)
+	assert.Equal(t, ErrorCategoryOverloaded, overloaded.ErrorCategory)
+	assert.True(t, overloaded.IsRetryable, "529 should be retryable")
+	assert.Equal(t, 529, overloaded.Error.Status)
+
 	// Test invalid request
 	invalid := findSpec(t, specs, "virtual-fail-400")
 	require.NotNil(t, invalid)
@@ -87,13 +94,13 @@ func TestExtendedErrorSpecs(t *testing.T) {
 }
 
 func TestAllErrorSpecs(t *testing.T) {
-	// Total error models = 4 (basic in SharedDefaultMocks) + 5 (extended)
+	// Total error models = 4 (basic in SharedDefaultMocks) + 6 (extended)
 	basicErrorModels := findErrorModels(SharedDefaultMocks())
 	extendedSpecs := ExtendedErrorSpecs()
 
 	// Verify we have the expected counts
 	assert.Len(t, basicErrorModels, 4, "Should have 4 basic error models in SharedDefaultMocks")
-	assert.Len(t, extendedSpecs, 5, "Should have 5 extended error specs")
+	assert.Len(t, extendedSpecs, 6, "Should have 6 extended error specs")
 
 	// Verify basic specs are in SharedDefaultMocks
 	assert.Contains(t, specIDs(basicErrorModels), "virtual-fail-429")

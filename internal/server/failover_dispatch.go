@@ -69,28 +69,24 @@ func (ph *ProtocolHandler) FailAttemptSetup(c *gin.Context, err error) {
 	})
 }
 
-// retryableUpstreamStatuses are the HTTP status codes treated as
-// "upstream transiently sick, try the next priority tier".
-//
-// 500 is included because in-process error helpers (SendStreamingError,
-// SendErrorResponse on forwarding failure) wrap upstream pre-stream
-// errors as 500. 502 covers the explicit "upstream stream failed" path.
-// Keeping both means refactors that change one helper's status code
-// don't silently break failover.
-var retryableUpstreamStatuses = map[int]bool{
-	http.StatusTooManyRequests:     true,
-	http.StatusBadGateway:          true,
-	http.StatusServiceUnavailable:  true,
-	http.StatusGatewayTimeout:      true,
-	http.StatusInternalServerError: true,
-}
-
 // isRetryableStatus reports whether a buffered status code from a
 // dispatch attempt should trigger failover. Status 0 means the writer
 // was never touched — treat as terminal (the handler ran to completion
 // without writing, retrying would just repeat the no-op).
+//
+// Retryable = 429 (rate limit) plus the WHOLE 5xx range, meaning "upstream
+// transiently sick, try the next priority tier". The full range matters:
+// error forwarding propagates the upstream provider's real status verbatim
+// (protocol.UpstreamStatus), so non-IANA provider statuses like Anthropic's
+// 529 overloaded_error or Cloudflare's 52x family land here unmapped —
+// enumerating individual codes silently dropped 529 and broke failover for
+// exactly the outage it signals. In-process error helpers wrap pre-stream
+// failures as 500 and stream failures as 502, both inside the range.
+// A 5xx-triggered extra attempt is always safe: nothing was delivered to
+// the client (the gate is still buffered), and if every tier fails the last
+// upstream error is flushed unchanged.
 func isRetryableStatus(status int) bool {
-	return status != 0 && retryableUpstreamStatuses[status]
+	return status == http.StatusTooManyRequests || (status >= 500 && status <= 599)
 }
 
 // firstChunkGate is a passive, protocol-agnostic byte buffer placed
@@ -410,6 +406,17 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		}
 		status := gate.Status()
 		if !isRetryableStatus(status) {
+			// A buffered 2xx is a success that never raised CommitFirstChunk:
+			// non-streaming responses (c.JSON lands in the gate, flushed by the
+			// deferred CommitIfBuffered) and buffering stream producers (e.g.
+			// the MCP interceptor paths). The breaker must see these successes
+			// — recording only on committed gates left half-open probe slots
+			// claimed forever, so a recovered primary could never close its
+			// breaker under non-streaming traffic and traffic never returned
+			// to T0.
+			if status >= 200 && status < 300 {
+				loadbalance.RecordServiceSuccess(rule.UUID, serviceID)
+			}
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
 			fields["stage"] = "failover_terminal"
 			fields["attempt"] = i + 1

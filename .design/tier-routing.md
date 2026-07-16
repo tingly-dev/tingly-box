@@ -142,6 +142,8 @@ Each request outcome feeds **two channels**:
 
 So 429 and 401/403 exclude a service on the *first* hit (health channel), well before the breaker trips. The `harness lb` simulator models both faithfully (reusing `reportHealthStatus` + the breaker recorder), driving them off one shared clock so a single simulated advance recovers both.
 
+Health recovery runs an optional lightweight probe (`Server.SetProbeFunc`, OPTIONS + `/models`) once the rate-limit window has elapsed; a failed probe pushes the window forward. The probe parses the serviceID with `loadbalance.ParseServiceID` ("provider/model") — it originally split on `":"`, which never matches, so every probe failed and a single 429 excluded the service *forever* (traffic could never return to the primary). Pinned by `TestFailoverTimeline_PrimaryDownThenRecover/429-*` in `internal/protocoltest/failover_timeline_test.go`.
+
 There is also a **third** time-based input: the **affinity TTL** (`AffinityEntry.ExpiresAt`). A lock expires *strictly* at `LockedAt + SessionAffinity` — an in-window request is honored but does **not** slide the expiry; once past it the pin is dropped and the session is re-selected and re-locked. The simulator puts this on the same clock seam (`loadbalance.SetClock` + `routing.SetClock`, both fed one fake clock), so a single `advance` moves breaker recovery, health recovery, *and* affinity expiry together — matching production, where all three read the wall clock. This lets the scenario suite assert the strict-TTL contract and cross-model failover (a failover hop must carry the fallback service's own model, not reuse the primary's) deterministically.
 
 ### End-to-end flow: how the tactic switch actually takes effect
@@ -201,6 +203,8 @@ The "user moves a service card to a different tier" event has to cross five laye
 ┌─ Per-request feedback into the breaker ──────────────────────────────┐
 │  dispatchWithPriorityFailover owns breaker accounting per attempt:    │
 │    gate committed        → RecordServiceSuccess(ruleUUID, serviceID)  │
+│    terminal 2xx (buffered, e.g. non-streaming c.JSON)                 │
+│                          → RecordServiceSuccess(ruleUUID, serviceID)  │
 │    retryable failure     → RecordServiceFailure(ruleUUID, serviceID)  │
 │  Same DefaultBreakerStore the selection logic consulted, so the next  │
 │  request's TierTactic sees the updated state. State is keyed per rule │
@@ -333,9 +337,9 @@ v1 only handled cross-request failover: a request that failed returned the error
 2. **`firstChunkGate`** is a passive, protocol-agnostic byte buffer wrapping `c.Writer`. It makes no decisions in its write path: writes land in memory until an explicit signal commits them. Crucially, **single-service requests skip the gate entirely** (`len(GetActiveServices()) <= 1`), so the common case never touches the buffer — zero blast radius.
 3. **Orchestrator** (`dispatchWithPriorityFailover`) owns the retry decision. After each attempt it reads the gate's state:
    - `gate.Committed()` → the stream's first real chunk already reached the wire; retry is impossible, return.
-   - else `gate.Status()` retryable (429, 500, 502, 503, 504) → `gate.Discard()`, pick the next tier via `selectFallbackService`, try again.
+   - else `gate.Status()` retryable (429 or **any 5xx**, 500–599) → `gate.Discard()`, pick the next tier via `selectFallbackService`, try again. The full 5xx range matters because error forwarding propagates the upstream's status verbatim — enumerating individual codes silently dropped provider-specific statuses like Anthropic's 529 `overloaded_error` (no failover on exactly the outage it signals).
    - else (200, other 4xx, status 0) → terminal; the deferred `gate.CommitIfBuffered()` flushes the captured error to the client.
-4. **Commit seam.** Streaming producers raise `CommitFirstChunk` on their first real chunk (centralised in `ProcessStream`/`StreamLoop`, plus the explicit `message_start` senders), which flushes captured headers + body and switches the gate to pass-through — preserving incremental delivery.
+4. **Commit seam.** Streaming producers raise `CommitFirstChunk` on their first real chunk (centralised in `ProcessStream`/`StreamLoop`, the explicit `message_start` senders, plus the MCP generic stream interceptor's `sendEvent` — the A→A v1 path runs through the interceptor unconditionally, and before it committed, multi-service rules on that path buffered the whole stream and never fed the breaker a success), which flushes captured headers + body and switches the gate to pass-through — preserving incremental delivery.
 5. Budget caps at the number of active services so we never loop unbounded. The same service is never tried twice in one request (in-request `tried` map, complementary to the cross-request breaker). The recorder's bound provider is re-set before each attempt (`SetActiveService`), so a second-attempt failure trips the *second* service's breaker — not the first's.
 
 ### Streaming: priming the first event

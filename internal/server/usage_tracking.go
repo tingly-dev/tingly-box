@@ -295,7 +295,8 @@ func classifyErrorCode(err error) string {
 	// Same signals as isRateLimitError, tested against the already-lowered
 	// string so a large error payload is not lowercased twice.
 	case strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") ||
-		strings.Contains(errStr, "ratelimit") || strings.Contains(errStr, "1302"):
+		strings.Contains(errStr, "ratelimit") || strings.Contains(errStr, "1302") ||
+		strings.Contains(errStr, "1305"):
 		return "rate_limit"
 	case strings.Contains(errStr, "401") || strings.Contains(errStr, "unauthorized"):
 		return "auth_401"
@@ -328,10 +329,12 @@ func isRateLimitError(err error) bool {
 		return false
 	}
 	errStr := strings.ToLower(err.Error())
+	// 1302/1305 are Zhipu GLM body codes for concurrency / request-rate limits.
 	return strings.Contains(errStr, "429") ||
 		strings.Contains(errStr, "rate limit") ||
 		strings.Contains(errStr, "ratelimit") ||
-		strings.Contains(errStr, "1302")
+		strings.Contains(errStr, "1302") ||
+		strings.Contains(errStr, "1305")
 }
 
 // recordDetailedUsage writes a detailed usage record to the database.
@@ -505,9 +508,9 @@ func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err er
 	// Error - classify and report appropriately
 	errStr := err.Error()
 
-	// Check for rate limit (429, 1302)
+	// Check for rate limit (429, plus Zhipu GLM body codes 1302/1305)
 	if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "RateLimit") ||
-		strings.Contains(errStr, "1302") || strings.Contains(errStr, "\"code\":\"1302\"") {
+		strings.Contains(errStr, "1302") || strings.Contains(errStr, "1305") {
 		logrus.WithFields(logrus.Fields{
 			"service_id": serviceID,
 			"provider":   provider.Name,

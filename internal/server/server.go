@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -519,12 +518,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// per-endpoint capability (which is now declared, not probed).
 	if server.healthMonitor != nil {
 		server.healthMonitor.SetProbeFunc(func(serviceID string) bool {
-			// serviceID format: "<providerUUID>:<model>" (from Service.ServiceID())
-			parts := strings.Split(serviceID, ":")
-			if len(parts) < 1 {
-				return false
-			}
-			providerUUID := parts[0]
+			// serviceID format: "<providerUUID>/<model>" (FormatServiceID).
+			// This used to split on ":" — which never matches the "/" format —
+			// so the probe failed for EVERY service and each failed probe
+			// pushed the recovery window forward: a service marked unhealthy
+			// by one 429 stayed excluded forever and traffic never returned
+			// to it.
+			providerUUID, _ := loadbalance.ParseServiceID(serviceID)
 
 			provider, err := cfg.GetProviderByUUID(providerUUID)
 			if err != nil || provider == nil {

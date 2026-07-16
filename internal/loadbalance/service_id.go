@@ -1,6 +1,9 @@
 package loadbalance
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ServiceID uniquely identifies a provider+model combination in load balancing.
 type ServiceID struct {
@@ -25,6 +28,18 @@ func (id ServiceID) String() string {
 // call this directly so all paths agree on the same key shape.
 func FormatServiceID(providerUUID, model string) string {
 	return fmt.Sprintf("%s/%s", providerUUID, model)
+}
+
+// ParseServiceID splits a canonical "provider/model" service ID back into its
+// parts (the inverse of FormatServiceID). Provider UUIDs are slash-free, so
+// splitting on the first "/" is unambiguous even when the model name itself
+// contains slashes. model is "" when serviceID carries no separator.
+func ParseServiceID(serviceID string) (providerUUID, model string) {
+	parts := strings.SplitN(serviceID, "/", 2)
+	if len(parts) < 2 {
+		return parts[0], ""
+	}
+	return parts[0], parts[1]
 }
 
 // FormatBreakerKey formats a (ruleUUID, serviceID) pair into the canonical
