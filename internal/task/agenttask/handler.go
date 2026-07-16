@@ -190,7 +190,9 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	normalized.NativeSessionID = payload.SessionID
 	normalized.ExitCode = &agentResult.ExitCode
 	normalized.DurationMS = agentResult.Duration.Milliseconds()
-	normalized.ExitReason = normalized.State
+	if normalized.ExitReason == "" {
+		normalized.ExitReason = normalized.State
+	}
 	normalized.Artifacts = safeArtifacts(normalized.Artifacts)
 	appendRuntimeEvent(ctx, runCtl, "outcome", normalized.Summary, eventData(normalized))
 	return h.taskResult(ctx, ctl, &payload, normalized)
@@ -328,16 +330,23 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 			next := h.now().Add(time.Duration(delay) * time.Second)
 			return &task.TaskResult{Outcome: task.OutcomeReschedule, Result: data, NextRunAt: &next}, nil
 		}
-		if payload.HasCurrentStep() {
-			result.State = "needs_input"
-			result.Question = "This step needs another run. Run now or send an instruction to continue."
-			data, err = json.Marshal(result)
-			if err != nil {
-				return nil, err
-			}
-			return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
+		// The agent reports more work remains but no automatic wake-up is
+		// available (follow-up disabled or wake budget spent): pause for a
+		// human decision instead of silently completing.
+		result.State = "needs_input"
+		if strings.TrimSpace(result.Question) == "" {
+			result.Question = "The agent reports more work remains, but automatic follow-up is unavailable. Run now, send an instruction, or stop the task."
 		}
-		return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
+		if payload.FollowUp.Enabled {
+			result.ExitReason = "follow_up_exhausted"
+		} else {
+			result.ExitReason = "follow_up_disabled"
+		}
+		data, err = json.Marshal(result)
+		if err != nil {
+			return nil, err
+		}
+		return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
 	case "done":
 		if payload.HasCurrentStep() {
 			step := payload.Steps[payload.CurrentStep]
@@ -381,7 +390,14 @@ func parseOutcome(output string) Result {
 		result.Summary = truncate(result.Summary)
 		return result
 	}
-	return Result{State: "done", Summary: truncate(trimmed)}
+	// An unreported outcome never means done: pause for a human decision
+	// instead of silently marking the task complete.
+	return Result{
+		State:      "needs_input",
+		Summary:    truncate(trimmed),
+		Question:   "The run ended without a machine-readable outcome. Review the summary, then run again or send an instruction.",
+		ExitReason: "outcome_unreported",
+	}
 }
 
 func taggedOutcome(output string) (string, bool) {

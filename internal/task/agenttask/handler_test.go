@@ -398,7 +398,7 @@ func TestHandler_ApprovalRequiresNativeHandoff(t *testing.T) {
 	}
 }
 
-func TestHandler_MissingEnvelopeFallsBackToDone(t *testing.T) {
+func TestHandler_MissingEnvelopePausesForInput(t *testing.T) {
 	workspace := mustWorkspace(t)
 	agent := &fakeAgent{available: true}
 	agent.execute = func(_ context.Context, _ string, _ agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
@@ -417,7 +417,7 @@ func TestHandler_MissingEnvelopeFallsBackToDone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != task.OutcomeComplete || !strings.Contains(string(result.Result), "plain final answer") {
+	if result.Outcome != task.OutcomeNeedsInput || !strings.Contains(string(result.Result), "plain final answer") || !strings.Contains(string(result.Result), "outcome_unreported") {
 		t.Fatalf("fallback result = %+v", result)
 	}
 }
@@ -522,7 +522,7 @@ func TestHandler_SequentialContinueWithoutFollowUpPausesCurrentStep(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != task.OutcomeNeedsInput || !strings.Contains(string(result.Result), "needs another run") {
+	if result.Outcome != task.OutcomeNeedsInput || !strings.Contains(string(result.Result), "follow_up_disabled") {
 		t.Fatalf("result = %+v", result)
 	}
 	checkpoint := controller.decodedPayload(t)
@@ -589,9 +589,9 @@ func TestHandler_StartFailureDoesNotCheckpointNewSession(t *testing.T) {
 	}
 }
 
-func TestParseOutcome_InvalidTagFallsBack(t *testing.T) {
+func TestParseOutcome_InvalidTagPausesForInput(t *testing.T) {
 	result := parseOutcome(`prefix <task_outcome>{bad}</task_outcome>`)
-	if result.State != "done" || !strings.Contains(result.Summary, "{bad}") {
+	if result.State != "needs_input" || result.ExitReason != "outcome_unreported" || !strings.Contains(result.Summary, "{bad}") {
 		t.Fatalf("result = %+v", result)
 	}
 }
