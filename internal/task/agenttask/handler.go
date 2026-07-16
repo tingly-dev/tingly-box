@@ -132,23 +132,50 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	}
 	if checkpointAfterStart {
 		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
-			cancelAndWait(ctx, handle, ctl)
+			cancelAndWait(handle)
 			return nil, err
 		}
 	}
 
-	runtimePause, eventErr := consumeEvents(ctx, handle, ctl, runCtl, func(nativeSessionID string) error {
-		if nativeSessionID == "" || nativeSessionID == payload.SessionID {
-			return nil
-		}
-		payload.SessionID = nativeSessionID
-		appendRuntimeEvent(ctx, runCtl, "session_discovered", "Native session checkpointed", eventData(map[string]any{"session_id": nativeSessionID}))
-		return checkpointPayload(ctx, ctl, &payload)
-	})
-	agentResult, waitErr := handle.Wait()
-	if eventErr != nil {
-		return nil, eventErr
+	prompter := &pausingPrompter{
+		cancel: handle.Cancel,
+		record: func(kind, summary string, data json.RawMessage) {
+			appendRuntimeEvent(ctx, runCtl, kind, summary, data)
+		},
 	}
+	messageCount := 0
+	var sinkErr error
+	sink := func(raw any) {
+		if ev, ok := raw.(agentboot.ErrorEvent); ok {
+			if ev.Err != nil {
+				_ = ctl.UpdateProgress(ctx, ev.Err.Error())
+				appendRuntimeEvent(ctx, runCtl, "runtime_error", ev.Err.Error(), nil)
+			}
+			return
+		}
+		if sinkErr != nil {
+			return
+		}
+		if sessionMessage, ok := raw.(nativeSessionMessage); ok {
+			if id := strings.TrimSpace(sessionMessage.GetSessionID()); id != "" && id != payload.SessionID {
+				payload.SessionID = id
+				appendRuntimeEvent(ctx, runCtl, "session_discovered", "Native session checkpointed", eventData(map[string]any{"session_id": id}))
+				if err := checkpointPayload(ctx, ctl, &payload); err != nil {
+					sinkErr = err
+					handle.Cancel()
+					return
+				}
+			}
+		}
+		messageCount++
+		recordNativeMessage(ctx, runCtl, raw)
+		_ = ctl.UpdateProgress(ctx, fmt.Sprintf("Agent working · %d events", messageCount))
+	}
+	agentResult, waitErr := agentboot.RunWithPrompter(ctx, handle, prompter, sink)
+	if sinkErr != nil {
+		return nil, sinkErr
+	}
+	runtimePause := prompter.pause
 	if runtimePause == nil {
 		runtimePause = pauseFromPermissionDenials(agentResult)
 		if runtimePause != nil {
@@ -224,71 +251,6 @@ type nativeSessionMessage interface {
 	GetSessionID() string
 }
 
-func consumeEvents(
-	ctx context.Context,
-	handle agentboot.ExecutionHandle,
-	ctl task.Controller,
-	runCtl task.RunController,
-	onSession func(string) error,
-) (*Result, error) {
-	messageCount := 0
-	var eventErr error
-	var pause *Result
-	for event := range handle.Events() {
-		switch e := event.(type) {
-		case agentboot.MessageEvent:
-			if sessionMessage, ok := e.Raw.(nativeSessionMessage); ok && onSession != nil {
-				if err := onSession(strings.TrimSpace(sessionMessage.GetSessionID())); err != nil {
-					eventErr = err
-					handle.Cancel()
-					continue
-				}
-			}
-			messageCount++
-			recordNativeMessage(ctx, runCtl, e.Raw)
-			_ = ctl.UpdateProgress(ctx, fmt.Sprintf("Agent working · %d events", messageCount))
-		case agentboot.AskRequestEvent:
-			if pause == nil {
-				question := strings.TrimSpace(e.Message)
-				if question == "" {
-					question = strings.TrimSpace(e.Reason)
-				}
-				if question == "" {
-					question = "The agent needs information before it can continue."
-				}
-				pause = &Result{State: "needs_input", Summary: "The automated run stopped for a business question.", Question: truncate(question)}
-				pause.ExitReason = "business_input_required"
-				appendRuntimeEvent(ctx, runCtl, "input_required", question, nil)
-			}
-			if err := handle.Respond(e.ID, agentboot.AskResponse{Approved: false, Reason: "Unattended Task runs cannot answer interactive questions"}); err != nil {
-				eventErr = fmt.Errorf("agent task: reject interactive question: %w", err)
-			}
-			handle.Cancel()
-		case agentboot.ApprovalRequestEvent:
-			if pause == nil {
-				tool := strings.TrimSpace(e.ToolName)
-				if tool == "" {
-					tool = "a protected tool"
-				}
-				summary := fmt.Sprintf("Native handoff required: %s requested permission outside this Task's automation boundary.", tool)
-				pause = &Result{State: "handoff_required", Summary: summary, Question: "Open the native session to review the request, then continue automation when ready."}
-				pause.ExitReason = "permission_boundary"
-				appendRuntimeEvent(ctx, runCtl, "handoff_required", summary, eventData(map[string]any{"tool": e.ToolName, "reason": e.Reason}))
-			}
-			if err := handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: false, Reason: "Permission is outside the Task's pre-authorized automation boundary"}); err != nil {
-				eventErr = fmt.Errorf("agent task: reject approval request: %w", err)
-			}
-			handle.Cancel()
-		case agentboot.ErrorEvent:
-			if e.Err != nil {
-				_ = ctl.UpdateProgress(ctx, e.Err.Error())
-				appendRuntimeEvent(ctx, runCtl, "runtime_error", e.Err.Error(), nil)
-			}
-		}
-	}
-	return pause, eventErr
-}
-
 func appendRuntimeEvent(ctx context.Context, ctl task.RunController, kind, summary string, data json.RawMessage) {
 	if ctl == nil {
 		return
@@ -298,9 +260,10 @@ func appendRuntimeEvent(ctx context.Context, ctl task.RunController, kind, summa
 	})
 }
 
-func cancelAndWait(ctx context.Context, handle agentboot.ExecutionHandle, ctl task.Controller) {
+func cancelAndWait(handle agentboot.ExecutionHandle) {
 	handle.Cancel()
-	_, _ = consumeEvents(ctx, handle, ctl, nil, nil)
+	for range handle.Events() {
+	}
 	_, _ = handle.Wait()
 }
 
