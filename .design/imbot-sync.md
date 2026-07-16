@@ -27,9 +27,11 @@ correctness.**
    The live port is discovered through the runtime port file gated on the
    PID lock (see `runtime-port-file.md`) — this is exactly why the port file
    exists. The call is best-effort: server not running → nothing to notify,
-   the initial sync at next startup picks the change up. The caller gets a
-   bool so UX can say what actually happened ("bot started automatically"
-   vs. "run `remote start …`").
+   the initial sync at next startup picks the change up. The reload response
+   carries per-bot running status (`Sync()` swallows individual start
+   failures by design), so UX reports what actually happened: "started
+   automatically" / "server notified but bot not running, check logs" /
+   "run `remote start …`".
 
 2. **The polling loop stays, but as a backstop** (`background.go`):
    one immediate sync at startup, then a 5-minute reconcile. It is no longer
