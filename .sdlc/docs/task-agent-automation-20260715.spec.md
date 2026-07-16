@@ -57,6 +57,14 @@ Task
   └── Runs
 ```
 
+Task 的输入分为三层：
+
+- `Goal`：持久目标，是每次 Run 都必须显式携带的当前主题；可在非 running/queued 状态编辑。
+- `Step`：可选的顺序阶段定义；本阶段创建后只读，避免编辑游标和历史结果产生歧义。
+- `Instruction`：只作用于下一次 Run 的临时补充，成功交给 worker 后清空，不改写 Goal。
+
+内部 outcome/system appendix 属于 TB 的执行协议和安全边界，不是 Task 主题，不提供用户编辑入口。
+
 `TaskRun` 对应一次真实 CLI process。一次 Step 可以经历多个 Run。Task 可选携带一个有序步骤列表。没有步骤时保持当前自由目标语义；添加步骤后，TB 每轮只下发当前步骤，Agent 在步骤内部自主规划和调用工具：
 
 ```text
@@ -123,8 +131,10 @@ Goal 下方提供 `Add step`，而不是先选择“简单/多步骤”模式。
 详情展示 goal、状态、最新摘要/错误、下一次运行、workspace 绝对路径、session ID、有效自动化策略和原生接管命令。顺序 Task 额外展示当前步骤、已完成步骤摘要和后续步骤。Run timeline 展示每轮 trigger、step、启动策略、关键 agent/tool 事件、结果、退出原因和错误。
 
 - `Stop`：取消当前进程并停止后续触发。
-- `Run now`：立即重新唤醒非运行 Task。
-- `Send instruction`：向同一 session 追加消息并唤醒。
+- `Run now`：尚未完成的非运行 Task 立即执行当前 Goal/Step，不增加临时消息。
+- `Run again`：终态 Task 从当前持久定义重新执行；顺序 Task 从第一步开始。
+- `Run with instruction`：向同一 session 追加只用于下一 Run 的临时补充并立即唤醒。
+- `Edit task`：编辑 title 和持久 Goal，但不自动执行；running/queued 时禁用并由 API 拒绝。
 - `Open workspace`：打开工作目录。
 - `Take over`：运行中先 Stop，然后复制或运行 `cd <workspace> && <agent> resume <session>`，在原生 CLI 中完整交互。
 - `Continue automation`：人工接管完成后，在同一 session 启动下一 Run，重新进入 Task 的预授权边界。
@@ -258,6 +268,8 @@ type FollowUpPolicy struct {
 
 `PendingInput` 成功交给 worker 后清空。
 
+每次 Run 的 user prompt 都显式包含当前 `Goal`，不能只依赖 native session 的历史上下文。无步骤 Task 的 resume prompt 组合为 `Goal + 本次 Instruction（若有）+ continue 边界`；顺序 Task 组合为 `Goal + 当前 Step + 本次 Instruction（若有）+ 不得提前执行后续步骤的边界`。因此编辑 Goal 后，同一个 native session 的下一 Run 会明确收到新 Goal，而不是静默沿用旧主题。
+
 顺序步骤约束：
 
 - 最多 50 个步骤；instruction trim 后不能为空。
@@ -363,13 +375,16 @@ Backend 先定义 swagger models；frontend 在 codegen 前使用集中 placehol
 | GET | `/api/v1/tasks` | List |
 | POST | `/api/v1/tasks` | Create |
 | GET | `/api/v1/tasks/{id}` | Detail |
-| POST | `/api/v1/tasks/{id}/wake` | Run now / Send instruction |
+| PATCH | `/api/v1/tasks/{id}` | Edit title / durable Goal |
+| POST | `/api/v1/tasks/{id}/wake` | Run now / Run again / Run with instruction |
 | POST | `/api/v1/tasks/{id}/stop` | Stop |
 | GET | `/api/v1/tasks/agents` | Agent availability |
 | GET | `/api/v1/tasks/{id}/runs` | Run history |
 | GET | `/api/v1/tasks/{id}/runs/{runID}` | Run detail |
 
 Create request 可选增加 `steps: [{instruction}]`、execution policy 和 `workspace_path`。服务端按 agent capability 校验、canonicalize 用户目录，并生成稳定 step ID 和展示标题。Create request 仍不接受 session ID、current step 或 step outcome。`/tasks/agents` 返回 launch profiles、automation boundary 和 tool filtering capabilities，不返回伪造的 live-control 能力。
+
+Update request 使用 pointer 字段区分 omitted 与显式空值，只接受 `title` 和 `goal`。`goal` 若出现则 trim 后必须非空；`title` 可清空以恢复 Goal 作为列表标题。更新保留 workspace、session、steps、step outcomes、execution、schedule 和 recurrence，不触发 Wake。running/queued 返回 409；其它状态保存后由下一 Run 读取。
 
 Server startup：从 `StoreManager.Tasks()` 创建 Manager，注册 agent handler 和 API，依赖就绪后 Start，graceful shutdown 时 Stop。
 
@@ -404,6 +419,7 @@ Task manager 始终启动；全局实验扩展 `extensions.task` 只控制入口
 - Claude/Codex create/resume args 和 event normalization。
 - fake agent：done、continue、needs input、cancel、restart resume。
 - API validation/auth；前端创建、状态分组和主要动作。
+- Goal 更新状态约束、字段保留、空 Goal 拒绝；编辑后下一 Run prompt 显式包含新 Goal。
 - 顺序步骤逐轮 prompt、done 推进、continue/needs-input 不推进、最终完成和 recurrence 重置。
 - Claude tools/profile 参数映射；Codex per-run sandbox 映射和不支持组合拒绝。
 - Run lifecycle/history、旧 Task 兼容、restart interruption。
@@ -436,5 +452,6 @@ Task manager 始终启动；全局实验扩展 `extensions.task` 只控制入口
 - When 与持续推进分轴。
 - 不增加“任务模式”选择器；添加步骤自然形成顺序 Task。
 - 展示具体 next run、workspace、session 和 resume command。
-- Done 后仍可进入和 Run now。
-- Stop、Send instruction、Take over 只影响当前 Task。
+- Done 后仍可进入和 Run again。
+- Goal、Step、Instruction 分轴展示；不暴露内部 system appendix 编辑器。
+- Stop、Run with instruction、Take over 只影响当前 Task。
