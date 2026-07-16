@@ -110,9 +110,10 @@ func (s *MemoryStore) MarkInterruptedOnStartup(_ context.Context) error {
 		}
 	}
 	for _, run := range s.runs {
-		if run.Status == RunStatusRunning {
+		if run.Status.IsActive() {
 			run.Status = RunStatusInterrupted
 			run.FinishedAt = &now
+			run.PendingControl = nil
 			run.UpdatedAt = now
 		}
 	}
@@ -226,6 +227,21 @@ func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[
 	return nil
 }
 
+func (s *MemoryStore) AppendRunEvent(_ context.Context, runID string, event RunEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[runID]
+	if !ok {
+		return ErrNotFound
+	}
+	run.Events = append(run.Events, event)
+	if len(run.Events) > 200 {
+		run.Events = append([]RunEvent(nil), run.Events[len(run.Events)-200:]...)
+	}
+	run.UpdatedAt = time.Now()
+	return nil
+}
+
 func (s *MemoryStore) CreateRun(_ context.Context, run *TaskRun) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -292,6 +308,17 @@ func (s *MemoryStore) UpdateRun(_ context.Context, runID string, fields map[stri
 			} else if ts, ok := value.(time.Time); ok {
 				run.FinishedAt = &ts
 			}
+		case "pending_control":
+			text, _ := value.(string)
+			if text == "" {
+				run.PendingControl = nil
+			} else {
+				var control PendingControl
+				if err := json.Unmarshal([]byte(text), &control); err != nil {
+					return err
+				}
+				run.PendingControl = &control
+			}
 		}
 	}
 	run.UpdatedAt = time.Now()
@@ -302,5 +329,11 @@ func cloneRun(run *TaskRun) *TaskRun {
 	cp := *run
 	cp.Input = append(json.RawMessage(nil), run.Input...)
 	cp.Result = append(json.RawMessage(nil), run.Result...)
+	if run.PendingControl != nil {
+		control := *run.PendingControl
+		control.Input = append(json.RawMessage(nil), run.PendingControl.Input...)
+		cp.PendingControl = &control
+	}
+	cp.Events = append([]RunEvent(nil), run.Events...)
 	return &cp
 }

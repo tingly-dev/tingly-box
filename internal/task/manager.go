@@ -357,9 +357,10 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 		}
 		now := time.Now()
 		fields := map[string]interface{}{
-			"status":      string(runStatus),
-			"finished_at": now,
-			"error":       runError,
+			"status":          string(runStatus),
+			"finished_at":     now,
+			"error":           runError,
+			"pending_control": "",
 		}
 		if len(runResult) > 0 {
 			fields["result"] = string(runResult)

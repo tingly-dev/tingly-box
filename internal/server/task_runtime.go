@@ -41,7 +41,8 @@ func (s *Server) initTaskRuntime() {
 	}
 
 	manager := coretask.NewManager(store)
-	if err := manager.Register(agenttask.NewHandler(agents, envResolver)); err != nil {
+	agentHandler := agenttask.NewHandler(agents, envResolver)
+	if err := manager.Register(agentHandler); err != nil {
 		logrus.WithError(err).Warn("Task runtime handler registration failed")
 		return
 	}
@@ -51,6 +52,6 @@ func (s *Server) initTaskRuntime() {
 	}
 
 	s.taskManager = manager
-	s.taskAPI = taskapi.NewHandler(manager, s.config.ConfigDir, agents)
+	s.taskAPI = taskapi.NewHandler(manager, s.config.ConfigDir, agents, agentHandler.Controls())
 	logrus.Debug("Task runtime initialized")
 }

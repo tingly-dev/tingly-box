@@ -81,23 +81,28 @@ func TestTaskStore_TaskRunRoundTripAndRecovery(t *testing.T) {
 
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
+	control := &task.PendingControl{
+		ID: "control-1", Kind: task.ControlKindApproval, ToolName: "Bash",
+		Input: json.RawMessage(`{"command":"go test ./..."}`), CreatedAt: now, ExpiresAt: now.Add(time.Minute),
+	}
 	run := &task.TaskRun{
-		ID: "run-1", TaskID: "task-1", Attempt: 2, Status: task.RunStatusRunning,
-		Input: json.RawMessage(`{"goal":"inspect"}`), Progress: "working",
+		ID: "run-1", TaskID: "task-1", Attempt: 2, Status: task.RunStatusWaitingApproval,
+		Input: json.RawMessage(`{"goal":"inspect"}`), Progress: "working", PendingControl: control,
+		Events:    []task.RunEvent{{ID: "event-1", Kind: "control_requested", Summary: "Approval requested", CreatedAt: now}},
 		StartedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := sm.Tasks().CreateRun(ctx, run); err != nil {
 		t.Fatal(err)
 	}
 	got, err := sm.Tasks().GetRun(ctx, "task-1", "run-1")
-	if err != nil || got.Status != task.RunStatusRunning || string(got.Input) != string(run.Input) {
+	if err != nil || got.Status != task.RunStatusWaitingApproval || string(got.Input) != string(run.Input) || got.PendingControl == nil || len(got.Events) != 1 {
 		t.Fatalf("run=%+v err=%v", got, err)
 	}
 	if err := sm.Tasks().MarkInterruptedOnStartup(ctx); err != nil {
 		t.Fatal(err)
 	}
 	got, err = sm.Tasks().GetRun(ctx, "task-1", "run-1")
-	if err != nil || got.Status != task.RunStatusInterrupted || got.FinishedAt == nil {
+	if err != nil || got.Status != task.RunStatusInterrupted || got.FinishedAt == nil || got.PendingControl != nil {
 		t.Fatalf("recovered run=%+v err=%v", got, err)
 	}
 }

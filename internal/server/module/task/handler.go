@@ -1,6 +1,7 @@
 package taskapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,10 +20,15 @@ type Handler struct {
 	manager   coretask.Manager
 	configDir string
 	agents    map[agenttask.AgentKind]agentboot.Agent
+	controls  *agenttask.ControlBroker
 }
 
-func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent) *Handler {
-	return &Handler{manager: manager, configDir: configDir, agents: agents}
+func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent, controls ...*agenttask.ControlBroker) *Handler {
+	broker := agenttask.NewControlBroker(0)
+	if len(controls) > 0 && controls[0] != nil {
+		broker = controls[0]
+	}
+	return &Handler{manager: manager, configDir: configDir, agents: agents, controls: broker}
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -55,6 +61,10 @@ func (h *Handler) Get(c *gin.Context) {
 	}
 	view, err := toView(task)
 	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if err := h.attachActiveRun(c.Request.Context(), task.ID, &view); err != nil {
 		writeError(c, err)
 		return
 	}
@@ -104,6 +114,61 @@ func (h *Handler) GetRun(c *gin.Context) {
 		return
 	}
 	view, err := toRunView(run)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, RunResponse{Data: view})
+}
+
+func (h *Handler) RespondControl(c *gin.Context) {
+	taskRecord, err := h.manager.Get(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if taskRecord.Type != agenttask.TaskType {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	run, err := h.manager.GetRun(c.Request.Context(), taskRecord.ID, c.Param("runID"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	controlID := c.Param("controlID")
+	if run.PendingControl == nil || run.PendingControl.ID != controlID {
+		c.JSON(http.StatusConflict, gin.H{"error": agenttask.ErrControlNotActive.Error()})
+		return
+	}
+	var req ControlResponseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	decision := agenttask.ControlDecision{
+		Action: strings.ToLower(strings.TrimSpace(req.Action)),
+		Answer: strings.TrimSpace(req.Answer),
+		Reason: strings.TrimSpace(req.Reason),
+	}
+	if err := h.controls.Respond(c.Request.Context(), run.ID, controlID, decision); err != nil {
+		if errors.Is(err, agenttask.ErrControlNotActive) || errors.Is(err, agenttask.ErrControlAnswered) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		if strings.Contains(err.Error(), "action must") || strings.Contains(err.Error(), "answer is required") || strings.Contains(err.Error(), "unsupported control") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		writeError(c, err)
+		return
+	}
+	updated, err := h.manager.GetRun(c.Request.Context(), taskRecord.ID, run.ID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, err := toRunView(updated)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -325,6 +390,22 @@ func toView(task *coretask.Task) (TaskView, error) {
 	return view, nil
 }
 
+func (h *Handler) attachActiveRun(ctx context.Context, taskID string, view *TaskView) error {
+	runs, err := h.manager.ListRuns(ctx, coretask.RunListFilter{TaskID: taskID, Limit: 1})
+	if err != nil {
+		return err
+	}
+	if len(runs) == 0 || !runs[0].Status.IsActive() {
+		return nil
+	}
+	view.ActiveRunID = runs[0].ID
+	if runs[0].PendingControl != nil {
+		control := *runs[0].PendingControl
+		view.Attention = &control
+	}
+	return nil
+}
+
 func toRunView(run *coretask.TaskRun) (RunView, error) {
 	var payload agenttask.Payload
 	if err := json.Unmarshal(run.Input, &payload); err != nil {
@@ -338,6 +419,7 @@ func toRunView(run *coretask.TaskRun) (RunView, error) {
 	view := RunView{
 		ID: run.ID, TaskID: run.TaskID, Attempt: run.Attempt, Status: run.Status,
 		Execution: execution, Progress: run.Progress, Error: run.Error,
+		PendingControl: run.PendingControl, Events: run.Events,
 		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
 		Trigger: "run",
 	}

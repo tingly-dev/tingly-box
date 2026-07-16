@@ -20,10 +20,59 @@ func testRouter(handler *Handler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/tasks", handler.Create)
+	router.GET("/tasks/:id", handler.Get)
 	router.POST("/tasks/:id/wake", handler.Wake)
 	router.GET("/tasks/:id/runs", handler.ListRuns)
 	router.GET("/tasks/:id/runs/:runID", handler.GetRun)
+	router.POST("/tasks/:id/runs/:runID/control/:controlID/respond", handler.RespondControl)
 	return router
+}
+
+func TestGet_SurfacesActiveControlAndRejectsStaleDelivery(t *testing.T) {
+	store := coretask.NewMemoryStore()
+	manager := coretask.NewManager(store)
+	payload := agenttask.Payload{
+		Version: 2, Goal: "Release", Agent: agenttask.AgentClaude, WorkspacePath: t.TempDir(),
+		Execution: agenttask.DefaultExecutionPolicy(agenttask.AgentClaude),
+	}
+	data, _ := json.Marshal(payload)
+	created, err := manager.Submit(context.Background(), coretask.SubmitRequest{Type: agenttask.TaskType, Payload: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	control := &coretask.PendingControl{
+		ID: "control-1", Kind: coretask.ControlKindApproval, ToolName: "Bash",
+		Input: json.RawMessage(`{"command":"go test ./..."}`), CreatedAt: now, ExpiresAt: now.Add(time.Minute),
+	}
+	if err := store.CreateRun(context.Background(), &coretask.TaskRun{
+		ID: "run-1", TaskID: created.ID, Attempt: 1, Status: coretask.RunStatusWaitingApproval,
+		Input: data, PendingControl: control, StartedAt: now, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(manager, t.TempDir(), nil)
+	router := testRouter(handler)
+	response := performJSON(t, router, http.MethodGet, "/tasks/"+created.ID, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var decoded TaskResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Data.ActiveRunID != "run-1" || decoded.Data.Attention == nil || decoded.Data.Attention.ID != control.ID {
+		t.Fatalf("task view = %+v", decoded.Data)
+	}
+
+	// A persisted control without a live broker is deliberately not actionable
+	// after process restart.
+	response = performJSON(t, router, http.MethodPost,
+		"/tasks/"+created.ID+"/runs/run-1/control/control-1/respond", `{"action":"approve"}`)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), agenttask.ErrControlNotActive.Error()) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
 }
 
 func TestRuns_ReturnsExecutionHistory(t *testing.T) {

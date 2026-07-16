@@ -61,6 +61,8 @@ type TaskView struct {
 	CurrentStep   int                       `json:"current_step"`
 	StepOutcomes  []agenttask.StepOutcome   `json:"step_outcomes,omitempty"`
 	Execution     agenttask.ExecutionPolicy `json:"execution"`
+	ActiveRunID   string                    `json:"active_run_id,omitempty"`
+	Attention     *coretask.PendingControl  `json:"attention,omitempty"`
 }
 
 type TaskResponse struct {
@@ -76,22 +78,30 @@ type AgentListResponse struct {
 }
 
 type RunView struct {
-	ID          string                    `json:"id"`
-	TaskID      string                    `json:"task_id"`
-	Attempt     int                       `json:"attempt"`
-	Status      coretask.RunStatus        `json:"status"`
-	Trigger     string                    `json:"trigger"`
-	StepID      string                    `json:"step_id,omitempty"`
-	StepIndex   *int                      `json:"step_index,omitempty"`
-	Instruction string                    `json:"instruction,omitempty"`
-	Execution   agenttask.ExecutionPolicy `json:"execution"`
-	Progress    string                    `json:"progress,omitempty"`
-	Result      *agenttask.Result         `json:"result,omitempty"`
-	Error       string                    `json:"error,omitempty"`
-	StartedAt   time.Time                 `json:"started_at"`
-	FinishedAt  *time.Time                `json:"finished_at,omitempty"`
-	CreatedAt   time.Time                 `json:"created_at"`
-	UpdatedAt   time.Time                 `json:"updated_at"`
+	ID             string                    `json:"id"`
+	TaskID         string                    `json:"task_id"`
+	Attempt        int                       `json:"attempt"`
+	Status         coretask.RunStatus        `json:"status"`
+	Trigger        string                    `json:"trigger"`
+	StepID         string                    `json:"step_id,omitempty"`
+	StepIndex      *int                      `json:"step_index,omitempty"`
+	Instruction    string                    `json:"instruction,omitempty"`
+	Execution      agenttask.ExecutionPolicy `json:"execution"`
+	Progress       string                    `json:"progress,omitempty"`
+	Result         *agenttask.Result         `json:"result,omitempty"`
+	Error          string                    `json:"error,omitempty"`
+	PendingControl *coretask.PendingControl  `json:"pending_control,omitempty"`
+	Events         []coretask.RunEvent       `json:"events,omitempty"`
+	StartedAt      time.Time                 `json:"started_at"`
+	FinishedAt     *time.Time                `json:"finished_at,omitempty"`
+	CreatedAt      time.Time                 `json:"created_at"`
+	UpdatedAt      time.Time                 `json:"updated_at"`
+}
+
+type ControlResponseRequest struct {
+	Action string `json:"action" binding:"required"`
+	Answer string `json:"answer,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type RunResponse struct {

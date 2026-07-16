@@ -18,6 +18,10 @@ type fakeController struct {
 	mu       sync.Mutex
 	payload  json.RawMessage
 	progress string
+	runID    string
+	pending  chan task.PendingControl
+	control  *task.PendingControl
+	events   []task.RunEvent
 }
 
 func (c *fakeController) UpdateProgress(_ context.Context, text string) error {
@@ -35,6 +39,39 @@ func (c *fakeController) UpdatePayload(_ context.Context, payload json.RawMessag
 }
 
 func (c *fakeController) IsCancelled(ctx context.Context) bool { return ctx.Err() != nil }
+
+func (c *fakeController) RunID() string {
+	if c.runID != "" {
+		return c.runID
+	}
+	return "run-1"
+}
+
+func (c *fakeController) SetPendingControl(_ context.Context, _ task.RunStatus, control *task.PendingControl) error {
+	c.mu.Lock()
+	copy := *control
+	c.control = &copy
+	c.mu.Unlock()
+	if c.pending != nil {
+		c.pending <- copy
+	}
+	return nil
+}
+
+func (c *fakeController) ResolvePendingControl(_ context.Context, event task.RunEvent) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.control = nil
+	c.events = append(c.events, event)
+	return nil
+}
+
+func (c *fakeController) AppendRunEvent(_ context.Context, event task.RunEvent) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, event)
+	return nil
+}
 
 func (c *fakeController) decodedPayload(t *testing.T) Payload {
 	t.Helper()
@@ -270,7 +307,7 @@ func TestHandler_CodexCheckpointsThreadStarted(t *testing.T) {
 	}
 }
 
-func TestHandler_AskBecomesNeedsInput(t *testing.T) {
+func TestHandler_AskCanBeAnsweredWhileRunContinues(t *testing.T) {
 	workspace := mustWorkspace(t)
 	responses := make(chan responseCall, 1)
 	agent := &fakeAgent{available: true}
@@ -279,11 +316,20 @@ func TestHandler_AskBecomesNeedsInput(t *testing.T) {
 			ID:      "ask-1",
 			Message: "Which environment?",
 		}}
-		return controlledHandle(events, nil, errors.New("cancelled"), responses), nil
+		return controlledHandle(events, &agentboot.Result{
+			Output: `<task_outcome>{"state":"done","summary":"deployed to staging"}</task_outcome>`,
+		}, nil, responses), nil
 	}
 
 	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
-	controller := &fakeController{}
+	controller := &fakeController{pending: make(chan task.PendingControl, 1)}
+	responded := make(chan error, 1)
+	go func() {
+		control := <-controller.pending
+		responded <- handler.Controls().Respond(context.Background(), controller.RunID(), control.ID, ControlDecision{
+			Action: "answer", Answer: "staging",
+		})
+	}()
 	taskResult, err := handler.Run(context.Background(), &task.Task{
 		ID:   uuid.NewString(),
 		Type: TaskType,
@@ -296,24 +342,55 @@ func TestHandler_AskBecomesNeedsInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if taskResult.Outcome != task.OutcomeNeedsInput {
+	if taskResult.Outcome != task.OutcomeComplete {
 		t.Fatalf("outcome = %s", taskResult.Outcome)
 	}
-	var result Result
-	if err := json.Unmarshal(taskResult.Result, &result); err != nil {
-		t.Fatal(err)
-	}
-	if result.Question != "Which environment?" || result.NativeSessionID == "" {
-		t.Fatalf("result = %+v", result)
+	if err := <-responded; err != nil {
+		t.Fatalf("respond: %v", err)
 	}
 	select {
 	case call := <-responses:
 		response, ok := call.resp.(agentboot.AskResponse)
-		if call.id != "ask-1" || !ok || response.Approved {
+		if call.id != "ask-1" || !ok || !response.Approved || response.Response != "staging" {
 			t.Fatalf("response = %+v", call)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("handler did not reject pending ask")
+		t.Fatal("handler did not deliver answer")
+	}
+}
+
+func TestHandler_ApprovalCanBeGrantedOnce(t *testing.T) {
+	workspace := mustWorkspace(t)
+	responses := make(chan responseCall, 1)
+	agent := &fakeAgent{available: true, execute: func(_ context.Context, _ string, _ agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+		return controlledHandle([]agentboot.StreamEvent{agentboot.ApprovalRequestEvent{
+			ID: "approval-1", ToolName: "Bash", Input: map[string]any{"command": "go test ./..."},
+		}}, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"tests passed"}</task_outcome>`}, nil, responses), nil
+	}}
+	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
+	controller := &fakeController{pending: make(chan task.PendingControl, 1)}
+	responded := make(chan error, 1)
+	go func() {
+		control := <-controller.pending
+		responded <- handler.Controls().Respond(context.Background(), controller.RunID(), control.ID, ControlDecision{Action: "approve"})
+	}()
+
+	result, err := handler.Run(context.Background(), &task.Task{ID: uuid.NewString(), Type: TaskType, Payload: rawPayload(t, Payload{
+		Goal: "test", Agent: AgentClaude, WorkspacePath: workspace,
+	})}, controller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != task.OutcomeComplete {
+		t.Fatalf("outcome = %s", result.Outcome)
+	}
+	if err := <-responded; err != nil {
+		t.Fatalf("respond: %v", err)
+	}
+	call := <-responses
+	response, ok := call.resp.(agentboot.ApprovalResponse)
+	if !ok || !response.Approved || call.id != "approval-1" {
+		t.Fatalf("response = %+v", call)
 	}
 }
 

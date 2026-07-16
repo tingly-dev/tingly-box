@@ -44,4 +44,5 @@ type Store interface {
 	GetRun(ctx context.Context, taskID, runID string) (*TaskRun, error)
 	ListRuns(ctx context.Context, filter RunListFilter) ([]TaskRun, error)
 	UpdateRun(ctx context.Context, runID string, fields map[string]interface{}) error
+	AppendRunEvent(ctx context.Context, runID string, event RunEvent) error
 }

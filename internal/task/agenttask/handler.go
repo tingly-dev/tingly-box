@@ -31,6 +31,7 @@ type EnvResolver func(ctx context.Context, agent AgentKind) ([]string, error)
 type Handler struct {
 	agents      map[AgentKind]agentboot.Agent
 	envResolver EnvResolver
+	controls    *ControlBroker
 	now         func() time.Time
 }
 
@@ -39,10 +40,18 @@ func NewHandler(agents map[AgentKind]agentboot.Agent, envResolver EnvResolver) *
 	for kind, agent := range agents {
 		registered[kind] = agent
 	}
-	return &Handler{agents: registered, envResolver: envResolver, now: time.Now}
+	return &Handler{
+		agents: registered, envResolver: envResolver,
+		controls: NewControlBroker(0), now: time.Now,
+	}
 }
 
 func (h *Handler) Type() string { return TaskType }
+
+// Controls exposes the process-local delivery bridge used by the Task API.
+// Durable control metadata remains on TaskRun; this broker only owns the live
+// stdin connection and therefore cannot survive a server restart.
+func (h *Handler) Controls() *ControlBroker { return h.controls }
 
 func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*task.TaskResult, error) {
 	var payload Payload
@@ -129,7 +138,8 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		}
 	}
 
-	pending, eventErr := consumeEvents(ctx, handle, ctl, func(nativeSessionID string) error {
+	runCtl, _ := ctl.(task.RunController)
+	eventErr := consumeEvents(ctx, handle, ctl, runCtl, h.controls, func(nativeSessionID string) error {
 		if nativeSessionID == "" || nativeSessionID == payload.SessionID {
 			return nil
 		}
@@ -139,9 +149,6 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	agentResult, waitErr := handle.Wait()
 	if eventErr != nil {
 		return nil, eventErr
-	}
-	if pending != nil {
-		return h.needsInputResult(ctx, ctl, &payload, *pending)
 	}
 	if waitErr != nil {
 		return nil, fmt.Errorf("agent task: %s execution: %w", payload.Agent, waitErr)
@@ -182,10 +189,6 @@ func nextPrompt(payload Payload, resume bool) string {
 	return payload.Goal
 }
 
-type pendingInput struct {
-	Question string
-}
-
 type nativeSessionMessage interface {
 	GetSessionID() string
 }
@@ -194,17 +197,15 @@ func consumeEvents(
 	ctx context.Context,
 	handle agentboot.ExecutionHandle,
 	ctl task.Controller,
+	runCtl task.RunController,
+	controls *ControlBroker,
 	onSession func(string) error,
-) (*pendingInput, error) {
+) error {
 	messageCount := 0
-	var pending *pendingInput
 	var eventErr error
 	for event := range handle.Events() {
 		switch e := event.(type) {
 		case agentboot.MessageEvent:
-			if pending != nil {
-				continue
-			}
 			if sessionMessage, ok := e.Raw.(nativeSessionMessage); ok && onSession != nil {
 				if err := onSession(strings.TrimSpace(sessionMessage.GetSessionID())); err != nil {
 					eventErr = err
@@ -215,64 +216,40 @@ func consumeEvents(
 			messageCount++
 			_ = ctl.UpdateProgress(ctx, fmt.Sprintf("Agent working · %d events", messageCount))
 		case agentboot.AskRequestEvent:
-			question := strings.TrimSpace(e.Message)
-			if question == "" {
-				question = marshalQuestion(e.Input)
+			if runCtl == nil || controls == nil {
+				eventErr = errors.New("agent task: live input requires a run controller")
+				_ = handle.Respond(e.ID, agentboot.AskResponse{Approved: false, Reason: eventErr.Error()})
+				handle.Cancel()
+				continue
 			}
-			_ = handle.Respond(e.ID, agentboot.AskResponse{Approved: false, Reason: "Task paused for user input"})
-			handle.Cancel()
-			if pending == nil {
-				pending = &pendingInput{Question: question}
+			if err := controls.AwaitAsk(ctx, runCtl.RunID(), handle, runCtl, e); err != nil {
+				eventErr = fmt.Errorf("agent task: answer input request: %w", err)
+				handle.Cancel()
 			}
 		case agentboot.ApprovalRequestEvent:
-			question := fmt.Sprintf("Approval required for tool %s: %s", e.ToolName, marshalQuestion(e.Input))
-			_ = handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: false, Reason: "Task paused for user approval"})
-			handle.Cancel()
-			if pending == nil {
-				pending = &pendingInput{Question: question}
+			if runCtl == nil || controls == nil {
+				eventErr = errors.New("agent task: live approval requires a run controller")
+				_ = handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: false, Reason: eventErr.Error()})
+				handle.Cancel()
+				continue
+			}
+			if err := controls.AwaitApproval(ctx, runCtl.RunID(), handle, runCtl, e); err != nil {
+				eventErr = fmt.Errorf("agent task: answer approval request: %w", err)
+				handle.Cancel()
 			}
 		case agentboot.ErrorEvent:
-			if pending == nil && e.Err != nil {
+			if e.Err != nil {
 				_ = ctl.UpdateProgress(ctx, e.Err.Error())
 			}
 		}
 	}
-	return pending, eventErr
+	return eventErr
 }
 
 func cancelAndWait(ctx context.Context, handle agentboot.ExecutionHandle, ctl task.Controller) {
 	handle.Cancel()
-	_, _ = consumeEvents(ctx, handle, ctl, nil)
+	_ = consumeEvents(ctx, handle, ctl, nil, nil, nil)
 	_, _ = handle.Wait()
-}
-
-func marshalQuestion(input map[string]any) string {
-	if len(input) == 0 {
-		return "Agent requires user input"
-	}
-	data, err := json.Marshal(input)
-	if err != nil {
-		return "Agent requires user input"
-	}
-	return string(data)
-}
-
-func (h *Handler) needsInputResult(ctx context.Context, ctl task.Controller, payload *Payload, pending pendingInput) (*task.TaskResult, error) {
-	payload.WakeCount++
-	if err := checkpointPayload(ctx, ctl, payload); err != nil {
-		return nil, err
-	}
-	result := Result{
-		State:           "needs_input",
-		Summary:         "Task paused for user input",
-		Question:        pending.Question,
-		NativeSessionID: payload.SessionID,
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
 }
 
 func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *Payload, result Result) (*task.TaskResult, error) {
