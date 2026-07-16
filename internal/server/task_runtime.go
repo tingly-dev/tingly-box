@@ -10,6 +10,7 @@ import (
 	taskapi "github.com/tingly-dev/tingly-box/internal/server/module/task"
 	coretask "github.com/tingly-dev/tingly-box/internal/task"
 	"github.com/tingly-dev/tingly-box/internal/task/agenttask"
+	"github.com/tingly-dev/tingly-box/internal/task/shelltask"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
@@ -44,6 +45,10 @@ func (s *Server) initTaskRuntime() {
 	agentHandler := agenttask.NewHandler(agents, envResolver)
 	if err := manager.Register(agentHandler); err != nil {
 		logrus.WithError(err).Warn("Task runtime handler registration failed")
+		return
+	}
+	if err := manager.Register(shelltask.NewHandler()); err != nil {
+		logrus.WithError(err).Warn("Task runtime shell handler registration failed")
 		return
 	}
 	if err := manager.Start(s.ctx); err != nil {
