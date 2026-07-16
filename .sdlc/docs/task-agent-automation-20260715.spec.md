@@ -26,7 +26,7 @@
 - 权限越界结束当前 Run 并进入 native handoff，不在 TB 中代理 CLI 审批。
 - 保存有用的 Run 事件、最终结果、退出原因和有效启动策略，而不是只显示最后一句话。
 - Task 显式保存启动 profile 和工具范围；Run 保存实际生效的启动策略快照。
-- 每个 Task 使用 TB 生成的稳定 workspace。
+- 每个 Task 使用稳定 workspace：默认由 TB 生成，也可在创建时选择用户已有目录。
 - 同一 workspace/session 同时只有一个执行者。
 - 服务重启后保留 Task、workspace、session ID 和最新结果。
 
@@ -112,7 +112,9 @@ Execution 区域在选择 Agent 后展示该 runtime 真实支持的启动 profi
 - Claude 的所选工具同时是可见工具和本 Run 的免交互 allowlist；Codex 固定 `approval_policy=never` 并使用所选 sandbox。
 - 不提供 Claude bypass/full-access 或 Codex danger-full-access；Terminal 明确提示其可间接读写和访问网络。
 
-workspace 由 TB 生成，不让用户先选路径。
+Goal/Steps 下方提供可选 `Working directory`。留空时由 TB 生成隔离目录；填写时必须是服务所在机器上已存在的绝对目录。它是任务内容的一部分，不增加“generated/custom”模式选择器。
+
+选择已有目录时就地说明：Agent 会直接读取或修改其中内容，TB 不复制、不清理该目录。服务端返回 canonical absolute path，页面创建后始终展示实际生效值。
 
 Goal 下方提供 `Add step`，而不是先选择“简单/多步骤”模式。用户未添加步骤时创建普通 Task；添加后按视觉顺序执行。v0 的步骤只输入 instruction，标题由 instruction 自动截取生成。
 
@@ -137,10 +139,13 @@ Goal 下方提供 `Add step`，而不是先选择“简单/多步骤”模式。
 ## 5. Workspace and Session
 
 ```text
-<configDir>/tasks/<task-id>/workspace/
+<configDir>/tasks/<task-id>/workspace/  # generated default
+<user-selected-existing-directory>/    # optional
 ```
 
-- 路径从 `AppConfig.ConfigDir()` 派生，目录权限 `0700`。
+- 默认路径从 `AppConfig.ConfigDir()` 派生，目录权限 `0700`。
+- 用户路径必须 absolute、存在且为 directory；通过 `EvalSymlinks` canonicalize 后保存，不保留含 symlink 的别名。
+- 用户目录的权限、内容和生命周期仍由用户负责；TB 不创建其子目录、不复制、不删除。
 - Task ID 使用服务生成 UUID；DB 保存 canonical absolute path。
 - TB 拥有 workspace；Claude/Codex 继续拥有各自 native session store。
 - TB 只保存 `agent + workspace_path + native_session_id`。
@@ -148,7 +153,7 @@ Goal 下方提供 `Add step`，而不是先选择“简单/多步骤”模式。
 - 首次执行创建/捕获 session ID，后续默认 resume 同一 session。
 - session 丢失时明确失败，不静默创建新 session。
 
-v0 不支持用户自选 workspace、attached path 或 fresh-session policy。
+v0 不支持为一个 Task 挂载多个目录或运行后切换 workspace；需要新目录时创建新 Task。fresh-session policy 仍 deferred。
 
 ## 6. Evolve `internal/task`
 
@@ -364,7 +369,7 @@ Backend 先定义 swagger models；frontend 在 codegen 前使用集中 placehol
 | GET | `/api/v1/tasks/{id}/runs` | Run history |
 | GET | `/api/v1/tasks/{id}/runs/{runID}` | Run detail |
 
-Create request 可选增加 `steps: [{instruction}]` 和 execution policy；服务端按 agent capability 校验并生成稳定 step ID 和展示标题。Create request 仍不接受 workspace path、session ID、current step 或 step outcome。`/tasks/agents` 返回 launch profiles、automation boundary 和 tool filtering capabilities，不返回伪造的 live-control 能力。
+Create request 可选增加 `steps: [{instruction}]`、execution policy 和 `workspace_path`。服务端按 agent capability 校验、canonicalize 用户目录，并生成稳定 step ID 和展示标题。Create request 仍不接受 session ID、current step 或 step outcome。`/tasks/agents` 返回 launch profiles、automation boundary 和 tool filtering capabilities，不返回伪造的 live-control 能力。
 
 Server startup：从 `StoreManager.Tasks()` 创建 Manager，注册 agent handler 和 API，依赖就绪后 Start，graceful shutdown 时 Stop。
 
@@ -383,6 +388,7 @@ Task manager 始终启动；全局实验扩展 `extensions.task` 只控制入口
 ### Security
 
 - workspace 服务端生成并 canonicalize，禁止路径穿越。
+- 用户 workspace 只接受 canonicalizable 的现有绝对目录；相对路径、文件、缺失路径在创建 API 直接拒绝。
 - Payload/Result 不保存 token 或完整 env。
 - 子进程只传必要 env，日志不输出 secret。
 - 无人值守执行只发生在显式 allowlist + workspace sandbox 内；未授权请求默认拒绝并 handoff。
