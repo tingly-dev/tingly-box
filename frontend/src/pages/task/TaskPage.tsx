@@ -300,11 +300,16 @@ function TaskDetail({ task, runs, onWake, onStop, onRespond }: {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const copy = (value?: string) => value && navigator.clipboard.writeText(value);
-  const act = async (action: () => Promise<void>) => {
+  useEffect(() => {
+    setInstruction(''); setInstructionOpen(false); setActionError('');
+  }, [task.id]);
+  const act = async (action: () => Promise<void>): Promise<boolean> => {
     setBusy(true); setActionError('');
-    try { await action(); } catch (error) { setActionError((error as Error).message); } finally { setBusy(false); }
+    try { await action(); return true; } catch (error) { setActionError((error as Error).message); return false; } finally { setBusy(false); }
   };
-  const send = async () => { await act(() => onWake(instruction)); setInstruction(''); setInstructionOpen(false); };
+  const send = async () => {
+    if (await act(() => onWake(instruction.trim()))) { setInstruction(''); setInstructionOpen(false); }
+  };
 
   return <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, p: { xs: 2, md: 3 }, borderRadius: 2 }}>
     <Stack spacing={3}>
@@ -313,12 +318,24 @@ function TaskDetail({ task, runs, onWake, onStop, onRespond }: {
         <Box><Stack direction="row" spacing={1} alignItems="center"><Typography variant="h4">{task.title || task.goal}</Typography><Chip size="small" label={statusMeta[task.status].label} color={statusMeta[task.status].color} /></Stack><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{task.goal}</Typography></Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
           {canStop(task) && <Button color="inherit" startIcon={<Block />} disabled={busy} onClick={() => act(onStop)}>Stop</Button>}
-          <Button startIcon={<PlayArrow />} disabled={busy || task.status === 'running' || task.status === 'queued'} onClick={() => act(() => onWake())}>Run now</Button>
-          <Button variant="contained" startIcon={<Send />} disabled={busy || task.status === 'running' || task.status === 'queued'} onClick={() => setInstructionOpen(true)}>Send instruction</Button>
+          {task.status !== 'needs_input' && <Button startIcon={<PlayArrow />} disabled={busy || task.status === 'running' || task.status === 'queued'} onClick={() => act(() => onWake())}>Run now</Button>}
+          {task.status !== 'needs_input' && <Button variant="contained" startIcon={<Send />} disabled={busy || task.status === 'running' || task.status === 'queued'} onClick={() => setInstructionOpen(true)}>Send instruction</Button>}
         </Stack>
       </Stack>
-      {task.attention && <ControlRequestCard control={task.attention} busy={busy} onRespond={(decision) => act(() => onRespond(decision))} />}
-      {task.status === 'needs_input' && <Alert severity="warning"><Typography variant="subtitle2">Waiting for you</Typography>{task.latest_result?.question || 'The agent needs another instruction before it can continue.'}</Alert>}
+      {task.attention && <ControlRequestCard control={task.attention} busy={busy} onRespond={async (decision) => { await act(() => onRespond(decision)); }} />}
+      {task.status === 'needs_input' && <Alert severity="warning" sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+        <Stack spacing={1.5}>
+          <Box>
+            <Typography variant="subtitle1">Reply to continue</Typography>
+            <Typography variant="body2">{task.latest_result?.question || 'The agent needs another instruction before it can continue.'}</Typography>
+            <Typography variant="caption" color="text.secondary">Your reply starts the next run in the same workspace and native session.</Typography>
+          </Box>
+          <TextField size="small" multiline minRows={2} label="Your reply" value={instruction} onChange={(event) => setInstruction(event.target.value)} />
+          <Stack direction="row" justifyContent="flex-end">
+            <Button variant="contained" color="warning" startIcon={<Send />} disabled={busy || !instruction.trim()} onClick={send}>Reply and continue</Button>
+          </Stack>
+        </Stack>
+      </Alert>}
       <TaskSteps task={task} />
       {(task.latest_result?.summary || task.error || task.progress) && <Box><Typography variant="overline" color="text.secondary">Latest outcome</Typography><Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{task.error || task.latest_result?.summary || task.progress}</Typography></Box>}
       <Divider />
