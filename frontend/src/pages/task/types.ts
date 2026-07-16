@@ -1,4 +1,4 @@
-export type TaskAgent = 'claude' | 'codex';
+export type TaskAgent = 'claude' | 'codex' | 'shell';
 export type TaskStatus = 'pending' | 'queued' | 'running' | 'needs_input' | 'handoff_required' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
 export type TaskRunStatus = 'running' | 'succeeded' | 'rescheduled' | 'needs_input' | 'handoff_required' | 'failed' | 'cancelled' | 'interrupted';
 export type LaunchProfile = 'legacy_inherited' | 'plan' | 'manual' | 'accept_edits' | 'read_only' | 'workspace_write';

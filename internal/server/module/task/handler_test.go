@@ -503,3 +503,87 @@ func TestToView_ResumeCommandIsInteractiveNativeHandoff(t *testing.T) {
 		t.Fatalf("resume command = %q", view.ResumeCommand)
 	}
 }
+
+func TestCreate_ShellTask(t *testing.T) {
+	manager := coretask.NewManager(coretask.NewMemoryStore())
+	handler := NewHandler(manager, t.TempDir(), nil)
+	router := testRouter(handler)
+
+	workspace := t.TempDir()
+	body := `{"goal":"echo hi","agent":"shell","workspace_path":"` + workspace + `"}`
+	response := performJSON(t, router, http.MethodPost, "/tasks", body)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var decoded TaskResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	view := decoded.Data
+	if view.Agent != agentShell || view.Goal != "echo hi" || view.WorkspacePath == "" {
+		t.Fatalf("view = %+v", view)
+	}
+	if view.SessionID != "" || view.ResumeCommand != "" || len(view.Steps) != 0 {
+		t.Fatalf("shell view leaked agent-only fields: %+v", view)
+	}
+
+	// List merges shell tasks with agent tasks.
+	listResponse := performJSON(t, router, http.MethodGet, "/tasks", "")
+	var list TaskListResponse
+	if err := json.Unmarshal(listResponse.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Data) != 1 || list.Data[0].Agent != agentShell {
+		t.Fatalf("list = %+v", list.Data)
+	}
+}
+
+func TestCreate_ShellTaskRejectsAgentOnlyOptions(t *testing.T) {
+	manager := coretask.NewManager(coretask.NewMemoryStore())
+	handler := NewHandler(manager, t.TempDir(), nil)
+	router := testRouter(handler)
+
+	body := `{"goal":"echo hi","agent":"shell","steps":[{"instruction":"x"}]}`
+	response := performJSON(t, router, http.MethodPost, "/tasks", body)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "do not apply") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestWake_ShellTaskRejectsInstruction(t *testing.T) {
+	manager := coretask.NewManager(coretask.NewMemoryStore())
+	handler := NewHandler(manager, t.TempDir(), nil)
+	router := testRouter(handler)
+
+	created := performJSON(t, router, http.MethodPost, "/tasks", `{"goal":"true","agent":"shell","workspace_path":"`+t.TempDir()+`"}`)
+	var decoded TaskResponse
+	if err := json.Unmarshal(created.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	response := performJSON(t, router, http.MethodPost, "/tasks/"+decoded.Data.ID+"/wake", `{"instruction":"again"}`)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAgents_IncludesShellExecutor(t *testing.T) {
+	manager := coretask.NewManager(coretask.NewMemoryStore())
+	handler := NewHandler(manager, t.TempDir(), nil)
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/agents", handler.Agents)
+	response := performJSON(t, router, http.MethodGet, "/agents", "")
+	var decoded AgentListResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range decoded.Data {
+		if item.Agent == agentShell {
+			found = item.Available && item.Unattended
+		}
+	}
+	if !found {
+		t.Fatalf("shell executor missing or unavailable: %+v", decoded.Data)
+	}
+}

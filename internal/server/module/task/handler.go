@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	coretask "github.com/tingly-dev/tingly-box/internal/task"
 	"github.com/tingly-dev/tingly-box/internal/task/agenttask"
+	"github.com/tingly-dev/tingly-box/internal/task/shelltask"
 )
 
 type Handler struct {
@@ -32,6 +34,12 @@ func (h *Handler) List(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	shellTasks, err := h.manager.List(c.Request.Context(), coretask.ListFilter{Type: shelltask.TaskType, Limit: 200})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	tasks = mergeByCreatedAtDesc(tasks, shellTasks, 200)
 	runs, err := h.manager.ListRuns(c.Request.Context(), coretask.RunListFilter{
 		Status: []coretask.RunStatus{coretask.RunStatusRunning},
 		Limit:  500,
@@ -65,7 +73,7 @@ func (h *Handler) Get(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if task.Type != agenttask.TaskType {
+	if !isBoardTask(task.Type) {
 		writeError(c, coretask.ErrNotFound)
 		return
 	}
@@ -98,8 +106,39 @@ func (h *Handler) Update(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if task.Type != agenttask.TaskType {
+	if !isBoardTask(task.Type) {
 		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	if task.Type == shelltask.TaskType {
+		var payload shelltask.Payload
+		if err := json.Unmarshal(task.Payload, &payload); err != nil {
+			writeError(c, err)
+			return
+		}
+		if req.Title != nil {
+			payload.Title = strings.TrimSpace(*req.Title)
+		}
+		if req.Goal != nil {
+			command := strings.TrimSpace(*req.Goal)
+			if command == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "goal is required"})
+				return
+			}
+			payload.Command = command
+		}
+		data, _ := json.Marshal(payload)
+		if err := h.manager.UpdatePayload(ctx, task.ID, data); err != nil {
+			writeError(c, err)
+			return
+		}
+		updated, err := h.manager.Get(ctx, task.ID)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		view, _ := toView(updated)
+		c.JSON(http.StatusOK, TaskResponse{Data: view})
 		return
 	}
 	var payload agenttask.Payload
@@ -146,7 +185,7 @@ func (h *Handler) ListRuns(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if task.Type != agenttask.TaskType {
+	if !isBoardTask(task.Type) {
 		writeError(c, coretask.ErrNotFound)
 		return
 	}
@@ -173,7 +212,7 @@ func (h *Handler) GetRun(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if task.Type != agenttask.TaskType {
+	if !isBoardTask(task.Type) {
 		writeError(c, coretask.ErrNotFound)
 		return
 	}
@@ -197,8 +236,12 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	req.Goal = strings.TrimSpace(req.Goal)
-	if req.Goal == "" || !req.Agent.IsValid() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "goal and a supported agent are required"})
+	if req.Goal == "" || (!req.Agent.IsValid() && req.Agent != agentShell) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "goal and a supported executor are required"})
+		return
+	}
+	if req.Agent == agentShell {
+		h.createShellTask(c, req)
 		return
 	}
 	steps, err := normalizeSteps(req.Steps)
@@ -289,11 +332,15 @@ func (h *Handler) Wake(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if task.Type != agenttask.TaskType {
+	if !isBoardTask(task.Type) {
 		writeError(c, coretask.ErrNotFound)
 		return
 	}
 	instruction := strings.TrimSpace(req.Instruction)
+	if task.Type == shelltask.TaskType && (instruction != "" || req.ExecutionOverride != nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "shell tasks rerun their command; instructions and execution overrides do not apply"})
+		return
+	}
 	if instruction != "" || req.ExecutionOverride != nil {
 		if task.Status != coretask.StatusNeedsInput && task.Status != coretask.StatusHandoff && !task.Status.IsTerminal() {
 			c.JSON(http.StatusConflict, gin.H{"error": "instruction or execution override can only be sent to a paused or finished task"})
@@ -360,10 +407,15 @@ func (h *Handler) Agents(c *gin.Context) {
 		}
 		data = append(data, item)
 	}
+	// The shell executor needs no external CLI and always runs unattended.
+	data = append(data, AgentAvailability{Agent: agentShell, Available: true, Unattended: true})
 	c.JSON(http.StatusOK, AgentListResponse{Data: data})
 }
 
 func toView(task *coretask.Task) (TaskView, error) {
+	if task.Type == shelltask.TaskType {
+		return shellToView(task)
+	}
 	var payload agenttask.Payload
 	if err := json.Unmarshal(task.Payload, &payload); err != nil {
 		return TaskView{}, fmt.Errorf("decode task %s payload: %w", task.ID, err)
@@ -498,4 +550,114 @@ func writeError(c *gin.Context, err error) {
 		status = http.StatusBadRequest
 	}
 	c.JSON(status, gin.H{"error": err.Error()})
+}
+
+// agentShell is the executor value for shell tasks on the shared
+// agent/executor axis of the API. It is not an agenttask kind: shell tasks
+// use shelltask payloads and have no session, steps, or launch profiles.
+const agentShell = agenttask.AgentKind(shelltask.TaskType)
+
+func isBoardTask(taskType string) bool {
+	return taskType == agenttask.TaskType || taskType == shelltask.TaskType
+}
+
+func (h *Handler) createShellTask(c *gin.Context, req CreateRequest) {
+	if len(req.Steps) > 0 || req.Execution != nil || req.FollowUp.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "steps, execution policy, and follow-up do not apply to shell tasks"})
+		return
+	}
+	taskID := uuid.NewString()
+	var workspace string
+	var err error
+	if strings.TrimSpace(req.WorkspacePath) == "" {
+		workspace, err = agenttask.CreateWorkspace(h.configDir, taskID)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+	} else {
+		workspace, err = agenttask.ResolveExistingWorkspace(req.WorkspacePath)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	payload := shelltask.Payload{
+		Title:          strings.TrimSpace(req.Title),
+		Command:        req.Goal,
+		WorkspacePath:  workspace,
+		TimeoutSeconds: req.TimeoutSeconds,
+	}
+	payload.ApplyDefaults()
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	var recurrence json.RawMessage
+	if req.Recurrence != nil {
+		recurrence, err = json.Marshal(req.Recurrence)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+	}
+	created, err := h.manager.Submit(c.Request.Context(), coretask.SubmitRequest{
+		ID:               taskID,
+		Type:             shelltask.TaskType,
+		Source:           "webui",
+		SerializationKey: workspace,
+		Payload:          payloadJSON,
+		MaxAttempts:      1,
+		ScheduledAt:      req.ScheduledAt,
+		Recurrence:       recurrence,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, _ := toView(created)
+	c.JSON(http.StatusCreated, TaskResponse{Data: view})
+}
+
+func shellToView(task *coretask.Task) (TaskView, error) {
+	var payload shelltask.Payload
+	if err := json.Unmarshal(task.Payload, &payload); err != nil {
+		return TaskView{}, fmt.Errorf("decode task %s payload: %w", task.ID, err)
+	}
+	view := TaskView{
+		ID: task.ID, Title: payload.Title, Goal: payload.Command, Agent: agentShell,
+		Status: task.Status, Progress: task.Progress, Error: task.Error,
+		WorkspacePath: payload.WorkspacePath,
+		ScheduledAt:   task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
+	}
+	if len(task.Result) > 0 {
+		// shelltask.Result shares the agenttask.Result JSON shape by design.
+		var result agenttask.Result
+		if err := json.Unmarshal(task.Result, &result); err == nil {
+			view.LatestResult = &result
+		}
+	}
+	if len(task.Recurrence) > 0 {
+		var recurrence coretask.RecurrenceSpec
+		if err := json.Unmarshal(task.Recurrence, &recurrence); err != nil {
+			return TaskView{}, err
+		}
+		view.Recurrence = &recurrence
+	}
+	return view, nil
+}
+
+func mergeByCreatedAtDesc(a, b []coretask.Task, limit int) []coretask.Task {
+	merged := make([]coretask.Task, 0, len(a)+len(b))
+	merged = append(merged, a...)
+	merged = append(merged, b...)
+	sort.SliceStable(merged, func(i, j int) bool {
+		return merged[i].CreatedAt.After(merged[j].CreatedAt)
+	})
+	if len(merged) > limit {
+		merged = merged[:limit]
+	}
+	return merged
 }

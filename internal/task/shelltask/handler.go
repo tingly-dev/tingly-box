@@ -31,6 +31,7 @@ const (
 
 // Payload is the persisted definition of one shell task.
 type Payload struct {
+	Title          string `json:"title,omitempty"`
 	Command        string `json:"command"`
 	WorkspacePath  string `json:"workspace_path"`
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
