@@ -260,13 +260,14 @@ func (sm *StoreManager) initAPITokenStore() error {
 
 // initTaskStore initializes the TaskStore.
 func (sm *StoreManager) initTaskStore() error {
-	if err := sm.db.AutoMigrate(&TaskRecord{}); err != nil {
+	if err := sm.db.AutoMigrate(&TaskRecord{}, &TaskRunRecord{}); err != nil {
 		return err
 	}
 	// Belt-and-suspenders: ensure composite indices exist regardless of GORM tag behaviour.
 	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_scheduled ON tasks(status, scheduled_at)`)
 	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_key_status ON tasks(serialization_key, status, created_at)`)
 	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_type, owner_id, created_at)`)
+	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_task_runs_task_created ON task_runs(task_id, created_at)`)
 	sm.taskStore = &TaskStore{
 		db:     sm.db,
 		dbPath: constant.GetDBFile(sm.baseDir),

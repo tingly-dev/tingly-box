@@ -36,7 +36,7 @@ import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
-    const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
+    const { skillUser, skillIde, enableGuardrails, enableMCP, enableTasks } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const botSummary = useBotPlatformSummary(isFullEdition);
 
@@ -152,6 +152,13 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
                 ],
             },
+            ...(enableTasks ? [{
+                key: 'task' as const,
+                icon: <IconCalendarClock sx={{ fontSize: 22 }} />,
+                label: t('layout.tasks', { defaultValue: 'Tasks' }),
+                path: '/tasks',
+                defaultPath: '/tasks',
+            }] as ActivityItem[] : []),
             ...(isFullEdition && promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
                 icon: <IconBrain sx={{ fontSize: 22 }} />,
@@ -234,5 +241,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, botSummary, hiddenScenarios]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, enableTasks, profiles, botSummary, hiddenScenarios]);
 }

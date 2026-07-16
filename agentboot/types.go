@@ -14,8 +14,8 @@ type AgentType string
 
 const (
 	AgentTypeClaude    AgentType = "claude"
+	AgentTypeCodex     AgentType = "codex"
 	AgentTypeMockAgent AgentType = "mock" // Mock agent for testing
-	// AgentTypeCodex  AgentType = "codex"  // Future
 	// AgentTypeGemini AgentType = "gemini" // Future
 	// AgentTypeCursor AgentType = "cursor" // Future
 )
@@ -79,7 +79,9 @@ type ExecutionOptions struct {
 	// Execution control
 	MaxTurns int
 
-	// Tool filtering (per-execution override)
+	// Tool filtering (per-execution override). AvailableTools controls which
+	// built-in tools the agent can see; AllowedTools is an approval allow-list.
+	AvailableTools  []string
 	AllowedTools    []string
 	DisallowedTools []string
 
@@ -93,6 +95,8 @@ type ExecutionOptions struct {
 
 	// Permission mode (per-execution override)
 	PermissionMode string
+	// SandboxMode is an agent-specific per-execution sandbox override.
+	SandboxMode string
 
 	// Settings path (per-execution override)
 	SettingsPath string
@@ -159,6 +163,14 @@ func (r *Result) TextOutput() string {
 				// Legacy: text events
 				if text, ok := event.Data["text"].(string); ok {
 					output.WriteString(text)
+				}
+			} else if event.Type == "item.completed" {
+				// Codex JSONL shape: final assistant text is carried by an
+				// item.completed event whose item type is agent_message.
+				if item, ok := event.Data["item"].(map[string]any); ok && item["type"] == "agent_message" {
+					if text, ok := item["text"].(string); ok {
+						output.WriteString(text)
+					}
 				}
 			}
 		}
@@ -231,6 +243,9 @@ func (r *Result) GetSessionID() string {
 	for _, event := range r.Events {
 		if sessionID, ok := event.Data["session_id"].(string); ok && sessionID != "" {
 			return sessionID
+		}
+		if threadID, ok := event.Data["thread_id"].(string); ok && threadID != "" {
+			return threadID
 		}
 	}
 

@@ -16,6 +16,7 @@ type CommonOptions struct {
 	AppendSystemPrompt   string
 	ContinueConversation bool
 	Resume               string
+	AvailableTools       []string
 	AllowedTools         []string
 	DisallowedTools      []string
 	MCPServers           map[string]interface{}
@@ -94,7 +95,13 @@ func BuildCommonArgs(config Config, opts CommonOptions) []string {
 		args = append(args, "--resume", opts.Resume)
 	}
 
-	// Tool filtering - both config and opts can contribute
+	// Available tools are a capability boundary. Unlike --allowedTools,
+	// --tools does not grant approval exemptions.
+	if len(opts.AvailableTools) > 0 {
+		args = append(args, "--tools", strings.Join(opts.AvailableTools, ","))
+	}
+
+	// Approval filtering - both config and opts can contribute
 	if len(config.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(config.AllowedTools, ","))
 	}

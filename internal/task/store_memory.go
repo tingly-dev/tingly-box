@@ -13,11 +13,12 @@ import (
 type MemoryStore struct {
 	mu    sync.Mutex
 	tasks map[string]*Task
+	runs  map[string]*TaskRun
 }
 
 // NewMemoryStore returns an empty MemoryStore.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{tasks: make(map[string]*Task)}
+	return &MemoryStore{tasks: make(map[string]*Task), runs: make(map[string]*TaskRun)}
 }
 
 func (s *MemoryStore) Create(_ context.Context, t *Task) error {
@@ -108,6 +109,14 @@ func (s *MemoryStore) MarkInterruptedOnStartup(_ context.Context) error {
 			t.UpdatedAt = now
 		}
 	}
+	for _, run := range s.runs {
+		if run.Status.IsActive() {
+			run.Status = RunStatusInterrupted
+			run.FinishedAt = &now
+			run.PendingControl = nil
+			run.UpdatedAt = now
+		}
+	}
 	return nil
 }
 
@@ -171,19 +180,37 @@ func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[
 		case "error":
 			t.Error = v.(string)
 		case "result":
-			if sv, ok := v.(string); ok && sv != "" {
-				t.Result = json.RawMessage(sv)
+			if sv, ok := v.(string); ok {
+				if sv == "" {
+					t.Result = nil
+				} else {
+					t.Result = json.RawMessage(sv)
+				}
+			}
+		case "payload":
+			if sv, ok := v.(string); ok {
+				if sv == "" {
+					t.Payload = nil
+				} else {
+					t.Payload = json.RawMessage(sv)
+				}
 			}
 		case "started_at":
-			if ts, ok := v.(time.Time); ok {
+			if v == nil {
+				t.StartedAt = nil
+			} else if ts, ok := v.(time.Time); ok {
 				t.StartedAt = &ts
 			}
 		case "finished_at":
-			if ts, ok := v.(time.Time); ok {
+			if v == nil {
+				t.FinishedAt = nil
+			} else if ts, ok := v.(time.Time); ok {
 				t.FinishedAt = &ts
 			}
 		case "cancelled_at":
-			if ts, ok := v.(time.Time); ok {
+			if v == nil {
+				t.CancelledAt = nil
+			} else if ts, ok := v.(time.Time); ok {
 				t.CancelledAt = &ts
 			}
 		case "scheduled_at":
@@ -198,4 +225,122 @@ func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[
 	}
 	t.UpdatedAt = time.Now()
 	return nil
+}
+
+func (s *MemoryStore) AppendRunEvent(_ context.Context, runID string, event RunEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[runID]
+	if !ok {
+		return ErrNotFound
+	}
+	run.Events = append(run.Events, event)
+	if len(run.Events) > 200 {
+		run.Events = append([]RunEvent(nil), run.Events[len(run.Events)-200:]...)
+	}
+	run.UpdatedAt = time.Now()
+	return nil
+}
+
+func (s *MemoryStore) CreateRun(_ context.Context, run *TaskRun) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := cloneRun(run)
+	s.runs[run.ID] = cp
+	return nil
+}
+
+func (s *MemoryStore) GetRun(_ context.Context, taskID, runID string) (*TaskRun, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[runID]
+	if !ok || run.TaskID != taskID {
+		return nil, ErrNotFound
+	}
+	return cloneRun(run), nil
+}
+
+func (s *MemoryStore) ListRuns(_ context.Context, filter RunListFilter) ([]TaskRun, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	statuses := make(map[RunStatus]bool, len(filter.Status))
+	for _, status := range filter.Status {
+		statuses[status] = true
+	}
+	result := make([]TaskRun, 0)
+	for _, run := range s.runs {
+		if filter.TaskID != "" && run.TaskID != filter.TaskID {
+			continue
+		}
+		if len(statuses) > 0 && !statuses[run.Status] {
+			continue
+		}
+		result = append(result, *cloneRun(run))
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt.After(result[j].CreatedAt) })
+	if filter.Offset > 0 {
+		if filter.Offset >= len(result) {
+			return nil, nil
+		}
+		result = result[filter.Offset:]
+	}
+	if filter.Limit > 0 && filter.Limit < len(result) {
+		result = result[:filter.Limit]
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) UpdateRun(_ context.Context, runID string, fields map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.runs[runID]
+	if !ok {
+		return ErrNotFound
+	}
+	for key, value := range fields {
+		switch key {
+		case "status":
+			run.Status = RunStatus(value.(string))
+		case "progress":
+			run.Progress = value.(string)
+		case "error":
+			run.Error = value.(string)
+		case "result":
+			if text, ok := value.(string); ok {
+				run.Result = json.RawMessage(text)
+			}
+		case "finished_at":
+			if value == nil {
+				run.FinishedAt = nil
+			} else if ts, ok := value.(time.Time); ok {
+				run.FinishedAt = &ts
+			}
+		case "pending_control":
+			text, _ := value.(string)
+			if text == "" {
+				run.PendingControl = nil
+			} else {
+				var control PendingControl
+				if err := json.Unmarshal([]byte(text), &control); err != nil {
+					return err
+				}
+				run.PendingControl = &control
+			}
+		}
+	}
+	run.UpdatedAt = time.Now()
+	return nil
+}
+
+func cloneRun(run *TaskRun) *TaskRun {
+	cp := *run
+	cp.Input = append(json.RawMessage(nil), run.Input...)
+	cp.Result = append(json.RawMessage(nil), run.Result...)
+	if run.PendingControl != nil {
+		control := *run.PendingControl
+		control.Input = append(json.RawMessage(nil), run.PendingControl.Input...)
+		cp.PendingControl = &control
+	}
+	cp.Events = append([]RunEvent(nil), run.Events...)
+	return &cp
 }

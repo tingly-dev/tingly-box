@@ -18,6 +18,7 @@ import (
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
 	"github.com/tingly-dev/tingly-box/internal/server/module/scenario"
 	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
+	taskapi "github.com/tingly-dev/tingly-box/internal/server/module/task"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -90,6 +91,10 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
+
+	if s.taskAPI != nil {
+		taskapi.RegisterRoutes(apiV1, s.taskAPI)
+	}
 
 	// Log API routes (HTTP request logs from memory)
 	apiV1.GET("/log", s.webHandler.GetLogs,

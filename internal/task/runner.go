@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 )
 
@@ -20,8 +21,19 @@ type Handler interface {
 type Controller interface {
 	// UpdateProgress stores a human-readable progress string on the task.
 	UpdateProgress(ctx context.Context, text string) error
+	// UpdatePayload checkpoints handler-owned durable state, such as a native
+	// agent session ID discovered after the child process starts.
+	UpdatePayload(ctx context.Context, payload json.RawMessage) error
 	// IsCancelled reports whether the task's context has been cancelled.
 	IsCancelled(ctx context.Context) bool
+}
+
+// RunController extends Controller with the durable event stream for one
+// bounded invocation. Generic handlers can keep using Controller.
+type RunController interface {
+	Controller
+	RunID() string
+	AppendRunEvent(ctx context.Context, event RunEvent) error
 }
 
 // handlerRegistry stores handlers keyed by task type.
@@ -55,12 +67,26 @@ func (r *handlerRegistry) get(typ string) (Handler, bool) {
 type taskController struct {
 	store  Store
 	taskID string
+	runID  string
 }
 
 func (c *taskController) UpdateProgress(ctx context.Context, text string) error {
-	return c.store.UpdateStatus(ctx, c.taskID, map[string]interface{}{"progress": text})
+	if err := c.store.UpdateStatus(ctx, c.taskID, map[string]interface{}{"progress": text}); err != nil {
+		return err
+	}
+	return c.store.UpdateRun(ctx, c.runID, map[string]interface{}{"progress": text})
+}
+
+func (c *taskController) UpdatePayload(ctx context.Context, payload json.RawMessage) error {
+	return c.store.UpdateStatus(ctx, c.taskID, map[string]interface{}{"payload": string(payload)})
 }
 
 func (c *taskController) IsCancelled(ctx context.Context) bool {
 	return ctx.Err() != nil
+}
+
+func (c *taskController) RunID() string { return c.runID }
+
+func (c *taskController) AppendRunEvent(ctx context.Context, event RunEvent) error {
+	return c.store.AppendRunEvent(ctx, c.runID, event)
 }

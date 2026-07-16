@@ -900,7 +900,58 @@ const mockClaudeCodeProfiles = [
 // Counter for alternating probe responses
 let probeRequestCount = 0
 
+const mockGlobalFlags: Record<string, boolean> = { guardrails: false, mcp: false, skill_ide: false, skill_user: false }
+const mockScenarioConfigs: Record<string, any> = {
+    _global: { scenario: '_global', config_mode: 'unified', extensions: { task: true } },
+}
+
+const mockTaskMarkdownResult = `## Migration notes ready
+
+- Documented the new \`workspace_path\` option.
+- Added upgrade and rollback steps.
+
+\`\`\`bash
+git diff -- docs/routing-migration.md
+\`\`\`
+
+| File | Status |
+| --- | --- |
+| \`docs/routing-migration.md\` | Updated |`
+
+const mockTasks: any[] = [
+    { id: 'task-release', title: 'Watch release checks', goal: 'Monitor the release checks and summarize anything blocking the rollout.', agent: 'claude', status: 'handoff_required', latest_result: { state: 'handoff_required', summary: "Native handoff required: Bash requested permission outside this Task's automation boundary.", question: 'Open the native session to review the request, then continue automation when ready.', duration_ms: 182000, exit_reason: 'permission_boundary' }, execution: { launch_profile: 'accept_edits', tools: ['files_read', 'files_write'] }, workspace_path: '/Users/demo/.tingly-box/tasks/task-release/workspace', session_id: 'a27a39d1-12d1-44e1-9c5d-42dd28cf54e0', resume_command: "cd '/Users/demo/.tingly-box/tasks/task-release/workspace' && claude --resume 'a27a39d1-12d1-44e1-9c5d-42dd28cf54e0'", follow_up: { enabled: true, delay_seconds: 300, max_wake_ups: 20 }, wake_count: 3, created_at: new Date(Date.now() - 7200000).toISOString(), updated_at: new Date(Date.now() - 120000).toISOString() },
+    { id: 'task-audit', title: 'Audit API errors', goal: 'Inspect recent API failures and prepare a concise root-cause report.', agent: 'codex', status: 'running', progress: 'Agent working · 14 events', execution: { launch_profile: 'workspace_write' }, workspace_path: '/Users/demo/.tingly-box/tasks/task-audit/workspace', session_id: '019f6b1e-2e7b-7000-a53c-37dcc2381aae', resume_command: "cd '/Users/demo/.tingly-box/tasks/task-audit/workspace' && codex resume '019f6b1e-2e7b-7000-a53c-37dcc2381aae'", follow_up: { enabled: false, delay_seconds: 300, max_wake_ups: 20 }, wake_count: 1, steps: [{ id: 'step-1', title: 'Inspect recent failures', instruction: 'Inspect recent API failures and group them by root cause.' }, { id: 'step-2', title: 'Reproduce the leading failure', instruction: 'Reproduce the highest-impact failure in the workspace.' }, { id: 'step-3', title: 'Prepare the report', instruction: 'Write a concise root-cause report with recommended next actions.' }], current_step: 1, step_outcomes: [{ step_id: 'step-1', result: { state: 'done', summary: 'Grouped 23 failures into three root-cause clusters.' }, completed_at: new Date(Date.now() - 240000).toISOString() }], started_at: new Date(Date.now() - 180000).toISOString(), created_at: new Date(Date.now() - 3600000).toISOString(), updated_at: new Date().toISOString() },
+    { id: 'task-daily', title: 'Daily dependency review', goal: 'Review dependency updates and flag security-sensitive changes.', agent: 'codex', status: 'needs_input', execution: { launch_profile: 'read_only' }, latest_result: { state: 'needs_input', summary: 'Paused before changing the lockfile.', question: 'Should I update production dependencies only, or include development dependencies?' }, workspace_path: '/Users/demo/.tingly-box/tasks/task-daily/workspace', session_id: '019f6b1e-2e7b-7000-a53c-37dcc2381bbb', follow_up: { enabled: false, delay_seconds: 300, max_wake_ups: 20 }, wake_count: 1, recurrence: { cron: '0 9 * * *', timezone: 'Asia/Shanghai' }, created_at: new Date(Date.now() - 86400000).toISOString(), updated_at: new Date(Date.now() - 600000).toISOString() },
+    { id: 'task-report', title: 'Generate migration notes', goal: 'Write migration notes for the completed routing refactor.', agent: 'claude', status: 'succeeded', execution: { launch_profile: 'accept_edits', tools: ['files_read', 'files_write', 'terminal'] }, latest_result: { state: 'done', summary: mockTaskMarkdownResult, artifacts: ['docs/routing-migration.md'] }, workspace_path: '/Users/demo/.tingly-box/tasks/task-report/workspace', session_id: '5727aa28-d554-49e9-8770-a413659f1988', resume_command: "cd '/Users/demo/.tingly-box/tasks/task-report/workspace' && claude --resume '5727aa28-d554-49e9-8770-a413659f1988'", follow_up: { enabled: false, delay_seconds: 300, max_wake_ups: 20 }, wake_count: 1, finished_at: new Date(Date.now() - 7200000).toISOString(), created_at: new Date(Date.now() - 10800000).toISOString(), updated_at: new Date(Date.now() - 7200000).toISOString() },
+]
+
+const mockTaskRuns: Record<string, any[]> = {
+    'task-release': [
+        { id: 'run-release-4', task_id: 'task-release', attempt: 1, status: 'handoff_required', trigger: 'run', execution: { launch_profile: 'accept_edits', tools: ['files_read', 'files_write'] }, result: mockTasks[0].latest_result, events: [{ id: 'event-release-start', kind: 'run_started', summary: 'Started unattended claude run', data: { launch_profile: 'accept_edits', tools: ['files_read', 'files_write'] }, created_at: new Date(Date.now() - 300000).toISOString() }, { id: 'event-release-checks', kind: 'assistant', summary: 'All release checks passed. Preparing the publish command.', created_at: new Date(Date.now() - 180000).toISOString() }, { id: 'event-release-handoff', kind: 'handoff_required', summary: "Native handoff required: Bash requested permission outside this Task's automation boundary.", data: { tool: 'Bash' }, created_at: new Date(Date.now() - 120000).toISOString() }], started_at: new Date(Date.now() - 300000).toISOString(), finished_at: new Date(Date.now() - 120000).toISOString(), created_at: new Date(Date.now() - 300000).toISOString(), updated_at: new Date(Date.now() - 120000).toISOString() },
+        { id: 'run-release-3', task_id: 'task-release', attempt: 1, status: 'rescheduled', trigger: 'run', execution: { launch_profile: 'accept_edits', tools: ['files_read', 'files_write'] }, result: { state: 'continue', summary: 'Release checks passed; waiting for the publish window.', exit_code: 0, duration_ms: 120000, exit_reason: 'continue' }, started_at: new Date(Date.now() - 1800000).toISOString(), finished_at: new Date(Date.now() - 1680000).toISOString(), created_at: new Date(Date.now() - 1800000).toISOString(), updated_at: new Date(Date.now() - 1680000).toISOString() },
+    ],
+    'task-audit': [
+        { id: 'run-audit-2', task_id: 'task-audit', attempt: 1, status: 'running', trigger: 'step', step_id: 'step-2', step_index: 1, instruction: 'Reproduce the highest-impact failure in the workspace.', execution: { launch_profile: 'workspace_write' }, progress: 'Agent working · 14 events', started_at: new Date(Date.now() - 180000).toISOString(), created_at: new Date(Date.now() - 180000).toISOString(), updated_at: new Date().toISOString() },
+        { id: 'run-audit-1', task_id: 'task-audit', attempt: 1, status: 'rescheduled', trigger: 'step', step_id: 'step-1', step_index: 0, instruction: 'Inspect recent API failures and group them by root cause.', execution: { launch_profile: 'workspace_write' }, result: { state: 'done', summary: 'Grouped 23 failures into three root-cause clusters.' }, started_at: new Date(Date.now() - 420000).toISOString(), finished_at: new Date(Date.now() - 240000).toISOString(), created_at: new Date(Date.now() - 420000).toISOString(), updated_at: new Date(Date.now() - 240000).toISOString() },
+    ],
+    'task-daily': [{ id: 'run-daily-1', task_id: 'task-daily', attempt: 1, status: 'needs_input', trigger: 'run', execution: { launch_profile: 'read_only' }, result: { state: 'needs_input', summary: 'Paused before changing the lockfile.', question: 'Should I update production dependencies only, or include development dependencies?' }, started_at: new Date(Date.now() - 900000).toISOString(), finished_at: new Date(Date.now() - 600000).toISOString(), created_at: new Date(Date.now() - 900000).toISOString(), updated_at: new Date(Date.now() - 600000).toISOString() }],
+    'task-report': [{ id: 'run-report-1', task_id: 'task-report', attempt: 1, status: 'succeeded', trigger: 'run', execution: { launch_profile: 'accept_edits', tools: ['files_read', 'files_write', 'terminal'] }, result: { state: 'done', summary: mockTaskMarkdownResult }, events: [{ id: 'event-report-written', kind: 'artifact', summary: '**Updated** `docs/routing-migration.md` with the final migration guide.', created_at: new Date(Date.now() - 7210000).toISOString() }], started_at: new Date(Date.now() - 7500000).toISOString(), finished_at: new Date(Date.now() - 7200000).toISOString(), created_at: new Date(Date.now() - 7500000).toISOString(), updated_at: new Date(Date.now() - 7200000).toISOString() }],
+}
+
 export const handlers = [
+    http.get('/api/v1/scenario/:scenario/flag/:flag', ({ params }) => HttpResponse.json({ success: true, data: { value: mockGlobalFlags[String(params.flag)] || false } })),
+    http.put('/api/v1/scenario/:scenario/flag/:flag', async ({ params, request }) => { const body = await request.json() as any; mockGlobalFlags[String(params.flag)] = Boolean(body.value); return HttpResponse.json({ success: true, data: { value: mockGlobalFlags[String(params.flag)] } }) }),
+    http.get('/api/v1/tasks', () => HttpResponse.json({ data: mockTasks })),
+    http.get('/api/v1/tasks/agents', () => HttpResponse.json({ data: [
+        { agent: 'claude', available: true, launch_profiles: ['plan', 'accept_edits'], default_profile: 'accept_edits', tool_filtering: true, unattended: true },
+        { agent: 'codex', available: true, launch_profiles: ['read_only', 'workspace_write'], default_profile: 'workspace_write', tool_filtering: false, unattended: true },
+    ] })),
+    http.get('/api/v1/tasks/:id', ({ params }) => { const task = mockTasks.find((item) => item.id === params.id); return task ? HttpResponse.json({ data: task }) : HttpResponse.json({ error: 'not found' }, { status: 404 }) }),
+    http.patch('/api/v1/tasks/:id', async ({ params, request }) => { const task = mockTasks.find((item) => item.id === params.id); const body = await request.json() as any; if (!task) return HttpResponse.json({ error: 'not found' }, { status: 404 }); if (task.status === 'running' || task.status === 'queued') return HttpResponse.json({ error: 'task is not editable while running or queued' }, { status: 409 }); if ('goal' in body && !String(body.goal).trim()) return HttpResponse.json({ error: 'goal is required' }, { status: 400 }); if ('title' in body) task.title = String(body.title).trim(); if ('goal' in body) task.goal = String(body.goal).trim(); task.updated_at = new Date().toISOString(); return HttpResponse.json({ data: task }) }),
+    http.get('/api/v1/tasks/:id/runs', ({ params }) => HttpResponse.json({ data: mockTaskRuns[String(params.id)] || [] })),
+    http.post('/api/v1/tasks', async ({ request }) => { const body = await request.json() as any; const steps = (body.steps || []).map((step: any, index: number) => ({ id: `step-${index + 1}`, title: step.instruction.trim().split('\n')[0].slice(0, 80), instruction: step.instruction.trim() })); const task = { ...body, steps, current_step: 0, step_outcomes: [], id: `task-${Date.now()}`, title: body.title || body.goal.slice(0, 48), status: 'pending', workspace_path: body.workspace_path || `/Users/demo/.tingly-box/tasks/new/workspace`, wake_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; mockTasks.unshift(task); return HttpResponse.json({ data: task }, { status: 201 }) }),
+    http.post('/api/v1/tasks/:id/wake', async ({ params, request }) => { const task = mockTasks.find((item) => item.id === params.id); const body = await request.json() as any; if (!task) return HttpResponse.json({ error: 'not found' }, { status: 404 }); task.status = 'pending'; task.updated_at = new Date().toISOString(); if (body.instruction) task.latest_result = { state: 'continue', summary: `Instruction queued: ${body.instruction}` }; return HttpResponse.json({ data: task }) }),
+    http.post('/api/v1/tasks/:id/stop', ({ params }) => { const task = mockTasks.find((item) => item.id === params.id); if (task) { task.status = 'cancelled'; task.updated_at = new Date().toISOString() } return new HttpResponse(null, { status: 204 }) }),
     // Remote Agents / Remote Graphs API endpoints
     http.get('/api/remote-agents', () => {
         return HttpResponse.json({
@@ -1386,14 +1437,15 @@ export const handlers = [
         const { scenario } = params as { scenario: string }
         return HttpResponse.json({
             success: true,
-            data: { scenario, config_mode: 'unified' },
+            data: mockScenarioConfigs[scenario] || { scenario, config_mode: 'unified' },
         })
     }),
 
     http.post('/api/v1/scenario/:scenario', async ({ params, request }) => {
         const { scenario } = params as { scenario: string }
         const body = await request.json() as any
-        return HttpResponse.json({ success: true, data: { scenario, ...body } })
+        mockScenarioConfigs[scenario] = { scenario, ...body }
+        return HttpResponse.json({ success: true, data: mockScenarioConfigs[scenario] })
     }),
 
     http.post('/api/v1/rule', async ({ request }) => {

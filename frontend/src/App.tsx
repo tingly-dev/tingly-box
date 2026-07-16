@@ -66,6 +66,7 @@ import SlackPage from './pages/remote-control/SlackPage';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
 import ServerToolPage from './pages/servertool/ServerToolPage';
+import TaskPage from './pages/task/TaskPage';
 
 // Loading fallback component - kept for potential future use with async data
 
@@ -253,6 +254,7 @@ function AppContent() {
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
                     {/* Tools */}
                     <Route path="/tools/servertool" element={<ServerToolPage />} />
+                    <Route path="/tasks" element={<TaskPage />} />
                     {/* Catch-all redirect for unknown routes (also covers legacy /zen/* links) */}
                     <Route path="*" element={<Navigate to="/agent" replace />} />
                 </Route>

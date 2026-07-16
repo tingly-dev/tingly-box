@@ -39,4 +39,10 @@ type Store interface {
 	// other columns are left unchanged. This prevents concurrent goroutines
 	// from stomping each other's fields.
 	UpdateStatus(ctx context.Context, taskID string, fields map[string]interface{}) error
+
+	CreateRun(ctx context.Context, run *TaskRun) error
+	GetRun(ctx context.Context, taskID, runID string) (*TaskRun, error)
+	ListRuns(ctx context.Context, filter RunListFilter) ([]TaskRun, error)
+	UpdateRun(ctx context.Context, runID string, fields map[string]interface{}) error
+	AppendRunEvent(ctx context.Context, runID string, event RunEvent) error
 }
