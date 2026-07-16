@@ -138,7 +138,7 @@ type Server struct {
 	visionProxyService *visionproxy.Service
 
 	// OTel meter setup for unified token tracking
-	meterSetup   *pkgotel.MeterSetup
+	otelSetup    *pkgotel.Setup
 	tokenTracker *tracker.TokenTracker
 
 	// virtual model service for testing
@@ -398,16 +398,16 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
 	server.probeLightweight = probe.NewLightweightService(server.clientPool)
 
-	// Initialize OTel meter setup for token tracking. Metrics are export-only
+	// Initialize OTel for token metrics and tracing. Telemetry is export-only
 	// (optional OTLP); persistent usage records are written directly by the
 	// usage-tracking layer, so no store references are needed here.
-	meterSetup, err := pkgotel.NewMeterSetup(context.Background(), pkgotel.DefaultConfig())
+	otelSetup, err := pkgotel.NewSetup(context.Background(), pkgotel.DefaultConfig())
 	if err != nil {
-		logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
-	} else if meterSetup != nil {
-		server.meterSetup = meterSetup
-		server.tokenTracker = meterSetup.Tracker()
-		logrus.Debugf("OTel meter setup initialized")
+		logrus.Warnf("Failed to initialize OTel setup: %v", err)
+	} else if otelSetup != nil {
+		server.otelSetup = otelSetup
+		server.tokenTracker = otelSetup.Tracker()
+		logrus.Debugf("OTel setup initialized")
 	}
 
 	// Initialize API token store for multi-tenant authentication

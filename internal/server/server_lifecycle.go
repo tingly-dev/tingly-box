@@ -305,8 +305,8 @@ func (s *Server) Stop(ctx context.Context) error {
 	s.scenarioRecordSinksMu.Unlock()
 
 	// Shutdown OTel meter setup
-	if s.meterSetup != nil {
-		if err := s.meterSetup.Shutdown(ctx); err != nil {
+	if s.otelSetup != nil {
+		if err := s.otelSetup.Shutdown(ctx); err != nil {
 			logrus.Errorf("OTel shutdown error: %v", err)
 		}
 	}

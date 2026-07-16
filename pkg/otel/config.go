@@ -15,16 +15,17 @@ type Config struct {
 	// ExportTimeout is the timeout for each export. Default: 30s
 	ExportTimeout time.Duration
 
-	// OTLP exporter configuration. OTLP is the only metrics egress:
-	// persistent usage records and request recordings are written at the
-	// source (internal/server/usage_tracking.go and the recording pipeline),
-	// not derived from aggregated metric data points.
+	// OTLP exporter configuration. OTLP is the only telemetry egress and is
+	// shared by all signals (metrics and traces): persistent usage records
+	// and request recordings are written at the source
+	// (internal/server/usage_tracking.go and the recording pipeline), not
+	// derived from aggregated metric data points.
 	OTLP OTLPConfig
 }
 
 // OTLPConfig holds OTLP exporter configuration
 type OTLPConfig struct {
-	// Enabled enables OTLP export
+	// Enabled enables OTLP export (metrics and traces)
 	Enabled bool
 
 	// Endpoint is the OTLP endpoint (gRPC or HTTP)
@@ -38,6 +39,11 @@ type OTLPConfig struct {
 
 	// Headers are optional headers to send with each request
 	Headers map[string]string
+
+	// TraceSampleRatio is the fraction of new traces to sample. Sampling is
+	// parent-based, so an incoming sampled context is always honored. Values
+	// outside (0,1) — including the zero value — mean "sample everything".
+	TraceSampleRatio float64
 }
 
 // DefaultConfig returns a config with sensible defaults
