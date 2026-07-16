@@ -3,6 +3,8 @@ package visionproxy
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -503,6 +505,43 @@ func TestVisionProxy_MultipleImages_AllReplacedInOrder(t *testing.T) {
 	require.Contains(t, text, "first description")
 	require.Contains(t, text, "second description")
 	require.Contains(t, text, "third description")
+}
+
+// echoPayloadClient derives the description from the image payload itself,
+// so ordering assertions can catch any cross-wiring between the concurrent
+// describe goroutines and their splice targets.
+type echoPayloadClient struct{}
+
+func (echoPayloadClient) Describe(_ context.Context, _ *loadbalance.Service, _, b64, _ string) (string, error) {
+	return "desc-of-" + b64, nil
+}
+
+// TestVisionProxy_ConcurrentDescribe_MappingPreserved sends more images than
+// describeConcurrency and verifies each description lands in the slot its
+// image came from — the concurrent fan-out must not scramble the mapping.
+func TestVisionProxy_ConcurrentDescribe_MappingPreserved(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	p := mkProcessor(t, echoPayloadClient{}, prov)
+
+	const n = describeConcurrency * 2
+	payloads := make([]string, n)
+	for i := range payloads {
+		payloads[i] = fmt.Sprintf("img-%02d", i)
+	}
+	req := betaReqWithImages("compare all of these", payloads...)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+
+	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.Equal(t, 0, countImages(req))
+
+	text := collectText(req)
+	prev := -1
+	for _, payload := range payloads {
+		pos := strings.Index(text, "desc-of-"+payload)
+		require.GreaterOrEqual(t, pos, 0, "description for %s missing", payload)
+		require.Greater(t, pos, prev, "description for %s spliced out of order", payload)
+		prev = pos
+	}
 }
 
 func TestVisionProxy_NoImages_NoOp(t *testing.T) {

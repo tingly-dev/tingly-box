@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -44,6 +45,25 @@ const imageUnavailableText = "[image: (description unavailable)]"
 // message are sent through the vision upstream for description.
 const imageHistoricalText = "[image: (omitted from history)]"
 
+// describeConcurrency bounds how many vision upstream calls run in parallel
+// for a single request. The upstream round-trip dominates proxy latency, so
+// a latest message carrying several images (multi-screenshot tool results,
+// image comparisons) should not pay N sequential round-trips; the bound
+// keeps a pathological request from opening dozens of connections at once.
+const describeConcurrency = 4
+
+// imageRef is one image occurrence in the LATEST message, captured while
+// walking the request: the extracted source plus a splice callback that
+// writes the replacement text back into the exact block the image came
+// from. Every ref targets a distinct slice slot, so splice calls are safe
+// to run from concurrent goroutines without locking.
+type imageRef struct {
+	mediaType string
+	b64       string
+	remoteURL string
+	splice    func(text string)
+}
+
 // Process mutates req in place: every image block becomes a text block. On
 // any failure (no usable service, vision client error, empty upstream
 // response) the image is still removed so a downstream text-only model does
@@ -54,23 +74,34 @@ func (p *VisionProxyProcessor) Process(ctx context.Context, req any, services []
 	if req == nil {
 		return nil
 	}
-	usable := p.pickUsableService(services)
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
+	// Phase 1 — walk the request: historical images are replaced with the
+	// fixed marker immediately (no upstream cost); latest-message images
+	// are collected for the describe fan-out.
+	var refs []imageRef
 	switch req := req.(type) {
 	case *anthropic.BetaMessageNewParams:
-		p.processBeta(ctx, req, usable)
+		refs = collectBeta(req)
 	case *anthropic.MessageNewParams:
-		p.processV1(ctx, req, usable)
+		refs = collectV1(req)
 	case *openai.ChatCompletionNewParams:
-		p.processOpenAI(ctx, req, usable)
+		refs = collectOpenAI(req)
 	case *responses.ResponseNewParams:
-		p.processResponses(ctx, req, usable)
+		refs = collectResponses(req)
 	default:
 		// Unknown request shape — leave it alone.
+		return nil
 	}
+	if len(refs) == 0 {
+		return nil
+	}
+
+	// Phase 2 — describe the collected images (concurrently when there is
+	// more than one) and splice the text back in.
+	p.describeAll(ctx, p.pickUsableService(services), refs)
 	return nil
 }
 
@@ -87,6 +118,30 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 		return svc
 	}
 	return nil
+}
+
+// describeAll resolves every collected ref via the vision upstream and
+// splices the replacement text into the request. Calls run concurrently,
+// bounded by describeConcurrency; the single-image fast path skips the
+// goroutine machinery entirely.
+func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbalance.Service, refs []imageRef) {
+	if len(refs) == 1 {
+		r := refs[0]
+		r.splice(p.describe(ctx, usable, r.mediaType, r.b64, r.remoteURL))
+		return
+	}
+	sem := make(chan struct{}, describeConcurrency)
+	var wg sync.WaitGroup
+	for _, r := range refs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			r.splice(p.describe(ctx, usable, r.mediaType, r.b64, r.remoteURL))
+		}()
+	}
+	wg.Wait()
 }
 
 // describe calls the vision client when available and returns the
@@ -131,129 +186,168 @@ func truncateForLog(s string, max int) string {
 	return s[:max] + fmt.Sprintf("…(+%d)", len(s)-max)
 }
 
-// processBeta replaces every image block in every message with a text
-// block: described via the vision upstream for the latest message,
-// stripped with imageHistoricalText for earlier ones. Image blocks
-// occur both at the top level and nested inside tool_result.Content
-// (see .design/vision-proxy-scenario.md §9.1) — walkBetaContent handles
-// both shapes.
-func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service) {
-	if len(req.Messages) == 0 {
-		return
+// spliceOrCollect is the single decision point for what happens to an image
+// block. Images outside the latest message get the fixed historical marker
+// spliced in immediately — no upstream call, no ref. Latest-message images
+// are appended to refs for the describe fan-out.
+func spliceOrCollect(refs []imageRef, isLast bool, mediaType, b64, remoteURL string, splice func(text string)) []imageRef {
+	if !isLast {
+		splice(imageHistoricalText)
+		return refs
 	}
+	return append(refs, imageRef{mediaType: mediaType, b64: b64, remoteURL: remoteURL, splice: splice})
+}
+
+// collectBeta walks every message of a Beta request. Image blocks occur both
+// at the top level and nested inside tool_result.Content (see
+// .design/vision-proxy-scenario.md §9.1) — both shapes are handled.
+func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
+	var refs []imageRef
 	lastIdx := len(req.Messages) - 1
 	for mi := range req.Messages {
-		p.walkBetaContent(ctx, req.Messages[mi].Content, usable, mi == lastIdx)
-	}
-}
-
-func (p *VisionProxyProcessor) walkBetaContent(ctx context.Context, blocks []anthropic.BetaContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
-	for bi := range blocks {
-		if blocks[bi].OfImage != nil {
-			blocks[bi] = anthropic.BetaContentBlockParamUnion{
-				OfText: &anthropic.BetaTextBlockParam{Text: p.betaReplacementText(ctx, blocks[bi].OfImage, usable, isLast)},
+		isLast := mi == lastIdx
+		blocks := req.Messages[mi].Content
+		for bi := range blocks {
+			if img := blocks[bi].OfImage; img != nil {
+				mediaType, b64, remoteURL := extractBetaImageSource(img)
+				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
+					blocks[bi] = anthropic.BetaContentBlockParamUnion{
+						OfText: &anthropic.BetaTextBlockParam{Text: text},
+					}
+				})
+				continue
 			}
-			continue
-		}
-		if tr := blocks[bi].OfToolResult; tr != nil {
+			tr := blocks[bi].OfToolResult
+			if tr == nil {
+				continue
+			}
 			inner := tr.Content
 			for ii := range inner {
-				if inner[ii].OfImage == nil {
+				img := inner[ii].OfImage
+				if img == nil {
 					continue
 				}
-				inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
-					OfText: &anthropic.BetaTextBlockParam{Text: p.betaReplacementText(ctx, inner[ii].OfImage, usable, isLast)},
-				}
+				mediaType, b64, remoteURL := extractBetaImageSource(img)
+				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
+					inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
+						OfText: &anthropic.BetaTextBlockParam{Text: text},
+					}
+				})
 			}
 		}
 	}
+	return refs
 }
 
-func (p *VisionProxyProcessor) betaReplacementText(ctx context.Context, img *anthropic.BetaImageBlockParam, usable *loadbalance.Service, isLast bool) string {
-	if !isLast {
-		return imageHistoricalText
-	}
-	mediaType, b64, remoteURL := extractBetaImageSource(img)
-	return p.describe(ctx, usable, mediaType, b64, remoteURL)
-}
-
-func (p *VisionProxyProcessor) processV1(ctx context.Context, req *anthropic.MessageNewParams, usable *loadbalance.Service) {
-	if len(req.Messages) == 0 {
-		return
-	}
+// collectV1 mirrors collectBeta for the v1 Messages API types.
+func collectV1(req *anthropic.MessageNewParams) []imageRef {
+	var refs []imageRef
 	lastIdx := len(req.Messages) - 1
 	for mi := range req.Messages {
-		p.walkV1Content(ctx, req.Messages[mi].Content, usable, mi == lastIdx)
-	}
-}
-
-func (p *VisionProxyProcessor) walkV1Content(ctx context.Context, blocks []anthropic.ContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
-	for bi := range blocks {
-		if blocks[bi].OfImage != nil {
-			blocks[bi] = anthropic.ContentBlockParamUnion{
-				OfText: &anthropic.TextBlockParam{Text: p.v1ReplacementText(ctx, blocks[bi].OfImage, usable, isLast)},
+		isLast := mi == lastIdx
+		blocks := req.Messages[mi].Content
+		for bi := range blocks {
+			if img := blocks[bi].OfImage; img != nil {
+				mediaType, b64, remoteURL := extractV1ImageSource(img)
+				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
+					blocks[bi] = anthropic.ContentBlockParamUnion{
+						OfText: &anthropic.TextBlockParam{Text: text},
+					}
+				})
+				continue
 			}
-			continue
-		}
-		if tr := blocks[bi].OfToolResult; tr != nil {
+			tr := blocks[bi].OfToolResult
+			if tr == nil {
+				continue
+			}
 			inner := tr.Content
 			for ii := range inner {
-				if inner[ii].OfImage == nil {
+				img := inner[ii].OfImage
+				if img == nil {
 					continue
 				}
-				inner[ii] = anthropic.ToolResultBlockParamContentUnion{
-					OfText: &anthropic.TextBlockParam{Text: p.v1ReplacementText(ctx, inner[ii].OfImage, usable, isLast)},
-				}
+				mediaType, b64, remoteURL := extractV1ImageSource(img)
+				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
+					inner[ii] = anthropic.ToolResultBlockParamContentUnion{
+						OfText: &anthropic.TextBlockParam{Text: text},
+					}
+				})
 			}
 		}
 	}
+	return refs
 }
 
-func (p *VisionProxyProcessor) v1ReplacementText(ctx context.Context, img *anthropic.ImageBlockParam, usable *loadbalance.Service, isLast bool) string {
-	if !isLast {
-		return imageHistoricalText
-	}
-	mediaType, b64, remoteURL := extractV1ImageSource(img)
-	return p.describe(ctx, usable, mediaType, b64, remoteURL)
-}
-
-func (p *VisionProxyProcessor) processOpenAI(ctx context.Context, req *openai.ChatCompletionNewParams, usable *loadbalance.Service) {
-	if len(req.Messages) == 0 {
-		return
-	}
+// collectOpenAI walks a Chat Completions request. Only user messages can
+// carry image_url content parts in the current SDK union.
+func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
+	var refs []imageRef
 	lastIdx := len(req.Messages) - 1
-	historicalPart := openai.ChatCompletionContentPartUnionParam{
-		OfText: &openai.ChatCompletionContentPartTextParam{Text: imageHistoricalText},
-	}
-	for mi := 0; mi < lastIdx; mi++ {
+	for mi := range req.Messages {
 		um := req.Messages[mi].OfUser
 		if um == nil {
 			continue
 		}
+		isLast := mi == lastIdx
 		parts := um.Content.OfArrayOfContentParts
 		for pi := range parts {
-			if parts[pi].OfImageURL == nil {
+			ip := parts[pi].OfImageURL
+			if ip == nil {
 				continue
 			}
-			parts[pi] = historicalPart
+			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
+			refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
+				parts[pi] = openai.ChatCompletionContentPartUnionParam{
+					OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
+				}
+			})
 		}
 	}
-	um := req.Messages[lastIdx].OfUser
-	if um == nil {
-		return
-	}
-	parts := um.Content.OfArrayOfContentParts
-	for pi := range parts {
-		ip := parts[pi].OfImageURL
-		if ip == nil {
+	return refs
+}
+
+// collectResponses mirrors collectBeta/collectV1 for the OpenAI Responses
+// API: it walks every input item's content list, replacing each
+// `input_image` part with a text part.
+//
+// Shapes handled: ResponseInputItemUnionParam.OfMessage (EasyInputMessageParam,
+// with EasyInputMessageContentUnionParam.OfInputItemContentList) and
+// ResponseInputItemUnionParam.OfInputMessage (ResponseInputItemMessageParam,
+// content list inline). Tool/function/output items don't carry
+// input_image parts in the current SDK union and are left alone.
+func collectResponses(req *responses.ResponseNewParams) []imageRef {
+	items := req.Input.OfInputItemList
+	var refs []imageRef
+	lastIdx := len(items) - 1
+	for mi := range items {
+		var list responses.ResponseInputMessageContentListParam
+		switch {
+		case items[mi].OfMessage != nil:
+			list = items[mi].OfMessage.Content.OfInputItemContentList
+		case items[mi].OfInputMessage != nil:
+			list = items[mi].OfInputMessage.Content
+		default:
 			continue
 		}
-		mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
-		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
-		parts[pi] = openai.ChatCompletionContentPartUnionParam{
-			OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
+		isLast := mi == lastIdx
+		for ci := range list {
+			img := list[ci].OfInputImage
+			if img == nil {
+				continue
+			}
+			url := ""
+			if img.ImageURL.Valid() {
+				url = img.ImageURL.Value
+			}
+			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(url)
+			refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
+				list[ci] = responses.ResponseInputContentUnionParam{
+					OfInputText: &responses.ResponseInputTextParam{Text: text},
+				}
+			})
 		}
 	}
+	return refs
 }
 
 func extractBetaImageSource(img *anthropic.BetaImageBlockParam) (mediaType, b64, remoteURL string) {
@@ -267,65 +361,6 @@ func extractBetaImageSource(img *anthropic.BetaImageBlockParam) (mediaType, b64,
 		return "", "", img.Source.OfURL.URL
 	}
 	return
-}
-
-// processResponses mirrors processBeta/processV1 for the OpenAI Responses
-// API: it walks every input item's content list, replacing each
-// `input_image` part with a text part. The latest item gets a real
-// description via the vision upstream; earlier items get the fixed
-// historical marker. Same rationale as processBeta — historical images
-// are too costly to describe and rarely needed for the current turn.
-//
-// Shapes handled: ResponseInputItemUnionParam.OfMessage (EasyInputMessageParam,
-// with EasyInputMessageContentUnionParam.OfInputItemContentList) and
-// ResponseInputItemUnionParam.OfInputMessage (ResponseInputItemMessageParam,
-// content list inline). Tool/function/output items don't carry
-// input_image parts in the current SDK union and are left alone.
-func (p *VisionProxyProcessor) processResponses(ctx context.Context, req *responses.ResponseNewParams, usable *loadbalance.Service) {
-	items := req.Input.OfInputItemList
-	if len(items) == 0 {
-		return
-	}
-	lastIdx := len(items) - 1
-	for mi := range items {
-		p.walkResponsesItem(ctx, &items[mi], usable, mi == lastIdx)
-	}
-}
-
-func (p *VisionProxyProcessor) walkResponsesItem(ctx context.Context, item *responses.ResponseInputItemUnionParam, usable *loadbalance.Service, isLast bool) {
-	if item.OfMessage != nil {
-		p.walkResponsesContentList(ctx, item.OfMessage.Content.OfInputItemContentList, usable, isLast)
-		return
-	}
-	if item.OfInputMessage != nil {
-		p.walkResponsesContentList(ctx, item.OfInputMessage.Content, usable, isLast)
-		return
-	}
-}
-
-func (p *VisionProxyProcessor) walkResponsesContentList(ctx context.Context, list responses.ResponseInputMessageContentListParam, usable *loadbalance.Service, isLast bool) {
-	for i := range list {
-		img := list[i].OfInputImage
-		if img == nil {
-			continue
-		}
-		text := p.responsesReplacementText(ctx, img, usable, isLast)
-		list[i] = responses.ResponseInputContentUnionParam{
-			OfInputText: &responses.ResponseInputTextParam{Text: text},
-		}
-	}
-}
-
-func (p *VisionProxyProcessor) responsesReplacementText(ctx context.Context, img *responses.ResponseInputImageParam, usable *loadbalance.Service, isLast bool) string {
-	if !isLast {
-		return imageHistoricalText
-	}
-	url := ""
-	if img.ImageURL.Valid() {
-		url = img.ImageURL.Value
-	}
-	mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(url)
-	return p.describe(ctx, usable, mediaType, b64, remoteURL)
 }
 
 func extractV1ImageSource(img *anthropic.ImageBlockParam) (mediaType, b64, remoteURL string) {

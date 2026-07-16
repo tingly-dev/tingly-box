@@ -61,6 +61,13 @@ responsibilities:
 
 ### Process pipeline
 
+Processing is two-phase: a **collect** walk that strips historical images
+in place and gathers the latest message's images as `imageRef`s (source +
+splice-back callback), then a **describe** fan-out that resolves each ref
+via the vision upstream — concurrently when there is more than one image,
+bounded by `describeConcurrency` (4). Each ref splices into its own
+distinct block slot, so the concurrent writes need no locking.
+
 ```
 req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
 
@@ -74,20 +81,22 @@ req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
         { OfImage: B }                                       ◄── latest target
       ] } ]
        │
-       │ pickUsableService(services)
+       │ Phase 1 — collect<Protocol>(req):
+       │   for each message i < lastIdx:
+       │     replace OfImage blocks with
+       │       { OfText: "[image: (omitted from history)]" }
+       │     (no Describe call — no upstream cost for historical images)
+       │   for each OfImage in messages[lastIdx]:
+       │     extractImageSource → (mediaType, b64Data, remoteURL)
+       │       - Beta:   img.Source.OfBase64 | img.Source.OfURL
+       │       - V1:     img.Source.OfBase64 | img.Source.OfURL
+       │       - OpenAI: ParseImageURLToAnthropicSource(image_url.url)
+       │     collect imageRef{source, splice}
+       │
+       │ pickUsableService(services)          (skipped when no refs)
        │   skip nil / inactive / unresolvable-provider svcs
        │
-       │ for each message i < lastIdx:
-       │   replace OfImage blocks with
-       │     { OfText: "[image: (omitted from history)]" }
-       │   (no Describe call — no upstream cost for historical images)
-       │
-       │ for each OfImage in messages[lastIdx]:
-       │   extractImageSource → (mediaType, b64Data, remoteURL)
-       │     - Beta:   img.Source.OfBase64 | img.Source.OfURL
-       │     - V1:     img.Source.OfBase64 | img.Source.OfURL
-       │     - OpenAI: ParseImageURLToAnthropicSource(image_url.url)
-       │
+       │ Phase 2 — describeAll(refs): concurrent, ≤ describeConcurrency
        │   describe(ctx, service, mediaType, b64, url):
        │     visionClient.Describe(...)
        │       poolVisionClient (production adapter)
@@ -172,5 +181,7 @@ deliver images this way. Unknown request shapes are left alone (no-op).
 
 ## Out of scope (today)
 
-- Concurrent image description (sequential, one call per image).
-- Caching describe results across requests.
+- Caching describe results across requests (each image is described once
+  per request, even if the identical image appears in multiple requests).
+- Deduplicating identical images within one request (each occurrence gets
+  its own describe call).
