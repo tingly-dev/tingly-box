@@ -70,6 +70,18 @@ func WithWaitInterval(d time.Duration) ManagerOption {
 	return func(m *taskManager) { m.waitInterval = d }
 }
 
+// TransitionObserver is invoked after a task settles: succeeded, failed,
+// needs_input, or handoff_required. Mid-loop reschedules, retries, and
+// user-initiated cancellations are not reported. It runs on its own
+// goroutine; result is the final run's result payload (may be nil).
+type TransitionObserver func(t Task, status TaskStatus, result json.RawMessage, errMsg string)
+
+// WithTransitionObserver registers the settled-transition callback used
+// for user-facing notifications.
+func WithTransitionObserver(fn TransitionObserver) ManagerOption {
+	return func(m *taskManager) { m.observer = fn }
+}
+
 // taskManager is the concrete implementation of Manager.
 type taskManager struct {
 	mu           sync.Mutex
@@ -81,6 +93,14 @@ type taskManager struct {
 	stopFn       context.CancelFunc
 	running      bool
 	waitInterval time.Duration
+	observer     TransitionObserver
+}
+
+func (m *taskManager) notifyTransition(t Task, status TaskStatus, result json.RawMessage, errMsg string) {
+	if m.observer == nil {
+		return
+	}
+	go m.observer(t, status, result, errMsg)
 }
 
 // NewManager constructs a Manager backed by the provided Store.
@@ -435,6 +455,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 				"finished_at": now,
 				"error":       err.Error(),
 			})
+			m.notifyTransition(*t, StatusFailed, nil, err.Error())
 		}
 		return
 	}
@@ -464,6 +485,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 					"error":       err.Error(),
 					"result":      resultJSON,
 				})
+				m.notifyTransition(*t, StatusFailed, runResult, err.Error())
 				return
 			}
 			finishRun()
@@ -475,6 +497,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 				"result":       resultJSON,
 				"error":        "",
 			})
+			m.notifyTransition(*t, StatusSucceeded, runResult, "")
 			return
 		}
 		finishRun()
@@ -485,6 +508,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			"result":       resultJSON,
 			"error":        "",
 		})
+		m.notifyTransition(*t, StatusSucceeded, runResult, "")
 	case OutcomeReschedule:
 		runStatus = RunStatusRescheduled
 		if result == nil || result.NextRunAt == nil {
@@ -534,6 +558,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			}
 		}
 		_ = m.store.UpdateStatus(context.Background(), t.ID, updates)
+		m.notifyTransition(*t, status, runResult, "")
 	default:
 		runStatus = RunStatusFailed
 		runError = fmt.Sprintf("%s: %q", ErrInvalidOutcome, outcome)
@@ -544,6 +569,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			"error":       fmt.Sprintf("%s: %q", ErrInvalidOutcome, outcome),
 			"result":      resultJSON,
 		})
+		m.notifyTransition(*t, StatusFailed, runResult, runError)
 	}
 }
 

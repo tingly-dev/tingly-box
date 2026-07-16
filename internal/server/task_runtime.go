@@ -41,7 +41,7 @@ func (s *Server) initTaskRuntime() {
 		return nil, nil
 	}
 
-	manager := coretask.NewManager(store)
+	manager := coretask.NewManager(store, coretask.WithTransitionObserver(s.taskTransitionObserver()))
 	agentHandler := agenttask.NewHandler(agents, envResolver)
 	if err := manager.Register(agentHandler); err != nil {
 		logrus.WithError(err).Warn("Task runtime handler registration failed")

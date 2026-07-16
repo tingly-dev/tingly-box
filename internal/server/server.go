@@ -91,6 +91,7 @@ type Server struct {
 	channelRegistry     *channel.Registry
 	interactionRegistry *interaction.Registry[interaction.Result]
 	scenarioRegistry    *scenario.Registry
+	scenarioRuntime     scenario.Runtime
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *tokenrefresh.OAuthRefresher

@@ -138,6 +138,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		resolver := binding.NewResolver(sm.ImBotSettings())
 		auditLog := audit.NewLogger(audit.Config{Console: true, MaxEntries: 1000})
 		runtime := remotescenario.NewDefaultRuntime(s.channelRegistry, resolver, RuntimeAuditSink(auditLog))
+		s.scenarioRuntime = runtime
 		notifyHandler = notifymodule.NewHandlerWithRouting(s.scenarioRegistry, s.interactionRegistry, runtime)
 	} else {
 		notifyHandler = notifymodule.NewHandler()
