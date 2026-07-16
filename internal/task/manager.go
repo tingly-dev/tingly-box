@@ -44,8 +44,8 @@ type Manager interface {
 	// ErrNotWakeable so a native session can never be resumed concurrently.
 	Wake(ctx context.Context, taskID string, at time.Time) error
 
-	// UpdatePayload checkpoints handler- or API-owned durable task state
-	// without exposing the Store to higher layers.
+	// UpdatePayload changes API-owned durable state for a non-running task.
+	// Running handlers checkpoint through Controller.UpdatePayload instead.
 	UpdatePayload(ctx context.Context, taskID string, payload json.RawMessage) error
 
 	// Start runs restart recovery and launches the scheduler goroutine.
@@ -239,8 +239,14 @@ func (m *taskManager) Wake(ctx context.Context, taskID string, at time.Time) err
 }
 
 func (m *taskManager) UpdatePayload(ctx context.Context, taskID string, payload json.RawMessage) error {
-	if _, err := m.store.Get(ctx, taskID); err != nil {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, err := m.store.Get(ctx, taskID)
+	if err != nil {
 		return err
+	}
+	if t.Status == StatusRunning || t.Status == StatusQueued {
+		return ErrNotEditable
 	}
 	return m.store.UpdateStatus(ctx, taskID, map[string]interface{}{"payload": string(payload)})
 }

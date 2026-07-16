@@ -24,6 +24,11 @@ type CreateStep struct {
 	Instruction string `json:"instruction" binding:"required"`
 }
 
+type UpdateRequest struct {
+	Title *string `json:"title,omitempty"`
+	Goal  *string `json:"goal,omitempty"`
+}
+
 type WakeRequest struct {
 	Instruction       string                     `json:"instruction,omitempty"`
 	ExecutionOverride *agenttask.ExecutionPolicy `json:"execution_override,omitempty"`

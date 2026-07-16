@@ -202,14 +202,14 @@ func nextPrompt(payload Payload, resume bool) string {
 			step := payload.Steps[payload.CurrentStep]
 			return fmt.Sprintf("Overall task goal:\n%s\n\nCurrent step %d of %d — %s\n%s\n\nUser instruction for this step:\n%s\n\nContinue only this step. Do not start later steps.", payload.Goal, payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, payload.PendingInput)
 		}
-		return payload.PendingInput
+		return fmt.Sprintf("Task goal:\n%s\n\nAdditional instruction for this run:\n%s\n\nContinue working toward the task goal using this instruction. Report the bounded run outcome when finished.", payload.Goal, payload.PendingInput)
 	}
 	if payload.HasCurrentStep() {
 		step := payload.Steps[payload.CurrentStep]
 		return fmt.Sprintf("Overall task goal:\n%s\n\nCurrent step %d of %d — %s\n%s\n\nComplete only this step during this bounded execution. Do not start later steps. Report done when this step is complete.", payload.Goal, payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction)
 	}
 	if resume {
-		return "Continue working toward the existing task goal. Review the session context and current workspace before acting."
+		return fmt.Sprintf("Task goal:\n%s\n\nContinue working toward this current task goal. Review the session context and current workspace before acting.", payload.Goal)
 	}
 	return payload.Goal
 }

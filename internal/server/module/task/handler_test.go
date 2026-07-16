@@ -23,6 +23,7 @@ func testRouter(handler *Handler) *gin.Engine {
 	router.POST("/tasks", handler.Create)
 	router.GET("/tasks", handler.List)
 	router.GET("/tasks/:id", handler.Get)
+	router.PATCH("/tasks/:id", handler.Update)
 	router.POST("/tasks/:id/wake", handler.Wake)
 	router.GET("/tasks/:id/runs", handler.ListRuns)
 	router.GET("/tasks/:id/runs/:runID", handler.GetRun)
@@ -245,6 +246,86 @@ func TestCreate_RejectsUnsupportedAgent(t *testing.T) {
 	}`)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestUpdate_EditsDurableDefinitionAndPreservesRuntimeState(t *testing.T) {
+	store := coretask.NewMemoryStore()
+	manager := coretask.NewManager(store)
+	payload := agenttask.Payload{
+		Version: 2, Title: "Old title", Goal: "Old goal", Agent: agenttask.AgentClaude,
+		WorkspacePath: t.TempDir(), SessionID: "session-1", PendingInput: "one-time input",
+		Steps:     []agenttask.Step{{ID: "step-1", Title: "Inspect", Instruction: "Inspect the build"}},
+		Execution: agenttask.DefaultExecutionPolicy(agenttask.AgentClaude),
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := manager.Submit(context.Background(), coretask.SubmitRequest{Type: agenttask.TaskType, Payload: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(context.Background(), created.ID, map[string]interface{}{"status": string(coretask.StatusNeedsInput)}); err != nil {
+		t.Fatal(err)
+	}
+
+	response := performJSON(t, testRouter(NewHandler(manager, t.TempDir(), nil)), http.MethodPatch, "/tasks/"+created.ID, `{"title":" New title ","goal":" New goal "}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var decoded TaskResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Data.Title != "New title" || decoded.Data.Goal != "New goal" || decoded.Data.Status != coretask.StatusNeedsInput {
+		t.Fatalf("updated view = %+v", decoded.Data)
+	}
+	stored, err := manager.Get(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var updated agenttask.Payload
+	if err := json.Unmarshal(stored.Payload, &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.WorkspacePath != payload.WorkspacePath || updated.SessionID != payload.SessionID || updated.PendingInput != payload.PendingInput || len(updated.Steps) != 1 || updated.Execution.LaunchProfile != payload.Execution.LaunchProfile {
+		t.Fatalf("runtime state changed: %+v", updated)
+	}
+}
+
+func TestUpdate_ValidatesGoalAndState(t *testing.T) {
+	for _, status := range []coretask.TaskStatus{coretask.StatusRunning, coretask.StatusQueued} {
+		t.Run(string(status), func(t *testing.T) {
+			store := coretask.NewMemoryStore()
+			manager := coretask.NewManager(store)
+			data, _ := json.Marshal(agenttask.Payload{Version: 2, Goal: "Old goal", Agent: agenttask.AgentCodex, WorkspacePath: t.TempDir()})
+			created, err := manager.Submit(context.Background(), coretask.SubmitRequest{Type: agenttask.TaskType, Payload: data})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.UpdateStatus(context.Background(), created.ID, map[string]interface{}{"status": string(status)}); err != nil {
+				t.Fatal(err)
+			}
+			response := performJSON(t, testRouter(NewHandler(manager, t.TempDir(), nil)), http.MethodPatch, "/tasks/"+created.ID, `{"goal":"New goal"}`)
+			if response.Code != http.StatusConflict {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+
+	manager := coretask.NewManager(coretask.NewMemoryStore())
+	data, _ := json.Marshal(agenttask.Payload{Version: 2, Goal: "Old goal", Agent: agenttask.AgentCodex, WorkspacePath: t.TempDir()})
+	created, err := manager.Submit(context.Background(), coretask.SubmitRequest{Type: agenttask.TaskType, Payload: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(manager, t.TempDir(), nil)
+	for _, body := range []string{`{}`, `{"goal":"   "}`} {
+		response := performJSON(t, testRouter(handler), http.MethodPatch, "/tasks/"+created.ID, body)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d response=%s", body, response.Code, response.Body.String())
+		}
 	}
 }
 

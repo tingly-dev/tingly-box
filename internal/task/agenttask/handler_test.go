@@ -197,7 +197,7 @@ func TestHandler_ResumeClearsPendingInputAndReschedules(t *testing.T) {
 	workspace := mustWorkspace(t)
 	agent := &fakeAgent{available: true}
 	agent.execute = func(_ context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
-		if prompt != "the build is ready" || !opts.Resume || opts.SessionID != "session-1" {
+		if !strings.Contains(prompt, "Task goal:\nwatch the build") || !strings.Contains(prompt, "Additional instruction for this run:\nthe build is ready") || !opts.Resume || opts.SessionID != "session-1" {
 			t.Fatalf("resume call: prompt=%q opts=%+v", prompt, opts)
 		}
 		output := `<task_outcome>{"state":"continue","summary":"still checking","suggested_delay_seconds":1}</task_outcome>`
@@ -240,6 +240,30 @@ func TestHandler_ResumeClearsPendingInputAndReschedules(t *testing.T) {
 	checkpoint := controller.decodedPayload(t)
 	if checkpoint.PendingInput != "" || checkpoint.WakeCount != 1 {
 		t.Fatalf("checkpoint = %+v", checkpoint)
+	}
+}
+
+func TestNextPrompt_AlwaysIncludesCurrentGoal(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload Payload
+		resume  bool
+		want    []string
+	}{
+		{name: "first run", payload: Payload{Goal: "new goal"}, want: []string{"new goal"}},
+		{name: "resume", payload: Payload{Goal: "updated goal"}, resume: true, want: []string{"Task goal:\nupdated goal", "Continue working"}},
+		{name: "instruction", payload: Payload{Goal: "updated goal", PendingInput: "focus on tests"}, resume: true, want: []string{"Task goal:\nupdated goal", "Additional instruction for this run:\nfocus on tests"}},
+		{name: "step instruction", payload: Payload{Goal: "updated goal", PendingInput: "use staging", Steps: []Step{{Title: "Deploy", Instruction: "Deploy the build"}}}, resume: true, want: []string{"Overall task goal:\nupdated goal", "Current step 1 of 1", "User instruction for this step:\nuse staging"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			prompt := nextPrompt(test.payload, test.resume)
+			for _, want := range test.want {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("prompt %q does not contain %q", prompt, want)
+				}
+			}
+		})
 	}
 }
 

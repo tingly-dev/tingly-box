@@ -81,6 +81,65 @@ func (h *Handler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, TaskResponse{Data: view})
 }
 
+func (h *Handler) Update(c *gin.Context) {
+	var req UpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Title == nil && req.Goal == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title or goal is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	task, err := h.manager.Get(ctx, c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if task.Type != agenttask.TaskType {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	var payload agenttask.Payload
+	if err := json.Unmarshal(task.Payload, &payload); err != nil {
+		writeError(c, err)
+		return
+	}
+	if req.Title != nil {
+		payload.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Goal != nil {
+		goal := strings.TrimSpace(*req.Goal)
+		if goal == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "goal is required"})
+			return
+		}
+		payload.Goal = goal
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if err := h.manager.UpdatePayload(ctx, task.ID, data); err != nil {
+		writeError(c, err)
+		return
+	}
+	updated, err := h.manager.Get(ctx, task.ID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, err := toView(updated)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, TaskResponse{Data: view})
+}
+
 func (h *Handler) ListRuns(c *gin.Context) {
 	task, err := h.manager.Get(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -433,7 +492,7 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, coretask.ErrNotFound):
 		status = http.StatusNotFound
-	case errors.Is(err, coretask.ErrNotWakeable), errors.Is(err, coretask.ErrNotCancellable):
+	case errors.Is(err, coretask.ErrNotWakeable), errors.Is(err, coretask.ErrNotCancellable), errors.Is(err, coretask.ErrNotEditable):
 		status = http.StatusConflict
 	case errors.Is(err, coretask.ErrInvalidRecurrence):
 		status = http.StatusBadRequest

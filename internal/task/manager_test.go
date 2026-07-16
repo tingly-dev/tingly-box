@@ -308,6 +308,22 @@ func TestRun_InvalidOutcomeFails(t *testing.T) {
 	}
 }
 
+func TestUpdatePayload_RejectsRunningAndQueuedTasks(t *testing.T) {
+	for _, status := range []task.TaskStatus{task.StatusRunning, task.StatusQueued} {
+		t.Run(string(status), func(t *testing.T) {
+			store := task.NewMemoryStore()
+			mgr := task.NewManager(store)
+			created := mustSubmit(t, mgr, task.SubmitRequest{Type: "editable", Payload: json.RawMessage(`{"goal":"old"}`)})
+			if err := store.UpdateStatus(context.Background(), created.ID, map[string]interface{}{"status": string(status)}); err != nil {
+				t.Fatal(err)
+			}
+			if err := mgr.UpdatePayload(context.Background(), created.ID, json.RawMessage(`{"goal":"new"}`)); !errors.Is(err, task.ErrNotEditable) {
+				t.Fatalf("UpdatePayload error = %v", err)
+			}
+		})
+	}
+}
+
 func TestRun_RescheduleRequiresNextRunAt(t *testing.T) {
 	mgr, _ := newManager(t)
 	mustRegister(t, mgr, &funcHandler{

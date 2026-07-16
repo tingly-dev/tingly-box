@@ -13,6 +13,7 @@ var (
 	ErrManagerStopped    = errors.New("task: manager is not running")
 	ErrDuplicateHandler  = errors.New("task: handler already registered for type")
 	ErrNotWakeable       = errors.New("task: task is already running or queued")
+	ErrNotEditable       = errors.New("task: task is not editable while running or queued")
 	ErrInvalidOutcome    = errors.New("task: invalid handler outcome")
 	ErrInvalidRecurrence = errors.New("task: invalid recurrence")
 )

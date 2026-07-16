@@ -15,12 +15,17 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(TaskListResponse{}))
 	router.POST("/tasks", handler.Create,
 		swagger.WithTags("tasks"),
-		swagger.WithDescription("Create an agent task with a service-owned workspace"),
+		swagger.WithDescription("Create an agent task with a stable generated or existing workspace"),
 		swagger.WithRequestModel(CreateRequest{}),
 		swagger.WithResponseModel(TaskResponse{}))
 	router.GET("/tasks/:id", handler.Get,
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Get an agent task"),
+		swagger.WithResponseModel(TaskResponse{}))
+	router.PATCH("/tasks/:id", handler.Update,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Update an agent task's durable title or goal"),
+		swagger.WithRequestModel(UpdateRequest{}),
 		swagger.WithResponseModel(TaskResponse{}))
 	router.GET("/tasks/:id/runs", handler.ListRuns,
 		swagger.WithTags("tasks"),
@@ -32,7 +37,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(RunResponse{}))
 	router.POST("/tasks/:id/wake", handler.Wake,
 		swagger.WithTags("tasks"),
-		swagger.WithDescription("Run now or send an instruction to a paused task"),
+		swagger.WithDescription("Run now, run again, or run with a one-time instruction"),
 		swagger.WithRequestModel(WakeRequest{}),
 		swagger.WithResponseModel(TaskResponse{}))
 	router.POST("/tasks/:id/stop", handler.Stop,
