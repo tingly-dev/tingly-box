@@ -37,6 +37,17 @@ func (h *Handler) List(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	runs, err := h.manager.ListRuns(c.Request.Context(), coretask.RunListFilter{Limit: 500})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	activeRuns := make(map[string]*coretask.TaskRun)
+	for i := range runs {
+		if runs[i].Status.IsActive() && activeRuns[runs[i].TaskID] == nil {
+			activeRuns[runs[i].TaskID] = &runs[i]
+		}
+	}
 	views := make([]TaskView, 0, len(tasks))
 	for i := range tasks {
 		view, err := toView(&tasks[i])
@@ -44,6 +55,7 @@ func (h *Handler) List(c *gin.Context) {
 			writeError(c, err)
 			return
 		}
+		attachRunAttention(&view, activeRuns[tasks[i].ID])
 		views = append(views, view)
 	}
 	c.JSON(http.StatusOK, TaskListResponse{Data: views})
@@ -398,12 +410,19 @@ func (h *Handler) attachActiveRun(ctx context.Context, taskID string, view *Task
 	if len(runs) == 0 || !runs[0].Status.IsActive() {
 		return nil
 	}
-	view.ActiveRunID = runs[0].ID
-	if runs[0].PendingControl != nil {
-		control := *runs[0].PendingControl
+	attachRunAttention(view, &runs[0])
+	return nil
+}
+
+func attachRunAttention(view *TaskView, run *coretask.TaskRun) {
+	if run == nil {
+		return
+	}
+	view.ActiveRunID = run.ID
+	if run.PendingControl != nil {
+		control := *run.PendingControl
 		view.Attention = &control
 	}
-	return nil
 }
 
 func toRunView(run *coretask.TaskRun) (RunView, error) {

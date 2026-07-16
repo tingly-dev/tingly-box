@@ -20,6 +20,7 @@ func testRouter(handler *Handler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/tasks", handler.Create)
+	router.GET("/tasks", handler.List)
 	router.GET("/tasks/:id", handler.Get)
 	router.POST("/tasks/:id/wake", handler.Wake)
 	router.GET("/tasks/:id/runs", handler.ListRuns)
@@ -64,6 +65,14 @@ func TestGet_SurfacesActiveControlAndRejectsStaleDelivery(t *testing.T) {
 	}
 	if decoded.Data.ActiveRunID != "run-1" || decoded.Data.Attention == nil || decoded.Data.Attention.ID != control.ID {
 		t.Fatalf("task view = %+v", decoded.Data)
+	}
+	listResponse := performJSON(t, router, http.MethodGet, "/tasks", "")
+	var listed TaskListResponse
+	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Data) != 1 || listed.Data[0].Attention == nil || listed.Data[0].ActiveRunID != "run-1" {
+		t.Fatalf("task list = %+v", listed.Data)
 	}
 
 	// A persisted control without a live broker is deliberately not actionable
