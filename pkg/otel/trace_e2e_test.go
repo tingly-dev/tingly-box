@@ -107,9 +107,8 @@ func TestTraceE2E_OTLPWireFormat(t *testing.T) {
 	// upstream-call span, token usage event, and an error on the child.
 	reqCtx, reqSpan := tracer.StartRequestSpan(ctx, "anthropic", "claude-sonnet-4-6", "claude_code")
 	tracer.SetSpanAttributes(reqCtx,
-		AttrLLMRequestModel.String("claude-sonnet-4-6"),
-		AttrLLMRuleUUID.String("rule-42"),
-		AttrLLMStreaming.Bool(true),
+		AttrTinglyRuleUUID.String("rule-42"),
+		AttrTinglyStreaming.Bool(true),
 	)
 
 	// The W3C traceparent header that would be injected on the upstream hop.
@@ -126,7 +125,7 @@ func TestTraceE2E_OTLPWireFormat(t *testing.T) {
 	// do not also call RecordError for the same error or it duplicates.
 	tracer.EndSpan(upSpan, errors.New("upstream 529: overloaded"))
 
-	tracer.RecordTokenUsageEvent(reqCtx, 1200, 350)
+	tracer.SetTokenUsage(reqCtx, 1200, 350)
 	tracer.EndSpan(reqSpan, nil)
 
 	// Shutdown flushes the batch processor to the collector.
@@ -171,7 +170,7 @@ func TestTraceE2E_OTLPWireFormat(t *testing.T) {
 
 	// Batch order is child-first (spans export on End).
 	child, root := spans[0], spans[1]
-	if child.Name != "llm.upstream.call" || root.Name != "llm.request" {
+	if child.Name != "llm.upstream.call" || root.Name != "chat claude-sonnet-4-6" {
 		t.Errorf("unexpected span names: %q, %q", child.Name, root.Name)
 	}
 	if string(child.TraceId) != string(root.TraceId) {
@@ -197,19 +196,14 @@ func TestTraceE2E_OTLPWireFormat(t *testing.T) {
 	for _, kv := range root.Attributes {
 		rootAttrs[kv.Key] = true
 	}
-	for _, want := range []string{"llm.provider", "llm.model", "llm.scenario", "llm.rule.uuid", "llm.streaming"} {
+	for _, want := range []string{
+		"gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.request.model",
+		"gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens",
+		"tingly.scenario", "tingly.rule.uuid", "tingly.streaming",
+	} {
 		if !rootAttrs[want] {
 			t.Errorf("root span missing attribute %s", want)
 		}
 	}
 
-	hasTokenEvent := false
-	for _, ev := range root.Events {
-		if ev.Name == "token_usage" {
-			hasTokenEvent = true
-		}
-	}
-	if !hasTokenEvent {
-		t.Error("root span missing token_usage event")
-	}
 }

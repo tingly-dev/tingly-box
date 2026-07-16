@@ -2,48 +2,57 @@ package otel
 
 import "go.opentelemetry.io/otel/attribute"
 
-// Semantic convention attributes following OpenLLMetry and OpenTelemetry standards
-// These attributes are used to annotate metrics with consistent, meaningful labels.
+// OTel GenAI semantic convention attributes (Development status, tracked at
+// https://github.com/open-telemetry/semantic-conventions-genai). Adopted
+// wholesale while this package has no telemetry consumers yet — going
+// straight to the standard namespace avoids a migration later.
 var (
-	// AttrLLMProvider identifies the LLM provider (e.g., "openai", "anthropic", "google")
-	AttrLLMProvider = attribute.Key("llm.provider")
+	// AttrGenAIOperationName is the operation kind: "chat", "embeddings",
+	// "text_completion", "generate_content", "execute_tool", ...
+	AttrGenAIOperationName = attribute.Key("gen_ai.operation.name")
 
-	// AttrLLMModel identifies the actual model used (e.g., "gpt-4", "claude-3-opus")
-	AttrLLMModel = attribute.Key("llm.model")
+	// AttrGenAIProviderName identifies the provider: "openai", "anthropic",
+	// "aws.bedrock", "gcp.vertex_ai", ...
+	AttrGenAIProviderName = attribute.Key("gen_ai.provider.name")
 
-	// AttrLLMRequestModel identifies the model requested by the user
-	AttrLLMRequestModel = attribute.Key("llm.request.model")
+	// AttrGenAIRequestModel is the model requested by the client.
+	AttrGenAIRequestModel = attribute.Key("gen_ai.request.model")
 
-	// AttrLLMTokenType identifies the type of token (input/output)
-	// Note: Uses underscore (llm.token_type) for backward compatibility with internal/obs/otel
-	AttrLLMTokenType = attribute.Key("llm.token_type")
+	// AttrGenAIResponseModel is the model that actually served the request.
+	AttrGenAIResponseModel = attribute.Key("gen_ai.response.model")
 
-	// AttrLLMScenario identifies the API scenario (e.g., "openai", "anthropic", "claude_code")
-	AttrLLMScenario = attribute.Key("llm.scenario")
+	// AttrGenAITokenType distinguishes token kinds on the token.usage metric.
+	// Spec values: "input", "output". This gateway extends the open enum with
+	// "cache_read" and "system" (see tracker.RecordUsage).
+	AttrGenAITokenType = attribute.Key("gen_ai.token.type")
 
-	// AttrLLMStreaming indicates whether the request was streaming
-	AttrLLMStreaming = attribute.Key("llm.streaming")
+	// AttrGenAIUsageInputTokens / AttrGenAIUsageOutputTokens carry token
+	// usage on inference spans.
+	AttrGenAIUsageInputTokens  = attribute.Key("gen_ai.usage.input_tokens")
+	AttrGenAIUsageOutputTokens = attribute.Key("gen_ai.usage.output_tokens")
 
-	// AttrLLMResponseStatus indicates the response status (success, error, canceled)
-	AttrLLMResponseStatus = attribute.Key("llm.response.status")
+	// AttrErrorType is the standard OTel error.type attribute, set on the
+	// operation.duration metric and on failed spans.
+	AttrErrorType = attribute.Key("error.type")
+)
 
-	// AttrLLMErrorCode contains the error code if status is error
-	AttrLLMErrorCode = attribute.Key("llm.error.code")
+// Gateway-specific attributes. These have no gen_ai equivalent; they live in
+// the tingly.* namespace instead of squatting on a standard one.
+var (
+	// AttrTinglyScenario is the API scenario ("openai", "anthropic",
+	// "claude_code", ...) — which protocol surface the request entered on.
+	AttrTinglyScenario = attribute.Key("tingly.scenario")
 
-	// AttrLLMRuleUUID identifies the load balancer rule used
-	AttrLLMRuleUUID = attribute.Key("llm.rule.uuid")
+	// AttrTinglyProviderUUID identifies the configured provider instance.
+	AttrTinglyProviderUUID = attribute.Key("tingly.provider.uuid")
 
-	// AttrLLMProviderUUID identifies the provider UUID
-	AttrLLMProviderUUID = attribute.Key("llm.provider.uuid")
+	// AttrTinglyRuleUUID identifies the load balancer rule used.
+	AttrTinglyRuleUUID = attribute.Key("tingly.rule.uuid")
 
-	// AttrLLMUserTier identifies low-cardinality user class for enterprise traffic.
-	AttrLLMUserTier = attribute.Key("llm.user.tier")
+	// AttrTinglyStreaming indicates whether the request was streaming.
+	AttrTinglyStreaming = attribute.Key("tingly.streaming")
 
-	// AttrLLMLatencyMs identifies the request latency in milliseconds.
-	//
-	// Deprecated: do not attach this as a metric attribute — latency is
-	// near-unique per request, and every distinct attribute set permanently
-	// allocates a new data point per instrument (unbounded memory growth,
-	// #1255). Record latency as a histogram value instead.
-	AttrLLMLatencyMs = attribute.Key("llm.latency.ms")
+	// AttrTinglyUserTier is a low-cardinality user class for enterprise
+	// observability.
+	AttrTinglyUserTier = attribute.Key("tingly.user.tier")
 )

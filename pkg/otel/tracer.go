@@ -29,34 +29,35 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...trace.SpanS
 	return t.tracer.Start(ctx, name, opts...)
 }
 
-// StartRequestSpan begins a span for an LLM request with standard attributes.
+// StartRequestSpan begins a CLIENT span for an LLM inference request with
+// the standard GenAI attributes. Per the convention the span is named
+// "{operation} {request model}" with operation "chat" (extend the signature
+// when other operations get instrumented).
 func (t *Tracer) StartRequestSpan(ctx context.Context, provider, model, scenario string) (context.Context, trace.Span) {
 	attrs := []attribute.KeyValue{
-		AttrLLMProvider.String(provider),
-		AttrLLMModel.String(model),
-		AttrLLMScenario.String(scenario),
+		AttrGenAIOperationName.String("chat"),
+		AttrGenAIProviderName.String(provider),
+		AttrGenAIRequestModel.String(model),
+		AttrTinglyScenario.String(scenario),
 	}
 
-	return t.tracer.Start(ctx, "llm.request",
+	return t.tracer.Start(ctx, "chat "+model,
 		trace.WithAttributes(attrs...),
 		trace.WithSpanKind(trace.SpanKindClient),
 	)
 }
 
-// RecordTokenUsageEvent records token usage as a span event.
-func (t *Tracer) RecordTokenUsageEvent(ctx context.Context, inputTokens, outputTokens int) {
+// SetTokenUsage records token usage on the current span using the standard
+// gen_ai.usage.* span attributes.
+func (t *Tracer) SetTokenUsage(ctx context.Context, inputTokens, outputTokens int) {
 	span := trace.SpanFromContext(ctx)
 	if !span.IsRecording() {
 		return
 	}
 
-	span.AddEvent("token_usage",
-		trace.WithAttributes(
-			AttrLLMTokenType.String("input"),
-			attribute.Int("input_tokens", inputTokens),
-			attribute.Int("output_tokens", outputTokens),
-			attribute.Int("total_tokens", inputTokens+outputTokens),
-		),
+	span.SetAttributes(
+		AttrGenAIUsageInputTokens.Int(inputTokens),
+		AttrGenAIUsageOutputTokens.Int(outputTokens),
 	)
 }
 

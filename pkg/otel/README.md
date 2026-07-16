@@ -78,22 +78,30 @@ if setup != nil {
 }
 ```
 
-## Metrics
+## Metrics — OTel GenAI semantic conventions
 
-| Instrument               | Type      | Unit      |
-|--------------------------|-----------|-----------|
-| `llm.token.usage.input`  | counter   | {token}   |
-| `llm.token.usage.output` | counter   | {token}   |
-| `llm.token.total`        | counter   | {token}   |
-| `llm.token.cache.input`  | counter   | {token}   |
-| `llm.token.system`       | counter   | {token}   |
-| `llm.request.count`      | counter   | {request} |
-| `llm.request.duration`   | histogram | ms        |
-| `llm.request.errors`     | counter   | {error}   |
+This package emits the standard GenAI client metrics
+(https://github.com/open-telemetry/semantic-conventions-genai, Development
+status; adopted wholesale before any consumer existed, so there is no legacy
+`llm.*` namespace to migrate):
 
-Attributes: `llm.provider`, `llm.provider.uuid`, `llm.model`,
-`llm.request.model`, `llm.scenario`, `llm.streaming`, `llm.response.status`,
-plus `llm.rule.uuid` / `llm.user.tier` / `llm.error.code` when set.
+| Instrument                        | Type      | Unit    |
+|-----------------------------------|-----------|---------|
+| `gen_ai.client.token.usage`       | histogram | {token} |
+| `gen_ai.client.operation.duration`| histogram | s       |
+
+There are deliberately no separate request/error counters: the duration
+histogram's count **is** the request count, and failures are classified by
+the `error.type` attribute on it — that is the standard shape.
+
+Standard attributes: `gen_ai.operation.name` (default `chat`),
+`gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model`,
+`gen_ai.token.type` (`input` / `output`, extended with `cache_read` /
+`system`), `error.type` on failures.
+
+Gateway-specific dimensions stay in their own namespace: `tingly.scenario`,
+`tingly.provider.uuid`, `tingly.rule.uuid`, `tingly.streaming`,
+`tingly.user.tier`.
 
 ## Traces
 
@@ -101,8 +109,13 @@ plus `llm.rule.uuid` / `llm.user.tier` / `llm.error.code` when set.
   metrics.
 - Sampling is parent-based: an incoming sampled `traceparent` is always
   honored; new traces sample at `TraceSampleRatio` (default: everything).
-- `Tracer` provides `StartRequestSpan` (standard llm.* attributes),
-  `RecordTokenUsageEvent`, `RecordError`, `EndSpan`.
+- Inference spans follow the GenAI convention: named
+  `"{operation} {request model}"` (e.g. `chat gpt-4`), kind CLIENT, with
+  `gen_ai.operation.name` / `gen_ai.provider.name` / `gen_ai.request.model`
+  and `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` set via
+  `Tracer.SetTokenUsage`.
+- `Tracer` provides `StartRequestSpan`, `SetTokenUsage`, `RecordError`,
+  `EndSpan`.
 
 ## Cardinality rules
 
