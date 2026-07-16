@@ -158,10 +158,19 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	taskID := uuid.NewString()
-	workspace, err := agenttask.CreateWorkspace(h.configDir, taskID)
-	if err != nil {
-		writeError(c, err)
-		return
+	var workspace string
+	if strings.TrimSpace(req.WorkspacePath) == "" {
+		workspace, err = agenttask.CreateWorkspace(h.configDir, taskID)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+	} else {
+		workspace, err = agenttask.ResolveExistingWorkspace(req.WorkspacePath)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 	payload := agenttask.Payload{
 		Version:        2,

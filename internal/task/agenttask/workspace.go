@@ -33,23 +33,37 @@ func CreateWorkspace(configDir, taskID string) (string, error) {
 	return canonical, nil
 }
 
-func validateWorkspace(path string) error {
+// ResolveExistingWorkspace validates a user-selected workspace and returns its
+// canonical absolute path. It never creates or modifies the directory.
+func ResolveExistingWorkspace(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("workspace path is required")
+	}
 	if !filepath.IsAbs(path) {
-		return fmt.Errorf("workspace path must be absolute")
+		return "", fmt.Errorf("workspace path must be absolute")
 	}
 	canonical, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return fmt.Errorf("resolve workspace: %w", err)
-	}
-	if canonical != filepath.Clean(path) {
-		return fmt.Errorf("workspace path is not canonical")
+		return "", fmt.Errorf("resolve workspace: %w", err)
 	}
 	info, err := os.Stat(canonical)
 	if err != nil {
-		return fmt.Errorf("stat workspace: %w", err)
+		return "", fmt.Errorf("stat workspace: %w", err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("workspace path is not a directory")
+		return "", fmt.Errorf("workspace path is not a directory")
+	}
+	return filepath.Clean(canonical), nil
+}
+
+func validateWorkspace(path string) error {
+	canonical, err := ResolveExistingWorkspace(path)
+	if err != nil {
+		return err
+	}
+	if canonical != filepath.Clean(path) {
+		return fmt.Errorf("workspace path is not canonical")
 	}
 	return nil
 }

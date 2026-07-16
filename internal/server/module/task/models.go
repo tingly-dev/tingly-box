@@ -11,6 +11,7 @@ type CreateRequest struct {
 	Title          string                     `json:"title"`
 	Goal           string                     `json:"goal" binding:"required"`
 	Agent          agenttask.AgentKind        `json:"agent" binding:"required"`
+	WorkspacePath  string                     `json:"workspace_path,omitempty"`
 	ScheduledAt    *time.Time                 `json:"scheduled_at,omitempty"`
 	Recurrence     *coretask.RecurrenceSpec   `json:"recurrence,omitempty"`
 	FollowUp       agenttask.FollowUpPolicy   `json:"follow_up"`

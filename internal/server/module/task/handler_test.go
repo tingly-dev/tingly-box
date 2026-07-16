@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -154,6 +155,85 @@ func TestCreate_GeneratesStableWorkspaceAndTask(t *testing.T) {
 	}
 	if stored.SerializationKey != view.WorkspacePath || string(stored.Payload) == "" {
 		t.Fatalf("stored task = %+v", stored)
+	}
+}
+
+func TestCreate_UsesCanonicalExistingWorkspace(t *testing.T) {
+	configDir := t.TempDir()
+	root := t.TempDir()
+	workspace := filepath.Join(root, "project")
+	if err := os.Mkdir(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "project-alias")
+	if err := os.Symlink(workspace, alias); err != nil {
+		t.Fatal(err)
+	}
+	request, err := json.Marshal(CreateRequest{
+		Goal: "Update the project", Agent: agenttask.AgentCodex, WorkspacePath: alias,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := coretask.NewManager(coretask.NewMemoryStore())
+	response := performJSON(t, testRouter(NewHandler(manager, configDir, nil)), http.MethodPost, "/tasks", string(request))
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var decoded TaskResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	canonicalWorkspace, err := filepath.EvalSymlinks(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Data.WorkspacePath != canonicalWorkspace {
+		t.Fatalf("workspace = %q, want %q", decoded.Data.WorkspacePath, canonicalWorkspace)
+	}
+	stored, err := manager.Get(context.Background(), decoded.Data.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.SerializationKey != canonicalWorkspace {
+		t.Fatalf("serialization key = %q, want %q", stored.SerializationKey, canonicalWorkspace)
+	}
+	generated := filepath.Join(configDir, "tasks", decoded.Data.ID, "workspace")
+	if _, err := os.Stat(generated); !os.IsNotExist(err) {
+		t.Fatalf("custom workspace should not create generated directory; stat error = %v", err)
+	}
+}
+
+func TestCreate_RejectsInvalidExistingWorkspace(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "workspace-file")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "relative", path: "relative/path"},
+		{name: "missing", path: filepath.Join(t.TempDir(), "missing")},
+		{name: "file", path: file.Name()},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request, err := json.Marshal(CreateRequest{
+				Goal: "Update the project", Agent: agenttask.AgentClaude, WorkspacePath: test.path,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler := NewHandler(coretask.NewManager(coretask.NewMemoryStore()), t.TempDir(), nil)
+			response := performJSON(t, testRouter(handler), http.MethodPost, "/tasks", string(request))
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "workspace") {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
 
