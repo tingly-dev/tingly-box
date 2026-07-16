@@ -6,6 +6,8 @@
 > Status: **设计定稿，未实现**。`internal/task/` 已存在一个休眠的 run 引擎
 > （代码注释中的 "Phase 4" 是本方向此前唯一的文字痕迹），本文档给出它的产品形态、
 > 领域模型、与现有子系统的接线方式和分期计划。
+> `feat/task` 分支做过一轮实验实现（可用但效果不佳），§10 给出对照结论：
+> 哪些采纳、哪些修正、为什么。
 >
 > Related: `.design/ux-principles.md`（设计判断标准）、
 > `.design/agentboot-refactor.md`（executor 运行时方向）、
@@ -59,6 +61,11 @@ when / where / with-what / how-much / who-approves；executor 是数据平面
    "executor 一次 run 内部的事"。tb 的编排能力上限刻意停在：线性 steps +
    until 条件 + 重试。需求超出上限时，答案不是增强 tb 的 DSL，而是让
    executor 在 run 内自己 orchestrate。
+5. **不复刻 agent console。**（来自 feat/task 的正确判断）tb 不代理原生
+   stdin/审批、不复制完整 transcript、不做实时 token 流控制台。无人值守
+   边界在创建时定死；run 内越界的权限请求直接拒绝并结束 run，交付
+   `cd <workspace> && <agent> resume <session>` 让人去原生 CLI 接管
+   （ux #11：给物件）。深度交互属于原生 CLI，tb 只管边界与交接。
 
 ## 3. 与 Claude 原生编排的关系（为什么不是重复造轮子）
 
@@ -132,10 +139,14 @@ notify: telegram
 
 - **每个 step = 一条独立的 Run 记录**，同一 workspace 内串行执行
   （引擎现成的 SerializationKey 保证）。每个 step 有自己的日志、状态、成本。
-- **step 之间不传对话上下文**，只传两样：workspace 里的文件（如
-  `.tb/test.log`）和上一步的结构化结果（`steps.bump.failed` 这类字段级引用）。
-  fix 步的 Claude 是一次全新的 headless run，它需要知道的都在磁盘上——
-  刻意如此，tb 不理解、不搬运 executor 的会话状态（守则 3）。
+- **session 连续性以 step 为界**。step 内的多轮（continue 唤醒、needs_input
+  回复）resume 同一原生 session——agent 需要自己的近期上下文；**step 边界
+  一律 fresh**，只传两样：workspace 里的文件（如 `.tb/test.log`）和前序 step
+  的结构化 outcome 摘要（`steps.bump.failed` 这类字段级引用）。fix 步的
+  Claude 是一次全新的 headless run，它需要知道的都在磁盘上——刻意如此：
+  一条 session 贯穿全任务会让上下文越滚越大（后期轮次变慢、变贵、变笨），
+  还把所有 step 锁死为同一个 agent（feat/task 的实测教训，§10）。
+  tb 始终只记 session handle，不理解、不搬运会话内容（守则 3）。
 - **`when` / `until` 只允许引用结构化结果字段**（status、exit code、
   executor 返回的 summary 字段）。"让 LLM 判断要不要继续"不属于这里——
   那种判断写进对应 step 的 prompt，让它在 run 内自己决定（守则 1）。
@@ -149,9 +160,23 @@ notify: telegram
 ```
 Handler（run 级唯一执行契约，即现有 task.Handler 的演进）:
   Type() string
-  Run(ctx, run, controller) → 流式日志 + 结构化结果 {status, summary, artifacts}
+  Run(ctx, run, controller) → TaskResult {
+    Outcome: complete | reschedule(+NextRunAt) | needs_input | handoff_required
+    Result:  结构化结果 {status, summary, artifacts, question?}
+  }
   能力声明: 可流式? 可恢复(原生 session handle)? 可交互升级? 结构化输出?
 ```
+
+- **OutcomeKind 返回契约**（采纳自 feat/task，§10）："下一步怎么走"是
+  Handler 的返回值，引擎统一落库推进——complete 走 recurrence 物化下一次、
+  reschedule 定时再唤醒、needs_input / handoff_required 暂停等人。边界依然
+  成立："我做完了吗"由 agent 在 run 内决定，tb 只读结构化结果。
+- **outcome 必须走结构化通道，不做文本标签解析。** feat/task 让 agent 在
+  输出末尾带 `<task_outcome>{...}</task_outcome>` 且解析失败默认判 done——
+  agent 忘带标签即被静默标记完成，是 loop 类任务最伤信任的失败模式。
+  改为：tb 暴露 `task_report` MCP 工具供 agent 上报（schema 校验、可强制），
+  shell 类走 `.tb/result.json` / exit code；任何"结果无法解析"一律判
+  needs_input，绝不默认 done。
 
 - **收敛为一套插件模式**（ux #3：一个概念一个词）。现状有两套并存：
   `task.Handler`（run 级）和 `internal/remote_control` 的
@@ -178,16 +203,25 @@ Handler（run 级唯一执行契约，即现有 task.Handler 的演进）:
 重试/退避、取消、崩溃恢复；GORM/SQLite 存储（`internal/data/db/task_store.go`）
 已迁移。它当前零生产消费者——本设计让它上岗，且**内核不改**。
 
-### 6.2 Task/Run 拆分（最大的一处结构调整）
+### 6.2 Task/Run 拆分（采纳 feat/task 的解法）
 
-现有 `task.Task` 一条记录既是定义又是实例。拆法：
+现有 `task.Task` 一条记录既是定义又是实例。feat/task 的拆法验证可行，采纳：
 
-- 现有 `internal/task` 原样作为 **Run 引擎**（它的名字里 "Task" 实为本设计
-  的 Run；重命名与否见 Open questions）。
-- 其上新增**定义层**：`TaskDef` 实体（steps / trigger / repeat / budget /
-  notify）+ 解释器。cron 到点或手动触发 → 从 TaskDef **物化**一轮 run 记录
-  逐条 submit；`ParentTaskID` 回链定义（"Phase 4" 预留字段的归宿）。
-- 缺件清单：cron 解析、完成后按 repeat 重新物化、steps/when/until 解释器。
+- `task.Task` 保持为**长期工作单元**（定义 + 调度投影）；新增 `task_runs`
+  表，**TaskRun = 一次 bounded handler 调用**的持久记录（有效输入、生效
+  策略快照、事件、结果、退出原因）。
+- **Recurrence 原地物化**：同一条 Task 记录在 complete 后按 cron 改写
+  `ScheduledAt`，不生成子任务（`ParentTaskID` 仅作存储兼容保留）。
+- 两条修正（feat/task 的坑）：
+  1. 暂停（needs_input / handoff）**不得清掉 recurrence 的调度**——
+     feat/task 里暂停会置空 `scheduled_at`，一个 cron 任务一旦提问就
+     静默停摆。暂停态要与"下一次 cron 触发"并存，并明确交互语义
+     （到点时仍在等人 → 跳过该 tick 并记录，或由用户选择）。
+  2. Task.Status 是"最近一次 run 状态"的投影，不要让它同时承担
+     trigger 的启停语义（ux #4：正交轴分离）——trigger 的
+     enabled/paused 单独建模。
+- 缺件清单（相对 feat/task）：steps/when 解释器按 §4.3 重做（step 为界的
+  session 语义 + 异构 executor）、budget、notify 接线。
 
 ### 6.3 API 模块
 
@@ -241,9 +275,10 @@ run 面板内（ux #12）。
 
 ## 8. 分期建造
 
-1. **Phase 1 — 骨架成立**：TaskDef 定义层 + cron（在引擎上加，不动内核）；
-   ClaudeCode Handler（包 agentboot）+ Shell Handler；单 step；
-   `module/task` API + 前端板块；run 级成本归因；结果经 channel 推 IM。
+1. **Phase 1 — 骨架成立**：Task/TaskRun + cron（引擎内核不动）；
+   ClaudeCode Handler（包 agentboot，结构化 outcome 通道）+ Shell Handler；
+   单 step；`module/task` API + 前端板块（run 事件走 SSE 实时流）；
+   run 级成本归因；**完成与暂停（needs_input / handoff）都经 channel 推 IM**。
    ——做完这一步，三个差异化点（跨 executor、成本可见、远程可达）全部成立。
 2. **Phase 2 — 多步与循环**：steps / when 解释器；repeat（until + max）；
    budget guardrail。
@@ -262,12 +297,56 @@ run 面板内（ux #12）。
 
 这些"不做"是边界原则的直接推论，出现相关需求时先回到 §2 的判断句。
 
-## 10. Open questions
+## 10. feat/task 实验分支对照（辩证结论）
 
-- **命名**：`internal/task` 的 `Task` 实为本设计的 Run。是重命名引擎类型
-  （侵入大、语义清晰）还是保留并在定义层用 `TaskDef` 区隔（侵入小、
-  两个 "Task" 并存违反 ux #3）？倾向后者起步、稳定后统一重命名。
+`feat/task`（37 commits，~6.9k 行）实现过一版：Task/TaskRun 拆分、cron、
+`module/task` API、实验性页面（`_global.extensions.task`）、Claude + Codex
+执行器、无人值守边界、needs_input / handoff 双暂停态。可用，但效果不佳。
+
+**采纳（比本文档初稿更好）：**
+
+- Handler 的 `OutcomeKind` 返回契约（→ §5）。
+- 无人值守边界 + 双暂停态 + native handoff，不代理 stdin（→ §2 守则 5）。
+- Task + TaskRun 的拆分形态与 recurrence 原地物化（→ §6.2）。
+- `agentboot/codex` 驱动、实验扩展开关的入口方式、创建表单的
+  "+ Add step" 展开（无模式选择）。
+
+**修正（"效果不佳"的病灶诊断）：**
+
+1. **文本标签 outcome 协议，解析失败默认 done** → 任务被静默判完成，
+   loop 最伤信任的失败模式（分支上 "fix: preserve task goals in agent
+   prompts" 等提交即在给 prompt 协议打补丁）。改结构化通道（→ §5）。
+2. **一条 native session 贯穿所有 wake-up 与 step**（最多 20 次唤醒全部
+   `--resume` 同一会话）→ 上下文越滚越大，后期轮次变慢、变贵、变笨；
+   steps 被锁死为同一 agent；且完全没有 shell executor，一次性命令也要
+   过 LLM。改为 session 以 step 为界（→ §4.3）+ Shell Handler。
+3. **暂停只停在页面上，无推送**（前端 2–5s 轮询发现）→ 无人值守任务
+   安静挂起等人；且暂停清空 `scheduled_at`，cron 任务提问后静默停摆。
+   channel 推送是这个功能成立的前提，进 Phase 1（→ §6.4、§6.2）。
+4. **三种循环机制（cron / follow-up 唤醒 / step 游标）挤在一条 Task
+   记录**，9 个状态：`Run again` 重置游标清掉 StepOutcomes、step 内
+   continue 未开 follow-up 时伪造一个 needs_input 问题。按 §4.1 的正交轴
+   重新归位：follow-up 唤醒即 repeat policy 的一种（until=agent 判 done），
+   step 游标属定义层，两者不共享状态字段。
+5. 运行中只有 "Agent working · N events" 的摘要轮询，无实时事件流 →
+   "现在在跑什么"（§7 第一问）没有被回答。run 事件走 SSE/WebSocket。
+6. 成本归因（§6.6）完全缺席——env 已指向 tb gateway，但没有 run 归因标，
+   差异化点 #2 落空。
+
+**保留原设计（分支未做或做反）：** steps 异构（每 step 独立 executor，
+含 shell）、跨 step 无会话延续、budget guardrail、IM/channel 集成、
+run 级成本归因。
+
+## 11. Open questions
+
 - **workspace 隔离**：并发 run 撞同一 repo 时是否引入 worktree-per-run？
   Phase 1 用 SerializationKey 串行规避，观察真实需求再定。
 - **定义的文件形态**：是否支持 repo 内 `tb-task.yaml` 声明式定义
   （版本可控、可 review）？语义已按此预留（§4.2），入口后置。
+- **暂停 × recurrence 的到点语义**：cron 到点时任务仍在等人——跳过该
+  tick 并记录，还是排队一次？倾向跳过 + 在详情里显式展示"错过 N 次"。
+- **feat/task 代码的取舍**：直接在该分支上按 §10 修正演进，还是按本设计
+  重做并摘取其可用件（codex 驱动、module 骨架、页面框架）？取决于
+  修正 2/4 对 agenttask 包的侵入程度，实现前先做一次改造成本评估。
+
+（原命名问题已由 feat/task 的 Task + TaskRun 拆分解决，不再悬置。）
