@@ -28,6 +28,10 @@ import (
 //
 // Returning ("", nil) means "no description available" → fail-strip path.
 // Returning a non-nil error is also fail-strip.
+//
+// Describe may be called concurrently — the processor fans out up to
+// describeConcurrency goroutines per request — so implementations must be
+// safe for concurrent use.
 type VisionClient interface {
 	Describe(ctx context.Context, service *loadbalance.Service, mediaType, base64Data, remoteURL string) (string, error)
 }

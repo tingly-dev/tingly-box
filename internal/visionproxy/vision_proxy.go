@@ -121,27 +121,37 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 }
 
 // describeAll resolves every collected ref via the vision upstream and
-// splices the replacement text into the request. Calls run concurrently,
-// bounded by describeConcurrency; the single-image fast path skips the
-// goroutine machinery entirely.
+// splices the replacement text into the request. The semaphore is acquired
+// BEFORE each goroutine is spawned, so describeConcurrency bounds live
+// goroutines as well as in-flight upstream calls.
 func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbalance.Service, refs []imageRef) {
-	if len(refs) == 1 {
-		r := refs[0]
-		r.splice(p.describe(ctx, usable, r.mediaType, r.b64, r.remoteURL))
-		return
-	}
 	sem := make(chan struct{}, describeConcurrency)
 	var wg sync.WaitGroup
 	for _, r := range refs {
+		sem <- struct{}{}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
-			r.splice(p.describe(ctx, usable, r.mediaType, r.b64, r.remoteURL))
+			r.splice(p.safeDescribe(ctx, usable, r))
 		}()
 	}
 	wg.Wait()
+}
+
+// safeDescribe is describe plus panic containment. It runs on goroutines
+// describeAll spawns, outside the HTTP handler's recovery middleware — a
+// panicking vision client (SDK edge case, malformed upstream stream) must
+// fail-strip one image, not crash the process.
+func (p *VisionProxyProcessor) safeDescribe(ctx context.Context, usable *loadbalance.Service, r imageRef) (text string) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logrus.WithContext(ctx).WithField("component", "vision_proxy").
+				WithField("panic", rec).Error("vision proxy: describe panicked; stripping image")
+			text = imageUnavailableText
+		}
+	}()
+	return p.describe(ctx, usable, r.mediaType, r.b64, r.remoteURL)
 }
 
 // describe calls the vision client when available and returns the
@@ -152,7 +162,7 @@ func (p *VisionProxyProcessor) describeAll(ctx context.Context, usable *loadbala
 // Logging deliberately uses no "source" field — that would push the
 // entry down MultiLogger's explicit-source branch and skip the
 // request_id auto-injection that drives per-request log aggregation.
-// See .design/vision-proxy-scenario.md §9.3.
+// See .design/vision-proxy.md §6.3.
 func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) string {
 	base := logrus.WithContext(ctx).WithField("component", "vision_proxy")
 	if usable == nil || p.Client == nil {
@@ -190,17 +200,17 @@ func truncateForLog(s string, max int) string {
 // block. Images outside the latest message get the fixed historical marker
 // spliced in immediately — no upstream call, no ref. Latest-message images
 // are appended to refs for the describe fan-out.
-func spliceOrCollect(refs []imageRef, isLast bool, mediaType, b64, remoteURL string, splice func(text string)) []imageRef {
+func spliceOrCollect(refs []imageRef, isLast bool, ref imageRef) []imageRef {
 	if !isLast {
-		splice(imageHistoricalText)
+		ref.splice(imageHistoricalText)
 		return refs
 	}
-	return append(refs, imageRef{mediaType: mediaType, b64: b64, remoteURL: remoteURL, splice: splice})
+	return append(refs, ref)
 }
 
 // collectBeta walks every message of a Beta request. Image blocks occur both
 // at the top level and nested inside tool_result.Content (see
-// .design/vision-proxy-scenario.md §9.1) — both shapes are handled.
+// .design/vision-proxy.md §6.1) — both shapes are handled.
 func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 	var refs []imageRef
 	lastIdx := len(req.Messages) - 1
@@ -210,10 +220,13 @@ func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
-				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
-					blocks[bi] = anthropic.BetaContentBlockParamUnion{
-						OfText: &anthropic.BetaTextBlockParam{Text: text},
-					}
+				refs = spliceOrCollect(refs, isLast, imageRef{
+					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+					splice: func(text string) {
+						blocks[bi] = anthropic.BetaContentBlockParamUnion{
+							OfText: &anthropic.BetaTextBlockParam{Text: text},
+						}
+					},
 				})
 				continue
 			}
@@ -228,10 +241,13 @@ func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 					continue
 				}
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
-				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
-					inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
-						OfText: &anthropic.BetaTextBlockParam{Text: text},
-					}
+				refs = spliceOrCollect(refs, isLast, imageRef{
+					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+					splice: func(text string) {
+						inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
+							OfText: &anthropic.BetaTextBlockParam{Text: text},
+						}
+					},
 				})
 			}
 		}
@@ -249,10 +265,13 @@ func collectV1(req *anthropic.MessageNewParams) []imageRef {
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractV1ImageSource(img)
-				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
-					blocks[bi] = anthropic.ContentBlockParamUnion{
-						OfText: &anthropic.TextBlockParam{Text: text},
-					}
+				refs = spliceOrCollect(refs, isLast, imageRef{
+					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+					splice: func(text string) {
+						blocks[bi] = anthropic.ContentBlockParamUnion{
+							OfText: &anthropic.TextBlockParam{Text: text},
+						}
+					},
 				})
 				continue
 			}
@@ -267,10 +286,13 @@ func collectV1(req *anthropic.MessageNewParams) []imageRef {
 					continue
 				}
 				mediaType, b64, remoteURL := extractV1ImageSource(img)
-				refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
-					inner[ii] = anthropic.ToolResultBlockParamContentUnion{
-						OfText: &anthropic.TextBlockParam{Text: text},
-					}
+				refs = spliceOrCollect(refs, isLast, imageRef{
+					mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+					splice: func(text string) {
+						inner[ii] = anthropic.ToolResultBlockParamContentUnion{
+							OfText: &anthropic.TextBlockParam{Text: text},
+						}
+					},
 				})
 			}
 		}
@@ -296,10 +318,13 @@ func collectOpenAI(req *openai.ChatCompletionNewParams) []imageRef {
 				continue
 			}
 			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
-			refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
-				parts[pi] = openai.ChatCompletionContentPartUnionParam{
-					OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
-				}
+			refs = spliceOrCollect(refs, isLast, imageRef{
+				mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+				splice: func(text string) {
+					parts[pi] = openai.ChatCompletionContentPartUnionParam{
+						OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
+					}
+				},
 			})
 		}
 	}
@@ -335,15 +360,14 @@ func collectResponses(req *responses.ResponseNewParams) []imageRef {
 			if img == nil {
 				continue
 			}
-			url := ""
-			if img.ImageURL.Valid() {
-				url = img.ImageURL.Value
-			}
-			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(url)
-			refs = spliceOrCollect(refs, isLast, mediaType, b64, remoteURL, func(text string) {
-				list[ci] = responses.ResponseInputContentUnionParam{
-					OfInputText: &responses.ResponseInputTextParam{Text: text},
-				}
+			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(img.ImageURL.Or(""))
+			refs = spliceOrCollect(refs, isLast, imageRef{
+				mediaType: mediaType, b64: b64, remoteURL: remoteURL,
+				splice: func(text string) {
+					list[ci] = responses.ResponseInputContentUnionParam{
+						OfInputText: &responses.ResponseInputTextParam{Text: text},
+					}
+				},
 			})
 		}
 	}
@@ -351,9 +375,6 @@ func collectResponses(req *responses.ResponseNewParams) []imageRef {
 }
 
 func extractBetaImageSource(img *anthropic.BetaImageBlockParam) (mediaType, b64, remoteURL string) {
-	if img == nil {
-		return
-	}
 	if img.Source.OfBase64 != nil {
 		return string(img.Source.OfBase64.MediaType), img.Source.OfBase64.Data, ""
 	}
@@ -364,9 +385,6 @@ func extractBetaImageSource(img *anthropic.BetaImageBlockParam) (mediaType, b64,
 }
 
 func extractV1ImageSource(img *anthropic.ImageBlockParam) (mediaType, b64, remoteURL string) {
-	if img == nil {
-		return
-	}
 	if img.Source.OfBase64 != nil {
 		return string(img.Source.OfBase64.MediaType), img.Source.OfBase64.Data, ""
 	}

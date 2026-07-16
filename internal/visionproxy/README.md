@@ -64,9 +64,13 @@ responsibilities:
 Processing is two-phase: a **collect** walk that strips historical images
 in place and gathers the latest message's images as `imageRef`s (source +
 splice-back callback), then a **describe** fan-out that resolves each ref
-via the vision upstream — concurrently when there is more than one image,
-bounded by `describeConcurrency` (4). Each ref splices into its own
-distinct block slot, so the concurrent writes need no locking.
+via the vision upstream — concurrently, with `describeConcurrency` (4)
+bounding both live goroutines and in-flight upstream calls (the semaphore
+is acquired before each goroutine spawns). Each ref splices into its own
+distinct block slot, so the concurrent writes need no locking. A panic in
+the describe path is recovered per-image and collapses to the fail-strip
+marker — the goroutines run outside the HTTP handler's recovery
+middleware, so containment lives here.
 
 ```
 req : *anthropic.BetaMessageNewParams (or v1 / OpenAI / Responses)
@@ -148,6 +152,7 @@ fail-strip does not apply; they always receive the omitted marker.
   vision client nil       │ p.Client == nil                  │  unavail   │
   Describe() error        │ err != nil                       │  unavail   │
   empty response          │ strings.TrimSpace(desc) == ""    │  unavail   │
+  Describe() panics       │ recovered in safeDescribe        │  unavail   │
   success                 │ desc non-empty                   │  [image: …]│
                           ├──────────────────────────────────┴───────────┤
   historical image        │ messages[i] where i < lastIdx    │  historic │

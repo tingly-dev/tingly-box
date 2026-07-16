@@ -31,6 +31,12 @@ type describeCall struct {
 	URL       string
 }
 
+// fakeVisionClient keys canned responses and injected errors by call ARRIVAL
+// index. Describe calls for a multi-image message run concurrently, so the
+// arrival order — and therefore which image receives responses[i] or the
+// errAt[i] failure — is nondeterministic. Use it with single-image requests
+// (or order-insensitive assertions); use echoPayloadClient to assert the
+// image→description mapping.
 type fakeVisionClient struct {
 	mu        sync.Mutex
 	calls     []describeCall
@@ -490,7 +496,11 @@ func TestVisionProxy_VisionCallError_StripImageWithUnavailableMarker(t *testing.
 	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
 }
 
-func TestVisionProxy_MultipleImages_AllReplacedInOrder(t *testing.T) {
+// Every latest-message image gets its own describe call and is replaced.
+// Descriptions are assigned by fakeVisionClient arrival order, which is
+// nondeterministic under the concurrent fan-out — positional mapping is
+// covered by TestVisionProxy_ConcurrentDescribe_MappingPreserved instead.
+func TestVisionProxy_MultipleImages_AllReplaced(t *testing.T) {
 	prov := mkProvider("anthropic-vision")
 	fake := newFakeVisionClient("first description", "second description", "third description")
 	p := mkProcessor(t, fake, prov)
@@ -505,6 +515,29 @@ func TestVisionProxy_MultipleImages_AllReplacedInOrder(t *testing.T) {
 	require.Contains(t, text, "first description")
 	require.Contains(t, text, "second description")
 	require.Contains(t, text, "third description")
+}
+
+// panickyVisionClient panics on every Describe call.
+type panickyVisionClient struct{}
+
+func (panickyVisionClient) Describe(_ context.Context, _ *loadbalance.Service, _, _, _ string) (string, error) {
+	panic("vision client exploded")
+}
+
+// TestVisionProxy_DescribePanic_FailStrips pins the panic-containment
+// contract: describe runs on goroutines outside the HTTP handler's recovery
+// middleware, so a panicking vision client must collapse to the fail-strip
+// marker for that image — never crash the process.
+func TestVisionProxy_DescribePanic_FailStrips(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	p := mkProcessor(t, panickyVisionClient{}, prov)
+
+	req := betaReqWithImages("describe", tinyPNGBase64, tinyPNGBase64)
+	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
+
+	require.NoError(t, p.Process(context.Background(), req, svcs))
+	require.Equal(t, 0, countImages(req), "images stripped despite panicking client")
+	require.Contains(t, collectText(req), "description unavailable", "fail-strip marker present")
 }
 
 // echoPayloadClient derives the description from the image payload itself,
