@@ -31,6 +31,10 @@ type Manager interface {
 	// List returns tasks matching the filter, ordered by created_at DESC.
 	List(ctx context.Context, filter ListFilter) ([]Task, error)
 
+	// GetRun and ListRuns expose durable bounded execution history.
+	GetRun(ctx context.Context, taskID, runID string) (*TaskRun, error)
+	ListRuns(ctx context.Context, filter RunListFilter) ([]TaskRun, error)
+
 	// Wait polls until taskID reaches a terminal status or ctx is cancelled.
 	// Useful for callers (e.g. HTTP handlers) that need a synchronous result.
 	Wait(ctx context.Context, taskID string) (*Task, error)
@@ -184,6 +188,14 @@ func (m *taskManager) List(ctx context.Context, filter ListFilter) ([]Task, erro
 	return m.store.List(ctx, filter)
 }
 
+func (m *taskManager) GetRun(ctx context.Context, taskID, runID string) (*TaskRun, error) {
+	return m.store.GetRun(ctx, taskID, runID)
+}
+
+func (m *taskManager) ListRuns(ctx context.Context, filter RunListFilter) ([]TaskRun, error) {
+	return m.store.ListRuns(ctx, filter)
+}
+
 func (m *taskManager) Wait(ctx context.Context, taskID string) (*Task, error) {
 	for {
 		t, err := m.store.Get(ctx, taskID)
@@ -307,14 +319,56 @@ func (m *taskManager) dispatchTask(ctx context.Context, t *Task) {
 	t.Attempt++
 	t.Status = StatusRunning
 	t.StartedAt = &now
+	run := &TaskRun{
+		ID:        uuid.NewString(),
+		TaskID:    t.ID,
+		Attempt:   t.Attempt,
+		Status:    RunStatusRunning,
+		Input:     append(json.RawMessage(nil), t.Payload...),
+		StartedAt: now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := m.store.CreateRun(ctx, run); err != nil {
+		_ = m.store.UpdateStatus(ctx, t.ID, map[string]interface{}{
+			"status":      string(StatusFailed),
+			"finished_at": now,
+			"error":       fmt.Sprintf("task: create run: %v", err),
+		})
+		m.registry.unregister(t.ID, t.SerializationKey)
+		cancel()
+		m.mu.Unlock()
+		return
+	}
 	m.mu.Unlock()
 
-	go m.runTask(taskCtx, cancel, t)
+	go m.runTask(taskCtx, cancel, t, run)
 }
 
 // runTask executes one handler invocation and writes its next durable state.
-func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t *Task) {
+func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t *Task, run *TaskRun) {
+	runStatus := RunStatusFailed
+	var runResult json.RawMessage
+	var runError string
+	runFinalized := false
+	finishRun := func() {
+		if runFinalized {
+			return
+		}
+		now := time.Now()
+		fields := map[string]interface{}{
+			"status":      string(runStatus),
+			"finished_at": now,
+			"error":       runError,
+		}
+		if len(runResult) > 0 {
+			fields["result"] = string(runResult)
+		}
+		_ = m.store.UpdateRun(context.Background(), run.ID, fields)
+		runFinalized = true
+	}
 	defer func() {
+		finishRun()
 		cancel()
 		m.registry.unregister(t.ID, t.SerializationKey)
 		m.onTaskFinished(t)
@@ -322,6 +376,8 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 
 	handler, ok := m.handlers.get(t.Type)
 	if !ok {
+		runError = ErrHandlerNotFound.Error()
+		finishRun()
 		_ = m.store.UpdateStatus(ctx, t.ID, map[string]interface{}{
 			"status":      string(StatusFailed),
 			"error":       ErrHandlerNotFound.Error(),
@@ -330,12 +386,15 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 		return
 	}
 
-	ctl := &taskController{store: m.store, taskID: t.ID}
+	ctl := &taskController{store: m.store, taskID: t.ID, runID: run.ID}
 	result, err := handler.Run(ctx, t, ctl)
 
 	now := time.Now()
 	if err != nil {
+		runError = err.Error()
 		if ctx.Err() != nil {
+			runStatus = RunStatusCancelled
+			finishRun()
 			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 				"status":       string(StatusCancelled),
 				"cancelled_at": now,
@@ -343,6 +402,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 				"error":        err.Error(),
 			})
 		} else if IsRetryable(err) && t.Attempt < t.MaxAttempts {
+			finishRun()
 			backoff := BackoffFor(err, t.Attempt)
 			next := now.Add(backoff)
 			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
@@ -351,6 +411,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 				"error":        err.Error(),
 			})
 		} else {
+			finishRun()
 			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 				"status":      string(StatusFailed),
 				"finished_at": now,
@@ -363,6 +424,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 	resultJSON := ""
 	if result != nil && len(result.Result) > 0 {
 		resultJSON = string(result.Result)
+		runResult = append(json.RawMessage(nil), result.Result...)
 	}
 	outcome := OutcomeComplete
 	if result != nil && result.Outcome != "" {
@@ -371,9 +433,13 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 
 	switch outcome {
 	case OutcomeComplete:
+		runStatus = RunStatusSucceeded
 		if len(t.Recurrence) > 0 {
 			next, err := NextOccurrence(t.Recurrence, now)
 			if err != nil {
+				runStatus = RunStatusFailed
+				runError = err.Error()
+				finishRun()
 				_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 					"status":      string(StatusFailed),
 					"finished_at": now,
@@ -382,6 +448,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 				})
 				return
 			}
+			finishRun()
 			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 				"status":       string(StatusPending),
 				"finished_at":  nil,
@@ -392,6 +459,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			})
 			return
 		}
+		finishRun()
 		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 			"status":       string(StatusSucceeded),
 			"finished_at":  now,
@@ -400,7 +468,11 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			"error":        "",
 		})
 	case OutcomeReschedule:
+		runStatus = RunStatusRescheduled
 		if result == nil || result.NextRunAt == nil {
+			runStatus = RunStatusFailed
+			runError = ErrInvalidOutcome.Error() + ": reschedule requires NextRunAt"
+			finishRun()
 			_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 				"status":      string(StatusFailed),
 				"finished_at": now,
@@ -409,6 +481,7 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			})
 			return
 		}
+		finishRun()
 		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 			"status":       string(StatusPending),
 			"scheduled_at": *result.NextRunAt,
@@ -418,6 +491,8 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			"error":        "",
 		})
 	case OutcomeNeedsInput:
+		runStatus = RunStatusNeedsInput
+		finishRun()
 		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 			"status":       string(StatusNeedsInput),
 			"scheduled_at": nil,
@@ -427,6 +502,9 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 			"error":        "",
 		})
 	default:
+		runStatus = RunStatusFailed
+		runError = fmt.Sprintf("%s: %q", ErrInvalidOutcome, outcome)
+		finishRun()
 		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 			"status":      string(StatusFailed),
 			"finished_at": now,

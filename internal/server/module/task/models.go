@@ -74,3 +74,30 @@ type TaskListResponse struct {
 type AgentListResponse struct {
 	Data []AgentAvailability `json:"data"`
 }
+
+type RunView struct {
+	ID          string                    `json:"id"`
+	TaskID      string                    `json:"task_id"`
+	Attempt     int                       `json:"attempt"`
+	Status      coretask.RunStatus        `json:"status"`
+	Trigger     string                    `json:"trigger"`
+	StepID      string                    `json:"step_id,omitempty"`
+	StepIndex   *int                      `json:"step_index,omitempty"`
+	Instruction string                    `json:"instruction,omitempty"`
+	Execution   agenttask.ExecutionPolicy `json:"execution"`
+	Progress    string                    `json:"progress,omitempty"`
+	Result      *agenttask.Result         `json:"result,omitempty"`
+	Error       string                    `json:"error,omitempty"`
+	StartedAt   time.Time                 `json:"started_at"`
+	FinishedAt  *time.Time                `json:"finished_at,omitempty"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at"`
+}
+
+type RunResponse struct {
+	Data RunView `json:"data"`
+}
+
+type RunListResponse struct {
+	Data []RunView `json:"data"`
+}

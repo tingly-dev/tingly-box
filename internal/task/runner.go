@@ -59,10 +59,14 @@ func (r *handlerRegistry) get(typ string) (Handler, bool) {
 type taskController struct {
 	store  Store
 	taskID string
+	runID  string
 }
 
 func (c *taskController) UpdateProgress(ctx context.Context, text string) error {
-	return c.store.UpdateStatus(ctx, c.taskID, map[string]interface{}{"progress": text})
+	if err := c.store.UpdateStatus(ctx, c.taskID, map[string]interface{}{"progress": text}); err != nil {
+		return err
+	}
+	return c.store.UpdateRun(ctx, c.runID, map[string]interface{}{"progress": text})
 }
 
 func (c *taskController) UpdatePayload(ctx context.Context, payload json.RawMessage) error {

@@ -142,6 +142,15 @@ func (s *TaskStore) MarkInterruptedOnStartup(ctx context.Context) error {
 			}).Error; err != nil {
 			return fmt.Errorf("mark queued→pending: %w", err)
 		}
+		if err := tx.Model(&TaskRunRecord{}).
+			Where("status = ?", string(task.RunStatusRunning)).
+			Updates(map[string]interface{}{
+				"status":      string(task.RunStatusInterrupted),
+				"finished_at": now,
+				"updated_at":  now,
+			}).Error; err != nil {
+			return fmt.Errorf("mark task runs interrupted: %w", err)
+		}
 		return nil
 	})
 }

@@ -22,6 +22,14 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Get an agent task"),
 		swagger.WithResponseModel(TaskResponse{}))
+	router.GET("/tasks/:id/runs", handler.ListRuns,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("List bounded execution history for an agent task"),
+		swagger.WithResponseModel(RunListResponse{}))
+	router.GET("/tasks/:id/runs/:runID", handler.GetRun,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Get one bounded execution for an agent task"),
+		swagger.WithResponseModel(RunResponse{}))
 	router.POST("/tasks/:id/wake", handler.Wake,
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Run now or send an instruction to a paused task"),

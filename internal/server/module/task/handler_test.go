@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	coretask "github.com/tingly-dev/tingly-box/internal/task"
@@ -20,7 +21,45 @@ func testRouter(handler *Handler) *gin.Engine {
 	router := gin.New()
 	router.POST("/tasks", handler.Create)
 	router.POST("/tasks/:id/wake", handler.Wake)
+	router.GET("/tasks/:id/runs", handler.ListRuns)
+	router.GET("/tasks/:id/runs/:runID", handler.GetRun)
 	return router
+}
+
+func TestRuns_ReturnsExecutionHistory(t *testing.T) {
+	store := coretask.NewMemoryStore()
+	manager := coretask.NewManager(store)
+	payload := agenttask.Payload{
+		Version: 2, Goal: "Ship", Agent: agenttask.AgentClaude, WorkspacePath: t.TempDir(),
+		Execution: agenttask.DefaultExecutionPolicy(agenttask.AgentClaude),
+		Steps:     []agenttask.Step{{ID: "step-1", Title: "Inspect", Instruction: "Inspect the build"}},
+	}
+	data, _ := json.Marshal(payload)
+	created, err := manager.Submit(context.Background(), coretask.SubmitRequest{Type: agenttask.TaskType, Payload: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	result := json.RawMessage(`{"state":"done","summary":"complete"}`)
+	if err := store.CreateRun(context.Background(), &coretask.TaskRun{
+		ID: "run-1", TaskID: created.ID, Attempt: 1, Status: coretask.RunStatusSucceeded,
+		Input: data, Result: result, StartedAt: now, FinishedAt: &now, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(manager, t.TempDir(), nil)
+	response := performJSON(t, testRouter(handler), http.MethodGet, "/tasks/"+created.ID+"/runs", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var decoded RunListResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Data) != 1 || decoded.Data[0].StepID != "step-1" || decoded.Data[0].Execution.LaunchProfile != agenttask.LaunchClaudeEdits || decoded.Data[0].Result == nil {
+		t.Fatalf("runs = %+v", decoded.Data)
+	}
 }
 
 func performJSON(t *testing.T, router http.Handler, method, path, body string) *httptest.ResponseRecorder {

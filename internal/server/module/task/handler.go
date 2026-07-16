@@ -61,6 +61,56 @@ func (h *Handler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, TaskResponse{Data: view})
 }
 
+func (h *Handler) ListRuns(c *gin.Context) {
+	task, err := h.manager.Get(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if task.Type != agenttask.TaskType {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	runs, err := h.manager.ListRuns(c.Request.Context(), coretask.RunListFilter{TaskID: task.ID, Limit: 200})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	views := make([]RunView, 0, len(runs))
+	for i := range runs {
+		view, err := toRunView(&runs[i])
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		views = append(views, view)
+	}
+	c.JSON(http.StatusOK, RunListResponse{Data: views})
+}
+
+func (h *Handler) GetRun(c *gin.Context) {
+	task, err := h.manager.Get(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if task.Type != agenttask.TaskType {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	run, err := h.manager.GetRun(c.Request.Context(), task.ID, c.Param("runID"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, err := toRunView(run)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, RunResponse{Data: view})
+}
+
 func (h *Handler) Create(c *gin.Context) {
 	var req CreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -271,6 +321,42 @@ func toView(task *coretask.Task) (TaskView, error) {
 			return TaskView{}, err
 		}
 		view.Recurrence = &recurrence
+	}
+	return view, nil
+}
+
+func toRunView(run *coretask.TaskRun) (RunView, error) {
+	var payload agenttask.Payload
+	if err := json.Unmarshal(run.Input, &payload); err != nil {
+		return RunView{}, fmt.Errorf("decode run %s input: %w", run.ID, err)
+	}
+	payload.ApplyDefaults()
+	execution := payload.Execution
+	if payload.PendingExecution != nil {
+		execution = *payload.PendingExecution
+	}
+	view := RunView{
+		ID: run.ID, TaskID: run.TaskID, Attempt: run.Attempt, Status: run.Status,
+		Execution: execution, Progress: run.Progress, Error: run.Error,
+		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
+		Trigger: "run",
+	}
+	if payload.PendingInput != "" {
+		view.Trigger = "instruction"
+		view.Instruction = payload.PendingInput
+	} else if payload.HasCurrentStep() {
+		step := payload.Steps[payload.CurrentStep]
+		index := payload.CurrentStep
+		view.Trigger = "step"
+		view.StepID = step.ID
+		view.StepIndex = &index
+		view.Instruction = step.Instruction
+	}
+	if len(run.Result) > 0 {
+		var result agenttask.Result
+		if err := json.Unmarshal(run.Result, &result); err == nil {
+			view.Result = &result
+		}
 	}
 	return view, nil
 }

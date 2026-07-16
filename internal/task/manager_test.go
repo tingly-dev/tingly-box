@@ -152,6 +152,33 @@ func TestRun_Success(t *testing.T) {
 	if done.Attempt != 1 {
 		t.Errorf("want attempt=1, got %d", done.Attempt)
 	}
+	runs, err := mgr.ListRuns(context.Background(), task.RunListFilter{TaskID: tk.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != task.RunStatusSucceeded || string(runs[0].Result) != string(resultPayload) {
+		t.Fatalf("runs = %+v", runs)
+	}
+}
+
+func TestRun_HistoryCapturesProgressAndNeedsInput(t *testing.T) {
+	mgr, _ := newManager(t)
+	mustRegister(t, mgr, &funcHandler{typ: "pause", fn: func(ctx context.Context, _ *task.Task, ctl task.Controller) (*task.TaskResult, error) {
+		if err := ctl.UpdateProgress(ctx, "waiting for a decision"); err != nil {
+			return nil, err
+		}
+		return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: json.RawMessage(`{"question":"continue?"}`)}, nil
+	}})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "pause", Payload: json.RawMessage(`{"goal":"test"}`)})
+	waitStatus(t, mgr, tk.ID, task.StatusNeedsInput)
+	runs, err := mgr.ListRuns(context.Background(), task.RunListFilter{TaskID: tk.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != task.RunStatusNeedsInput || runs[0].Progress != "waiting for a decision" || runs[0].FinishedAt == nil {
+		t.Fatalf("runs = %+v", runs)
+	}
 }
 
 func TestRun_RescheduleSameTask(t *testing.T) {
