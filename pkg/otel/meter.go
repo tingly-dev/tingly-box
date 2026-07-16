@@ -1,3 +1,12 @@
+// Package otel wires OpenTelemetry metrics for LLM token usage.
+//
+// Design: metrics have exactly one egress — an optional OTLP endpoint.
+// Aggregated metrics (counters, histograms) answer "how much / how fast";
+// per-request artifacts (usage records, request recordings) are written at
+// the source by internal/server/usage_tracking.go and the recording
+// pipeline, never reconstructed from aggregated metric data points. When
+// OTLP is not configured, the meter provider is created without a reader,
+// so instrument calls are cheap no-ops.
 package otel
 
 import (
@@ -5,35 +14,23 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 
-	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/pkg/otel/exporter"
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
-// MeterSetup holds the meter provider, tracer provider, and token tracker.
+// MeterSetup holds the meter provider and token tracker.
 type MeterSetup struct {
-	meterProvider  *metric.MeterProvider
-	tracerProvider *trace.TracerProvider
-	tracker        *tracker.TokenTracker
-	tracer         *Tracer
+	meterProvider *metric.MeterProvider
+	tracker       *tracker.TokenTracker
 }
 
-// StoreRefs holds references to the storage backends for exporters.
-type StoreRefs struct {
-	StatsStore *db.StatsStore
-	UsageStore *db.UsageStore
-	Sink       *obs.Sink
-}
-
-// NewMeterSetup creates a new meter setup with the provided config and stores.
-func NewMeterSetup(ctx context.Context, cfg *Config, stores *StoreRefs) (*MeterSetup, error) {
+// NewMeterSetup creates a new meter setup with the provided config.
+// It returns (nil, nil) when cfg.Enabled is false.
+func NewMeterSetup(ctx context.Context, cfg *Config) (*MeterSetup, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -49,22 +46,12 @@ func NewMeterSetup(ctx context.Context, cfg *Config, stores *StoreRefs) (*MeterS
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	// Build metric exporters
-	var metricExporters []metric.Exporter
+	providerOpts := []metric.Option{metric.WithResource(res)}
 
-	// SQLite exporter
-	if cfg.SQLite.Enabled && stores.UsageStore != nil {
-		sqliteExp := exporter.NewSQLiteExporter(stores.UsageStore)
-		metricExporters = append(metricExporters, sqliteExp)
-	}
-
-	// Sink exporter
-	if cfg.Sink.Enabled && stores.Sink != nil {
-		sinkExp := exporter.NewSinkExporter(stores.Sink)
-		metricExporters = append(metricExporters, sinkExp)
-	}
-
-	// OTLP exporter
+	// OTLP is the only exporter. Without it there is deliberately no reader:
+	// a reader-less provider keeps instrument calls near-free and avoids
+	// pushing metrics anywhere nobody asked for (the previous stdout
+	// fallback would have spammed the server console).
 	if cfg.OTLP.Enabled && cfg.OTLP.Endpoint != "" {
 		otlpExp, err := exporter.NewOTLPExporter(exporter.OTLPConfig{
 			Endpoint: cfg.OTLP.Endpoint,
@@ -76,66 +63,28 @@ func NewMeterSetup(ctx context.Context, cfg *Config, stores *StoreRefs) (*MeterS
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
 		}
-		metricExporters = append(metricExporters, otlpExp)
+		providerOpts = append(providerOpts, metric.WithReader(metric.NewPeriodicReader(
+			otlpExp,
+			metric.WithInterval(cfg.ExportInterval),
+			metric.WithTimeout(cfg.ExportTimeout),
+		)))
 	}
 
-	// If no exporters, use stdout for debugging
-	if len(metricExporters) == 0 {
-		stdoutExp, err := stdoutmetric.New()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create stdout exporter: %w", err)
-		}
-		metricExporters = append(metricExporters, stdoutExp)
-	}
-
-	// Create meter provider with periodic reader
-	multiExporter := exporter.NewMultiExporter(metricExporters...)
-	reader := metric.NewPeriodicReader(
-		multiExporter,
-		metric.WithInterval(cfg.ExportInterval),
-		metric.WithTimeout(cfg.ExportTimeout),
-	)
-
-	meterProvider := metric.NewMeterProvider(
-		metric.WithReader(reader),
-		metric.WithResource(res),
-	)
+	meterProvider := metric.NewMeterProvider(providerOpts...)
 
 	// Set global meter provider
 	otel.SetMeterProvider(meterProvider)
 
-	// Create tracer provider
-	var tracerProvider *trace.TracerProvider
-	if cfg.OTLP.Enabled && cfg.OTLP.Endpoint != "" {
-		// TODO: Add OTLP trace exporter when needed
-		tracerProvider = trace.NewTracerProvider(
-			trace.WithResource(res),
-		)
-	} else {
-		tracerProvider = trace.NewTracerProvider(
-			trace.WithResource(res),
-			trace.WithSampler(trace.AlwaysSample()),
-		)
-	}
-
-	// Set global tracer provider
-	otel.SetTracerProvider(tracerProvider)
-
 	// Create meter and token tracker
-	meter := meterProvider.Meter("tingly-box")
-	tokenTracker, err := tracker.NewTokenTracker(meter)
+	tokenTracker, err := tracker.NewTokenTracker(meterProvider.Meter("tingly-box"))
 	if err != nil {
-		// Shutdown meter provider on error
 		_ = meterProvider.Shutdown(ctx)
-		_ = tracerProvider.Shutdown(ctx)
 		return nil, fmt.Errorf("failed to create token tracker: %w", err)
 	}
 
 	return &MeterSetup{
-		meterProvider:  meterProvider,
-		tracerProvider: tracerProvider,
-		tracker:        tokenTracker,
-		tracer:         NewTracer(tracerProvider),
+		meterProvider: meterProvider,
+		tracker:       tokenTracker,
 	}, nil
 }
 
@@ -144,29 +93,13 @@ func (ms *MeterSetup) Tracker() *tracker.TokenTracker {
 	return ms.tracker
 }
 
-// Tracer returns the tracer.
-func (ms *MeterSetup) Tracer() *Tracer {
-	return ms.tracer
-}
-
-// Shutdown shuts down the meter and tracer providers.
+// Shutdown flushes pending exports and shuts down the meter provider.
 func (ms *MeterSetup) Shutdown(ctx context.Context) error {
-	var errs []error
-
-	if ms.meterProvider != nil {
-		if err := ms.meterProvider.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
+	if ms.meterProvider == nil {
+		return nil
 	}
-
-	if ms.tracerProvider != nil {
-		if err := ms.tracerProvider.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("shutdown errors: %v", errs)
+	if err := ms.meterProvider.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown error: %w", err)
 	}
 	return nil
 }

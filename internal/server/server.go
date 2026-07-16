@@ -398,32 +398,27 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
 	server.probeLightweight = probe.NewLightweightService(server.clientPool)
 
-	// Initialize OTel meter setup for token tracking
-	sm := cfg.StoreManager()
-	if sm == nil {
-		logrus.Warnf("StoreManager not available, skipping OTel meter setup")
-	} else {
-		meterSetup, err := pkgotel.NewMeterSetup(context.Background(), pkgotel.DefaultConfig(), &pkgotel.StoreRefs{
-			StatsStore: sm.Stats(),
-			UsageStore: sm.Usage(),
-			Sink:       server.recordSink,
-		})
-		if err != nil {
-			logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
-		} else if meterSetup != nil {
-			server.meterSetup = meterSetup
-			server.tokenTracker = meterSetup.Tracker()
-			logrus.Debugf("OTel meter setup initialized")
-		}
+	// Initialize OTel meter setup for token tracking. Metrics are export-only
+	// (optional OTLP); persistent usage records are written directly by the
+	// usage-tracking layer, so no store references are needed here.
+	meterSetup, err := pkgotel.NewMeterSetup(context.Background(), pkgotel.DefaultConfig())
+	if err != nil {
+		logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
+	} else if meterSetup != nil {
+		server.meterSetup = meterSetup
+		server.tokenTracker = meterSetup.Tracker()
+		logrus.Debugf("OTel meter setup initialized")
+	}
 
-		// Initialize API token store for multi-tenant authentication
-		if apiTokenManager != nil {
-			apiTokenStore := sm.APIToken()
-			if apiTokenStore != nil {
-				// Update auth middleware with API token store
-				server.authMW = middleware.NewAuthMiddleware(cfg, jwtManager, apiTokenManager, apiTokenStore)
-				logrus.Debugf("API token store initialized for multi-tenant authentication")
-			}
+	// Initialize API token store for multi-tenant authentication
+	if sm := cfg.StoreManager(); sm == nil {
+		logrus.Warnf("StoreManager not available, skipping API token store setup")
+	} else if apiTokenManager != nil {
+		apiTokenStore := sm.APIToken()
+		if apiTokenStore != nil {
+			// Update auth middleware with API token store
+			server.authMW = middleware.NewAuthMiddleware(cfg, jwtManager, apiTokenManager, apiTokenStore)
+			logrus.Debugf("API token store initialized for multi-tenant authentication")
 		}
 	}
 
