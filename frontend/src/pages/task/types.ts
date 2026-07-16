@@ -78,6 +78,7 @@ export interface CreateTaskInput {
   title?: string;
   goal: string;
   agent: TaskAgent;
+  workspace_path?: string;
   scheduled_at?: string;
   recurrence?: { cron: string; timezone: string };
   follow_up: FollowUpPolicy;

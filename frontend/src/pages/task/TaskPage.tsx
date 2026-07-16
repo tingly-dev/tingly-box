@@ -75,6 +75,7 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
   const [delay, setDelay] = useState(300);
   const [maxWakeUps, setMaxWakeUps] = useState(20);
   const [steps, setSteps] = useState<string[]>([]);
+  const [workspacePath, setWorkspacePath] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const agentInfo = (kind: TaskAgent) => agents.find((item) => item.agent === kind);
@@ -117,11 +118,12 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
       execution,
     };
     if (steps.length) input.steps = steps.map((instruction) => ({ instruction: instruction.trim() }));
+    if (workspacePath.trim()) input.workspace_path = workspacePath.trim();
     if (when === 'later' && scheduledAt) input.scheduled_at = new Date(scheduledAt).toISOString();
     if (when === 'repeat') input.recurrence = { cron: cron.trim(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
     try {
       const created = await taskApi.create(input);
-      setGoal(''); setSteps([]); onCreated(created); onClose();
+      setGoal(''); setSteps([]); setWorkspacePath(''); onCreated(created); onClose();
     } catch (err) { setError((err as Error).message); } finally { setSaving(false); }
   };
 
@@ -144,6 +146,21 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
             </Stack>)}
           </Stack>}
         </Box>
+        <TextField
+          label="Working directory (optional)"
+          placeholder="/absolute/path/to/project"
+          value={workspacePath}
+          onChange={(event) => setWorkspacePath(event.target.value)}
+          helperText={workspacePath.trim()
+            ? 'This existing directory will be used for every run in this task.'
+            : 'Leave empty to create an isolated directory for this task.'}
+          slotProps={{ htmlInput: { spellCheck: false } }}
+          sx={{ '& input': { fontFamily: 'monospace' } }}
+          fullWidth
+        />
+        {workspacePath.trim() && <Alert severity="warning" variant="outlined">
+          The agent will work directly in this directory. Tingly Box will not copy, create, or clean its contents.
+        </Alert>}
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>Agent</Typography>
           <ToggleButtonGroup exclusive value={agent} onChange={(_, value) => value && chooseAgent(value)} fullWidth>
