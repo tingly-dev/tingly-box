@@ -152,7 +152,7 @@ func TestHandler_ClaudeDoneCreatesSession(t *testing.T) {
 		if opts.ProjectPath != workspace || !strings.Contains(opts.AppendSystemPrompt, outcomeOpenTag) {
 			t.Fatalf("execution options not wired: %+v", opts)
 		}
-		if opts.PermissionPromptTool != "" || opts.PermissionMode != "acceptEdits" || len(opts.AvailableTools) != 6 || len(opts.AllowedTools) != 6 || opts.AvailableTools[5] != "Bash" {
+		if opts.PermissionPromptTool != "" || opts.PermissionMode != "acceptEdits" || len(opts.AvailableTools) != 5 || len(opts.AllowedTools) != 5 || opts.AvailableTools[4] != "Edit" {
 			t.Fatalf("execution policy not wired: %+v", opts)
 		}
 		output := `finished

@@ -108,6 +108,7 @@ Execution 区域在选择 Agent 后展示该 runtime 真实支持的启动 profi
 - Claude：`plan` / `accept_edits`；默认 `accept_edits`。历史 `manual` 配置可读，但不再提供给新建 Task。
 - Codex：`read_only` / `workspace_write`；默认 `workspace_write`。
 - Claude 可选择 Files read / Files write / Terminal / Web 逻辑工具组；Codex v1 不伪造逐工具过滤能力。
+- Claude 默认预授权 Files read / Files write；Terminal 需要显式选择，并提示 Shell 可越过其它逻辑工具标签。
 - Claude 的所选工具同时是可见工具和本 Run 的免交互 allowlist；Codex 固定 `approval_policy=never` 并使用所选 sandbox。
 - 不提供 Claude bypass/full-access 或 Codex danger-full-access；Terminal 明确提示其可间接读写和访问网络。
 

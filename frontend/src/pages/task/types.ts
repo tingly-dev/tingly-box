@@ -1,6 +1,6 @@
 export type TaskAgent = 'claude' | 'codex';
-export type TaskStatus = 'pending' | 'queued' | 'running' | 'needs_input' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
-export type TaskRunStatus = 'running' | 'waiting_approval' | 'waiting_input' | 'succeeded' | 'rescheduled' | 'needs_input' | 'failed' | 'cancelled' | 'interrupted';
+export type TaskStatus = 'pending' | 'queued' | 'running' | 'needs_input' | 'handoff_required' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
+export type TaskRunStatus = 'running' | 'succeeded' | 'rescheduled' | 'needs_input' | 'handoff_required' | 'failed' | 'cancelled' | 'interrupted';
 export type LaunchProfile = 'legacy_inherited' | 'plan' | 'manual' | 'accept_edits' | 'read_only' | 'workspace_write';
 export type ToolCapability = 'files_read' | 'files_write' | 'terminal' | 'web';
 
@@ -16,11 +16,14 @@ export interface FollowUpPolicy {
 }
 
 export interface TaskResult {
-  state: 'done' | 'continue' | 'needs_input';
+  state: 'done' | 'continue' | 'needs_input' | 'handoff_required';
   summary: string;
   question?: string;
   artifacts?: string[];
   native_session_id?: string;
+  exit_code?: number;
+  duration_ms?: number;
+  exit_reason?: string;
 }
 
 export interface TaskStep {
@@ -60,7 +63,6 @@ export interface AgentTask {
   step_outcomes?: StepOutcome[];
   execution: ExecutionPolicy;
   active_run_id?: string;
-  attention?: PendingControl;
 }
 
 export interface AgentAvailability {
@@ -69,7 +71,7 @@ export interface AgentAvailability {
   launch_profiles: LaunchProfile[];
   default_profile: LaunchProfile;
   tool_filtering: boolean;
-  interactive_control: boolean;
+  unattended: boolean;
 }
 
 export interface CreateTaskInput {
@@ -82,17 +84,6 @@ export interface CreateTaskInput {
   timeout_seconds: number;
   steps?: Array<{ instruction: string }>;
   execution: ExecutionPolicy;
-}
-
-export interface PendingControl {
-  id: string;
-  kind: 'approval' | 'question';
-  tool_name?: string;
-  input?: unknown;
-  message?: string;
-  reason?: string;
-  created_at: string;
-  expires_at: string;
 }
 
 export interface TaskRunEvent {
@@ -116,16 +107,9 @@ export interface TaskRun {
   progress?: string;
   result?: TaskResult;
   error?: string;
-  pending_control?: PendingControl;
   events?: TaskRunEvent[];
   started_at: string;
   finished_at?: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface ControlDecision {
-  action: 'approve' | 'deny' | 'answer';
-  answer?: string;
-  reason?: string;
 }

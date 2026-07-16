@@ -57,7 +57,7 @@ func DefaultExecutionPolicy(agent AgentKind) ExecutionPolicy {
 	case AgentClaude:
 		return ExecutionPolicy{
 			LaunchProfile: LaunchClaudeEdits,
-			Tools:         []ToolCapability{ToolFilesRead, ToolFilesWrite, ToolTerminal},
+			Tools:         []ToolCapability{ToolFilesRead, ToolFilesWrite},
 		}
 	case AgentCodex:
 		return ExecutionPolicy{LaunchProfile: LaunchCodexWorkspace}
@@ -78,7 +78,7 @@ func (p *ExecutionPolicy) ApplyDefaults(agent AgentKind, legacy bool) {
 		if p.LaunchProfile == LaunchClaudePlan {
 			p.Tools = []ToolCapability{ToolFilesRead}
 		} else {
-			p.Tools = []ToolCapability{ToolFilesRead, ToolFilesWrite, ToolTerminal}
+			p.Tools = []ToolCapability{ToolFilesRead, ToolFilesWrite}
 		}
 	}
 }
@@ -304,7 +304,7 @@ type Result struct {
 	Artifacts         []string `json:"artifacts,omitempty"`
 	NativeSessionID   string   `json:"native_session_id"`
 	SuggestedDelaySec int      `json:"suggested_delay_seconds,omitempty"`
-	ExitCode          int      `json:"exit_code"`
+	ExitCode          *int     `json:"exit_code,omitempty"`
 	DurationMS        int64    `json:"duration_ms"`
 	ExitReason        string   `json:"exit_reason,omitempty"`
 }

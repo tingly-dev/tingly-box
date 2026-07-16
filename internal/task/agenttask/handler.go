@@ -149,10 +149,19 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	if eventErr != nil {
 		return nil, eventErr
 	}
+	if runtimePause == nil {
+		runtimePause = pauseFromPermissionDenials(agentResult)
+		if runtimePause != nil {
+			kind := "handoff_required"
+			if runtimePause.State == "needs_input" {
+				kind = "input_required"
+			}
+			appendRuntimeEvent(ctx, runCtl, kind, runtimePause.Summary, eventData(runtimePause))
+		}
+	}
 	if runtimePause != nil {
 		runtimePause.NativeSessionID = payload.SessionID
 		if agentResult != nil {
-			runtimePause.ExitCode = agentResult.ExitCode
 			runtimePause.DurationMS = agentResult.Duration.Milliseconds()
 		}
 		payload.WakeCount++
@@ -179,7 +188,7 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 
 	normalized := parseOutcome(agentResult.TextOutput())
 	normalized.NativeSessionID = payload.SessionID
-	normalized.ExitCode = agentResult.ExitCode
+	normalized.ExitCode = &agentResult.ExitCode
 	normalized.DurationMS = agentResult.Duration.Milliseconds()
 	normalized.ExitReason = normalized.State
 	normalized.Artifacts = safeArtifacts(normalized.Artifacts)

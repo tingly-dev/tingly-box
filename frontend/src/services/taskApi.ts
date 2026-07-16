@@ -2,7 +2,7 @@
 // calls with the generated OpenAPI client after the backend schema is exported.
 import { getApiBaseUrl } from '@/utils/protocol';
 import { getControlApiHeaders } from '@/services/openapi';
-import type { AgentAvailability, AgentTask, ControlDecision, CreateTaskInput, TaskRun } from '@/pages/task/types';
+import type { AgentAvailability, AgentTask, CreateTaskInput, TaskRun } from '@/pages/task/types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const [baseUrl, authHeaders] = await Promise.all([getApiBaseUrl(), getControlApiHeaders()]);
@@ -30,9 +30,4 @@ export const taskApi = {
   wake: async (id: string, instruction?: string): Promise<AgentTask> => (await request<{ data: AgentTask }>(`/tasks/${id}/wake`, { method: 'POST', body: JSON.stringify(instruction ? { instruction } : {}) })).data,
   stop: async (id: string): Promise<void> => request<void>(`/tasks/${id}/stop`, { method: 'POST' }),
   runs: async (id: string): Promise<TaskRun[]> => (await request<{ data: TaskRun[] }>(`/tasks/${id}/runs`)).data,
-  respond: async (taskId: string, runId: string, controlId: string, decision: ControlDecision): Promise<TaskRun> => (
-    await request<{ data: TaskRun }>(`/tasks/${taskId}/runs/${runId}/control/${controlId}/respond`, {
-      method: 'POST', body: JSON.stringify(decision),
-    })
-  ).data,
 };

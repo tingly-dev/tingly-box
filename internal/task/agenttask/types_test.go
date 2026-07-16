@@ -7,7 +7,7 @@ func TestExecutionPolicyDefaultsAndNativeMapping(t *testing.T) {
 	if claude.LaunchProfile != LaunchClaudeEdits || claude.ClaudePermissionMode() != "acceptEdits" {
 		t.Fatalf("Claude policy = %+v", claude)
 	}
-	if got := claude.ClaudeTools(); len(got) != 6 || got[0] != "Read" || got[5] != "Bash" {
+	if got := claude.ClaudeTools(); len(got) != 5 || got[0] != "Read" || got[4] != "Edit" {
 		t.Fatalf("Claude tools = %v", got)
 	}
 

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/task"
 )
 
@@ -69,6 +70,98 @@ func summarizeNativeMessage(messageType string, raw map[string]interface{}) (str
 		return summarizeCodexItem(messageType, raw)
 	}
 	return "", "", nil, false
+}
+
+func pauseFromPermissionDenials(result *agentboot.Result) *Result {
+	if result == nil {
+		return nil
+	}
+	for _, event := range result.Events {
+		if event.Type != "result" {
+			continue
+		}
+		denials, _ := event.Data["permission_denials"].([]interface{})
+		if len(denials) == 0 {
+			continue
+		}
+		if question := askQuestionFromEvents(result.Events); question != "" {
+			return &Result{
+				State: "needs_input", Summary: "The automated run stopped for a business question.",
+				Question: truncate(question), ExitReason: "business_input_required",
+			}
+		}
+		tool := deniedToolName(denials)
+		if tool == "" {
+			tool = "A protected action"
+		}
+		return &Result{
+			State:      "handoff_required",
+			Summary:    fmt.Sprintf("Native handoff required: %s was denied outside this Task's automation boundary.", tool),
+			Question:   "Open the native session to review the request, then continue automation when ready.",
+			ExitReason: "permission_boundary",
+		}
+	}
+	return nil
+}
+
+func deniedToolName(denials []interface{}) string {
+	for _, item := range denials {
+		denial, _ := item.(map[string]interface{})
+		for _, key := range []string{"tool_name", "tool", "name"} {
+			if value, _ := denial[key].(string); strings.TrimSpace(value) != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func askQuestionFromEvents(events []agentboot.Event) string {
+	for i := len(events) - 1; i >= 0; i-- {
+		event := events[i]
+		if event.Type != "assistant" && event.Type != "tool_use" {
+			continue
+		}
+		if event.Type == "tool_use" {
+			if name, _ := event.Data["name"].(string); name == "AskUserQuestion" {
+				if input, _ := event.Data["input"].(map[string]interface{}); input != nil {
+					return questionFromInput(input)
+				}
+			}
+			continue
+		}
+		message, _ := event.Data["message"].(map[string]interface{})
+		content, _ := message["content"].([]interface{})
+		for _, item := range content {
+			block, _ := item.(map[string]interface{})
+			name, _ := block["name"].(string)
+			if name != "AskUserQuestion" {
+				continue
+			}
+			input, _ := block["input"].(map[string]interface{})
+			if question := questionFromInput(input); question != "" {
+				return question
+			}
+		}
+	}
+	return ""
+}
+
+func questionFromInput(input map[string]interface{}) string {
+	if input == nil {
+		return ""
+	}
+	if question, _ := input["question"].(string); strings.TrimSpace(question) != "" {
+		return question
+	}
+	questions, _ := input["questions"].([]interface{})
+	for _, item := range questions {
+		question, _ := item.(map[string]interface{})
+		if value, _ := question["question"].(string); strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func summarizeAssistant(raw map[string]interface{}) (string, string, any, bool) {

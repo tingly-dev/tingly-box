@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
 func TestSummarizeNativeMessageKeepsUsefulDetailsWithoutReasoning(t *testing.T) {
@@ -26,6 +28,25 @@ func TestSummarizeNativeMessageKeepsUsefulDetailsWithoutReasoning(t *testing.T) 
 		"item": map[string]interface{}{"type": "reasoning", "text": "private chain of thought"},
 	}); keep {
 		t.Fatal("reasoning must not be persisted")
+	}
+}
+
+func TestPauseFromPermissionDenialsDistinguishesQuestionsFromTools(t *testing.T) {
+	question := pauseFromPermissionDenials(&agentboot.Result{Events: []agentboot.Event{
+		{Type: "assistant", Data: map[string]interface{}{"message": map[string]interface{}{"content": []interface{}{
+			map[string]interface{}{"type": "tool_use", "name": "AskUserQuestion", "input": map[string]interface{}{"questions": []interface{}{map[string]interface{}{"question": "Which environment?"}}}},
+		}}}},
+		{Type: "result", Data: map[string]interface{}{"permission_denials": []interface{}{map[string]interface{}{"tool_name": "AskUserQuestion"}}}},
+	}})
+	if question == nil || question.State != "needs_input" || question.Question != "Which environment?" {
+		t.Fatalf("question pause = %+v", question)
+	}
+
+	handoff := pauseFromPermissionDenials(&agentboot.Result{Events: []agentboot.Event{
+		{Type: "result", Data: map[string]interface{}{"permission_denials": []interface{}{map[string]interface{}{"tool_name": "Bash"}}}},
+	}})
+	if handoff == nil || handoff.State != "handoff_required" || !strings.Contains(handoff.Summary, "Bash") {
+		t.Fatalf("handoff pause = %+v", handoff)
 	}
 }
 
