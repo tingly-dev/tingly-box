@@ -126,8 +126,14 @@ func runRemoteAddInteractive(reader *bufio.Reader, appManager *AppManager) error
 	PrintSuccess("Bot configuration saved successfully!")
 	fmt.Printf("UUID: %s\n", created.UUID)
 	fmt.Println()
-	fmt.Println("To start this bot, run:")
-	fmt.Printf("  tingly-box remote start %s\n", created.UUID)
+	// The bot is saved with Enabled: true. If the server is running, poke it
+	// so the bot starts right away; otherwise tell the user how to run it.
+	if notifyServerBotReload(appManager) {
+		fmt.Println("Server is running — the bot has been started automatically.")
+	} else {
+		fmt.Println("To start this bot, run:")
+		fmt.Printf("  tingly-box remote start %s\n", created.UUID)
+	}
 	fmt.Println()
 
 	return nil
