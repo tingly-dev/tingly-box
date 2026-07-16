@@ -8,10 +8,13 @@
 > 完成漏洞）、修正 2（session 以 step 为界 + Shell Handler 后端）、
 > 修正 3（暂停经 'task' scenario binding 推 IM、无绑定落桌面通知；暂停
 > 不再清空 recurring 的 next occurrence）、§5.1 第 2 步（agenttask 事件
-> 循环收敛到 RunWithPrompter + pausingPrompter）。待做：shell 的 API/
-> 前端暴露、SSE 实时事件、成本归因（§6.6）、修正 4 的循环机制归位、
-> §5.1 其余步骤（SmartGuide 退役、ExecutionPolicy/session 统一、
-> AgentRouter 反向收敛）。
+> 循环收敛到 RunWithPrompter + pausingPrompter）、shell 的 API/前端暴露
+> （executor=shell 走共享 agent 轴，agent-only 选项显式拒绝）、成本归因
+> §6.6（Claude 经 ANTHROPIC_CUSTOM_HEADERS 注入 task/run id → usage
+> 记录 task_id/run_id 列 → GET /tasks/:id/usage + 详情 Tokens 行；
+> Codex 归因待其原生 config 有 header 接缝后补）。待做：SSE 实时事件、
+> budget guardrail、修正 4 的循环机制归位、§5.1 其余步骤（SmartGuide
+> 退役、ExecutionPolicy/session 统一、AgentRouter 反向收敛）。
 > `feat/task` 分支做过一轮实验实现（可用但效果不佳），§10 给出对照结论：
 > 哪些采纳、哪些修正、为什么。
 >
