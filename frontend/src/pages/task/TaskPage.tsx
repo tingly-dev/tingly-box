@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import { Add, Block, ContentCopy, Delete, History, PlayArrow, Refresh, Schedule, Security, Send, Terminal } from '@/components/icons';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { taskApi } from '@/services/taskApi';
+import TaskMarkdown from './TaskMarkdown';
 import type {
   AgentAvailability, AgentTask, CreateTaskInput, ExecutionPolicy, LaunchProfile,
   TaskAgent, TaskRun, TaskRunStatus, TaskStatus, ToolCapability,
@@ -239,7 +240,7 @@ function TaskSteps({ task }: { task: AgentTask }) {
             <Chip size="small" label={label} color={color} variant={isCurrent ? 'filled' : 'outlined'} />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{step.instruction}</Typography>
-          {outcome?.result.summary && <Typography variant="body2" sx={{ mt: 1 }}>{outcome.result.summary}</Typography>}
+          {outcome?.result.summary && <Box sx={{ mt: 1 }}><TaskMarkdown compact>{outcome.result.summary}</TaskMarkdown></Box>}
         </Box>;
       })}
     </Stack>
@@ -267,7 +268,8 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
       {runs.slice(0, 20).map((run, index) => {
         const meta = getRunStatusMeta(run.status);
         const title = run.trigger === 'step' ? `Step ${(run.step_index ?? 0) + 1}` : run.trigger === 'instruction' ? 'Instruction' : `Run ${runs.length - index}`;
-        const summary = run.error || run.result?.summary || run.progress || run.instruction;
+        const markdownSummary = run.result?.summary;
+        const plainSummary = run.error || run.progress || run.instruction;
         const expanded = expandedRun === run.id;
         const hasDetails = Boolean(run.events?.length || run.result?.exit_reason || run.result?.duration_ms !== undefined || run.result?.exit_code !== undefined);
         return <Box key={run.id} sx={{ position: 'relative', pl: 2, pb: 0.25, borderLeft: '2px solid', borderColor: index === 0 && ['needs_input', 'handoff_required'].includes(run.status) ? 'warning.main' : 'divider' }}>
@@ -278,7 +280,9 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
             </Box>
             {run.finished_at && <Typography variant="caption" color="text.secondary">Finished {formatTime(run.finished_at)}</Typography>}
           </Stack>
-          {summary && <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>{summary}</Typography>}
+          {markdownSummary
+            ? <Box sx={{ mt: 0.75 }}><TaskMarkdown compact>{markdownSummary}</TaskMarkdown></Box>
+            : plainSummary && <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-wrap' }}>{plainSummary}</Typography>}
           {hasDetails && <Button size="small" color="inherit" sx={{ mt: 0.5, px: 0 }} onClick={() => setExpandedRun(expanded ? '' : run.id)}>{expanded ? 'Hide details' : `Show details${run.events?.length ? ` (${run.events.length})` : ''}`}</Button>}
           {expanded && <Stack spacing={1} sx={{ mt: 0.75 }}>
             {run.result && <Typography variant="caption" color="text.secondary">
@@ -286,7 +290,7 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
             </Typography>}
             {run.events?.map((event) => <Box key={event.id} sx={{ pl: 1.25, borderLeft: '1px solid', borderColor: 'divider' }}>
               <Typography variant="caption" color="text.secondary">{formatTime(event.created_at)} · {event.kind.replaceAll('_', ' ')}</Typography>
-              <Typography variant="body2">{event.summary}</Typography>
+              <TaskMarkdown compact>{event.summary}</TaskMarkdown>
               {event.data !== undefined && <Typography component="pre" variant="caption" fontFamily="monospace" sx={{ display: 'block', m: 0, mt: 0.5, p: 1, bgcolor: 'action.hover', borderRadius: 1, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 180, overflow: 'auto' }}>{typeof event.data === 'string' ? event.data : JSON.stringify(event.data, null, 2)}</Typography>}
             </Box>)}
           </Stack>}
@@ -330,7 +334,7 @@ function TaskDetail({ task, runs, onWake, onStop }: {
         <Stack spacing={1.5}>
           <Box>
             <Typography variant="subtitle1">Native takeover required</Typography>
-            <Typography variant="body2">{task.latest_result?.summary || 'The run reached an action outside its pre-authorized automation boundary.'}</Typography>
+            <TaskMarkdown compact>{task.latest_result?.summary || 'The run reached an action outside its pre-authorized automation boundary.'}</TaskMarkdown>
             <Typography variant="caption" color="text.secondary">Review the full native session, complete or redirect the work there, then return automation to Tingly Box.</Typography>
           </Box>
           {task.resume_command ? <Paper variant="outlined" sx={{ p: 1.25, bgcolor: 'background.paper' }}>
@@ -346,7 +350,7 @@ function TaskDetail({ task, runs, onWake, onStop }: {
         <Stack spacing={1.5}>
           <Box>
             <Typography variant="subtitle1">Reply to continue</Typography>
-            <Typography variant="body2">{task.latest_result?.question || 'The agent needs another instruction before it can continue.'}</Typography>
+            <TaskMarkdown compact>{task.latest_result?.question || 'The agent needs another instruction before it can continue.'}</TaskMarkdown>
             <Typography variant="caption" color="text.secondary">Your reply starts the next run in the same workspace and native session.</Typography>
           </Box>
           <TextField size="small" multiline minRows={2} label="Your reply" value={instruction} onChange={(event) => setInstruction(event.target.value)} />
@@ -356,7 +360,12 @@ function TaskDetail({ task, runs, onWake, onStop }: {
         </Stack>
       </Alert>}
       <TaskSteps task={task} />
-      {(task.latest_result?.summary || task.error || task.progress) && !['needs_input', 'handoff_required'].includes(task.status) && <Box><Typography variant="overline" color="text.secondary">Latest outcome</Typography><Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{task.error || task.latest_result?.summary || task.progress}</Typography></Box>}
+      {(task.latest_result?.summary || task.error || task.progress) && !['needs_input', 'handoff_required'].includes(task.status) && <Box>
+        <Typography variant="overline" color="text.secondary">Latest outcome</Typography>
+        {task.latest_result?.summary
+          ? <TaskMarkdown>{task.latest_result.summary}</TaskMarkdown>
+          : <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{task.error || task.progress}</Typography>}
+      </Box>}
       <Divider />
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={4}>
         <Box sx={{ minWidth: 180 }}><Typography variant="overline" color="text.secondary">Execution</Typography><Typography variant="body2">Agent · {task.agent === 'claude' ? 'Claude Code' : 'Codex'}</Typography><Typography variant="body2">Wake-ups · {task.wake_count}</Typography><Typography variant="body2">Next run · {formatTime(task.scheduled_at)}</Typography></Box>
