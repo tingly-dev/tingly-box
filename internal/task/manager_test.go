@@ -927,7 +927,7 @@ func TestTaskStatus_IsTerminal(t *testing.T) {
 		task.StatusCancelled, task.StatusInterrupted,
 	}
 	nonTerminal := []task.TaskStatus{
-		task.StatusPending, task.StatusQueued, task.StatusRunning, task.StatusNeedsInput,
+		task.StatusPending, task.StatusQueued, task.StatusRunning, task.StatusNeedsInput, task.StatusHandoff,
 	}
 	for _, s := range terminal {
 		if !s.IsTerminal() {

@@ -16,6 +16,7 @@ const (
 	RunStatusSucceeded       RunStatus = "succeeded"
 	RunStatusRescheduled     RunStatus = "rescheduled"
 	RunStatusNeedsInput      RunStatus = "needs_input"
+	RunStatusHandoff         RunStatus = "handoff_required"
 	RunStatusFailed          RunStatus = "failed"
 	RunStatusCancelled       RunStatus = "cancelled"
 	RunStatusInterrupted     RunStatus = "interrupted"

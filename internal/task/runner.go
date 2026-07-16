@@ -28,13 +28,11 @@ type Controller interface {
 	IsCancelled(ctx context.Context) bool
 }
 
-// RunController extends Controller with the durable state used by handlers
-// that support live interaction. Generic handlers can keep using Controller.
+// RunController extends Controller with the durable event stream for one
+// bounded invocation. Generic handlers can keep using Controller.
 type RunController interface {
 	Controller
 	RunID() string
-	SetPendingControl(ctx context.Context, status RunStatus, control *PendingControl) error
-	ResolvePendingControl(ctx context.Context, event RunEvent) error
 	AppendRunEvent(ctx context.Context, event RunEvent) error
 }
 
@@ -88,27 +86,6 @@ func (c *taskController) IsCancelled(ctx context.Context) bool {
 }
 
 func (c *taskController) RunID() string { return c.runID }
-
-func (c *taskController) SetPendingControl(ctx context.Context, status RunStatus, control *PendingControl) error {
-	data, err := json.Marshal(control)
-	if err != nil {
-		return err
-	}
-	return c.store.UpdateRun(ctx, c.runID, map[string]interface{}{
-		"status":          string(status),
-		"pending_control": string(data),
-	})
-}
-
-func (c *taskController) ResolvePendingControl(ctx context.Context, event RunEvent) error {
-	if err := c.store.UpdateRun(ctx, c.runID, map[string]interface{}{
-		"status":          string(RunStatusRunning),
-		"pending_control": "",
-	}); err != nil {
-		return err
-	}
-	return c.store.AppendRunEvent(ctx, c.runID, event)
-}
 
 func (c *taskController) AppendRunEvent(ctx context.Context, event RunEvent) error {
 	return c.store.AppendRunEvent(ctx, c.runID, event)

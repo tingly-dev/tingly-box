@@ -25,11 +25,10 @@ func testRouter(handler *Handler) *gin.Engine {
 	router.POST("/tasks/:id/wake", handler.Wake)
 	router.GET("/tasks/:id/runs", handler.ListRuns)
 	router.GET("/tasks/:id/runs/:runID", handler.GetRun)
-	router.POST("/tasks/:id/runs/:runID/control/:controlID/respond", handler.RespondControl)
 	return router
 }
 
-func TestGet_SurfacesActiveControlAndRejectsStaleDelivery(t *testing.T) {
+func TestGet_SurfacesOnlyActiveRun(t *testing.T) {
 	store := coretask.NewMemoryStore()
 	manager := coretask.NewManager(store)
 	payload := agenttask.Payload{
@@ -42,13 +41,9 @@ func TestGet_SurfacesActiveControlAndRejectsStaleDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	control := &coretask.PendingControl{
-		ID: "control-1", Kind: coretask.ControlKindApproval, ToolName: "Bash",
-		Input: json.RawMessage(`{"command":"go test ./..."}`), CreatedAt: now, ExpiresAt: now.Add(time.Minute),
-	}
 	if err := store.CreateRun(context.Background(), &coretask.TaskRun{
-		ID: "run-1", TaskID: created.ID, Attempt: 1, Status: coretask.RunStatusWaitingApproval,
-		Input: data, PendingControl: control, StartedAt: now, CreatedAt: now, UpdatedAt: now,
+		ID: "run-1", TaskID: created.ID, Attempt: 1, Status: coretask.RunStatusRunning,
+		Input: data, StartedAt: now, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +58,7 @@ func TestGet_SurfacesActiveControlAndRejectsStaleDelivery(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Data.ActiveRunID != "run-1" || decoded.Data.Attention == nil || decoded.Data.Attention.ID != control.ID {
+	if decoded.Data.ActiveRunID != "run-1" {
 		t.Fatalf("task view = %+v", decoded.Data)
 	}
 	listResponse := performJSON(t, router, http.MethodGet, "/tasks", "")
@@ -71,16 +66,8 @@ func TestGet_SurfacesActiveControlAndRejectsStaleDelivery(t *testing.T) {
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Data) != 1 || listed.Data[0].Attention == nil || listed.Data[0].ActiveRunID != "run-1" {
+	if len(listed.Data) != 1 || listed.Data[0].ActiveRunID != "run-1" {
 		t.Fatalf("task list = %+v", listed.Data)
-	}
-
-	// A persisted control without a live broker is deliberately not actionable
-	// after process restart.
-	response = performJSON(t, router, http.MethodPost,
-		"/tasks/"+created.ID+"/runs/run-1/control/control-1/respond", `{"action":"approve"}`)
-	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), agenttask.ErrControlNotActive.Error()) {
-		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
@@ -317,7 +304,7 @@ func TestToView_ResumeCommandStartsInWorkspace(t *testing.T) {
 		{
 			name:  "codex quotes shell values",
 			agent: agenttask.AgentCodex, workspace: "/tmp/user's task", sessionID: "thread-1",
-			want: "cd '/tmp/user'\"'\"'s task' && codex exec resume 'thread-1'",
+			want: "cd '/tmp/user'\"'\"'s task' && codex resume 'thread-1'",
 		},
 	}
 
@@ -341,41 +328,17 @@ func TestToView_ResumeCommandStartsInWorkspace(t *testing.T) {
 	}
 }
 
-func TestToView_ResumeCommandIncludesExecutionPolicy(t *testing.T) {
-	tests := []struct {
-		name     string
-		payload  agenttask.Payload
-		contains []string
-	}{
-		{
-			name: "Claude tools and permission mode",
-			payload: agenttask.Payload{
-				Version: 2, Goal: "Work", Agent: agenttask.AgentClaude, WorkspacePath: "/tmp/task", SessionID: "session-1",
-				Execution: agenttask.ExecutionPolicy{LaunchProfile: agenttask.LaunchClaudeManual, Tools: []agenttask.ToolCapability{agenttask.ToolFilesRead, agenttask.ToolTerminal}},
-			},
-			contains: []string{"--permission-mode 'manual'", "--tools 'Read,Glob,Grep,Bash'"},
-		},
-		{
-			name: "Codex sandbox",
-			payload: agenttask.Payload{
-				Version: 2, Goal: "Inspect", Agent: agenttask.AgentCodex, WorkspacePath: "/tmp/task", SessionID: "thread-1",
-				Execution: agenttask.ExecutionPolicy{LaunchProfile: agenttask.LaunchCodexReadOnly},
-			},
-			contains: []string{"codex exec -s 'read-only' resume 'thread-1'"},
-		},
+func TestToView_ResumeCommandIsInteractiveNativeHandoff(t *testing.T) {
+	payload := agenttask.Payload{
+		Version: 2, Goal: "Work", Agent: agenttask.AgentClaude, WorkspacePath: "/tmp/task", SessionID: "session-1",
+		Execution: agenttask.DefaultExecutionPolicy(agenttask.AgentClaude),
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			data, _ := json.Marshal(tt.payload)
-			view, err := toView(&coretask.Task{ID: "task-1", Payload: data})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, value := range tt.contains {
-				if !strings.Contains(view.ResumeCommand, value) {
-					t.Fatalf("resume command %q does not contain %q", view.ResumeCommand, value)
-				}
-			}
-		})
+	data, _ := json.Marshal(payload)
+	view, err := toView(&coretask.Task{ID: "task-1", Payload: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ResumeCommand != "cd '/tmp/task' && claude --resume 'session-1'" {
+		t.Fatalf("resume command = %q", view.ResumeCommand)
 	}
 }

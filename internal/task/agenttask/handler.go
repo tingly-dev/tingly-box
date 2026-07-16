@@ -31,7 +31,6 @@ type EnvResolver func(ctx context.Context, agent AgentKind) ([]string, error)
 type Handler struct {
 	agents      map[AgentKind]agentboot.Agent
 	envResolver EnvResolver
-	controls    *ControlBroker
 	now         func() time.Time
 }
 
@@ -42,16 +41,11 @@ func NewHandler(agents map[AgentKind]agentboot.Agent, envResolver EnvResolver) *
 	}
 	return &Handler{
 		agents: registered, envResolver: envResolver,
-		controls: NewControlBroker(0), now: time.Now,
+		now: time.Now,
 	}
 }
 
 func (h *Handler) Type() string { return TaskType }
-
-// Controls exposes the process-local delivery bridge used by the Task API.
-// Durable control metadata remains on TaskRun; this broker only owns the live
-// stdin connection and therefore cannot survive a server restart.
-func (h *Handler) Controls() *ControlBroker { return h.controls }
 
 func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*task.TaskResult, error) {
 	var payload Payload
@@ -87,6 +81,7 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	if payload.PendingExecution != nil {
 		execution = *payload.PendingExecution
 	}
+	execution = execution.Automated(payload.Agent)
 	if payload.Agent == AgentClaude && !resume {
 		sessionID = uuid.NewString()
 	}
@@ -102,17 +97,17 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	}
 
 	handle, err := agent.Execute(ctx, prompt, agentboot.ExecutionOptions{
-		ProjectPath:          payload.WorkspacePath,
-		OutputFormat:         agentboot.OutputFormatStreamJSON,
-		Timeout:              time.Duration(payload.TimeoutSeconds) * time.Second,
-		Env:                  env,
-		SessionID:            sessionID,
-		Resume:               resume,
-		AppendSystemPrompt:   outcomeSystemAppendix,
-		PermissionPromptTool: "stdio",
-		AvailableTools:       execution.ClaudeTools(),
-		PermissionMode:       execution.ClaudePermissionMode(),
-		SandboxMode:          execution.CodexSandboxMode(),
+		ProjectPath:        payload.WorkspacePath,
+		OutputFormat:       agentboot.OutputFormatStreamJSON,
+		Timeout:            time.Duration(payload.TimeoutSeconds) * time.Second,
+		Env:                env,
+		SessionID:          sessionID,
+		Resume:             resume,
+		AppendSystemPrompt: outcomeSystemAppendix,
+		AvailableTools:     execution.ClaudeTools(),
+		AllowedTools:       execution.ClaudeTools(),
+		PermissionMode:     execution.ClaudePermissionMode(),
+		SandboxMode:        execution.CodexSandboxMode(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("agent task: start %s: %w", payload.Agent, err)
@@ -139,7 +134,7 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	}
 
 	runCtl, _ := ctl.(task.RunController)
-	eventErr := consumeEvents(ctx, handle, ctl, runCtl, h.controls, func(nativeSessionID string) error {
+	runtimePause, eventErr := consumeEvents(ctx, handle, ctl, runCtl, func(nativeSessionID string) error {
 		if nativeSessionID == "" || nativeSessionID == payload.SessionID {
 			return nil
 		}
@@ -149,6 +144,14 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	agentResult, waitErr := handle.Wait()
 	if eventErr != nil {
 		return nil, eventErr
+	}
+	if runtimePause != nil {
+		runtimePause.NativeSessionID = payload.SessionID
+		payload.WakeCount++
+		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
+			return nil, err
+		}
+		return h.taskResult(ctx, ctl, &payload, *runtimePause)
 	}
 	if waitErr != nil {
 		return nil, fmt.Errorf("agent task: %s execution: %w", payload.Agent, waitErr)
@@ -198,11 +201,11 @@ func consumeEvents(
 	handle agentboot.ExecutionHandle,
 	ctl task.Controller,
 	runCtl task.RunController,
-	controls *ControlBroker,
 	onSession func(string) error,
-) error {
+) (*Result, error) {
 	messageCount := 0
 	var eventErr error
+	var pause *Result
 	for event := range handle.Events() {
 		switch e := event.(type) {
 		case agentboot.MessageEvent:
@@ -216,39 +219,57 @@ func consumeEvents(
 			messageCount++
 			_ = ctl.UpdateProgress(ctx, fmt.Sprintf("Agent working · %d events", messageCount))
 		case agentboot.AskRequestEvent:
-			if runCtl == nil || controls == nil {
-				eventErr = errors.New("agent task: live input requires a run controller")
-				_ = handle.Respond(e.ID, agentboot.AskResponse{Approved: false, Reason: eventErr.Error()})
-				handle.Cancel()
-				continue
+			if pause == nil {
+				question := strings.TrimSpace(e.Message)
+				if question == "" {
+					question = strings.TrimSpace(e.Reason)
+				}
+				if question == "" {
+					question = "The agent needs information before it can continue."
+				}
+				pause = &Result{State: "needs_input", Summary: "The automated run stopped for a business question.", Question: truncate(question)}
+				appendRuntimeEvent(ctx, runCtl, "input_required", question, nil)
 			}
-			if err := controls.AwaitAsk(ctx, runCtl.RunID(), handle, runCtl, e); err != nil {
-				eventErr = fmt.Errorf("agent task: answer input request: %w", err)
-				handle.Cancel()
+			if err := handle.Respond(e.ID, agentboot.AskResponse{Approved: false, Reason: "Unattended Task runs cannot answer interactive questions"}); err != nil {
+				eventErr = fmt.Errorf("agent task: reject interactive question: %w", err)
 			}
+			handle.Cancel()
 		case agentboot.ApprovalRequestEvent:
-			if runCtl == nil || controls == nil {
-				eventErr = errors.New("agent task: live approval requires a run controller")
-				_ = handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: false, Reason: eventErr.Error()})
-				handle.Cancel()
-				continue
+			if pause == nil {
+				tool := strings.TrimSpace(e.ToolName)
+				if tool == "" {
+					tool = "a protected tool"
+				}
+				summary := fmt.Sprintf("Native handoff required: %s requested permission outside this Task's automation boundary.", tool)
+				pause = &Result{State: "handoff_required", Summary: summary, Question: "Open the native session to review the request, then continue automation when ready."}
+				data, _ := json.Marshal(map[string]any{"tool": e.ToolName, "reason": e.Reason})
+				appendRuntimeEvent(ctx, runCtl, "handoff_required", summary, data)
 			}
-			if err := controls.AwaitApproval(ctx, runCtl.RunID(), handle, runCtl, e); err != nil {
-				eventErr = fmt.Errorf("agent task: answer approval request: %w", err)
-				handle.Cancel()
+			if err := handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: false, Reason: "Permission is outside the Task's pre-authorized automation boundary"}); err != nil {
+				eventErr = fmt.Errorf("agent task: reject approval request: %w", err)
 			}
+			handle.Cancel()
 		case agentboot.ErrorEvent:
 			if e.Err != nil {
 				_ = ctl.UpdateProgress(ctx, e.Err.Error())
 			}
 		}
 	}
-	return eventErr
+	return pause, eventErr
+}
+
+func appendRuntimeEvent(ctx context.Context, ctl task.RunController, kind, summary string, data json.RawMessage) {
+	if ctl == nil {
+		return
+	}
+	_ = ctl.AppendRunEvent(ctx, task.RunEvent{
+		ID: uuid.NewString(), Kind: kind, Summary: truncate(summary), Data: data, CreatedAt: time.Now(),
+	})
 }
 
 func cancelAndWait(ctx context.Context, handle agentboot.ExecutionHandle, ctl task.Controller) {
 	handle.Cancel()
-	_ = consumeEvents(ctx, handle, ctl, nil, nil, nil)
+	_, _ = consumeEvents(ctx, handle, ctl, nil, nil)
 	_, _ = handle.Wait()
 }
 
@@ -261,6 +282,8 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 	switch result.State {
 	case "needs_input":
 		return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
+	case "handoff_required":
+		return &task.TaskResult{Outcome: task.OutcomeHandoff, Result: data}, nil
 	case "continue":
 		if payload.FollowUp.Enabled && payload.WakeCount < payload.FollowUp.MaxWakeUps {
 			delay := payload.FollowUp.DelaySeconds

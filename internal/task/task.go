@@ -13,6 +13,7 @@ const (
 	StatusQueued      TaskStatus = "queued"
 	StatusRunning     TaskStatus = "running"
 	StatusNeedsInput  TaskStatus = "needs_input"
+	StatusHandoff     TaskStatus = "handoff_required"
 	StatusSucceeded   TaskStatus = "succeeded"
 	StatusFailed      TaskStatus = "failed"
 	StatusCancelled   TaskStatus = "cancelled"
@@ -71,6 +72,7 @@ const (
 	OutcomeComplete   OutcomeKind = "complete"
 	OutcomeReschedule OutcomeKind = "reschedule"
 	OutcomeNeedsInput OutcomeKind = "needs_input"
+	OutcomeHandoff    OutcomeKind = "handoff_required"
 )
 
 // TaskResult is returned by Handler.Run on success. A handler can complete

@@ -29,12 +29,12 @@ type WakeRequest struct {
 }
 
 type AgentAvailability struct {
-	Agent              agenttask.AgentKind       `json:"agent"`
-	Available          bool                      `json:"available"`
-	LaunchProfiles     []agenttask.LaunchProfile `json:"launch_profiles"`
-	DefaultProfile     agenttask.LaunchProfile   `json:"default_profile"`
-	ToolFiltering      bool                      `json:"tool_filtering"`
-	InteractiveControl bool                      `json:"interactive_control"`
+	Agent          agenttask.AgentKind       `json:"agent"`
+	Available      bool                      `json:"available"`
+	LaunchProfiles []agenttask.LaunchProfile `json:"launch_profiles"`
+	DefaultProfile agenttask.LaunchProfile   `json:"default_profile"`
+	ToolFiltering  bool                      `json:"tool_filtering"`
+	Unattended     bool                      `json:"unattended"`
 }
 
 type TaskView struct {
@@ -62,7 +62,6 @@ type TaskView struct {
 	StepOutcomes  []agenttask.StepOutcome   `json:"step_outcomes,omitempty"`
 	Execution     agenttask.ExecutionPolicy `json:"execution"`
 	ActiveRunID   string                    `json:"active_run_id,omitempty"`
-	Attention     *coretask.PendingControl  `json:"attention,omitempty"`
 }
 
 type TaskResponse struct {
@@ -96,12 +95,6 @@ type RunView struct {
 	FinishedAt     *time.Time                `json:"finished_at,omitempty"`
 	CreatedAt      time.Time                 `json:"created_at"`
 	UpdatedAt      time.Time                 `json:"updated_at"`
-}
-
-type ControlResponseRequest struct {
-	Action string `json:"action" binding:"required"`
-	Answer string `json:"answer,omitempty"`
-	Reason string `json:"reason,omitempty"`
 }
 
 type RunResponse struct {

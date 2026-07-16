@@ -162,7 +162,7 @@ func (m *taskManager) Cancel(ctx context.Context, taskID string, reason string) 
 	case StatusRunning:
 		m.registry.cancel(taskID)
 		// The runner goroutine detects ctx cancellation and writes status=cancelled.
-	case StatusPending, StatusQueued, StatusNeedsInput:
+	case StatusPending, StatusQueued, StatusNeedsInput, StatusHandoff:
 		if err := m.store.UpdateStatus(ctx, taskID, map[string]interface{}{
 			"status":       string(StatusCancelled),
 			"cancelled_at": now,
@@ -496,6 +496,17 @@ func (m *taskManager) runTask(ctx context.Context, cancel context.CancelFunc, t 
 		finishRun()
 		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
 			"status":       string(StatusNeedsInput),
+			"scheduled_at": nil,
+			"finished_at":  nil,
+			"attempt":      0,
+			"result":       resultJSON,
+			"error":        "",
+		})
+	case OutcomeHandoff:
+		runStatus = RunStatusHandoff
+		finishRun()
+		_ = m.store.UpdateStatus(context.Background(), t.ID, map[string]interface{}{
+			"status":       string(StatusHandoff),
 			"scheduled_at": nil,
 			"finished_at":  nil,
 			"attempt":      0,

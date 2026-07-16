@@ -19,8 +19,6 @@ type fakeController struct {
 	payload  json.RawMessage
 	progress string
 	runID    string
-	pending  chan task.PendingControl
-	control  *task.PendingControl
 	events   []task.RunEvent
 }
 
@@ -45,25 +43,6 @@ func (c *fakeController) RunID() string {
 		return c.runID
 	}
 	return "run-1"
-}
-
-func (c *fakeController) SetPendingControl(_ context.Context, _ task.RunStatus, control *task.PendingControl) error {
-	c.mu.Lock()
-	copy := *control
-	c.control = &copy
-	c.mu.Unlock()
-	if c.pending != nil {
-		c.pending <- copy
-	}
-	return nil
-}
-
-func (c *fakeController) ResolvePendingControl(_ context.Context, event task.RunEvent) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.control = nil
-	c.events = append(c.events, event)
-	return nil
 }
 
 func (c *fakeController) AppendRunEvent(_ context.Context, event task.RunEvent) error {
@@ -173,7 +152,7 @@ func TestHandler_ClaudeDoneCreatesSession(t *testing.T) {
 		if opts.ProjectPath != workspace || !strings.Contains(opts.AppendSystemPrompt, outcomeOpenTag) {
 			t.Fatalf("execution options not wired: %+v", opts)
 		}
-		if opts.PermissionMode != "acceptEdits" || len(opts.AvailableTools) != 6 || opts.AvailableTools[5] != "Bash" {
+		if opts.PermissionPromptTool != "" || opts.PermissionMode != "acceptEdits" || len(opts.AvailableTools) != 6 || len(opts.AllowedTools) != 6 || opts.AvailableTools[5] != "Bash" {
 			t.Fatalf("execution policy not wired: %+v", opts)
 		}
 		output := `finished
@@ -307,7 +286,7 @@ func TestHandler_CodexCheckpointsThreadStarted(t *testing.T) {
 	}
 }
 
-func TestHandler_AskCanBeAnsweredWhileRunContinues(t *testing.T) {
+func TestHandler_AskStopsRunForNewInput(t *testing.T) {
 	workspace := mustWorkspace(t)
 	responses := make(chan responseCall, 1)
 	agent := &fakeAgent{available: true}
@@ -322,14 +301,7 @@ func TestHandler_AskCanBeAnsweredWhileRunContinues(t *testing.T) {
 	}
 
 	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
-	controller := &fakeController{pending: make(chan task.PendingControl, 1)}
-	responded := make(chan error, 1)
-	go func() {
-		control := <-controller.pending
-		responded <- handler.Controls().Respond(context.Background(), controller.RunID(), control.ID, ControlDecision{
-			Action: "answer", Answer: "staging",
-		})
-	}()
+	controller := &fakeController{}
 	taskResult, err := handler.Run(context.Background(), &task.Task{
 		ID:   uuid.NewString(),
 		Type: TaskType,
@@ -342,16 +314,13 @@ func TestHandler_AskCanBeAnsweredWhileRunContinues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if taskResult.Outcome != task.OutcomeComplete {
+	if taskResult.Outcome != task.OutcomeNeedsInput || !strings.Contains(string(taskResult.Result), "Which environment?") {
 		t.Fatalf("outcome = %s", taskResult.Outcome)
-	}
-	if err := <-responded; err != nil {
-		t.Fatalf("respond: %v", err)
 	}
 	select {
 	case call := <-responses:
 		response, ok := call.resp.(agentboot.AskResponse)
-		if call.id != "ask-1" || !ok || !response.Approved || response.Response != "staging" {
+		if call.id != "ask-1" || !ok || response.Approved {
 			t.Fatalf("response = %+v", call)
 		}
 	case <-time.After(time.Second):
@@ -359,7 +328,7 @@ func TestHandler_AskCanBeAnsweredWhileRunContinues(t *testing.T) {
 	}
 }
 
-func TestHandler_ApprovalCanBeGrantedOnce(t *testing.T) {
+func TestHandler_ApprovalRequiresNativeHandoff(t *testing.T) {
 	workspace := mustWorkspace(t)
 	responses := make(chan responseCall, 1)
 	agent := &fakeAgent{available: true, execute: func(_ context.Context, _ string, _ agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
@@ -368,12 +337,7 @@ func TestHandler_ApprovalCanBeGrantedOnce(t *testing.T) {
 		}}, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"tests passed"}</task_outcome>`}, nil, responses), nil
 	}}
 	handler := NewHandler(map[AgentKind]agentboot.Agent{AgentClaude: agent}, nil)
-	controller := &fakeController{pending: make(chan task.PendingControl, 1)}
-	responded := make(chan error, 1)
-	go func() {
-		control := <-controller.pending
-		responded <- handler.Controls().Respond(context.Background(), controller.RunID(), control.ID, ControlDecision{Action: "approve"})
-	}()
+	controller := &fakeController{}
 
 	result, err := handler.Run(context.Background(), &task.Task{ID: uuid.NewString(), Type: TaskType, Payload: rawPayload(t, Payload{
 		Goal: "test", Agent: AgentClaude, WorkspacePath: workspace,
@@ -381,16 +345,16 @@ func TestHandler_ApprovalCanBeGrantedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != task.OutcomeComplete {
+	if result.Outcome != task.OutcomeHandoff || !strings.Contains(string(result.Result), "Bash") {
 		t.Fatalf("outcome = %s", result.Outcome)
-	}
-	if err := <-responded; err != nil {
-		t.Fatalf("respond: %v", err)
 	}
 	call := <-responses
 	response, ok := call.resp.(agentboot.ApprovalResponse)
-	if !ok || !response.Approved || call.id != "approval-1" {
+	if !ok || response.Approved || call.id != "approval-1" {
 		t.Fatalf("response = %+v", call)
+	}
+	if len(controller.events) != 1 || controller.events[0].Kind != "handoff_required" {
+		t.Fatalf("events = %+v", controller.events)
 	}
 }
 

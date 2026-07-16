@@ -30,11 +30,6 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Get one bounded execution for an agent task"),
 		swagger.WithResponseModel(RunResponse{}))
-	router.POST("/tasks/:id/runs/:runID/control/:controlID/respond", handler.RespondControl,
-		swagger.WithTags("tasks"),
-		swagger.WithDescription("Respond once to a live agent approval or question"),
-		swagger.WithRequestModel(ControlResponseRequest{}),
-		swagger.WithResponseModel(RunResponse{}))
 	router.POST("/tasks/:id/wake", handler.Wake,
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Run now or send an instruction to a paused task"),

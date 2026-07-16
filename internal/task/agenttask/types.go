@@ -93,7 +93,11 @@ func (p ExecutionPolicy) Validate(agent AgentKind, allowLegacy bool) error {
 	switch agent {
 	case AgentClaude:
 		switch p.LaunchProfile {
-		case LaunchClaudePlan, LaunchClaudeManual, LaunchClaudeEdits:
+		case LaunchClaudePlan, LaunchClaudeEdits:
+		case LaunchClaudeManual:
+			if !allowLegacy {
+				return errors.New("manual is not available for unattended tasks")
+			}
 		default:
 			return fmt.Errorf("unsupported Claude launch profile %q", p.LaunchProfile)
 		}
@@ -123,6 +127,23 @@ func (p ExecutionPolicy) Validate(agent AgentKind, allowLegacy bool) error {
 		return fmt.Errorf("unsupported agent %q", agent)
 	}
 	return nil
+}
+
+// Automated returns the effective policy for an unattended Run. Historical
+// interactive or inherited policies are narrowed instead of silently gaining
+// write privileges.
+func (p ExecutionPolicy) Automated(agent AgentKind) ExecutionPolicy {
+	switch agent {
+	case AgentClaude:
+		if p.LaunchProfile == LaunchClaudeManual || p.LaunchProfile == LaunchLegacyInherited {
+			return ExecutionPolicy{LaunchProfile: LaunchClaudePlan, Tools: []ToolCapability{ToolFilesRead}}
+		}
+	case AgentCodex:
+		if p.LaunchProfile == LaunchLegacyInherited {
+			return ExecutionPolicy{LaunchProfile: LaunchCodexReadOnly}
+		}
+	}
+	return p
 }
 
 func (p ExecutionPolicy) ClaudePermissionMode() string {

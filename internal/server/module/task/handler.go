@@ -20,15 +20,10 @@ type Handler struct {
 	manager   coretask.Manager
 	configDir string
 	agents    map[agenttask.AgentKind]agentboot.Agent
-	controls  *agenttask.ControlBroker
 }
 
-func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent, controls ...*agenttask.ControlBroker) *Handler {
-	broker := agenttask.NewControlBroker(0)
-	if len(controls) > 0 && controls[0] != nil {
-		broker = controls[0]
-	}
-	return &Handler{manager: manager, configDir: configDir, agents: agents, controls: broker}
+func NewHandler(manager coretask.Manager, configDir string, agents map[agenttask.AgentKind]agentboot.Agent) *Handler {
+	return &Handler{manager: manager, configDir: configDir, agents: agents}
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -38,10 +33,8 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 	runs, err := h.manager.ListRuns(c.Request.Context(), coretask.RunListFilter{
-		Status: []coretask.RunStatus{
-			coretask.RunStatusRunning, coretask.RunStatusWaitingApproval, coretask.RunStatusWaitingInput,
-		},
-		Limit: 500,
+		Status: []coretask.RunStatus{coretask.RunStatusRunning},
+		Limit:  500,
 	})
 	if err != nil {
 		writeError(c, err)
@@ -131,61 +124,6 @@ func (h *Handler) GetRun(c *gin.Context) {
 		return
 	}
 	view, err := toRunView(run)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, RunResponse{Data: view})
-}
-
-func (h *Handler) RespondControl(c *gin.Context) {
-	taskRecord, err := h.manager.Get(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	if taskRecord.Type != agenttask.TaskType {
-		writeError(c, coretask.ErrNotFound)
-		return
-	}
-	run, err := h.manager.GetRun(c.Request.Context(), taskRecord.ID, c.Param("runID"))
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	controlID := c.Param("controlID")
-	if run.PendingControl == nil || run.PendingControl.ID != controlID {
-		c.JSON(http.StatusConflict, gin.H{"error": agenttask.ErrControlNotActive.Error()})
-		return
-	}
-	var req ControlResponseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	decision := agenttask.ControlDecision{
-		Action: strings.ToLower(strings.TrimSpace(req.Action)),
-		Answer: strings.TrimSpace(req.Answer),
-		Reason: strings.TrimSpace(req.Reason),
-	}
-	if err := h.controls.Respond(c.Request.Context(), run.ID, controlID, decision); err != nil {
-		if errors.Is(err, agenttask.ErrControlNotActive) || errors.Is(err, agenttask.ErrControlAnswered) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, agenttask.ErrInvalidControlDecision) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		writeError(c, err)
-		return
-	}
-	updated, err := h.manager.GetRun(c.Request.Context(), taskRecord.ID, run.ID)
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	view, err := toRunView(updated)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -289,7 +227,7 @@ func (h *Handler) Wake(c *gin.Context) {
 	}
 	instruction := strings.TrimSpace(req.Instruction)
 	if instruction != "" || req.ExecutionOverride != nil {
-		if task.Status != coretask.StatusNeedsInput && !task.Status.IsTerminal() {
+		if task.Status != coretask.StatusNeedsInput && task.Status != coretask.StatusHandoff && !task.Status.IsTerminal() {
 			c.JSON(http.StatusConflict, gin.H{"error": "instruction or execution override can only be sent to a paused or finished task"})
 			return
 		}
@@ -343,13 +281,14 @@ func (h *Handler) Agents(c *gin.Context) {
 		agent := h.agents[kind]
 		item := AgentAvailability{Agent: kind, Available: agent != nil && agent.IsAvailable()}
 		if kind == agenttask.AgentClaude {
-			item.LaunchProfiles = []agenttask.LaunchProfile{agenttask.LaunchClaudePlan, agenttask.LaunchClaudeManual, agenttask.LaunchClaudeEdits}
+			item.LaunchProfiles = []agenttask.LaunchProfile{agenttask.LaunchClaudePlan, agenttask.LaunchClaudeEdits}
 			item.DefaultProfile = agenttask.LaunchClaudeEdits
 			item.ToolFiltering = true
-			item.InteractiveControl = true
+			item.Unattended = true
 		} else {
 			item.LaunchProfiles = []agenttask.LaunchProfile{agenttask.LaunchCodexReadOnly, agenttask.LaunchCodexWorkspace}
 			item.DefaultProfile = agenttask.LaunchCodexWorkspace
+			item.Unattended = true
 		}
 		data = append(data, item)
 	}
@@ -377,18 +316,8 @@ func toView(task *coretask.Task) (TaskView, error) {
 		sessionID := shellQuote(payload.SessionID)
 		if payload.Agent == agenttask.AgentClaude {
 			view.ResumeCommand = fmt.Sprintf("cd %s && claude --resume %s", workspace, sessionID)
-			if mode := payload.Execution.ClaudePermissionMode(); mode != "" {
-				view.ResumeCommand += " --permission-mode " + shellQuote(mode)
-			}
-			if tools := payload.Execution.ClaudeTools(); len(tools) > 0 {
-				view.ResumeCommand += " --tools " + shellQuote(strings.Join(tools, ","))
-			}
 		} else {
-			view.ResumeCommand = fmt.Sprintf("cd %s && codex exec", workspace)
-			if sandbox := payload.Execution.CodexSandboxMode(); sandbox != "" {
-				view.ResumeCommand += " -s " + shellQuote(sandbox)
-			}
-			view.ResumeCommand += " resume " + sessionID
+			view.ResumeCommand = fmt.Sprintf("cd %s && codex resume %s", workspace, sessionID)
 		}
 	}
 	if len(task.Result) > 0 {
@@ -424,10 +353,6 @@ func attachRunAttention(view *TaskView, run *coretask.TaskRun) {
 		return
 	}
 	view.ActiveRunID = run.ID
-	if run.PendingControl != nil {
-		control := *run.PendingControl
-		view.Attention = &control
-	}
 }
 
 func toRunView(run *coretask.TaskRun) (RunView, error) {
@@ -440,6 +365,7 @@ func toRunView(run *coretask.TaskRun) (RunView, error) {
 	if payload.PendingExecution != nil {
 		execution = *payload.PendingExecution
 	}
+	execution = execution.Automated(payload.Agent)
 	view := RunView{
 		ID: run.ID, TaskID: run.TaskID, Attempt: run.Attempt, Status: run.Status,
 		Execution: execution, Progress: run.Progress, Error: run.Error,
