@@ -5,13 +5,14 @@ import {
   TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
-import { Add, Block, ContentCopy, Delete, History, PlayArrow, Refresh, Schedule, Security, Send, Terminal } from '@/components/icons';
+import { Add, Block, ContentCopy, Delete, Edit, History, PlayArrow, Refresh, Schedule, Security, Send, Terminal } from '@/components/icons';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { taskApi } from '@/services/taskApi';
 import TaskMarkdown from './TaskMarkdown';
 import type {
   AgentAvailability, AgentTask, CreateTaskInput, ExecutionPolicy, LaunchProfile,
   TaskAgent, TaskRun, TaskRunStatus, TaskStatus, ToolCapability,
+  UpdateTaskInput,
 } from './types';
 
 const statusMeta: Record<TaskStatus, { label: string; color: 'default' | 'primary' | 'warning' | 'success' | 'error' }> = {
@@ -62,6 +63,7 @@ const formatTime = (value?: string) => value ? new Intl.DateTimeFormat(undefined
 
 const isActive = (task: AgentTask) => ['pending', 'queued', 'running'].includes(task.status);
 const canStop = (task: AgentTask) => ['pending', 'queued', 'running', 'needs_input', 'handoff_required'].includes(task.status);
+const isTerminal = (task: AgentTask) => ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(task.status);
 
 function CreateTaskDialog({ open, agents, onClose, onCreated }: {
   open: boolean; agents: AgentAvailability[]; onClose: () => void; onCreated: (task: AgentTask) => void;
@@ -300,16 +302,50 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
   </Box>;
 }
 
-function TaskDetail({ task, runs, onWake, onStop }: {
-  task: AgentTask; runs: TaskRun[]; onWake: (instruction?: string) => Promise<void>; onStop: () => Promise<void>;
+function EditTaskDialog({ task, open, onClose, onSaved }: {
+  task: AgentTask; open: boolean; onClose: () => void; onSaved: (input: UpdateTaskInput) => Promise<void>;
 }) {
+  const [title, setTitle] = useState('');
+  const [goal, setGoal] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    setTitle(task.title || ''); setGoal(task.goal); setError('');
+  }, [open, task.id, task.title, task.goal]);
+  const save = async () => {
+    if (!goal.trim()) return;
+    setSaving(true); setError('');
+    try {
+      await onSaved({ title: title.trim(), goal: goal.trim() });
+      onClose();
+    } catch (err) { setError((err as Error).message); } finally { setSaving(false); }
+  };
+  return <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth>
+    <DialogTitle>Edit task</DialogTitle>
+    <DialogContent sx={{ pt: '12px !important' }}>
+      <Stack spacing={2}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <TextField autoFocus label="Task name (optional)" value={title} onChange={(event) => setTitle(event.target.value)} helperText="Leave empty to use the goal as the task name." />
+        <TextField multiline minRows={4} label="Goal" value={goal} onChange={(event) => setGoal(event.target.value)} required />
+        <Alert severity="info" variant="outlined">Saving changes the durable goal for future runs. It does not start a run or change the workspace, session, or steps.</Alert>
+      </Stack>
+    </DialogContent>
+    <DialogActions><Button onClick={onClose} disabled={saving}>Cancel</Button><Button variant="contained" onClick={save} disabled={saving || !goal.trim()}>{saving ? <CircularProgress size={18} /> : 'Save changes'}</Button></DialogActions>
+  </Dialog>;
+}
+
+function TaskDetail({ task, runs, onUpdate, onWake, onStop }: {
+  task: AgentTask; runs: TaskRun[]; onUpdate: (input: UpdateTaskInput) => Promise<void>; onWake: (instruction?: string) => Promise<void>; onStop: () => Promise<void>;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
   const [instructionOpen, setInstructionOpen] = useState(false);
   const [instruction, setInstruction] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const copy = (value?: string) => value && navigator.clipboard.writeText(value);
   useEffect(() => {
-    setInstruction(''); setInstructionOpen(false); setActionError('');
+    setEditOpen(false); setInstruction(''); setInstructionOpen(false); setActionError('');
   }, [task.id]);
   const act = async (action: () => Promise<void>): Promise<boolean> => {
     setBusy(true); setActionError('');
@@ -318,6 +354,7 @@ function TaskDetail({ task, runs, onWake, onStop }: {
   const send = async () => {
     if (await act(() => onWake(instruction.trim()))) { setInstruction(''); setInstructionOpen(false); }
   };
+  const executionLocked = task.status === 'running' || task.status === 'queued';
 
   return <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, p: { xs: 2, md: 3 }, borderRadius: 2 }}>
     <Stack spacing={3}>
@@ -326,8 +363,9 @@ function TaskDetail({ task, runs, onWake, onStop }: {
         <Box><Stack direction="row" spacing={1} alignItems="center"><Typography variant="h4">{task.title || task.goal}</Typography><Chip size="small" label={statusMeta[task.status].label} color={statusMeta[task.status].color} /></Stack><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{task.goal}</Typography></Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
           {canStop(task) && <Button color="inherit" startIcon={<Block />} disabled={busy} onClick={() => act(onStop)}>Stop</Button>}
-          {!['needs_input', 'handoff_required'].includes(task.status) && <Button startIcon={<PlayArrow />} disabled={busy || task.status === 'running' || task.status === 'queued'} onClick={() => act(() => onWake())}>Run now</Button>}
-          {task.status !== 'needs_input' && <Button variant="contained" startIcon={<Send />} disabled={busy || task.status === 'running' || task.status === 'queued'} onClick={() => setInstructionOpen(true)}>{task.status === 'handoff_required' ? 'Send alternative' : 'Send instruction'}</Button>}
+          <Button color="inherit" startIcon={<Edit />} disabled={busy || executionLocked} onClick={() => setEditOpen(true)}>Edit task</Button>
+          {!['needs_input', 'handoff_required'].includes(task.status) && <Button startIcon={<PlayArrow />} disabled={busy || executionLocked} onClick={() => act(() => onWake())}>{isTerminal(task) ? 'Run again' : 'Run now'}</Button>}
+          {task.status !== 'needs_input' && <Button variant="contained" startIcon={<Send />} disabled={busy || executionLocked} onClick={() => setInstructionOpen(true)}>Run with instruction</Button>}
         </Stack>
       </Stack>
       {task.status === 'handoff_required' && <Alert severity="warning" icon={<Terminal />} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
@@ -376,7 +414,8 @@ function TaskDetail({ task, runs, onWake, onStop }: {
       <Divider />
       <RunHistory runs={runs} />
     </Stack>
-    <Dialog open={instructionOpen} onClose={() => setInstructionOpen(false)} maxWidth="sm" fullWidth><DialogTitle>Send instruction</DialogTitle><DialogContent><TextField autoFocus multiline minRows={3} fullWidth label="What should the agent know?" value={instruction} onChange={(e) => setInstruction(e.target.value)} sx={{ mt: 1 }} /></DialogContent><DialogActions><Button onClick={() => setInstructionOpen(false)}>Cancel</Button><Button variant="contained" disabled={!instruction.trim() || busy} onClick={send}>Send and run</Button></DialogActions></Dialog>
+    <EditTaskDialog task={task} open={editOpen} onClose={() => setEditOpen(false)} onSaved={onUpdate} />
+    <Dialog open={instructionOpen} onClose={() => setInstructionOpen(false)} maxWidth="sm" fullWidth><DialogTitle>Run with instruction</DialogTitle><DialogContent sx={{ pt: '12px !important' }}><Stack spacing={1.5}><TextField autoFocus multiline minRows={3} fullWidth label="Instruction for this run" value={instruction} onChange={(e) => setInstruction(e.target.value)} /><Typography variant="caption" color="text.secondary">This instruction is used once for the next run. It does not replace the task goal.</Typography></Stack></DialogContent><DialogActions><Button onClick={() => setInstructionOpen(false)}>Cancel</Button><Button variant="contained" disabled={!instruction.trim() || busy} onClick={send}>Run with instruction</Button></DialogActions></Dialog>
   </Paper>;
 }
 
@@ -408,6 +447,7 @@ export default function TaskPage() {
     { label: 'Completed', items: tasks.filter((task) => !isActive(task) && !['needs_input', 'handoff_required'].includes(task.status)) },
   ].filter((group) => group.items.length), [tasks]);
   const update = (task: AgentTask) => { setTasks((items) => items.map((item) => item.id === task.id ? task : item)); setDetail(task); };
+  const edit = async (input: UpdateTaskInput) => { if (!selected) return; update(await taskApi.update(selected.id, input)); };
   const wake = async (instruction?: string) => { if (!selected) return; update(await taskApi.wake(selected.id, instruction)); };
   const stop = async () => { if (!selected) return; await taskApi.stop(selected.id); await load(true); };
   return <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: '100%' }}>
@@ -416,7 +456,7 @@ export default function TaskPage() {
     {error && <Alert severity="error">{error}</Alert>}
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box> : tasks.length === 0 ? <Paper variant="outlined" sx={{ py: 10, textAlign: 'center', borderRadius: 2 }}><Schedule sx={{ fontSize: 40, color: 'text.secondary' }} /><Typography variant="h5" sx={{ mt: 2 }}>No tasks yet</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Create one goal. Tingly Box will handle the workspace, schedule, and native session.</Typography>{enableTasks && <Button variant="contained" startIcon={<Add />} sx={{ mt: 3 }} onClick={() => setCreateOpen(true)}>Create your first task</Button>}</Paper> : <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
       <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320, lg: 340 }, flexShrink: 0, p: 1.5, borderRadius: 2 }}><Stack spacing={2}>{groups.map((group) => <Box key={group.label}><Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>{group.label}</Typography><Stack spacing={0.5}>{group.items.map((task) => { const meta = statusMeta[task.status]; return <Box key={task.id} onClick={() => setSelectedId(task.id)} sx={{ p: 1.25, borderRadius: 1.5, cursor: 'pointer', bgcolor: selectedId === task.id ? 'action.selected' : 'transparent', border: '1px solid', borderColor: selectedId === task.id ? 'primary.main' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography variant="subtitle2" noWrap>{task.title || task.goal}</Typography><Chip size="small" label={meta.label} color={meta.color} /></Stack><Typography variant="caption" color="text.secondary">{task.agent === 'claude' ? 'Claude Code' : 'Codex'}{task.steps?.length ? ` · Step ${Math.min((task.current_step ?? 0) + 1, task.steps.length)}/${task.steps.length}` : ''} · {task.status === 'pending' ? formatTime(task.scheduled_at) : formatTime(task.updated_at)}</Typography></Box>; })}</Stack></Box>)}</Stack></Paper>
-      {selected && <TaskDetail task={selected} runs={runs} onWake={wake} onStop={stop} />}
+      {selected && <TaskDetail task={selected} runs={runs} onUpdate={edit} onWake={wake} onStop={stop} />}
     </Stack>}
     <CreateTaskDialog open={createOpen} agents={agents} onClose={() => setCreateOpen(false)} onCreated={(task) => { setTasks((items) => [task, ...items]); setDetail(task); setRuns([]); setSelectedId(task.id); }} />
   </Box>;

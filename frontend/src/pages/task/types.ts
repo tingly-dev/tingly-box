@@ -87,6 +87,11 @@ export interface CreateTaskInput {
   execution: ExecutionPolicy;
 }
 
+export interface UpdateTaskInput {
+  title?: string;
+  goal?: string;
+}
+
 export interface TaskRunEvent {
   id: string;
   kind: string;
