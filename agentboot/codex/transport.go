@@ -1,6 +1,8 @@
 package codex
 
 import (
+	"time"
+
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
@@ -21,6 +23,11 @@ type Message struct {
 }
 
 func (m Message) GetSessionID() string { return m.SessionID }
+func (m Message) GetType() string      { return m.Event.Type }
+func (m Message) GetTimestamp() time.Time {
+	return m.Event.Timestamp
+}
+func (m Message) GetRawData() map[string]interface{} { return m.Event.Data }
 
 type Transport struct{}
 

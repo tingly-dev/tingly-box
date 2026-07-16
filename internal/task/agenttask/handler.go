@@ -112,6 +112,10 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	if err != nil {
 		return nil, fmt.Errorf("agent task: start %s: %w", payload.Agent, err)
 	}
+	runCtl, _ := ctl.(task.RunController)
+	appendRuntimeEvent(ctx, runCtl, "run_started", fmt.Sprintf("Started unattended %s run", payload.Agent), eventData(map[string]any{
+		"launch_profile": execution.LaunchProfile, "tools": execution.Tools,
+	}))
 
 	checkpointAfterStart := false
 	if payload.SessionID != sessionID {
@@ -133,12 +137,12 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		}
 	}
 
-	runCtl, _ := ctl.(task.RunController)
 	runtimePause, eventErr := consumeEvents(ctx, handle, ctl, runCtl, func(nativeSessionID string) error {
 		if nativeSessionID == "" || nativeSessionID == payload.SessionID {
 			return nil
 		}
 		payload.SessionID = nativeSessionID
+		appendRuntimeEvent(ctx, runCtl, "session_discovered", "Native session checkpointed", eventData(map[string]any{"session_id": nativeSessionID}))
 		return checkpointPayload(ctx, ctl, &payload)
 	})
 	agentResult, waitErr := handle.Wait()
@@ -147,10 +151,15 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	}
 	if runtimePause != nil {
 		runtimePause.NativeSessionID = payload.SessionID
+		if agentResult != nil {
+			runtimePause.ExitCode = agentResult.ExitCode
+			runtimePause.DurationMS = agentResult.Duration.Milliseconds()
+		}
 		payload.WakeCount++
 		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
 			return nil, err
 		}
+		appendRuntimeEvent(ctx, runCtl, "outcome", runtimePause.Summary, eventData(runtimePause))
 		return h.taskResult(ctx, ctl, &payload, *runtimePause)
 	}
 	if waitErr != nil {
@@ -170,7 +179,11 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 
 	normalized := parseOutcome(agentResult.TextOutput())
 	normalized.NativeSessionID = payload.SessionID
+	normalized.ExitCode = agentResult.ExitCode
+	normalized.DurationMS = agentResult.Duration.Milliseconds()
+	normalized.ExitReason = normalized.State
 	normalized.Artifacts = safeArtifacts(normalized.Artifacts)
+	appendRuntimeEvent(ctx, runCtl, "outcome", normalized.Summary, eventData(normalized))
 	return h.taskResult(ctx, ctl, &payload, normalized)
 }
 
@@ -217,6 +230,7 @@ func consumeEvents(
 				}
 			}
 			messageCount++
+			recordNativeMessage(ctx, runCtl, e.Raw)
 			_ = ctl.UpdateProgress(ctx, fmt.Sprintf("Agent working · %d events", messageCount))
 		case agentboot.AskRequestEvent:
 			if pause == nil {
@@ -228,6 +242,7 @@ func consumeEvents(
 					question = "The agent needs information before it can continue."
 				}
 				pause = &Result{State: "needs_input", Summary: "The automated run stopped for a business question.", Question: truncate(question)}
+				pause.ExitReason = "business_input_required"
 				appendRuntimeEvent(ctx, runCtl, "input_required", question, nil)
 			}
 			if err := handle.Respond(e.ID, agentboot.AskResponse{Approved: false, Reason: "Unattended Task runs cannot answer interactive questions"}); err != nil {
@@ -242,8 +257,8 @@ func consumeEvents(
 				}
 				summary := fmt.Sprintf("Native handoff required: %s requested permission outside this Task's automation boundary.", tool)
 				pause = &Result{State: "handoff_required", Summary: summary, Question: "Open the native session to review the request, then continue automation when ready."}
-				data, _ := json.Marshal(map[string]any{"tool": e.ToolName, "reason": e.Reason})
-				appendRuntimeEvent(ctx, runCtl, "handoff_required", summary, data)
+				pause.ExitReason = "permission_boundary"
+				appendRuntimeEvent(ctx, runCtl, "handoff_required", summary, eventData(map[string]any{"tool": e.ToolName, "reason": e.Reason}))
 			}
 			if err := handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: false, Reason: "Permission is outside the Task's pre-authorized automation boundary"}); err != nil {
 				eventErr = fmt.Errorf("agent task: reject approval request: %w", err)
@@ -252,6 +267,7 @@ func consumeEvents(
 		case agentboot.ErrorEvent:
 			if e.Err != nil {
 				_ = ctl.UpdateProgress(ctx, e.Err.Error())
+				appendRuntimeEvent(ctx, runCtl, "runtime_error", e.Err.Error(), nil)
 			}
 		}
 	}

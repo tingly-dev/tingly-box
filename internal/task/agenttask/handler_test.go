@@ -353,7 +353,11 @@ func TestHandler_ApprovalRequiresNativeHandoff(t *testing.T) {
 	if !ok || response.Approved || call.id != "approval-1" {
 		t.Fatalf("response = %+v", call)
 	}
-	if len(controller.events) != 1 || controller.events[0].Kind != "handoff_required" {
+	foundHandoff := false
+	for _, event := range controller.events {
+		foundHandoff = foundHandoff || event.Kind == "handoff_required"
+	}
+	if !foundHandoff {
 		t.Fatalf("events = %+v", controller.events)
 	}
 }

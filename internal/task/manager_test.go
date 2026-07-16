@@ -181,6 +181,26 @@ func TestRun_HistoryCapturesProgressAndNeedsInput(t *testing.T) {
 	}
 }
 
+func TestRun_HandoffPausesWithoutBecomingTerminal(t *testing.T) {
+	mgr, _ := newManager(t)
+	mustRegister(t, mgr, &funcHandler{typ: "handoff", fn: func(_ context.Context, _ *task.Task, _ task.Controller) (*task.TaskResult, error) {
+		return &task.TaskResult{Outcome: task.OutcomeHandoff, Result: json.RawMessage(`{"state":"handoff_required"}`)}, nil
+	}})
+
+	tk := mustSubmit(t, mgr, task.SubmitRequest{Type: "handoff"})
+	paused := waitStatus(t, mgr, tk.ID, task.StatusHandoff)
+	if paused.Status.IsTerminal() {
+		t.Fatal("handoff must remain actionable")
+	}
+	runs, err := mgr.ListRuns(context.Background(), task.RunListFilter{TaskID: tk.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != task.RunStatusHandoff || runs[0].FinishedAt == nil {
+		t.Fatalf("runs = %+v", runs)
+	}
+}
+
 func TestRun_RescheduleSameTask(t *testing.T) {
 	mgr, _ := newManager(t)
 

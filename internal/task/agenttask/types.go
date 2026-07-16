@@ -304,4 +304,7 @@ type Result struct {
 	Artifacts         []string `json:"artifacts,omitempty"`
 	NativeSessionID   string   `json:"native_session_id"`
 	SuggestedDelaySec int      `json:"suggested_delay_seconds,omitempty"`
+	ExitCode          int      `json:"exit_code"`
+	DurationMS        int64    `json:"duration_ms"`
+	ExitReason        string   `json:"exit_reason,omitempty"`
 }
