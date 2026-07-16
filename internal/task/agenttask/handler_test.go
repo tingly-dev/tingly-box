@@ -457,8 +457,14 @@ func TestHandler_SequentialStepsAdvanceOneRunAtATime(t *testing.T) {
 			}
 			return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"build inspected"}</task_outcome>`}, nil, nil), nil
 		case 2:
-			if !strings.Contains(prompt, "Current step 2 of 2") || !strings.Contains(prompt, "Publish artifacts") || !opts.Resume {
-				t.Fatalf("second step call: prompt=%q opts=%+v", prompt, opts)
+			if !strings.Contains(prompt, "Current step 2 of 2") || !strings.Contains(prompt, "Publish artifacts") {
+				t.Fatalf("second step prompt = %q", prompt)
+			}
+			if opts.Resume {
+				t.Fatal("second step must start a fresh session, not resume the first step's")
+			}
+			if !strings.Contains(prompt, "Completed steps so far") || !strings.Contains(prompt, "build inspected") {
+				t.Fatalf("second step prompt lacks prior-step context: %q", prompt)
 			}
 			return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"artifacts published"}</task_outcome>`}, nil, nil), nil
 		default:
@@ -534,8 +540,8 @@ func TestHandler_SequentialContinueWithoutFollowUpPausesCurrentStep(t *testing.T
 func TestHandler_CompletedSequenceRestartsFromFirstStep(t *testing.T) {
 	workspace := mustWorkspace(t)
 	agent := &fakeAgent{available: true, execute: func(_ context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
-		if !strings.Contains(prompt, "Current step 1 of 1") || !opts.Resume {
-			t.Fatalf("restart call: prompt=%q opts=%+v", prompt, opts)
+		if !strings.Contains(prompt, "Current step 1 of 1") || opts.Resume {
+			t.Fatalf("restart call must use a fresh session: prompt=%q opts=%+v", prompt, opts)
 		}
 		return controlledHandle(nil, &agentboot.Result{Output: `<task_outcome>{"state":"done","summary":"new result"}</task_outcome>`}, nil, nil), nil
 	}}

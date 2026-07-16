@@ -70,6 +70,7 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 	if len(payload.Steps) > 0 && payload.CurrentStep == len(payload.Steps) && strings.TrimSpace(payload.PendingInput) == "" {
 		payload.CurrentStep = 0
 		payload.StepOutcomes = nil
+		payload.SessionID = ""
 		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
 			return nil, err
 		}
@@ -229,13 +230,13 @@ func nextPrompt(payload Payload, resume bool) string {
 	if strings.TrimSpace(payload.PendingInput) != "" {
 		if payload.HasCurrentStep() {
 			step := payload.Steps[payload.CurrentStep]
-			return appendRunContext(payload.Goal, fmt.Sprintf("Current step %d of %d — %s\n%s\n\nUser instruction for this step:\n%s\n\nContinue only this step. Do not start later steps.", payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, payload.PendingInput))
+			return appendRunContext(payload.Goal, fmt.Sprintf("Current step %d of %d — %s\n%s\n\nUser instruction for this step:\n%s\n\nContinue only this step. Do not start later steps.%s", payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, payload.PendingInput, completedStepContext(payload)))
 		}
 		return appendRunContext(payload.Goal, fmt.Sprintf("Additional instruction for this run:\n%s\n\nContinue working toward the task goal using this instruction. Report the bounded run outcome when finished.", payload.PendingInput))
 	}
 	if payload.HasCurrentStep() {
 		step := payload.Steps[payload.CurrentStep]
-		return appendRunContext(payload.Goal, fmt.Sprintf("Current step %d of %d — %s\n%s\n\nComplete only this step during this bounded execution. Do not start later steps. Report done when this step is complete.", payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction))
+		return appendRunContext(payload.Goal, fmt.Sprintf("Current step %d of %d — %s\n%s\n\nComplete only this step during this bounded execution. Do not start later steps. Report done when this step is complete.%s", payload.CurrentStep+1, len(payload.Steps), step.Title, step.Instruction, completedStepContext(payload)))
 	}
 	if resume {
 		return appendRunContext(payload.Goal, "Continue working toward the task goal. Review the session context and current workspace before acting.")
@@ -245,6 +246,32 @@ func nextPrompt(payload Payload, resume bool) string {
 
 func appendRunContext(goal, context string) string {
 	return goal + "\n\n---\n\nTingly Box run context:\n" + context
+}
+
+// completedStepContext summarizes finished steps for the current step's
+// fresh native session. State crosses step boundaries only through the
+// workspace and these structured summaries, never through a shared session.
+func completedStepContext(p Payload) string {
+	if p.CurrentStep == 0 || len(p.StepOutcomes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\nCompleted steps so far (each ran in its own session; their file changes are already in this workspace):\n")
+	for i, outcome := range p.StepOutcomes {
+		if i >= p.CurrentStep || i >= len(p.Steps) {
+			break
+		}
+		b.WriteString(fmt.Sprintf("%d. %s — %s\n", i+1, p.Steps[i].Title, clipRunes(outcome.Result.Summary, 300)))
+	}
+	return b.String()
+}
+
+func clipRunes(value string, limit int) string {
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit]) + "…"
 }
 
 type nativeSessionMessage interface {
@@ -317,6 +344,12 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 				StepID: step.ID, Result: result, CompletedAt: h.now(),
 			})
 			payload.CurrentStep++
+			// Session continuity ends at the step boundary: the next step
+			// starts a fresh native session and receives prior-step state
+			// via the workspace plus completedStepContext summaries. A
+			// shared session across steps accretes context and degrades
+			// later rounds.
+			payload.SessionID = ""
 			if err := checkpointPayload(ctx, ctl, payload); err != nil {
 				return nil, err
 			}
