@@ -69,7 +69,9 @@ func (t *Tracer) RecordError(ctx context.Context, err error, attrs ...attribute.
 	span.RecordError(err, trace.WithAttributes(attrs...))
 }
 
-// EndSpan ends a span with optional error handling.
+// EndSpan ends a span with optional error handling. When err is non-nil it
+// records the exception event and sets error status — callers should not
+// also invoke RecordError for the same error, or the event is duplicated.
 func (t *Tracer) EndSpan(span trace.Span, err error) {
 	if err != nil {
 		span.RecordError(err)
