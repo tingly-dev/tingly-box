@@ -190,8 +190,8 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
             {getProfileMeta(execution.launch_profile).description}
           </Alert>
         </Box>}
-        {agent === 'shell' ? <Alert severity="info">The command runs unattended in the working directory with your server user's permissions. Exit code 0 completes the task; it may leave a structured outcome in .tb/result.json.</Alert> : agent === 'claude' ? <Box>
-          <Typography variant="subtitle2">Tools Claude may use</Typography>
+        {agent === 'shell' ? <Alert severity="info">The command runs unattended in the working directory with your server user's permissions. Exit code 0 completes the task; it may leave a structured outcome in .tb/result.json.</Alert> : (agentInfo(agent)?.tool_filtering ?? agent === 'claude') ? <Box>
+          <Typography variant="subtitle2">Tools {agentLabel(agent)} may use</Typography>
           <FormGroup row sx={{ mt: 0.5 }}>
             {(Object.keys(toolMeta) as ToolCapability[]).map((tool) => <FormControlLabel key={tool} label={toolMeta[tool]} control={<Checkbox
               size="small" checked={execution.tools?.includes(tool) || false}
@@ -200,7 +200,7 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
             />} />)}
           </FormGroup>
           {execution.tools?.includes('terminal') && <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>Run commands is powerful: shell commands may read, write, or access the network beyond the other tool labels. Use it only for trusted goals.</Alert>}
-        </Box> : <Alert severity="info">Codex runs unattended with approval prompts disabled, inside the selected sandbox. A sandbox boundary error stops the run for native takeover.</Alert>}
+        </Box> : <Alert severity="info">{agentLabel(agent)} runs unattended with approval prompts disabled, inside the selected boundary. Per-tool filtering is not supported by this executor; a boundary violation stops the run for native takeover.</Alert>}
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>When</Typography>
           <ToggleButtonGroup exclusive value={when} onChange={(_, value) => value && setWhen(value)} fullWidth size="small">
@@ -219,7 +219,7 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
         </Stack>}
       </Stack>
     </DialogContent>
-    <DialogActions><Button onClick={onClose}>Cancel</Button><Button variant="contained" onClick={submit} disabled={saving || !goal.trim() || (agent !== 'shell' && steps.some((step) => !step.trim())) || !availability(agent) || (agent === 'claude' && !execution.tools?.length) || (when === 'later' && !scheduledAt) || (when === 'repeat' && !cron.trim())}>{saving ? <CircularProgress size={18} /> : 'Create task'}</Button></DialogActions>
+    <DialogActions><Button onClick={onClose}>Cancel</Button><Button variant="contained" onClick={submit} disabled={saving || !goal.trim() || (agent !== 'shell' && steps.some((step) => !step.trim())) || !availability(agent) || ((agentInfo(agent)?.tool_filtering ?? agent === 'claude') && !execution.tools?.length) || (when === 'later' && !scheduledAt) || (when === 'repeat' && !cron.trim())}>{saving ? <CircularProgress size={18} /> : 'Create task'}</Button></DialogActions>
   </Dialog>;
 }
 
@@ -360,10 +360,16 @@ function TaskDetail({ task, runs, usage, onUpdate, onWake, onStop }: {
     if (await act(() => onWake(instruction.trim()))) { setInstruction(''); setInstructionOpen(false); }
   };
   const executionLocked = task.status === 'running' || task.status === 'queued';
+  // updated_at advances on every progress/event write, so a quiet gap while
+  // running is the "possibly stuck" signal.
+  const quietMinutes = task.status === 'running'
+    ? Math.floor((Date.now() - new Date(task.updated_at).getTime()) / 60000)
+    : 0;
 
   return <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, p: { xs: 2, md: 3 }, borderRadius: 2 }}>
     <Stack spacing={3}>
       {actionError && <Alert severity="error" onClose={() => setActionError('')}>{actionError}</Alert>}
+      {quietMinutes >= 3 && <Alert severity="warning">No activity for {quietMinutes} min. The run may be stuck: it still ends on its own at the run timeout; Stop cancels it now — the native session stays resumable via the takeover command below, and Run now continues from where it left off.</Alert>}
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={2}>
         <Box><Stack direction="row" spacing={1} alignItems="center"><Typography variant="h4">{task.title || task.goal}</Typography><Chip size="small" label={statusMeta[task.status].label} color={statusMeta[task.status].color} /></Stack><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{task.goal}</Typography></Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
