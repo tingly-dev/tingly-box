@@ -35,13 +35,15 @@ const getRunStatusMeta = (status: string) => runStatusMeta[status as TaskRunStat
   label: status.replaceAll('_', ' '), color: 'default' as const,
 };
 
+// Labels are the agents' own native mode names (Claude permission modes,
+// Codex sandbox modes) — tb does not overlay a unified vocabulary on them.
 const profileMeta: Record<LaunchProfile, { label: string; description: string }> = {
   legacy_inherited: { label: 'Inherited', description: 'Use the CLI configuration already installed on this machine.' },
-  plan: { label: 'Review only', description: 'Claude can inspect and propose a plan, but cannot change the workspace.' },
+  plan: { label: 'Plan', description: "Claude Code's plan mode: inspect and propose, no workspace changes." },
   manual: { label: 'Legacy manual', description: 'Historical interactive profile; unattended runs narrow it to review-only access.' },
-  accept_edits: { label: 'Edit workspace', description: 'Selected tools are pre-authorized for each unattended run.' },
-  read_only: { label: 'Review only', description: 'Codex runs in its read-only sandbox.' },
-  workspace_write: { label: 'Edit workspace', description: 'Codex can write inside this task workspace.' },
+  accept_edits: { label: 'Accept Edits', description: "Claude Code's acceptEdits mode: selected tools are pre-authorized for each unattended run." },
+  read_only: { label: 'Read Only', description: "Codex's read-only sandbox: inspect without writing." },
+  workspace_write: { label: 'Workspace Write', description: "Codex's workspace-write sandbox: writes allowed inside this task workspace." },
 };
 
 const getProfileMeta = (profile: string) => profileMeta[profile as LaunchProfile] || {
@@ -51,6 +53,10 @@ const getProfileMeta = (profile: string) => profileMeta[profile as LaunchProfile
 
 const toolMeta: Record<ToolCapability, string> = {
   files_read: 'Read files', files_write: 'Edit files', terminal: 'Run commands', web: 'Use the web',
+};
+// The native Claude tool allowlist each group maps to (shown as the concrete value).
+const toolNative: Record<ToolCapability, string> = {
+  files_read: 'Read · Glob · Grep', files_write: 'Write · Edit', terminal: 'Bash', web: 'WebSearch · WebFetch',
 };
 
 const agentLabel = (kind: TaskAgent) => kind === 'claude' ? 'Claude Code' : kind === 'codex' ? 'Codex' : 'Shell';
@@ -193,11 +199,11 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
         {agent === 'shell' ? <Alert severity="info">The command runs unattended in the working directory with your server user's permissions. Exit code 0 completes the task; it may leave a structured outcome in .tb/result.json.</Alert> : (agentInfo(agent)?.tool_filtering ?? agent === 'claude') ? <Box>
           <Typography variant="subtitle2">Tools {agentLabel(agent)} may use</Typography>
           <FormGroup row sx={{ mt: 0.5 }}>
-            {(Object.keys(toolMeta) as ToolCapability[]).map((tool) => <FormControlLabel key={tool} label={toolMeta[tool]} control={<Checkbox
+            {(Object.keys(toolMeta) as ToolCapability[]).map((tool) => <Tooltip key={tool} title={toolNative[tool]}><FormControlLabel label={toolMeta[tool]} control={<Checkbox
               size="small" checked={execution.tools?.includes(tool) || false}
               disabled={execution.launch_profile === 'plan' && tool !== 'files_read'}
               onChange={() => toggleTool(tool)}
-            />} />)}
+            />} /></Tooltip>)}
           </FormGroup>
           {execution.tools?.includes('terminal') && <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>Run commands is powerful: shell commands may read, write, or access the network beyond the other tool labels. Use it only for trusted goals.</Alert>}
         </Box> : <Alert severity="info">{agentLabel(agent)} runs unattended with approval prompts disabled, inside the selected boundary. Per-tool filtering is not supported by this executor; a boundary violation stops the run for native takeover.</Alert>}
@@ -260,7 +266,10 @@ function ExecutionSummary({ task }: { task: AgentTask }) {
     <Typography variant="overline" color="text.secondary">Unattended boundary</Typography>
     <Typography variant="body2">{getProfileMeta(execution.launch_profile).label}</Typography>
     <Typography variant="caption" color="text.secondary" fontFamily="monospace">{execution.launch_profile}</Typography>
-    {execution.tools?.length ? <Typography variant="body2" sx={{ mt: 0.75 }}>{execution.tools.map((tool) => toolMeta[tool] || tool).join(' · ')}</Typography> : null}
+    {execution.tools?.length ? <>
+      <Typography variant="body2" sx={{ mt: 0.75 }}>{execution.tools.map((tool) => toolMeta[tool] || tool).join(' · ')}</Typography>
+      <Typography variant="caption" color="text.secondary" fontFamily="monospace">{execution.tools.map((tool) => toolNative[tool] || tool).join(' · ')}</Typography>
+    </> : null}
   </Box>;
 }
 
