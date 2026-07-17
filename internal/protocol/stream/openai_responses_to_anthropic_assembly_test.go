@@ -80,6 +80,9 @@ func TestHandleResponsesToAnthropicV1Assembly_Golden(t *testing.T) {
 	assert.Equal(t, 2, usage.CacheInputTokens)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
+	// JSON body must be labeled application/json — a text/event-stream label
+	// makes SDK clients skip JSON parsing entirely (#1316).
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 
 	var msg map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &msg))
@@ -133,10 +136,12 @@ func TestHandleResponsesToAnthropicBetaAssembly_Golden(t *testing.T) {
 	assert.Equal(t, "get_weather", content[1].(map[string]any)["name"])
 }
 
-// TestHandleResponsesToAnthropicV1Assembly_Truncated: a stream that ends
-// without a terminal Responses event must still respond with the partial
-// assembled message (the old implementation returned an empty body).
-func TestHandleResponsesToAnthropicV1Assembly_Truncated(t *testing.T) {
+// TestHandleResponsesToAnthropicV1Assembly_TruncatedNoContent: a stream cut
+// before any content block completes must fail with a retryable error status.
+// The old behavior responded 200 with `content: null`, which strict clients
+// (Claude Code's non-streaming fallback) reject as a malformed message (#1316),
+// and which the failover orchestrator treated as success.
+func TestHandleResponsesToAnthropicV1Assembly_TruncatedNoContent(t *testing.T) {
 	c, rec := newAssemblyTestContext(t)
 
 	events := []map[string]any{
@@ -144,12 +149,55 @@ func TestHandleResponsesToAnthropicV1Assembly_Truncated(t *testing.T) {
 		{"type": "response.output_text.delta", "item_id": "item_1", "output_index": 0, "delta": "partial"},
 	}
 	_, err := HandleResponsesToAnthropicV1Assembly(c, newAssemblyTestStream(events), "claude-proxy")
+	require.Error(t, err)
+
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	errObj, ok := resp["error"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "api_error", errObj["type"])
+}
+
+// TestHandleResponsesToAnthropicV1Assembly_TruncatedPartialContent: a stream
+// cut after a content block completed still responds best-effort with the
+// assembled blocks, and fills in a stop_reason so the message is well-formed.
+func TestHandleResponsesToAnthropicV1Assembly_TruncatedPartialContent(t *testing.T) {
+	c, rec := newAssemblyTestContext(t)
+
+	events := []map[string]any{
+		{"type": "response.created", "response": map[string]any{"id": "resp_1"}},
+		{"type": "response.output_text.delta", "item_id": "item_1", "output_index": 0, "delta": "partial"},
+		{"type": "response.output_text.done", "item_id": "item_1", "output_index": 0, "text": "partial"},
+	}
+	_, err := HandleResponsesToAnthropicV1Assembly(c, newAssemblyTestStream(events), "claude-proxy")
 	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var msg map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &msg))
-	// The text block never received content_block_stop, so content stays
-	// empty — but the response is a well-formed message, not an empty body.
 	assert.Equal(t, "message", msg["type"])
 	assert.Equal(t, "assistant", msg["role"])
+	assert.Equal(t, "end_turn", msg["stop_reason"])
+	content, ok := msg["content"].([]any)
+	require.True(t, ok)
+	require.Len(t, content, 1)
+	assert.Equal(t, "partial", content[0].(map[string]any)["text"])
+}
+
+// TestHandleResponsesToAnthropicBetaAssembly_EmptyContent mirrors the V1 empty
+// case for the beta handler.
+func TestHandleResponsesToAnthropicBetaAssembly_EmptyContent(t *testing.T) {
+	c, rec := newAssemblyTestContext(t)
+
+	events := []map[string]any{
+		{"type": "response.created", "response": map[string]any{"id": "resp_1"}},
+	}
+	_, err := HandleResponsesToAnthropicBetaAssembly(c, newAssemblyTestStream(events), "claude-proxy")
+	require.Error(t, err)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 }
