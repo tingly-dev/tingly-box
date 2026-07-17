@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -262,4 +263,57 @@ func keys(m map[string]metricdata.Metrics) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// TestRecordUsage_DetachesRequestBufferStrings guards the core of #1255 at
+// the pointer level: model / request-model / error strings typically alias
+// the gjson-parsed request body, and the cumulative SDK retains attribute
+// sets for the process lifetime — an aliased attribute pins the whole
+// multi-MB buffer forever. The retained values must live in fresh storage.
+func TestRecordUsage_DetachesRequestBufferStrings(t *testing.T) {
+	tracker, reader := newTestTracker(t)
+
+	// Simulate strings carved out of a large request body buffer.
+	body := strings.Repeat("x", 1<<20) + "gpt-4" + "boom_upstream"
+	model := body[1<<20 : 1<<20+5] // "gpt-4", aliases the 1MB buffer
+	errCode := body[1<<20+5:]      // "boom_upstream", aliases it too
+
+	tracker.RecordUsage(context.Background(), UsageOptions{
+		Provider: "openai", Model: model, RequestModel: model,
+		Scenario: "openai", InputTokens: 10, OutputTokens: 5,
+		Status: "error", ErrorCode: errCode, LatencyMs: 100,
+	})
+
+	checkDetached := func(metricName string, attrs attribute.Set) {
+		for _, key := range []string{"gen_ai.response.model", "gen_ai.request.model"} {
+			if v, ok := attrs.Value(attribute.Key(key)); ok && v.AsString() != "" {
+				if unsafe.StringData(v.AsString()) == unsafe.StringData(model) {
+					t.Errorf("%s: %s aliases the request-body buffer — retained forever by the cumulative SDK (#1255)", metricName, key)
+				}
+			}
+		}
+		if v, ok := attrs.Value("error.type"); ok && v.AsString() != "" {
+			if unsafe.StringData(v.AsString()) == unsafe.StringData(errCode) {
+				t.Errorf("%s: error.type aliases the request-body buffer (#1255)", metricName)
+			}
+		}
+	}
+	seen := 0
+	for name, m := range collect(t, reader) {
+		switch data := m.Data.(type) {
+		case metricdata.Histogram[int64]:
+			for _, dp := range data.DataPoints {
+				seen++
+				checkDetached(name, dp.Attributes)
+			}
+		case metricdata.Histogram[float64]:
+			for _, dp := range data.DataPoints {
+				seen++
+				checkDetached(name, dp.Attributes)
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no data points collected — test is vacuous")
+	}
 }
