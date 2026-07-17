@@ -187,6 +187,15 @@ Handler（run 级唯一执行契约，即现有 task.Handler 的演进）:
   shell 类走 `.tb/result.json` / exit code；任何"结果无法解析"一律判
   needs_input，绝不默认 done。
 
+- **执行模式遵循原生 agent 自己的模式，只暴露最常用的子集。**
+  ExecutionPolicy 不发明 tb 自己的权限语义：Claude 暴露它原生的
+  permission mode（plan / acceptEdits）与工具 allowlist，Codex 暴露它
+  原生的 sandbox（read-only / workspace-write）+ `approval_policy=never`，
+  不为语义对齐而伪造对方没有的能力（如给 Codex 造逐工具过滤）。
+  "统一为一种类型"（§5.1 第 3 步）指**信封统一**——一个 Go 类型承载
+  各 agent 的原生字段并快照进 TaskRun——而非语义统一；UI 按执行器的
+  能力声明渲染各自的原生选项，友好名只是 label，原生值照实展示
+  （ux #5）。新增执行器时暴露它自己的原生模式子集，而不是塞进共享词表。
 - **收敛为一套插件模式**（ux #3：一个概念一个词）。现状有两套并存：
   `task.Handler`（run 级）和 `internal/remote_control` 的
   `AgentRouter → AgentExecutor`（IM 专用）。目标态：`task.Handler` 是唯一
@@ -278,6 +287,27 @@ run 核 = agentboot.Execute(workspace, prompt, agent, ExecutionPolicy, session)
 interaction、session.Store 全部已存在；做的唯一一件事是删掉两份重复的
 事件循环和两套 ExecutionPolicy 表达，让 attendance 成为参数。若未来发现
 需要为整合发明新的中间层，回到 §2 的判断句重新审视。
+
+### 5.2 交互语义的对齐：差异收敛为 ask 处置策略
+
+表面上 remote（对话式、run 内阻塞等人）与 task（无人值守、run 边界
+暂停-续跑）的交互模型相去甚远。逐维度拆开后，真正的语义差异只有一个：
+
+| 维度 | remote | task | 对齐结论 |
+|---|---|---|---|
+| 多轮模型 | 每条 IM 消息在同一 native session 上再起一次进程 | 每次 wake/回复同上 | **已经相同**：都是"一条 session 上的一串 bounded run" |
+| run 内 Ask/Approval | 转发 IM、阻塞等人、同进程继续 | 拒绝、取消、暂停 | 唯一真差异 → Prompter 的**处置策略** |
+| 越界权限 | 问人 | 拒绝 | 同一 ExecutionPolicy，`OnPermission` 的两个取值 |
+| session 存储 | session.Manager | payload 字段 | 工程统一（§5.1 第 4 步） |
+| 并发 | 每 chat 单执行 | SerializationKey 队列 | 后者取代前者（§5.1 第 5 步） |
+
+escalating prompter（转发 + 超时，答了同进程继续、没答回落暂停）是
+对齐枢纽：**remote ≡ escalating(timeout→∞)，今日 task ≡
+escalating(timeout→0)**。三种交互不是三套方案，是一个策略参数的三个
+取值。对齐后：IM 对话 = trigger=manual、attendance=该 chat 的 task
+（体验不变，白得 run 历史/成本归因/board 可见性）；task 绑定 channel
+且人在线时表现得与 remote 无异，人离线时优雅降级为暂停 + 通知。
+实施顺序：Phase 3 先做 escalating prompter（枢纽），Phase 4 收敛入口。
 
 ## 6. 落到现有代码
 
