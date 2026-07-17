@@ -254,6 +254,7 @@ function TaskSteps({ task }: { task: AgentTask }) {
 }
 
 function ExecutionSummary({ task }: { task: AgentTask }) {
+  if (task.agent === 'shell') return null;
   const execution = task.execution || defaultExecution(task.agent);
   return <Box sx={{ minWidth: 200 }}>
     <Typography variant="overline" color="text.secondary">Unattended boundary</Typography>
@@ -369,7 +370,7 @@ function TaskDetail({ task, runs, usage, onUpdate, onWake, onStop }: {
           {canStop(task) && <Button color="inherit" startIcon={<Block />} disabled={busy} onClick={() => act(onStop)}>Stop</Button>}
           <Button color="inherit" startIcon={<Edit />} disabled={busy || executionLocked} onClick={() => setEditOpen(true)}>Edit task</Button>
           {!['needs_input', 'handoff_required'].includes(task.status) && <Button startIcon={<PlayArrow />} disabled={busy || executionLocked} onClick={() => act(() => onWake())}>{isTerminal(task) ? 'Run again' : 'Run now'}</Button>}
-          {task.status !== 'needs_input' && <Button variant="contained" startIcon={<Send />} disabled={busy || executionLocked} onClick={() => setInstructionOpen(true)}>Run with instruction</Button>}
+          {task.status !== 'needs_input' && task.agent !== 'shell' && <Button variant="contained" startIcon={<Send />} disabled={busy || executionLocked} onClick={() => setInstructionOpen(true)}>Run with instruction</Button>}
         </Stack>
       </Stack>
       {task.status === 'handoff_required' && <Alert severity="warning" icon={<Terminal />} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
@@ -455,7 +456,7 @@ export default function TaskPage() {
   const wake = async (instruction?: string) => { if (!selected) return; update(await taskApi.wake(selected.id, instruction)); };
   const stop = async () => { if (!selected) return; await taskApi.stop(selected.id); await load(true); };
   return <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: '100%' }}>
-    <PageHeader title="Tasks" subtitle="Schedule unattended Claude Code or Codex runs; step in only for business input or native takeover." actions={<><Tooltip title="Refresh"><Button onClick={() => load()} startIcon={<Refresh />}>Refresh</Button></Tooltip><Button variant="contained" startIcon={<Add />} disabled={!enableTasks} onClick={() => setCreateOpen(true)}>New task</Button></>} />
+    <PageHeader title="Tasks" subtitle="Schedule unattended Claude Code, Codex, or shell runs; step in only for business input or native takeover." actions={<><Tooltip title="Refresh"><Button onClick={() => load()} startIcon={<Refresh />}>Refresh</Button></Tooltip><Button variant="contained" startIcon={<Add />} disabled={!enableTasks} onClick={() => setCreateOpen(true)}>New task</Button></>} />
     {!enableTasks && <Alert severity="info">Task creation is disabled. Existing tasks remain available so you can stop, inspect, or resume them.</Alert>}
     {error && <Alert severity="error">{error}</Alert>}
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box> : tasks.length === 0 ? <Paper variant="outlined" sx={{ py: 10, textAlign: 'center', borderRadius: 2 }}><Schedule sx={{ fontSize: 40, color: 'text.secondary' }} /><Typography variant="h5" sx={{ mt: 2 }}>No tasks yet</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Create one goal. Tingly Box will handle the workspace, schedule, and native session.</Typography>{enableTasks && <Button variant="contained" startIcon={<Add />} sx={{ mt: 3 }} onClick={() => setCreateOpen(true)}>Create your first task</Button>}</Paper> : <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">

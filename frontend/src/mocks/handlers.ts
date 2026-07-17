@@ -945,7 +945,9 @@ export const handlers = [
     http.get('/api/v1/tasks/agents', () => HttpResponse.json({ data: [
         { agent: 'claude', available: true, launch_profiles: ['plan', 'accept_edits'], default_profile: 'accept_edits', tool_filtering: true, unattended: true },
         { agent: 'codex', available: true, launch_profiles: ['read_only', 'workspace_write'], default_profile: 'workspace_write', tool_filtering: false, unattended: true },
+        { agent: 'shell', available: true, launch_profiles: [], default_profile: '', tool_filtering: false, unattended: true },
     ] })),
+    http.get('/api/v1/tasks/:id/usage', ({ params }) => HttpResponse.json({ data: { task_id: String(params.id), requests: 12, input_tokens: 48210, output_tokens: 9182, cache_input_tokens: 30500, total_tokens: 57392 } })),
     http.get('/api/v1/tasks/:id', ({ params }) => { const task = mockTasks.find((item) => item.id === params.id); return task ? HttpResponse.json({ data: task }) : HttpResponse.json({ error: 'not found' }, { status: 404 }) }),
     http.patch('/api/v1/tasks/:id', async ({ params, request }) => { const task = mockTasks.find((item) => item.id === params.id); const body = await request.json() as any; if (!task) return HttpResponse.json({ error: 'not found' }, { status: 404 }); if (task.status === 'running' || task.status === 'queued') return HttpResponse.json({ error: 'task is not editable while running or queued' }, { status: 409 }); if ('goal' in body && !String(body.goal).trim()) return HttpResponse.json({ error: 'goal is required' }, { status: 400 }); if ('title' in body) task.title = String(body.title).trim(); if ('goal' in body) task.goal = String(body.goal).trim(); task.updated_at = new Date().toISOString(); return HttpResponse.json({ data: task }) }),
     http.get('/api/v1/tasks/:id/runs', ({ params }) => HttpResponse.json({ data: mockTaskRuns[String(params.id)] || [] })),
