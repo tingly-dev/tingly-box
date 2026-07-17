@@ -51,6 +51,30 @@ func TestSetup_Shutdown_ZeroValue(t *testing.T) {
 	}
 }
 
+func TestSetup_NilReceiverSafe(t *testing.T) {
+	// NewSetup returns (nil, nil) when disabled, and the server continues
+	// with a nil Setup after startup errors — every method must be safe on
+	// a nil receiver so instrumentation code doesn't need its own guards.
+	var setup *Setup
+
+	if setup.Tracker() != nil {
+		t.Error("nil Setup: Tracker() should be nil")
+	}
+	tracer := setup.Tracer()
+	if tracer == nil {
+		t.Fatal("nil Setup: Tracer() should still return a usable no-op tracer")
+	}
+	_, span := tracer.StartRequestSpan(context.Background(), "chat", "openai", "gpt-4", "openai")
+	if span.IsRecording() {
+		t.Error("nil Setup: spans must be no-ops")
+	}
+	tracer.EndSpan(span, nil)
+
+	if err := setup.Shutdown(context.Background()); err != nil {
+		t.Errorf("nil Setup: Shutdown should not error: %v", err)
+	}
+}
+
 func TestNewSetup_Disabled(t *testing.T) {
 	setup, err := NewSetup(context.Background(), &Config{Enabled: false})
 	if err != nil {
@@ -77,15 +101,15 @@ func TestNewSetup_NoOTLP(t *testing.T) {
 	if setup == nil {
 		t.Fatal("Setup should not be nil")
 	}
-	if setup.Tracker() == nil {
-		t.Error("Tracker should not be nil")
+	if setup.Tracker() != nil {
+		t.Error("Tracker should be nil without an OTLP egress - callers nil-guard and skip all per-request metric work")
 	}
 	if setup.Tracer() == nil {
 		t.Error("Tracer should not be nil - it must be safe to instrument unconditionally")
 	}
 
 	// Spans must be no-ops (not sampled) rather than recorded-and-dropped.
-	sctx, span := setup.Tracer().StartRequestSpan(ctx, "openai", "gpt-4", "chat")
+	sctx, span := setup.Tracer().StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
 	if span.IsRecording() {
 		t.Error("spans must not record when no OTLP endpoint is configured")
 	}
@@ -118,7 +142,7 @@ func TestNewSetup_WithOTLP(t *testing.T) {
 		t.Fatal("Setup should not be nil")
 	}
 
-	_, span := setup.Tracer().StartRequestSpan(ctx, "openai", "gpt-4", "chat")
+	_, span := setup.Tracer().StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
 	if !span.IsRecording() {
 		t.Error("spans should record when OTLP tracing is configured")
 	}

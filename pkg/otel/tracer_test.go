@@ -55,7 +55,7 @@ func TestTracer_StartRequestSpan(t *testing.T) {
 	tracer := NewTracer(tp)
 	ctx := context.Background()
 
-	ctx, span := tracer.StartRequestSpan(ctx, "openai", "gpt-4", "openai")
+	ctx, span := tracer.StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
 	defer span.End()
 
 	if span == nil {

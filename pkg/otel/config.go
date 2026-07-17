@@ -9,6 +9,11 @@ type Config struct {
 	// Enabled enables or disables OTel tracking
 	Enabled bool
 
+	// ServiceVersion stamps the service.version resource attribute on all
+	// exported telemetry, so backends can correlate regressions with
+	// releases. Empty omits the attribute (better than a fake constant).
+	ServiceVersion string
+
 	// ExportInterval is the time between exports. Default: 10s
 	ExportInterval time.Duration
 

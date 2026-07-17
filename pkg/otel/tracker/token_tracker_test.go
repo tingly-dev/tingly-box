@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"unicode/utf8"
 	"unsafe"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -39,10 +40,10 @@ func collect(t *testing.T, reader *metric.ManualReader) map[string]metricdata.Me
 
 func TestNewTokenTracker(t *testing.T) {
 	tracker, _ := newTestTracker(t)
-	if tracker.tokenUsage == nil {
+	if tracker.tokenUsage.Inst() == nil {
 		t.Error("tokenUsage histogram should be initialized")
 	}
-	if tracker.operationDuration == nil {
+	if tracker.operationDuration.Inst() == nil {
 		t.Error("operationDuration histogram should be initialized")
 	}
 }
@@ -146,26 +147,52 @@ func TestRecordUsage_ErrorType(t *testing.T) {
 		Scenario: "anthropic", Status: "error", ErrorCode: "rate_limit", LatencyMs: 50,
 	})
 	tracker.RecordUsage(ctx, UsageOptions{
+		Provider: "openai", Model: "gpt-4", RequestModel: "gpt-4",
+		Scenario: "openai", Status: "error", LatencyMs: 20, // no code -> _OTHER
+	})
+	// Client cancellations are routine in LLM UIs and must NOT carry
+	// error.type — standard error-rate queries ("points with error.type /
+	// total") would otherwise alert on ordinary Ctrl-C traffic.
+	tracker.RecordUsage(ctx, UsageOptions{
 		Provider: "google", Model: "gemini-pro", RequestModel: "gemini",
-		Scenario: "openai", Status: "canceled", LatencyMs: 10,
+		Scenario: "openai", Status: "canceled", ErrorCode: "client_disconnected", LatencyMs: 10,
 	})
 
 	od := collect(t, reader)["gen_ai.client.operation.duration"]
 	hist := od.Data.(metricdata.Histogram[float64])
-	got := map[string]bool{}
+	got := map[string]int{}
 	for _, dp := range hist.DataPoints {
-		v, ok := dp.Attributes.Value("error.type")
-		if !ok {
-			t.Error("error.type should be set on failed operations")
-			continue
+		if v, ok := dp.Attributes.Value("error.type"); ok {
+			got[v.AsString()]++
+		} else {
+			got[""]++
 		}
-		got[v.AsString()] = true
 	}
-	if !got["rate_limit"] {
+	if got["rate_limit"] != 1 {
 		t.Error("error.type should carry the error code (rate_limit)")
 	}
-	if !got["canceled"] {
-		t.Error("error.type should fall back to the status (canceled) when no code")
+	if got["_OTHER"] != 1 {
+		t.Error("error.type should fall back to _OTHER when status=error has no code")
+	}
+	if got[""] != 1 {
+		t.Error("canceled requests must not carry error.type")
+	}
+}
+
+func TestTruncateErrorType_UTF8Safe(t *testing.T) {
+	// A multi-byte rune straddling the 64-byte cut must not produce invalid
+	// UTF-8 (OTLP requires valid UTF-8 strings; a poisoned retained
+	// timeseries would break every subsequent export).
+	s := strings.Repeat("x", maxErrorTypeAttrLen-1) + "世界"
+	got := truncateErrorType(s)
+	if len(got) > maxErrorTypeAttrLen {
+		t.Errorf("truncated length %d exceeds cap %d", len(got), maxErrorTypeAttrLen)
+	}
+	if !utf8.ValidString(got) {
+		t.Errorf("truncation produced invalid UTF-8: %q", got)
+	}
+	if short := "rate_limit"; truncateErrorType(short) != short {
+		t.Error("short strings must pass through unchanged")
 	}
 }
 

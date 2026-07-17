@@ -401,7 +401,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize OTel for token metrics and tracing. Telemetry is export-only
 	// (optional OTLP); persistent usage records are written directly by the
 	// usage-tracking layer, so no store references are needed here.
-	otelSetup, err := pkgotel.NewSetup(context.Background(), pkgotel.DefaultConfig())
+	otelCfg := pkgotel.DefaultConfig()
+	otelCfg.ServiceVersion = server.version
+	otelSetup, err := pkgotel.NewSetup(context.Background(), otelCfg)
 	if err != nil {
 		logrus.Warnf("Failed to initialize OTel setup: %v", err)
 	} else if otelSetup != nil {

@@ -23,12 +23,14 @@ temporality, re-emits every known series each export cycle. Earlier versions
 of this package did exactly that via SQLite/Sink "exporters"; both have been
 removed.
 
-When OTLP is not configured (the default), the meter provider has **no
-reader** and **no tracer provider is installed**: instrument calls are
-near-free no-ops and spans are never sampled (`IsRecording() == false`), so
-instrumentation can stay in place unconditionally. A provider is only
-constructed when it has somewhere to send data — never the
-"record-then-drop" middle ground.
+When OTLP is not configured (the default), **no providers are constructed
+at all**: `Tracker()` returns nil — callers nil-guard and skip every bit of
+per-request metric work — and `Tracer()` wraps an explicit no-op provider,
+so spans are never sampled (`IsRecording() == false`) and instrumentation
+can stay in place unconditionally. A provider is only constructed when it
+has somewhere to send data — never the "record-then-drop" middle ground.
+All `Setup` methods are nil-receiver-safe. The process-global OTel
+providers are installed only after the whole setup succeeds.
 
 ## Package Structure
 
@@ -70,10 +72,10 @@ if err != nil {
 if setup != nil {
     defer setup.Shutdown(context.Background())
 
-    tracker := setup.Tracker() // call RecordUsage per request
-    tracer := setup.Tracer()   // always non-nil; no-op when OTLP is off
+    tracker := setup.Tracker() // nil when OTLP is off - nil-guard RecordUsage calls
+    tracer := setup.Tracer()   // always usable; no-op when OTLP is off
 
-    ctx, span := tracer.StartRequestSpan(ctx, provider, model, scenario)
+    ctx, span := tracer.StartRequestSpan(ctx, "chat", provider, model, scenario)
     defer func() { tracer.EndSpan(span, err) }()
 }
 ```
@@ -92,7 +94,14 @@ status; adopted wholesale before any consumer existed, so there is no legacy
 
 There are deliberately no separate request/error counters: the duration
 histogram's count **is** the request count, and failures are classified by
-the `error.type` attribute on it — that is the standard shape.
+the `error.type` attribute on it — that is the standard shape. `error.type`
+is attached only when `Status == "error"`: client cancellations (routine in
+LLM UIs) must not trip error-rate alerts computed from this metric.
+
+Instrument names/units/descriptions and the standard attribute keys come
+from the official `semconv/v1.37.0` + `genaiconv` packages, so a semconv
+version bump tracks spec renames; only the `tingly.*` keys are ours (their
+single home is the tracker package, aliased for spans in `attributes.go`).
 
 Standard attributes: `gen_ai.operation.name` (default `chat`),
 `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model`,
@@ -110,7 +119,9 @@ Gateway-specific dimensions stay in their own namespace: `tingly.scenario`,
 - Sampling is parent-based: an incoming sampled `traceparent` is always
   honored; new traces sample at `TraceSampleRatio` (default: everything).
 - Inference spans follow the GenAI convention: named
-  `"{operation} {request model}"` (e.g. `chat gpt-4`), kind CLIENT, with
+  `"{operation} {request model}"` (e.g. `chat gpt-4`), kind CLIENT — the
+  operation is a `StartRequestSpan` parameter (default `chat`), mirroring
+  `UsageOptions.Operation` so metrics and spans agree on the axis — with
   `gen_ai.operation.name` / `gen_ai.provider.name` / `gen_ai.request.model`
   and `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` set via
   `Tracer.SetTokenUsage`.

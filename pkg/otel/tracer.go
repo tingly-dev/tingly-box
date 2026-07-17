@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/semconv/v1.37.0/genaiconv"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -32,8 +33,10 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...trace.SpanS
 
 // StartRequestSpan begins a CLIENT span for an LLM inference request with
 // the standard GenAI attributes. Per the convention the span is named
-// "{operation} {request model}" with operation "chat" (extend the signature
-// when other operations get instrumented).
+// "{operation} {request model}". operation is the gen_ai.operation.name
+// ("chat", "embeddings", ...) and defaults to "chat" when empty — mirroring
+// UsageOptions.Operation so metrics and spans always agree on the operation
+// axis.
 //
 // The model string is cloned: it typically originates from the gjson-parsed
 // request body and would otherwise pin the entire multi-MB buffer for as
@@ -41,16 +44,19 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...trace.SpanS
 // the collector is slow) — the trace-side variant of the #1255 OOM.
 // Callers passing request-derived strings via SetSpanAttributes must apply
 // the same discipline.
-func (t *Tracer) StartRequestSpan(ctx context.Context, provider, model, scenario string) (context.Context, trace.Span) {
+func (t *Tracer) StartRequestSpan(ctx context.Context, operation, provider, model, scenario string) (context.Context, trace.Span) {
+	if operation == "" {
+		operation = string(genaiconv.OperationNameChat)
+	}
 	model = strings.Clone(model)
 	attrs := []attribute.KeyValue{
-		AttrGenAIOperationName.String("chat"),
+		AttrGenAIOperationName.String(operation),
 		AttrGenAIProviderName.String(provider),
 		AttrGenAIRequestModel.String(model),
 		AttrTinglyScenario.String(scenario),
 	}
 
-	return t.tracer.Start(ctx, "chat "+model,
+	return t.tracer.Start(ctx, operation+" "+model,
 		trace.WithAttributes(attrs...),
 		trace.WithSpanKind(trace.SpanKindClient),
 	)

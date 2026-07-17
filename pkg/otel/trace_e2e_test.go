@@ -105,7 +105,7 @@ func TestTraceE2E_OTLPWireFormat(t *testing.T) {
 
 	// Simulate one gateway request: root request span with a nested
 	// upstream-call span, token usage event, and an error on the child.
-	reqCtx, reqSpan := tracer.StartRequestSpan(ctx, "anthropic", "claude-sonnet-4-6", "claude_code")
+	reqCtx, reqSpan := tracer.StartRequestSpan(ctx, "", "anthropic", "claude-sonnet-4-6", "claude_code")
 	tracer.SetSpanAttributes(reqCtx,
 		AttrTinglyRuleUUID.String("rule-42"),
 		AttrTinglyStreaming.Bool(true),

@@ -26,7 +26,7 @@ func TestStartRequestSpan_DetachesModelString(t *testing.T) {
 	defer tp.Shutdown(context.Background())
 
 	tracer := NewTracer(tp)
-	_, span := tracer.StartRequestSpan(context.Background(), "anthropic", model, "claude_code")
+	_, span := tracer.StartRequestSpan(context.Background(), "chat", "anthropic", model, "claude_code")
 	span.End()
 
 	spans := exporter.GetSpans()
