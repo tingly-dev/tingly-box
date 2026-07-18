@@ -227,6 +227,92 @@ func TestRoundTrip_StreamingPreContentFailure_AnthropicNative(t *testing.T) {
 		"no assistant content should be assembled from a failed pre-content stream")
 }
 
+// ---- Codex assembly: nonstream client / stream upstream / assemble ----
+//
+// Codex only speaks the streaming Responses API. A non-streaming Anthropic
+// client request against a Codex-flagged provider is routed by
+// dispatchOpenAIResponses (provider.IsCodexProvider()) through
+// forwardResponsesStream + PrimeResponsesStream + the assembly handler
+// instead of a plain non-streaming forward — the third cell of the
+// {v1,beta} × {nonstream,stream,assemble} Responses→Anthropic matrix (see
+// internal/server/protocol_cross.go). Before SetupCodexAssemblyRoute, this
+// cell was unreachable by the harness: the routing check and the client's
+// dial target were the same provider.APIBase field, so a route could never
+// point at a local VirtualServer while also tripping the Codex branch.
+
+// TestRoundTrip_CodexAssembly_Golden proves the happy path of the
+// previously-unreachable cell: a non-streaming Anthropic v1 request against
+// a Codex-flagged provider gets a well-formed 200 message, assembled from a
+// real (mocked) upstream SSE stream via the genuine dispatch decision.
+func TestRoundTrip_CodexAssembly_Golden(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupCodexAssemblyRoute(protocol.TypeAnthropicV1, pt.StreamingTextScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses, pt.StreamingTextScenario(), false)
+
+	require.Equal(t, 200, result.HTTPStatus)
+	assert.Equal(t, "assistant", result.Role)
+	assert.Contains(t, result.Content, "Paris")
+}
+
+// TestRoundTrip_CodexAssembly_Beta mirrors the golden case for the Anthropic
+// beta source, exercising assembleResponsesToAnthropicBeta instead of the v1
+// variant.
+func TestRoundTrip_CodexAssembly_Beta(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupCodexAssemblyRoute(protocol.TypeAnthropicBeta, pt.StreamingTextScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.StreamingTextScenario(), false)
+
+	require.Equal(t, 200, result.HTTPStatus)
+	assert.Contains(t, result.Content, "Paris")
+}
+
+// TestRoundTrip_CodexAssembly_PrimeFailure covers the same pre-stream
+// failure this file's TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses
+// covers for the plain streaming branch, but for the assembly branch: a
+// client that asked for a non-streaming response must still get a JSON
+// error with the upstream's status, not a 200 or an SSE frame, when the
+// mocked upstream fails before any event is readable.
+func TestRoundTrip_CodexAssembly_PrimeFailure(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupCodexAssemblyRoute(protocol.TypeAnthropicV1, pt.ErrorScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses, pt.ErrorScenario(), false)
+
+	assert.GreaterOrEqual(t, result.HTTPStatus, 400,
+		"a mocked upstream failure must surface as a 4xx/5xx, not a 200")
+	assert.Empty(t, result.Content,
+		"no assistant content should be assembled from a prime-failed stream")
+}
+
+// TestRoundTrip_CodexAssembly_NoContentBlocks reproduces #1316's actual
+// repro end to end: the upstream starts a normal 200 stream (some events
+// arrive) but is cut before any content block completes — no
+// response.output_text.done, no response.completed. ErrorMidStreamCloseScenario
+// already models exactly this shape for FormatOpenAIResponses (see
+// buildMidStreamTruncated in vmodel/benchmark/scenario/scenario.go), so this
+// reuses it rather than hand-building synthetic events. Before #1316's fix,
+// this folded into a 200 message with content:null; the fix requires a
+// retryable error instead.
+func TestRoundTrip_CodexAssembly_NoContentBlocks(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupCodexAssemblyRoute(protocol.TypeAnthropicV1, pt.ErrorMidStreamCloseScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses, pt.ErrorMidStreamCloseScenario(), false)
+
+	assert.GreaterOrEqual(t, result.HTTPStatus, 400,
+		"a stream cut before any content block completes must fail, not return 200 with content:null")
+}
+
 func TestRoundTrip_AllSources_TextScenario_NonStreaming(t *testing.T) {
 	sources := []protocol.APIType{
 		protocol.TypeAnthropicV1,

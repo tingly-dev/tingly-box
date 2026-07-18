@@ -294,6 +294,73 @@ func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scena
 	return env.findRouteModel(source, target, s.Name)
 }
 
+// SetupCodexAssemblyRoute wires a route to a provider flagged as Codex via
+// OAuthDetail.Issuer (not via a literal APIBase match against the real
+// chatgpt.com host) pointed at the VirtualServer. Codex only speaks the
+// streaming Responses API, so dispatchOpenAIResponses
+// (provider.IsCodexProvider()) routes a non-streaming client request through
+// forwardResponsesStream + PrimeResponsesStream + the assembly handler
+// instead of a plain non-streaming forward — the "nonstream client / stream
+// upstream / assemble" cell of the {v1,beta} × {nonstream,stream,assemble}
+// Responses→Anthropic matrix (see internal/server/protocol_cross.go).
+//
+// Before provider.IsCodexProvider() replaced a raw
+// provider.APIBase == protocol.CodexAPIBase comparison in dispatch, this
+// cell was unreachable by any harness: the routing check and the client's
+// real dial target were the same field, so a route could never point at a
+// local VirtualServer while also tripping the Codex branch. Decoupling the
+// two — Codex-ness now comes from OAuthDetail.Issuer, independent of
+// APIBase — is what makes this helper possible. The VirtualServer's mux
+// additionally registers /codex/responses (see
+// vmodel/benchmark/scenario_responder.go) to serve the path Codex's
+// RoundTripper rewrites /v1/responses to.
+//
+// Only source (client protocol) varies; target is always
+// protocol.TypeOpenAIResponses and streaming is always requested as false —
+// that's the one dispatch cell this exists to reach.
+func (env *TestEnv) SetupCodexAssemblyRoute(source protocol.APIType, s Scenario) {
+	target := protocol.TypeOpenAIResponses
+	key := routeKey(source, target, s.Name)
+
+	env.mu.Lock()
+	if env.setupRoutes[key] {
+		env.mu.Unlock()
+		return
+	}
+	env.setupRoutes[key] = true
+	env.mu.Unlock()
+
+	env.virtual.RegisterScenario(s)
+
+	providerUUID := fmt.Sprintf("virtual-codex-%s-%s", source, s.Name)
+	providerModel := fmt.Sprintf("virtual-model-%s", s.Name)
+	requestModel := fmt.Sprintf("pv-%s-to-codex-%s", source, s.Name)
+
+	provider := &typ.Provider{
+		UUID:               providerUUID,
+		Name:               providerUUID,
+		APIBase:            env.virtual.URL() + "/v1",
+		APIStyle:           protocol.APIStyleOpenAI,
+		OpenAIEndpointMode: ai.EndpointModeResponses,
+		AuthType:           typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			Issuer:      ai.IssuerCodex,
+			AccessToken: "virtual-codex-token",
+		},
+		Enabled: true,
+		Timeout: int64(constant.DefaultRequestTimeout),
+	}
+	_ = env.appConfig.AddProvider(provider)
+
+	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, providerModel,
+		harnessService(providerUUID, providerModel))
+	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+
+	env.mu.Lock()
+	env.routeModels[key] = requestModel
+	env.mu.Unlock()
+}
+
 // SendAs sends a request to the gateway as the given source protocol,
 // using the request model configured by SetupRoute, and returns the parsed result.
 //
