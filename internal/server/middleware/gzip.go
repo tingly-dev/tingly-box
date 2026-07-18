@@ -25,13 +25,36 @@ type gzipResponseWriter struct {
 	wrote bool
 }
 
-func (g *gzipResponseWriter) Write(data []byte) (int, error) {
+func (g *gzipResponseWriter) clearContentLength() {
+	// A handler may have set Content-Length for the uncompressed body (Gin's
+	// render.Data does this). Gzip changes the representation length, so the
+	// stale value would make clients and reverse proxies treat the response as
+	// truncated. Let net/http select the correct framing for the encoded body.
+	g.Header().Del("Content-Length")
+}
+
+func (g *gzipResponseWriter) WriteHeader(code int) {
+	g.clearContentLength()
+	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *gzipResponseWriter) WriteHeaderNow() {
+	g.clearContentLength()
+	g.ResponseWriter.WriteHeaderNow()
+}
+
+func (g *gzipResponseWriter) prepareWrite() {
+	g.clearContentLength()
 	g.wrote = true
+}
+
+func (g *gzipResponseWriter) Write(data []byte) (int, error) {
+	g.prepareWrite()
 	return g.gz.Write(data)
 }
 
 func (g *gzipResponseWriter) WriteString(s string) (int, error) {
-	g.wrote = true
+	g.prepareWrite()
 	return g.gz.Write([]byte(s))
 }
 

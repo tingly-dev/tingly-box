@@ -3,6 +3,7 @@ package middleware
 import (
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -51,6 +52,61 @@ func TestGzipHandlerCompressesWhenAccepted(t *testing.T) {
 	}
 	if body.Data != payload {
 		t.Fatal("decompressed payload does not match original")
+	}
+}
+
+func TestGzipHandlerRemovesUncompressedContentLength(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	payload := []byte(strings.Repeat("cloudflare origin response ", 200))
+	engine.GET("/data", Gzip(), func(c *gin.Context) {
+		// render.Data sets Content-Length before writing. Once Gzip transforms
+		// the body, that uncompressed length must not reach the network.
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", payload)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/data", nil)
+	req.Header.Set("Accept-Encoding", "br, gzip")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Content-Length"); got != "" {
+		t.Fatalf("Content-Length = %q, want empty for a streamed gzip response", got)
+	}
+	if got := w.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", got)
+	}
+
+	gz, err := gzip.NewReader(w.Body)
+	if err != nil {
+		t.Fatalf("gzip.NewReader failed: %v", err)
+	}
+	decoded, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("decompression failed: %v", err)
+	}
+	if string(decoded) != string(payload) {
+		t.Fatal("decompressed payload does not match original")
+	}
+}
+
+func TestGzipHandlerRemovesContentLengthBeforeExplicitHeaderCommit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	payload := strings.Repeat("explicit header commit ", 100)
+	engine.GET("/data", Gzip(), func(c *gin.Context) {
+		c.Header("Content-Length", fmt.Sprintf("%d", len(payload)))
+		c.Writer.WriteHeaderNow()
+		_, _ = c.Writer.WriteString(payload)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/data", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+
+	if got := w.Result().Header.Get("Content-Length"); got != "" {
+		t.Fatalf("committed Content-Length = %q, want empty", got)
 	}
 }
 
