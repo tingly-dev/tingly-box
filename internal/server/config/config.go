@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1494,19 +1495,23 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 }
 
 func cloneProfileMeta(profile typ.ProfileMeta) typ.ProfileMeta {
-	if profile.ClaudeCode == nil {
-		return profile
-	}
-	cloned := *profile.ClaudeCode
-	if profile.ClaudeCode.Env != nil {
-		cloned.Env = make(map[string]string, len(profile.ClaudeCode.Env))
-		for key, value := range profile.ClaudeCode.Env {
-			cloned.Env[key] = value
-		}
-	}
-	cloned.UnsetEnv = append([]string(nil), profile.ClaudeCode.UnsetEnv...)
-	profile.ClaudeCode = &cloned
+	profile.ClaudeCode = cloneClaudeCodeProfileConfig(profile.ClaudeCode)
 	return profile
+}
+
+func cloneClaudeCodeProfileConfig(profileConfig *typ.ClaudeCodeProfileConfig) *typ.ClaudeCodeProfileConfig {
+	if profileConfig == nil {
+		return nil
+	}
+	cloned := *profileConfig
+	cloned.Env = maps.Clone(profileConfig.Env)
+	cloned.UnsetEnv = slices.Clone(profileConfig.UnsetEnv)
+	return &cloned
+}
+
+func hasClaudeCodeProfileOverrides(profileConfig *typ.ClaudeCodeProfileConfig) bool {
+	return profileConfig != nil && (len(profileConfig.Env) > 0 ||
+		len(profileConfig.UnsetEnv) > 0 || profileConfig.DefaultMode != "")
 }
 
 // UpdateClaudeCodeProfileConfig replaces the persistent Claude Code override
@@ -1522,20 +1527,8 @@ func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, pr
 			continue
 		}
 		profiles[i].ClaudeCode = nil
-		if profileConfig != nil {
-			copyConfig := &typ.ClaudeCodeProfileConfig{
-				DefaultMode: profileConfig.DefaultMode,
-				UnsetEnv:    append([]string(nil), profileConfig.UnsetEnv...),
-			}
-			if len(profileConfig.Env) > 0 {
-				copyConfig.Env = make(map[string]string, len(profileConfig.Env))
-				for key, value := range profileConfig.Env {
-					copyConfig.Env[key] = value
-				}
-			}
-			if len(copyConfig.Env) > 0 || len(copyConfig.UnsetEnv) > 0 || copyConfig.DefaultMode != "" {
-				profiles[i].ClaudeCode = copyConfig
-			}
+		if hasClaudeCodeProfileOverrides(profileConfig) {
+			profiles[i].ClaudeCode = cloneClaudeCodeProfileConfig(profileConfig)
 		}
 		c.Profiles[string(baseScenario)] = profiles
 		return c.Save()

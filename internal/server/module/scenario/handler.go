@@ -588,6 +588,35 @@ func profileClaudeConfigResponse(profile typ.ProfileMeta, resolved agent.CCProfi
 	}, nil
 }
 
+func (h *Handler) materializeAndRespondProfileClaudeConfig(
+	c *gin.Context,
+	profileID string,
+	profiledScenario string,
+	materializeErrorPrefix string,
+) {
+	updated, ok := h.config.GetProfile(typ.ScenarioClaudeCode, profileID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "profile not found"})
+		return
+	}
+	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
+	if _, err := agent.MaterializeCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": materializeErrorPrefix + err.Error()})
+		return
+	}
+	refreshed, err := agent.ResolveCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	response, err := profileClaudeConfigResponse(updated, refreshed)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // GetProfileClaudeConfig returns the profile's concrete effective values and
 // its inherited base so the UI can explain and reset overrides accurately.
 func (h *Handler) GetProfileClaudeConfig(c *gin.Context) {
@@ -636,24 +665,8 @@ func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	updated, _ := h.config.GetProfile(typ.ScenarioClaudeCode, profile.ID)
-	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
-	_, err = agent.MaterializeCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "profile preferences were saved but settings could not be generated: " + err.Error()})
-		return
-	}
-	refreshed, err := agent.ResolveCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	response, err := profileClaudeConfigResponse(updated, refreshed)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, response)
+	h.materializeAndRespondProfileClaudeConfig(c, profile.ID, profiledScenario,
+		"profile preferences were saved but settings could not be generated: ")
 }
 
 // DeleteProfileClaudeConfig clears only the profile-specific delta, preserving
@@ -667,24 +680,7 @@ func (h *Handler) DeleteProfileClaudeConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	updated, _ := h.config.GetProfile(typ.ScenarioClaudeCode, profile.ID)
-	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
-	_, err := agent.MaterializeCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	refreshed, err := agent.ResolveCCProfileSettings(h.config, baseURL, h.config.GetModelToken(), profiledScenario, updated)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	response, err := profileClaudeConfigResponse(updated, refreshed)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, response)
+	h.materializeAndRespondProfileClaudeConfig(c, profile.ID, profiledScenario, "")
 }
 
 // DeleteProfile deletes a profile by ID

@@ -55,7 +55,6 @@ const TEXT = {
         title: 'Profile 覆盖',
         inherited: '当前完全继承主配置和模型路由',
         pendingInheritance: '覆盖已移除；保存 Profile 后恢复继承',
-        summary: (count: number) => `${count} 项运行参数由此 Profile 覆盖`,
         hint: '未列出的参数继续继承；启动时自动生成运行配置。',
         add: '添加覆盖',
         allAdded: '所有支持的参数都已添加',
@@ -83,7 +82,6 @@ const TEXT = {
         title: 'Profile Overrides',
         inherited: 'Fully inherits the main configuration and model routing',
         pendingInheritance: 'Overrides removed; save the profile to restore inheritance',
-        summary: (count: number) => `${count} runtime setting${count === 1 ? '' : 's'} overridden by this profile`,
         hint: 'Unlisted settings keep inheriting; runtime settings are generated automatically at launch.',
         add: 'Add override',
         allAdded: 'All supported settings are already added',
@@ -161,7 +159,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     const [selectedKeys, setSelectedKeys] = React.useState<Set<OverrideKey>>(new Set());
     const [hasOverrides, setHasOverrides] = React.useState(false);
     const [loading, setLoading] = React.useState(true);
-    const [saving, setSaving] = React.useState(false);
+    const [savingAction, setSavingAction] = React.useState<'save' | 'restore' | null>(null);
     const [loadError, setLoadError] = React.useState(false);
     const [message, setMessage] = React.useState<{ severity: 'success' | 'error'; text: string } | null>(null);
     const [addAnchor, setAddAnchor] = React.useState<HTMLElement | null>(null);
@@ -216,6 +214,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     const availableCommon = COMMON_KEYS.filter(key => !selectedKeys.has(key));
     const availableMore = FIELD_ORDER.filter(key => !COMMON_KEYS.includes(key) && !selectedKeys.has(key));
     const isDirty = !prefsEqual(prefs, loadedPrefs) || defaultMode !== loadedMode;
+    const saving = savingAction !== null;
 
     const addOverride = (key: OverrideKey) => {
         setSelectedKeys(current => new Set(current).add(key));
@@ -248,40 +247,43 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         setMessage(null);
     };
 
-    const handleSave = async () => {
-        setSaving(true);
+    const runMutation = async (
+        action: 'save' | 'restore',
+        request: () => Promise<any>,
+        successMessage: string,
+    ) => {
+        setSavingAction(action);
         setMessage(null);
         try {
-            const result = await api.updateClaudeCodeProfileConfig(
-                'claude_code',
-                profileId,
-                prefs as Record<string, string>,
-                defaultMode,
-            );
+            const result = await request();
             if (applyResponse(result)) {
-                setMessage({ severity: 'success', text: text.saved });
+                setMessage({ severity: 'success', text: successMessage });
             } else {
                 setMessage({ severity: 'error', text: result?.error || text.saveFailed });
             }
         } finally {
-            setSaving(false);
+            setSavingAction(null);
         }
     };
 
-    const handleRestoreAll = async () => {
+    const handleSave = () => runMutation(
+        'save',
+        () => api.updateClaudeCodeProfileConfig(
+            'claude_code',
+            profileId,
+            prefs as Record<string, string>,
+            defaultMode,
+        ),
+        text.saved,
+    );
+
+    const handleRestoreAll = () => {
         setRestoreOpen(false);
-        setSaving(true);
-        setMessage(null);
-        try {
-            const result = await api.resetClaudeCodeProfileConfig('claude_code', profileId);
-            if (applyResponse(result)) {
-                setMessage({ severity: 'success', text: text.restored });
-            } else {
-                setMessage({ severity: 'error', text: result?.error || text.saveFailed });
-            }
-        } finally {
-            setSaving(false);
-        }
+        return runMutation(
+            'restore',
+            () => api.resetClaudeCodeProfileConfig('claude_code', profileId),
+            text.restored,
+        );
     };
 
     const renderInheritedValue = (key: OverrideKey): string => {
@@ -356,16 +358,45 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
             size="full"
             title={text.title}
             subtitle={text.hint}
+            sx={{
+                '& > .MuiCardContent-root': {
+                    p: 2.5,
+                    '&:last-child': { pb: 2.5 },
+                },
+            }}
             rightAction={(
-                <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<Add fontSize="small" />}
-                    onClick={event => setAddAnchor(event.currentTarget)}
-                    disabled={loading || saving || loadError || (availableCommon.length === 0 && availableMore.length === 0)}
-                >
-                    {text.add}
-                </Button>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                    {!loading && !loadError && (hasOverrides || isDirty) && (
+                        <Tooltip title={text.restoreAll} arrow>
+                            <span>
+                                <IconButton
+                                    size="small"
+                                    aria-label={text.restoreAll}
+                                    onClick={() => setRestoreOpen(true)}
+                                    disabled={saving}
+                                >
+                                    {savingAction === 'restore'
+                                        ? <CircularProgress size={16} color="inherit" />
+                                        : <RestartAlt fontSize="small" />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                    )}
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Add fontSize="small" />}
+                        onClick={event => setAddAnchor(event.currentTarget)}
+                        disabled={loading || saving || loadError || (availableCommon.length === 0 && availableMore.length === 0)}
+                    >
+                        {text.add}
+                    </Button>
+                    {isDirty && (
+                        <Button size="small" variant="contained" onClick={handleSave} disabled={saving}>
+                            {savingAction === 'save' ? <CircularProgress size={15} color="inherit" /> : text.save}
+                        </Button>
+                    )}
+                </Stack>
             )}
         >
 
@@ -402,16 +433,12 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
             </Menu>
 
             {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={20} /></Box>
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}><CircularProgress size={20} /></Box>
             ) : orderedSelectedKeys.length === 0 ? (
-                <Box sx={{ py: 1.5 }}>
+                <Box sx={{ py: 0.5 }}>
                     <Typography variant="body2" color="text.secondary">{isDirty ? text.pendingInheritance : text.inherited}</Typography>
                 </Box>
-            ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-                    {text.summary(orderedSelectedKeys.length)}
-                </Typography>
-            )}
+            ) : null}
 
             <Collapse in={!loading && orderedSelectedKeys.length > 0} unmountOnExit>
                 <Box>
@@ -424,7 +451,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                                     alignItems: 'center',
                                     gap: { xs: 1, md: 2 },
                                     gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(180px, 0.8fr) minmax(180px, 0.8fr) minmax(220px, 1fr) auto' },
-                                    py: 1.25,
+                                    py: 0.75,
                                 }}
                             >
                                 <Box sx={{ minWidth: 0 }}>
@@ -457,23 +484,6 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                     </Stack>
                 </Box>
             </Collapse>
-
-            {!loading && !loadError && (orderedSelectedKeys.length > 0 || hasOverrides || isDirty) && (
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pt: 1.25 }}>
-                    <Button
-                        size="small"
-                        color="inherit"
-                        startIcon={<RestartAlt fontSize="small" />}
-                        onClick={() => setRestoreOpen(true)}
-                        disabled={saving || (!hasOverrides && !isDirty)}
-                    >
-                        {text.restoreAll}
-                    </Button>
-                    <Button size="small" variant="contained" onClick={handleSave} disabled={saving || !isDirty}>
-                        {saving ? <CircularProgress size={15} color="inherit" /> : text.save}
-                    </Button>
-                </Stack>
-            )}
 
             {message && (
                 <Alert severity={message.severity} sx={{ mt: 1 }}>{message.text}</Alert>

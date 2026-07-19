@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -167,11 +168,9 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 		return CCProfileSettingsResolution{}, err
 	}
 
-	baseEnv := make(map[string]string)
+	baseEnv := map[string]string{}
 	if snapshot.Exists {
-		for key, value := range snapshot.Env {
-			baseEnv[key] = value
-		}
+		baseEnv = maps.Clone(snapshot.Env)
 	} else {
 		defaults := DefaultClaudeCodePrefs(profile.Unified)
 		defaultValues, valuesErr := defaults.Values()
@@ -192,10 +191,7 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 		return CCProfileSettingsResolution{}, err
 	}
 
-	effectiveEnv := make(map[string]string, len(baseEnv))
-	for key, value := range baseEnv {
-		effectiveEnv[key] = value
-	}
+	effectiveEnv := maps.Clone(baseEnv)
 	if profile.ClaudeCode != nil {
 		for key, value := range profile.ClaudeCode.Env {
 			effectiveEnv[key] = value
