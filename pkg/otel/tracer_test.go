@@ -55,7 +55,7 @@ func TestTracer_StartRequestSpan(t *testing.T) {
 	tracer := NewTracer(tp)
 	ctx := context.Background()
 
-	ctx, span := tracer.StartRequestSpan(ctx, "openai", "gpt-4", "openai")
+	ctx, span := tracer.StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
 	defer span.End()
 
 	if span == nil {
@@ -67,7 +67,7 @@ func TestTracer_StartRequestSpan(t *testing.T) {
 	}
 }
 
-func TestTracer_RecordTokenUsageEvent(t *testing.T) {
+func TestTracer_SetTokenUsage(t *testing.T) {
 	tp := trace.NewTracerProvider()
 	defer tp.Shutdown(context.Background())
 
@@ -76,12 +76,12 @@ func TestTracer_RecordTokenUsageEvent(t *testing.T) {
 
 	ctx, span := tracer.StartSpan(ctx, "test-span")
 
-	tracer.RecordTokenUsageEvent(ctx, 100, 50)
+	tracer.SetTokenUsage(ctx, 100, 50)
 
 	span.End()
 }
 
-func TestTracer_RecordTokenUsageEvent_NoSpan(t *testing.T) {
+func TestTracer_SetTokenUsage_NoSpan(t *testing.T) {
 	tp := trace.NewTracerProvider()
 	defer tp.Shutdown(context.Background())
 
@@ -89,7 +89,7 @@ func TestTracer_RecordTokenUsageEvent_NoSpan(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not panic when no span in context
-	tracer.RecordTokenUsageEvent(ctx, 100, 50)
+	tracer.SetTokenUsage(ctx, 100, 50)
 }
 
 func TestTracer_RecordError(t *testing.T) {
@@ -117,7 +117,7 @@ func TestTracer_RecordError_WithAttributes(t *testing.T) {
 	ctx, span := tracer.StartSpan(ctx, "test-span")
 
 	testErr := &testError{"test error"}
-	tracer.RecordError(ctx, testErr, AttrLLMProvider.String("openai"))
+	tracer.RecordError(ctx, testErr, AttrGenAIProviderName.String("openai"))
 
 	span.End()
 }
@@ -161,7 +161,7 @@ func TestTracer_SetSpanAttributes(t *testing.T) {
 
 	ctx, span := tracer.StartSpan(ctx, "test-span")
 
-	tracer.SetSpanAttributes(ctx, AttrLLMProvider.String("openai"))
+	tracer.SetSpanAttributes(ctx, AttrGenAIProviderName.String("openai"))
 
 	span.End()
 }
@@ -174,7 +174,7 @@ func TestTracer_SetSpanAttributes_NoSpan(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not panic when no span in context
-	tracer.SetSpanAttributes(ctx, AttrLLMProvider.String("openai"))
+	tracer.SetSpanAttributes(ctx, AttrGenAIProviderName.String("openai"))
 }
 
 // testError is a simple error type for testing

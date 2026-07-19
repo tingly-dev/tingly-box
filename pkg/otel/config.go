@@ -9,34 +9,28 @@ type Config struct {
 	// Enabled enables or disables OTel tracking
 	Enabled bool
 
+	// ServiceVersion stamps the service.version resource attribute on all
+	// exported telemetry, so backends can correlate regressions with
+	// releases. Empty omits the attribute (better than a fake constant).
+	ServiceVersion string
+
 	// ExportInterval is the time between exports. Default: 10s
 	ExportInterval time.Duration
 
 	// ExportTimeout is the timeout for each export. Default: 30s
 	ExportTimeout time.Duration
 
-	// BufferSize is the max number of metrics to buffer. Default: 10000
-	BufferSize int
-
-	// SQLite exporter configuration
-	SQLite SQLiteConfig
-
-	// OTLP exporter configuration
+	// OTLP exporter configuration. OTLP is the only telemetry egress and is
+	// shared by all signals (metrics and traces): persistent usage records
+	// and request recordings are written at the source
+	// (internal/server/usage_tracking.go and the recording pipeline), not
+	// derived from aggregated metric data points.
 	OTLP OTLPConfig
-
-	// Sink exporter configuration
-	Sink SinkConfig
-}
-
-// SQLiteConfig holds SQLite exporter configuration
-type SQLiteConfig struct {
-	// Enabled enables SQLite export
-	Enabled bool
 }
 
 // OTLPConfig holds OTLP exporter configuration
 type OTLPConfig struct {
-	// Enabled enables OTLP export
+	// Enabled enables OTLP export (metrics and traces)
 	Enabled bool
 
 	// Endpoint is the OTLP endpoint (gRPC or HTTP)
@@ -50,12 +44,11 @@ type OTLPConfig struct {
 
 	// Headers are optional headers to send with each request
 	Headers map[string]string
-}
 
-// SinkConfig holds JSONL sink exporter configuration
-type SinkConfig struct {
-	// Enabled enables JSONL sink export
-	Enabled bool
+	// TraceSampleRatio is the fraction of new traces to sample. Sampling is
+	// parent-based, so an incoming sampled context is always honored. Values
+	// outside (0,1) — including the zero value — mean "sample everything".
+	TraceSampleRatio float64
 }
 
 // DefaultConfig returns a config with sensible defaults
@@ -64,15 +57,8 @@ func DefaultConfig() *Config {
 		Enabled:        true,
 		ExportInterval: 10 * time.Second,
 		ExportTimeout:  30 * time.Second,
-		BufferSize:     10000,
-		SQLite: SQLiteConfig{
-			Enabled: true,
-		},
 		OTLP: OTLPConfig{
 			Enabled: false,
-		},
-		Sink: SinkConfig{
-			Enabled: true,
 		},
 	}
 }

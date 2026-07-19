@@ -1,39 +1,69 @@
+// Package tracker records LLM token usage and request duration as
+// OpenTelemetry metrics following the GenAI semantic conventions
+// (https://github.com/open-telemetry/semantic-conventions-genai):
+//
+//   - gen_ai.client.token.usage       histogram {token}, split by gen_ai.token.type
+//   - gen_ai.client.operation.duration histogram s, errors via error.type
+//
+// Request counts and error counts are intentionally NOT separate counters:
+// the duration histogram's count is the request count, and error.type on it
+// classifies failures — that is the standard shape.
 package tracker
 
 import (
 	"context"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	"go.opentelemetry.io/otel/semconv/v1.37.0/genaiconv"
 )
 
-// Attribute keys for token usage tracking
-// Note: Attribute names follow the original internal/obs/otel convention for compatibility
+// Gateway-specific metric attributes. These have no gen_ai equivalent; they
+// live in the tingly.* namespace instead of squatting on a standard one.
+// This is the single home for these keys — pkg/otel aliases them for spans
+// (tracker cannot import pkg/otel, which imports tracker).
 var (
-	attrLLMProvider       = attribute.Key("llm.provider")
-	attrLLMProviderUUID   = attribute.Key("llm.provider.uuid")
-	attrLLMModel          = attribute.Key("llm.model")
-	attrLLMRequestModel   = attribute.Key("llm.request.model")
-	attrLLMTokenType      = attribute.Key("llm.token_type") // Underscore for backward compatibility
-	attrLLMScenario       = attribute.Key("llm.scenario")
-	attrLLMStreaming      = attribute.Key("llm.streaming")
-	attrLLMResponseStatus = attribute.Key("llm.response.status")
-	attrLLMErrorCode      = attribute.Key("llm.error.code")
-	attrLLMRuleUUID       = attribute.Key("llm.rule.uuid")
-	attrLLMUserTier       = attribute.Key("llm.user.tier")
+	AttrScenario     = attribute.Key("tingly.scenario")
+	AttrProviderUUID = attribute.Key("tingly.provider.uuid")
+	AttrRuleUUID     = attribute.Key("tingly.rule.uuid")
+	AttrStreaming    = attribute.Key("tingly.streaming")
+	AttrUserTier     = attribute.Key("tingly.user.tier")
 )
 
-// maxErrorCodeAttrLen caps the llm.error.code attribute value. Every distinct
+// gen_ai.token.type values. input/output are the spec enum (from semconv);
+// the enum is open, so the gateway extends it for cache and system token
+// accounting.
+var (
+	tokenTypeInput     = string(genaiconv.TokenTypeInput)
+	tokenTypeOutput    = string(genaiconv.TokenTypeOutput)
+	tokenTypeCacheRead = "cache_read"
+	tokenTypeSystem    = "system"
+)
+
+// maxErrorTypeAttrLen caps the error.type attribute value. Every distinct
 // attribute set becomes a data point the cumulative metrics SDK retains for
 // the lifetime of the process, so unbounded error strings (which may embed
 // upstream response bodies) would leak memory one timeseries at a time.
 // Callers should already pass a bounded classification; this is a guard.
-const maxErrorCodeAttrLen = 64
+const maxErrorTypeAttrLen = 64
+
+// Spec-advised histogram bucket boundaries.
+var (
+	durationBoundaries = []float64{0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92}
+	tokenBoundaries    = []float64{1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304}
+)
 
 // UsageOptions contains the options for recording token usage.
 type UsageOptions struct {
+	// Operation is the gen_ai.operation.name ("chat", "embeddings", ...).
+	// Defaults to "chat" when empty. Callers MUST pass a bounded set of
+	// values — every distinct operation mints permanent timeseries.
+	Operation string
+
 	// Provider is the name of the LLM provider (e.g., "openai", "anthropic")
 	Provider string
 
@@ -80,101 +110,29 @@ type UsageOptions struct {
 	UserTier string
 }
 
-// TokenTracker provides a unified interface for tracking token usage
-// using OpenTelemetry metrics.
+// TokenTracker records token usage and operation duration using the
+// OpenTelemetry GenAI client metrics.
 type TokenTracker struct {
-	inputTokens      metric.Int64Counter
-	outputTokens     metric.Int64Counter
-	totalTokens      metric.Int64Counter
-	cacheInputTokens metric.Int64Counter
-	systemTokens     metric.Int64Counter
-	requestCount     metric.Int64Counter
-	requestDuration  metric.Float64Histogram
-	requestError     metric.Int64Counter
+	tokenUsage        genaiconv.ClientTokenUsage
+	operationDuration genaiconv.ClientOperationDuration
 }
 
 // NewTokenTracker creates a new TokenTracker with the provided meter.
+// The genaiconv constructors supply the spec-exact instrument names, units
+// and descriptions.
 func NewTokenTracker(meter metric.Meter) (*TokenTracker, error) {
 	tt := &TokenTracker{}
 
 	var err error
 
-	// Token usage counters - input tokens
-	tt.inputTokens, err = meter.Int64Counter(
-		"llm.token.usage.input",
-		metric.WithDescription("LLM input/prompt token usage"),
-		metric.WithUnit("{token}"),
-	)
+	tt.tokenUsage, err = genaiconv.NewClientTokenUsage(meter,
+		metric.WithExplicitBucketBoundaries(tokenBoundaries...))
 	if err != nil {
 		return nil, err
 	}
 
-	// Token usage counters - output tokens
-	tt.outputTokens, err = meter.Int64Counter(
-		"llm.token.usage.output",
-		metric.WithDescription("LLM output/completion token usage"),
-		metric.WithUnit("{token}"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Total tokens counter
-	tt.totalTokens, err = meter.Int64Counter(
-		"llm.token.total",
-		metric.WithDescription("Total LLM tokens consumed (input + output)"),
-		metric.WithUnit("{token}"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Cache token counters
-	tt.cacheInputTokens, err = meter.Int64Counter(
-		"llm.token.cache.input",
-		metric.WithDescription("LLM cache-related input token usage"),
-		metric.WithUnit("{token}"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// System tokens counter
-	tt.systemTokens, err = meter.Int64Counter(
-		"llm.token.system",
-		metric.WithDescription("LLM tokens consumed by system operations"),
-		metric.WithUnit("{token}"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Request counter
-	tt.requestCount, err = meter.Int64Counter(
-		"llm.request.count",
-		metric.WithDescription("Number of LLM requests"),
-		metric.WithUnit("{request}"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Request duration histogram
-	tt.requestDuration, err = meter.Float64Histogram(
-		"llm.request.duration",
-		metric.WithDescription("LLM request duration in milliseconds"),
-		metric.WithUnit("ms"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Error counter
-	tt.requestError, err = meter.Int64Counter(
-		"llm.request.errors",
-		metric.WithDescription("Number of LLM request errors"),
-		metric.WithUnit("{error}"),
-	)
+	tt.operationDuration, err = genaiconv.NewClientOperationDuration(meter,
+		metric.WithExplicitBucketBoundaries(durationBoundaries...))
 	if err != nil {
 		return nil, err
 	}
@@ -182,8 +140,13 @@ func NewTokenTracker(meter metric.Meter) (*TokenTracker, error) {
 	return tt, nil
 }
 
-// RecordUsage records token usage with the provided options.
+// RecordUsage records token usage and duration for one request.
 func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
+	operation := opts.Operation
+	if operation == "" {
+		operation = string(genaiconv.OperationNameChat)
+	}
+
 	// Build common attributes.
 	//
 	// Attribute values are retained for the lifetime of the process by the
@@ -195,78 +158,77 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 	// gjson.ParseBytes in heap profiles). strings.Clone detaches exactly those
 	// values; the remaining attributes are config- or enum-owned strings that
 	// cannot alias a request buffer.
-	commonAttrs := []attribute.KeyValue{
-		attrLLMProvider.String(opts.Provider),
-		attrLLMProviderUUID.String(opts.ProviderUUID),
-		attrLLMModel.String(strings.Clone(opts.Model)),
-		attrLLMRequestModel.String(strings.Clone(opts.RequestModel)),
-		attrLLMScenario.String(opts.Scenario),
-		attrLLMStreaming.Bool(opts.Streamed),
-		attrLLMResponseStatus.String(opts.Status),
-	}
-
+	commonAttrs := make([]attribute.KeyValue, 0, 10)
+	commonAttrs = append(commonAttrs,
+		semconv.GenAIOperationNameKey.String(operation),
+		semconv.GenAIProviderNameKey.String(opts.Provider),
+		semconv.GenAIResponseModelKey.String(strings.Clone(opts.Model)),
+		semconv.GenAIRequestModelKey.String(strings.Clone(opts.RequestModel)),
+		AttrScenario.String(opts.Scenario),
+		AttrProviderUUID.String(opts.ProviderUUID),
+		AttrStreaming.Bool(opts.Streamed),
+	)
 	if opts.RuleUUID != "" {
-		commonAttrs = append(commonAttrs, attrLLMRuleUUID.String(opts.RuleUUID))
+		commonAttrs = append(commonAttrs, AttrRuleUUID.String(opts.RuleUUID))
 	}
 	if opts.UserTier != "" {
-		commonAttrs = append(commonAttrs, attrLLMUserTier.String(opts.UserTier))
-	}
-	if opts.ErrorCode != "" {
-		code := opts.ErrorCode
-		if len(code) > maxErrorCodeAttrLen {
-			// The truncated slice still aliases the original backing array, so
-			// the clone below is what actually bounds retained memory.
-			code = code[:maxErrorCodeAttrLen]
-		}
-		commonAttrs = append(commonAttrs, attrLLMErrorCode.String(strings.Clone(code)))
+		commonAttrs = append(commonAttrs, AttrUserTier.String(opts.UserTier))
 	}
 	// NOTE: latency is deliberately NOT an attribute. It is near-unique per
 	// request, so every request would permanently allocate a new data point
 	// (and pin its attribute strings, see above) on every instrument below.
 	// This exact line was bisected as the #1255 leak: with it, the tb2→tb1
 	// e2e retains 823KB/request forever; without it, 0.5KB/request.
-	// Latency is recorded as the requestDuration histogram VALUE instead.
+	// Latency is the duration histogram VALUE instead.
 
-	// Record input tokens
-	if opts.InputTokens > 0 {
-		tt.inputTokens.Add(ctx, int64(opts.InputTokens), metric.WithAttributes(commonAttrs...))
-	}
+	// Token usage, split by gen_ai.token.type. Each record builds its own
+	// attribute set from a fresh copy of commonAttrs (never append onto the
+	// shared backing array — a second append would clobber the first's
+	// token_type element).
+	tt.recordTokens(ctx, commonAttrs, tokenTypeInput, opts.InputTokens)
+	tt.recordTokens(ctx, commonAttrs, tokenTypeOutput, opts.OutputTokens)
+	tt.recordTokens(ctx, commonAttrs, tokenTypeCacheRead, opts.CacheInputTokens)
+	tt.recordTokens(ctx, commonAttrs, tokenTypeSystem, opts.SystemTokens)
 
-	// Record output tokens
-	if opts.OutputTokens > 0 {
-		tt.outputTokens.Add(ctx, int64(opts.OutputTokens), metric.WithAttributes(commonAttrs...))
-	}
-
-	// Record total tokens
-	totalTokens := opts.InputTokens + opts.OutputTokens
-	if totalTokens > 0 {
-		tt.totalTokens.Add(ctx, int64(totalTokens), metric.WithAttributes(commonAttrs...))
-	}
-
-	// Record cache tokens. slices.Clone before append: two appends off the
-	// same commonAttrs base would otherwise share its backing array and the
-	// second could overwrite the first's token_type element.
-	if opts.CacheInputTokens > 0 {
-		cacheAttrs := append(slices.Clone(commonAttrs), attrLLMTokenType.String("cache"))
-		tt.cacheInputTokens.Add(ctx, int64(opts.CacheInputTokens), metric.WithAttributes(cacheAttrs...))
-	}
-
-	// Record system tokens
-	if opts.SystemTokens > 0 {
-		systemAttrs := append(slices.Clone(commonAttrs), attrLLMTokenType.String("system"))
-		tt.systemTokens.Add(ctx, int64(opts.SystemTokens), metric.WithAttributes(systemAttrs...))
-	}
-
-	// Record request count
-	tt.requestCount.Add(ctx, 1, metric.WithAttributes(commonAttrs...))
-
-	// Record request duration
-	if opts.LatencyMs > 0 {
-		tt.requestDuration.Record(ctx, float64(opts.LatencyMs), metric.WithAttributes(commonAttrs...))
-	}
-
-	// Record error if status is "error"
+	// Operation duration; the histogram count doubles as the request count,
+	// per the spec. error.type is attached only for genuine failures —
+	// client cancellations (Status "canceled") routinely happen mid-stream
+	// in LLM UIs and must not trip error-rate alerts computed from this
+	// metric ("data points with error.type present / total").
+	durAttrs := commonAttrs
 	if opts.Status == "error" {
-		tt.requestError.Add(ctx, 1, metric.WithAttributes(commonAttrs...))
+		errType := opts.ErrorCode
+		if errType == "" {
+			errType = string(genaiconv.ErrorTypeOther)
+		}
+		durAttrs = append(slices.Clone(commonAttrs),
+			semconv.ErrorTypeKey.String(strings.Clone(truncateErrorType(errType))))
 	}
+	tt.operationDuration.RecordSet(ctx, float64(opts.LatencyMs)/1000.0,
+		attribute.NewSet(durAttrs...))
+}
+
+// recordTokens records count tokens of the given type, skipping zero counts
+// so absent token kinds don't allocate empty timeseries.
+func (tt *TokenTracker) recordTokens(ctx context.Context, commonAttrs []attribute.KeyValue, tokenType string, count int) {
+	if count <= 0 {
+		return
+	}
+	attrs := append(slices.Clone(commonAttrs), semconv.GenAITokenTypeKey.String(tokenType))
+	tt.tokenUsage.RecordSet(ctx, int64(count), attribute.NewSet(attrs...))
+}
+
+// truncateErrorType bounds an error.type value to maxErrorTypeAttrLen bytes
+// without splitting a multi-byte UTF-8 rune (OTLP requires valid UTF-8; a
+// poisoned attribute value could make strict collectors reject every
+// subsequent export of the retained timeseries).
+func truncateErrorType(s string) string {
+	if len(s) <= maxErrorTypeAttrLen {
+		return s
+	}
+	s = s[:maxErrorTypeAttrLen]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
 }

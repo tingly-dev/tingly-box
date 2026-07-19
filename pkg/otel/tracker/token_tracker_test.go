@@ -4,320 +4,343 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"unicode/utf8"
+	"unsafe"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
+func newTestTracker(t *testing.T) (*TokenTracker, *metric.ManualReader) {
+	t.Helper()
+	reader := metric.NewManualReader()
+	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	tracker, err := NewTokenTracker(meterProvider.Meter("test"))
+	if err != nil {
+		t.Fatalf("Failed to create token tracker: %v", err)
+	}
+	return tracker, reader
+}
+
+func collect(t *testing.T, reader *metric.ManualReader) map[string]metricdata.Metrics {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("Failed to collect metrics: %v", err)
+	}
+	out := map[string]metricdata.Metrics{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			out[m.Name] = m
+		}
+	}
+	return out
+}
+
 func TestNewTokenTracker(t *testing.T) {
-	// Create a meter provider for testing
-	meterProvider := metric.NewMeterProvider()
-	meter := meterProvider.Meter("test")
-
-	// Create token tracker
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
+	tracker, _ := newTestTracker(t)
+	if tracker.tokenUsage.Inst() == nil {
+		t.Error("tokenUsage histogram should be initialized")
 	}
-
-	if tracker == nil {
-		t.Fatal("Token tracker should not be nil")
-	}
-
-	if tracker.inputTokens == nil {
-		t.Error("inputTokens counter should be initialized")
-	}
-
-	if tracker.outputTokens == nil {
-		t.Error("outputTokens counter should be initialized")
-	}
-
-	if tracker.totalTokens == nil {
-		t.Error("totalTokens counter should be initialized")
-	}
-
-	if tracker.requestCount == nil {
-		t.Error("requestCount counter should be initialized")
-	}
-
-	if tracker.requestDuration == nil {
-		t.Error("requestDuration histogram should be initialized")
-	}
-
-	if tracker.requestError == nil {
-		t.Error("requestError counter should be initialized")
+	if tracker.operationDuration.Inst() == nil {
+		t.Error("operationDuration histogram should be initialized")
 	}
 }
 
-func TestRecordUsage_Success(t *testing.T) {
-	// Create a meter provider with reader for testing
-	reader := metric.NewManualReader()
-	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
-	meter := meterProvider.Meter("test")
+func TestRecordUsage_StandardMetricShape(t *testing.T) {
+	tracker, reader := newTestTracker(t)
 
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
+	tracker.RecordUsage(context.Background(), UsageOptions{
+		Provider:         "openai",
+		ProviderUUID:     "provider-123",
+		Model:            "gpt-4-0613",
+		RequestModel:     "gpt-4",
+		RuleUUID:         "rule-456",
+		Scenario:         "openai",
+		InputTokens:      100,
+		OutputTokens:     50,
+		CacheInputTokens: 30,
+		Streamed:         true,
+		Status:           "success",
+		LatencyMs:        250,
+		UserTier:         "enterprise",
+	})
+
+	metrics := collect(t, reader)
+
+	// Token usage: one histogram, split by gen_ai.token.type.
+	tu, ok := metrics["gen_ai.client.token.usage"]
+	if !ok {
+		t.Fatalf("missing gen_ai.client.token.usage; got %v", keys(metrics))
+	}
+	tuHist, ok := tu.Data.(metricdata.Histogram[int64])
+	if !ok {
+		t.Fatalf("token.usage should be Histogram[int64], got %T", tu.Data)
+	}
+	byType := map[string]int64{}
+	for _, dp := range tuHist.DataPoints {
+		typ, _ := dp.Attributes.Value("gen_ai.token.type")
+		byType[typ.AsString()] = dp.Sum
+
+		if v, _ := dp.Attributes.Value("gen_ai.provider.name"); v.AsString() != "openai" {
+			t.Errorf("gen_ai.provider.name = %q, want openai", v.AsString())
+		}
+		if v, _ := dp.Attributes.Value("gen_ai.request.model"); v.AsString() != "gpt-4" {
+			t.Errorf("gen_ai.request.model = %q, want gpt-4", v.AsString())
+		}
+		if v, _ := dp.Attributes.Value("gen_ai.response.model"); v.AsString() != "gpt-4-0613" {
+			t.Errorf("gen_ai.response.model = %q, want gpt-4-0613", v.AsString())
+		}
+		if v, _ := dp.Attributes.Value("gen_ai.operation.name"); v.AsString() != "chat" {
+			t.Errorf("gen_ai.operation.name = %q, want chat (default)", v.AsString())
+		}
+		if v, _ := dp.Attributes.Value("tingly.scenario"); v.AsString() != "openai" {
+			t.Errorf("tingly.scenario = %q, want openai", v.AsString())
+		}
+	}
+	want := map[string]int64{"input": 100, "output": 50, "cache_read": 30}
+	for typ, sum := range want {
+		if byType[typ] != sum {
+			t.Errorf("token.usage[%s] = %d, want %d", typ, byType[typ], sum)
+		}
+	}
+	if _, ok := byType["system"]; ok {
+		t.Error("system token type should be absent when SystemTokens is 0")
 	}
 
-	// Record usage
-	opts := UsageOptions{
-		Provider:     "openai",
-		ProviderUUID: "provider-123",
-		Model:        "gpt-4",
-		RequestModel: "gpt-4",
-		RuleUUID:     "rule-456",
-		Scenario:     "openai",
-		InputTokens:  100,
-		OutputTokens: 50,
-		Streamed:     true,
-		Status:       "success",
-		LatencyMs:    250,
-		UserTier:     "enterprise",
+	// Duration: seconds histogram, count doubles as request count, no
+	// error.type on success.
+	od, ok := metrics["gen_ai.client.operation.duration"]
+	if !ok {
+		t.Fatalf("missing gen_ai.client.operation.duration; got %v", keys(metrics))
+	}
+	odHist, ok := od.Data.(metricdata.Histogram[float64])
+	if !ok {
+		t.Fatalf("operation.duration should be Histogram[float64], got %T", od.Data)
+	}
+	if len(odHist.DataPoints) != 1 {
+		t.Fatalf("expected 1 duration data point, got %d", len(odHist.DataPoints))
+	}
+	dp := odHist.DataPoints[0]
+	if dp.Count != 1 {
+		t.Errorf("duration count = %d, want 1 (doubles as request count)", dp.Count)
+	}
+	if dp.Sum != 0.25 {
+		t.Errorf("duration sum = %v s, want 0.25 (250ms converted to seconds)", dp.Sum)
+	}
+	if _, ok := dp.Attributes.Value("error.type"); ok {
+		t.Error("error.type must be absent on success")
 	}
 
-	ctx := context.Background()
-	tracker.RecordUsage(ctx, opts)
-
-	// Verify metrics were recorded
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("Failed to collect metrics: %v", err)
-	}
-
-	// Check that we have scope metrics
-	if len(rm.ScopeMetrics) == 0 {
-		t.Fatal("No scope metrics recorded")
+	if len(metrics) != 2 {
+		t.Errorf("expected exactly 2 instruments, got %v", keys(metrics))
 	}
 }
 
-func TestRecordUsage_WithError(t *testing.T) {
-	reader := metric.NewManualReader()
-	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
-	meter := meterProvider.Meter("test")
-
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
-	}
-
-	opts := UsageOptions{
-		Provider:     "anthropic",
-		ProviderUUID: "provider-789",
-		Model:        "claude-3-opus",
-		RequestModel: "claude-3",
-		Scenario:     "anthropic",
-		InputTokens:  200,
-		OutputTokens: 100,
-		Streamed:     false,
-		Status:       "error",
-		ErrorCode:    "rate_limit",
-		LatencyMs:    50,
-	}
-
+func TestRecordUsage_ErrorType(t *testing.T) {
+	tracker, reader := newTestTracker(t)
 	ctx := context.Background()
-	tracker.RecordUsage(ctx, opts)
 
-	// Verify metrics were recorded
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("Failed to collect metrics: %v", err)
+	tracker.RecordUsage(ctx, UsageOptions{
+		Provider: "anthropic", Model: "claude-3-opus", RequestModel: "claude-3",
+		Scenario: "anthropic", Status: "error", ErrorCode: "rate_limit", LatencyMs: 50,
+	})
+	tracker.RecordUsage(ctx, UsageOptions{
+		Provider: "openai", Model: "gpt-4", RequestModel: "gpt-4",
+		Scenario: "openai", Status: "error", LatencyMs: 20, // no code -> _OTHER
+	})
+	// Client cancellations are routine in LLM UIs and must NOT carry
+	// error.type — standard error-rate queries ("points with error.type /
+	// total") would otherwise alert on ordinary Ctrl-C traffic.
+	tracker.RecordUsage(ctx, UsageOptions{
+		Provider: "google", Model: "gemini-pro", RequestModel: "gemini",
+		Scenario: "openai", Status: "canceled", ErrorCode: "client_disconnected", LatencyMs: 10,
+	})
+
+	od := collect(t, reader)["gen_ai.client.operation.duration"]
+	hist := od.Data.(metricdata.Histogram[float64])
+	got := map[string]int{}
+	for _, dp := range hist.DataPoints {
+		if v, ok := dp.Attributes.Value("error.type"); ok {
+			got[v.AsString()]++
+		} else {
+			got[""]++
+		}
+	}
+	if got["rate_limit"] != 1 {
+		t.Error("error.type should carry the error code (rate_limit)")
+	}
+	if got["_OTHER"] != 1 {
+		t.Error("error.type should fall back to _OTHER when status=error has no code")
+	}
+	if got[""] != 1 {
+		t.Error("canceled requests must not carry error.type")
 	}
 }
 
-func TestRecordUsage_WithCanceledStatus(t *testing.T) {
-	reader := metric.NewManualReader()
-	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
-	meter := meterProvider.Meter("test")
-
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
+func TestTruncateErrorType_UTF8Safe(t *testing.T) {
+	// A multi-byte rune straddling the 64-byte cut must not produce invalid
+	// UTF-8 (OTLP requires valid UTF-8 strings; a poisoned retained
+	// timeseries would break every subsequent export).
+	s := strings.Repeat("x", maxErrorTypeAttrLen-1) + "世界"
+	got := truncateErrorType(s)
+	if len(got) > maxErrorTypeAttrLen {
+		t.Errorf("truncated length %d exceeds cap %d", len(got), maxErrorTypeAttrLen)
 	}
-
-	opts := UsageOptions{
-		Provider:     "google",
-		ProviderUUID: "provider-abc",
-		Model:        "gemini-pro",
-		RequestModel: "gemini",
-		Scenario:     "openai",
-		InputTokens:  50,
-		OutputTokens: 0,
-		Streamed:     true,
-		Status:       "canceled",
-		LatencyMs:    10,
+	if !utf8.ValidString(got) {
+		t.Errorf("truncation produced invalid UTF-8: %q", got)
 	}
-
-	ctx := context.Background()
-	tracker.RecordUsage(ctx, opts)
-
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("Failed to collect metrics: %v", err)
+	if short := "rate_limit"; truncateErrorType(short) != short {
+		t.Error("short strings must pass through unchanged")
 	}
 }
 
 func TestRecordUsage_ZeroTokens(t *testing.T) {
-	reader := metric.NewManualReader()
-	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
-	meter := meterProvider.Meter("test")
+	tracker, reader := newTestTracker(t)
 
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
+	// Zero tokens: duration (request count) still records, token usage doesn't.
+	tracker.RecordUsage(context.Background(), UsageOptions{
+		Provider: "openai", Model: "gpt-3.5-turbo", RequestModel: "gpt-3.5-turbo",
+		Scenario: "openai", Status: "success", LatencyMs: 0,
+	})
+
+	metrics := collect(t, reader)
+	if _, ok := metrics["gen_ai.client.token.usage"]; ok {
+		t.Error("token.usage should have no data points when all token counts are 0")
 	}
-
-	// Record with zero tokens - should still record request count
-	opts := UsageOptions{
-		Provider:     "openai",
-		ProviderUUID: "provider-xyz",
-		Model:        "gpt-3.5-turbo",
-		RequestModel: "gpt-3.5-turbo",
-		Scenario:     "openai",
-		InputTokens:  0,
-		OutputTokens: 0,
-		Streamed:     false,
-		Status:       "success",
-		LatencyMs:    0,
+	od, ok := metrics["gen_ai.client.operation.duration"]
+	if !ok {
+		t.Fatal("operation.duration must record even for zero-token requests")
 	}
-
-	ctx := context.Background()
-	tracker.RecordUsage(ctx, opts)
-
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("Failed to collect metrics: %v", err)
+	if hist := od.Data.(metricdata.Histogram[float64]); hist.DataPoints[0].Count != 1 {
+		t.Error("duration count should be 1")
 	}
 }
 
 func TestRecordUsage_MultipleRequests(t *testing.T) {
-	reader := metric.NewManualReader()
-	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
-	meter := meterProvider.Meter("test")
-
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
-	}
-
+	tracker, reader := newTestTracker(t)
 	ctx := context.Background()
 
-	// Record multiple requests
 	for i := 0; i < 5; i++ {
-		opts := UsageOptions{
-			Provider:     "openai",
-			ProviderUUID: "provider-123",
-			Model:        "gpt-4",
-			RequestModel: "gpt-4",
-			Scenario:     "openai",
-			InputTokens:  100 * (i + 1),
-			OutputTokens: 50 * (i + 1),
-			Streamed:     i%2 == 0,
-			Status:       "success",
-			LatencyMs:    200 * (i + 1),
-		}
-		tracker.RecordUsage(ctx, opts)
+		tracker.RecordUsage(ctx, UsageOptions{
+			Provider: "openai", Model: "gpt-4", RequestModel: "gpt-4",
+			Scenario: "openai", InputTokens: 100, OutputTokens: 50,
+			Status: "success", LatencyMs: 200,
+		})
 	}
 
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("Failed to collect metrics: %v", err)
+	od := collect(t, reader)["gen_ai.client.operation.duration"]
+	hist := od.Data.(metricdata.Histogram[float64])
+	var count uint64
+	for _, dp := range hist.DataPoints {
+		count += dp.Count
+	}
+	if count != 5 {
+		t.Errorf("total duration count = %d, want 5 (request count)", count)
 	}
 }
 
 // TestRecordUsage_NoHighCardinalityAttributes guards the fix for #1255: the
 // per-request latency value must not be a metric attribute (each unique value
-// would permanently allocate a new data point per instrument), and the error
-// code attribute must be bounded in length.
+// would permanently allocate a new data point per instrument), and the
+// error.type attribute must be bounded in length.
 func TestRecordUsage_NoHighCardinalityAttributes(t *testing.T) {
-	reader := metric.NewManualReader()
-	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
-	meter := meterProvider.Meter("test")
-
-	tracker, err := NewTokenTracker(meter)
-	if err != nil {
-		t.Fatalf("Failed to create token tracker: %v", err)
-	}
+	tracker, reader := newTestTracker(t)
 
 	longError := strings.Repeat("x", 4096)
-	ctx := context.Background()
-	tracker.RecordUsage(ctx, UsageOptions{
-		Provider:     "openai",
-		ProviderUUID: "provider-123",
-		Model:        "gpt-4",
-		RequestModel: "gpt-4",
-		Scenario:     "openai",
-		InputTokens:  100,
-		OutputTokens: 50,
-		Streamed:     true,
-		Status:       "error",
-		ErrorCode:    longError,
-		LatencyMs:    1234,
+	tracker.RecordUsage(context.Background(), UsageOptions{
+		Provider: "openai", ProviderUUID: "provider-123",
+		Model: "gpt-4", RequestModel: "gpt-4", Scenario: "openai",
+		InputTokens: 100, OutputTokens: 50, Streamed: true,
+		Status: "error", ErrorCode: longError, LatencyMs: 1234,
 	})
 
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("Failed to collect metrics: %v", err)
-	}
-
 	checkAttrs := func(metricName string, attrs attribute.Set) {
-		if _, ok := attrs.Value("llm.latency.ms"); ok {
-			t.Errorf("%s: latency must not be a metric attribute (unbounded cardinality)", metricName)
+		iter := attrs.Iter()
+		for iter.Next() {
+			kv := iter.Attribute()
+			if strings.Contains(string(kv.Key), "latency") {
+				t.Errorf("%s: latency must not be a metric attribute (unbounded cardinality)", metricName)
+			}
 		}
-		if v, ok := attrs.Value("llm.error.code"); ok {
-			if len(v.AsString()) > maxErrorCodeAttrLen {
-				t.Errorf("%s: error code attribute exceeds %d chars (len=%d)", metricName, maxErrorCodeAttrLen, len(v.AsString()))
+		if v, ok := attrs.Value("error.type"); ok {
+			if len(v.AsString()) > maxErrorTypeAttrLen {
+				t.Errorf("%s: error.type exceeds %d chars (len=%d)", metricName, maxErrorTypeAttrLen, len(v.AsString()))
 			}
 		}
 	}
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			switch data := m.Data.(type) {
-			case metricdata.Sum[int64]:
-				for _, dp := range data.DataPoints {
-					checkAttrs(m.Name, dp.Attributes)
-				}
-			case metricdata.Histogram[float64]:
-				for _, dp := range data.DataPoints {
-					checkAttrs(m.Name, dp.Attributes)
-				}
+	for name, m := range collect(t, reader) {
+		switch data := m.Data.(type) {
+		case metricdata.Histogram[int64]:
+			for _, dp := range data.DataPoints {
+				checkAttrs(name, dp.Attributes)
+			}
+		case metricdata.Histogram[float64]:
+			for _, dp := range data.DataPoints {
+				checkAttrs(name, dp.Attributes)
 			}
 		}
 	}
 }
 
-func TestUsageOptions_AllFields(t *testing.T) {
-	// Verify all fields in UsageOptions are properly defined
-	opts := UsageOptions{
-		Provider:     "test-provider",
-		ProviderUUID: "test-uuid",
-		Model:        "test-model",
-		RequestModel: "test-request-model",
-		RuleUUID:     "test-rule",
-		Scenario:     "test-scenario",
-		InputTokens:  100,
-		OutputTokens: 50,
-		Streamed:     true,
-		Status:       "success",
-		ErrorCode:    "",
-		LatencyMs:    250,
-		UserTier:     "enterprise",
+func keys(m map[string]metricdata.Metrics) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
 	}
+	return out
+}
 
-	if opts.Provider != "test-provider" {
-		t.Errorf("Provider mismatch: %s", opts.Provider)
+// TestRecordUsage_DetachesRequestBufferStrings guards the core of #1255 at
+// the pointer level: model / request-model / error strings typically alias
+// the gjson-parsed request body, and the cumulative SDK retains attribute
+// sets for the process lifetime — an aliased attribute pins the whole
+// multi-MB buffer forever. The retained values must live in fresh storage.
+func TestRecordUsage_DetachesRequestBufferStrings(t *testing.T) {
+	tracker, reader := newTestTracker(t)
+
+	// Simulate strings carved out of a large request body buffer.
+	body := strings.Repeat("x", 1<<20) + "gpt-4" + "boom_upstream"
+	model := body[1<<20 : 1<<20+5] // "gpt-4", aliases the 1MB buffer
+	errCode := body[1<<20+5:]      // "boom_upstream", aliases it too
+
+	tracker.RecordUsage(context.Background(), UsageOptions{
+		Provider: "openai", Model: model, RequestModel: model,
+		Scenario: "openai", InputTokens: 10, OutputTokens: 5,
+		Status: "error", ErrorCode: errCode, LatencyMs: 100,
+	})
+
+	checkDetached := func(metricName string, attrs attribute.Set) {
+		for _, key := range []string{"gen_ai.response.model", "gen_ai.request.model"} {
+			if v, ok := attrs.Value(attribute.Key(key)); ok && v.AsString() != "" {
+				if unsafe.StringData(v.AsString()) == unsafe.StringData(model) {
+					t.Errorf("%s: %s aliases the request-body buffer — retained forever by the cumulative SDK (#1255)", metricName, key)
+				}
+			}
+		}
+		if v, ok := attrs.Value("error.type"); ok && v.AsString() != "" {
+			if unsafe.StringData(v.AsString()) == unsafe.StringData(errCode) {
+				t.Errorf("%s: error.type aliases the request-body buffer (#1255)", metricName)
+			}
+		}
 	}
-
-	if opts.InputTokens != 100 {
-		t.Errorf("InputTokens mismatch: %d", opts.InputTokens)
+	seen := 0
+	for name, m := range collect(t, reader) {
+		switch data := m.Data.(type) {
+		case metricdata.Histogram[int64]:
+			for _, dp := range data.DataPoints {
+				seen++
+				checkDetached(name, dp.Attributes)
+			}
+		case metricdata.Histogram[float64]:
+			for _, dp := range data.DataPoints {
+				seen++
+				checkDetached(name, dp.Attributes)
+			}
+		}
 	}
-
-	if opts.OutputTokens != 50 {
-		t.Errorf("OutputTokens mismatch: %d", opts.OutputTokens)
-	}
-
-	if opts.Streamed != true {
-		t.Error("Streamed should be true")
+	if seen == 0 {
+		t.Fatal("no data points collected — test is vacuous")
 	}
 }

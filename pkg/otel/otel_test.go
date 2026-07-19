@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/tingly-dev/tingly-box/internal/obs"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -27,73 +25,8 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("ExportTimeout should be 30s, got %v", cfg.ExportTimeout)
 	}
 
-	if cfg.BufferSize != 10000 {
-		t.Errorf("BufferSize should be 10000, got %d", cfg.BufferSize)
-	}
-
-	if !cfg.SQLite.Enabled {
-		t.Error("SQLite.Enabled should be true by default")
-	}
-
 	if cfg.OTLP.Enabled {
 		t.Error("OTLP.Enabled should be false by default")
-	}
-
-	if !cfg.Sink.Enabled {
-		t.Error("Sink.Enabled should be true by default")
-	}
-}
-
-func TestConfig_CustomValues(t *testing.T) {
-	cfg := &Config{
-		Enabled:        true,
-		ExportInterval: 5 * time.Second,
-		ExportTimeout:  60 * time.Second,
-		BufferSize:     5000,
-		SQLite: SQLiteConfig{
-			Enabled: false,
-		},
-		OTLP: OTLPConfig{
-			Enabled:  true,
-			Endpoint: "localhost:4317",
-			Protocol: "grpc",
-			Insecure: true,
-		},
-		Sink: SinkConfig{
-			Enabled: true,
-		},
-	}
-
-	if cfg.ExportInterval != 5*time.Second {
-		t.Errorf("ExportInterval mismatch: %v", cfg.ExportInterval)
-	}
-
-	if cfg.ExportTimeout != 60*time.Second {
-		t.Errorf("ExportTimeout mismatch: %v", cfg.ExportTimeout)
-	}
-
-	if cfg.BufferSize != 5000 {
-		t.Errorf("BufferSize mismatch: %d", cfg.BufferSize)
-	}
-
-	if cfg.SQLite.Enabled {
-		t.Error("SQLite.Enabled should be false")
-	}
-
-	if !cfg.OTLP.Enabled {
-		t.Error("OTLP.Enabled should be true")
-	}
-
-	if cfg.OTLP.Endpoint != "localhost:4317" {
-		t.Errorf("OTLP.Endpoint mismatch: %s", cfg.OTLP.Endpoint)
-	}
-
-	if cfg.OTLP.Protocol != "grpc" {
-		t.Errorf("OTLP.Protocol mismatch: %s", cfg.OTLP.Protocol)
-	}
-
-	if !cfg.OTLP.Insecure {
-		t.Error("OTLP.Insecure should be true")
 	}
 }
 
@@ -109,178 +42,132 @@ func TestOTLPConfig_Defaults(t *testing.T) {
 	}
 }
 
-func TestStoreRefs(t *testing.T) {
-	refs := &StoreRefs{
-		StatsStore: nil,
-		UsageStore: nil,
-		Sink:       nil,
-	}
+func TestSetup_Shutdown_ZeroValue(t *testing.T) {
+	// Shutdown on a zero-value setup must not panic
+	setup := &Setup{}
 
-	if refs == nil {
-		t.Fatal("StoreRefs should not be nil")
-	}
-}
-
-func TestMeterSetup_Shutdown(t *testing.T) {
-	// Test shutdown with nil providers (should not panic)
-	setup := &MeterSetup{
-		meterProvider:  nil,
-		tracerProvider: nil,
-		tracker:        nil,
-		tracer:         nil,
-	}
-
-	ctx := context.Background()
-	err := setup.Shutdown(ctx)
-	if err != nil {
+	if err := setup.Shutdown(context.Background()); err != nil {
 		t.Errorf("Shutdown with nil providers should not return error: %v", err)
 	}
 }
 
-func TestMeterSetup_Tracker(t *testing.T) {
-	// Test Tracker method
-	setup := &MeterSetup{}
-	tracker := setup.Tracker()
-	if tracker != nil {
-		t.Error("Tracker should be nil when not initialized")
-	}
-}
+func TestSetup_NilReceiverSafe(t *testing.T) {
+	// NewSetup returns (nil, nil) when disabled, and the server continues
+	// with a nil Setup after startup errors — every method must be safe on
+	// a nil receiver so instrumentation code doesn't need its own guards.
+	var setup *Setup
 
-func TestMeterSetup_Tracer(t *testing.T) {
-	// Test Tracer method
-	setup := &MeterSetup{}
+	if setup.Tracker() != nil {
+		t.Error("nil Setup: Tracker() should be nil")
+	}
 	tracer := setup.Tracer()
-	if tracer != nil {
-		t.Error("Tracer should be nil when not initialized")
+	if tracer == nil {
+		t.Fatal("nil Setup: Tracer() should still return a usable no-op tracer")
+	}
+	_, span := tracer.StartRequestSpan(context.Background(), "chat", "openai", "gpt-4", "openai")
+	if span.IsRecording() {
+		t.Error("nil Setup: spans must be no-ops")
+	}
+	tracer.EndSpan(span, nil)
+
+	if err := setup.Shutdown(context.Background()); err != nil {
+		t.Errorf("nil Setup: Shutdown should not error: %v", err)
 	}
 }
 
-func TestNewMeterSetup_Disabled(t *testing.T) {
-	ctx := context.Background()
-	cfg := &Config{
-		Enabled: false,
-	}
-	stores := &StoreRefs{}
-
-	setup, err := NewMeterSetup(ctx, cfg, stores)
+func TestNewSetup_Disabled(t *testing.T) {
+	setup, err := NewSetup(context.Background(), &Config{Enabled: false})
 	if err != nil {
-		t.Errorf("NewMeterSetup with disabled config should not return error: %v", err)
+		t.Errorf("NewSetup with disabled config should not return error: %v", err)
 	}
-
 	if setup != nil {
-		t.Error("NewMeterSetup with disabled config should return nil setup")
+		t.Error("NewSetup with disabled config should return nil setup")
 	}
 }
 
-func TestNewMeterSetup_WithStores(t *testing.T) {
+func TestNewSetup_NoOTLP(t *testing.T) {
+	// Without OTLP the meter provider has no reader and no tracer provider
+	// is installed; instruments and the tracer helper must still be usable
+	// and Shutdown must succeed.
 	ctx := context.Background()
-	cfg := &Config{
+	setup, err := NewSetup(ctx, &Config{
 		Enabled:        true,
 		ExportInterval: 10 * time.Second,
 		ExportTimeout:  30 * time.Second,
-		SQLite: SQLiteConfig{
-			Enabled: true,
-		},
-		Sink: SinkConfig{
-			Enabled: true,
-		},
-		OTLP: OTLPConfig{
-			Enabled: false,
-		},
-	}
-
-	// Create with nil stores (should handle gracefully)
-	stores := &StoreRefs{
-		StatsStore: nil,
-		UsageStore: nil,
-		Sink:       nil,
-	}
-
-	setup, err := NewMeterSetup(ctx, cfg, stores)
+	})
 	if err != nil {
-		t.Fatalf("NewMeterSetup failed: %v", err)
+		t.Fatalf("NewSetup failed: %v", err)
 	}
-
 	if setup == nil {
-		t.Fatal("MeterSetup should not be nil")
+		t.Fatal("Setup should not be nil")
+	}
+	if setup.Tracker() != nil {
+		t.Error("Tracker should be nil without an OTLP egress - callers nil-guard and skip all per-request metric work")
+	}
+	if setup.Tracer() == nil {
+		t.Error("Tracer should not be nil - it must be safe to instrument unconditionally")
 	}
 
-	// Cleanup
+	// Spans must be no-ops (not sampled) rather than recorded-and-dropped.
+	sctx, span := setup.Tracer().StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
+	if span.IsRecording() {
+		t.Error("spans must not record when no OTLP endpoint is configured")
+	}
+	setup.Tracer().EndSpan(span, nil)
+	_ = sctx
+
 	if err := setup.Shutdown(ctx); err != nil {
 		t.Errorf("Shutdown failed: %v", err)
 	}
 }
 
-func TestNewMeterSetup_WithMockStores(t *testing.T) {
+func TestNewSetup_WithOTLP(t *testing.T) {
+	// OTLP exporters connect lazily, so setup succeeds offline. Spans must
+	// actually record when tracing is wired.
 	ctx := context.Background()
-	cfg := &Config{
+	setup, err := NewSetup(ctx, &Config{
 		Enabled:        true,
-		ExportInterval: 10 * time.Second,
-		ExportTimeout:  30 * time.Second,
-		SQLite: SQLiteConfig{
-			Enabled: true,
-		},
-		Sink: SinkConfig{
-			Enabled: false, // Disable sink for this test
-		},
+		ExportInterval: time.Hour, // never fires during the test
+		ExportTimeout:  time.Second,
 		OTLP: OTLPConfig{
-			Enabled: false,
+			Enabled:  true,
+			Endpoint: "localhost:4317",
+			Insecure: true,
 		},
-	}
-
-	// Create mock sink
-	sink := obs.NewSink(t.TempDir(), obs.RecordModeRequestResponse)
-
-	stores := &StoreRefs{
-		StatsStore: nil,
-		UsageStore: nil,
-		Sink:       sink,
-	}
-
-	setup, err := NewMeterSetup(ctx, cfg, stores)
+	})
 	if err != nil {
-		t.Fatalf("NewMeterSetup failed: %v", err)
+		t.Fatalf("NewSetup failed: %v", err)
 	}
-
 	if setup == nil {
-		t.Fatal("MeterSetup should not be nil")
+		t.Fatal("Setup should not be nil")
 	}
 
-	if setup.Tracker() == nil {
-		t.Error("Tracker should not be nil")
+	_, span := setup.Tracer().StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
+	if !span.IsRecording() {
+		t.Error("spans should record when OTLP tracing is configured")
 	}
+	setup.Tracer().EndSpan(span, nil)
 
-	// Cleanup
-	if err := setup.Shutdown(ctx); err != nil {
-		t.Errorf("Shutdown failed: %v", err)
-	}
+	sctx, scancel := context.WithTimeout(ctx, 2*time.Second)
+	defer scancel()
+	// Shutdown flushes to an unreachable endpoint; the exporter error is
+	// expected — what matters is that it returns rather than hangs.
+	_ = setup.Shutdown(sctx)
 }
 
-func TestAttributes(t *testing.T) {
-	// Test that all semantic convention attributes are defined
+func TestTraceSampler(t *testing.T) {
 	tests := []struct {
-		name string
-		key  string
+		ratio float64
+		desc  string
 	}{
-		{"Provider", string(AttrLLMProvider)},
-		{"Model", string(AttrLLMModel)},
-		{"RequestModel", string(AttrLLMRequestModel)},
-		{"TokenType", string(AttrLLMTokenType)},
-		{"Scenario", string(AttrLLMScenario)},
-		{"Streaming", string(AttrLLMStreaming)},
-		{"ResponseStatus", string(AttrLLMResponseStatus)},
-		{"ErrorCode", string(AttrLLMErrorCode)},
-		{"RuleUUID", string(AttrLLMRuleUUID)},
-		{"ProviderUUID", string(AttrLLMProviderUUID)},
-		{"UserTier", string(AttrLLMUserTier)},
-		{"LatencyMs", string(AttrLLMLatencyMs)},
+		{0, "zero value samples everything"},
+		{1, "1.0 samples everything"},
+		{-0.5, "negative samples everything"},
+		{0.25, "fractional ratio"},
 	}
-
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.key == "" {
-				t.Errorf("Attribute %s should not be empty", tt.name)
-			}
-		})
+		if s := traceSampler(tt.ratio); s == nil {
+			t.Errorf("traceSampler(%v) returned nil (%s)", tt.ratio, tt.desc)
+		}
 	}
 }

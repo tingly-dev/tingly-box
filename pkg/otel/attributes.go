@@ -1,52 +1,31 @@
-// Package otel provides OpenTelemetry-based observability for LLM token usage.
-// It implements metrics, traces, and logs collection with a collector/exporter
-// architecture for efficient batch processing.
 package otel
 
-import "go.opentelemetry.io/otel/attribute"
+import (
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 
-// Semantic convention attributes following OpenLLMetry and OpenTelemetry standards
-// These attributes are used to annotate metrics with consistent, meaningful labels.
+	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
+)
+
+// OTel GenAI semantic convention attribute keys, aliased from the official
+// semconv package so a version bump tracks spec renames (the conventions are
+// still Development status — gen_ai.system already became
+// gen_ai.provider.name once).
 var (
-	// AttrLLMProvider identifies the LLM provider (e.g., "openai", "anthropic", "google")
-	AttrLLMProvider = attribute.Key("llm.provider")
+	AttrGenAIOperationName     = semconv.GenAIOperationNameKey
+	AttrGenAIProviderName      = semconv.GenAIProviderNameKey
+	AttrGenAIRequestModel      = semconv.GenAIRequestModelKey
+	AttrGenAIResponseModel     = semconv.GenAIResponseModelKey
+	AttrGenAIUsageInputTokens  = semconv.GenAIUsageInputTokensKey
+	AttrGenAIUsageOutputTokens = semconv.GenAIUsageOutputTokensKey
+	AttrErrorType              = semconv.ErrorTypeKey
+)
 
-	// AttrLLMModel identifies the actual model used (e.g., "gpt-4", "claude-3-opus")
-	AttrLLMModel = attribute.Key("llm.model")
-
-	// AttrLLMRequestModel identifies the model requested by the user
-	AttrLLMRequestModel = attribute.Key("llm.request.model")
-
-	// AttrLLMTokenType identifies the type of token (input/output)
-	// Note: Uses underscore (llm.token_type) for backward compatibility with internal/obs/otel
-	AttrLLMTokenType = attribute.Key("llm.token_type")
-
-	// AttrLLMScenario identifies the API scenario (e.g., "openai", "anthropic", "claude_code")
-	AttrLLMScenario = attribute.Key("llm.scenario")
-
-	// AttrLLMStreaming indicates whether the request was streaming
-	AttrLLMStreaming = attribute.Key("llm.streaming")
-
-	// AttrLLMResponseStatus indicates the response status (success, error, canceled)
-	AttrLLMResponseStatus = attribute.Key("llm.response.status")
-
-	// AttrLLMErrorCode contains the error code if status is error
-	AttrLLMErrorCode = attribute.Key("llm.error.code")
-
-	// AttrLLMRuleUUID identifies the load balancer rule used
-	AttrLLMRuleUUID = attribute.Key("llm.rule.uuid")
-
-	// AttrLLMProviderUUID identifies the provider UUID
-	AttrLLMProviderUUID = attribute.Key("llm.provider.uuid")
-
-	// AttrLLMUserTier identifies low-cardinality user class for enterprise traffic.
-	AttrLLMUserTier = attribute.Key("llm.user.tier")
-
-	// AttrLLMLatencyMs identifies the request latency in milliseconds.
-	//
-	// Deprecated: do not attach this as a metric attribute — latency is
-	// near-unique per request, and every distinct attribute set permanently
-	// allocates a new data point per instrument (unbounded memory growth,
-	// #1255). Record latency as a histogram value instead.
-	AttrLLMLatencyMs = attribute.Key("llm.latency.ms")
+// Gateway-specific attributes, aliased from tracker (their single home) so
+// metrics and spans are guaranteed to emit identical key strings.
+var (
+	AttrTinglyScenario     = tracker.AttrScenario
+	AttrTinglyProviderUUID = tracker.AttrProviderUUID
+	AttrTinglyRuleUUID     = tracker.AttrRuleUUID
+	AttrTinglyStreaming    = tracker.AttrStreaming
+	AttrTinglyUserTier     = tracker.AttrUserTier
 )

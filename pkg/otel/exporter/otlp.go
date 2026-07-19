@@ -1,3 +1,4 @@
+// Package exporter provides the OTLP exporters used by pkg/otel.
 package exporter
 
 import (
@@ -8,16 +9,9 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
-// OTLPExporter exports metrics to an OTLP backend via gRPC or HTTP.
-type OTLPExporter struct {
-	exporter sdkmetric.Exporter
-	config   OTLPConfig
-}
-
-// OTLPConfig holds the OTLP exporter configuration
+// OTLPConfig holds the OTLP exporter configuration, shared by all signals.
 type OTLPConfig struct {
 	Endpoint string
 	Protocol string
@@ -26,87 +20,55 @@ type OTLPConfig struct {
 	Timeout  time.Duration
 }
 
-// NewOTLPExporter creates a new OTLP exporter.
-func NewOTLPExporter(cfg OTLPConfig) (*OTLPExporter, error) {
-	ctx := context.Background()
-	var exporter sdkmetric.Exporter
-	var err error
-
-	// Set default timeout if not specified
+// timeout returns the configured timeout or the 30s default.
+func (cfg OTLPConfig) timeout() time.Duration {
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 30 * time.Second
+		return 30 * time.Second
 	}
+	return cfg.Timeout
+}
+
+// otlpOptions assembles the option list for one OTLP exporter flavor. The
+// per-signal, per-protocol option types are distinct but structurally
+// identical, so each constructor passes its own With* functions.
+func otlpOptions[O any](cfg OTLPConfig, withEndpoint func(string) O, withTimeout func(time.Duration) O, withInsecure func() O, withHeaders func(map[string]string) O) []O {
+	opts := []O{withEndpoint(cfg.Endpoint), withTimeout(cfg.timeout())}
+	if cfg.Insecure {
+		opts = append(opts, withInsecure())
+	}
+	if len(cfg.Headers) > 0 {
+		opts = append(opts, withHeaders(cfg.Headers))
+	}
+	return opts
+}
+
+// NewOTLPExporter creates a new OTLP metrics exporter for the configured
+// protocol ("grpc" by default, or "http/protobuf"). The returned exporter is
+// the SDK exporter itself — no wrapping is needed. Construction is lazy;
+// no connection is dialed until the first export.
+func NewOTLPExporter(cfg OTLPConfig) (sdkmetric.Exporter, error) {
+	ctx := context.Background()
 
 	switch cfg.Protocol {
 	case "http/protobuf":
-		opts := []otlpmetrichttp.Option{
-			otlpmetrichttp.WithEndpoint(cfg.Endpoint),
-			otlpmetrichttp.WithTimeout(cfg.Timeout),
-		}
-
-		if cfg.Insecure {
-			opts = append(opts, otlpmetrichttp.WithInsecure())
-		}
-
-		if len(cfg.Headers) > 0 {
-			opts = append(opts, otlpmetrichttp.WithHeaders(cfg.Headers))
-		}
-
-		exporter, err = otlpmetrichttp.New(ctx, opts...)
+		exp, err := otlpmetrichttp.New(ctx, otlpOptions(cfg,
+			otlpmetrichttp.WithEndpoint, otlpmetrichttp.WithTimeout,
+			otlpmetrichttp.WithInsecure, otlpmetrichttp.WithHeaders)...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OTLP HTTP exporter: %w", err)
 		}
+		return exp, nil
 
 	case "grpc", "":
-		opts := []otlpmetricgrpc.Option{
-			otlpmetricgrpc.WithEndpoint(cfg.Endpoint),
-			otlpmetricgrpc.WithTimeout(cfg.Timeout),
-		}
-
-		if cfg.Insecure {
-			opts = append(opts, otlpmetricgrpc.WithInsecure())
-		}
-
-		if len(cfg.Headers) > 0 {
-			opts = append(opts, otlpmetricgrpc.WithHeaders(cfg.Headers))
-		}
-
-		exporter, err = otlpmetricgrpc.New(ctx, opts...)
+		exp, err := otlpmetricgrpc.New(ctx, otlpOptions(cfg,
+			otlpmetricgrpc.WithEndpoint, otlpmetricgrpc.WithTimeout,
+			otlpmetricgrpc.WithInsecure, otlpmetricgrpc.WithHeaders)...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OTLP gRPC exporter: %w", err)
 		}
+		return exp, nil
 
 	default:
 		return nil, fmt.Errorf("unsupported OTLP protocol: %s", cfg.Protocol)
 	}
-
-	return &OTLPExporter{
-		exporter: exporter,
-		config:   cfg,
-	}, nil
-}
-
-// Temporality returns the Temporality to use for an instrument kind.
-func (e *OTLPExporter) Temporality(kind sdkmetric.InstrumentKind) metricdata.Temporality {
-	return metricdata.CumulativeTemporality
-}
-
-// Aggregation returns the Aggregation to use for an instrument kind.
-func (e *OTLPExporter) Aggregation(kind sdkmetric.InstrumentKind) sdkmetric.Aggregation {
-	return sdkmetric.DefaultAggregationSelector(kind)
-}
-
-// Export exports metrics to the OTLP endpoint.
-func (e *OTLPExporter) Export(ctx context.Context, res *metricdata.ResourceMetrics) error {
-	return e.exporter.Export(ctx, res)
-}
-
-// ForceFlush forces a flush of pending data.
-func (e *OTLPExporter) ForceFlush(ctx context.Context) error {
-	return e.exporter.ForceFlush(ctx)
-}
-
-// Shutdown shuts down the exporter.
-func (e *OTLPExporter) Shutdown(ctx context.Context) error {
-	return e.exporter.Shutdown(ctx)
 }

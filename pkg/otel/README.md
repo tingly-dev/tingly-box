@@ -1,200 +1,142 @@
-# pkg/otel - OpenTelemetry Observability for Tingly-Box
+# pkg/otel - OpenTelemetry Metrics & Traces for Tingly-Box
 
-Package otel provides OpenTelemetry-based observability for LLM token usage in tingly-box.
+Package otel wires OpenTelemetry metrics and traces for LLM requests.
 
-## Features
+## Design
 
-- **Token Usage Metrics**: Track input/output tokens, request counts, latency, and errors
-- **Multi-Exporter Support**: Export to SQLite, OTLP backends, and JSONL files simultaneously
-- **Distributed Tracing**: Trace request lifecycle with token usage events
-- **Semantic Conventions**: Follows OpenLLMetry attribute naming conventions
+Telemetry has exactly **one egress**: an optional OTLP endpoint, shared by
+all signals.
+
+- **Aggregated metrics** (token counters, request counts, duration histogram)
+  answer "how much / how fast".
+- **Traces** answer "what happened inside this request" and propagate across
+  the gateway hop via W3C `traceparent` (propagator installed when tracing
+  is on).
+- **Per-request artifacts** are written at the source, not derived from
+  metrics: usage records by `internal/server/usage_tracking.go` (straight to
+  the SQLite usage store), request recordings by the recording pipeline
+  (`internal/server/recording` → `internal/obs.Sink`).
+
+Reconstructing per-request records from aggregated metric data points is
+lossy (values, request ids and timing are gone) and, with cumulative
+temporality, re-emits every known series each export cycle. Earlier versions
+of this package did exactly that via SQLite/Sink "exporters"; both have been
+removed.
+
+When OTLP is not configured (the default), **no providers are constructed
+at all**: `Tracker()` returns nil — callers nil-guard and skip every bit of
+per-request metric work — and `Tracer()` wraps an explicit no-op provider,
+so spans are never sampled (`IsRecording() == false`) and instrumentation
+can stay in place unconditionally. A provider is only constructed when it
+has somewhere to send data — never the "record-then-drop" middle ground.
+All `Setup` methods are nil-receiver-safe. The process-global OTel
+providers are installed only after the whole setup succeeds.
 
 ## Package Structure
 
 ```
 pkg/otel/
+├── config.go             # Config / OTLPConfig (incl. TraceSampleRatio)
+├── setup.go              # Setup: providers, propagator, lifecycle
+├── tracer.go             # Tracer helper (request spans, events, errors)
 ├── attributes.go         # Semantic convention attribute keys
-├── config.go             # Configuration types (Config, SQLiteConfig, OTLPConfig, SinkConfig)
-├── meter.go              # MeterSetup initialization and lifecycle
-├── tracer.go             # Distributed tracing support
 ├── tracker/
 │   └── token_tracker.go  # TokenTracker for recording token usage
 └── exporter/
-    ├── multi.go          # MultiExporter for multiple backends
-    ├── sqlite.go         # SQLite exporter
-    ├── otlp.go           # OTLP exporter (gRPC/HTTP)
-    ├── sink.go           # JSONL file sink exporter
-    └── util.go           # Utility functions
+    ├── otlp.go           # OTLP metrics exporter (gRPC/HTTP)
+    └── otlp_trace.go     # OTLP trace exporter (gRPC/HTTP)
 ```
 
 ## Usage
 
-### Basic Setup
-
 ```go
 import (
     "context"
+
     "github.com/tingly-dev/tingly-box/pkg/otel"
-    "github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
-// Create configuration
-cfg := &otel.Config{
-    Enabled:        true,
-    ExportInterval: 10 * time.Second,
-    ExportTimeout:  30 * time.Second,
-    SQLite: otel.SQLiteConfig{Enabled: true},
-    Sink:   otel.SinkConfig{Enabled: true},
-    OTLP:   otel.OTLPConfig{Enabled: false},
+cfg := otel.DefaultConfig()
+cfg.OTLP = otel.OTLPConfig{
+    Enabled:  true,
+    Endpoint: "localhost:4317",
+    Protocol: "grpc", // or "http/protobuf"
+    Insecure: true,
+    // TraceSampleRatio: 0.1, // sample 10% of new traces; 0 = everything
 }
 
-// Initialize meter setup
-setup, err := otel.NewMeterSetup(ctx, cfg, &otel.StoreRefs{
-    StatsStore: statsStore,
-    UsageStore: usageStore,
-    Sink:       sink,
-})
+setup, err := otel.NewSetup(context.Background(), cfg)
 if err != nil {
     // handle error
 }
-defer setup.Shutdown(ctx)
+if setup != nil {
+    defer setup.Shutdown(context.Background())
 
-// Get token tracker
-tracker := setup.Tracker()
+    tracker := setup.Tracker() // nil when OTLP is off - nil-guard RecordUsage calls
+    tracer := setup.Tracer()   // always usable; no-op when OTLP is off
 
-// Record token usage
-tracker.RecordUsage(ctx, tracker.UsageOptions{
-    Provider:     "openai",
-    ProviderUUID: "uuid-123",
-    Model:        "gpt-4",
-    RequestModel: "gpt-4",
-    Scenario:     "openai",
-    InputTokens:  100,
-    OutputTokens: 50,
-    Streamed:     true,
-    Status:       "success",
-    LatencyMs:    250,
-})
-```
-
-### Using Tracer
-
-```go
-// Get tracer
-tracer := setup.Tracer()
-
-// Start a span for LLM request
-ctx, span := tracer.StartRequestSpan(ctx, "openai", "gpt-4", "openai")
-defer tracer.EndSpan(span, nil)
-
-// Record token usage as span event
-tracer.RecordTokenUsageEvent(ctx, 100, 50)
-```
-
-### OTLP Export
-
-```go
-cfg := &otel.Config{
-    Enabled:        true,
-    ExportInterval: 10 * time.Second,
-    OTLP: otel.OTLPConfig{
-        Enabled:  true,
-        Endpoint: "localhost:4317",
-        Protocol: "grpc",
-        Insecure: true,
-    },
+    ctx, span := tracer.StartRequestSpan(ctx, "chat", provider, model, scenario)
+    defer func() { tracer.EndSpan(span, err) }()
 }
 ```
 
-## Metrics
+## Metrics — OTel GenAI semantic conventions
 
-| Metric Name | Type | Description |
-|-------------|------|-------------|
-| `llm.token.usage.input` | Counter | Input/prompt token usage |
-| `llm.token.usage.output` | Counter | Output/completion token usage |
-| `llm.token.total` | Counter | Total tokens consumed |
-| `llm.request.count` | Counter | Number of LLM requests |
-| `llm.request.duration` | Histogram | Request duration in milliseconds |
-| `llm.request.errors` | Counter | Number of request errors |
+This package emits the standard GenAI client metrics
+(https://github.com/open-telemetry/semantic-conventions-genai, Development
+status; adopted wholesale before any consumer existed, so there is no legacy
+`llm.*` namespace to migrate):
 
-## Semantic Attributes
+| Instrument                        | Type      | Unit    |
+|-----------------------------------|-----------|---------|
+| `gen_ai.client.token.usage`       | histogram | {token} |
+| `gen_ai.client.operation.duration`| histogram | s       |
 
-| Attribute | Key | Example |
-|-----------|-----|---------|
-| Provider | `llm.provider` | "openai", "anthropic" |
-| Model | `llm.model` | "gpt-4", "claude-3-opus" |
-| Request Model | `llm.request.model` | User-requested model |
-| Token Type | `llm.token.type` | "input", "output" |
-| Scenario | `llm.scenario` | "openai", "anthropic", "claude_code" |
-| Streaming | `llm.streaming` | true, false |
-| Status | `llm.response.status` | "success", "error", "canceled" |
-| Error Code | `llm.error.code` | Bounded error class ("rate_limit", "timeout", ...) |
-| Rule UUID | `llm.rule.uuid` | Load balancer rule |
-| Provider UUID | `llm.provider.uuid` | Provider UUID |
-| User Tier | `llm.user.tier` | "enterprise", "standard" |
+There are deliberately no separate request/error counters: the duration
+histogram's count **is** the request count, and failures are classified by
+the `error.type` attribute on it — that is the standard shape. `error.type`
+is attached only when `Status == "error"`: client cancellations (routine in
+LLM UIs) must not trip error-rate alerts computed from this metric.
 
-> **Cardinality note:** metric attributes must be low-cardinality. Every
-> distinct attribute set permanently allocates a data point per instrument in
-> the cumulative metrics SDK, so per-request values (latency, raw error
-> messages, request IDs) must never be attributes. Latency is recorded as the
-> `llm.request.duration` histogram *value*; error codes are classified into a
-> bounded set before recording.
+Instrument names/units/descriptions and the standard attribute keys come
+from the official `semconv/v1.37.0` + `genaiconv` packages, so a semconv
+version bump tracks spec renames; only the `tingly.*` keys are ours (their
+single home is the tracker package, aliased for spans in `attributes.go`).
 
-## Configuration
+Standard attributes: `gen_ai.operation.name` (default `chat`),
+`gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model`,
+`gen_ai.token.type` (`input` / `output`, extended with `cache_read` /
+`system`), `error.type` on failures.
 
-### Config
+Gateway-specific dimensions stay in their own namespace: `tingly.scenario`,
+`tingly.provider.uuid`, `tingly.rule.uuid`, `tingly.streaming`,
+`tingly.user.tier`.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Enabled | bool | true | Enable/disable OTel tracking |
-| ExportInterval | duration | 10s | Time between exports |
-| ExportTimeout | duration | 30s | Timeout for each export |
-| BufferSize | int | 10000 | Max metrics to buffer |
-| SQLite | SQLiteConfig | - | SQLite exporter config |
-| OTLP | OTLPConfig | - | OTLP exporter config |
-| Sink | SinkConfig | - | JSONL sink config |
+## Traces
 
-### SQLiteConfig
+- Spans batch through `sdktrace.WithBatcher` to the same OTLP endpoint as
+  metrics.
+- Sampling is parent-based: an incoming sampled `traceparent` is always
+  honored; new traces sample at `TraceSampleRatio` (default: everything).
+- Inference spans follow the GenAI convention: named
+  `"{operation} {request model}"` (e.g. `chat gpt-4`), kind CLIENT — the
+  operation is a `StartRequestSpan` parameter (default `chat`), mirroring
+  `UsageOptions.Operation` so metrics and spans agree on the axis — with
+  `gen_ai.operation.name` / `gen_ai.provider.name` / `gen_ai.request.model`
+  and `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` set via
+  `Tracer.SetTokenUsage`.
+- `Tracer` provides `StartRequestSpan`, `SetTokenUsage`, `RecordError`,
+  `EndSpan`.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Enabled | bool | true | Enable SQLite export |
+## Cardinality rules
 
-### OTLPConfig
+Every distinct attribute set becomes a data point the cumulative SDK retains
+for the lifetime of the process. Two rules keep that bounded (see #1255):
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Enabled | bool | false | Enable OTLP export |
-| Endpoint | string | "" | OTLP endpoint (host:port) |
-| Protocol | string | "grpc" | "grpc" or "http/protobuf" |
-| Insecure | bool | false | Disable TLS |
-| Headers | map[string]string | nil | Additional headers |
-
-### SinkConfig
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Enabled | bool | true | Enable JSONL sink export |
-
-## Migration from internal/obs/otel
-
-The new `pkg/otel` package replaces `internal/obs/otel`:
-
-1. Import path changed: `internal/obs/otel` → `pkg/otel`
-2. TokenTracker moved: `otel.TokenTracker` → `tracker.TokenTracker`
-3. UsageOptions moved: `otel.UsageOptions` → `tracker.UsageOptions`
-4. Config structure updated with nested exporter configs
-5. Metric names updated for clarity:
-   - `llm.token.usage` → `llm.token.usage.input` / `llm.token.usage.output`
-
-## Dependencies
-
-- go.opentelemetry.io/otel (v1.42.0)
-- go.opentelemetry.io/otel/sdk (v1.42.0)
-- go.opentelemetry.io/otel/exporters/otlp (v1.42.0)
-- go.opentelemetry.io/otel/exporters/stdout (v1.42.0)
-
-## Related Documentation
-
-- Specification: `docs/spec/20260309-otel-token-usage-collector-spec.md`
-- Architecture: `docs/arch/otel-arch.md`
+- **Never attach near-unique values as metric attributes** (latency, request
+  ids, raw error text). Latency is the histogram *value*; error codes are
+  capped at 64 bytes. (Spans are different: per-request values belong on
+  spans, which are exported and released, not retained.)
+- **Detach attribute strings from request buffers** — `RecordUsage` clones
+  model / request-model / error-code strings so a retained attribute cannot
+  pin a multi-megabyte parsed request body.
