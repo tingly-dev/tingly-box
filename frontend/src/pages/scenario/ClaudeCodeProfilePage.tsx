@@ -65,7 +65,10 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
-    const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
+    // Prefer the CLI already installed alongside the running server. An npx
+    // package can be an older published build during local/dev testing and may
+    // regenerate this profile with a schema that predates persistent overrides.
+    const [commandMode, setCommandMode] = useState<'npx' | 'global'>('global');
     const [settingsArtifact, setSettingsArtifact] = useState<ClaudeCodeProfileSettingsArtifact | null>(null);
 
     // Update unified mode when profile changes
