@@ -73,8 +73,17 @@ type HealthMonitor struct {
 	probeFunc              HealthProbeFunc // Optional probe function for recovery checking
 }
 
-// NewHealthMonitor creates a new health monitor with the given configuration
+// NewHealthMonitor creates a new health monitor with the given configuration.
+// Zero values fall back to defaults (mirroring NewBreaker): the server builds
+// the monitor straight from the persisted config, and an absent health_monitor
+// section used to yield a ZERO recovery window — a 429-marked service
+// "auto-recovered" on the very next request, so the documented rate-limit
+// window never held. ProbeEnabled is left as-is (false is a valid choice and
+// a bool cannot express "unset").
 func NewHealthMonitor(config HealthMonitorConfig) *HealthMonitor {
+	if config.RecoveryTimeoutSeconds <= 0 {
+		config.RecoveryTimeoutSeconds = DefaultHealthMonitorConfig().RecoveryTimeoutSeconds
+	}
 	return &HealthMonitor{
 		services:               make(map[string]*ServiceHealth),
 		config:                 config,
@@ -303,11 +312,15 @@ func (hm *HealthMonitor) RemoveHealth(serviceID string) {
 	delete(hm.services, serviceID)
 }
 
-// UpdateConfig updates the health monitor configuration
+// UpdateConfig updates the health monitor configuration. Zero values fall
+// back to defaults, matching NewHealthMonitor.
 func (hm *HealthMonitor) UpdateConfig(config HealthMonitorConfig) {
 	hm.mutex.Lock()
 	defer hm.mutex.Unlock()
 
+	if config.RecoveryTimeoutSeconds <= 0 {
+		config.RecoveryTimeoutSeconds = DefaultHealthMonitorConfig().RecoveryTimeoutSeconds
+	}
 	hm.config = config
 	hm.defaultRecoveryTimeout = time.Duration(config.RecoveryTimeoutSeconds) * time.Second
 }

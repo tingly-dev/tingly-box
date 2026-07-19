@@ -216,6 +216,20 @@ func ExtendedErrorSpecs() []SharedMockSpec {
 			Severity:      "high",
 		},
 		{
+			ID:      "virtual-fail-529",
+			Name:    "Virtual Fail 529",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  529,
+				Message: "simulated overloaded",
+				Type:    "overloaded_error",
+			},
+			ErrorCategory: ErrorCategoryOverloaded,
+			IsRetryable:   true,
+			Severity:      "medium",
+		},
+		{
 			ID:      "virtual-fail-503",
 			Name:    "Virtual Fail 503",
 			Content: "unreachable",

@@ -269,6 +269,7 @@ Registered by `RegisterExtendedErrorMocks()`:
 | `virtual-fail-auth-401` | Pre-content | 401 | auth | Authentication failure |
 | `virtual-fail-502` | Pre-content | 502 | upstream | Bad gateway |
 | `virtual-fail-503` | Pre-content | 503 | overloaded | Service unavailable |
+| `virtual-fail-529` | Pre-content | 529 | overloaded | Anthropic overloaded_error |
 | `virtual-fail-400` | Pre-content | 400 | invalid | Invalid request |
 | `virtual-fail-timeout` | Mid-stream | — | timeout | Mid-stream timeout |
 

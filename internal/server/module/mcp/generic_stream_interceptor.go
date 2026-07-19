@@ -98,6 +98,21 @@ func NewGenericStreamInterceptor(
 	}
 }
 
+// sendEvent forwards one client-bound SSE event through the adapter, raising
+// the failover gate's CommitFirstChunk signal first (idempotent, no-op when no
+// gate is installed). The interceptor is a streaming producer, so like
+// ProcessStream/StreamLoop it must commit on its first real chunk: without the
+// signal a multi-service rule's firstChunkGate buffered the WHOLE stream until
+// the request ended (no incremental delivery) and the orchestrator never saw a
+// committed gate, so successful attempts were invisible to the circuit
+// breaker. Every client-bound event goes through here — keep-alives
+// deliberately do not commit (they can be emitted while the upstream verdict
+// is still unknown, and committing forecloses failover).
+func (i *GenericStreamInterceptor) sendEvent(eventType string, payload []byte) error {
+	protocol.CommitFirstChunk(i.c)
+	return i.adapter.SendEvent(i.c, eventType, payload)
+}
+
 // Run executes the streaming interceptor loop
 func (i *GenericStreamInterceptor) Run(req any) error {
 	// Setup SSE headers
@@ -180,16 +195,19 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 // message (e.g. [DONE] for OpenAI Chat).
 func (i *GenericStreamInterceptor) sendFinalEvents() error {
 	if i.roundMessageDelta == nil {
+		// SendFinalMessage writes through the adapter directly; commit first so
+		// even a stream that produced no forwardable events flushes the gate.
+		protocol.CommitFirstChunk(i.c)
 		return i.adapter.SendFinalMessage(i.c)
 	}
-	if err := i.adapter.SendEvent(i.c, "message_delta", i.roundMessageDelta); err != nil {
+	if err := i.sendEvent("message_delta", i.roundMessageDelta); err != nil {
 		return err
 	}
 	stop := i.roundMessageStop
 	if stop == nil {
 		stop, _ = json.Marshal(map[string]interface{}{"type": "message_stop"})
 	}
-	return i.adapter.SendEvent(i.c, "message_stop", stop)
+	return i.sendEvent("message_stop", stop)
 }
 
 // handlePureExternal hands non-virtual tools back to the client. Only virtual
@@ -201,12 +219,12 @@ func (i *GenericStreamInterceptor) handlePureExternal(response any) error {
 func (i *GenericStreamInterceptor) finishClientNativeToolUse() error {
 	i.stopAfterRound = true
 	if i.roundMessageDelta != nil {
-		if err := i.adapter.SendEvent(i.c, "message_delta", i.roundMessageDelta); err != nil {
+		if err := i.sendEvent("message_delta", i.roundMessageDelta); err != nil {
 			return err
 		}
 	}
 	if i.roundMessageStop != nil {
-		if err := i.adapter.SendEvent(i.c, "message_stop", i.roundMessageStop); err != nil {
+		if err := i.sendEvent("message_stop", i.roundMessageStop); err != nil {
 			return err
 		}
 	}
@@ -430,7 +448,7 @@ func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) er
 			// Nothing forwardable; drop rather than emit an empty frame.
 			return nil
 		}
-		return i.adapter.SendEvent(i.c, "", payload)
+		return i.sendEvent("", payload)
 	}
 }
 
@@ -444,7 +462,7 @@ func (i *GenericStreamInterceptor) handleTextEvent(event any) error {
 	// Mark TTFT on the first content token; MarkFirstToken is idempotent.
 	i.recordTTFT()
 
-	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
+	return i.sendEvent("content_block_delta", payload)
 }
 
 // handleToolStartEvent handles tool use start event
@@ -460,7 +478,7 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 		if err != nil {
 			return err
 		}
-		return i.adapter.SendEvent(i.c, "content_block_start", payload)
+		return i.sendEvent("content_block_start", payload)
 	}
 	i.recordRoundTool(tool)
 
@@ -477,7 +495,7 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 	if err != nil {
 		return err
 	}
-	return i.adapter.SendEvent(i.c, "content_block_start", payload)
+	return i.sendEvent("content_block_start", payload)
 }
 
 // handleToolDeltaEvent handles tool parameter delta event
@@ -496,7 +514,7 @@ func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
 	}
 	// A tool input delta is content; mark TTFT (idempotent).
 	i.recordTTFT()
-	return i.adapter.SendEvent(i.c, "content_block_delta", payload)
+	return i.sendEvent("content_block_delta", payload)
 }
 
 // handleToolStopEvent handles tool stop event
@@ -511,7 +529,7 @@ func (i *GenericStreamInterceptor) handleToolStopEvent(event any) error {
 	if err != nil {
 		return err
 	}
-	return i.adapter.SendEvent(i.c, "content_block_stop", payload)
+	return i.sendEvent("content_block_stop", payload)
 }
 
 // classifyResponse classifies the response to determine next action
