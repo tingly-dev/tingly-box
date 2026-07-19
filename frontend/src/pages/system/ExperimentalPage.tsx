@@ -16,7 +16,12 @@ const ExperimentalPage = () => {
                     size="full"
                 >
                     <Stack spacing={1}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                mb: 1
+                            }}>
                             {t('system.experimentalFeatures.description')}
                         </Typography>
                         <GlobalExperimentalFeatures />

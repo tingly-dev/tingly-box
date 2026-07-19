@@ -50,13 +50,14 @@ const FilterBar: React.FC<FilterBarProps> = ({
         placeholder="Search recordings..."
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
-        InputProps={{
-          startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-        }}
         sx={{ minWidth: 200, flex: 1, maxWidth: 300 }}
         size="small"
+        slotProps={{
+          input: {
+            startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
+          }
+        }}
       />
-
       {/* User Filter */}
       <FormControl size="small" sx={{ minWidth: 130 }}>
         <InputLabel>User</InputLabel>
@@ -73,7 +74,6 @@ const FilterBar: React.FC<FilterBarProps> = ({
           ))}
         </Select>
       </FormControl>
-
       {/* Project Filter */}
       <FormControl size="small" sx={{ minWidth: 130 }}>
         <InputLabel>Project</InputLabel>
@@ -90,7 +90,6 @@ const FilterBar: React.FC<FilterBarProps> = ({
           ))}
         </Select>
       </FormControl>
-
       {/* Type Filter */}
       <FormControl size="small" sx={{ minWidth: 130 }}>
         <InputLabel>Type</InputLabel>
@@ -107,7 +106,6 @@ const FilterBar: React.FC<FilterBarProps> = ({
           ))}
         </Select>
       </FormControl>
-
       {/* Active Filters Display */}
       {hasActiveFilters && (
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 'auto' }}>

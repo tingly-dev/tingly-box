@@ -78,15 +78,14 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
 
                         <Typography
                             variant="body2"
-                            color="text.primary"
                             noWrap
                             sx={{
+                                color: "text.primary",
                                 ...NODE_LAYER_STYLES.typography,
                                 fontStyle: !provider ? 'italic' : 'normal',
                                 width: '100px',
-                                textAlign: 'center',
-                            }}
-                        >
+                                textAlign: 'center'
+                            }}>
                             {providerName || provider || 'select model'}
                         </Typography>
 
@@ -97,24 +96,21 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
                         {provider && (
                             <Typography
                                 variant="body2"
-                                color="text.primary"
                                 noWrap
                                 sx={{
+                                    color: "text.primary",
                                     ...NODE_LAYER_STYLES.typography,
                                     fontStyle: !model ? 'italic' : 'normal',
                                     width: '70px',
-                                    textAlign: 'center',
-                                }}
-                            >
+                                    textAlign: 'center'
+                                }}>
                                 {model || 'select model'}
                             </Typography>
                         )}
                     </Box>
                 </NodeTooltip>
             </Box>
-
             <Divider sx={NODE_LAYER_STYLES.divider} />
-
             {/* Bottom Layer - Chip showing bot model */}
             <Box sx={NODE_LAYER_STYLES.bottomLayer}>
                 <Chip

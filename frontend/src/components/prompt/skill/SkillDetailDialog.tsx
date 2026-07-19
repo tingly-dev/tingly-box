@@ -111,8 +111,10 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
             onClose={handleClose}
             maxWidth="lg"
             fullWidth
-            PaperProps={{
-                sx: { height: '80vh' },
+            slotProps={{
+                paper: {
+                    sx: { height: '80vh' },
+                }
             }}
         >
             <DialogTitle>
@@ -129,7 +131,9 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                             <Typography variant="h6" noWrap>
                                 {skill.name}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" noWrap>
+                            <Typography variant="caption" noWrap sx={{
+                                color: "text.secondary"
+                            }}>
                                 {skill.filename}
                             </Typography>
                         </Box>
@@ -156,22 +160,36 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                             bgcolor: 'action.hover',
                         }}
                     >
-                        <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
-                            <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack
+                            direction="row"
+                            spacing={3}
+                            sx={{
+                                alignItems: "center",
+                                flexWrap: "wrap"
+                            }}>
+                            <Stack direction="row" spacing={1} sx={{
+                                alignItems: "center"
+                            }}>
                                 <Chip
                                     size="small"
                                     label={sourceLabel}
                                     variant="outlined"
                                     sx={{ height: 24, fontSize: '0.75rem' }}
                                 />
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     {location.name}
                                 </Typography>
                             </Stack>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Size: {formatFileSize(skill.size)}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Modified: {formatDate(String(skill.modified_at))}
                             </Typography>
                         </Stack>
@@ -190,7 +208,9 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                                 }}
                             >
                                 <CircularProgress size={40} sx={{ mb: 2 }} />
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Loading skill content...
                                 </Typography>
                             </Box>
@@ -248,7 +268,9 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                                     height: '100%',
                                 }}
                             >
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     No content available
                                 </Typography>
                             </Box>

@@ -47,7 +47,9 @@ const MCPSourceEditor = ({
     return (
         <Stack spacing={2}>
             <Stack spacing={0.5}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{
+                    alignItems: "center"
+                }}>
                     <Button
                         href="https://tingly-dev.github.io/"
                         target="_blank"
@@ -64,9 +66,13 @@ const MCPSourceEditor = ({
                     )}
                 </Stack>
             </Stack>
-
             <Box sx={sectionSx}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Name</Typography>
+                <Typography
+                    variant="h6"
+                    sx={{
+                        fontWeight: 700,
+                        mb: 1
+                    }}>Name</Typography>
                 <TextField
                     fullWidth
                     placeholder="MCP server name"
@@ -75,7 +81,6 @@ const MCPSourceEditor = ({
                     disabled={lockId}
                 />
             </Box>
-
             <Box sx={{ ...sectionSx, p: 0, overflow: 'hidden' }}>
                     <ToggleButtonGroup
                         exclusive
@@ -89,11 +94,15 @@ const MCPSourceEditor = ({
                     <ToggleButton value="sse">SSE</ToggleButton>
                 </ToggleButtonGroup>
             </Box>
-
             {value.transport === 'stdio' ? (
                 <>
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Command to launch</Typography>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 1
+                            }}>Command to launch</Typography>
                         <TextField
                             fullWidth
                             placeholder="python3"
@@ -103,10 +112,17 @@ const MCPSourceEditor = ({
                     </Box>
 
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Arguments</Typography>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 1
+                            }}>Arguments</Typography>
                         <Stack spacing={1}>
                             {value.args.map((arg, idx) => (
-                                <Stack key={`arg-${idx}`} direction="row" spacing={1} alignItems="center">
+                                <Stack key={`arg-${idx}`} direction="row" spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
                                     <TextField
                                         fullWidth
                                         value={arg}
@@ -138,7 +154,12 @@ const MCPSourceEditor = ({
                 </>
             ) : (
                 <Box sx={sectionSx}>
-                    <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>{value.transport === 'sse' ? 'SSE endpoint' : 'HTTP endpoint'}</Typography>
+                    <Typography
+                        variant="h6"
+                        sx={{
+                            fontWeight: 700,
+                            mb: 1
+                        }}>{value.transport === 'sse' ? 'SSE endpoint' : 'HTTP endpoint'}</Typography>
                     <TextField
                         fullWidth
                         placeholder={value.transport === 'sse' ? "http://localhost:3000/mcp" : "http://localhost:3000/mcp"}
@@ -147,12 +168,18 @@ const MCPSourceEditor = ({
                     />
                 </Box>
             )}
-
             <Box sx={sectionSx}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Environment variables</Typography>
+                <Typography
+                    variant="h6"
+                    sx={{
+                        fontWeight: 700,
+                        mb: 1
+                    }}>Environment variables</Typography>
                 <Stack spacing={1}>
                     {value.env.map((row, idx) => (
-                        <Stack key={`env-${idx}`} direction="row" spacing={1} alignItems="center">
+                        <Stack key={`env-${idx}`} direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <TextField
                                 fullWidth
                                 placeholder="Key"
@@ -192,12 +219,18 @@ const MCPSourceEditor = ({
                     </Button>
                 </Stack>
             </Box>
-
             <Box sx={sectionSx}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Environment variable passthrough</Typography>
+                <Typography
+                    variant="h6"
+                    sx={{
+                        fontWeight: 700,
+                        mb: 1
+                    }}>Environment variable passthrough</Typography>
                 <Stack spacing={1}>
                     {value.envPassthrough.map((item, idx) => (
-                        <Stack key={`pass-${idx}`} direction="row" spacing={1} alignItems="center">
+                        <Stack key={`pass-${idx}`} direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <TextField
                                 fullWidth
                                 value={item}
@@ -226,9 +259,13 @@ const MCPSourceEditor = ({
                     </Button>
                 </Stack>
             </Box>
-
             <Box sx={sectionSx}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Proxy</Typography>
+                <Typography
+                    variant="h6"
+                    sx={{
+                        fontWeight: 700,
+                        mb: 1
+                    }}>Proxy</Typography>
                 <FormControlLabel
                     control={
                         <Checkbox
@@ -261,9 +298,13 @@ const MCPSourceEditor = ({
                     />
                 )}
             </Box>
-
             <Box sx={sectionSx}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Working directory</Typography>
+                <Typography
+                    variant="h6"
+                    sx={{
+                        fontWeight: 700,
+                        mb: 1
+                    }}>Working directory</Typography>
                 <TextField
                     fullWidth
                     placeholder="~/code"
@@ -272,10 +313,14 @@ const MCPSourceEditor = ({
                     disabled={value.transport === 'http'}
                 />
             </Box>
-
             {!hideTools && (
                 <Box sx={sectionSx}>
-                    <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Tools</Typography>
+                    <Typography
+                        variant="h6"
+                        sx={{
+                            fontWeight: 700,
+                            mb: 1
+                        }}>Tools</Typography>
                     <TextField
                         fullWidth
                         placeholder="* or mcp_web_search mcp_web_fetch"
@@ -283,7 +328,9 @@ const MCPSourceEditor = ({
                         onChange={(e) => set({ tools: e.target.value.split(/\s+/).filter(Boolean) })}
                     />
                     <Divider sx={{ mt: 1, mb: 1 }} />
-                    <Typography variant="caption" color="text.secondary">Use `*` for all tools, or list names separated by spaces.</Typography>
+                    <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                    }}>Use `*` for all tools, or list names separated by spaces.</Typography>
                 </Box>
             )}
         </Stack>

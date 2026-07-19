@@ -63,7 +63,9 @@ const MCPLocalMode = () => {
             <Stack spacing={3}>
                 <UnifiedCard title="MCP Local Mode" size="full">
                     <Stack spacing={2}>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <Chip
                                 icon={<CheckCircleIcon />}
                                 label="Active"
@@ -83,7 +85,9 @@ const MCPLocalMode = () => {
                 <UnifiedCard title="Connection Information" size="full">
                     <Stack spacing={3}>
                         <Box>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            <Typography variant="subtitle2" gutterBottom sx={{
+                                color: "text.secondary"
+                            }}>
                                 MCP Endpoint URL
                             </Typography>
                             <Paper
@@ -114,10 +118,17 @@ const MCPLocalMode = () => {
                         <Divider />
 
                         <Box>
-                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                            <Typography variant="subtitle2" gutterBottom sx={{
+                                fontWeight: 600
+                            }}>
                                 Method 1: Using Claude CLI
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: "text.secondary",
+                                    mb: 1
+                                }}>
                                 Run this command in your terminal:
                             </Typography>
                             <Paper
@@ -161,10 +172,17 @@ const MCPLocalMode = () => {
                         <Divider />
 
                         <Box>
-                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                            <Typography variant="subtitle2" gutterBottom sx={{
+                                fontWeight: 600
+                            }}>
                                 Method 2: Manual Config File
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: "text.secondary",
+                                    mb: 1
+                                }}>
                                 Add to your Claude Desktop config file:
                             </Typography>
                             <Paper
@@ -201,7 +219,13 @@ const MCPLocalMode = () => {
                                     <ContentCopyIcon fontSize="small" />
                                 </IconButton>
                             </Paper>
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: "text.secondary",
+                                    mt: 0.5,
+                                    display: 'block'
+                                }}>
                                 Config location: ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)
                             </Typography>
                         </Box>

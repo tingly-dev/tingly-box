@@ -96,9 +96,10 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                 onChange={e => setInput(e.target.value)}
                 placeholder={PLACEHOLDER}
                 spellCheck={false}
-                inputProps={{style: {fontFamily: 'monospace', fontSize: 13}}}
+                slotProps={{
+                    htmlInput: {style: {fontFamily: 'monospace', fontSize: 13}}
+                }}
             />
-
             <Stack direction="row" spacing={1.5} sx={{mt: 1.5}}>
                 <Button
                     variant="contained"
@@ -112,13 +113,11 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                     {t('onboarding.paste.manualFill', {defaultValue: 'Fill in manually'})}
                 </Button>
             </Stack>
-
             {error && (
                 <Alert severity="error" sx={{mt: 2}}>
                     {error}
                 </Alert>
             )}
-
             {hasResults && (
                 <Box sx={{mt: 2}}>
                     {urls!.length === 0 && tokens!.length === 0 ? (
@@ -129,7 +128,13 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                         </Alert>
                     ) : (
                         <>
-                            <Typography variant="caption" color="text.secondary" sx={{display: 'block', mb: 1.5}}>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: "text.secondary",
+                                    display: 'block',
+                                    mb: 1.5
+                                }}>
                                 {t('onboarding.paste.pickHint', {
                                     defaultValue: 'Pick the URL and the token you want to use, then click "Use selected".',
                                 })}
@@ -137,15 +142,25 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
 
                             <Stack direction={{xs: 'column', md: 'row'}} spacing={2}>
                                 <Paper variant="outlined" sx={{flex: 1, p: 1.5, minWidth: 0}}>
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{mb: 1}}>
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        sx={{
+                                            alignItems: "center",
+                                            mb: 1
+                                        }}>
                                         <LinkIcon fontSize="small" color="action"/>
-                                        <Typography variant="subtitle2" fontWeight={600}>
+                                        <Typography variant="subtitle2" sx={{
+                                            fontWeight: 600
+                                        }}>
                                             {t('onboarding.paste.urlsTitle', {defaultValue: 'Detected URLs'})}
                                         </Typography>
                                         <Chip label={urls!.length} size="small" sx={{height: 18, fontSize: '0.65rem'}}/>
                                     </Stack>
                                     {urls!.length === 0 ? (
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {t('onboarding.paste.noURL', {defaultValue: 'No URLs detected.'})}
                                         </Typography>
                                     ) : (
@@ -174,15 +189,25 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                                 </Paper>
 
                                 <Paper variant="outlined" sx={{flex: 1, p: 1.5, minWidth: 0}}>
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{mb: 1}}>
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        sx={{
+                                            alignItems: "center",
+                                            mb: 1
+                                        }}>
                                         <VpnKeyIcon fontSize="small" color="action"/>
-                                        <Typography variant="subtitle2" fontWeight={600}>
+                                        <Typography variant="subtitle2" sx={{
+                                            fontWeight: 600
+                                        }}>
                                             {t('onboarding.paste.tokensTitle', {defaultValue: 'Detected tokens'})}
                                         </Typography>
                                         <Chip label={tokens!.length} size="small" sx={{height: 18, fontSize: '0.65rem'}}/>
                                     </Stack>
                                     {tokens!.length === 0 ? (
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {t('onboarding.paste.noToken', {defaultValue: 'No tokens detected.'})}
                                         </Typography>
                                     ) : (
@@ -204,7 +229,9 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                                                             </Typography>
                                                         }
                                                         secondary={
-                                                            <Typography variant="caption" color="text.secondary">
+                                                            <Typography variant="caption" sx={{
+                                                                color: "text.secondary"
+                                                            }}>
                                                                 {tok.source}
                                                             </Typography>
                                                         }
@@ -240,9 +267,10 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                     )}
                 </Box>
             )}
-
             <Box sx={{mt: 3}}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                }}>
                     {t('onboarding.hint', {
                         defaultValue: 'Detection runs locally in the box; pasted text is not sent to any third party.',
                     })}

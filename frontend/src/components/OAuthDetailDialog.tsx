@@ -126,7 +126,9 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }
                                 color="primary"
                                 size="small"
                             />
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 OAuth credentials are managed automatically
                             </Typography>
                         </Box>
@@ -142,7 +144,9 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }
                                 ...prev,
                                 apiStyle: e.target.value as 'openai' | 'anthropic',
                             }))}
-                            SelectProps={{ native: true }}
+                            slotProps={{
+                                select: { native: true }
+                            }}
                         >
                             <option value="openai">OpenAI Compatible</option>
                             <option value="anthropic">Anthropic Compatible</option>
@@ -185,7 +189,9 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }
 
                         {/* Read-only OAuth Credentials */}
                         <Alert severity="info" icon={<Info fontSize="small" />}>
-                            <Typography variant="caption" display="block">
+                            <Typography variant="caption" sx={{
+                                display: "block"
+                            }}>
                                 <strong>OAuth Credentials (Read-only)</strong>
                             </Typography>
                         </Alert>
@@ -303,7 +309,9 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit, onNotification }
                         {provider.oauth_detail && (
                             <Stack spacing={1.5}>
                                 <Alert severity="info" icon={<Info fontSize="small" />}>
-                                    <Typography variant="caption" display="block">
+                                    <Typography variant="caption" sx={{
+                                        display: "block"
+                                    }}>
                                         <strong>Extra Fields</strong>
                                     </Typography>
                                 </Alert>

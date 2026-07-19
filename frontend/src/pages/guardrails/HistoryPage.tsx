@@ -208,13 +208,28 @@ const GuardrailsHistoryPage = () => {
 
                 <UnifiedCard title={rowCountLabel} size="full">
                     <Stack spacing={2}>
-                        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', lg: 'center' }} justifyContent="space-between">
+                        <Stack
+                            direction={{ xs: 'column', lg: 'row' }}
+                            spacing={2}
+                            sx={{
+                                alignItems: { xs: 'flex-start', lg: 'center' },
+                                justifyContent: "space-between"
+                            }}>
                             <Stack spacing={1.25}>
-                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44 }}>
+                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{
+                                    alignItems: { xs: 'flex-start', md: 'center' }
+                                }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            minWidth: 44
+                                        }}>
                                         Verdict
                                     </Typography>
-                                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                                    <Stack direction="row" spacing={0.75} useFlexGap sx={{
+                                        flexWrap: "wrap"
+                                    }}>
                                         {VERDICT_OPTIONS.map((option) => {
                                             const selected = option.value === 'all' ? selectedVerdicts.length === 0 : selectedVerdicts.includes(option.value);
                                             return (
@@ -231,11 +246,20 @@ const GuardrailsHistoryPage = () => {
                                         })}
                                     </Stack>
                                 </Stack>
-                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 44 }}>
+                                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{
+                                    alignItems: { xs: 'flex-start', md: 'center' }
+                                }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            minWidth: 44
+                                        }}>
                                         Time
                                     </Typography>
-                                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                                    <Stack direction="row" spacing={0.75} useFlexGap sx={{
+                                        flexWrap: "wrap"
+                                    }}>
                                         {TIME_OPTIONS.map((option) => (
                                             <Chip
                                                 key={option.value}
@@ -281,7 +305,9 @@ const GuardrailsHistoryPage = () => {
                                         <TableRow>
                                             <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                                 <HistoryIcon sx={{ fontSize: 36, color: 'text.disabled', mb: 1 }} />
-                                                <Typography variant="body2" color="text.secondary">
+                                                <Typography variant="body2" sx={{
+                                                    color: "text.secondary"
+                                                }}>
                                                     {entries.length === 0 ? 'No Guardrails events recorded yet.' : 'No events match the current filters.'}
                                                 </Typography>
                                             </TableCell>
@@ -335,20 +361,28 @@ const GuardrailsHistoryPage = () => {
                                                                 <Box sx={{ px: 2, py: 2, bgcolor: 'action.hover' }}>
                                                                     <Stack spacing={2}>
                                                                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                                                                            <Typography variant="body2" color="text.secondary">
+                                                                            <Typography variant="body2" sx={{
+                                                                                color: "text.secondary"
+                                                                            }}>
                                                                                 provider: {entry.provider || 'unknown'}
                                                                             </Typography>
-                                                                            <Typography variant="body2" color="text.secondary">
+                                                                            <Typography variant="body2" sx={{
+                                                                                color: "text.secondary"
+                                                                            }}>
                                                                                 model: {entry.model || 'unknown'}
                                                                             </Typography>
-                                                                            <Typography variant="body2" color="text.secondary">
+                                                                            <Typography variant="body2" sx={{
+                                                                                color: "text.secondary"
+                                                                            }}>
                                                                                 direction: {entry.direction || 'unknown'}
                                                                             </Typography>
                                                                         </Stack>
 
                                                                         {entry.block_message && (
                                                                             <Box>
-                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                <Typography variant="caption" sx={{
+                                                                                    color: "text.secondary"
+                                                                                }}>
                                                                                     Message
                                                                                 </Typography>
                                                                                 <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -359,7 +393,9 @@ const GuardrailsHistoryPage = () => {
 
                                                                         {entry.preview && (
                                                                             <Box>
-                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                <Typography variant="caption" sx={{
+                                                                                    color: "text.secondary"
+                                                                                }}>
                                                                                     Preview
                                                                                 </Typography>
                                                                                 <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -370,10 +406,19 @@ const GuardrailsHistoryPage = () => {
 
                                                                         {entry.credential_names && entry.credential_names.length > 0 && (
                                                                             <Box>
-                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                <Typography variant="caption" sx={{
+                                                                                    color: "text.secondary"
+                                                                                }}>
                                                                                     Credential Names
                                                                                 </Typography>
-                                                                                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.75 }}>
+                                                                                <Stack
+                                                                                    direction="row"
+                                                                                    spacing={0.75}
+                                                                                    useFlexGap
+                                                                                    sx={{
+                                                                                        flexWrap: "wrap",
+                                                                                        mt: 0.75
+                                                                                    }}>
                                                                                     {entry.credential_names.map((name) => (
                                                                                         <Chip key={name} size="small" label={name} variant="outlined" />
                                                                                     ))}
@@ -383,10 +428,19 @@ const GuardrailsHistoryPage = () => {
 
                                                                         {entry.alias_hits && entry.alias_hits.length > 0 && (
                                                                             <Box>
-                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                <Typography variant="caption" sx={{
+                                                                                    color: "text.secondary"
+                                                                                }}>
                                                                                     Alias Hits
                                                                                 </Typography>
-                                                                                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.75 }}>
+                                                                                <Stack
+                                                                                    direction="row"
+                                                                                    spacing={0.75}
+                                                                                    useFlexGap
+                                                                                    sx={{
+                                                                                        flexWrap: "wrap",
+                                                                                        mt: 0.75
+                                                                                    }}>
                                                                                     {entry.alias_hits.map((alias) => (
                                                                                         <Chip key={alias} size="small" label={alias} variant="outlined" />
                                                                                     ))}
@@ -396,7 +450,9 @@ const GuardrailsHistoryPage = () => {
 
                                                                         {entry.reasons && entry.reasons.length > 0 && (
                                                                             <Box>
-                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                <Typography variant="caption" sx={{
+                                                                                    color: "text.secondary"
+                                                                                }}>
                                                                                     Matched Policies
                                                                                 </Typography>
                                                                                 <Stack spacing={0.75} sx={{ mt: 0.75 }}>
@@ -404,7 +460,9 @@ const GuardrailsHistoryPage = () => {
                                                                                         <Typography
                                                                                             key={`${reason.policy_id || 'reason'}-${reasonIndex}`}
                                                                                             variant="body2"
-                                                                                            color="text.secondary"
+                                                                                            sx={{
+                                                                                                color: "text.secondary"
+                                                                                            }}
                                                                                         >
                                                                                             {(reason.policy_name || reason.policy_id || 'Policy') + ': ' + (reason.reason || 'matched')}
                                                                                         </Typography>
@@ -427,11 +485,12 @@ const GuardrailsHistoryPage = () => {
                     </Stack>
                 </UnifiedCard>
             </Stack>
-
             <Dialog open={clearConfirmOpen} onClose={() => setClearConfirmOpen(false)} disableRestoreFocus>
                 <DialogTitle>Clear Event History</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         This will remove all local Guardrails event history.
                     </Typography>
                 </DialogContent>

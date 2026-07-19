@@ -20,10 +20,19 @@ interface ScenarioLogDialogProps {
 const ScenarioLogDialog = ({ open, onClose, scenario, initialScenario }: ScenarioLogDialogProps) => {
     const { t } = useTranslation();
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
+        <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth slotProps={{
+            paper: { sx: { height: '80vh' } }
+        }}>
             <DialogTitle sx={{ pb: 1 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Stack direction="row" alignItems="center" spacing={1}>
+                <Stack
+                    direction="row"
+                    sx={{
+                        alignItems: "center",
+                        justifyContent: "space-between"
+                    }}>
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
                         <Typography variant="h6">{t('templateActions.troubleshoot')}</Typography>
                         <Chip label={scenario} size="small" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
                     </Stack>
@@ -32,7 +41,6 @@ const ScenarioLogDialog = ({ open, onClose, scenario, initialScenario }: Scenari
                     </IconButton>
                 </Stack>
             </DialogTitle>
-
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', pt: 1.5 }}>
                 <LogExplorer initialScenario={scenario} />
             </DialogContent>

@@ -148,21 +148,34 @@ const AccessControl = () => {
                 {/* Page Header Card */}
                 <UnifiedCard size="full">
                     <Stack spacing={2}>
-                        <Stack direction="row" alignItems="center" spacing={2}>
+                        <Stack direction="row" spacing={2} sx={{
+                            alignItems: "center"
+                        }}>
                             <Box sx={{ flex: 1 }}>
-                                <Typography variant="h5" fontWeight={600}>
+                                <Typography variant="h5" sx={{
+                                    fontWeight: 600
+                                }}>
                                     {t('accessControl.pageTitle')}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     {t('accessControl.pageDescription')}
                                 </Typography>
                             </Box>
                         </Stack>
                         <Box sx={{ pt: 1 }}>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            <Typography variant="subtitle2" gutterBottom sx={{
+                                color: "text.secondary"
+                            }}>
                                 {t('accessControl.securityInfo.title')}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: "text.secondary",
+                                    mb: 1
+                                }}>
                                 {t('accessControl.securityInfo.description')}
                             </Typography>
                             <Stack spacing={0.5}>
@@ -186,7 +199,9 @@ const AccessControl = () => {
                 {/* Security Warning for Default Token */}
                 {isUsingDefaultToken && (
                     <Alert severity="warning" icon={<WarningIcon />}>
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography variant="body2" sx={{
+                            fontWeight: 500
+                        }}>
                             {t('accessControl.warning.default')}
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 1 }}>
@@ -206,7 +221,9 @@ const AccessControl = () => {
                 {/* Success Banner after User Token Reset */}
                 {userSuccessToken && (
                     <Alert severity="success" icon={<CheckCircleIcon />}>
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography variant="body2" sx={{
+                            fontWeight: 500
+                        }}>
                             {t('accessControl.userToken.resetSuccess')}
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -275,7 +292,9 @@ const AccessControl = () => {
                     }
                 >
                     <Stack spacing={2}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('accessControl.userToken.description')}
                         </Typography>
 
@@ -325,7 +344,14 @@ const AccessControl = () => {
                         </Box>
 
                         {!isUsingDefaultToken && !userSuccessToken && (
-                            <Typography variant="body2" color="success.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: "success.main",
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 0.5
+                                }}>
                                 <CheckCircleIcon fontSize="inherit" />
                                 {t('accessControl.secure')}
                             </Typography>
@@ -336,7 +362,9 @@ const AccessControl = () => {
                 {/* Success Banner after Model Token Reset */}
                 {modelSuccessToken && (
                     <Alert severity="success" icon={<CheckCircleIcon />}>
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography variant="body2" sx={{
+                            fontWeight: 500
+                        }}>
                             {t('accessControl.modelToken.resetSuccess')}
                         </Typography>
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -403,7 +431,9 @@ const AccessControl = () => {
                     }
                 >
                     <Stack spacing={2}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('accessControl.modelToken.description')}
                         </Typography>
 
@@ -455,7 +485,6 @@ const AccessControl = () => {
                     </Stack>
                 </UnifiedCard>
             </Stack>
-
             {/* User Reset Confirmation Dialog */}
             <Dialog open={resetUserDialogOpen} onClose={() => setResetUserDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
@@ -469,16 +498,24 @@ const AccessControl = () => {
                         {t('accessControl.userToken.resetConfirm')}
                     </Typography>
                     <Stack sx={{ mt: 2 }} spacing={1}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             • {t('accessControl.userToken.resetPoints.new')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             • {t('accessControl.userToken.resetPoints.session')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             • {t('accessControl.userToken.resetPoints.other')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             • {t('accessControl.userToken.resetPoints.stop')}
                         </Typography>
                     </Stack>
@@ -501,7 +538,6 @@ const AccessControl = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Model Reset Confirmation Dialog */}
             <Dialog open={resetModelDialogOpen} onClose={() => setResetModelDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
@@ -515,10 +551,14 @@ const AccessControl = () => {
                         {t('accessControl.modelToken.resetConfirm')}
                     </Typography>
                     <Stack sx={{ mt: 2 }} spacing={1}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             • {t('accessControl.modelToken.resetPoints.new')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             • {t('accessControl.modelToken.resetPoints.stop')}
                         </Typography>
                     </Stack>

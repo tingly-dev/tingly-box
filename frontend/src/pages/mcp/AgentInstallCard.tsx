@@ -249,12 +249,13 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                     <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
                         {heading}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {subtitle}
                     </Typography>
                 </Box>
             </Box>
-
             {/* ── Card body ── */}
             <Box
                 sx={{
@@ -298,7 +299,12 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                             Pick your runtime
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.4 }}>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: "text.secondary",
+                                lineHeight: 1.4
+                            }}>
                             The token is read from your local config — no copy/paste required.
                         </Typography>
                     </Box>

@@ -71,7 +71,9 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
             onClose={handleClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{sx: {maxHeight: '82vh', display: 'flex', flexDirection: 'column'}}}
+            slotProps={{
+                paper: {sx: {maxHeight: '82vh', display: 'flex', flexDirection: 'column'}}
+            }}
         >
             <DialogTitle>Import</DialogTitle>
             <DialogContent>
@@ -86,7 +88,12 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                 </Tabs>
 
                 <TabPanel value={tabValue} index={0}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mb: 2
+                        }}>
                         Paste exported data in Base64 format below.
                     </Typography>
                     <TextField
@@ -102,7 +109,12 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={1}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mb: 2
+                        }}>
                         Paste exported data in JSONL format below.
                     </Typography>
                     <TextField
@@ -118,7 +130,12 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={2}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mb: 2
+                        }}>
                         Upload a file containing exported data (JSONL or Base64 format).
                     </Typography>
                     <Button

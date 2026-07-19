@@ -110,13 +110,15 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
             onClose={onClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{
-                sx: {
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                },
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    },
+                }
             }}
         >
             {/* Header with gradient background */}
@@ -157,7 +159,6 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                     )}
                 </Typography>
             </Box>
-
             <DialogContent sx={{ p: 0 }}>
                 <Stack spacing={0} divider={<Divider />}>
                     {/* Manual Check Section */}
@@ -266,7 +267,6 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                     </Box>
                 </Stack>
             </DialogContent>
-
             <DialogActions sx={{ px: 3, py: 2, bgcolor: 'action.hover', justifyContent: 'space-between' }}>
                 <Button
                     onClick={() => window.open(releaseURL || 'https://github.com/tingly-dev/tingly-box/releases', '_blank')}

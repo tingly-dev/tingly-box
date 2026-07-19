@@ -151,12 +151,11 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
                     <InfoIcon sx={{ fontSize: 15, color: 'text.disabled', cursor: 'default' }} />
                 </Tooltip>
             </Box>
-
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 {loading && dailyData.length === 0 ? (
                     // First load: a grid-shaped skeleton instead of flashing
                     // the "No activity" empty state before data arrives.
-                    <Skeleton variant="rounded" height={160} sx={{ borderRadius: 1.5 }} />
+                    (<Skeleton variant="rounded" height={160} sx={{ borderRadius: 1.5 }} />)
                 ) : dailyData.length > 0 ? (
                     <TokenHeatmap data={dailyData} />
                 ) : (

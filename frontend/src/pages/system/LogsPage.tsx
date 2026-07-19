@@ -47,8 +47,12 @@ const LogsPage = () => {
             size="full"
             height="calc(100vh - 48px)"
             rightAction={
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: "center"
+                }}>
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         Debug Mode
                     </Typography>
                     <Switch

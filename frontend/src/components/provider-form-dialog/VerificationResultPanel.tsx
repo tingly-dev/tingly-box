@@ -25,7 +25,9 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
             }}
         >
             <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1}}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                }}>
                     Connection Test (for reference)
                 </Typography>
                 <IconButton
@@ -37,14 +39,20 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     <Close fontSize="small"/>
                 </IconButton>
             </Box>
-
             <Stack spacing={0.75}>
                 {details.map((detail, index) => {
                     const isSuccess = detail.includes('✓');
                     const label = detail.replace(/^[✓✗]\s*/, '');
 
                     return (
-                        <Stack key={index} direction="row" spacing={1} alignItems="center" sx={{minHeight: 24}}>
+                        <Stack
+                            key={index}
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                                alignItems: "center",
+                                minHeight: 24
+                            }}>
                             {isSuccess ? (
                                 <Box
                                     sx={{
@@ -99,14 +107,19 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     );
                 })}
             </Stack>
-
             {v1Hint?.show && (
                 <Stack
                     direction="row"
-                    alignItems="center"
                     spacing={1}
-                    sx={{mt: 1.5, p: 1, borderRadius: 1, bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08), border: '1px solid', borderColor: 'warning.light'}}
-                >
+                    sx={{
+                        alignItems: "center",
+                        mt: 1.5,
+                        p: 1,
+                        borderRadius: 1,
+                        bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08),
+                        border: '1px solid',
+                        borderColor: 'warning.light'
+                    }}>
                     <Typography variant="caption" sx={{flex: 1}}>
                         Some OpenAI-compatible APIs require a <code>/v1</code> suffix on the base URL.
                     </Typography>
@@ -115,12 +128,16 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     </Button>
                 </Stack>
             )}
-
             <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{display: 'block', mt: 1.5, pt: 1, borderTop: '1px solid', borderColor: 'divider'}}
-            >
+                sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    mt: 1.5,
+                    pt: 1,
+                    borderTop: '1px solid',
+                    borderColor: 'divider'
+                }}>
                 Test results are for reference only - you can add the key even if some tests fail
             </Typography>
         </Box>

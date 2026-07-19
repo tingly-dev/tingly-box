@@ -208,7 +208,6 @@ export default function CustomModelCard({
                     </ControlBar>
                 )}
             </Card>
-
             <ProbeDialog
                 open={probe.dialogOpen}
                 onClose={probe.closeDialog}
@@ -219,7 +218,6 @@ export default function CustomModelCard({
                 initialResult={probe.result ?? undefined}
                 onResult={probe.setResult}
             />
-
             {/* Confirmation dialog for deleting custom model */}
             <Dialog
                 open={deleteConfirmOpen}
@@ -230,7 +228,9 @@ export default function CustomModelCard({
                     Delete Custom Model?
                 </DialogTitle>
                 <DialogContent sx={{ pb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         Are you sure you want to delete the custom model <strong>"{model}"</strong>?
                         {isSelected && " The selection will be cleared after deletion."}
                     </Typography>

@@ -310,15 +310,24 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 maxWidth="lg"
                 fullWidth
                 disableEscapeKeyDown
-                PaperProps={{ sx: { borderRadius: 3, maxHeight: '90vh' } }}
+                slotProps={{
+                    paper: { sx: { borderRadius: 3, maxHeight: '90vh' } }
+                }}
             >
                 <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="h6" fontWeight={600}>
+                            <Typography variant="h6" sx={{
+                                fontWeight: 600
+                            }}>
                                 {t('claudeCode.modal.title')}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    color: "text.secondary",
+                                    mt: 0.5
+                                }}>
                                 {t('claudeCode.modal.subtitle')}
                             </Typography>
                         </Box>
@@ -403,7 +412,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             {/* settings.json section */}
                             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                                 <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" color="text.secondary">
+                                    <Typography variant="subtitle2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {t('claudeCode.step1')}
                                     </Typography>
                                     <Tabs
@@ -457,7 +468,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             {/* .claude.json section */}
                             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                                 <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" color="text.secondary">
+                                    <Typography variant="subtitle2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {t('claudeCode.step2')}
                                     </Typography>
                                     <Tabs
@@ -511,7 +524,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             {/* Status Line section */}
                             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                                 <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" color="text.secondary">
+                                    <Typography variant="subtitle2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {t('claudeCode.step3')}
                                     </Typography>
                                     <Tabs
@@ -532,10 +547,17 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                                 <Typography variant="body2" sx={{ mb: 1 }}>
                                                     {t('claudeCode.statusLine.jsonDescription')}
                                                 </Typography>
-                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: "text.secondary",
+                                                        mb: 1
+                                                    }}>
                                                     {t('claudeCode.statusLine.addToSettingsJson')}
                                                 </Typography>
-                                                <Typography variant="body2" color="text.secondary">
+                                                <Typography variant="body2" sx={{
+                                                    color: "text.secondary"
+                                                }}>
                                                     {t('claudeCode.statusLine.manualSetup')}{' '}
                                                     <Link
                                                         href="https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh"
@@ -562,7 +584,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                             <Typography variant="body2" sx={{ mb: 1 }}>
                                                 {t('claudeCode.statusLine.description')}
                                             </Typography>
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: "text.secondary"
+                                            }}>
                                                 {t('claudeCode.statusLine.manualSetup')}{' '}
                                                 <Link
                                                     href="https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh"
@@ -612,7 +636,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 />
                             }
                             label={
-                                <Stack direction="row" spacing={0.5} alignItems="center">
+                                <Stack direction="row" spacing={0.5} sx={{
+                                    alignItems: "center"
+                                }}>
                                     <Typography variant="body2">Install Tingly-Box Claude Code status line</Typography>
                                     <Tooltip title="Adds a status line script to ~/.claude/settings.json that shows the current Tingly Box connection status in the Claude Code prompt." arrow placement="top">
                                         <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
@@ -649,17 +675,20 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     </Box>
                 </DialogActions>
             </Dialog>
-
             {/* Preview dialog: shows the exact env block the backend will write */}
             <Dialog
                 open={previewOpen}
                 onClose={() => setPreviewOpen(false)}
                 maxWidth="md"
                 fullWidth
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                slotProps={{
+                    paper: { sx: { borderRadius: 3 } }
+                }}
             >
                 <DialogTitle>
-                    <Typography variant="subtitle1" fontWeight={600}>{modalText.previewTitle}</Typography>
+                    <Typography variant="subtitle1" sx={{
+                        fontWeight: 600
+                    }}>{modalText.previewTitle}</Typography>
                 </DialogTitle>
                 <DialogContent>
                     <CodeBlock

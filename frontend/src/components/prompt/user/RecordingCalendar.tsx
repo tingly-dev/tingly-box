@@ -225,14 +225,18 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
 
                     {/* Legend */}
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                        }}>
                             {rangeMode
                                 ? `Last ${rangeMode} days`
                                 : selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                             }
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Less
                             </Typography>
                             {[
@@ -254,7 +258,9 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                                     />
                                 </Tooltip>
                             ))}
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 More
                             </Typography>
                         </Box>

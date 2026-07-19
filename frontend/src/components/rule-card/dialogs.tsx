@@ -65,7 +65,6 @@ export function RuleFlagEditDialog({ open, value, error, onChange, onClose, onSa
                     error={Boolean(error)}
                     helperText={error || ' '}
                     variant="standard"
-                    InputProps={{ disableUnderline: true }}
                     sx={{
                         '& .MuiInputBase-root': {
                             border: '1px solid',
@@ -76,6 +75,9 @@ export function RuleFlagEditDialog({ open, value, error, onChange, onClose, onSa
                         '& .MuiInputBase-input': {
                             padding: 0,
                         },
+                    }}
+                    slotProps={{
+                        input: { disableUnderline: true }
                     }}
                 />
             </DialogContent>

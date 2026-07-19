@@ -87,14 +87,13 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
             {/* Fixed-height header so the body has a stable scroll region */}
             <Stack
                 direction="row"
-                alignItems="center"
                 spacing={0.75}
                 sx={{
+                    alignItems: "center",
                     flexShrink: 0,
                     height: CARD_HEADER_HEIGHT,
-                    mb: 0.75,
-                }}
-            >
+                    mb: 0.75
+                }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.72rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
@@ -104,7 +103,6 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     <AddIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 </Tooltip>
             </Stack>
-
             {enabled.length === 0 ? (
                 <Box
                     sx={{
@@ -145,7 +143,9 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     onClick={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => e.stopPropagation()}
                 >
-                    <Stack gap={0.4}>
+                    <Stack sx={{
+                        gap: 0.4
+                    }}>
                         {enabled.map((spec) => {
                             const isString = spec.type === 'string';
                             const isEnum = spec.type === 'enum';

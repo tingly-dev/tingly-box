@@ -113,16 +113,25 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
             onClose={onClose}
             maxWidth="md"
             fullWidth
-            PaperProps={{ sx: { borderRadius: 3 } }}
+            slotProps={{
+                paper: { sx: { borderRadius: 3 } }
+            }}
         >
             <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography component="span" variant="h6" fontWeight={600}>Image Generation Quick Start</Typography>
+                <Typography component="span" variant="h6" sx={{
+                    fontWeight: 600
+                }}>Image Generation Quick Start</Typography>
                 <IconButton onClick={onClose} size="small" aria-label="Close quick start">
                     <Close fontSize="small" />
                 </IconButton>
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: "text.secondary",
+                        mb: 2
+                    }}>
                     Call the image generation endpoint, then decode the base64 response into an image file.
                     The model token is available from GET /api/v1/token.
                 </Typography>

@@ -128,7 +128,9 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                         />
                         <Box>
                             <Typography variant="h6">{location.name}</Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 {location.path}
                             </Typography>
                         </Box>
@@ -146,13 +148,20 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                             placeholder="Search skills..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            InputProps={{
-                                startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-                            }}
                             size="small"
                             fullWidth
+                            slotProps={{
+                                input: {
+                                    startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
+                                }
+                            }}
                         />
-                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                whiteSpace: 'nowrap'
+                            }}>
                             {filteredSkills.length} / {skills.length}
                         </Typography>
                     </Box>
@@ -161,7 +170,9 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                     {loading && !refreshing && (
                         <Box sx={{ textAlign: 'center', py: 3 }}>
                             <CircularProgress size={40} sx={{ mb: 2 }} />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Loading skills...
                             </Typography>
                         </Box>
@@ -229,17 +240,23 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                                                         <Stack
                                                             direction="row"
                                                             spacing={2}
-                                                            alignItems="center"
+                                                            sx={{
+                                                                alignItems: "center"
+                                                            }}
                                                         >
                                                             <Typography
                                                                 variant="caption"
-                                                                color="text.secondary"
+                                                                sx={{
+                                                                    color: "text.secondary"
+                                                                }}
                                                             >
                                                                 {skill.filename}
                                                             </Typography>
                                                             <Typography
                                                                 variant="caption"
-                                                                color="text.secondary"
+                                                                sx={{
+                                                                    color: "text.secondary"
+                                                                }}
                                                             >
                                                                 {formatFileSize(skill.size)}
                                                             </Typography>
@@ -263,7 +280,9 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                                     <FolderOpen
                                         sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
                                     />
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {searchQuery
                                             ? 'No skills match your search.'
                                             : 'No skills found in this location.'}

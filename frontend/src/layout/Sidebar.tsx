@@ -108,7 +108,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 </Typography>
                 {headerAction}
             </Box>
-
             {/* Nav Items */}
             <List
                 sx={{
@@ -223,7 +222,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     );
                 })}
             </List>
-
             {/* Footer top row: version */}
             <Box
                 sx={{
@@ -238,7 +236,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
             >
                 <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
             </Box>
-
             {/* Add Profile Popover */}
             <Popover
                 open={Boolean(addProfileAnchorEl)}
@@ -262,19 +259,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>{t('layout.sidebar.mode')}</Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                        }}>
                             {newProfileUnified ? t('layout.sidebar.modeUnified') : t('layout.sidebar.modeSeparate')}
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="body2" color="text.secondary">{t('layout.sidebar.separate')}</Typography>
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>{t('layout.sidebar.separate')}</Typography>
                         <Switch
                             size="small"
                             checked={newProfileUnified}
                             onChange={(e) => setNewProfileUnified(e.target.checked)}
                             disabled={isCreating}
                         />
-                        <Typography variant="body2" color="text.secondary">{t('layout.sidebar.unified')}</Typography>
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>{t('layout.sidebar.unified')}</Typography>
                     </Stack>
                 </Box>
                 <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
@@ -284,7 +289,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     </Button>
                 </Box>
             </Popover>
-
             {/* Footer bottom row: slogan */}
             <Box
                 sx={{
@@ -306,7 +310,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     </Typography>
                 </Tooltip>
             </Box>
-
             {/* Update Panel Dialog */}
             <UpdatePanelDialog
                 open={updatePanelOpen}

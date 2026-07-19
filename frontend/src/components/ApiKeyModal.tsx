@@ -36,7 +36,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             <DialogTitle>{t('apiKeyModal.title')}</DialogTitle>
             <DialogContent>
                 <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mb: 1
+                        }}>
                         {t('apiKeyModal.description')}
                     </Typography>
                     <Box

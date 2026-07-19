@@ -167,7 +167,13 @@ const System = () => {
                                 <Typography variant="body2" sx={{ color: 'text.primary' }}>
                                     {serverStatusLabel}
                                     {isHealthy && (
-                                        <Typography component="span" variant="body2" color="success.main" sx={{ ml: 1 }}>
+                                        <Typography
+                                            component="span"
+                                            variant="body2"
+                                            sx={{
+                                                color: "success.main",
+                                                ml: 1
+                                            }}>
                                             · {t('system.status.connected')}
                                         </Typography>
                                     )}
@@ -232,10 +238,14 @@ const System = () => {
                     size="full"
                 >
                     <Stack spacing={1.5}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('system.proxy.globalProxyUrl.description', { defaultValue: t('system.proxy.globalProxyUrl.helper') })}
                         </Typography>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <TextField
                                 size="small"
                                 fullWidth
@@ -243,15 +253,17 @@ const System = () => {
                                 onChange={(e) => setGlobalProxyInput(e.target.value)}
                                 placeholder="http://127.0.0.1:7890"
                                 sx={{ maxWidth: 480 }}
-                                InputProps={globalProxyUrl && globalProxyInput === globalProxyUrl ? {
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <Tooltip title={t('common.saved', { defaultValue: 'Saved' })} arrow>
-                                                <IconCheck sx={{ fontSize: 16, color: 'success.main' }} />
-                                            </Tooltip>
-                                        </InputAdornment>
-                                    )
-                                } : undefined}
+                                slotProps={{
+                                    input: globalProxyUrl && globalProxyInput === globalProxyUrl ? {
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <Tooltip title={t('common.saved', { defaultValue: 'Saved' })} arrow>
+                                                    <IconCheck sx={{ fontSize: 16, color: 'success.main' }} />
+                                                </Tooltip>
+                                            </InputAdornment>
+                                        )
+                                    } : undefined
+                                }}
                             />
                             <Button
                                 size="small"
@@ -429,7 +441,6 @@ const System = () => {
                 </UnifiedCard>
 
             </CardGrid>
-
             {/* Update Panel Dialog */}
             <UpdatePanelDialog
                 open={openUpdateDialog}

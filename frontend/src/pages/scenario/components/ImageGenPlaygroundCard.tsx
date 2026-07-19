@@ -136,444 +136,470 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
     return (
         <>
-        <UnifiedCard
-            size="full"
-            title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
-        >
-            <Box
-                sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: 'minmax(360px, 0.9fr) minmax(420px, 1.1fr)' },
-                    gap: 3,
-                    alignItems: 'stretch',
-                }}
+            <UnifiedCard
+                size="full"
+                title={t('playground.imageTitle', { defaultValue: 'Image Playground' })}
             >
-                <Stack
-                    spacing={2}
+                <Box
                     sx={{
-                        minWidth: 0,
-                        height: { xs: 'auto', md: 420 },
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'minmax(360px, 0.9fr) minmax(420px, 1.1fr)' },
+                        gap: 3,
+                        alignItems: 'stretch',
                     }}
                 >
-                    {noModels && !loadingRules && (
-                        <Alert severity="info" variant="outlined">
-                            {t('playground.noImageModels', {
-                                defaultValue: 'Add an image generation model rule below to start generating images.',
-                            })}
-                        </Alert>
-                    )}
-
-                    <FormControl size="small" fullWidth>
-                        <InputLabel id="image-model-label">
-                            {t('playground.model', { defaultValue: 'Model' })}
-                        </InputLabel>
-                        <Select
-                            labelId="image-model-label"
-                            label={t('playground.model', { defaultValue: 'Model' })}
-                            value={model}
-                            onChange={(event) => setSelectedModel(event.target.value)}
-                            disabled={noModels}
-                        >
-                            {models.map((modelName) => (
-                                <MenuItem key={modelName} value={modelName}>{modelName}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-
-                    <TextField
-                        multiline
-                        minRows={7}
-                        fullWidth
-                        label={t('playground.prompt', { defaultValue: 'Prompt' })}
-                        placeholder={t('playground.promptPlaceholder', {
-                            defaultValue: 'Describe the image you want to generate…',
-                        })}
-                        value={prompt}
-                        onChange={(event) => setPrompt(event.target.value)}
-                        disabled={noModels}
+                    <Stack
+                        spacing={2}
                         sx={{
-                            flex: { xs: 'initial', md: 1 },
-                            minHeight: 0,
-                            '& .MuiInputBase-root': {
-                                height: { xs: 'auto', md: '100%' },
-                                alignItems: 'flex-start',
-                            },
-                            '& .MuiInputBase-inputMultiline': {
-                                height: { md: '100% !important' },
-                                overflow: { md: 'auto !important' },
-                            },
+                            minWidth: 0,
+                            height: { xs: 'auto', md: 420 },
                         }}
-                    />
+                    >
+                        {noModels && !loadingRules && (
+                            <Alert severity="info" variant="outlined">
+                                {t('playground.noImageModels', {
+                                    defaultValue: 'Add an image generation model rule below to start generating images.',
+                                })}
+                            </Alert>
+                        )}
+
+                        <FormControl size="small" fullWidth>
+                            <InputLabel id="image-model-label">
+                                {t('playground.model', { defaultValue: 'Model' })}
+                            </InputLabel>
+                            <Select
+                                labelId="image-model-label"
+                                label={t('playground.model', { defaultValue: 'Model' })}
+                                value={model}
+                                onChange={(event) => setSelectedModel(event.target.value)}
+                                disabled={noModels}
+                            >
+                                {models.map((modelName) => (
+                                    <MenuItem key={modelName} value={modelName}>{modelName}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+
+                        <TextField
+                            multiline
+                            minRows={7}
+                            fullWidth
+                            label={t('playground.prompt', { defaultValue: 'Prompt' })}
+                            placeholder={t('playground.promptPlaceholder', {
+                                defaultValue: 'Describe the image you want to generate…',
+                            })}
+                            value={prompt}
+                            onChange={(event) => setPrompt(event.target.value)}
+                            disabled={noModels}
+                            sx={{
+                                flex: { xs: 'initial', md: 1 },
+                                minHeight: 0,
+                                '& .MuiInputBase-root': {
+                                    height: { xs: 'auto', md: '100%' },
+                                    alignItems: 'flex-start',
+                                },
+                                '& .MuiInputBase-inputMultiline': {
+                                    height: { md: '100% !important' },
+                                    overflow: { md: 'auto !important' },
+                                },
+                            }}
+                        />
+
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                gap: 1.5,
+                            }}
+                        >
+                            <FormControl size="small">
+                                <InputLabel id="image-size-label">
+                                    {t('playground.size', { defaultValue: 'Size' })}
+                                </InputLabel>
+                                <Select
+                                    labelId="image-size-label"
+                                    label={t('playground.size', { defaultValue: 'Size' })}
+                                    value={size}
+                                    onChange={(event) => setSize(event.target.value)}
+                                >
+                                    <MenuItem value="256x256">256x256</MenuItem>
+                                    <MenuItem value="512x512">512x512</MenuItem>
+                                    <MenuItem value="1024x1024">1024x1024</MenuItem>
+                                    <MenuItem value="1024x1792">1024x1792</MenuItem>
+                                    <MenuItem value="1792x1024">1792x1024</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <FormControl size="small">
+                                <InputLabel id="image-quality-label">
+                                    {t('playground.quality', { defaultValue: 'Quality' })}
+                                </InputLabel>
+                                <Select
+                                    labelId="image-quality-label"
+                                    label={t('playground.quality', { defaultValue: 'Quality' })}
+                                    value={quality}
+                                    onChange={(event) => setQuality(event.target.value as Quality)}
+                                >
+                                    <MenuItem value="auto">auto</MenuItem>
+                                    <MenuItem value="low">low</MenuItem>
+                                    <MenuItem value="medium">medium</MenuItem>
+                                    <MenuItem value="high">high</MenuItem>
+                                    <MenuItem value="standard">standard</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <TextField
+                                size="small"
+                                type="number"
+                                label={t('playground.count', { defaultValue: 'N' })}
+                                value={count}
+                                onChange={(event) => {
+                                    const nextCount = Number(event.target.value);
+                                    setCount(Number.isFinite(nextCount) && nextCount > 0 ? Math.min(nextCount, 10) : 1);
+                                }}
+                                slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                            />
+                        </Box>
+
+                        <Button
+                            variant="contained"
+                            size="large"
+                            fullWidth
+                            onClick={handleGenerate}
+                            disabled={sending || noModels || !prompt.trim() || !model}
+                            startIcon={sending ? <CircularProgress size={18} /> : <AutoAwesome />}
+                        >
+                            {sending
+                                ? t('playground.generating', { defaultValue: 'Generating…' })
+                                : t('playground.generate', { defaultValue: 'Generate' })}
+                        </Button>
+                    </Stack>
 
                     <Box
                         sx={{
-                            display: 'grid',
-                            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
-                            gap: 1.5,
+                            minWidth: 0,
+                            minHeight: { xs: 320, md: 420 },
+                            height: { xs: 'auto', md: 420 },
+                            maxHeight: { xs: 560, md: 420 },
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 2,
+                            bgcolor: 'action.hover',
+                            p: 2,
+                            display: 'flex',
+                            alignItems: runs.length === 0 && !sending ? 'center' : 'stretch',
+                            justifyContent: runs.length === 0 && !sending ? 'center' : 'flex-start',
+                            overflow: 'hidden',
                         }}
                     >
-                        <FormControl size="small">
-                            <InputLabel id="image-size-label">
-                                {t('playground.size', { defaultValue: 'Size' })}
-                            </InputLabel>
-                            <Select
-                                labelId="image-size-label"
-                                label={t('playground.size', { defaultValue: 'Size' })}
-                                value={size}
-                                onChange={(event) => setSize(event.target.value)}
-                            >
-                                <MenuItem value="256x256">256x256</MenuItem>
-                                <MenuItem value="512x512">512x512</MenuItem>
-                                <MenuItem value="1024x1024">1024x1024</MenuItem>
-                                <MenuItem value="1024x1792">1024x1792</MenuItem>
-                                <MenuItem value="1792x1024">1792x1024</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <FormControl size="small">
-                            <InputLabel id="image-quality-label">
-                                {t('playground.quality', { defaultValue: 'Quality' })}
-                            </InputLabel>
-                            <Select
-                                labelId="image-quality-label"
-                                label={t('playground.quality', { defaultValue: 'Quality' })}
-                                value={quality}
-                                onChange={(event) => setQuality(event.target.value as Quality)}
-                            >
-                                <MenuItem value="auto">auto</MenuItem>
-                                <MenuItem value="low">low</MenuItem>
-                                <MenuItem value="medium">medium</MenuItem>
-                                <MenuItem value="high">high</MenuItem>
-                                <MenuItem value="standard">standard</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <TextField
-                            size="small"
-                            type="number"
-                            label={t('playground.count', { defaultValue: 'N' })}
-                            value={count}
-                            onChange={(event) => {
-                                const nextCount = Number(event.target.value);
-                                setCount(Number.isFinite(nextCount) && nextCount > 0 ? Math.min(nextCount, 10) : 1);
-                            }}
-                            slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                        />
-                    </Box>
-
-                    <Button
-                        variant="contained"
-                        size="large"
-                        fullWidth
-                        onClick={handleGenerate}
-                        disabled={sending || noModels || !prompt.trim() || !model}
-                        startIcon={sending ? <CircularProgress size={18} /> : <AutoAwesome />}
-                    >
-                        {sending
-                            ? t('playground.generating', { defaultValue: 'Generating…' })
-                            : t('playground.generate', { defaultValue: 'Generate' })}
-                    </Button>
-                </Stack>
-
-                <Box
-                    sx={{
-                        minWidth: 0,
-                        minHeight: { xs: 320, md: 420 },
-                        height: { xs: 'auto', md: 420 },
-                        maxHeight: { xs: 560, md: 420 },
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 2,
-                        bgcolor: 'action.hover',
-                        p: 2,
-                        display: 'flex',
-                        alignItems: runs.length === 0 && !sending ? 'center' : 'stretch',
-                        justifyContent: runs.length === 0 && !sending ? 'center' : 'flex-start',
-                        overflow: 'hidden',
-                    }}
-                >
-                    {runs.length === 0 && !sending ? (
-                        <Stack alignItems="center" spacing={1} sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                            <Photo sx={{ fontSize: 44, opacity: 0.45 }} />
-                            <Typography variant="subtitle2" color="text.secondary">
-                                {t('playground.previewEmpty', { defaultValue: 'Your generated images will appear here' })}
-                            </Typography>
-                            <Typography variant="caption" color="text.disabled">
-                                {t('playground.previewHint', { defaultValue: 'Each generation will be kept for this session.' })}
-                            </Typography>
-                        </Stack>
-                    ) : (
-                        <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                                <Typography variant="subtitle2">
-                                    {t('playground.sessionOutputs', { defaultValue: 'Session outputs' })}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {t('playground.runCount', {
-                                        defaultValue: runs.length === 1 ? '1 generation' : '{{count}} generations',
-                                        count: runs.length,
-                                    })}
-                                </Typography>
-                            </Box>
-
-                            <Box
-                                ref={historyTrackRef}
-                                data-testid="imagegen-history-track"
+                        {runs.length === 0 && !sending ? (
+                            <Stack
+                                spacing={1}
                                 sx={{
-                                    display: 'flex',
-                                    gap: 1.5,
-                                    flex: 1,
-                                    minHeight: 0,
-                                    overflowX: 'auto',
-                                    overflowY: 'hidden',
-                                    pb: 0.5,
-                                    scrollSnapType: 'x proximity',
-                                    overflowAnchor: 'none',
-                                    scrollbarWidth: 'thin',
-                                    '&::-webkit-scrollbar': { height: 6 },
-                                    '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
-                                }}
-                            >
-                                {sending && (
-                                    <Card
-                                        variant="outlined"
-                                        sx={{
-                                            flex: '0 0 280px',
-                                            height: '100%',
-                                            borderStyle: 'dashed',
-                                            bgcolor: 'background.paper',
-                                            scrollSnapAlign: 'end',
-                                            order: 2,
-                                        }}
-                                    >
-                                        <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
-                                            <Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ height: '100%' }}>
-                                                <CircularProgress size={24} />
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
-                                                </Typography>
-                                            </Stack>
-                                        </CardContent>
-                                    </Card>
-                                )}
+                                    alignItems: "center",
+                                    color: 'text.secondary',
+                                    textAlign: 'center'
+                                }}>
+                                <Photo sx={{ fontSize: 44, opacity: 0.45 }} />
+                                <Typography variant="subtitle2" sx={{
+                                    color: "text.secondary"
+                                }}>
+                                    {t('playground.previewEmpty', { defaultValue: 'Your generated images will appear here' })}
+                                </Typography>
+                                <Typography variant="caption" sx={{
+                                    color: "text.disabled"
+                                }}>
+                                    {t('playground.previewHint', { defaultValue: 'Each generation will be kept for this session.' })}
+                                </Typography>
+                            </Stack>
+                        ) : (
+                            <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                                    <Typography variant="subtitle2">
+                                        {t('playground.sessionOutputs', { defaultValue: 'Session outputs' })}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
+                                        {t('playground.runCount', {
+                                            defaultValue: runs.length === 1 ? '1 generation' : '{{count}} generations',
+                                            count: runs.length,
+                                        })}
+                                    </Typography>
+                                </Box>
 
-                                {runs.map((run) => (
-                                    <Card
-                                        key={run.id}
-                                        variant="outlined"
-                                        sx={{
-                                            flex: { xs: '0 0 min(82vw, 320px)', md: '0 0 clamp(280px, 46%, 360px)' },
-                                            height: '100%',
-                                            bgcolor: 'background.paper',
-                                            scrollSnapAlign: 'start',
-                                        }}
-                                    >
-                                    <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
-                                        <Stack spacing={1.25} sx={{ height: '100%' }}>
-                                            <Box>
-                                                <Typography
-                                                    variant="body2"
+                                <Box
+                                    ref={historyTrackRef}
+                                    data-testid="imagegen-history-track"
+                                    sx={{
+                                        display: 'flex',
+                                        gap: 1.5,
+                                        flex: 1,
+                                        minHeight: 0,
+                                        overflowX: 'auto',
+                                        overflowY: 'hidden',
+                                        pb: 0.5,
+                                        scrollSnapType: 'x proximity',
+                                        overflowAnchor: 'none',
+                                        scrollbarWidth: 'thin',
+                                        '&::-webkit-scrollbar': { height: 6 },
+                                        '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
+                                    }}
+                                >
+                                    {sending && (
+                                        <Card
+                                            variant="outlined"
+                                            sx={{
+                                                flex: '0 0 280px',
+                                                height: '100%',
+                                                borderStyle: 'dashed',
+                                                bgcolor: 'background.paper',
+                                                scrollSnapAlign: 'end',
+                                                order: 2,
+                                            }}
+                                        >
+                                            <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
+                                                <Stack
+                                                    spacing={1.5}
                                                     sx={{
-                                                        fontWeight: 500,
-                                                        display: '-webkit-box',
-                                                        WebkitLineClamp: 2,
-                                                        WebkitBoxOrient: 'vertical',
-                                                        overflow: 'hidden',
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        height: '100%'
+                                                    }}>
+                                                    <CircularProgress size={24} />
+                                                    <Typography variant="body2" sx={{
+                                                        color: "text.secondary"
+                                                    }}>
+                                                        {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
+                                                    </Typography>
+                                                </Stack>
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {runs.map((run) => (
+                                        <Card
+                                            key={run.id}
+                                            variant="outlined"
+                                            sx={{
+                                                flex: { xs: '0 0 min(82vw, 320px)', md: '0 0 clamp(280px, 46%, 360px)' },
+                                                height: '100%',
+                                                bgcolor: 'background.paper',
+                                                scrollSnapAlign: 'start',
+                                            }}
+                                        >
+                                        <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
+                                            <Stack spacing={1.25} sx={{ height: '100%' }}>
+                                                <Box>
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 500,
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                        }}
+                                                    >
+                                                        {run.prompt}
+                                                    </Typography>
+                                                    <Typography variant="caption" sx={{
+                                                        color: "text.secondary"
+                                                    }}>
+                                                        {run.model} · {run.size} · {run.quality}
+                                                    </Typography>
+                                                </Box>
+                                                <Box
+                                                    sx={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: run.images.length === 1
+                                                            ? 'minmax(0, 1fr)'
+                                                            : 'repeat(2, minmax(0, 1fr))',
+                                                        flex: 1,
+                                                        minHeight: 0,
+                                                        gap: 1,
                                                     }}
                                                 >
-                                                    {run.prompt}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {run.model} · {run.size} · {run.quality}
-                                                </Typography>
-                                            </Box>
-                                            <Box
-                                                sx={{
-                                                    display: 'grid',
-                                                    gridTemplateColumns: run.images.length === 1
-                                                        ? 'minmax(0, 1fr)'
-                                                        : 'repeat(2, minmax(0, 1fr))',
-                                                    flex: 1,
-                                                    minHeight: 0,
-                                                    gap: 1,
-                                                }}
-                                            >
-                                                {run.images.map((image, index) => {
-                                                    const src = image.url || (image.b64_json
-                                                        ? `data:image/png;base64,${image.b64_json}`
-                                                        : '');
-                                                    return src ? (
-                                                        <ButtonBase
-                                                            key={`${run.id}-${index}`}
-                                                            onClick={() => setSelectedImage({
-                                                                src,
-                                                                prompt: run.prompt,
-                                                                model: run.model,
-                                                                size: run.size,
-                                                                quality: run.quality,
-                                                                index,
-                                                            })}
-                                                            aria-label={t('playground.openResult', {
-                                                                defaultValue: 'Open generated image {{number}}',
-                                                                number: index + 1,
-                                                            })}
-                                                            sx={{
-                                                                position: 'relative',
-                                                                width: '100%',
-                                                                height: '100%',
-                                                                borderRadius: 1,
-                                                                bgcolor: 'action.hover',
-                                                                overflow: 'hidden',
-                                                                '&:hover .image-preview-overlay, &:focus-visible .image-preview-overlay': {
-                                                                    opacity: 1,
-                                                                },
-                                                            }}
-                                                        >
-                                                            <Box
-                                                                component="img"
-                                                                src={src}
-                                                                alt={t('playground.resultAlt', {
-                                                                    defaultValue: 'Generated image {{number}}',
+                                                    {run.images.map((image, index) => {
+                                                        const src = image.url || (image.b64_json
+                                                            ? `data:image/png;base64,${image.b64_json}`
+                                                            : '');
+                                                        return src ? (
+                                                            <ButtonBase
+                                                                key={`${run.id}-${index}`}
+                                                                onClick={() => setSelectedImage({
+                                                                    src,
+                                                                    prompt: run.prompt,
+                                                                    model: run.model,
+                                                                    size: run.size,
+                                                                    quality: run.quality,
+                                                                    index,
+                                                                })}
+                                                                aria-label={t('playground.openResult', {
+                                                                    defaultValue: 'Open generated image {{number}}',
                                                                     number: index + 1,
                                                                 })}
                                                                 sx={{
+                                                                    position: 'relative',
                                                                     width: '100%',
                                                                     height: '100%',
-                                                                    maxHeight: '100%',
-                                                                    objectFit: 'contain',
-                                                                    display: 'block',
-                                                                }}
-                                                            />
-                                                            <Box
-                                                                className="image-preview-overlay"
-                                                                sx={{
-                                                                    position: 'absolute',
-                                                                    inset: 0,
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    color: 'common.white',
-                                                                    bgcolor: 'rgba(15, 23, 42, 0.38)',
-                                                                    opacity: 0,
-                                                                    transition: 'opacity 0.16s ease-out',
+                                                                    borderRadius: 1,
+                                                                    bgcolor: 'action.hover',
+                                                                    overflow: 'hidden',
+                                                                    '&:hover .image-preview-overlay, &:focus-visible .image-preview-overlay': {
+                                                                        opacity: 1,
+                                                                    },
                                                                 }}
                                                             >
-                                                                <ZoomIn sx={{ fontSize: 30 }} />
-                                                            </Box>
-                                                            <Box
-                                                                sx={{
-                                                                    position: 'absolute',
-                                                                    top: 8,
-                                                                    right: 8,
-                                                                    width: 30,
-                                                                    height: 30,
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    borderRadius: '50%',
-                                                                    color: 'common.white',
-                                                                    bgcolor: 'rgba(15, 23, 42, 0.58)',
-                                                                    backdropFilter: 'blur(4px)',
-                                                                }}
-                                                            >
-                                                                <ZoomIn fontSize="small" />
-                                                            </Box>
-                                                        </ButtonBase>
-                                                    ) : (
-                                                        <Typography key={`${run.id}-${index}`} variant="caption" color="text.secondary">
-                                                            {t('playground.emptyResult', { defaultValue: 'No image returned' })}
-                                                        </Typography>
-                                                    );
-                                                })}
-                                            </Box>
-                                        </Stack>
-                                    </CardContent>
-                                    </Card>
-                                ))}
-                            </Box>
-                        </Stack>
-                    )}
+                                                                <Box
+                                                                    component="img"
+                                                                    src={src}
+                                                                    alt={t('playground.resultAlt', {
+                                                                        defaultValue: 'Generated image {{number}}',
+                                                                        number: index + 1,
+                                                                    })}
+                                                                    sx={{
+                                                                        width: '100%',
+                                                                        height: '100%',
+                                                                        maxHeight: '100%',
+                                                                        objectFit: 'contain',
+                                                                        display: 'block',
+                                                                    }}
+                                                                />
+                                                                <Box
+                                                                    className="image-preview-overlay"
+                                                                    sx={{
+                                                                        position: 'absolute',
+                                                                        inset: 0,
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        color: 'common.white',
+                                                                        bgcolor: 'rgba(15, 23, 42, 0.38)',
+                                                                        opacity: 0,
+                                                                        transition: 'opacity 0.16s ease-out',
+                                                                    }}
+                                                                >
+                                                                    <ZoomIn sx={{ fontSize: 30 }} />
+                                                                </Box>
+                                                                <Box
+                                                                    sx={{
+                                                                        position: 'absolute',
+                                                                        top: 8,
+                                                                        right: 8,
+                                                                        width: 30,
+                                                                        height: 30,
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        borderRadius: '50%',
+                                                                        color: 'common.white',
+                                                                        bgcolor: 'rgba(15, 23, 42, 0.58)',
+                                                                        backdropFilter: 'blur(4px)',
+                                                                    }}
+                                                                >
+                                                                    <ZoomIn fontSize="small" />
+                                                                </Box>
+                                                            </ButtonBase>
+                                                        ) : (
+                                                            <Typography key={`${run.id}-${index}`} variant="caption" sx={{
+                                                                color: "text.secondary"
+                                                            }}>
+                                                                {t('playground.emptyResult', { defaultValue: 'No image returned' })}
+                                                            </Typography>
+                                                        );
+                                                    })}
+                                                </Box>
+                                            </Stack>
+                                        </CardContent>
+                                        </Card>
+                                    ))}
+                                </Box>
+                            </Stack>
+                        )}
+                    </Box>
                 </Box>
-            </Box>
-        </UnifiedCard>
-        <Dialog
-            open={selectedImage !== null}
-            onClose={() => setSelectedImage(null)}
-            maxWidth={false}
-            fullWidth
-            PaperProps={{
-                sx: {
-                    width: 'calc(100vw - 48px)',
-                    height: 'calc(100vh - 48px)',
-                    maxWidth: 'none',
-                    borderRadius: 3,
-                    bgcolor: 'grey.900',
-                    color: 'common.white',
-                    overflow: 'hidden',
-                },
-            }}
-        >
-            <DialogTitle
-                sx={{
-                    py: 1.5,
-                    px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    bgcolor: 'rgba(15, 23, 42, 0.96)',
-                    color: 'common.white',
+            </UnifiedCard>
+            <Dialog
+                open={selectedImage !== null}
+                onClose={() => setSelectedImage(null)}
+                maxWidth={false}
+                fullWidth
+                slotProps={{
+                    paper: {
+                        sx: {
+                            width: 'calc(100vw - 48px)',
+                            height: 'calc(100vh - 48px)',
+                            maxWidth: 'none',
+                            borderRadius: 3,
+                            bgcolor: 'grey.900',
+                            color: 'common.white',
+                            overflow: 'hidden',
+                        },
+                    }
                 }}
             >
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography
-                        component="span"
-                        variant="subtitle1"
-                        sx={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    >
-                        {selectedImage?.prompt}
-                    </Typography>
-                    <Typography component="span" variant="caption" sx={{ display: 'block', color: 'grey.400' }}>
-                        {selectedImage?.model} · {selectedImage?.size} · {selectedImage?.quality}
-                    </Typography>
-                </Box>
-                <IconButton
-                    onClick={() => setSelectedImage(null)}
-                    aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
+                <DialogTitle
                     sx={{
+                        py: 1.5,
+                        px: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        bgcolor: 'rgba(15, 23, 42, 0.96)',
                         color: 'common.white',
-                        bgcolor: 'rgba(255, 255, 255, 0.08)',
-                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
                     }}
                 >
-                    <Close />
-                </IconButton>
-            </DialogTitle>
-            <DialogContent
-                sx={{
-                    p: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'common.black',
-                    overflow: 'hidden',
-                }}
-            >
-                {selectedImage && (
-                    <Box
-                        component="img"
-                        src={selectedImage.src}
-                        alt={t('playground.resultAlt', {
-                            defaultValue: 'Generated image {{number}}',
-                            number: selectedImage.index + 1,
-                        })}
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                            component="span"
+                            variant="subtitle1"
+                            sx={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                            {selectedImage?.prompt}
+                        </Typography>
+                        <Typography component="span" variant="caption" sx={{ display: 'block', color: 'grey.400' }}>
+                            {selectedImage?.model} · {selectedImage?.size} · {selectedImage?.quality}
+                        </Typography>
+                    </Box>
+                    <IconButton
+                        onClick={() => setSelectedImage(null)}
+                        aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
                         sx={{
-                            display: 'block',
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            objectFit: 'contain',
+                            color: 'common.white',
+                            bgcolor: 'rgba(255, 255, 255, 0.08)',
+                            '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
                         }}
-                    />
-                )}
-            </DialogContent>
-        </Dialog>
+                    >
+                        <Close />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent
+                    sx={{
+                        p: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        bgcolor: 'common.black',
+                        overflow: 'hidden',
+                    }}
+                >
+                    {selectedImage && (
+                        <Box
+                            component="img"
+                            src={selectedImage.src}
+                            alt={t('playground.resultAlt', {
+                                defaultValue: 'Generated image {{number}}',
+                                number: selectedImage.index + 1,
+                            })}
+                            sx={{
+                                display: 'block',
+                                maxWidth: '100%',
+                                maxHeight: '100%',
+                                objectFit: 'contain',
+                            }}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </>
     );
 };

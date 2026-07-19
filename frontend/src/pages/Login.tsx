@@ -105,7 +105,9 @@ const Login: React.FC = () => {
                     <Typography component="h1" variant="h4" align="center" gutterBottom>
                         {t('login.title')}
                     </Typography>
-                    <Typography component="h2" variant="h6" align="center" color="text.secondary" gutterBottom>
+                    <Typography component="h2" variant="h6" align="center" gutterBottom sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('login.subtitle')}
                     </Typography>
 

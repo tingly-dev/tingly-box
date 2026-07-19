@@ -30,7 +30,9 @@ const buildFeishuFamilyGuide = (t: TFunction, opts: {
 }) => (
     <Stack spacing={2}>
         <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-            <Typography variant="body2" color="info.dark">
+            <Typography variant="body2" sx={{
+                color: "info.dark"
+            }}>
                 {opts.tip}
             </Typography>
         </Box>
@@ -38,7 +40,9 @@ const buildFeishuFamilyGuide = (t: TFunction, opts: {
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 {t('remoteControl.guides.feishuFamily.step1Title', { defaultValue: '1. Scan to create (recommended)' })}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+                color: "text.secondary"
+            }}>
                 {t('remoteControl.guides.feishuFamily.step1TextBefore', { defaultValue: 'Click "Add Bot" above, choose' })}{' '}
                 <strong>{t('remoteControl.guides.feishuFamily.oneClickOption', { defaultValue: 'One-click (scan QR)' })}</strong>
                 {opts.step1TextAfter}
@@ -48,7 +52,9 @@ const buildFeishuFamilyGuide = (t: TFunction, opts: {
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 {t('remoteControl.guides.feishuFamily.step2Title', { defaultValue: '2. Or create manually' })}
             </Typography>
-            <Typography variant="body2" color="text.secondary" component="div">
+            <Typography variant="body2" component="div" sx={{
+                color: "text.secondary"
+            }}>
                 <Box component="ul" sx={{ pl: 2, m: 0 }}>
                     <li>
                         {t('remoteControl.guides.feishu.step2Open', { defaultValue: 'Open' })}{' '}
@@ -73,7 +79,9 @@ const buildFeishuFamilyGuide = (t: TFunction, opts: {
 const buildComingSoonGuide = (t: TFunction, platformName: string) => (
     <Stack spacing={2}>
         <Box>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+                color: "text.secondary"
+            }}>
                 {t('remoteControl.guides.comingSoon', { defaultValue: '{{platform}} bot integration is currently under development. Stay tuned for updates!', platform: platformName })}
             </Typography>
         </Box>
@@ -99,7 +107,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         guide: (
             <Stack spacing={2}>
                 <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
+                    <Typography variant="body2" sx={{
+                        color: "info.dark"
+                    }}>
                         {t('remoteControl.guides.telegram.tip', { defaultValue: 'Tip: Configure traffic proxy as needed for network access.' })}
                     </Typography>
                 </Box>
@@ -107,13 +117,20 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.telegram.step1Title', { defaultValue: '1. Create a bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.telegram.step1Open', { defaultValue: 'Open Telegram, search' })}{' '}
                         <Link href="https://t.me/BotFather" target="_blank">
                             @BotFather <OpenInNew sx={{ fontSize: 10 }} />
                         </Link>
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mt: 0.5
+                        }}>
                         {t('remoteControl.guides.telegram.step1Send', { defaultValue: 'Send' })} <code>/newbot</code> {t('remoteControl.guides.telegram.step1SendTail', { defaultValue: ', follow the prompts, and copy the token' })}
                     </Typography>
                 </Box>
@@ -121,7 +138,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.telegram.step2Title', { defaultValue: '2. Add bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.telegram.step2Text', { defaultValue: 'Click "Add Bot" button above and paste the token to create your bot.' })}
                     </Typography>
                 </Box>
@@ -172,7 +191,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         guide: (
             <Stack spacing={2}>
                 <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
+                    <Typography variant="body2" sx={{
+                        color: "info.dark"
+                    }}>
                         {t('remoteControl.guides.dingtalk.tip', { defaultValue: 'Tip: DingTalk uses Stream Mode - no public IP required. Configure traffic proxy as needed.' })}
                     </Typography>
                 </Box>
@@ -180,7 +201,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.dingtalk.step1Title', { defaultValue: '1. Create a DingTalk bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
+                    <Typography variant="body2" component="div" sx={{
+                        color: "text.secondary"
+                    }}>
                         <Box component="ul" sx={{ pl: 2, m: 0 }}>
                             <li>
                                 {t('remoteControl.guides.dingtalk.step1Visit', { defaultValue: 'Visit' })}{' '}
@@ -203,7 +226,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.telegram.step2Title', { defaultValue: '2. Add bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.dingtalk.step2Text', { defaultValue: 'Click "Add Bot" button above and fill in App Key and App Secret to create your bot.' })}
                     </Typography>
                 </Box>
@@ -222,7 +247,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         guide: (
             <Stack spacing={2}>
                 <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
+                    <Typography variant="body2" sx={{
+                        color: "info.dark"
+                    }}>
                         <strong>{t('remoteControl.guides.weixin.betaLabel', { defaultValue: 'Beta:' })}</strong> {t('remoteControl.guides.weixin.betaText', { defaultValue: 'Weixin integration is in beta. Please provide feedback for any issues.' })}
                     </Typography>
                 </Box>
@@ -230,7 +257,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.weixin.step1Title', { defaultValue: '1. Install latest Weixin' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.weixin.step1TextBefore', { defaultValue: 'Make sure you have the latest version of' })}{' '}
                         <Link href="https://weixin.qq.com/" target="_blank">
                             Weixin <OpenInNew sx={{ fontSize: 10 }} />
@@ -242,7 +271,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.telegram.step2Title', { defaultValue: '2. Add bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.weixin.step2Text', { defaultValue: 'Click "Add Bot" button above and scan the QR code with Weixin to bind your account.' })}
                     </Typography>
                 </Box>
@@ -261,7 +292,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         guide: (
             <Stack spacing={2}>
                 <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
-                    <Typography variant="body2" color="info.dark">
+                    <Typography variant="body2" sx={{
+                        color: "info.dark"
+                    }}>
                         {t('remoteControl.guides.wecom.tip', { defaultValue: 'Tip: WeCom AI Bot uses WebSocket long connection — no public IP required.' })}
                     </Typography>
                 </Box>
@@ -269,7 +302,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.wecom.step1Title', { defaultValue: '1. Open WeCom Admin Console' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.wecom.step1GoTo', { defaultValue: 'Go to' })}{' '}
                         <Link href="https://work.weixin.qq.com/wework_admin/frame#/aiHelper/list" target="_blank">
                             {t('remoteControl.guides.wecom.step1LinkLabel', { defaultValue: 'WeCom Admin → AI Assistant' })} <OpenInNew sx={{ fontSize: 10 }} />
@@ -281,7 +316,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.wecom.step2Title', { defaultValue: '2. Create via API mode' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.wecom.step2TextBefore', { defaultValue: 'Scroll to the bottom of the page and click' })} <strong>{t('remoteControl.guides.wecom.step2LinkLabel', { defaultValue: 'Create via API Mode' })}</strong>.
                     </Typography>
                 </Box>
@@ -289,7 +326,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.wecom.step3Title', { defaultValue: '3. Configure the bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
+                    <Typography variant="body2" component="div" sx={{
+                        color: "text.secondary"
+                    }}>
                         <Box component="ul" sx={{ pl: 2, m: 0 }}>
                             <li><strong>{t('remoteControl.guides.wecom.step3VisibleScope', { defaultValue: 'Visible Scope:' })}</strong> {t('remoteControl.guides.wecom.step3VisibleScopeText', { defaultValue: 'Set who can use the bot' })}</li>
                             <li><strong>{t('remoteControl.guides.wecom.step3ApiConfig', { defaultValue: 'API Config:' })}</strong> {t('remoteControl.guides.wecom.step3ApiConfigTextBefore', { defaultValue: 'Under Connection Method, select' })} <strong>{t('remoteControl.guides.wecom.step3LongConnection', { defaultValue: 'Long Connection' })}</strong></li>
@@ -305,7 +344,9 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                         {t('remoteControl.guides.wecom.step4Title', { defaultValue: '4. Add bot' })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.guides.wecom.step4Text', { defaultValue: 'Click "Add Bot" above and enter the Bot ID and Secret to connect.' })}
                     </Typography>
                 </Box>

@@ -106,7 +106,12 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
                   >
                     {RECORDING_TYPE_LABELS[recording.type]}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: '0.7rem'
+                    }}>
                     {recording.user.name}
                   </Typography>
                 </Box>

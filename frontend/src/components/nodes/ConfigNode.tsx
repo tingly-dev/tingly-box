@@ -110,7 +110,6 @@ const CWDNode: React.FC<CWDNodeProps> = ({ onPathChange, disabled = false, curre
                     }}>Default Path</Typography>
                 </Box>
             </StyledCWDNode>
-
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Set Working Directory</DialogTitle>
                 <DialogContent>
@@ -126,7 +125,13 @@ const CWDNode: React.FC<CWDNodeProps> = ({ onPathChange, disabled = false, curre
                             helperText="Enter the absolute path to the working directory"
                         />
                         {currentPath && (
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: "text.secondary",
+                                    mt: 1,
+                                    display: 'block'
+                                }}>
                                 Current: {currentPath}
                             </Typography>
                         )}

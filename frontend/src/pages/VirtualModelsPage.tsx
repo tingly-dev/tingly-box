@@ -74,11 +74,16 @@ const VirtualModelsPage = () => {
                         showHeroIcon={false}
                     />
                 )}
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                <Typography
+                    variant="caption"
+                    sx={{
+                        color: "text.secondary",
+                        mt: 2,
+                        display: 'block'
+                    }}>
                     Builtin providers are seeded on every startup; they cannot be deleted, only enabled or disabled here.
                 </Typography>
             </UnifiedCard>
-
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={6000}

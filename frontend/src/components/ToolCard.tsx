@@ -190,7 +190,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                             <Tag key={t} label={t} />
                         ))}
                     </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.4 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: "text.secondary",
+                            lineHeight: 1.4
+                        }}>
                         {description}
                     </Typography>
                 </Box>
@@ -220,7 +225,6 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                     </Box>
                 )}
             </Box>
-
             {/* ── Expanded settings ── */}
             {settings && expanded && (
                 <Box

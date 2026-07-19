@@ -74,7 +74,14 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
             <StyledSmartNodePrimary active={active} onClick={onEdit}>
 
                 {/* ── Header ── */}
-                <Stack direction="row" alignItems="center" gap={0.5} sx={{ width: '100%', flexShrink: 0 }}>
+                <Stack
+                    direction="row"
+                    sx={{
+                        alignItems: "center",
+                        gap: 0.5,
+                        width: '100%',
+                        flexShrink: 0
+                    }}>
                     {/* Inline index badge */}
                     {index !== undefined && (
                         <Box
@@ -159,7 +166,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                 {/* ── Body ── */}
                 {ops.length === 0 ? (
                     /* Unconditional — no conditions means this branch always fires */
-                    <Box
+                    (<Box
                         sx={{
                             display: 'flex',
                             alignItems: 'center',
@@ -179,9 +186,13 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                         >
                             {t('rule.smart.unconditional', { defaultValue: 'Unconditional, ignore' })}
                         </Typography>
-                    </Box>
+                    </Box>)
                 ) : (
-                    <Stack gap={0.4} sx={{ width: '100%' }}>
+                    <Stack
+                        sx={{
+                            gap: 0.4,
+                            width: '100%'
+                        }}>
                         {ops.map((op) => (
                             <NodeTooltip key={op.uuid} title={opTooltip(op)} placement="right">
                                 <Box
@@ -256,7 +267,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     </Stack>
                 )}
             </StyledSmartNodePrimary>
-
             {/* Delete confirmation menu */}
             <Menu
                 anchorEl={anchorEl}

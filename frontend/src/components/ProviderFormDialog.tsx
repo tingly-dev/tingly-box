@@ -512,7 +512,9 @@ const ProviderFormDialog = ({
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-            PaperProps={{sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column'}}}>
+            slotProps={{
+                paper: {sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column'}}
+            }}>
             <DialogTitle sx={{flexShrink: 0}}>
                 <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
                     {title || defaultTitle}
@@ -575,7 +577,14 @@ const ProviderFormDialog = ({
 
                         {/* ── Protocol Slots ────────────────────── */}
                         <Box>
-                            <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{display: 'block', mb: 1.5}}>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontWeight: 600,
+                                    color: "text.secondary",
+                                    display: 'block',
+                                    mb: 1.5
+                                }}>
                                 {t('providerDialog.protocol.label', {defaultValue: 'Protocols'})}
                             </Typography>
                             <Stack spacing={2}>
@@ -671,7 +680,12 @@ const ProviderFormDialog = ({
                                 expandIcon={<ExpandMore fontSize="small"/>}
                                 sx={{px: 0, minHeight: 40, '& .MuiAccordionSummary-content': {my: 0.5}}}
                             >
-                                <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        color: "text.secondary",
+                                        fontWeight: 600
+                                    }}>
                                     {t('providerDialog.advanced.label', {defaultValue: 'Advanced — user-agent, name'})}
                                 </Typography>
                             </AccordionSummary>

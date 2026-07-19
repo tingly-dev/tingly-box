@@ -51,7 +51,9 @@ const KeyNameField: React.FC<KeyNameFieldProps> = ({
                 borderColor: 'divider',
             }}
         >
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+                color: "text.secondary"
+            }}>
                 {t('providerDialog.keyName.label')}
             </Typography>
             <Typography

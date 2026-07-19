@@ -167,11 +167,12 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ pb: 1 }}>
                 Rule Plugins
-                <Typography variant="caption" component="div" color="text.secondary">
+                <Typography variant="caption" component="div" sx={{
+                    color: "text.secondary"
+                }}>
                     Plugin flags applied at the rule level.
                 </Typography>
             </DialogTitle>
-
             {/* Active flags strip — empty state stays hidden to save vertical space. */}
             {activeFlags.length > 0 && (
                 <Box
@@ -184,7 +185,14 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                         bgcolor: 'action.hover',
                     }}
                 >
-                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{
+                            alignItems: "center",
+                            flexWrap: "wrap"
+                        }}>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                             Active ({activeFlags.length})
                         </Typography>
@@ -206,18 +214,21 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                     </Stack>
                 </Box>
             )}
-
             <DialogContent sx={{ p: 0, display: 'flex', minHeight: 420 }} dividers={false}>
                 {loading && (
                     <Box sx={{ p: 3 }}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             Loading flag catalog…
                         </Typography>
                     </Box>
                 )}
                 {!loading && grouped.length === 0 && (
                     <Box sx={{ p: 3 }}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             No flags available.
                         </Typography>
                     </Box>
@@ -315,9 +326,13 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                     transition: 'box-shadow 0.2s, border-color 0.2s',
                                                 }}
                                             >
-                                                <Stack direction="row" alignItems="center" spacing={1}>
+                                                <Stack direction="row" spacing={1} sx={{
+                                                    alignItems: "center"
+                                                }}>
                                                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                                        <Stack direction="row" alignItems="center" spacing={0.75}>
+                                                        <Stack direction="row" spacing={0.75} sx={{
+                                                            alignItems: "center"
+                                                        }}>
                                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                                 {spec.label}
                                                             </Typography>
@@ -328,7 +343,9 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                                 variant="outlined"
                                                             />
                                                         </Stack>
-                                                        <Typography variant="caption" color="text.secondary">
+                                                        <Typography variant="caption" sx={{
+                                                            color: "text.secondary"
+                                                        }}>
                                                             {spec.description}
                                                         </Typography>
                                                     </Box>
@@ -355,9 +372,10 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                                 direction="row"
                                                                 spacing={0.5}
                                                                 useFlexGap
-                                                                flexWrap="wrap"
-                                                                sx={{ mt: 1 }}
-                                                            >
+                                                                sx={{
+                                                                    flexWrap: "wrap",
+                                                                    mt: 1
+                                                                }}>
                                                                 {spec.suggestions.map((s) => {
                                                                     const selected = flagToString(draft, spec.key) === s.value;
                                                                     return (
@@ -444,14 +462,15 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                     Save
                 </Button>
             </DialogActions>
-
             {/* Service picker for service_ref flags (e.g. vision_proxy_service). */}
             <Dialog
                 open={pickerKey !== null}
                 onClose={() => setPickerKey(null)}
                 maxWidth="lg"
                 fullWidth
-                PaperProps={{ sx: { height: '80vh' } }}
+                slotProps={{
+                    paper: { sx: { height: '80vh' } }
+                }}
             >
                 <DialogTitle sx={{ textAlign: 'center' }}>
                     <Typography variant="h6">Pick Vision Proxy Model</Typography>

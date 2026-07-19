@@ -102,12 +102,14 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
             aria-labelledby="tier-guide-dialog-title"
             aria-describedby="tier-guide-dialog-description"
             onKeyDown={handleKeyDown}
-            PaperProps={{
-                sx: {
-                    borderRadius: fullScreen ? 0 : 2,
-                    maxHeight: '90vh',
-                    width: fullScreen ? '100%' : '90vw',
-                    maxWidth: fullScreen ? '100vw' : '900px',
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: fullScreen ? 0 : 2,
+                        maxHeight: '90vh',
+                        width: fullScreen ? '100%' : '90vw',
+                        maxWidth: fullScreen ? '100vw' : '900px',
+                    }
                 }
             }}
         >
@@ -116,7 +118,9 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                     <Typography variant="h6" component="div">
                         {t(`rule.tier.guide.steps.${activeStep + 1}.title`)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('rule.tier.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: activeStep + 1, total: maxSteps })}
                     </Typography>
                 </Box>

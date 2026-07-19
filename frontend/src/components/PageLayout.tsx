@@ -9,7 +9,13 @@ interface PageLoadingProps {
 
 export const PageLoading: React.FC<PageLoadingProps> = ({ minHeight = 400 }) => {
   return (
-    <Box display="flex" justifyContent="center" alignItems="center" minHeight={minHeight}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: minHeight
+      }}>
       <CircularProgress />
     </Box>
   );
@@ -78,16 +84,14 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
 
   return (
     <Box
-      position="relative"
       sx={{
+        position: "relative",
         width: '100%',
         height: '100%',
         display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+        flexDirection: 'column'
+      }}>
       <Box sx={{ flex: 1 }}>{children}</Box>
-
       {/* Unified Notification System */}
       {notification?.open && (
         <Box

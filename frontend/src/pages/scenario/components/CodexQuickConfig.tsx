@@ -156,12 +156,13 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 44 }}>
             {/* Col 1 — Label + info icon */}
             <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={500} noWrap>{text.label}</Typography>
+                <Typography variant="body2" noWrap sx={{
+                    fontWeight: 500
+                }}>{text.label}</Typography>
                 <Tooltip placement="top" arrow title={richTooltip}>
                     <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                 </Tooltip>
             </Box>
-
             {/* Col 2 — config.toml key as a subtle code badge */}
             <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
                 <Box
@@ -180,7 +181,6 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                     {field.key}
                 </Box>
             </Box>
-
             {/* Col 3 — control, right-aligned */}
             <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
                 {field.kind === 'bool' && (
@@ -199,7 +199,9 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         sx={{ minWidth: 160, fontSize: '0.85rem' }}
                     >
                         <MenuItem value={UNSET}>
-                            <Typography variant="body2" color="text.disabled">{unsetLabel}</Typography>
+                            <Typography variant="body2" sx={{
+                                color: "text.disabled"
+                            }}>{unsetLabel}</Typography>
                         </MenuItem>
                         {field.enumValues!.map((v) => (
                             <MenuItem key={v} value={v} sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{v}</MenuItem>
@@ -252,8 +254,9 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Typography variant="body2" color="text.secondary">{uiText.panelHeader}</Typography>
-
+            <Typography variant="body2" sx={{
+                color: "text.secondary"
+            }}>{uiText.panelHeader}</Typography>
             {/* Catalog first — it's the more consequential toggle (it's what makes
                 Codex's /model picker list tingly-served models). */}
             <Box>
@@ -263,7 +266,9 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                 <Divider />
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 44 }}>
                     <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={500} noWrap>{catalogText.label}</Typography>
+                        <Typography variant="body2" noWrap sx={{
+                            fontWeight: 500
+                        }}>{catalogText.label}</Typography>
                         <Tooltip placement="top" arrow title={catalogTooltip}>
                             <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                         </Tooltip>
@@ -289,11 +294,12 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                     </Box>
                 </Box>
             </Box>
-
             <Box>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{uiText.sectionTitle}</Typography>
-                    <Typography variant="caption" color="text.secondary">{uiText.sectionHint}</Typography>
+                    <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                    }}>{uiText.sectionHint}</Typography>
                 </Box>
                 <Divider />
                 <Stack divider={<Divider flexItem />}>

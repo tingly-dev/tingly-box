@@ -164,10 +164,17 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                                 }}
                                             />
                                         </Box>
-                                        <Typography variant="body1" color="text.secondary">
+                                        <Typography variant="body1" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             No usage data available
                                         </Typography>
-                                        <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "text.disabled",
+                                                mt: 0.5
+                                            }}>
                                             Select a different time range or check back later
                                         </Typography>
                                     </Box>

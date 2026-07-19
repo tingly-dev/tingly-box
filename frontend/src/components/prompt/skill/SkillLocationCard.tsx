@@ -84,21 +84,26 @@ const SkillLocationCard = ({
                             </Typography>
                             <Typography
                                 variant="caption"
-                                color="text.secondary"
                                 sx={{
+                                    color: "text.secondary",
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
-                                    display: 'block',
-                                }}
-                            >
+                                    display: 'block'
+                                }}>
                                 {location.path}
                             </Typography>
                         </Box>
                     </Box>
                 </Box>
 
-                <Stack direction="row" spacing={1} mb={2} flexWrap="wrap">
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        mb: 2,
+                        flexWrap: "wrap"
+                    }}>
                     <Chip
                         size="small"
                         label={`${location.skill_count} skill${location.skill_count !== 1 ? 's' : ''}`}
@@ -113,7 +118,13 @@ const SkillLocationCard = ({
                     )}
                 </Stack>
 
-                <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+                <Typography
+                    variant="caption"
+                    sx={{
+                        color: "text.secondary",
+                        display: "block",
+                        mb: 2
+                    }}>
                     Last scanned: {lastScanned}
                 </Typography>
 

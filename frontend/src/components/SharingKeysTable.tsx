@@ -106,7 +106,12 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                     ) : tokens.length === 0 ? (
                         <TableRow>
                             <TableCell colSpan={colSpan} align="center" sx={{ border: 0 }}>
-                                <Stack alignItems="center" spacing={1.5} sx={{ py: 4 }}>
+                                <Stack
+                                    spacing={1.5}
+                                    sx={{
+                                        alignItems: "center",
+                                        py: 4
+                                    }}>
                                     <Box
                                         sx={{
                                             width: 40,
@@ -121,7 +126,9 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                     >
                                         <IconKey sx={{ fontSize: 20 }} />
                                     </Box>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         No sharing keys yet. Create one to share model access with your team.
                                     </Typography>
                                 </Stack>
@@ -139,11 +146,15 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                 }}
                             >
                                 <TableCell>
-                                    <Stack direction="row" spacing={1} alignItems="center">
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         <Box sx={{ color: key.enabled ? 'primary.main' : 'text.disabled', display: 'flex', flexShrink: 0 }}>
                                             <IconKey sx={{ fontSize: 15 }} />
                                         </Box>
-                                        <Typography variant="body2" fontWeight={600}>
+                                        <Typography variant="body2" sx={{
+                                            fontWeight: 600
+                                        }}>
                                             {key.display_name}
                                         </Typography>
                                     </Stack>
@@ -151,7 +162,14 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                 {showUserColumn && (
                                     <TableCell>
                                         <Tooltip title={key.user_id} placement="top">
-                                            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ width: 'fit-content', cursor: 'default' }}>
+                                            <Stack
+                                                direction="row"
+                                                spacing={0.5}
+                                                sx={{
+                                                    alignItems: "center",
+                                                    width: 'fit-content',
+                                                    cursor: 'default'
+                                                }}>
                                                 <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
                                                 <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
                                                     {key.user_id.slice(0, 8)}…
@@ -217,16 +235,22 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                     </Tooltip>
                                 </TableCell>
                                 <TableCell>
-                                    <Stack direction="row" spacing={0.5} alignItems="center">
+                                    <Stack direction="row" spacing={0.5} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         <IconClock sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {formatDate(key.created_at)}
                                         </Typography>
                                     </Stack>
                                 </TableCell>
                                 {showLastUsedColumn && (
                                     <TableCell>
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {formatDate(key.last_used_at)}
                                         </Typography>
                                     </TableCell>

@@ -48,8 +48,12 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                         return (
                             <TableRow key={p.uuid ?? p.name} hover>
                                 <TableCell>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Typography variant="body2" fontWeight={500}>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "center"
+                                    }}>
+                                        <Typography variant="body2" sx={{
+                                            fontWeight: 500
+                                        }}>
                                             {p.name}
                                         </Typography>
                                         <Chip
@@ -65,7 +69,9 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                                 </TableCell>
                                 <TableCell>
                                     {models.length === 0 ? (
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             none registered
                                         </Typography>
                                     ) : (

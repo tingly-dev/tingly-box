@@ -148,7 +148,9 @@ const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => 
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
                         {t('rule.tier.editTitle')}
                     </Typography>
-                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "flex-start"
+                    }}>
                         <TextField
                             type="number"
                             size="small"
@@ -158,22 +160,35 @@ const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => 
                                 setError(null);
                             }}
                             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') close(); }}
-                            inputProps={{ min: 0, step: 1 }}
                             autoFocus
                             fullWidth
                             placeholder="0"
                             error={!!error}
                             helperText={error}
+                            slotProps={{
+                                htmlInput: { min: 0, step: 1 }
+                            }}
                         />
                         <Button size="small" variant="contained" onClick={commit} sx={{ mt: 0, flexShrink: 0 }}>
                             {t('common.confirm')}
                         </Button>
                     </Stack>
                     <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                lineHeight: 1.6
+                            }}>
                             {t('rule.tier.helpHigher')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.6 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                mt: 0.5,
+                                lineHeight: 1.6
+                            }}>
                             {t('rule.tier.helpZero')}
                         </Typography>
                     </Box>
@@ -247,7 +262,6 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                 onMenuClose={handleMenuClose}
                 onDelete={handleDelete}
             />
-
             {provider.provider && providerInfo.exists && (
                 <ProbeMenu
                     open={probeMenuOpen}
@@ -259,7 +273,6 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                     model={provider.model}
                 />
             )}
-
             <ServiceNodeContainer
                 onClick={onNodeClick}
                 sx={{
@@ -269,8 +282,13 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
             >
                 {!provider.provider ? (
                     <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
-                        <Typography variant="body2" color="text.secondary"
-                            sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                ...NODE_LAYER_STYLES.typography,
+                                fontStyle: 'italic'
+                            }}>
                             {t('rule.service.selectProvider')}
                         </Typography>
                     </Box>

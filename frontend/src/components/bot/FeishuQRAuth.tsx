@@ -115,7 +115,11 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CircularProgress size={40} />
-                        <Typography sx={{ mt: 2 }} color="text.secondary">
+                        <Typography
+                            sx={{
+                                color: "text.secondary",
+                                mt: 2
+                            }}>
                             {t('remoteControl.feishuQr.preparing', { defaultValue: 'Preparing one-click {{label}} registration...', label })}
                         </Typography>
                     </Box>
@@ -123,7 +127,9 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
 
             case 'show_qr':
                 return (
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} sx={{
+                        alignItems: "center"
+                    }}>
                         <Typography variant="h6">{t('remoteControl.feishuQr.scanTitle', { defaultValue: 'Scan to create your {{label}} app', label })}</Typography>
                         <Paper sx={{ p: 2, bgcolor: 'background.paper' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -136,7 +142,9 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
                                 />
                             </Box>
                         </Paper>
-                        <Typography variant="body2" color="text.secondary" align="center">
+                        <Typography variant="body2" align="center" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('remoteControl.feishuQr.step1', { defaultValue: '1. Open {{label}} on your phone and scan the QR code', label })}
                             <br />
                             {t('remoteControl.feishuQr.step2', { defaultValue: '2. Confirm authorization — the app, permissions and events are created for you' })}
@@ -156,10 +164,14 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
-                        <Typography variant="h6" color="success.main">
+                        <Typography variant="h6" sx={{
+                            color: "success.main"
+                        }}>
                             {t('remoteControl.feishuQr.createdTitle', { defaultValue: '{{label}} app created!', label })}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('remoteControl.feishuQr.createdBody', { defaultValue: 'Credentials were saved automatically. Your bot is ready.' })}
                         </Typography>
                     </Box>
@@ -167,7 +179,9 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
 
             case 'expired':
                 return (
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} sx={{
+                        alignItems: "center"
+                    }}>
                         <Alert severity="warning">
                             {t('remoteControl.feishuQr.expiredWarning', { defaultValue: 'The QR code expired. Please get a new one.' })}
                         </Alert>
@@ -179,7 +193,9 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
 
             case 'denied':
                 return (
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} sx={{
+                        alignItems: "center"
+                    }}>
                         <Alert severity="warning">
                             {t('remoteControl.feishuQr.deniedWarning', { defaultValue: 'Authorization was declined in {{label}}.', label })}
                         </Alert>

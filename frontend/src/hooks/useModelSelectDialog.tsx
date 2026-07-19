@@ -292,8 +292,10 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
             }}
             maxWidth="lg"
             fullWidth
-            PaperProps={{
-                sx: { height: '80vh' }
+            slotProps={{
+                paper: {
+                    sx: { height: '80vh' }
+                }
             }}
         >
             <DialogTitle sx={{ textAlign: 'center' }}>

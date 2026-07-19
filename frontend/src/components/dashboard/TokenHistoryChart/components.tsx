@@ -204,10 +204,17 @@ export function ChartWrapper({ title, hasData, children }: ChartWrapperProps) {
                             }}
                         />
                     </Box>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: "text.secondary"
+                    }}>
                         No data available
                     </Typography>
-                    <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: "text.disabled",
+                            mt: 0.5
+                        }}>
                         Select a different time range or check back later
                     </Typography>
                 </Box>

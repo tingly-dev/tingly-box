@@ -97,7 +97,12 @@ const MCPClientEditor = ({
 
                     {/* Basic Settings */}
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 2
+                            }}>
                             Basic Settings
                         </Typography>
                         <Stack spacing={2}>
@@ -125,7 +130,12 @@ const MCPClientEditor = ({
 
                     {/* Connection Type */}
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 2
+                            }}>
                             Connection Type
                         </Typography>
                         <ToggleButtonGroup
@@ -143,7 +153,12 @@ const MCPClientEditor = ({
                     {/* Connection Settings */}
                     {form.connection_type === 'stdio' ? (
                         <Box sx={sectionSx}>
-                            <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    fontWeight: 700,
+                                    mb: 2
+                                }}>
                                 STDIO Configuration
                             </Typography>
                             <Stack spacing={2}>
@@ -160,7 +175,9 @@ const MCPClientEditor = ({
                                     </Typography>
                                     <Stack spacing={1}>
                                         {form.stdio_args.map((arg, idx) => (
-                                            <Stack key={`arg-${idx}`} direction="row" spacing={1} alignItems="center">
+                                            <Stack key={`arg-${idx}`} direction="row" spacing={1} sx={{
+                                                alignItems: "center"
+                                            }}>
                                                 <TextField
                                                     fullWidth
                                                     size="small"
@@ -206,7 +223,9 @@ const MCPClientEditor = ({
                                     </Typography>
                                     <Stack spacing={1}>
                                         {form.stdio_env.map((env, idx) => (
-                                            <Stack key={`env-${idx}`} direction="row" spacing={1} alignItems="center">
+                                            <Stack key={`env-${idx}`} direction="row" spacing={1} sx={{
+                                                alignItems: "center"
+                                            }}>
                                                 <TextField
                                                     size="small"
                                                     placeholder="Key"
@@ -254,7 +273,12 @@ const MCPClientEditor = ({
                         </Box>
                     ) : (
                         <Box sx={sectionSx}>
-                            <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    fontWeight: 700,
+                                    mb: 2
+                                }}>
                                 {form.connection_type === 'http' ? 'HTTP' : 'SSE'} Configuration
                             </Typography>
                             <Stack spacing={2}>
@@ -271,7 +295,9 @@ const MCPClientEditor = ({
                                     </Typography>
                                     <Stack spacing={1}>
                                         {form.headers.map((header, idx) => (
-                                            <Stack key={`header-${idx}`} direction="row" spacing={1} alignItems="center">
+                                            <Stack key={`header-${idx}`} direction="row" spacing={1} sx={{
+                                                alignItems: "center"
+                                            }}>
                                                 <TextField
                                                     size="small"
                                                     placeholder="Key"
@@ -321,7 +347,12 @@ const MCPClientEditor = ({
 
                     {/* Authentication */}
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 2
+                            }}>
                             Authentication
                         </Typography>
                         <ToggleButtonGroup
@@ -379,7 +410,12 @@ const MCPClientEditor = ({
 
                     {/* Tools Configuration */}
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 2
+                            }}>
                             Tools Configuration
                         </Typography>
                         <TextField
@@ -403,7 +439,12 @@ const MCPClientEditor = ({
 
                     {/* Advanced Settings */}
                     <Box sx={sectionSx}>
-                        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                fontWeight: 700,
+                                mb: 2
+                            }}>
                             Advanced Settings
                         </Typography>
                         <Stack spacing={2}>

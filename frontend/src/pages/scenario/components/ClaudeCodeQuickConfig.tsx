@@ -635,12 +635,13 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
         >
             {/* Col 1 — Label + info icon */}
             <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={500} noWrap>{text.label}</Typography>
+                <Typography variant="body2" noWrap sx={{
+                    fontWeight: 500
+                }}>{text.label}</Typography>
                 <Tooltip placement="top" arrow title={richTooltip}>
                     <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                 </Tooltip>
             </Box>
-
             {/* Col 2 — env name as a subtle code badge */}
             <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
                 <Box
@@ -659,7 +660,6 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                     {field.envName}
                 </Box>
             </Box>
-
             {/* Col 3 — control, right-aligned */}
             <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
                 {field.kind === 'bool' && (
@@ -679,11 +679,15 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                         }}
                         placeholder={text.placeholder}
                         sx={{ width: field.kind === 'model' ? 280 : field.kind === 'text' ? 320 : 180 }}
-                        InputProps={{
-                            endAdornment: field.unit
-                                ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
-                                : undefined,
-                            sx: { fontFamily: field.kind === 'model' ? 'monospace' : undefined, fontSize: '0.85rem' },
+                        slotProps={{
+                            input: {
+                                endAdornment: field.unit
+                                    ? <InputAdornment position="end"><Typography variant="caption" sx={{
+                                    color: "text.disabled"
+                                }}>{field.unit}</Typography></InputAdornment>
+                                    : undefined,
+                                sx: { fontFamily: field.kind === 'model' ? 'monospace' : undefined, fontSize: '0.85rem' },
+                            }
                         }}
                     />
                 )}
@@ -736,7 +740,9 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                    <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+                    <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                    }}>{meta.hint}</Typography>
                 </Box>
                 {hasAdvancedFields && (
                     <IconButton
@@ -793,12 +799,16 @@ const DefaultModeSection: React.FC<{
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+                <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                }}>{meta.hint}</Typography>
             </Box>
             <Divider />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 52 }}>
                 <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                    <Typography variant="body2" fontWeight={500} noWrap>Default Mode</Typography>
+                    <Typography variant="body2" noWrap sx={{
+                        fontWeight: 500
+                    }}>Default Mode</Typography>
                     <Tooltip placement="top" arrow title={`${selectedText.label}: ${selectedText.description}`}>
                         <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                     </Tooltip>
@@ -830,13 +840,18 @@ const DefaultModeSection: React.FC<{
                                 return (
                                     <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                         <Typography component="span" variant="body2">{text[mode].label}</Typography>
-                                        <Typography component="span" variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{mode}</Typography>
+                                        <Typography
+                                            component="span"
+                                            variant="caption"
+                                            sx={{
+                                                color: "text.secondary",
+                                                fontFamily: 'monospace'
+                                            }}>{mode}</Typography>
                                     </Box>
                                 );
                             }}
                             MenuProps={{
-                                PaperProps: { sx: { maxHeight: 320, width: 360 } },
-                                MenuListProps: { sx: { py: 0.5 } },
+                                slotProps: { paper: { sx: { maxHeight: 320, width: 360 } }, list: { sx: { py: 0.5 } } },
                             }}
                             sx={{
                                 height: 40,
@@ -852,7 +867,12 @@ const DefaultModeSection: React.FC<{
                                     <Tooltip title={text[mode].description} arrow placement="left">
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                             <Typography variant="body2">{text[mode].label}</Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{mode}</Typography>
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    fontFamily: 'monospace'
+                                                }}>{mode}</Typography>
                                         </Box>
                                     </Tooltip>
                                 </MenuItem>
@@ -876,8 +896,9 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Typography variant="body2" color="text.secondary">{uiText.panelHeader}</Typography>
-
+            <Typography variant="body2" sx={{
+                color: "text.secondary"
+            }}>{uiText.panelHeader}</Typography>
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />

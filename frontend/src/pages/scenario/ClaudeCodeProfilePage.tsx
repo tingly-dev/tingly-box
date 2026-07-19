@@ -157,7 +157,9 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         </Box>
                     }
                     rightAction={
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <Chip
                                 label={unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}
                                 size="small"
@@ -318,7 +320,12 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         <Typography variant="body1">
                             {t('claudeCode.profile.deleteConfirm', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                mt: 1
+                            }}>
                             {t('claudeCode.profile.deleteWarning')}
                         </Typography>
                     </DialogContent>

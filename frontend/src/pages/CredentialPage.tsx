@@ -196,7 +196,14 @@ const CredentialPage = () => {
                     title="Credentials"
                     subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total !== 1 ? 's' : ''}`}
                     actions={
-                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{
+                                flexWrap: "wrap",
+                                justifyContent: { xs: 'flex-start', sm: 'flex-end' }
+                            }}>
                             <Button component={Link} to="/onboarding" variant="outlined" startIcon={<ListAlt />} size="small" sx={{ minWidth: 130 }}>Providers</Button>
                             <Button variant="outlined" startIcon={<Upload />} onClick={handleImportClick} size="small" sx={{ minWidth: 110 }}>Import</Button>
                             <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>Connect AI</Button>
@@ -206,8 +213,16 @@ const CredentialPage = () => {
 
                 {/* OAuth Section */}
                 <Surface padding={{ xs: 2, sm: 2.5 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-                        <Typography variant="subtitle1" fontWeight={500}>OAuth</Typography>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            alignItems: "center",
+                            mb: 1.5
+                        }}>
+                        <Typography variant="subtitle1" sx={{
+                            fontWeight: 500
+                        }}>OAuth</Typography>
                         <Chip label={credentialCounts.oauth} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}/>
                     </Stack>
                     {credentialCounts.oauth > 0 ? (
@@ -219,8 +234,16 @@ const CredentialPage = () => {
 
                 {/* API Keys Section */}
                 <Surface padding={{ xs: 2, sm: 2.5 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-                        <Typography variant="subtitle1" fontWeight={500}>API Keys</Typography>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                            alignItems: "center",
+                            mb: 1.5
+                        }}>
+                        <Typography variant="subtitle1" sx={{
+                            fontWeight: 500
+                        }}>API Keys</Typography>
                         <Chip label={credentialCounts.apiKeys} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}/>
                     </Stack>
                     {credentialCounts.apiKeys > 0 ? (
@@ -230,7 +253,6 @@ const CredentialPage = () => {
                     )}
                 </Surface>
             </Stack>
-
             {/* API Key Provider Dialog — unified add flow (edit goes through useProviderEditDialog) */}
             <ProviderFormDialog
                 open={providerDialogOpen}
@@ -243,20 +265,19 @@ const CredentialPage = () => {
                 mode="add"
                 optionalEditableToken={optionalEditableToken}
             />
-
             {/* Unified provider picker */}
             <ConnectProviderDialog open={connectDialogOpen} onClose={handleCloseConnect} onSelect={handleConnectSelect}/>
-
             {/* OAuth Add Dialog */}
             <OAuthDialog open={oauthDialogOpen} autoStartProviderId={oauthAutoStartId} reauthProviderUuid={oauthReauthUuid} onClose={() => { setOAuthDialogOpen(false); setOAuthAutoStartId(null); setOAuthReauthUuid(null); }} onSuccess={handleOAuthSuccess}/>
-
             {/* Refresh-failed → reauthorize guidance */}
             <Dialog open={refreshFailPrompt.open} onClose={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))} maxWidth="xs" fullWidth>
                 <DialogTitle>Token refresh failed</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 0.5 }}>
                         <Alert severity="warning">{refreshFailPrompt.reason}</Alert>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             Refreshing the token for <strong>{refreshFailPrompt.providerName}</strong> didn't work. If the credential was revoked or has fully expired, a refresh can't recover it — reauthorize to sign in again. This overwrites the credential in place, keeping the same provider so your routing rules and model keys stay intact.
                         </Typography>
                     </Stack>
@@ -266,9 +287,7 @@ const CredentialPage = () => {
                     <Button variant="contained" startIcon={<VpnKey />} onClick={() => { const uuid = refreshFailPrompt.providerUuid; setRefreshFailPrompt((s) => ({ ...s, open: false })); handleReauthorize(uuid); }}>Reauthorize</Button>
                 </DialogActions>
             </Dialog>
-
             {providerEditDialogs}
-
             {/* Import Modal */}
             <ImportModal open={showImportModal} onClose={() => setShowImportModal(false)} onImport={handleImportData} loading={importing}/>
         </PageLayout>

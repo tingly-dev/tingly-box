@@ -68,7 +68,6 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     </Box>
                 </Button>
             </Tooltip>
-
             <Menu
                 anchorEl={anchor}
                 open={Boolean(anchor)}
@@ -96,13 +95,14 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     {isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
             </Menu>
-
             <Dialog
                 open={pickerOpen}
                 onClose={() => setPickerOpen(false)}
                 maxWidth="lg"
                 fullWidth
-                PaperProps={{ sx: { height: '80vh' } }}
+                slotProps={{
+                    paper: { sx: { height: '80vh' } }
+                }}
             >
                 <DialogTitle sx={{ textAlign: 'center' }}>
                     <Typography variant="h6">Pick Vision Proxy Model</Typography>

@@ -99,10 +99,18 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 gap: 1,
             }}
         >
-            <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic', flexShrink: 0 }}>
+            <Typography
+                variant="caption"
+                sx={{
+                    color: "text.disabled",
+                    fontStyle: 'italic',
+                    flexShrink: 0
+                }}>
                 {t('rule.routing.guide.toolbarLabel', { defaultValue: 'Page toolbar' })}
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{
+                alignItems: "center"
+            }}>
                 <Button variant="outlined" size="small" startIcon={<TroubleshootIcon />} sx={{ opacity: 0.45, pointerEvents: 'none' }} tabIndex={-1}>
                     {t('templateActions.troubleshoot', { defaultValue: 'Troubleshoot' })}
                 </Button>

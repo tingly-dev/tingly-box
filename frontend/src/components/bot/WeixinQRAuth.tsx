@@ -151,7 +151,11 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CircularProgress size={40} />
-                        <Typography sx={{ mt: 2 }} color="text.secondary">
+                        <Typography
+                            sx={{
+                                color: "text.secondary",
+                                mt: 2
+                            }}>
                             {t('remoteControl.weixinQr.initializing', { defaultValue: 'Initializing Weixin QR binding...' })}
                         </Typography>
                     </Box>
@@ -159,7 +163,9 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
 
             case 'show_qr':
                 return (
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} sx={{
+                        alignItems: "center"
+                    }}>
                         <Typography variant="h6">{t('remoteControl.weixinQr.scanTitle', { defaultValue: 'Scan QR Code to Bind' })}</Typography>
                         <Paper sx={{ p: 2, bgcolor: 'background.paper' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -172,7 +178,9 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
                                 />
                             </Box>
                         </Paper>
-                        <Typography variant="body2" color="text.secondary" align="center">
+                        <Typography variant="body2" align="center" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('remoteControl.weixinQr.step1', { defaultValue: '1. Open Weixin on your phone and scan the QR code' })}
                             <br />
                             {t('remoteControl.weixinQr.step2', { defaultValue: '2. Confirm to complete binding' })}
@@ -192,7 +200,11 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CircularProgress size={40} />
-                        <Typography sx={{ mt: 2 }} color="text.secondary">
+                        <Typography
+                            sx={{
+                                color: "text.secondary",
+                                mt: 2
+                            }}>
                             {t('remoteControl.weixinQr.scannedWaiting', { defaultValue: 'QR code scanned! Please confirm on your Weixin...' })}
                         </Typography>
                     </Box>
@@ -202,10 +214,14 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
                 return (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                         <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
-                        <Typography variant="h6" color="success.main">
+                        <Typography variant="h6" sx={{
+                            color: "success.main"
+                        }}>
                             {t('remoteControl.weixinQr.successTitle', { defaultValue: 'Weixin Binding Successful!' })}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('remoteControl.weixinQr.successBody', { defaultValue: 'Your bot is now connected to Weixin.' })}
                         </Typography>
                     </Box>
@@ -213,7 +229,9 @@ export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, b
 
             case 'expired':
                 return (
-                    <Stack spacing={2} alignItems="center">
+                    <Stack spacing={2} sx={{
+                        alignItems: "center"
+                    }}>
                         <Alert severity="warning">
                             {t('remoteControl.weixinQr.expiredWarning', { defaultValue: 'QR code expired. Please refresh to get a new one.' })}
                         </Alert>

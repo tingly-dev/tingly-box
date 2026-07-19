@@ -83,12 +83,20 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
         {detailedInfo}
       </Typography>
       {resetTime && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           Resets: {resetTime}
         </Typography>
       )}
       {window.description && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: 'block',
+            mt: 0.5
+          }}>
           {window.description}
         </Typography>
       )}
@@ -100,7 +108,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
       title={customTooltip ?? tooltipContent}
       arrow
       disableInteractive
-      componentsProps={{
+      slotProps={{
         tooltip: {
           sx: {
             backgroundColor: 'transparent',
@@ -115,18 +123,19 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
     >
       <Stack
         direction="row"
-        alignItems="center"
         spacing={0.5}
         sx={{
-          flexShrink: 0,
-        }}
-      >
+          alignItems: "center",
+          flexShrink: 0
+        }}>
         {/* Label */}
         <Typography
           variant="body2"
-          color="text.secondary"
-          sx={{ fontSize: '12px', whiteSpace: 'nowrap' }}
-        >
+          sx={{
+            color: "text.secondary",
+            fontSize: '12px',
+            whiteSpace: 'nowrap'
+          }}>
           {window.label}:
         </Typography>
 
@@ -176,7 +185,9 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
 
         {/* Optional details inline */}
         {showDetails && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {detailedInfo}
           </Typography>
         )}
