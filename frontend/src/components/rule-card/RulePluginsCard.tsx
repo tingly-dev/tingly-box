@@ -33,7 +33,6 @@ const StyledPluginsCard = styled(Box, {
     width: CARD_STYLES.width,
     minHeight: CARD_STYLES.minHeight,
     maxHeight: '100%',
-    boxShadow: 'none',
     opacity: active ? 1 : 0.6,
     cursor: 'pointer',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
@@ -80,7 +79,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
     onOpenCatalog,
     onToggleFlag,
 }) => {
-    const enabled = (registry || []).filter((spec) => isFlagActive(spec, flags));
+    const enabled = (registry || []).filter((spec) => isFlagActive(spec, flags ?? {}));
 
     return (
         <StyledPluginsCard active={active} onClick={onOpenCatalog}>

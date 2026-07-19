@@ -31,7 +31,7 @@ import {
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { isFullEdition } from '@/utils/edition';
-import type { ActivityItem, NavItem } from './types';
+import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 export function useActivityItems(): ActivityItem[] {
@@ -156,7 +156,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'prompt' as const,
                 icon: <IconBrain sx={{ fontSize: 22 }} />,
                 label: t('common.prompt', { defaultValue: 'Prompt' }),
-                defaultPath: promptMenuItems[0]?.path,
+                defaultPath: promptMenuItems.find((item): item is NavItemBase => !('type' in item))?.path,
                 children: promptMenuItems,
             }] as ActivityItem[] : []),
             ...(isFullEdition ? [{

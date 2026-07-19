@@ -173,7 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                     primary={item.label}
                                     secondary={item.subtitle}
                                     slotProps={{
-                                        primary: { fontWeight: 500, noWrap: true, variant: 'body2' as const, sx: { lineHeight: 1.3 } },
+                                        primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3 } },
                                         secondary: { variant: 'caption' as const, sx: { fontSize: '0.6875rem', lineHeight: 1.2 } },
                                     }}
                                     sx={{

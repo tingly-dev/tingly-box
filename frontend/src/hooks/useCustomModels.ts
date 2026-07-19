@@ -167,7 +167,9 @@ export const useCustomModels = () => {
 
     // Helper to listen for custom model updates (backward compatibility)
     const listenForCustomModelUpdates = (callback: (providerUuid: string, modelName: string) => void) => {
-        return customModelEvent.listen(({ providerUuid, modelName }) => {
+        return customModelEvent.listen((data) => {
+            if (!data) return;
+            const { providerUuid, modelName } = data;
             callback(providerUuid, modelName);
         });
     };

@@ -24,6 +24,7 @@ import {
     InputLabel,
     List,
     ListItem,
+    ListItemButton,
     ListItemIcon,
     ListItemText,
     MenuItem,
@@ -328,7 +329,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                     {sessions.map((session) => (
                                         <ListItem
                                             key={session.id}
-                                            button
+                                            disablePadding
+                                        >
+                                        <ListItemButton
                                             selected={selectedSession?.id === session.id}
                                             onClick={() => setSelectedSession(session)}
                                             sx={{
@@ -377,6 +380,7 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                                     fontSize: '0.7rem',
                                                 }}
                                             />
+                                        </ListItemButton>
                                         </ListItem>
                                     ))}
                                     {sessions.length === 0 && (

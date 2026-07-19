@@ -100,7 +100,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
             if (data?.success && data?.platforms) {
                 setBotPlatforms(data.platforms);
                 // Set current platform config
-                const config = data.platforms.find(p => p.platform === platformId);
+                const config = data.platforms.find((p: { platform: string }) => p.platform === platformId);
                 if (config) {
                     setCurrentPlatformConfig(config);
                 }

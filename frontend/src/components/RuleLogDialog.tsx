@@ -17,7 +17,7 @@ interface ScenarioLogDialogProps {
     scenario: string;
 }
 
-const ScenarioLogDialog = ({ open, onClose, scenario, initialScenario }: ScenarioLogDialogProps) => {
+const ScenarioLogDialog = ({ open, onClose, scenario }: ScenarioLogDialogProps) => {
     const { t } = useTranslation();
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth slotProps={{

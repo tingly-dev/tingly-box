@@ -300,7 +300,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             onClick={providerDone ? () => toggleDoneStep(0) : undefined}
                             sx={[{
                                 alignItems: "center"
-                            }, providerDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined]}>
+                            }, providerDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
                             <Typography
                                 variant="body2"
@@ -349,7 +349,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             onClick={modelDone ? () => toggleDoneStep(1) : undefined}
                             sx={[{
                                 alignItems: "center"
-                            }, modelDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined]}>
+                            }, modelDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
                             <Typography
                                 variant="body2"
@@ -398,7 +398,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             onClick={installDone ? () => toggleDoneStep(2) : undefined}
                             sx={[{
                                 alignItems: "center"
-                            }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined]}>
+                            }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
                             <Typography
                                 variant="body2"
@@ -499,7 +499,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             onClick={applyDone ? () => toggleDoneStep(3) : undefined}
                             sx={[{
                                 alignItems: "center"
-                            }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined]}>
+                            }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
                             <Typography
                                 variant="body2"

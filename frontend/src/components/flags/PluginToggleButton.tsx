@@ -50,7 +50,7 @@ const PluginToggleButton: React.FC<PluginToggleButtonProps> = ({ label, descript
                     onClick={() => { onChange(true); setAnchor(null); }}
                     title={description}
                 >
-                    <ListItemText primary="On" primaryTypographyProps={{ variant: 'body2' }} />
+                    <ListItemText primary="On" slotProps={{ primary: { variant: 'body2' } }} />
                     {value && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
                 <MenuItem
@@ -58,7 +58,7 @@ const PluginToggleButton: React.FC<PluginToggleButtonProps> = ({ label, descript
                     onClick={() => { onChange(false); setAnchor(null); }}
                     title={description}
                 >
-                    <ListItemText primary="Off" primaryTypographyProps={{ variant: 'body2' }} />
+                    <ListItemText primary="Off" slotProps={{ primary: { variant: 'body2' } }} />
                     {!value && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
             </Menu>

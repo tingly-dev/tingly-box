@@ -62,7 +62,7 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
                         title={level.description}
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                            <ListItemText primary={level.label} primaryTypographyProps={{ variant: 'body2' }} />
+                            <ListItemText primary={level.label} slotProps={{ primary: { variant: 'body2' } }} />
                             {level.value === value && <IconCheck sx={{ fontSize: 16 }} />}
                         </Box>
                     </MenuItem>

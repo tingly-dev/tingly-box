@@ -119,7 +119,9 @@ export const useNewModels = () => {
 
     // Helper to listen for new models updates (backward compatibility)
     const listenForNewModelsUpdates = (callback: (providerUuid: string, diff: NewModelsDiff | null) => void) => {
-        return newModelsEvent.listen(({ providerUuid, diff }) => {
+        return newModelsEvent.listen((data) => {
+            if (!data) return;
+            const { providerUuid, diff } = data;
             callback(providerUuid, diff);
         });
     };

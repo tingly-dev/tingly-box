@@ -309,7 +309,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 }}
                 maxWidth="lg"
                 fullWidth
-                disableEscapeKeyDown
                 slotProps={{
                     paper: { sx: { borderRadius: 3, maxHeight: '90vh' } }
                 }}

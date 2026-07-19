@@ -1257,7 +1257,7 @@ const SkillPage = () => {
                         ? {
                               name: editLocation.name,
                               path: editLocation.path,
-                              ide_source: editLocation.ide_source,
+                              ide_source: editLocation.ide_source as IDESource,
                           }
                         : undefined
                 }

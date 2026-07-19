@@ -788,7 +788,9 @@ const GuardrailsRulesPage = () => {
             ]);
 
             if (guardrailsConfig.status !== 'fulfilled' || builtinResponse.status !== 'fulfilled') {
-                throw (guardrailsConfig.status === 'rejected' ? guardrailsConfig.reason : builtinResponse.reason);
+                throw (guardrailsConfig.status === 'rejected'
+                    ? (guardrailsConfig as PromiseRejectedResult).reason
+                    : (builtinResponse as PromiseRejectedResult).reason);
             }
 
             const config = guardrailsConfig.value?.config || {};

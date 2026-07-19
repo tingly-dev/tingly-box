@@ -33,13 +33,15 @@ export default function Surface({
 
   return (
     <Box
-      sx={{
-        borderRadius: 2,
-        boxShadow: 'none',
-        p: padding,
-        ...variantSx[variant],
-        ...sx,
-      }}
+      sx={[
+        {
+          borderRadius: 2,
+          boxShadow: 'none',
+          p: padding as number | string,
+        },
+        variantSx[variant],
+        sx,
+      ] as SxProps<Theme>}
     >
       {children}
     </Box>

@@ -124,7 +124,7 @@ export function ModelsPanel({
 
     const isProviderSelected = selectedProvider === provider.uuid;
     const isRefreshing = refreshingProviders.includes(provider.uuid);
-    const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
+    const backendCustomModels = providerModels?.[provider.uuid]?.custom_model || [];
 
     // Get custom models for this provider
     const providerCustomModels = customModels[provider.uuid] || [];
@@ -134,21 +134,21 @@ export function ModelsPanel({
     const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
     // Consolidate all custom models from different sources with proper deduplication
-    // Sources: localStorage (providerCustomModels), backend (backendCustomModel), selected model
+    // Sources: localStorage (providerCustomModels), backend (backendCustomModels), selected model
     const customModelsSet = new Set<string>();
 
     // Add from localStorage
     providerCustomModels.forEach(model => customModelsSet.add(model));
 
     // Add from backend if not already present (only when no localStorage models exist)
-    if (backendCustomModel && providerCustomModels.length === 0) {
-        customModelsSet.add(backendCustomModel);
+    if (providerCustomModels.length === 0) {
+        backendCustomModels.forEach(model => customModelsSet.add(model));
     }
 
     // Add currently selected model if it's a custom model not in any other source
     if (isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
         !providerCustomModels.includes(selectedModel) &&
-        selectedModel !== backendCustomModel) {
+        !backendCustomModels.includes(selectedModel)) {
         customModelsSet.add(selectedModel);
     }
 
@@ -354,10 +354,10 @@ export function ModelsPanel({
                             if (type === 'custom') {
                                 // Determine variant based on custom model source
                                 let variant: 'localStorage' | 'backend' | 'selected' = 'localStorage';
-                                if (model === backendCustomModel && providerCustomModels.length === 0) {
+                                if (backendCustomModels.includes(model) && providerCustomModels.length === 0) {
                                     variant = 'backend';
                                 } else if (isProviderSelected && model === selectedModel &&
-                                    !providerCustomModels.includes(model) && model !== backendCustomModel) {
+                                    !providerCustomModels.includes(model) && !backendCustomModels.includes(model)) {
                                     variant = 'selected';
                                 }
 

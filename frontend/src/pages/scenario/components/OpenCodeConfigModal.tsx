@@ -48,7 +48,6 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
             }}
             maxWidth="lg"
             fullWidth
-            disableEscapeKeyDown
             slotProps={{
                 paper: {
                     sx: {

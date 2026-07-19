@@ -119,7 +119,7 @@ const RemoteCoderPage: React.FC = () => {
             const state = await api.getRemoteCCSessionState(sessionId);
             if (state?.success === false) return;
             if (Array.isArray(state?.expanded_messages)) {
-                const next = new Set(state.expanded_messages.filter((v: any) => Number.isInteger(v)));
+                const next = new Set<number>(state.expanded_messages.filter((v: any): v is number => Number.isInteger(v)));
                 setExpandedMessages(next);
             } else {
                 setExpandedMessages(new Set());

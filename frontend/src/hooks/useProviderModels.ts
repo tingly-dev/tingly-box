@@ -199,12 +199,14 @@ export const useProviderModels = () => {
     // Listen for cross-tab cache events
     useEffect(() => {
         const cleanup = modelCacheEvent.listen((event) => {
+            if (!event) return;
             switch (event.type) {
-                case 'provider_models_update':
-                    if (event.models) {
+                case 'provider_models_update': {
+                    const updatedModels = event.models;
+                    if (updatedModels) {
                         setProviderModels(prev => ({
                             ...prev,
-                            [event.providerUuid]: event.models
+                            [event.providerUuid]: updatedModels
                         }));
                     } else {
                         setProviderModels(prev => {
@@ -214,6 +216,7 @@ export const useProviderModels = () => {
                         });
                     }
                     break;
+                }
 
                 case 'refresh_trigger':
                     // Another tab is refreshing, show loading state

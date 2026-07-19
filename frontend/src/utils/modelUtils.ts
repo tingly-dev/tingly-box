@@ -8,7 +8,7 @@ export interface CustomModelsData {
 export interface ModelData {
     models?: string[];
     star_models?: string[];
-    custom_model?: string;
+    custom_model?: string[];
 }
 
 export interface ModelTypeInfo {
@@ -25,13 +25,13 @@ export function getModelTypeInfo(
 ): ModelTypeInfo {
     const models = providerModels?.[provider.uuid]?.models || [];
     const starModels = providerModels?.[provider.uuid]?.star_models || [];
-    const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
+    const backendCustomModels = providerModels?.[provider.uuid]?.custom_model || [];
     const localStorageCustomModels = customModels[provider.uuid] || [];
 
     // Calculate total unique models count
     const uniqueModels = new Set(models);
     starModels.forEach(model => uniqueModels.add(model));
-    if (backendCustomModel) uniqueModels.add(backendCustomModel);
+    backendCustomModels.forEach(model => uniqueModels.add(model));
     localStorageCustomModels.forEach(model => uniqueModels.add(model));
 
     // Combine all models for searching
@@ -41,9 +41,11 @@ export function getModelTypeInfo(
             allModelsForSearch.push(model);
         }
     });
-    if (backendCustomModel && !allModelsForSearch.includes(backendCustomModel)) {
-        allModelsForSearch.push(backendCustomModel);
-    }
+    backendCustomModels.forEach(model => {
+        if (!allModelsForSearch.includes(model)) {
+            allModelsForSearch.push(model);
+        }
+    });
     localStorageCustomModels.forEach(model => {
         if (!allModelsForSearch.includes(model)) {
             allModelsForSearch.push(model);
@@ -52,7 +54,7 @@ export function getModelTypeInfo(
 
     // Get standard models for display (excluding custom models)
     const standardModelsForDisplay = allModelsForSearch.filter(model => {
-        if (model === backendCustomModel) return false;
+        if (backendCustomModels.includes(model)) return false;
         if (localStorageCustomModels.includes(model)) return false;
         if (starModels.includes(model)) return false;
         return true;
@@ -62,7 +64,7 @@ export function getModelTypeInfo(
         return !models.includes(model) &&
             !starModels.includes(model) &&
             model !== '' &&
-            model !== backendCustomModel &&
+            !backendCustomModels.includes(model) &&
             !localStorageCustomModels.includes(model);
     };
 

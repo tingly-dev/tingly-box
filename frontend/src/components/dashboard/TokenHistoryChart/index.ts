@@ -2,7 +2,6 @@
 
 export { DailyTokenHistoryChart } from './DailyChart';
 export { HourlyTokenHistoryChart } from './HourlyChart';
-export { TokenHistoryChart } from './TokenHistoryChart';
 export { ChartWrapper, LegendItem, CustomTooltip } from './components';
 export {
     formatTimeLabel,

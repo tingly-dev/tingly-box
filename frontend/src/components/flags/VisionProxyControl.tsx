@@ -79,7 +79,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     selected={!isEnabled}
                     onClick={() => { setAnchor(null); if (isEnabled) onChange(null); }}
                 >
-                    <ListItemText primary="Off" primaryTypographyProps={{ variant: 'body2' }} />
+                    <ListItemText primary="Off" slotProps={{ primary: { variant: 'body2' } }} />
                     {!isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
                 <MenuItem
@@ -89,8 +89,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     <ListItemText
                         primary={isEnabled ? `On — ${value!.model}` : 'On — pick a model…'}
                         secondary={isEnabled ? providerName(value!.provider) : 'Choose a vision-capable model'}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        secondaryTypographyProps={{ variant: 'caption' }}
+                        slotProps={{ primary: { variant: 'body2' }, secondary: { variant: 'caption' } }}
                     />
                     {isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
