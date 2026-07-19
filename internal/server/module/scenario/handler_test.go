@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -237,6 +238,24 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 	assert.Contains(t, updateResult.Body.String(), `"defaultMode":"plan"`)
 	assert.Contains(t, updateResult.Body.String(), `"hasOverrides":true`)
 	assert.Contains(t, updateResult.Body.String(), `"settingsExists":true`)
+
+	settingsPath, _, err := agent.InspectCCProfileSettings(profile.ID, profile.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generatedSettings struct {
+		Env         map[string]string `json:"env"`
+		DefaultMode string            `json:"defaultMode"`
+	}
+	if err := json.Unmarshal(generated, &generatedSettings); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, "64000", generatedSettings.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"])
+	assert.Equal(t, "plan", generatedSettings.DefaultMode)
 
 	stored, ok := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
 	if !ok || stored.ClaudeCode == nil {
