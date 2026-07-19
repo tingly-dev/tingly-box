@@ -2,6 +2,7 @@ package stream
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -123,15 +124,14 @@ func (a *responsesToAnthropicAssembly) run(c *gin.Context, stream ResponsesStrea
 	return conv.Usage(), stream.Err()
 }
 
-// setAssemblyHeadersAndRecover mirrors the header and panic behavior of the
-// previous assembly implementation: SSE headers are set up-front (gin's JSON
-// render preserves an already-set Content-Type, so responses keep the
-// historical text/event-stream header), and a panic surfaces as an SSE error
-// frame.
+// setAssemblyHeaders sets the response headers for the assembly path. The
+// assembled response is a single JSON message, so the Content-Type is left to
+// gin's JSON render (application/json). A historical implementation forced
+// text/event-stream here, which made strict SDK clients (e.g. Claude Code's
+// non-streaming fallback) skip JSON parsing and treat the body as opaque text,
+// surfacing as "API returned an empty or malformed response (HTTP 200)" (#1316).
 func setAssemblyHeaders(c *gin.Context) {
-	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 }
@@ -139,13 +139,48 @@ func setAssemblyHeaders(c *gin.Context) {
 func recoverAssemblyPanic(c *gin.Context) {
 	if r := recover(); r != nil {
 		logrus.WithContext(c.Request.Context()).Errorf("Panic in Responses API to Anthropic assembly handler: %v", r)
-		if c.Writer != nil {
-			c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
-			if flusher, ok := c.Writer.(http.Flusher); ok {
-				flusher.Flush()
-			}
+		if c.Writer != nil && !c.Writer.Written() {
+			c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+				Error: protocol.ErrorDetail{
+					Message: "Internal assembly error",
+					Type:    "internal_error",
+				},
+			})
 		}
 	}
+}
+
+// failEmptyAssembly reports an upstream stream that produced no usable content
+// blocks. Responding with an error status (propagating the upstream status
+// when known, 502 otherwise) instead of a 200 message with `content: null`
+// keeps strict clients from choking on a malformed message and lets priority
+// failover retry another candidate (both statuses are retryable).
+func failEmptyAssembly(c *gin.Context, err error, stopReason string) error {
+	if err == nil {
+		err = fmt.Errorf("upstream responses stream produced no content blocks (stop_reason=%q)", stopReason)
+	}
+	c.JSON(protocol.UpstreamStatus(err, http.StatusBadGateway), protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{
+			Message: "Upstream returned an empty response: " + err.Error(),
+			Type:    "api_error",
+		},
+	})
+	return err
+}
+
+// normalizeAssemblyStopReason fills in a stop reason for a stream that was cut
+// before its terminal Responses event: tool_use if a tool call completed,
+// end_turn otherwise. Only called when at least one content block assembled.
+func normalizeAssemblyStopReason(asm *responsesToAnthropicAssembly) string {
+	if asm.stopReason != "" {
+		return asm.stopReason
+	}
+	for _, block := range asm.content {
+		if block.blockType == blockTypeToolUse {
+			return anthropicStopReasonToolUse
+		}
+	}
+	return anthropicStopReasonEndTurn
 }
 
 func closeResponsesStream(c *gin.Context, stream ResponsesStreamIter) {
@@ -167,12 +202,19 @@ func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream ResponsesStream
 	asm := newResponsesToAnthropicAssembly()
 	usage, err := asm.run(c, stream, responseModel)
 
+	// A stream that produced no content blocks (upstream failure, or cut
+	// before any block completed) must not be folded into a 200 message with
+	// null content — fail so failover can retry (#1316).
+	if len(asm.content) == 0 {
+		return usage, failEmptyAssembly(c, err, asm.stopReason)
+	}
+
 	msg := anthropic.Message{
 		ID:         asm.id,
 		Type:       constant.Message("message"),
 		Role:       constant.Assistant("assistant"),
 		Model:      anthropic.Model(asm.model),
-		StopReason: anthropic.StopReason(asm.stopReason),
+		StopReason: anthropic.StopReason(normalizeAssemblyStopReason(asm)),
 	}
 	for _, block := range asm.content {
 		union := anthropic.ContentBlockUnion{
@@ -211,12 +253,18 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream ResponsesStre
 	asm := newResponsesToAnthropicAssembly()
 	usage, err := asm.run(c, stream, responseModel)
 
+	// See HandleResponsesToAnthropicV1Assembly: never fold a content-less
+	// stream into a 200 message with null content (#1316).
+	if len(asm.content) == 0 {
+		return usage, failEmptyAssembly(c, err, asm.stopReason)
+	}
+
 	msg := anthropic.BetaMessage{
 		ID:         asm.id,
 		Type:       constant.Message("message"),
 		Role:       constant.Assistant("assistant"),
 		Model:      anthropic.Model(asm.model),
-		StopReason: anthropic.BetaStopReason(asm.stopReason),
+		StopReason: anthropic.BetaStopReason(normalizeAssemblyStopReason(asm)),
 	}
 	for _, block := range asm.content {
 		union := anthropic.BetaContentBlockUnion{
