@@ -17,25 +17,7 @@ type ApplyClaudeConfigRequest struct {
 	DefaultMode       string                 `json:"defaultMode,omitempty"`
 }
 
-const DefaultClaudeCodeDefaultMode = "acceptEdits"
-
-var validClaudeCodeDefaultModes = map[string]struct{}{
-	"acceptEdits":       {},
-	"bypassPermissions": {},
-	"default":           {},
-	"delegate":          {},
-	"dontAsk":           {},
-	"plan":              {},
-	"auto":              {},
-}
-
-func normalizeClaudeCodeDefaultMode(mode string) (string, bool) {
-	if mode == "" {
-		return DefaultClaudeCodeDefaultMode, true
-	}
-	_, ok := validClaudeCodeDefaultModes[mode]
-	return mode, ok
-}
+const DefaultClaudeCodeDefaultMode = agent.DefaultClaudeCodeDefaultMode
 
 // ApplyConfigResponse is the response for ApplyClaudeConfig
 type ApplyConfigResponse struct {
@@ -45,6 +27,16 @@ type ApplyConfigResponse struct {
 	CreatedFiles     []string           `json:"createdFiles"`
 	UpdatedFiles     []string           `json:"updatedFiles"`
 	BackupPaths      []string           `json:"backupPaths"`
+}
+
+// ClaudeConfigResponse returns the typed values currently persisted in the
+// user's main ~/.claude/settings.json so the frontend can restore Apply state.
+type ClaudeConfigResponse struct {
+	Success           bool                  `json:"success"`
+	Exists            bool                  `json:"exists"`
+	Preferences       agent.ClaudeCodePrefs `json:"preferences"`
+	DefaultMode       string                `json:"defaultMode"`
+	InstallStatusLine bool                  `json:"installStatusLine"`
 }
 
 // ApplyOpenCodeConfigResponse is the response for ApplyOpenCodeConfigFromState

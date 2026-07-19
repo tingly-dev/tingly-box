@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,6 +37,35 @@ func TestNewHandler(t *testing.T) {
 	if handler.host != "localhost" {
 		t.Errorf("expected host 'localhost', got %q", handler.host)
 	}
+}
+
+func TestGetClaudeConfig_RestoresAppliedPreferences(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	settingsDir := filepath.Join(home, ".claude")
+	require.NoError(t, os.MkdirAll(settingsDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(settingsDir, "settings.json"), []byte(`{
+		"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"},
+		"defaultMode":"plan",
+		"statusLine":{"type":"command","command":"status.sh"}
+	}`), 0644))
+
+	handler := NewHandler(nil, "localhost")
+	router := gin.New()
+	router.GET("/config/claude", handler.GetClaudeConfig)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/config/claude", nil)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var response ClaudeConfigResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.True(t, response.Success)
+	assert.True(t, response.Exists)
+	assert.True(t, response.InstallStatusLine)
+	assert.Equal(t, "plan", response.DefaultMode)
+	assert.Equal(t, "64000", response.Preferences.ClaudeCodeMaxOutputTokens)
 }
 
 func TestApplyClaudeConfig_NilConfig(t *testing.T) {
