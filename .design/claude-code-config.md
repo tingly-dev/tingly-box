@@ -168,8 +168,11 @@ real auth token. Reused by the Manual tab.
 `~/.claude/settings.json` is also the durable state for the main Quick Config
 form. `GET /config/claude` reads only the typed preference keys plus
 `defaultMode` and whether a status line is configured; it never returns the
-server-injected token or base URL. Reopening the modal restores those applied
-values instead of reseeding the form from recommendations on every visit.
+server-injected token or base URL. Reopening the modal restores applied tuning
+values, while the five model slots are always regenerated from the current
+mode's well-known rule UUIDs. This keeps max-output, timeout, privacy, and
+network adjustments durable without allowing stale strings in the local file
+to mask a renamed rule `request_model` or a unified/separate mode change.
 
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` stays in the first expanded Model routing group.
 It is adjusted often enough that hiding it with the advanced limits creates
@@ -226,17 +229,19 @@ mode".
 ### 5.3 UUID-suffix lookup (modal side)
 
 `derivePrefsFromRules` in `ClaudeCodeQuickConfig.tsx` uses the UUIDs as
-keys:
+keys. It does not depend on array order or canonical `tingly/cc*` names:
 
 ```ts
 const modelForVariant = (variant, fallback) => {
-    if (mode === 'unified') return rules[0]?.request_model || fallback;
+    if (mode === 'unified') {
+        return rules.find(r => r.uuid === 'builtin:claude_code:cc')?.request_model || fallback;
+    }
     const rule = rules.find(r => r.uuid === `builtin:claude_code:${variant}`);
     return rule?.request_model || fallback;
 };
 ```
 
-- **unified**: `rules[0]` is the single `builtin:claude_code:cc` rule; its
+- **unified**: the `builtin:claude_code:cc` rule is found explicitly; its
   `request_model` populates all 5 slots.
 - **separate**: each of the 5 variants (`default` / `haiku` / `sonnet` /
   `opus` / `subagent`) does a UUID-exact `find` against
