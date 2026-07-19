@@ -213,6 +213,14 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 	router.DELETE(route, handler.DeleteProfileClaudeConfig)
 	endpoint := "/scenario/claude_code/profiles/" + profile.ID + "/claude-config"
 
+	initialResult := httptest.NewRecorder()
+	router.ServeHTTP(initialResult, httptest.NewRequest(http.MethodGet, endpoint, nil))
+	assert.Equal(t, http.StatusOK, initialResult.Code, initialResult.Body.String())
+	assert.Contains(t, initialResult.Body.String(), `"settingsPath":"`)
+	assert.Contains(t, initialResult.Body.String(), `p1--work`)
+	assert.Contains(t, initialResult.Body.String(), `settings.json`)
+	assert.Contains(t, initialResult.Body.String(), `"settingsExists":false`)
+
 	updateBody, err := json.Marshal(ProfileClaudeConfigRequest{
 		Preferences: &agent.ClaudeCodePrefs{ClaudeCodeMaxOutputTokens: "64000"},
 		DefaultMode: "plan",
@@ -228,6 +236,7 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 	assert.Contains(t, updateResult.Body.String(), `"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"`)
 	assert.Contains(t, updateResult.Body.String(), `"defaultMode":"plan"`)
 	assert.Contains(t, updateResult.Body.String(), `"hasOverrides":true`)
+	assert.Contains(t, updateResult.Body.String(), `"settingsExists":true`)
 
 	stored, ok := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
 	if !ok || stored.ClaudeCode == nil {

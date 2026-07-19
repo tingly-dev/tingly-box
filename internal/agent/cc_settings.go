@@ -289,12 +289,12 @@ func MaterializeCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, sce
 // Config remains the source of truth. The directory contains only rebuildable
 // runtime artifacts: settings.json and its statusline.sh wrapper.
 func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map[string]string, opts ...serverconfig.ApplyOption) (string, error) {
-	rootDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
-	artifactDir, err := ccProfileArtifactDir(rootDir, profileID, profileName)
+	destPath, err := CCProfileSettingsPath(profileID, profileName)
 	if err != nil {
 		return "", err
 	}
-	destPath := filepath.Join(artifactDir, "settings.json")
+	artifactDir := filepath.Dir(destPath)
+	rootDir := filepath.Dir(artifactDir)
 
 	if err := ensureCCProfileArtifactDir(artifactDir); err != nil {
 		return "", fmt.Errorf("failed to create profile directory: %w", err)
@@ -347,6 +347,35 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 	removeLegacyCCProfileArtifacts(rootDir, profileID, profileName)
 
 	return destPath, nil
+}
+
+// CCProfileSettingsPath derives the canonical generated settings path from
+// current profile metadata. The path is never persisted; callers recompute it
+// so profile renames and legacy-name fallbacks cannot leave stale locations.
+func CCProfileSettingsPath(profileID, profileName string) (string, error) {
+	rootDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
+	artifactDir, err := ccProfileArtifactDir(rootDir, profileID, profileName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(artifactDir, "settings.json"), nil
+}
+
+// InspectCCProfileSettings derives the canonical path and reports whether the
+// generated settings file currently exists as a regular file.
+func InspectCCProfileSettings(profileID, profileName string) (string, bool, error) {
+	settingsPath, err := CCProfileSettingsPath(profileID, profileName)
+	if err != nil {
+		return "", false, err
+	}
+	info, err := os.Lstat(settingsPath)
+	if os.IsNotExist(err) {
+		return settingsPath, false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("failed to inspect Claude Code profile settings: %w", err)
+	}
+	return settingsPath, info.Mode().IsRegular(), nil
 }
 
 func ccProfileArtifactDir(rootDir, profileID, profileName string) (string, error) {

@@ -51,7 +51,8 @@ type ProfileClaudeConfigData struct {
 	InheritedDefaultMode string                `json:"inheritedDefaultMode"`
 	DefaultMode          string                `json:"defaultMode"`
 	HasOverrides         bool                  `json:"hasOverrides"`
-	SettingsPath         string                `json:"settingsPath,omitempty"`
+	SettingsPath         string                `json:"settingsPath"`
+	SettingsExists       bool                  `json:"settingsExists"`
 }
 
 type ProfileClaudeConfigResponse struct {

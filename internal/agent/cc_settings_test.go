@@ -390,6 +390,48 @@ func TestBuildCCProfileSettings_MaterializesReadableDirectory(t *testing.T) {
 	}
 }
 
+func TestInspectCCProfileSettings_DerivesPathWithoutPersistingIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	wantPath := filepath.Join(home, ".tingly-box", "claude", "p1--work", "settings.json")
+	path, exists, err := InspectCCProfileSettings("p1", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != wantPath || exists {
+		t.Fatalf("artifact before generation = (%q, %v), want (%q, false)", path, exists, wantPath)
+	}
+
+	writeTestFile(t, wantPath, `{}`)
+	path, exists, err = InspectCCProfileSettings("p1", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != wantPath || !exists {
+		t.Fatalf("artifact after generation = (%q, %v), want (%q, true)", path, exists, wantPath)
+	}
+	renamedPath, renamedExists, err := InspectCCProfileSettings("p1", "renamed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, ".tingly-box", "claude", "p1--renamed", "settings.json"); renamedPath != want || renamedExists {
+		t.Fatalf("renamed artifact = (%q, %v), want (%q, false)", renamedPath, renamedExists, want)
+	}
+
+	legacyPath, legacyExists, err := InspectCCProfileSettings("p1", "../legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, ".tingly-box", "claude", "p1", "settings.json"); legacyPath != want || legacyExists {
+		t.Fatalf("legacy artifact = (%q, %v), want (%q, false)", legacyPath, legacyExists, want)
+	}
+	if _, _, err := InspectCCProfileSettings("../p1", "work"); err == nil {
+		t.Fatal("expected unsafe profile ID to be rejected")
+	}
+}
+
 func TestRemoveCCProfileArtifacts_PreservesUserFiles(t *testing.T) {
 	root := t.TempDir()
 	artifactDir := filepath.Join(root, "p1--work")
