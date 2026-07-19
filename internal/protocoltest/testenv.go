@@ -226,14 +226,18 @@ func (env *TestEnv) VirtualCallCount() int { return env.virtual.CallCount() }
 // The provider's APIBase includes the /v1 suffix for OpenAI-style providers
 // to match actual provider API structure.
 func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
-	env.setupRouteCore(source, target, s, nil)
+	env.setupRouteCore(source, target, s, nil, nil)
 }
 
 // setupRouteCore wires the provider + rule for a (source, target, scenario)
 // route. When flags is non-nil it is stamped onto the rule, so requests routed
 // through it traverse the real flag-resolution + transform path. flags==nil
 // preserves the original flag-free behavior used by the protocol matrix.
-func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, flags *typ.RuleFlags) {
+// When providerFn is non-nil it is applied to the built provider just before
+// it's registered, letting callers override auth shape (e.g. SetupCodexAssemblyRoute
+// swapping the plain token for an OAuth/Codex identity) without duplicating
+// the rest of the provider/rule wiring.
+func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, flags *typ.RuleFlags, providerFn func(*typ.Provider)) {
 	key := routeKey(source, target, s.Name)
 
 	env.mu.Lock()
@@ -272,10 +276,13 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 		Enabled:            true,
 		Timeout:            int64(constant.DefaultRequestTimeout),
 	}
+	if providerFn != nil {
+		providerFn(provider)
+	}
 	_ = env.appConfig.AddProvider(provider)
 
 	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, providerModel,
-		harnessService(providerName, providerModel))
+		harnessService(provider.UUID, providerModel))
 	if flags != nil {
 		rule.Flags = *flags
 	}
@@ -290,7 +297,7 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 // onto the gateway rule, so a request routed through it exercises the real
 // flag-resolution and transform pipeline. Returns the request model to send to.
 func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scenario, flags typ.RuleFlags) string {
-	env.setupRouteCore(source, target, s, &flags)
+	env.setupRouteCore(source, target, s, &flags, nil)
 	return env.findRouteModel(source, target, s.Name)
 }
 
@@ -320,45 +327,21 @@ func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scena
 // that's the one dispatch cell this exists to reach.
 func (env *TestEnv) SetupCodexAssemblyRoute(source protocol.APIType, s Scenario) {
 	target := protocol.TypeOpenAIResponses
-	key := routeKey(source, target, s.Name)
-
-	env.mu.Lock()
-	if env.setupRoutes[key] {
-		env.mu.Unlock()
-		return
-	}
-	env.setupRoutes[key] = true
-	env.mu.Unlock()
-
-	env.virtual.RegisterScenario(s)
-
-	providerUUID := fmt.Sprintf("virtual-codex-%s-%s", source, s.Name)
-	providerModel := fmt.Sprintf("virtual-model-%s", s.Name)
-	requestModel := fmt.Sprintf("pv-%s-to-codex-%s", source, s.Name)
-
-	provider := &typ.Provider{
-		UUID:               providerUUID,
-		Name:               providerUUID,
-		APIBase:            env.virtual.URL() + "/v1",
-		APIStyle:           protocol.APIStyleOpenAI,
-		OpenAIEndpointMode: ai.EndpointModeResponses,
-		AuthType:           typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+	env.setupRouteCore(source, target, s, nil, func(p *typ.Provider) {
+		// setupRouteCore already computes the right APIBase/APIStyle/
+		// OpenAIEndpointMode for an OpenAIResponses target; only the auth
+		// shape needs to change, from a plain token to an OAuth identity
+		// carrying the Codex issuer (what provider.IsCodexProvider() and
+		// ClientPool.GetOpenAIClient key off of).
+		p.UUID = fmt.Sprintf("virtual-codex-%s-%s", source, s.Name)
+		p.Name = p.UUID
+		p.Token = ""
+		p.AuthType = typ.AuthTypeOAuth
+		p.OAuthDetail = &typ.OAuthDetail{
 			Issuer:      ai.IssuerCodex,
 			AccessToken: "virtual-codex-token",
-		},
-		Enabled: true,
-		Timeout: int64(constant.DefaultRequestTimeout),
-	}
-	_ = env.appConfig.AddProvider(provider)
-
-	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, providerModel,
-		harnessService(providerUUID, providerModel))
-	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
-
-	env.mu.Lock()
-	env.routeModels[key] = requestModel
-	env.mu.Unlock()
+		}
+	})
 }
 
 // SendAs sends a request to the gateway as the given source protocol,
