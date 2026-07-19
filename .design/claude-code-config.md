@@ -303,7 +303,13 @@ and how to launch it; what runtime values this profile changes; how its models
 are routed. `Add override` promotes max output tokens and permission mode, and
 all other supported typed fields remain available without showing inherited
 values as editable noise. Saving is labeled **Save Profile**, while generated
-files remain an internal runtime artifact.
+files remain a rebuildable runtime artifact.
+
+The profile identity card shows a **Settings File** row immediately below Quick
+Start. Its path is derived on every profile-config response by the same backend
+path helper used for materialization; it is never stored in profile metadata or
+reconstructed in the frontend. The row exposes the concrete path, copy action,
+and file-exists status, while warning that manual edits will be overwritten.
 
 There is deliberately no second profile manifest under the Claude
 directory. The sources of truth are:

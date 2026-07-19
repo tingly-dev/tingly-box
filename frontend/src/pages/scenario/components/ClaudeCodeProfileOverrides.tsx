@@ -41,6 +41,13 @@ type OverrideKey = PrefsKey | 'defaultMode';
 
 interface ClaudeCodeProfileOverridesProps {
     profileId: string;
+    profileName?: string;
+    onArtifactChange?: (artifact: ClaudeCodeProfileSettingsArtifact) => void;
+}
+
+export interface ClaudeCodeProfileSettingsArtifact {
+    settingsPath: string;
+    settingsExists: boolean;
 }
 
 const TEXT = {
@@ -134,7 +141,11 @@ const deriveOverrideKeys = (
     return keys;
 };
 
-const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({ profileId }) => {
+const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
+    profileId,
+    profileName,
+    onArtifactChange,
+}) => {
     const { i18n } = useTranslation();
     const lang: Lang = i18n.language === 'zh' ? 'zh' : 'en';
     const text = TEXT[lang];
@@ -170,9 +181,13 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         setLoadedMode(nextMode);
         setSelectedKeys(deriveOverrideKeys(nextBase, nextPrefs, nextInheritedMode, nextMode));
         setHasOverrides(!!result.data.hasOverrides);
+        onArtifactChange?.({
+            settingsPath: result.data.settingsPath || '',
+            settingsExists: !!result.data.settingsExists,
+        });
         setLoadError(false);
         return true;
-    }, []);
+    }, [onArtifactChange]);
 
     React.useEffect(() => {
         if (!profileId) return;
@@ -192,7 +207,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         return () => {
             active = false;
         };
-    }, [applyResponse, profileId, text.loadFailed]);
+    }, [applyResponse, profileId, profileName, text.loadFailed]);
 
     const orderedSelectedKeys = React.useMemo(
         () => FIELD_ORDER.filter(key => selectedKeys.has(key)),

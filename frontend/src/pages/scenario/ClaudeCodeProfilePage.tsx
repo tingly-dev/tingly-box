@@ -34,7 +34,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
-import ClaudeCodeProfileOverrides from './components/ClaudeCodeProfileOverrides';
+import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -66,11 +66,20 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
     const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
+    const [settingsArtifact, setSettingsArtifact] = useState<ClaudeCodeProfileSettingsArtifact | null>(null);
 
     // Update unified mode when profile changes
     useEffect(() => {
         setUnifiedMode(currentProfile?.unified || false);
     }, [currentProfile]);
+
+    useEffect(() => {
+        setSettingsArtifact(null);
+    }, [profileId, currentProfile?.name]);
+
+    const handleArtifactChange = React.useCallback((artifact: ClaudeCodeProfileSettingsArtifact) => {
+        setSettingsArtifact(artifact);
+    }, []);
 
     // Load app version for npm command
     useEffect(() => {
@@ -171,7 +180,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         </Stack>
                     }
                 >
-                    <Box sx={{ px: 2, pb: 0.5 }}>
+                    <Box sx={{ px: 2, pb: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <ConfigRow
                             tabs={[
                                 {
@@ -254,6 +263,57 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                             activeTab="quickstart"
                             onTabChange={() => {}}
                         />
+                        <ConfigRow
+                            tabs={[
+                                {
+                                    key: 'settings-file',
+                                    label: t('claudeCode.profile.settingsFile'),
+                                    content: settingsArtifact?.settingsPath ? (
+                                        <Tooltip title={t('claudeCode.profile.settingsFileWarning')} arrow>
+                                            <Typography
+                                                variant="subtitle2"
+                                                onClick={() => copyToClipboard(settingsArtifact.settingsPath, 'settings-file')}
+                                                sx={{ ...copyableTextStyle, fontFamily: 'monospace', fontSize: '0.78rem' }}
+                                            >
+                                                {settingsArtifact.settingsPath}
+                                            </Typography>
+                                        </Tooltip>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">
+                                            {t('claudeCode.profile.resolvingSettingsFile')}
+                                        </Typography>
+                                    ),
+                                    actions: (
+                                        <>
+                                            {settingsArtifact && (
+                                                <Chip
+                                                    label={settingsArtifact.settingsExists
+                                                        ? t('claudeCode.profile.settingsGenerated')
+                                                        : t('claudeCode.profile.settingsNotGenerated')}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color={settingsArtifact.settingsExists ? 'success' : 'default'}
+                                                />
+                                            )}
+                                            <Tooltip title={t('claudeCode.profile.copySettingsFile')} arrow>
+                                                <span>
+                                                    <IconButton
+                                                        size="small"
+                                                        aria-label={t('claudeCode.profile.copySettingsFile')}
+                                                        disabled={!settingsArtifact?.settingsPath}
+                                                        onClick={() => settingsArtifact?.settingsPath && copyToClipboard(settingsArtifact.settingsPath, 'settings-file')}
+                                                    >
+                                                        <ContentCopyIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                        </>
+                                    ),
+                                },
+                            ]}
+                            activeTab="settings-file"
+                            onTabChange={() => {}}
+                        />
                     </Box>
                     <ProviderConfigCard
                         title={`Claude Code [${profileId}]`}
@@ -267,7 +327,11 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     />
                 </UnifiedCard>
 
-                <ClaudeCodeProfileOverrides profileId={profileId || ''} />
+                <ClaudeCodeProfileOverrides
+                    profileId={profileId || ''}
+                    profileName={currentProfile?.name}
+                    onArtifactChange={handleArtifactChange}
+                />
 
                 <TemplatePage
                     scenario={scenario}

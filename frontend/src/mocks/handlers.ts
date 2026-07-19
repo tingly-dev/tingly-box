@@ -932,7 +932,10 @@ const mockProfileClaudeConfigData = (profileId: string) => {
         inheritedDefaultMode: 'acceptEdits',
         defaultMode: stored?.defaultMode || 'acceptEdits',
         hasOverrides: stored?.hasOverrides || false,
-        settingsPath: stored ? `~/.tingly-box/claude/${profileId}--${profile?.name}/settings.json` : undefined,
+        // Mirrors the backend contract: derive from current profile metadata;
+        // never remember the path in the stored override object.
+        settingsPath: `/Users/demo/.tingly-box/claude/${profileId}--${profile?.name}/settings.json`,
+        settingsExists: true,
     }
 }
 
