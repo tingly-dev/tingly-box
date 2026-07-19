@@ -1,46 +1,42 @@
 import { renderHook, act } from '@testing-library/react';
-import { useProviderModels } from '../useProviderModels';
-import * as api from '../../services/api';
+import { vi } from 'vitest';
+import { useProviderModels } from './useProviderModels';
+import api from '../services/api';
 
 // Mock the API
-jest.mock('../../services/api');
-const mockApi = api as jest.Mocked<typeof api>;
+vi.mock('../services/api');
+const mockApi = api as vi.Mocked<typeof api>;
 
-// Mock event system to avoid cross-tab pollution
-jest.mock('../../utils/eventSystem', () => ({
-  createEventSystem: jest.fn((name: string) => {
-    let listeners: Array<(data?: any) => void> = [];
-
-    return {
-      eventName: name,
-      dispatch: jest.fn((data?: any) => {
-        listeners.forEach((listener) => listener(data));
-      }),
-      listen: jest.fn((callback: (data?: any) => void) => {
-        listeners.push(callback);
-        return () => {
-          listeners = listeners.filter((l) => l !== callback);
-        };
-      }),
-    };
-  }),
+// Mock event system to avoid cross-tab pollution.
+// IMPORTANT: useProviderModels calls createEventSystem() at module top level
+// (on import), so the mock must return a STABLE single instance whose
+// dispatch/listen spies are the same ones the hook captures at import time
+// and the ones the tests assert against. Returning fresh spies per call (or
+// re-configuring mockReturnValue in beforeEach) would disconnect the two.
+//
+// vi.mock factories are hoisted above all imports, so the shared instance
+// must be created with vi.hoisted() to be initialized before the factory runs.
+const { mockEventSystem, mockDispatch, mockListen } = vi.hoisted(() => {
+  const mockDispatch = vi.fn();
+  const mockListen = vi.fn((): (() => void) => () => {});
+  const mockEventSystem = {
+    eventName: 'tingly_model_cache',
+    dispatch: mockDispatch,
+    listen: mockListen,
+  };
+  return { mockEventSystem, mockDispatch, mockListen };
+});
+vi.mock('../utils/eventSystem', () => ({
+  createEventSystem: vi.fn(() => mockEventSystem),
 }));
 
-import { createEventSystem } from '../../utils/eventSystem';
-const mockCreateEventSystem = createEventSystem as jest.Mock;
+import { createEventSystem } from '../utils/eventSystem';
+const mockCreateEventSystem = createEventSystem as vi.Mock;
 
 describe('useProviderModels - Cache Convergence', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Setup event system mock
-    mockCreateEventSystem.mockReturnValue({
-      eventName: 'tingly_model_cache',
-      dispatch: jest.fn(),
-      listen: jest.fn((cb) => {
-        // Return cleanup function
-        return () => {};
-      }),
-    });
+    vi.clearAllMocks();
+    mockCreateEventSystem.mockReturnValue(mockEventSystem);
   });
 
   describe('Server-side TTL validation', () => {
@@ -166,13 +162,6 @@ describe('useProviderModels - Cache Convergence', () => {
 
   describe('Cross-tab sync events', () => {
     it('should dispatch refresh_trigger event when refreshing', async () => {
-      const mockDispatch = jest.fn();
-      mockCreateEventSystem.mockReturnValue({
-        eventName: 'tingly_model_cache',
-        dispatch: mockDispatch,
-        listen: jest.fn(() => () => {}),
-      });
-
       mockApi.updateProviderModelsByUUID.mockResolvedValue({
         success: true,
         data: {
@@ -195,13 +184,6 @@ describe('useProviderModels - Cache Convergence', () => {
     });
 
     it('should dispatch cache_invalidated event when removing models', () => {
-      const mockDispatch = jest.fn();
-      mockCreateEventSystem.mockReturnValue({
-        eventName: 'tingly_model_cache',
-        dispatch: mockDispatch,
-        listen: jest.fn(() => () => {}),
-      });
-
       const { result } = renderHook(() => useProviderModels());
 
       act(() => {
@@ -245,7 +227,7 @@ describe('useProviderModels - Cache Convergence', () => {
     });
 
     it('should bust cache on tab visibility change after 30s', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       mockApi.getProviderModelsByUUID.mockResolvedValue({
         success: true,
