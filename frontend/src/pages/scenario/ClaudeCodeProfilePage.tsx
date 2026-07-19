@@ -34,6 +34,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import ClaudeCodeProfileOverrides from './components/ClaudeCodeProfileOverrides';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -265,6 +266,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
+
+                <ClaudeCodeProfileOverrides profileId={profileId || ''} />
 
                 <TemplatePage
                     scenario={scenario}

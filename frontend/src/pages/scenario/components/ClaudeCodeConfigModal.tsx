@@ -12,6 +12,7 @@ import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from '
 import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
+import { api } from '@/services/api';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -118,9 +119,11 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
     const [installStatusLine, setInstallStatusLine] = React.useState(true);
     const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
+    const [isConfigLoading, setIsConfigLoading] = React.useState(false);
 
-    // Prefs is the single source of truth for both tabs. Re-seed when the
-    // modal isn't open so we never clobber the user's unsaved edits.
+    // Prefs is the single source of truth for both tabs. On open, restore the
+    // values previously applied to ~/.claude/settings.json; first-time users
+    // still start from routing-aware recommendations.
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>(() =>
         derivePrefsFromRules({ rules, mode: configMode })
     );
@@ -128,15 +131,16 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         if (!open) {
             setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
             setDefaultMode('acceptEdits');
+            setInstallStatusLine(true);
             setApplyResult(null);
+            setIsConfigLoading(false);
+            return;
         }
-    }, [open, configMode, rules]);
 
-    // When 1M context changes, regenerate prefs to reflect the new state.
-    // The pending change is scoped to the toggled rule — other tiers keep
-    // their own context_1m state (in separate mode each tier is independent).
-    React.useEffect(() => {
-        if (open && pendingContext1MChange != null) {
+        // A pending routing 1M change must preview the rule's new generated
+        // values. It intentionally takes precedence over the persisted model
+        // slots for this apply operation.
+        if (pendingContext1MChange != null) {
             const tempRules = rules.map(rule => {
                 if (pendingContext1MChange.ruleUuid && rule.uuid !== pendingContext1MChange.ruleUuid) {
                     return rule;
@@ -150,7 +154,33 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 };
             });
             setPrefs(derivePrefsFromRules({ rules: tempRules, mode: configMode }));
+            setIsConfigLoading(false);
+            return;
         }
+
+        let active = true;
+        setIsConfigLoading(true);
+        void api.getAppliedClaudeConfig().then(result => {
+            if (!active) return;
+            if (result?.success && result.exists) {
+                setPrefs(result.preferences || {});
+                setDefaultMode((result.defaultMode || 'acceptEdits') as ClaudeCodeDefaultMode);
+                setInstallStatusLine(!!result.installStatusLine);
+            } else {
+                setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
+                setDefaultMode('acceptEdits');
+                setInstallStatusLine(true);
+                if (result?.success === false) {
+                    setApplyResult({ success: false, error: result.error || 'Failed to load the applied Claude Code configuration' });
+                }
+            }
+        }).finally(() => {
+            if (active) setIsConfigLoading(false);
+        });
+
+        return () => {
+            active = false;
+        };
     }, [pendingContext1MChange, rules, configMode, open]);
 
     // Editing prefs after a previous Apply invalidates the success state —
@@ -397,7 +427,13 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         </Alert>
                     )}
 
-                    {mainTab === 'quick' && (
+                    {mainTab === 'quick' && isConfigLoading && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                            <CircularProgress size={28} />
+                        </Box>
+                    )}
+
+                    {mainTab === 'quick' && !isConfigLoading && (
                         <ClaudeCodeQuickConfig
                             prefs={prefs}
                             setPrefs={setPrefsAndClearResult}
@@ -665,7 +701,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             <Button
                                 onClick={() => handleApply(installStatusLine)}
                                 variant="contained"
-                                disabled={isApplyLoading}
+                                disabled={isApplyLoading || isConfigLoading}
                                 startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : null}
                             >
                                 {t('claudeCode.quickApply')}

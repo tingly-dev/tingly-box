@@ -53,17 +53,17 @@ export interface ClaudeCodePrefs {
     NO_PROXY?: string;
 }
 
-type PrefsKey = keyof ClaudeCodePrefs;
+export type PrefsKey = keyof ClaudeCodePrefs;
 export type ClaudeCodeDefaultMode = 'acceptEdits' | 'bypassPermissions' | 'default' | 'delegate' | 'dontAsk' | 'plan' | 'auto';
-type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
-type Kind = 'model' | 'int' | 'text' | 'bool';
-type Lang = 'zh' | 'en';
+export type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
+export type Kind = 'model' | 'int' | 'text' | 'bool';
+export type Lang = 'zh' | 'en';
 
 // ── Field structure (language-agnostic) ────────────────────────────────
 // Adding a new env: append a row here AND add entries in FIELDS_TEXT_ZH /
 // FIELDS_TEXT_EN below (TS will flag the missing keys).
 
-interface FieldStruct {
+export interface FieldStruct {
     envName: PrefsKey;
     group: Group;
     kind: Kind;
@@ -71,16 +71,16 @@ interface FieldStruct {
     advanced?: boolean; // Mark advanced fields that should be collapsed by default
 }
 
-const FIELD_STRUCT: FieldStruct[] = [
+export const CLAUDE_CODE_FIELD_STRUCT: FieldStruct[] = [
     // Models (always visible - most commonly adjusted)
     { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'ANTHROPIC_DEFAULT_SONNET_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'CLAUDE_CODE_SUBAGENT_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'model', kind: 'int', unit: 'tokens', advanced: false },
     // Limits (advanced - rarely changed)
     { envName: 'API_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
-    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
     { envName: 'MAX_THINKING_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
     { envName: 'BASH_DEFAULT_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'BASH_MAX_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
@@ -107,7 +107,7 @@ const FIELD_STRUCT: FieldStruct[] = [
 // facing, and likely to churn as we tune the wording. Two parallel maps
 // avoids the i18n locale file becoming a junk drawer.
 
-interface FieldText {
+export interface FieldText {
     label: string;
     purpose: string;
     tooltip: string;
@@ -396,7 +396,7 @@ interface DefaultModeOptionText {
     description: string;
 }
 
-const DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
+export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
 
 const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
     acceptEdits: { label: '接受编辑（推荐）', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
@@ -418,7 +418,7 @@ const DEFAULT_MODE_TEXT_EN: Record<ClaudeCodeDefaultMode, DefaultModeOptionText>
     bypassPermissions: { label: 'Bypass permissions', description: 'Skip permission checks; use only in fully trusted environments.' },
 };
 
-const DEFAULT_MODE_TEXT: Record<Lang, Record<ClaudeCodeDefaultMode, DefaultModeOptionText>> = {
+export const CLAUDE_CODE_DEFAULT_MODE_TEXT: Record<Lang, Record<ClaudeCodeDefaultMode, DefaultModeOptionText>> = {
     zh: DEFAULT_MODE_TEXT_ZH,
     en: DEFAULT_MODE_TEXT_EN,
 };
@@ -489,7 +489,7 @@ const UI_TEXT_EN: UIText = {
     oneMTooltip: 'Enable the 1M context window (appends [1m] to the model ID; the routed target model must support it).',
 };
 
-const FIELDS_TEXT: Record<Lang, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN };
+export const CLAUDE_CODE_FIELDS_TEXT: Record<Lang, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN };
 const SECTION_TEXT: Record<Lang, SectionTextMap> = { zh: SECTION_TEXT_ZH, en: SECTION_TEXT_EN };
 const UI_TEXT: Record<Lang, UIText> = { zh: UI_TEXT_ZH, en: UI_TEXT_EN };
 
@@ -728,9 +728,9 @@ interface SectionProps {
 const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
     const [expanded, setExpanded] = React.useState(group === 'model'); // Only model group expanded by default
     const meta = SECTION_TEXT[lang][group];
-    const fieldsText = FIELDS_TEXT[lang];
+    const fieldsText = CLAUDE_CODE_FIELDS_TEXT[lang];
     const oneMTooltip = UI_TEXT[lang].oneMTooltip;
-    const fields = FIELD_STRUCT.filter(f => f.group === group);
+    const fields = CLAUDE_CODE_FIELD_STRUCT.filter(f => f.group === group);
     const hasAdvancedFields = fields.some(f => f.advanced);
 
     const toggleExpanded = () => setExpanded(!expanded);
@@ -792,7 +792,7 @@ const DefaultModeSection: React.FC<{
     setDefaultMode: (mode: ClaudeCodeDefaultMode) => void;
 }> = ({ lang, defaultMode, setDefaultMode }) => {
     const meta = DEFAULT_MODE_SECTION_TEXT[lang];
-    const text = DEFAULT_MODE_TEXT[lang];
+    const text = CLAUDE_CODE_DEFAULT_MODE_TEXT[lang];
     const selectedText = text[defaultMode];
 
     return (
@@ -862,7 +862,7 @@ const DefaultModeSection: React.FC<{
                                 },
                             }}
                         >
-                            {DEFAULT_MODE_OPTIONS.map((mode) => (
+                            {CLAUDE_CODE_DEFAULT_MODE_OPTIONS.map((mode) => (
                                 <MenuItem key={mode} value={mode} sx={{ minHeight: 40, py: 1 }}>
                                     <Tooltip title={text[mode].description} arrow placement="left">
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>

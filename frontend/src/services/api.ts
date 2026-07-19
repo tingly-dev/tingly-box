@@ -494,6 +494,14 @@ export const api = {
     },
 
     // Profile API
+
+    // Placeholder calls for the new Claude Code config endpoints. These use
+    // the generated client's runtime transport; remove the casts after the
+    // next OpenAPI client regeneration includes these routes.
+    getAppliedClaudeConfig: async (): Promise<any> => {
+        return controlApi((client, headers) => (client as any).GET('/api/v1/config/claude', {headers}));
+    },
+
     getProfiles: async (scenario: string): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/profiles', {
             headers,
@@ -526,6 +534,33 @@ export const api = {
 
     deleteProfile: async (scenario: string, id: string): Promise<any> => {
         return controlApi((client, headers) => client.DELETE('/api/v1/scenario/{scenario}/profiles/{id}', {
+            headers,
+            params: {path: {scenario, id}},
+        }));
+    },
+
+    getClaudeCodeProfileConfig: async (scenario: string, id: string): Promise<any> => {
+        return controlApi((client, headers) => (client as any).GET('/api/v1/scenario/{scenario}/profiles/{id}/claude-config', {
+            headers,
+            params: {path: {scenario, id}},
+        }));
+    },
+
+    updateClaudeCodeProfileConfig: async (
+        scenario: string,
+        id: string,
+        preferences: Record<string, string>,
+        defaultMode: string,
+    ): Promise<any> => {
+        return controlApi((client, headers) => (client as any).PUT('/api/v1/scenario/{scenario}/profiles/{id}/claude-config', {
+            headers,
+            params: {path: {scenario, id}},
+            body: {preferences, defaultMode},
+        }));
+    },
+
+    resetClaudeCodeProfileConfig: async (scenario: string, id: string): Promise<any> => {
+        return controlApi((client, headers) => (client as any).DELETE('/api/v1/scenario/{scenario}/profiles/{id}/claude-config', {
             headers,
             params: {path: {scenario, id}},
         }));
