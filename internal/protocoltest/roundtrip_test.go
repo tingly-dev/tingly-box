@@ -228,22 +228,11 @@ func TestRoundTrip_StreamingPreContentFailure_AnthropicNative(t *testing.T) {
 }
 
 // ---- Codex assembly: nonstream client / stream upstream / assemble ----
-//
-// Codex only speaks the streaming Responses API. A non-streaming Anthropic
-// client request against a Codex-flagged provider is routed by
-// dispatchOpenAIResponses (provider.IsCodexProvider()) through
-// forwardResponsesStream + PrimeResponsesStream + the assembly handler
-// instead of a plain non-streaming forward — the third cell of the
-// {v1,beta} × {nonstream,stream,assemble} Responses→Anthropic matrix (see
-// internal/server/protocol_cross.go). Before SetupCodexAssemblyRoute, this
-// cell was unreachable by the harness: the routing check and the client's
-// dial target were the same provider.APIBase field, so a route could never
-// point at a local VirtualServer while also tripping the Codex branch.
+// Codex only speaks the streaming Responses API, so a non-streaming client
+// request against it is folded into a single message via
+// SetupCodexAssemblyRoute (see its doc comment for how this cell of the
+// dispatch matrix becomes reachable).
 
-// TestRoundTrip_CodexAssembly_Golden proves the happy path of the
-// previously-unreachable cell: a non-streaming Anthropic v1 request against
-// a Codex-flagged provider gets a well-formed 200 message, assembled from a
-// real (mocked) upstream SSE stream via the genuine dispatch decision.
 func TestRoundTrip_CodexAssembly_Golden(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -258,8 +247,7 @@ func TestRoundTrip_CodexAssembly_Golden(t *testing.T) {
 }
 
 // TestRoundTrip_CodexAssembly_Beta mirrors the golden case for the Anthropic
-// beta source, exercising assembleResponsesToAnthropicBeta instead of the v1
-// variant.
+// beta source (assembleResponsesToAnthropicBeta instead of the v1 variant).
 func TestRoundTrip_CodexAssembly_Beta(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -272,12 +260,9 @@ func TestRoundTrip_CodexAssembly_Beta(t *testing.T) {
 	assert.Contains(t, result.Content, "Paris")
 }
 
-// TestRoundTrip_CodexAssembly_PrimeFailure covers the same pre-stream
-// failure this file's TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses
-// covers for the plain streaming branch, but for the assembly branch: a
-// client that asked for a non-streaming response must still get a JSON
-// error with the upstream's status, not a 200 or an SSE frame, when the
-// mocked upstream fails before any event is readable.
+// TestRoundTrip_CodexAssembly_PrimeFailure is TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses's
+// counterpart for the assembly branch: a non-streaming client must still get
+// a JSON error with the upstream's status, not a 200 or an SSE frame.
 func TestRoundTrip_CodexAssembly_PrimeFailure(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -292,15 +277,9 @@ func TestRoundTrip_CodexAssembly_PrimeFailure(t *testing.T) {
 		"no assistant content should be assembled from a prime-failed stream")
 }
 
-// TestRoundTrip_CodexAssembly_NoContentBlocks reproduces #1316's actual
-// repro end to end: the upstream starts a normal 200 stream (some events
-// arrive) but is cut before any content block completes — no
-// response.output_text.done, no response.completed. ErrorMidStreamCloseScenario
-// already models exactly this shape for FormatOpenAIResponses (see
-// buildMidStreamTruncated in vmodel/benchmark/scenario/scenario.go), so this
-// reuses it rather than hand-building synthetic events. Before #1316's fix,
-// this folded into a 200 message with content:null; the fix requires a
-// retryable error instead.
+// TestRoundTrip_CodexAssembly_NoContentBlocks reproduces #1316's repro end
+// to end via ErrorMidStreamCloseScenario, whose stream is cut before any
+// content block completes: a retryable error, not 200 with content:null.
 func TestRoundTrip_CodexAssembly_NoContentBlocks(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()

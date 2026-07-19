@@ -32,12 +32,8 @@ func newScenarioResponder(reg *vmodel.GenericRegistry[scenario.Scenario]) http.H
 	sr := &scenarioResponder{scenarios: reg, mux: http.NewServeMux()}
 	sr.mux.HandleFunc("/v1/chat/completions", sr.handle(scenario.FormatOpenAIChat))
 	sr.mux.HandleFunc("/v1/responses", sr.handleResponses)
-	// /codex/responses is where the Codex OAuth client's RoundTripper
-	// rewrites /v1/responses to (see internal/client/codex_round_tripper.go
-	// rewriteCodexPath) — registered so a provider flagged as Codex via
-	// OAuthDetail.Issuer can point at this server and still resolve,
-	// letting the protocoltest harness reach the Codex-only-streams /
-	// non-streaming-client assembly path without a real chatgpt.com host.
+	// /codex/responses is where the Codex client's RoundTripper rewrites
+	// /v1/responses to (internal/client/codex_round_tripper.go).
 	sr.mux.HandleFunc("/codex/responses", sr.handleResponses)
 	sr.mux.HandleFunc("/v1/messages", sr.handle(scenario.FormatAnthropic))
 	sr.mux.HandleFunc("/v1beta/models/", sr.handleGoogle)

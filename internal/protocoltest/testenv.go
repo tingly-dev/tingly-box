@@ -230,13 +230,9 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 }
 
 // setupRouteCore wires the provider + rule for a (source, target, scenario)
-// route. When flags is non-nil it is stamped onto the rule, so requests routed
-// through it traverse the real flag-resolution + transform path. flags==nil
-// preserves the original flag-free behavior used by the protocol matrix.
-// When providerFn is non-nil it is applied to the built provider just before
-// it's registered, letting callers override auth shape (e.g. SetupCodexAssemblyRoute
-// swapping the plain token for an OAuth/Codex identity) without duplicating
-// the rest of the provider/rule wiring.
+// route. flags, when non-nil, is stamped onto the rule. providerFn, when
+// non-nil, is applied to the built provider before registration — e.g.
+// SetupCodexAssemblyRoute uses it to swap in an OAuth/Codex identity.
 func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, flags *typ.RuleFlags, providerFn func(*typ.Provider)) {
 	key := routeKey(source, target, s.Name)
 
@@ -302,37 +298,22 @@ func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scena
 }
 
 // SetupCodexAssemblyRoute wires a route to a provider flagged as Codex via
-// OAuthDetail.Issuer (not via a literal APIBase match against the real
-// chatgpt.com host) pointed at the VirtualServer. Codex only speaks the
-// streaming Responses API, so dispatchOpenAIResponses
-// (provider.IsCodexProvider()) routes a non-streaming client request through
-// forwardResponsesStream + PrimeResponsesStream + the assembly handler
-// instead of a plain non-streaming forward — the "nonstream client / stream
-// upstream / assemble" cell of the {v1,beta} × {nonstream,stream,assemble}
-// Responses→Anthropic matrix (see internal/server/protocol_cross.go).
-//
-// Before provider.IsCodexProvider() replaced a raw
-// provider.APIBase == protocol.CodexAPIBase comparison in dispatch, this
-// cell was unreachable by any harness: the routing check and the client's
-// real dial target were the same field, so a route could never point at a
-// local VirtualServer while also tripping the Codex branch. Decoupling the
-// two — Codex-ness now comes from OAuthDetail.Issuer, independent of
-// APIBase — is what makes this helper possible. The VirtualServer's mux
-// additionally registers /codex/responses (see
-// vmodel/benchmark/scenario_responder.go) to serve the path Codex's
-// RoundTripper rewrites /v1/responses to.
-//
-// Only source (client protocol) varies; target is always
-// protocol.TypeOpenAIResponses and streaming is always requested as false —
-// that's the one dispatch cell this exists to reach.
+// OAuthDetail.Issuer rather than a literal APIBase match, so it can point at
+// the VirtualServer instead of the real chatgpt.com host. Codex only speaks
+// the streaming Responses API, so a non-streaming request against it is
+// routed by dispatchOpenAIResponses through the assembly path — the
+// "nonstream client / stream upstream / assemble" cell of the
+// {v1,beta} × {nonstream,stream,assemble} matrix (protocol_cross.go) that
+// was unreachable before provider.IsCodexProvider() decoupled the routing
+// check from the literal dial target. (The mux also needs /codex/responses
+// registered — see vmodel/benchmark/scenario_responder.go — since that's
+// the path Codex's RoundTripper rewrites /v1/responses to.)
 func (env *TestEnv) SetupCodexAssemblyRoute(source protocol.APIType, s Scenario) {
 	target := protocol.TypeOpenAIResponses
 	env.setupRouteCore(source, target, s, nil, func(p *typ.Provider) {
-		// setupRouteCore already computes the right APIBase/APIStyle/
-		// OpenAIEndpointMode for an OpenAIResponses target; only the auth
-		// shape needs to change, from a plain token to an OAuth identity
-		// carrying the Codex issuer (what provider.IsCodexProvider() and
-		// ClientPool.GetOpenAIClient key off of).
+		// Only the auth shape needs to change from setupRouteCore's plain
+		// token to an OAuth/Codex identity — APIBase/APIStyle/EndpointMode
+		// are already right for an OpenAIResponses target.
 		p.UUID = fmt.Sprintf("virtual-codex-%s-%s", source, s.Name)
 		p.Name = p.UUID
 		p.Token = ""

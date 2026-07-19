@@ -126,16 +126,10 @@ func (ph *ProtocolHandler) dispatchAnthropicBeta(
 // source format. Anthropic sources on Codex providers use the assembly path
 // (Codex only streams), other providers use the plain non-streaming forward.
 //
-// The Codex check is provider.IsCodexProvider() rather than a raw
-// provider.APIBase == protocol.CodexAPIBase comparison so the "must
-// stream-and-assemble" decision is driven by the provider's OAuth issuer for
-// OAuth-authenticated providers (falling back to the literal APIBase for
-// legacy non-OAuth configs, same as before). This decouples the routing
-// decision from the literal dial target: a test provider can trip this
-// branch via OAuthDetail.Issuer while APIBase points at a local mock
-// server, which a raw string-equality check could never allow — that
-// coupling is what made this cell of the dispatch matrix unreachable by the
-// protocoltest harness (see #1316 follow-up).
+// Uses provider.IsCodexProvider() (OAuth issuer, falling back to literal
+// APIBase) rather than a raw APIBase equality check, so a test provider can
+// trip this branch via OAuthDetail.Issuer while APIBase points at a mock
+// server — see protocoltest.SetupCodexAssemblyRoute.
 func (ph *ProtocolHandler) dispatchOpenAIResponses(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
