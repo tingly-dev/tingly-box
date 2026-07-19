@@ -163,6 +163,45 @@ func TestCreateProfile_EmptyProfilesStartsAtP1(t *testing.T) {
 	}
 }
 
+func TestUpdateClaudeCodeProfileConfig_PersistsCopiesAndClears(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overrides := &typ.ClaudeCodeProfileConfig{
+		Env:         map[string]string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"},
+		UnsetEnv:    []string{"DISABLE_TELEMETRY"},
+		DefaultMode: "plan",
+	}
+	if err := cfg.UpdateClaudeCodeProfileConfig(typ.ScenarioClaudeCode, profile.ID, overrides); err != nil {
+		t.Fatal(err)
+	}
+
+	// Mutating the caller and a returned snapshot must not mutate config state.
+	overrides.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "1"
+	stored, ok := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	if !ok || stored.ClaudeCode == nil || stored.ClaudeCode.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] != "64000" {
+		t.Fatalf("profile override not persisted safely: %#v", stored)
+	}
+	stored.ClaudeCode.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = "2"
+	again, _ := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	if again.ClaudeCode.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] != "64000" {
+		t.Fatal("GetProfile leaked the stored override map")
+	}
+
+	if err := cfg.UpdateClaudeCodeProfileConfig(typ.ScenarioClaudeCode, profile.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	cleared, _ := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	if cleared.ClaudeCode != nil {
+		t.Fatalf("profile overrides were not cleared: %#v", cleared.ClaudeCode)
+	}
+}
+
 func TestGetServerHost_DefaultReturnsLocalhost(t *testing.T) {
 	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
 	if err != nil {

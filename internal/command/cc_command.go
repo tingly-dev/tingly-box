@@ -98,19 +98,16 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 			envUnified = sc.GetDefaultFlags().Unified
 		}
 	}
-	env := agent.GenerateCCEnv(globalConfig, baseURL, apiKey, scenarioPath, envUnified, profileID != "")
-
 	// Build settings file. Profile mode uses the profileID; default mode uses
 	// "default" as a stable, predictable name so the file is reused across runs.
-	settingsID := profileID
-	if settingsID == "" {
-		settingsID = "default"
-	}
-	profileName := ""
+	var settingsPath string
+	var err error
 	if profileMeta != nil {
-		profileName = profileMeta.Name
+		settingsPath, err = agent.MaterializeCCProfileSettings(globalConfig, baseURL, apiKey, scenarioPath, *profileMeta)
+	} else {
+		env := agent.GenerateCCEnv(globalConfig, baseURL, apiKey, scenarioPath, envUnified, false)
+		settingsPath, err = agent.BuildCCProfileSettings("default", scenarioPath, "", env)
 	}
-	settingsPath, err := agent.BuildCCProfileSettings(settingsID, scenarioPath, profileName, env)
 	if err != nil {
 		return err
 	}

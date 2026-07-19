@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -23,13 +25,17 @@ import (
 // fallback when the rule is missing or inactive.
 func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, unified, isProfile bool) map[string]string {
 	env := map[string]string{
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"API_TIMEOUT_MS":                           "3000000",
-		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/" + scenarioPath,
-		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
-		"TINGLY_API_URL":                           baseURL,
+		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
+		"ANTHROPIC_AUTH_TOKEN": apiKey,
+		"TINGLY_API_URL":       baseURL,
+	}
+	// Named profiles inherit tunables from the main settings file. The main
+	// synthetic profile keeps the historical canonical defaults.
+	if !isProfile {
+		env["DISABLE_TELEMETRY"] = "1"
+		env["DISABLE_ERROR_REPORTING"] = "1"
+		env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+		env["API_TIMEOUT_MS"] = "3000000"
 	}
 
 	// Track whether any resolved rule has the 1M context flag so we can
@@ -94,6 +100,187 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 	return env
 }
 
+// ClaudeCodeSettingsSnapshot is the relevant subset of a Claude Code settings
+// file. Env may contain keys outside the typed preference surface; callers that
+// expose data through the API must convert it with ClaudeCodePrefsFromEnv.
+type ClaudeCodeSettingsSnapshot struct {
+	Exists      bool
+	Env         map[string]string
+	DefaultMode string
+	StatusLine  bool
+}
+
+// ReadMainClaudeCodeSettings reads the user's source-of-truth settings file.
+func ReadMainClaudeCodeSettings() (ClaudeCodeSettingsSnapshot, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ClaudeCodeSettingsSnapshot{}, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return readClaudeCodeSettings(filepath.Join(homeDir, ".claude", "settings.json"))
+}
+
+func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
+	snapshot := ClaudeCodeSettingsSnapshot{Env: map[string]string{}}
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return snapshot, nil
+	}
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.Exists = true
+	var raw struct {
+		Env         map[string]any  `json:"env"`
+		DefaultMode string          `json:"defaultMode"`
+		StatusLine  json.RawMessage `json:"statusLine"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return snapshot, fmt.Errorf("failed to parse Claude Code settings: %w", err)
+	}
+	for key, value := range raw.Env {
+		if text, ok := value.(string); ok {
+			snapshot.Env[key] = text
+		}
+	}
+	snapshot.DefaultMode = raw.DefaultMode
+	snapshot.StatusLine = len(raw.StatusLine) > 0 && string(raw.StatusLine) != "null"
+	return snapshot, nil
+}
+
+// CCProfileSettingsResolution contains both the inherited profile base and the
+// effective result after persistent overrides. Env includes server-owned keys
+// and is ready to materialize; the preference fields are safe for API output.
+type CCProfileSettingsResolution struct {
+	BasePreferences      ClaudeCodePrefs
+	EffectivePreferences ClaudeCodePrefs
+	InheritedDefaultMode string
+	EffectiveDefaultMode string
+	Env                  map[string]string
+	HasOverrides         bool
+}
+
+// ResolveCCProfileSettings composes main settings, rule-derived profile model
+// slots, stored overrides, and protected connection values in that order.
+func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, profile typ.ProfileMeta) (CCProfileSettingsResolution, error) {
+	snapshot, err := ReadMainClaudeCodeSettings()
+	if err != nil {
+		return CCProfileSettingsResolution{}, err
+	}
+
+	baseEnv := make(map[string]string)
+	if snapshot.Exists {
+		for key, value := range snapshot.Env {
+			baseEnv[key] = value
+		}
+	} else {
+		defaults := DefaultClaudeCodePrefs(profile.Unified)
+		defaultValues, valuesErr := defaults.Values()
+		if valuesErr != nil {
+			return CCProfileSettingsResolution{}, valuesErr
+		}
+		for key, value := range defaultValues {
+			baseEnv[key] = value
+		}
+	}
+
+	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, profile.Unified, true)
+	for key, value := range generated {
+		baseEnv[key] = value
+	}
+	basePreferences, err := ClaudeCodePrefsFromEnv(baseEnv)
+	if err != nil {
+		return CCProfileSettingsResolution{}, err
+	}
+
+	effectiveEnv := make(map[string]string, len(baseEnv))
+	for key, value := range baseEnv {
+		effectiveEnv[key] = value
+	}
+	if profile.ClaudeCode != nil {
+		for key, value := range profile.ClaudeCode.Env {
+			effectiveEnv[key] = value
+		}
+		for _, key := range profile.ClaudeCode.UnsetEnv {
+			delete(effectiveEnv, key)
+		}
+	}
+	effectivePreferences, err := ClaudeCodePrefsFromEnv(effectiveEnv)
+	if err != nil {
+		return CCProfileSettingsResolution{}, err
+	}
+
+	// Connection values are owned by the current server context and always win,
+	// including for configs written by older versions or edited by hand.
+	for _, key := range []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "TINGLY_API_URL"} {
+		effectiveEnv[key] = generated[key]
+	}
+	effectiveEnv["NO_PROXY"] = appendNoProxy(effectiveEnv["NO_PROXY"], "localhost", "127.0.0.1", "::1")
+	inheritedDefaultMode, ok := NormalizeClaudeCodeDefaultMode(snapshot.DefaultMode)
+	if !ok {
+		inheritedDefaultMode = DefaultClaudeCodeDefaultMode
+	}
+	effectiveDefaultMode := inheritedDefaultMode
+	if profile.ClaudeCode != nil && profile.ClaudeCode.DefaultMode != "" {
+		if normalized, valid := NormalizeClaudeCodeDefaultMode(profile.ClaudeCode.DefaultMode); valid {
+			effectiveDefaultMode = normalized
+		}
+	}
+
+	return CCProfileSettingsResolution{
+		BasePreferences:      basePreferences,
+		EffectivePreferences: effectivePreferences,
+		InheritedDefaultMode: inheritedDefaultMode,
+		EffectiveDefaultMode: effectiveDefaultMode,
+		Env:                  effectiveEnv,
+		HasOverrides: profile.ClaudeCode != nil && (len(profile.ClaudeCode.Env) > 0 ||
+			len(profile.ClaudeCode.UnsetEnv) > 0 || profile.ClaudeCode.DefaultMode != ""),
+	}, nil
+}
+
+// DiffCCProfileConfig stores a minimal, stable delta between the profile base
+// and the full desired typed configuration submitted by the editor.
+func DiffCCProfileConfig(base ClaudeCodePrefs, inheritedDefaultMode string, desired ClaudeCodePrefs, desiredDefaultMode string) (*typ.ClaudeCodeProfileConfig, error) {
+	baseValues, err := base.Values()
+	if err != nil {
+		return nil, err
+	}
+	desiredValues, err := desired.Values()
+	if err != nil {
+		return nil, err
+	}
+	overrides := &typ.ClaudeCodeProfileConfig{Env: map[string]string{}}
+	for key, value := range desiredValues {
+		if baseValues[key] != value {
+			overrides.Env[key] = value
+		}
+	}
+	for key := range baseValues {
+		if _, present := desiredValues[key]; !present {
+			overrides.UnsetEnv = append(overrides.UnsetEnv, key)
+		}
+	}
+	slices.Sort(overrides.UnsetEnv)
+	if desiredDefaultMode != inheritedDefaultMode {
+		overrides.DefaultMode = desiredDefaultMode
+	}
+	if len(overrides.Env) == 0 && len(overrides.UnsetEnv) == 0 && overrides.DefaultMode == "" {
+		return nil, nil
+	}
+	return overrides, nil
+}
+
+// MaterializeCCProfileSettings resolves and writes one named profile using its
+// persisted override delta. It is the shared path for HTTP mutations and CLI
+// launch, preventing either surface from generating a different artifact.
+func MaterializeCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, profile typ.ProfileMeta) (string, error) {
+	resolved, err := ResolveCCProfileSettings(cfg, baseURL, apiKey, scenarioPath, profile)
+	if err != nil {
+		return "", err
+	}
+	return BuildCCProfileSettings(profile.ID, scenarioPath, profile.Name, resolved.Env,
+		serverconfig.WithDefaultMode(resolved.EffectiveDefaultMode))
+}
+
 // BuildCCProfileSettings materializes one derived Claude Code profile under
 // ~/.tingly-box/claude/. The local/default profile lives at default/, while a
 // named profile lives at <profileID>--<profileName>/ so both its stable identity
@@ -101,7 +288,7 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 //
 // Config remains the source of truth. The directory contains only rebuildable
 // runtime artifacts: settings.json and its statusline.sh wrapper.
-func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map[string]string) (string, error) {
+func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map[string]string, opts ...serverconfig.ApplyOption) (string, error) {
 	rootDir := filepath.Join(constant.GetTinglyConfDir(), "claude")
 	artifactDir, err := ccProfileArtifactDir(rootDir, profileID, profileName)
 	if err != nil {
@@ -147,8 +334,9 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 		"type":    "command",
 		"command": wrapperPath,
 	}
-	result, err := serverconfig.ApplyClaudeSettingsToPath(destPath, env,
-		serverconfig.WithBackup(false), serverconfig.WithExtra("statusLine", statusLine))
+	applyOpts := []serverconfig.ApplyOption{serverconfig.WithBackup(false), serverconfig.WithExtra("statusLine", statusLine)}
+	applyOpts = append(applyOpts, opts...)
+	result, err := serverconfig.ApplyClaudeSettingsToPath(destPath, env, applyOpts...)
 	if err != nil {
 		return "", fmt.Errorf("failed to apply settings: %w", err)
 	}

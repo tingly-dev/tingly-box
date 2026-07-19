@@ -270,9 +270,20 @@ type VisionProxyService struct {
 // Profiles allow multiple Rule + ScenarioFlags configurations per base scenario.
 // A profile is identified by a short service-generated ID (e.g. "p1", "p2").
 type ProfileMeta struct {
-	ID      string `json:"id" yaml:"id"`           // Profile ID (e.g. "p1")
-	Name    string `json:"name" yaml:"name"`       // Human-readable name (unique within base scenario)
-	Unified bool   `json:"unified" yaml:"unified"` // true=unified mode (single model), false=separate mode (individual models, default)
+	ID         string                   `json:"id" yaml:"id"`                                       // Profile ID (e.g. "p1")
+	Name       string                   `json:"name" yaml:"name"`                                   // Human-readable name (unique within base scenario)
+	Unified    bool                     `json:"unified" yaml:"unified"`                             // true=unified mode (single model), false=separate mode (individual models, default)
+	ClaudeCode *ClaudeCodeProfileConfig `json:"claude_code,omitempty" yaml:"claude_code,omitempty"` // Persistent overrides for generated Claude Code settings.
+}
+
+// ClaudeCodeProfileConfig stores only the delta from a profile's inherited
+// Claude Code configuration. Env contains explicit values, UnsetEnv contains
+// inherited keys the profile removes, and an empty DefaultMode means inherit.
+// Generated settings files remain disposable runtime artifacts.
+type ClaudeCodeProfileConfig struct {
+	Env         map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
+	UnsetEnv    []string          `json:"unset_env,omitempty" yaml:"unset_env,omitempty"`
+	DefaultMode string            `json:"default_mode,omitempty" yaml:"default_mode,omitempty"`
 }
 
 // ScenarioConfig represents configuration for a specific scenario

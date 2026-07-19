@@ -1,6 +1,9 @@
 package scenario
 
-import "github.com/tingly-dev/tingly-box/internal/typ"
+import (
+	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
 
 // ScenarioFlagUpdateRequest represents the request to update a boolean flag
 type ScenarioFlagUpdateRequest struct {
@@ -33,6 +36,27 @@ type ProfileCreateRequest struct {
 type ProfileUpdateRequest struct {
 	Name    string `json:"name,omitempty"`
 	Unified *bool  `json:"unified,omitempty"` // Pointer to distinguish zero from unset; nil = no change
+}
+
+// ProfileClaudeConfigRequest is the complete desired typed configuration for
+// one Claude Code profile. The backend persists only its delta from inheritance.
+type ProfileClaudeConfigRequest struct {
+	Preferences *agent.ClaudeCodePrefs `json:"preferences" binding:"required"`
+	DefaultMode string                 `json:"defaultMode,omitempty"`
+}
+
+type ProfileClaudeConfigData struct {
+	BasePreferences      agent.ClaudeCodePrefs `json:"basePreferences"`
+	Preferences          agent.ClaudeCodePrefs `json:"preferences"`
+	InheritedDefaultMode string                `json:"inheritedDefaultMode"`
+	DefaultMode          string                `json:"defaultMode"`
+	HasOverrides         bool                  `json:"hasOverrides"`
+	SettingsPath         string                `json:"settingsPath,omitempty"`
+}
+
+type ProfileClaudeConfigResponse struct {
+	Success bool                    `json:"success"`
+	Data    ProfileClaudeConfigData `json:"data"`
 }
 
 // ScenariosResponse represents the response for getting all scenarios

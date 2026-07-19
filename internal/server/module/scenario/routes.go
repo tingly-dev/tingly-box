@@ -100,6 +100,25 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithRequestModel(ProfileUpdateRequest{}),
 	)
 
+	router.GET("/scenario/:scenario/profiles/:id/claude-config", handler.GetProfileClaudeConfig,
+		swagger.WithDescription("Get the effective and inherited Claude Code profile configuration"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ProfileClaudeConfigResponse{}),
+	)
+
+	router.PUT("/scenario/:scenario/profiles/:id/claude-config", handler.UpdateProfileClaudeConfig,
+		swagger.WithDescription("Persist and materialize fine-grained Claude Code profile preferences"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ProfileClaudeConfigRequest{}),
+		swagger.WithResponseModel(ProfileClaudeConfigResponse{}),
+	)
+
+	router.DELETE("/scenario/:scenario/profiles/:id/claude-config", handler.DeleteProfileClaudeConfig,
+		swagger.WithDescription("Clear Claude Code profile overrides and restore inheritance"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ProfileClaudeConfigResponse{}),
+	)
+
 	// DELETE /scenario/:scenario/profiles/:id - Delete a profile
 	router.DELETE("/scenario/:scenario/profiles/:id", handler.DeleteProfile,
 		swagger.WithDescription("Delete a profile"),

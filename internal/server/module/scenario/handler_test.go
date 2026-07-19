@@ -1,13 +1,16 @@
 package scenario
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -187,6 +190,63 @@ func TestGetScenarioConfig_NilConfig(t *testing.T) {
 	body := w.Body.String()
 	assert.Contains(t, body, `"success":false`)
 	assert.Contains(t, body, "Global config not available")
+}
+
+func TestProfileClaudeConfigLifecycle(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	route := "/scenario/:scenario/profiles/:id/claude-config"
+	router.GET(route, handler.GetProfileClaudeConfig)
+	router.PUT(route, handler.UpdateProfileClaudeConfig)
+	router.DELETE(route, handler.DeleteProfileClaudeConfig)
+	endpoint := "/scenario/claude_code/profiles/" + profile.ID + "/claude-config"
+
+	updateBody, err := json.Marshal(ProfileClaudeConfigRequest{
+		Preferences: &agent.ClaudeCodePrefs{ClaudeCodeMaxOutputTokens: "64000"},
+		DefaultMode: "plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateReq := httptest.NewRequest(http.MethodPut, endpoint, bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateResult := httptest.NewRecorder()
+	router.ServeHTTP(updateResult, updateReq)
+	assert.Equal(t, http.StatusOK, updateResult.Code, updateResult.Body.String())
+	assert.Contains(t, updateResult.Body.String(), `"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"`)
+	assert.Contains(t, updateResult.Body.String(), `"defaultMode":"plan"`)
+	assert.Contains(t, updateResult.Body.String(), `"hasOverrides":true`)
+
+	stored, ok := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	if !ok || stored.ClaudeCode == nil {
+		t.Fatalf("profile override was not persisted: %#v", stored)
+	}
+	assert.Equal(t, "64000", stored.ClaudeCode.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"])
+	assert.Equal(t, "plan", stored.ClaudeCode.DefaultMode)
+
+	getResult := httptest.NewRecorder()
+	router.ServeHTTP(getResult, httptest.NewRequest(http.MethodGet, endpoint, nil))
+	assert.Equal(t, http.StatusOK, getResult.Code, getResult.Body.String())
+	assert.Contains(t, getResult.Body.String(), `"hasOverrides":true`)
+
+	deleteResult := httptest.NewRecorder()
+	router.ServeHTTP(deleteResult, httptest.NewRequest(http.MethodDelete, endpoint, nil))
+	assert.Equal(t, http.StatusOK, deleteResult.Code, deleteResult.Body.String())
+	assert.Contains(t, deleteResult.Body.String(), `"hasOverrides":false`)
+	cleared, _ := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	assert.Nil(t, cleared.ClaudeCode)
 }
 
 func TestScenarioTypes(t *testing.T) {
