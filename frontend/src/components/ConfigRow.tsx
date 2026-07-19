@@ -139,7 +139,12 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
 
             {/* Right: Actions */}
             {currentTab?.actions && (
-                <Stack direction="row" spacing={0.5} sx={{gridColumn: {xs: '2', sm: '3'}, justifySelf: 'end'}}>
+                <Stack
+                    direction="row"
+                    spacing={0.5}
+                    alignItems="center"
+                    sx={{gridColumn: {xs: '2', sm: '3'}, justifySelf: 'end'}}
+                >
                     {currentTab.actions}
                 </Stack>
             )}

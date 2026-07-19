@@ -288,16 +288,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                     ),
                                     actions: (
                                         <>
-                                            {settingsArtifact && (
-                                                <Chip
-                                                    label={settingsArtifact.settingsExists
-                                                        ? t('claudeCode.profile.settingsGenerated')
-                                                        : t('claudeCode.profile.settingsNotGenerated')}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    color={settingsArtifact.settingsExists ? 'success' : 'default'}
-                                                />
-                                            )}
                                             <Tooltip title={t('claudeCode.profile.copySettingsFile')} arrow>
                                                 <span>
                                                     <IconButton
@@ -309,6 +299,36 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                                         <ContentCopyIcon fontSize="small" />
                                                     </IconButton>
                                                 </span>
+                                            </Tooltip>
+                                            <Box aria-hidden sx={{ width: 30, height: 30, flexShrink: 0 }} />
+                                            <Tooltip
+                                                title={settingsArtifact
+                                                    ? settingsArtifact.settingsExists
+                                                        ? t('claudeCode.profile.settingsGenerated')
+                                                        : t('claudeCode.profile.settingsNotGenerated')
+                                                    : ''}
+                                                arrow
+                                            >
+                                                <Box
+                                                    role={settingsArtifact ? 'status' : undefined}
+                                                    aria-label={settingsArtifact
+                                                        ? settingsArtifact.settingsExists
+                                                            ? t('claudeCode.profile.settingsGenerated')
+                                                            : t('claudeCode.profile.settingsNotGenerated')
+                                                        : undefined}
+                                                    sx={{
+                                                        width: 30,
+                                                        height: 30,
+                                                        flexShrink: 0,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: settingsArtifact?.settingsExists ? 'success.main' : 'text.disabled',
+                                                        visibility: settingsArtifact ? 'visible' : 'hidden',
+                                                    }}
+                                                >
+                                                    <InfoIcon fontSize="small" />
+                                                </Box>
                                             </Tooltip>
                                         </>
                                     ),
