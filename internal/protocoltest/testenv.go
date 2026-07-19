@@ -226,14 +226,14 @@ func (env *TestEnv) VirtualCallCount() int { return env.virtual.CallCount() }
 // The provider's APIBase includes the /v1 suffix for OpenAI-style providers
 // to match actual provider API structure.
 func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
-	env.setupRouteCore(source, target, s, nil)
+	env.setupRouteCore(source, target, s, nil, nil)
 }
 
 // setupRouteCore wires the provider + rule for a (source, target, scenario)
-// route. When flags is non-nil it is stamped onto the rule, so requests routed
-// through it traverse the real flag-resolution + transform path. flags==nil
-// preserves the original flag-free behavior used by the protocol matrix.
-func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, flags *typ.RuleFlags) {
+// route. flags, when non-nil, is stamped onto the rule. providerFn, when
+// non-nil, is applied to the built provider before registration — e.g.
+// SetupCodexAssemblyRoute uses it to swap in an OAuth/Codex identity.
+func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, flags *typ.RuleFlags, providerFn func(*typ.Provider)) {
 	key := routeKey(source, target, s.Name)
 
 	env.mu.Lock()
@@ -272,10 +272,13 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 		Enabled:            true,
 		Timeout:            int64(constant.DefaultRequestTimeout),
 	}
+	if providerFn != nil {
+		providerFn(provider)
+	}
 	_ = env.appConfig.AddProvider(provider)
 
 	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, providerModel,
-		harnessService(providerName, providerModel))
+		harnessService(provider.UUID, providerModel))
 	if flags != nil {
 		rule.Flags = *flags
 	}
@@ -290,8 +293,36 @@ func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, 
 // onto the gateway rule, so a request routed through it exercises the real
 // flag-resolution and transform pipeline. Returns the request model to send to.
 func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scenario, flags typ.RuleFlags) string {
-	env.setupRouteCore(source, target, s, &flags)
+	env.setupRouteCore(source, target, s, &flags, nil)
 	return env.findRouteModel(source, target, s.Name)
+}
+
+// SetupCodexAssemblyRoute wires a route to a provider flagged as Codex via
+// OAuthDetail.Issuer rather than a literal APIBase match, so it can point at
+// the VirtualServer instead of the real chatgpt.com host. Codex only speaks
+// the streaming Responses API, so a non-streaming request against it is
+// routed by dispatchOpenAIResponses through the assembly path — the
+// "nonstream client / stream upstream / assemble" cell of the
+// {v1,beta} × {nonstream,stream,assemble} matrix (protocol_cross.go) that
+// was unreachable before provider.IsCodexProvider() decoupled the routing
+// check from the literal dial target. (The mux also needs /codex/responses
+// registered — see vmodel/benchmark/scenario_responder.go — since that's
+// the path Codex's RoundTripper rewrites /v1/responses to.)
+func (env *TestEnv) SetupCodexAssemblyRoute(source protocol.APIType, s Scenario) {
+	target := protocol.TypeOpenAIResponses
+	env.setupRouteCore(source, target, s, nil, func(p *typ.Provider) {
+		// Only the auth shape needs to change from setupRouteCore's plain
+		// token to an OAuth/Codex identity — APIBase/APIStyle/EndpointMode
+		// are already right for an OpenAIResponses target.
+		p.UUID = fmt.Sprintf("virtual-codex-%s-%s", source, s.Name)
+		p.Name = p.UUID
+		p.Token = ""
+		p.AuthType = typ.AuthTypeOAuth
+		p.OAuthDetail = &typ.OAuthDetail{
+			Issuer:      ai.IssuerCodex,
+			AccessToken: "virtual-codex-token",
+		}
+	})
 }
 
 // SendAs sends a request to the gateway as the given source protocol,

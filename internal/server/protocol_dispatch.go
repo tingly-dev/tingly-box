@@ -125,6 +125,11 @@ func (ph *ProtocolHandler) dispatchAnthropicBeta(
 // dispatchOpenAIResponses routes a Responses-API-bound request by the client's
 // source format. Anthropic sources on Codex providers use the assembly path
 // (Codex only streams), other providers use the plain non-streaming forward.
+//
+// Uses provider.IsCodexProvider() (OAuth issuer, falling back to literal
+// APIBase) rather than a raw APIBase equality check, so a test provider can
+// trip this branch via OAuthDetail.Issuer while APIBase points at a mock
+// server — see protocoltest.SetupCodexAssemblyRoute.
 func (ph *ProtocolHandler) dispatchOpenAIResponses(
 	c *gin.Context, reqCtx *transform.TransformContext,
 	rule *typ.Rule, provider *typ.Provider,
@@ -138,7 +143,7 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			ph.streamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
-		} else if provider.APIBase == protocol.CodexAPIBase {
+		} else if provider.IsCodexProvider() {
 			ph.assembleResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
 		} else {
 			ph.nonstreamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
@@ -147,7 +152,7 @@ func (ph *ProtocolHandler) dispatchOpenAIResponses(
 		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
 			ph.streamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
-		} else if provider.APIBase == protocol.CodexAPIBase {
+		} else if provider.IsCodexProvider() {
 			ph.assembleResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
 		} else {
 			ph.nonstreamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)

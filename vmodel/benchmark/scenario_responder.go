@@ -32,6 +32,9 @@ func newScenarioResponder(reg *vmodel.GenericRegistry[scenario.Scenario]) http.H
 	sr := &scenarioResponder{scenarios: reg, mux: http.NewServeMux()}
 	sr.mux.HandleFunc("/v1/chat/completions", sr.handle(scenario.FormatOpenAIChat))
 	sr.mux.HandleFunc("/v1/responses", sr.handleResponses)
+	// /codex/responses is where the Codex client's RoundTripper rewrites
+	// /v1/responses to (internal/client/codex_round_tripper.go).
+	sr.mux.HandleFunc("/codex/responses", sr.handleResponses)
 	sr.mux.HandleFunc("/v1/messages", sr.handle(scenario.FormatAnthropic))
 	sr.mux.HandleFunc("/v1beta/models/", sr.handleGoogle)
 	return sr
