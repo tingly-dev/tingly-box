@@ -509,8 +509,9 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
+    const unifiedRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:cc');
     const modelForVariant = (variant: string, fallback: string): string => {
-        if (mode === 'unified') return rules[0]?.request_model || fallback;
+        if (mode === 'unified') return unifiedRule?.request_model || fallback;
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
         return rule?.request_model || fallback;
     };
@@ -526,8 +527,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     // Get the 1M state for a specific variant (only used in separate mode)
     const getContext1MStateForVariant = (variant: string): boolean => {
         if (mode === 'unified') {
-            // In unified mode, use the first rule's context1m state
-            return getContext1MStateForRule(rules[0]);
+            return getContext1MStateForRule(unifiedRule);
         }
         // In separate mode, check the specific rule for this variant
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
@@ -535,7 +535,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     };
 
     const context1MEnabled = mode === 'unified'
-        ? getContext1MStateForRule(rules[0])
+        ? getContext1MStateForRule(unifiedRule)
         : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
 
 

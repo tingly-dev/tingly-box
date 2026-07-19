@@ -13,6 +13,7 @@ import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickCo
 import type { AgentApplyResult } from './AgentSetupCard';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
+import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -163,7 +164,11 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         void api.getAppliedClaudeConfig().then(result => {
             if (!active) return;
             if (result?.success && result.exists) {
-                setPrefs(result.preferences || {});
+                const generated = derivePrefsFromRules({ rules, mode: configMode });
+                setPrefs(restoreAppliedClaudeCodePrefs({
+                    generated,
+                    applied: result.preferences || {},
+                }));
                 setDefaultMode((result.defaultMode || 'acceptEdits') as ClaudeCodeDefaultMode);
                 setInstallStatusLine(!!result.installStatusLine);
             } else {
