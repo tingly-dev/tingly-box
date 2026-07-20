@@ -81,21 +81,6 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	return b.Bot.DeleteMessage(ctx, messageID)
 }
 
-// HandleWebhook handles an incoming webhook event
-func (b *Bot) HandleWebhook(body []byte) error {
-	return b.Bot.HandleWebhook(body)
-}
-
-// GetWebhookURL returns the webhook URL for Lark
-func (b *Bot) GetWebhookURL(webhookPath string) string {
-	return "/webhook/lark/" + webhookPath
-}
-
-// VerifyWebhook verifies webhook signature
-func (b *Bot) VerifyWebhook(signature, timestamp, body string) bool {
-	return b.Bot.VerifyWebhook(signature, timestamp, body)
-}
-
 // StartReceiving starts receiving events
 func (b *Bot) StartReceiving(ctx context.Context) error {
 	return b.Bot.StartReceiving(ctx)
