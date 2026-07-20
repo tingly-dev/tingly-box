@@ -341,33 +341,14 @@ func (b *BaseBot) GetMessageLimit() int {
 	return 4000 // Default fallback
 }
 
-// ChunkText chunks text into smaller parts based on platform limit
+// ChunkText chunks text into smaller parts based on this bot's platform limit.
 func (b *BaseBot) ChunkText(text string) []string {
-	caps := GetPlatformCapabilities(b.config.Platform)
-	if caps.TextLimit <= 0 || len(text) <= caps.TextLimit {
-		return []string{text}
-	}
-
-	var chunks []string
-	remaining := text
-	limit := caps.TextLimit
-
-	for len(remaining) > limit {
-		breakPoint := b.findBreakPoint(remaining, limit)
-		chunks = append(chunks, remaining[:breakPoint])
-		remaining = remaining[breakPoint:]
-	}
-
-	if len(remaining) > 0 {
-		chunks = append(chunks, remaining)
-	}
-
-	return chunks
+	return ChunkTextForPlatform(b.config.Platform, text)
 }
 
 // findBreakPoint finds a good break point for chunking
 // Avoids breaking inside code blocks (``` or `)
-func (b *BaseBot) findBreakPoint(text string, limit int) int {
+func findBreakPoint(text string, limit int) int {
 	// First, check if we're inside a code block at the limit point
 	inCodeBlock := false
 	codeBlockChar := rune(0)
@@ -435,22 +416,20 @@ func (b *BaseBot) findBreakPoint(text string, limit int) int {
 	return limit
 }
 
-// ChunkTextForPlatform splits text into chunks within the platform's message size limit.
-// It uses the same code-block-aware break-point logic as BaseBot.ChunkText.
+// ChunkTextForPlatform splits text into chunks within the platform's message
+// size limit, using code-block-aware break points. It is the single chunking
+// implementation; BaseBot.ChunkText is a thin wrapper over it.
 func ChunkTextForPlatform(platform Platform, text string) []string {
 	caps := GetPlatformCapabilities(platform)
 	if caps == nil || caps.TextLimit <= 0 || len(text) <= caps.TextLimit {
 		return []string{text}
 	}
 
-	// Reuse the method logic via a temporary BaseBot with minimal config.
-	b := &BaseBot{config: &Config{Platform: platform}}
+	limit := caps.TextLimit
 	var chunks []string
 	remaining := text
-	limit := caps.TextLimit
-
 	for len(remaining) > limit {
-		breakPoint := b.findBreakPoint(remaining, limit)
+		breakPoint := findBreakPoint(remaining, limit)
 		chunks = append(chunks, remaining[:breakPoint])
 		remaining = remaining[breakPoint:]
 	}
