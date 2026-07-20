@@ -20,6 +20,7 @@ export interface ServiceProvider {
     base_url_anthropic?: string;
     auth_type?: string;
     oauth_provider?: string;
+    type?: string;
     icon?: string; // Icon identifier for Lobe Icons (e.g., "openai", "anthropic")
 }
 

@@ -161,7 +161,9 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', py: 2, gap: 2, alignItems: 'center', justifyContent: 'center', minHeight: 100 }}>
                 <CircularProgress size={24} />
-                <Typography variant="body2" color="text.secondary">Loading features...</Typography>
+                <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                }}>Loading features...</Typography>
             </Box>
         );
     }

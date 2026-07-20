@@ -3,6 +3,7 @@
  * Eliminates duplication across useCustomModels, useNewModels, useRecentModels, useProviderModels.
  */
 import { useEffect, useState, useCallback } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 
 export interface LocalStorageOptions<T> {
   serializer?: (value: T) => string;
@@ -15,7 +16,7 @@ export interface LocalStorageReturn<T> {
   loadData: () => T;
   saveData: (key: string, value: any) => boolean;
   removeKey: (key: string) => boolean;
-  setData: (data: T) => void;
+  setData: Dispatch<SetStateAction<T>>;
   refetch: () => void;
 }
 
@@ -56,7 +57,7 @@ export function useLocalStorage<T extends Record<string, any>>(
   // Save a key-value pair to localStorage
   const saveData = useCallback((key: string, value: any): boolean => {
     try {
-      const currentData = loadData();
+      const currentData: Record<string, any> = { ...loadData() };
       currentData[key] = value;
       localStorage.setItem(storageKey, serializer(currentData));
       return true;

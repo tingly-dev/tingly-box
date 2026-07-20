@@ -41,7 +41,9 @@ const ProviderTable: React.FC<ProviderTableProps> = ({ providers, onCopySuccess 
   if (providers.length === 0) {
     return (
       <Box sx={{ textAlign: 'center', py: 8 }}>
-        <Typography color="text.secondary">
+        <Typography sx={{
+          color: "text.secondary"
+        }}>
           No providers found matching your filters.
         </Typography>
       </Box>
@@ -93,11 +95,15 @@ const ProviderTable: React.FC<ProviderTableProps> = ({ providers, onCopySuccess 
               </TableCell>
               <TableCell>
                 <Box>
-                  <Typography variant="subtitle2" fontWeight={500}>
+                  <Typography variant="subtitle2" sx={{
+                    fontWeight: 500
+                  }}>
                     {provider.name}
                   </Typography>
                   {provider.name_zh && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {provider.name_zh}
                     </Typography>
                   )}
@@ -136,19 +142,20 @@ const ProviderTable: React.FC<ProviderTableProps> = ({ providers, onCopySuccess 
               <TableCell>
                 <Typography
                   variant="body2"
-                  color="text.secondary"
                   sx={{
+                    color: "text.secondary",
                     maxWidth: 400,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+                    whiteSpace: 'nowrap'
+                  }}>
                   {provider.description}
                 </Typography>
               </TableCell>
               <TableCell align="right" sx={{ pr: 2 }}>
-                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                <Stack direction="row" spacing={0.5} sx={{
+                  justifyContent: "flex-end"
+                }}>
                   <IconButton
                     size="small"
                     href={provider.website}

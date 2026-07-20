@@ -5,6 +5,8 @@ import { DateCalendar, LocalizationProvider, PickerDay } from '@mui/x-date-picke
 import type { PickerDayProps } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useState } from 'react';
+import { createContext, useContext } from 'react';
+import { EMPTY_SX } from '@/constants/defaults';
 
 interface RecordingCalendarProps {
     currentDate: Date;
@@ -25,6 +27,79 @@ const getActivityLevel = (count: number): number => {
     return 4;
 };
 
+interface CustomDayContextValue {
+    recordingCounts: Map<string, number>;
+    selectedDate: Date;
+    formatDateKey: (date: Date) => string;
+    isSameDay: (date1: Date, date2: Date) => boolean;
+    isInRange: (date: Date) => boolean;
+}
+
+const CustomDayContext = createContext<CustomDayContextValue | null>(null);
+
+// Custom PickersDay with activity color — kept at module scope so it has a
+// stable identity across renders (defining it inside the parent re-mounts it
+// every render and breaks referential equality).
+const CustomDay = (props: PickerDayProps) => {
+    const { day, outsideCurrentMonth, ...other } = props;
+    const ctx = useContext(CustomDayContext);
+    const dateKey = ctx ? ctx.formatDateKey(day as Date) : '';
+    const count = ctx ? ctx.recordingCounts.get(dateKey) || 0 : 0;
+    const level = getActivityLevel(count);
+    const isSelected = ctx ? ctx.isSameDay(day as Date, ctx.selectedDate) : false;
+    const inRange = ctx ? ctx.isInRange(day as Date) : false;
+
+    // Color mapping
+    const getBgColor = () => {
+        if (isSelected) return '#3b82f6';
+        if (outsideCurrentMonth) return 'transparent';
+        if (inRange) return '#e0f2fe'; // Light blue for range
+        switch (level) {
+            case 0: return 'transparent';
+            case 1: return '#dcfce7';
+            case 2: return '#86efac';
+            case 3: return '#22c55e';
+            case 4: return '#15803d';
+            default: return 'transparent';
+        }
+    };
+
+    const getTextColor = () => {
+        if (isSelected) return '#ffffff';
+        if (inRange) return '#0369a1';
+        if (level >= 3) return '#ffffff';
+        if (level >= 1) return '#166534';
+        return 'inherit';
+    };
+
+    return (
+        <Tooltip
+            title={
+                count > 0
+                    ? `${count} recording${count > 1 ? 's' : ''} on ${day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`
+                    : day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+            }
+            arrow
+        >
+            <PickerDay
+                {...other}
+                day={day}
+                outsideCurrentMonth={outsideCurrentMonth}
+                sx={{
+                    backgroundColor: getBgColor(),
+                    color: getTextColor(),
+                    fontWeight: count > 0 || inRange ? 600 : 400,
+                    '&:hover': {
+                        backgroundColor: isSelected ? '#2563eb' : (count > 0 ? '#bbf7d0' : inRange ? '#bae6fd' : undefined),
+                    },
+                }}
+            >
+                {(day as Date).getDate()}
+            </PickerDay>
+        </Tooltip>
+    );
+};
+
 const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     currentDate,
     selectedDate,
@@ -32,7 +107,7 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     onDateSelect,
     onMonthChange,
     onRangeChange,
-    sx = {},
+    sx = EMPTY_SX,
 }) => {
     const [viewDate, setViewDate] = useState(currentDate);
     const [rangeMode, setRangeMode] = useState<number | null>(null);
@@ -58,66 +133,6 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
         startDate.setDate(startDate.getDate() - rangeMode);
         startDate.setHours(0, 0, 0, 0);
         return date >= startDate && date <= today;
-    };
-
-    // Custom PickersDay with activity color
-    const CustomDay = (props: PickerDayProps) => {
-        const { day, outsideCurrentMonth, ...other } = props;
-        const dateKey = formatDateKey(day as Date);
-        const count = recordingCounts.get(dateKey) || 0;
-        const level = getActivityLevel(count);
-        const isSelected = isSameDay(day as Date, selectedDate);
-        const inRange = isInRange(day as Date);
-
-        // Color mapping
-        const getBgColor = () => {
-            if (isSelected) return '#3b82f6';
-            if (outsideCurrentMonth) return 'transparent';
-            if (inRange) return '#e0f2fe'; // Light blue for range
-            switch (level) {
-                case 0: return 'transparent';
-                case 1: return '#dcfce7';
-                case 2: return '#86efac';
-                case 3: return '#22c55e';
-                case 4: return '#15803d';
-                default: return 'transparent';
-            }
-        };
-
-        const getTextColor = () => {
-            if (isSelected) return '#ffffff';
-            if (inRange) return '#0369a1';
-            if (level >= 3) return '#ffffff';
-            if (level >= 1) return '#166534';
-            return 'inherit';
-        };
-
-        return (
-            <Tooltip
-                title={
-                    count > 0
-                        ? `${count} recording${count > 1 ? 's' : ''} on ${day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`
-                        : day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                }
-                arrow
-            >
-                <PickerDay
-                    {...other}
-                    day={day}
-                    outsideCurrentMonth={outsideCurrentMonth}
-                    sx={{
-                        backgroundColor: getBgColor(),
-                        color: getTextColor(),
-                        fontWeight: count > 0 || inRange ? 600 : 400,
-                        '&:hover': {
-                            backgroundColor: isSelected ? '#2563eb' : (count > 0 ? '#bbf7d0' : inRange ? '#bae6fd' : undefined),
-                        },
-                    }}
-                >
-                    {(day as Date).getDate()}
-                </PickerDay>
-            </Tooltip>
-        );
     };
 
     const handlePrevMonth = () => {
@@ -196,6 +211,7 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                     </ButtonGroup>
 
                     {/* MUI DateCalendar */}
+                    <CustomDayContext.Provider value={{ recordingCounts, selectedDate, formatDateKey, isSameDay, isInRange }}>
                     <DateCalendar
                         value={selectedDate}
                         onChange={(newDate) => {
@@ -222,17 +238,22 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                             maxWidth: 320,
                         }}
                     />
+                    </CustomDayContext.Provider>
 
                     {/* Legend */}
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                        }}>
                             {rangeMode
                                 ? `Last ${rangeMode} days`
                                 : selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                             }
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Less
                             </Typography>
                             {[
@@ -254,7 +275,9 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
                                     />
                                 </Tooltip>
                             ))}
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 More
                             </Typography>
                         </Box>

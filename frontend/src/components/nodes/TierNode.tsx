@@ -43,7 +43,7 @@ export const TierNode: React.FC<TierNodeProps> = ({
             {learnMoreLink && (
                 <Box
                     component="span"
-                    onClick={(e) => { e.stopPropagation(); onShowGuide && onShowGuide(); }}
+                    onClick={(e) => { e.stopPropagation(); if (onShowGuide) onShowGuide(); }}
                     sx={{
                         display: 'block',
                         mt: 1,

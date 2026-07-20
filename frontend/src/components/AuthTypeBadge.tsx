@@ -1,5 +1,6 @@
 import { Box, useTheme, alpha } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
+import { EMPTY_SX } from '@/constants/defaults';
 
 interface AuthTypeBadgeProps {
     authType: string;
@@ -7,7 +8,7 @@ interface AuthTypeBadgeProps {
 }
 
 // Helper function to render auth type badge with colored background
-export const AuthTypeBadge = ({ authType, sx = {} }: AuthTypeBadgeProps) => {
+export const AuthTypeBadge = ({ authType, sx = EMPTY_SX }: AuthTypeBadgeProps) => {
     const theme = useTheme();
 
     // Define label for each auth type

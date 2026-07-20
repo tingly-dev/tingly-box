@@ -95,7 +95,14 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 onClick={active ? onAdd : undefined}
             >
                 <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ fontSize: '0.6rem', lineHeight: 1.1 }}>
+                <Typography
+                    variant="caption"
+                    sx={{
+                        color: "text.secondary",
+                        textAlign: "center",
+                        fontSize: '0.6rem',
+                        lineHeight: 1.1
+                    }}>
                     Add model
                 </Typography>
             </StyledAddProviderNode>

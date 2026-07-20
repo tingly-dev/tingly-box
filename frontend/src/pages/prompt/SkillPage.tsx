@@ -594,7 +594,9 @@ const SkillPage = () => {
                     <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
                         Skill Management
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         Manage your AI skill locations from various IDEs and tools
                     </Typography>
                 </Box>
@@ -617,7 +619,6 @@ const SkillPage = () => {
                     </Button>
                 </Stack>
             </Box>
-
             {/* Empty State */}
             {locations.length === 0 && !loading && (
                 <UnifiedCard
@@ -625,7 +626,11 @@ const SkillPage = () => {
                     subtitle="Get started by discovering or adding your first skill location"
                     size="large"
                 >
-                    <Box textAlign="center" py={3}>
+                    <Box
+                        sx={{
+                            textAlign: "center",
+                            py: 3
+                        }}>
                         <Alert severity="info" sx={{ mb: 2, display: 'inline-block', textAlign: 'left' }}>
                             <Typography variant="body2">
                                 <strong>About Skills</strong><br />
@@ -634,7 +639,13 @@ const SkillPage = () => {
                                 skills from multiple sources.
                             </Typography>
                         </Alert>
-                        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
+                        <Stack
+                            direction="row"
+                            spacing={2}
+                            sx={{
+                                justifyContent: "center",
+                                mt: 2
+                            }}>
                             <Button
                                 variant="outlined"
                                 onClick={() => setDiscoveryDialogOpen(true)}
@@ -648,7 +659,6 @@ const SkillPage = () => {
                     </Box>
                 </UnifiedCard>
             )}
-
             {/* Three-Column Layout */}
             {locations.length > 0 && (
                 <Stack direction="row" spacing={1} sx={{ height: 'calc(100vh - 180px)' }}>
@@ -674,12 +684,14 @@ const SkillPage = () => {
                                 onChange={(e) => setLocationSearch(e.target.value)}
                                 size="small"
                                 fullWidth
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <Search fontSize="small" />
-                                        </InputAdornment>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Search fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                    }
                                 }}
                             />
                         </Box>
@@ -709,14 +721,13 @@ const SkillPage = () => {
                                                 </Typography>
                                                 <Typography
                                                     variant="caption"
-                                                    color="text.secondary"
                                                     sx={{
+                                                        color: "text.secondary",
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
-                                                        display: 'block',
-                                                    }}
-                                                >
+                                                        display: 'block'
+                                                    }}>
                                                     {location.path}
                                                 </Typography>
                                                 <MuiChip
@@ -726,8 +737,15 @@ const SkillPage = () => {
                                                     sx={{ alignSelf: 'flex-start', height: 20, fontSize: '0.7rem' }}
                                                 />
                                             </Box>
-                                            <Stack direction="row" spacing={0.25} alignItems="center">
-                                                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                                            <Stack direction="row" spacing={0.25} sx={{
+                                                alignItems: "center"
+                                            }}>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: "text.secondary",
+                                                        mr: 0.5
+                                                    }}>
                                                     {location.skill_count}
                                                 </Typography>
                                                 <IconButton
@@ -792,12 +810,14 @@ const SkillPage = () => {
                                 size="small"
                                 fullWidth
                                 disabled={!selectedLocation}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <Search fontSize="small" />
-                                        </InputAdornment>
-                                    ),
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Search fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                    }
                                 }}
                             />
                         </Box>
@@ -817,7 +837,9 @@ const SkillPage = () => {
                                     <FolderOpen
                                         sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
                                     />
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Select a location to view skills
                                     </Typography>
                                 </Box>
@@ -848,7 +870,9 @@ const SkillPage = () => {
                                     <Description
                                         sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
                                     />
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {skillSearch
                                             ? 'No skills match your search'
                                             : 'No skills found in this location'}
@@ -858,7 +882,7 @@ const SkillPage = () => {
                                 <Box sx={{ flex: 1, overflow: 'auto' }}>
                                     {isGroupedMode ? (
                                         // Grouped mode
-                                        (() => {
+                                        ((() => {
                                             const skillGroups = groupSkillsIntelligently(filteredSkills, selectedLocation);
 
                                             return skillGroups.map((group) => {
@@ -890,7 +914,6 @@ const SkillPage = () => {
                                                                 </Box>
                                                             </ListItemButton>
                                                         </ListItem>
-
                                                         {/* Group Content */}
                                                         <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                                             <List sx={{ p: 0 }}>
@@ -936,14 +959,13 @@ const SkillPage = () => {
                                                                                     secondary={
                                                                                         <Typography
                                                                                             variant="caption"
-                                                                                            color="text.secondary"
                                                                                             sx={{
+                                                                                                color: "text.secondary",
                                                                                                 overflow: 'hidden',
                                                                                                 textOverflow: 'ellipsis',
                                                                                                 whiteSpace: 'nowrap',
-                                                                                                display: 'block',
-                                                                                            }}
-                                                                                        >
+                                                                                                display: 'block'
+                                                                                            }}>
                                                                                             {displayPath}
                                                                                         </Typography>
                                                                                     }
@@ -957,10 +979,10 @@ const SkillPage = () => {
                                                     </Box>
                                                 );
                                             });
-                                        })()
+                                        })())
                                     ) : (
                                         // Flat mode
-                                        <List sx={{ p: 0 }}>
+                                        (<List sx={{ p: 0 }}>
                                             {filteredSkills.map((skill) => {
                                                 const isSelected = selectedSkill?.id === skill.id;
                                                 const twoLevelName = selectedLocation ? getTwoLevelDisplayName(skill, selectedLocation) : skill.filename;
@@ -997,14 +1019,13 @@ const SkillPage = () => {
                                                                 secondary={
                                                                     <Typography
                                                                         variant="caption"
-                                                                        color="text.secondary"
                                                                         sx={{
+                                                                            color: "text.secondary",
                                                                             overflow: 'hidden',
                                                                             textOverflow: 'ellipsis',
                                                                             whiteSpace: 'nowrap',
-                                                                            display: 'block',
-                                                                        }}
-                                                                    >
+                                                                            display: 'block'
+                                                                        }}>
                                                                         {relativePath}
                                                                     </Typography>
                                                                 }
@@ -1013,7 +1034,7 @@ const SkillPage = () => {
                                                     </ListItem>
                                                 );
                                             })}
-                                        </List>
+                                        </List>)
                                     )}
                                 </Box>
                             )}
@@ -1058,14 +1079,13 @@ const SkillPage = () => {
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                                         <Typography
                                             variant="caption"
-                                            color="text.secondary"
                                             sx={{
+                                                color: "text.secondary",
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap',
-                                                display: 'block',
-                                            }}
-                                        >
+                                                display: 'block'
+                                            }}>
                                             {selectedSkill.path}
                                         </Typography>
                                         <IconButton
@@ -1081,19 +1101,20 @@ const SkillPage = () => {
                                 {selectedSkill && (
                                     <Typography
                                         variant="caption"
-                                        color="text.secondary"
                                         sx={{
+                                            color: "text.secondary",
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
-                                            display: 'block',
-                                        }}
-                                    >
+                                            display: 'block'
+                                        }}>
                                         {formatFileSize(selectedSkill.size)}
                                     </Typography>
                                 )}
                             </Box>
-                            <Stack direction="row" spacing={0.5} alignItems="center">
+                            <Stack direction="row" spacing={0.5} sx={{
+                                alignItems: "center"
+                            }}>
                                 {skillContent && (
                                     <>
                                         <Button
@@ -1142,7 +1163,9 @@ const SkillPage = () => {
                                     <Description
                                         sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}
                                     />
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Select a skill to view its content
                                     </Typography>
                                 </Box>
@@ -1224,7 +1247,6 @@ const SkillPage = () => {
                     </Paper>
                 </Stack>
             )}
-
             {/* Add/Edit Location Dialog */}
             <AddSkillLocationDialog
                 open={addDialogOpen}
@@ -1235,13 +1257,12 @@ const SkillPage = () => {
                         ? {
                               name: editLocation.name,
                               path: editLocation.path,
-                              ide_source: editLocation.ide_source,
+                              ide_source: editLocation.ide_source as IDESource,
                           }
                         : undefined
                 }
                 mode={addDialogMode}
             />
-
             {/* Auto Discovery Dialog */}
             <AutoDiscoveryDialog
                 open={discoveryDialogOpen}

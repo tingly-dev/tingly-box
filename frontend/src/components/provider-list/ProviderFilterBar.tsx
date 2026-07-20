@@ -31,13 +31,6 @@ const ProviderFilterBar: React.FC<ProviderFilterBarProps> = ({
         placeholder="Search providers..."
         value={filter.search}
         onChange={(e) => onFilterChange({ search: e.target.value })}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-        }}
         sx={{
           minWidth: 200,
           flexGrow: 1,
@@ -46,8 +39,16 @@ const ProviderFilterBar: React.FC<ProviderFilterBarProps> = ({
             borderRadius: 1,
           },
         }}
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }
+        }}
       />
-
       {/* Protocol Filter */}
       <FormControl size="small" sx={{ minWidth: 140 }}>
         <InputLabel>Protocol</InputLabel>
@@ -62,7 +63,6 @@ const ProviderFilterBar: React.FC<ProviderFilterBarProps> = ({
           <MenuItem value="both">Both</MenuItem>
         </Select>
       </FormControl>
-
       {/* Sort */}
       <FormControl size="small" sx={{ minWidth: 140 }}>
         <InputLabel>Sort</InputLabel>
@@ -76,7 +76,6 @@ const ProviderFilterBar: React.FC<ProviderFilterBarProps> = ({
           <MenuItem value="nameZh">中文拼音</MenuItem>
         </Select>
       </FormControl>
-
       {/* Result count */}
       <Box sx={{ ml: 'auto', color: 'text.secondary', fontSize: '0.875rem' }}>
         {isFiltering ? `${resultCount} of ${totalCount} providers` : `${totalCount} providers`}

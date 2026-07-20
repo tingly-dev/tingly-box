@@ -206,13 +206,15 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                                 placeholder="Search locations..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                InputProps={{
-                                    startAdornment: (
-                                        <Search sx={{ mr: 1, color: 'text.secondary' }} />
-                                    ),
-                                }}
                                 size="small"
                                 fullWidth
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                                        ),
+                                    }
+                                }}
                             />
                             <Button
                                 variant="outlined"
@@ -229,7 +231,9 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                     {discovering && (
                         <Box sx={{ textAlign: 'center', py: 3 }}>
                             <CircularProgress size={40} sx={{ mb: 2 }} />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Scanning home directory for IDE installations...
                             </Typography>
                             <LinearProgress sx={{ mt: 2 }} />
@@ -247,7 +251,9 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                                     mb: 1,
                                 }}
                             >
-                                <Typography variant="subtitle2" color="text.secondary">
+                                <Typography variant="subtitle2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     {selectedCount} of {filteredLocations.length} selected
                                 </Typography>
                                 <Button
@@ -309,23 +315,23 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                                                     </Typography>
                                                     <Typography
                                                         variant="caption"
-                                                        color="text.secondary"
                                                         sx={{
+                                                            color: "text.secondary",
                                                             overflow: 'hidden',
                                                             textOverflow: 'ellipsis',
                                                             whiteSpace: 'nowrap',
-                                                            display: 'block',
-                                                        }}
-                                                    >
+                                                            display: 'block'
+                                                        }}>
                                                         {location.path}
                                                     </Typography>
                                                 </Box>
                                             </Box>
                                             <Typography
                                                 variant="caption"
-                                                color="text.secondary"
-                                                sx={{ whiteSpace: 'nowrap' }}
-                                            >
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    whiteSpace: 'nowrap'
+                                                }}>
                                                 {location.skill_count} skill
                                                 {location.skill_count !== 1 ? 's' : ''}
                                             </Typography>
@@ -339,7 +345,9 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                     {/* No Results */}
                     {!discovering && !error && filteredLocations.length === 0 && searchQuery && (
                         <Box sx={{ textAlign: 'center', py: 3 }}>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 No locations match your search.
                             </Typography>
                         </Box>

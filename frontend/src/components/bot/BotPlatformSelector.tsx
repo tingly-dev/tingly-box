@@ -31,7 +31,9 @@ export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1 }}>
                 <CircularProgress size={16} />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                }}>
                     {t('remoteControl.platformSelector.loading', { defaultValue: 'Loading platforms...' })}
                 </Typography>
             </Box>
@@ -42,7 +44,9 @@ export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
     if (platforms.length === 0) {
         return (
             <Box sx={{ p: 1 }}>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                }}>
                     {t('remoteControl.platformSelector.empty', { defaultValue: 'No platforms available. Make sure the remote-control service is running.' })}
                 </Typography>
             </Box>

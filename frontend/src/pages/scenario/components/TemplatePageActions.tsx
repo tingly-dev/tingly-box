@@ -37,7 +37,9 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     const { t } = useTranslation();
 
     return (
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} sx={{
+            alignItems: "center"
+        }}>
             {/* Diagnostics pair: "is it working now" (test all) + "why not" (logs) */}
             {onProbeAll && (
                 <Tooltip title={t('probe.testAllHint')}>

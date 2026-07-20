@@ -30,7 +30,9 @@ export const TitleIconButtons: React.FC<TitleIconButtonsProps> = ({
     }
 
     return (
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={0.5} sx={{
+            alignItems: "center"
+        }}>
             {showExpandCollapseButton && collapsible && (
                 <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
                     <IconButton size="small" onClick={onToggleExpandAll}>

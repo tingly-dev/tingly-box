@@ -17,7 +17,12 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
     onAddApiKeyClick,
 }) => {
     return (
-        <Box textAlign="center" py={8} width="100%">
+        <Box
+            sx={{
+                textAlign: "center",
+                py: 8,
+                width: "100%"
+            }}>
             {showHeroIcon && (
                 <Button
                     variant="contained"
@@ -43,10 +48,19 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                 {title}
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+            <Typography
+                variant="body1"
+                sx={{
+                    color: "text.secondary",
+                    mb: 3,
+                    maxWidth: 500,
+                    mx: 'auto'
+                }}>
                 {description}
             </Typography>
-            <Stack direction="row" spacing={2} justifyContent="center">
+            <Stack direction="row" spacing={2} sx={{
+                justifyContent: "center"
+            }}>
                 <Button
                     variant="contained"
                     startIcon={<Add />}

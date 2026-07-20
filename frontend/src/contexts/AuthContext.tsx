@@ -51,10 +51,12 @@ const AuthPromptDialog: React.FC<{
             onClose={() => {}}
             maxWidth="sm"
             fullWidth
-            PaperProps={{
-                sx: {
-                    borderRadius: 2,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: 2,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                    }
                 }
             }}
         >
@@ -70,7 +72,9 @@ const AuthPromptDialog: React.FC<{
                 </Typography>
             </DialogTitle>
             <DialogContent>
-                <Typography variant="body1" color="text.secondary">
+                <Typography variant="body1" sx={{
+                    color: "text.secondary"
+                }}>
                     Your authentication token has expired or is invalid. Please log in again to continue.
                 </Typography>
             </DialogContent>

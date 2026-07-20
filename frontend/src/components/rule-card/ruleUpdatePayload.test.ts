@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { buildRuleUpdatePayload } from './ruleUpdatePayload';
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes';
 

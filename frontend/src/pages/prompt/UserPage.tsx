@@ -120,7 +120,9 @@ const UserPage = () => {
             <Typography variant="h3" sx={{ fontWeight: 600, mb: 1 }}>
               User Recordings
             </Typography>
-            <Typography variant="body1" color="text.secondary">
+            <Typography variant="body1" sx={{
+              color: "text.secondary"
+            }}>
               Browse and manage your IDE recordings
             </Typography>
           </Box>
@@ -206,7 +208,9 @@ const UserPage = () => {
                   <FolderOpen
                     sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
                   />
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     No recordings found
                   </Typography>
                 </Box>
@@ -273,7 +277,9 @@ const UserPage = () => {
                   <Description
                     sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}
                   />
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     Select a recording to view its details
                   </Typography>
                 </Box>
@@ -282,22 +288,52 @@ const UserPage = () => {
                   <Typography variant="h6" sx={{ mb: 2 }}>
                     {selectedRecording.summary}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1
+                    }}>
                     User: {selectedRecording.user.name}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1
+                    }}>
                     Project: {selectedRecording.project}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1
+                    }}>
                     Type: {selectedRecording.type}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1
+                    }}>
                     Duration: {selectedRecording.duration}s
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1
+                    }}>
                     Model: {selectedRecording.model}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 2
+                    }}>
                     Time: {selectedRecording.timestamp.toLocaleString()}
                   </Typography>
                   <Typography variant="body1" sx={{ mt: 2 }}>

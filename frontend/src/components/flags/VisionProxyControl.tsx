@@ -68,7 +68,6 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     </Box>
                 </Button>
             </Tooltip>
-
             <Menu
                 anchorEl={anchor}
                 open={Boolean(anchor)}
@@ -80,7 +79,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     selected={!isEnabled}
                     onClick={() => { setAnchor(null); if (isEnabled) onChange(null); }}
                 >
-                    <ListItemText primary="Off" primaryTypographyProps={{ variant: 'body2' }} />
+                    <ListItemText primary="Off" slotProps={{ primary: { variant: 'body2' } }} />
                     {!isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
                 <MenuItem
@@ -90,19 +89,19 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     <ListItemText
                         primary={isEnabled ? `On — ${value!.model}` : 'On — pick a model…'}
                         secondary={isEnabled ? providerName(value!.provider) : 'Choose a vision-capable model'}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        secondaryTypographyProps={{ variant: 'caption' }}
+                        slotProps={{ primary: { variant: 'body2' }, secondary: { variant: 'caption' } }}
                     />
                     {isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
             </Menu>
-
             <Dialog
                 open={pickerOpen}
                 onClose={() => setPickerOpen(false)}
                 maxWidth="lg"
                 fullWidth
-                PaperProps={{ sx: { height: '80vh' } }}
+                slotProps={{
+                    paper: { sx: { height: '80vh' } }
+                }}
             >
                 <DialogTitle sx={{ textAlign: 'center' }}>
                     <Typography variant="h6">Pick Vision Proxy Model</Typography>

@@ -82,10 +82,12 @@ const AppDialogs = () => {
                 onClose={closeDisconnectDialog}
                 maxWidth="sm"
                 fullWidth
-                PaperProps={{
-                    sx: {
-                        borderRadius: 2,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                slotProps={{
+                    paper: {
+                        sx: {
+                            borderRadius: 2,
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                        }
                     }
                 }}
             >

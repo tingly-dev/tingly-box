@@ -81,7 +81,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     baseUrl={baseUrl}
                     copyToClipboard={copyToClipboard}
                     rules={rules}
-                    onRulesRefresh={loadRules}
+                    onRulesRefresh={() => loadRules(scenario)}
                     pendingContext1MChange={pendingContext1MChange}
                 />
             </CardGrid>

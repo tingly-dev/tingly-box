@@ -200,7 +200,6 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                     />
                 </Box>
             </StyledAgentNode>
-
             <Popover
                 open={open}
                 anchorEl={anchorEl.current}
@@ -220,7 +219,9 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                             color={config.color as any}
                             sx={{ fontWeight: 700, fontSize: '0.75rem' }}
                         />
-                        <Typography variant="caption" color="text.secondary">Agent</Typography>
+                        <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                        }}>Agent</Typography>
                     </Box>
 
                     {/* Description */}
@@ -237,7 +238,9 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                     <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5, mb: 1.5 }}>
                         {info.features.map((f) => (
                             <Box component="li" key={f} sx={{ mb: 0.25 }}>
-                                <Typography variant="caption" color="text.secondary">{f}</Typography>
+                                <Typography variant="caption" sx={{
+                                    color: "text.secondary"
+                                }}>{f}</Typography>
                             </Box>
                         ))}
                     </Box>
@@ -248,7 +251,14 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                     <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                         {lang === 'zh' ? '配置' : 'Configuration'}
                     </Typography>
-                    <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary', lineHeight: 1.5 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            display: "block",
+                            mt: 0.5,
+                            color: 'text.secondary',
+                            lineHeight: 1.5
+                        }}>
                         {info.config}
                     </Typography>
                 </Paper>

@@ -24,6 +24,7 @@ import {
     InputLabel,
     List,
     ListItem,
+    ListItemButton,
     ListItemIcon,
     ListItemText,
     MenuItem,
@@ -137,10 +138,14 @@ const RemoteCoderSessionsPage: React.FC = () => {
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
-                    <Typography variant="h4" fontWeight={700} gutterBottom>
+                    <Typography variant="h4" gutterBottom sx={{
+                        fontWeight: 700
+                    }}>
                         Remote Control
                     </Typography>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: "text.secondary"
+                    }}>
                         Manage remote Claude Code sessions
                     </Typography>
                 </Box>
@@ -169,17 +174,17 @@ const RemoteCoderSessionsPage: React.FC = () => {
                     </Button>
                 </Box>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             <Dialog open={clearDialogOpen} onClose={() => setClearDialogOpen(false)}>
                 <DialogTitle>Clear All Sessions</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         This will clear all stored Remote Control sessions from the local UI cache.
                         It does not delete sessions on the server.
                     </Typography>
@@ -215,51 +220,78 @@ const RemoteCoderSessionsPage: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Stats Cards */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
                 <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
                     <Card>
                         <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Total</Typography>
-                            <Typography variant="h5" fontWeight={700}>{stats?.total || 0}</Typography>
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>Total</Typography>
+                            <Typography variant="h5" sx={{
+                                fontWeight: 700
+                            }}>{stats?.total || 0}</Typography>
                         </CardContent>
                     </Card>
                 </Box>
                 <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
                     <Card>
                         <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Active</Typography>
-                            <Typography variant="h5" fontWeight={700} sx={{ color: '#0891b2' }}>{stats?.active || 0}</Typography>
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>Active</Typography>
+                            <Typography
+                                variant="h5"
+                                sx={{
+                                    fontWeight: 700,
+                                    color: '#0891b2'
+                                }}>{stats?.active || 0}</Typography>
                         </CardContent>
                     </Card>
                 </Box>
                 <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
                     <Card>
                         <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Completed</Typography>
-                            <Typography variant="h5" fontWeight={700} sx={{ color: '#10b981' }}>{stats?.completed || 0}</Typography>
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>Completed</Typography>
+                            <Typography
+                                variant="h5"
+                                sx={{
+                                    fontWeight: 700,
+                                    color: '#10b981'
+                                }}>{stats?.completed || 0}</Typography>
                         </CardContent>
                     </Card>
                 </Box>
                 <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
                     <Card>
                         <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Failed</Typography>
-                            <Typography variant="h5" fontWeight={700} sx={{ color: '#ef4444' }}>{stats?.failed || 0}</Typography>
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>Failed</Typography>
+                            <Typography
+                                variant="h5"
+                                sx={{
+                                    fontWeight: 700,
+                                    color: '#ef4444'
+                                }}>{stats?.failed || 0}</Typography>
                         </CardContent>
                     </Card>
                 </Box>
                 <Box sx={{ width: { xs: 'calc(100% - 16px)', sm: 'calc(20% - 12px)' } }}>
                     <Card>
                         <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Uptime</Typography>
-                            <Typography variant="h5" fontWeight={700}>{formatDuration(stats?.uptime || '0s')}</Typography>
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>Uptime</Typography>
+                            <Typography variant="h5" sx={{
+                                fontWeight: 700
+                            }}>{formatDuration(stats?.uptime || '0s')}</Typography>
                         </CardContent>
                     </Card>
                 </Box>
             </Box>
-
             {/* Sessions */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                 {/* Session List */}
@@ -267,7 +299,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                     <Card>
                         <CardContent sx={{ p: 2 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                <Typography variant="h6" fontWeight={600}>
+                                <Typography variant="h6" sx={{
+                                    fontWeight: 600
+                                }}>
                                     Sessions
                                 </Typography>
                                 <FormControl size="small" sx={{ minWidth: 120 }}>
@@ -295,7 +329,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                     {sessions.map((session) => (
                                         <ListItem
                                             key={session.id}
-                                            button
+                                            disablePadding
+                                        >
+                                        <ListItemButton
                                             selected={selectedSession?.id === session.id}
                                             onClick={() => setSelectedSession(session)}
                                             sx={{
@@ -319,10 +355,17 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                                 }
                                                 secondary={
                                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                                                        <Typography variant="caption" color="text.secondary">
+                                                        <Typography variant="caption" sx={{
+                                                            color: "text.secondary"
+                                                        }}>
                                                             {new Date(session.created_at).toLocaleString()}
                                                         </Typography>
-                                                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: "text.secondary",
+                                                                fontFamily: 'monospace'
+                                                            }}>
                                                             {session.id}
                                                         </Typography>
                                                     </Box>
@@ -337,10 +380,17 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                                     fontSize: '0.7rem',
                                                 }}
                                             />
+                                        </ListItemButton>
                                         </ListItem>
                                     ))}
                                     {sessions.length === 0 && (
-                                        <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                color: "text.secondary",
+                                                p: 2,
+                                                textAlign: 'center'
+                                            }}>
                                             No sessions found
                                         </Typography>
                                     )}
@@ -357,7 +407,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                             {selectedSession ? (
                                 <>
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                        <Typography variant="h6" fontWeight={600}>
+                                        <Typography variant="h6" sx={{
+                                            fontWeight: 600
+                                        }}>
                                             Session Details
                                         </Typography>
                                         <Chip
@@ -372,7 +424,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                     <Divider sx={{ mb: 2 }} />
 
                                     <Box sx={{ flex: 1, overflow: 'auto' }}>
-                                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                        <Typography variant="subtitle2" gutterBottom sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             Request
                                         </Typography>
                                         <Paper
@@ -382,7 +436,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                             {selectedSession.request || '-'}
                                         </Paper>
 
-                                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                        <Typography variant="subtitle2" gutterBottom sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             Response (Summary)
                                         </Typography>
                                         <Paper
@@ -396,7 +452,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                                         {selectedSession.response.length > 1000 && '...'}
                                                     </Typography>
                                                     {selectedSession.response.length > 1000 && (
-                                                        <Typography variant="caption" color="text.secondary">
+                                                        <Typography variant="caption" sx={{
+                                                            color: "text.secondary"
+                                                        }}>
                                                             (Response truncated. View full response in chat.)
                                                         </Typography>
                                                     )}
@@ -425,7 +483,9 @@ const RemoteCoderSessionsPage: React.FC = () => {
                                 </>
                             ) : (
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Select a session to view details
                                     </Typography>
                                 </Box>

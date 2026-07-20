@@ -71,7 +71,7 @@ export const useScenarioPageInternal = (scenario: string) => {
     }, [scenario, ruleManagement.loadRules]);
 
     // Combined loading state
-    const isLoading = functionPanelData.providersLoading || ruleManagement.loadingRule;
+    const isLoading = functionPanelData.loading || ruleManagement.loadingRule;
 
     // Return all data in a structured way
     return {
@@ -81,7 +81,7 @@ export const useScenarioPageInternal = (scenario: string) => {
         token: functionPanelData.token,
         showNotification: functionPanelData.showNotification,
         providers: functionPanelData.providers,
-        loading: functionPanelData.providersLoading,
+        loading: functionPanelData.loading,
         notification: functionPanelData.notification,
         loadProviders: functionPanelData.loadProviders,
         copyToClipboard: functionPanelData.copyToClipboard,

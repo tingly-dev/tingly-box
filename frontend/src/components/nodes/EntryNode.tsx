@@ -173,7 +173,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
             <StyledEntryNode active={active} compact={isCompact}>
                 {isCompact ? (
                     // Horizontal layout - buttons side by side
-                    <>
+                    (<>
                         <ToggleButtonStyled
                             value="direct"
                             selected={!smartEnabled}
@@ -196,10 +196,10 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                             <AutoAwesomeIcon sx={{ fontSize: 9 }} />
                             Smart
                         </ToggleButtonStyled>
-                    </>
+                    </>)
                 ) : (
                     // Vertical layout - buttons stacked
-                    <>
+                    (<>
                         <ToggleButtonStyled
                             value="direct"
                             selected={!smartEnabled}
@@ -222,7 +222,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                             <AutoAwesomeIcon sx={{ fontSize: 10 }} />
                             Smart
                         </ToggleButtonStyled>
-                    </>
+                    </>)
                 )}
             </StyledEntryNode>
         </NodeTooltip>

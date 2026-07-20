@@ -130,7 +130,9 @@ const Layout = ({ children }: LayoutProps) => {
     // The scenario activity exposes a quick link to manage which agents are
     // visible (the overview page hosts the show/hide controls).
     const sidebarHeaderAction = activeActivity === 'scenario' ? (
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={0.5} sx={{
+            alignItems: "center"
+        }}>
             <Tooltip title={t('scenarioOverview.editTooltip', { defaultValue: 'Manage visible agents' })} arrow placement="right">
                 <IconButton
                     size="small"

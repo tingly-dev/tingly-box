@@ -185,7 +185,12 @@ const CollapsibleSection = memo(({ title, defaultExpanded = false, children }: C
                 }}
                 onClick={() => setExpanded(!expanded)}
             >
-                <Typography variant="subtitle2" fontWeight={600} color="text.primary">
+                <Typography
+                    variant="subtitle2"
+                    sx={{
+                        fontWeight: 600,
+                        color: "text.primary"
+                    }}>
                     {title}
                 </Typography>
                 {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -218,7 +223,12 @@ const StatusBar = memo(({ result }: { result: ProbeResult }) => {
             icon={ok ? <CheckIcon sx={{ fontSize: 28 }} /> : <ErrorIcon sx={{ fontSize: 28 }} />}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ fontSize: '1rem' }}>
+                <Typography
+                    variant="subtitle1"
+                    sx={{
+                        fontWeight: 700,
+                        fontSize: '1rem'
+                    }}>
                     {ok ? t('probe.success') : t('probe.failed')}
                 </Typography>
                 {d?.latency_ms ? (
@@ -403,18 +413,19 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
     const extracted = useMemo(() => extractText(result?.data?.content), [result?.data?.content]);
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { minHeight: 420 } }}>
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{
+            paper: { sx: { minHeight: 420 } }
+        }}>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0, overflow: 'hidden' }}>
                     <Typography
                         variant="subtitle1"
-                        fontWeight={600}
                         sx={{
+                            fontWeight: 600,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
+                            whiteSpace: 'nowrap'
+                        }}>
                         {model ? `${targetName} · ${model}` : targetName}
                     </Typography>
                 </Box>
@@ -503,12 +514,13 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                     </Button>
                 </Box>
             </DialogTitle>
-
             <DialogContent>
                 {/* Controls: request type + scope */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('probe.shape')}
                         </Typography>
                         <ToggleButtonGroup
@@ -529,7 +541,9 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                     {targetType === 'provider' && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Tooltip title={t('probe.scopeHint')}>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     {t('probe.scope')}
                                 </Typography>
                             </Tooltip>
@@ -551,7 +565,9 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
 
                 {!isLoading && !result && (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             {t('probe.runHint')}
                         </Typography>
                     </Box>

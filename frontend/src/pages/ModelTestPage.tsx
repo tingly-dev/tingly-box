@@ -48,7 +48,12 @@ const ModelCard = ({ model, provider, isTesting, onTest, onViewResult, hasResult
         >
             <CardContent sx={{ flexGrow: 1, p: 2 }}>
                 <Stack spacing={1.5}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Stack
+                        direction="row"
+                        sx={{
+                            justifyContent: "space-between",
+                            alignItems: "center"
+                        }}>
                         {provider.api_base_openai && provider.api_base_anthropic ? (
                             <Stack direction="row" spacing={0.5}>
                                 <ApiStyleBadge compact apiStyle="openai" />
@@ -192,9 +197,13 @@ const ModelTestPage = () => {
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-                <Stack spacing={2} alignItems="center">
+                <Stack spacing={2} sx={{
+                    alignItems: "center"
+                }}>
                     <CircularProgress />
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         Loading provider and models...
                     </Typography>
                 </Stack>
@@ -220,7 +229,13 @@ const ModelTestPage = () => {
     return (
         <Box sx={{ p: 3 }}>
             {/* Header */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+            <Stack
+                direction="row"
+                sx={{
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 3
+                }}>
                 <Stack spacing={1}>
                     <Button
                         startIcon={<ArrowBackIcon />}
@@ -232,7 +247,9 @@ const ModelTestPage = () => {
                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         Choose Model
                     </Typography>
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{
+                        alignItems: "center"
+                    }}>
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
                             {provider.name}
                         </Typography>
@@ -259,18 +276,18 @@ const ModelTestPage = () => {
                     {refreshing ? 'Refreshing...' : 'Refresh Models'}
                 </Button>
             </Stack>
-
             {/* Error Alert */}
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             {/* Models Grid */}
             {modelsData.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: "text.secondary"
+                    }}>
                         No models found for this provider. Click "Refresh Models" to fetch the latest models.
                     </Typography>
                 </Paper>
@@ -290,7 +307,6 @@ const ModelTestPage = () => {
                     ))}
                 </Grid>
             )}
-
             {/* Probe dialog */}
             {selectedModel && provider && (
                 <ProbeDialog

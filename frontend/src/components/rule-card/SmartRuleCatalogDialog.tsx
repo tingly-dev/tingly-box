@@ -279,11 +279,12 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ pb: 1 }}>
                 Smart Rule
-                <Typography variant="caption" component="div" color="text.secondary">
+                <Typography variant="caption" component="div" sx={{
+                    color: "text.secondary"
+                }}>
                     Conditions evaluated with AND logic — all must match for the rule to trigger.
                 </Typography>
             </DialogTitle>
-
             {/* Description strip */}
             <Box
                 sx={{
@@ -304,7 +305,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     placeholder="e.g., Route image requests to vision model"
                 />
             </Box>
-
             {/* Active conditions strip — mirrors FlagCatalogDialog's active-flags strip */}
             {ops.length > 0 && (
                 <Box
@@ -316,7 +316,14 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                         borderColor: 'divider',
                     }}
                 >
-                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{
+                            alignItems: "center",
+                            flexWrap: "wrap"
+                        }}>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                             Active ({ops.length})
                         </Typography>
@@ -341,7 +348,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     </Stack>
                 </Box>
             )}
-
             <DialogContent sx={{ p: 0, display: 'flex', minHeight: 460 }} dividers={false}>
                 {/* Left: category sidebar */}
                 <Box
@@ -425,7 +431,9 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                     }}
                                 >
                                     {/* Position header */}
-                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "flex-start"
+                                    }}>
                                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                 {pos.label}
@@ -433,14 +441,13 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                             <Tooltip title={pos.description} placement="top-start" disableHoverListener={pos.description.length <= 60}>
                                                 <Typography
                                                     variant="caption"
-                                                    color="text.secondary"
                                                     sx={{
+                                                        color: "text.secondary",
                                                         display: '-webkit-box',
                                                         WebkitLineClamp: 2,
                                                         WebkitBoxOrient: 'vertical',
-                                                        overflow: 'hidden',
-                                                    }}
-                                                >
+                                                        overflow: 'hidden'
+                                                    }}>
                                                     {pos.description}
                                                 </Typography>
                                             </Tooltip>
@@ -455,7 +462,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                             Add
                                         </Button>
                                     </Stack>
-
                                     {/* Inline condition rows */}
                                     {posOps.length > 0 && (
                                         <Stack spacing={1} sx={{ mt: 1.5 }}>
@@ -472,17 +478,20 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                             borderColor: valid ? 'divider' : 'warning.light',
                                                         }}
                                                     >
-                                                        <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                                        <Stack direction="row" spacing={1} sx={{
+                                                            alignItems: "flex-start"
+                                                        }}>
                                                             <Box sx={{ flexGrow: 1 }}>
                                                                 {/* Operation chips */}
                                                                 {opOpts.length > 0 && (
                                                                     <Stack
                                                                         direction="row"
                                                                         spacing={0.5}
-                                                                        flexWrap="wrap"
                                                                         useFlexGap
-                                                                        sx={{ mb: op.meta?.type !== 'bool' && op.operation ? 1 : 0 }}
-                                                                    >
+                                                                        sx={{
+                                                                            flexWrap: "wrap",
+                                                                            mb: op.meta?.type !== 'bool' && op.operation ? 1 : 0
+                                                                        }}>
                                                                         {opOpts.map((opt) => (
                                                                             <Tooltip
                                                                                 key={opt.value}
@@ -540,10 +549,16 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                                                     renderInput={(params) => <TextField {...params} label="Timezone" />}
                                                                                     sx={{ minWidth: 200 }}
                                                                                 />
-                                                                                <TextField size="small" label="Start" type="time" value={range.start} onChange={(e) => updateTimeRange(op, { start: e.target.value })} InputLabelProps={{ shrink: true }} fullWidth />
-                                                                                <TextField size="small" label="End" type="time" value={range.end} onChange={(e) => updateTimeRange(op, { end: e.target.value })} InputLabelProps={{ shrink: true }} fullWidth />
+                                                                                <TextField size="small" label="Start" type="time" value={range.start} onChange={(e) => updateTimeRange(op, { start: e.target.value })} fullWidth slotProps={{
+                                                                                    inputLabel: { shrink: true }
+                                                                                }} />
+                                                                                <TextField size="small" label="End" type="time" value={range.end} onChange={(e) => updateTimeRange(op, { end: e.target.value })} fullWidth slotProps={{
+                                                                                    inputLabel: { shrink: true }
+                                                                                }} />
                                                                             </Stack>
-                                                                            <Typography variant="caption" color="text.secondary">
+                                                                            <Typography variant="caption" sx={{
+                                                                                color: "text.secondary"
+                                                                            }}>
                                                                                 Routing converts the current UTC time into this timezone. Start is included, end is excluded; overnight windows work.
                                                                             </Typography>
                                                                         </Stack>
@@ -622,7 +637,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     </Stack>
                 </Box>
             </DialogContent>
-
             <DialogActions>
                 <Button onClick={onClose} color="primary">
                     Cancel

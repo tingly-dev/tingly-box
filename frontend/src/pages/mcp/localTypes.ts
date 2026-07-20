@@ -281,7 +281,7 @@ export const validateClientForm = (form: MCPClientFormValue): string | null => {
         }
         // Basic URL validation
         try {
-            new URL(form.endpoint.trim());
+            void new URL(form.endpoint.trim());
         } catch {
             return 'Invalid endpoint URL';
         }
@@ -295,7 +295,7 @@ export const validateClientForm = (form: MCPClientFormValue): string | null => {
             return 'OAuth Authorize URL is required';
         }
         try {
-            new URL(form.oauth_authorize_url.trim());
+            void new URL(form.oauth_authorize_url.trim());
         } catch {
             return 'Invalid OAuth Authorize URL';
         }
@@ -303,7 +303,7 @@ export const validateClientForm = (form: MCPClientFormValue): string | null => {
             return 'OAuth Token URL is required';
         }
         try {
-            new URL(form.oauth_token_url.trim());
+            void new URL(form.oauth_token_url.trim());
         } catch {
             return 'Invalid OAuth Token URL';
         }

@@ -124,7 +124,7 @@ export function ModelsPanel({
 
     const isProviderSelected = selectedProvider === provider.uuid;
     const isRefreshing = refreshingProviders.includes(provider.uuid);
-    const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
+    const backendCustomModels = providerModels?.[provider.uuid]?.custom_model || [];
 
     // Get custom models for this provider
     const providerCustomModels = customModels[provider.uuid] || [];
@@ -134,21 +134,21 @@ export function ModelsPanel({
     const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
     // Consolidate all custom models from different sources with proper deduplication
-    // Sources: localStorage (providerCustomModels), backend (backendCustomModel), selected model
+    // Sources: localStorage (providerCustomModels), backend (backendCustomModels), selected model
     const customModelsSet = new Set<string>();
 
     // Add from localStorage
     providerCustomModels.forEach(model => customModelsSet.add(model));
 
     // Add from backend if not already present (only when no localStorage models exist)
-    if (backendCustomModel && providerCustomModels.length === 0) {
-        customModelsSet.add(backendCustomModel);
+    if (providerCustomModels.length === 0) {
+        backendCustomModels.forEach(model => customModelsSet.add(model));
     }
 
     // Add currently selected model if it's a custom model not in any other source
     if (isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
         !providerCustomModels.includes(selectedModel) &&
-        selectedModel !== backendCustomModel) {
+        !backendCustomModels.includes(selectedModel)) {
         customModelsSet.add(selectedModel);
     }
 
@@ -229,9 +229,17 @@ export function ModelsPanel({
             <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
                 <Stack spacing={2}>
                 {/* Controls */}
-                <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2}>
+                <Stack
+                    direction="row"
+                    spacing={2}
+                    sx={{
+                        justifyContent: "flex-end",
+                        alignItems: "center"
+                    }}>
                     {/* Action buttons */}
-                    <Stack direction="row" alignItems="center" spacing={1}>
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
                         <Button
                             variant="outlined"
                             startIcon={<AddCircleOutlineIcon />}
@@ -283,7 +291,12 @@ export function ModelsPanel({
                 </Stack>
 
                 {/* Model count */}
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                <Typography
+                    variant="caption"
+                    sx={{
+                        color: "text.secondary",
+                        mt: 1
+                    }}>
                     {pagination.totalItems} models
                 </Typography>
 
@@ -341,10 +354,10 @@ export function ModelsPanel({
                             if (type === 'custom') {
                                 // Determine variant based on custom model source
                                 let variant: 'localStorage' | 'backend' | 'selected' = 'localStorage';
-                                if (model === backendCustomModel && providerCustomModels.length === 0) {
+                                if (backendCustomModels.includes(model) && providerCustomModels.length === 0) {
                                     variant = 'backend';
                                 } else if (isProviderSelected && model === selectedModel &&
-                                    !providerCustomModels.includes(model) && model !== backendCustomModel) {
+                                    !providerCustomModels.includes(model) && !backendCustomModels.includes(model)) {
                                     variant = 'selected';
                                 }
 
@@ -379,7 +392,9 @@ export function ModelsPanel({
                     {/* Empty state */}
                     {paginatedItems.length === 0 && (
                         <Box sx={{ textAlign: 'center', py: 4 }}>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 No models found matching "{searchTerm}"
                             </Typography>
                         </Box>
@@ -389,7 +404,9 @@ export function ModelsPanel({
                 {/* Pagination Controls */}
                 {pagination.totalPages > 1 && (
                     <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                        <Stack direction="row" alignItems="center" spacing={1}>
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <IconButton
                                 size="small"
                                 disabled={pagination.currentPage === 1}
@@ -412,12 +429,22 @@ export function ModelsPanel({
                 )}
             </Stack>
             </Box>
-
             {/* Provider Quota Bars - fixed at the bottom */}
             {quotaWindows.length > 0 && (
                 <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                    <Stack
+                        direction="row"
+                        sx={{
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            mb: 1.5
+                        }}>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: "text.secondary",
+                                fontWeight: 500
+                            }}>
                             Provider Quota
                         </Typography>
                         <IconButton

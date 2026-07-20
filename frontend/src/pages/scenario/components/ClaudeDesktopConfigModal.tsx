@@ -43,12 +43,14 @@ const buildInferenceModelsJson = (modelRules: any[]): string => {
     return `"inferenceModels": [\n${entries.join(',\n')}\n  ]`;
 };
 
+const EMPTY_RULES: any[] = [];
+
 const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
     open,
     onClose,
     baseUrl,
     copyToClipboard,
-    rules = [],
+    rules = EMPTY_RULES,
     onRulesRefresh,
     pendingContext1MChange,
 }) => {
@@ -129,14 +131,17 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
             onClose={onClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{ sx: { borderRadius: 3 } }}
+            slotProps={{
+                paper: { sx: { borderRadius: 3 } }
+            }}
         >
             <DialogTitle sx={{ pb: 1 }}>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography variant="h6" sx={{
+                    fontWeight: 600
+                }}>
                     Configure Claude Desktop
                 </Typography>
             </DialogTitle>
-
             <DialogContent sx={{ pt: 1 }}>
                 {pendingContext1MChange != null && (
                     <Context1MChangeBanner enabled={pendingContext1MChange} clientName="Claude Desktop" requiresApply={false} />
@@ -209,8 +214,16 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
 
                     {/* Step 3 */}
                     <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                            <Typography variant="subtitle2" fontWeight={600}>
+                        <Stack
+                            direction="row"
+                            sx={{
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                mb: 1
+                            }}>
+                            <Typography variant="subtitle2" sx={{
+                                fontWeight: 600
+                            }}>
                                 Step 3: Configure Models
                             </Typography>
                             {modelRules.length > 0 && (
@@ -225,11 +238,21 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             )}
                         </Stack>
 
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                mb: 0.5
+                            }}>
                             <strong>Optional</strong> — Claude Desktop will auto-discover models from{' '}
                             <code>/v1/models</code> if left empty.
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                mb: 1.5
+                            }}>
                             To pin a specific list, paste the JSON below into the <em>inferenceModels</em> field.
                             Custom model names may not be recognized by Claude Desktop.
                         </Typography>
@@ -264,15 +287,14 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                     <Stack
                                         key={rule.uuid}
                                         direction="row"
-                                        alignItems="center"
                                         spacing={1}
                                         sx={{
+                                            alignItems: "center",
                                             bgcolor: 'background.default',
                                             borderRadius: 1,
                                             px: 1.5,
-                                            py: 0.5,
-                                        }}
-                                    >
+                                            py: 0.5
+                                        }}>
                                         <Typography
                                             sx={{ fontFamily: 'monospace', fontSize: '0.82rem', flex: 1 }}
                                         >
@@ -281,9 +303,10 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                         {label && (
                                             <Typography
                                                 variant="caption"
-                                                color="text.secondary"
-                                                sx={{ fontFamily: 'monospace' }}
-                                            >
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    fontFamily: 'monospace'
+                                                }}>
                                                 {label}
                                             </Typography>
                                         )}
@@ -303,7 +326,9 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                         </Stack>
 
                         {/* Add row */}
-                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: "flex-start"
+                        }}>
                             <TextField
                                 size="small"
                                 placeholder="claude-sonnet-4-6"
@@ -312,11 +337,12 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                 onKeyDown={handleKeyDown}
                                 error={Boolean(error)}
                                 helperText={error || warning}
-                                FormHelperTextProps={{ sx: error ? {} : { color: 'warning.main' } }}
                                 disabled={adding}
                                 sx={{ flex: 2 }}
-                                inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.82rem' } }}
-                            />
+                                slotProps={{
+                                    htmlInput: { style: { fontFamily: 'monospace', fontSize: '0.82rem' } },
+                                    formHelperText: { sx: error ? {} : { color: 'warning.main' } }
+                                }} />
                             <TextField
                                 size="small"
                                 placeholder="label (optional)"
@@ -325,7 +351,9 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                 onKeyDown={handleKeyDown}
                                 disabled={adding}
                                 sx={{ flex: 1 }}
-                                inputProps={{ style: { fontSize: '0.82rem' } }}
+                                slotProps={{
+                                    htmlInput: { style: { fontSize: '0.82rem' } }
+                                }}
                             />
                             <IconButton
                                 color="primary"
@@ -339,7 +367,6 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                     </Box>
                 </Stack>
             </DialogContent>
-
             <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
                 <Button onClick={onClose} variant="contained">Done</Button>
             </DialogActions>

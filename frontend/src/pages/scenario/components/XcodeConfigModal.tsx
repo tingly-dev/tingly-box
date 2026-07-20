@@ -24,18 +24,21 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
             onClose={onClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{
-                sx: {
-                    borderRadius: 3,
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: 3,
+                    }
                 }
             }}
         >
             <DialogTitle sx={{ pb: 1 }}>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography variant="h6" sx={{
+                    fontWeight: 600
+                }}>
                     Configure Xcode
                 </Typography>
             </DialogTitle>
-
             <DialogContent sx={{ pt: 1 }}>
                 <Stack spacing={2}>
                     <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
@@ -93,7 +96,6 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
                     />
                 </Stack>
             </DialogContent>
-
             <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
                 <Button onClick={onClose} variant="contained">
                     Done

@@ -251,13 +251,24 @@ const AgentOverviewPage: React.FC = () => {
     return (
         <PageLayout loading={false}>
             <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+                <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{
+                        alignItems: "center",
+                        mb: 1
+                    }}>
                     <IconAiAgents sx={{ fontSize: 28 }} />
                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         {t('scenarioOverview.title')}
                     </Typography>
                 </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: "text.secondary",
+                        mb: 3
+                    }}>
                     {t('scenarioOverview.subtitle')}
                 </Typography>
 
@@ -314,12 +325,20 @@ const AgentOverviewPage: React.FC = () => {
                                         onClick={() => navigate(s.path)}
                                         sx={{ p: 2 }}
                                     >
-                                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1.5}
+                                            sx={{
+                                                alignItems: "center",
+                                                mb: 1
+                                            }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
                                                 {s.icon(scenarioIconSize)}
                                             </Box>
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                <Stack direction="row" spacing={1} sx={{
+                                                    alignItems: "center"
+                                                }}>
                                                     <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                                                         {t(s.labelKey)}
                                                     </Typography>
@@ -335,15 +354,14 @@ const AgentOverviewPage: React.FC = () => {
                                         </Stack>
                                         <Typography
                                             variant="body2"
-                                            color="text.secondary"
                                             sx={{
+                                                color: "text.secondary",
                                                 minHeight: 40,
                                                 display: '-webkit-box',
                                                 WebkitLineClamp: 2,
                                                 WebkitBoxOrient: 'vertical',
-                                                overflow: 'hidden',
-                                            }}
-                                        >
+                                                overflow: 'hidden'
+                                            }}>
                                             {t(s.descKey)}
                                         </Typography>
                                         <Box sx={{ mt: 1, minHeight: 20, display: 'flex', alignItems: 'center' }}>
@@ -354,7 +372,9 @@ const AgentOverviewPage: React.FC = () => {
                                                         : t('scenarioOverview.ruleCount', { count, defaultValue: '{{count}} rules' })}
                                                 </Typography>
                                             ) : (
-                                                <Typography variant="caption" color="text.disabled">
+                                                <Typography variant="caption" sx={{
+                                                    color: "text.disabled"
+                                                }}>
                                                     {t('scenarioOverview.notConfigured', { defaultValue: 'Not configured yet' })}
                                                 </Typography>
                                             )}

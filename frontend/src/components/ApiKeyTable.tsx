@@ -261,7 +261,9 @@ const ApiKeyTable = ({
                             >
                                 {/* Status */}
                                 <TableCell>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         <Switch
                                             checked={provider.enabled}
                                             onChange={() => onToggle?.(provider.uuid)}
@@ -300,7 +302,9 @@ const ApiKeyTable = ({
                                         <Stack
                                             direction="column"
                                             spacing={0.5}
-                                            alignItems="flex-start"
+                                            sx={{
+                                                alignItems: "flex-start"
+                                            }}
                                         >
                                             <ApiStyleBadge
                                                 apiStyle="openai"
@@ -333,7 +337,9 @@ const ApiKeyTable = ({
                                 </TableCell>
                                 {/* API Key */}
                                 <TableCell>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         {provider.token && (
                                             <Tooltip title="View Token">
                                                 <IconButton
@@ -368,7 +374,9 @@ const ApiKeyTable = ({
                                             />
                                         </Tooltip>
                                     ) : (
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             -
                                         </Typography>
                                     )}
@@ -460,7 +468,6 @@ const ApiKeyTable = ({
                     ))}
                 </TableBody>
             </Table>
-
             {/* Overflow menu (shared, driven by moreMenu state) */}
             <Menu
                 anchorEl={moreMenu.anchorEl}
@@ -519,7 +526,6 @@ const ApiKeyTable = ({
                     ].filter(Boolean);
                 })()}
             </Menu>
-
             {/* Token View Modal */}
             <Modal open={tokenModal.open} onClose={handleCloseTokenModal}>
                 <Box
@@ -544,7 +550,9 @@ const ApiKeyTable = ({
 
                     {tokenModal.loading ? (
                         <Box sx={{mb: 3, textAlign: "center", py: 4}}>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Loading API key...
                             </Typography>
                         </Box>
@@ -566,7 +574,9 @@ const ApiKeyTable = ({
                         </Box>
                     ) : null}
 
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Stack direction="row" spacing={2} sx={{
+                        justifyContent: "flex-end"
+                    }}>
                         <IconButton
                             color="primary"
                             disabled={tokenModal.loading || !tokenModal.token}
@@ -591,7 +601,6 @@ const ApiKeyTable = ({
                     </Stack>
                 </Box>
             </Modal>
-
             {/* Delete Confirmation Modal */}
             <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
                 <Box
@@ -615,7 +624,9 @@ const ApiKeyTable = ({
                         Are you sure you want to delete the provider "
                         {deleteModal.providerName}"? This action cannot be undone.
                     </Typography>
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Stack direction="row" spacing={2} sx={{
+                        justifyContent: "flex-end"
+                    }}>
                         <Button onClick={handleCloseDeleteModal} color="inherit">
                             Cancel
                         </Button>
@@ -629,7 +640,6 @@ const ApiKeyTable = ({
                     </Stack>
                 </Box>
             </Modal>
-
             {/* Model List Dialog */}
             <ModelListDialog
                 open={modelListDialog.open}

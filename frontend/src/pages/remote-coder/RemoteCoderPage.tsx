@@ -119,7 +119,7 @@ const RemoteCoderPage: React.FC = () => {
             const state = await api.getRemoteCCSessionState(sessionId);
             if (state?.success === false) return;
             if (Array.isArray(state?.expanded_messages)) {
-                const next = new Set(state.expanded_messages.filter((v: any) => Number.isInteger(v)));
+                const next = new Set<number>(state.expanded_messages.filter((v: any): v is number => Number.isInteger(v)));
                 setExpandedMessages(next);
             } else {
                 setExpandedMessages(new Set());
@@ -299,10 +299,14 @@ const RemoteCoderPage: React.FC = () => {
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
-                    <Typography variant="h4" fontWeight={700} gutterBottom>
+                    <Typography variant="h4" gutterBottom sx={{
+                        fontWeight: 700
+                    }}>
                         Remote Control Chat
                     </Typography>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" sx={{
+                        color: "text.secondary"
+                    }}>
                         Chat with Claude Code sessions remotely
                     </Typography>
                     <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -337,17 +341,20 @@ const RemoteCoderPage: React.FC = () => {
                     </Button>
                 </Box>
             </Box>
-
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             <Dialog open={projectPathDialogOpen} onClose={() => { }}>
                 <DialogTitle>Set Project Path</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            mb: 2
+                        }}>
                         Enter the project path to provide Claude Code context for this chat.
                     </Typography>
                     <TextField
@@ -391,7 +398,6 @@ const RemoteCoderPage: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             <Card sx={{ mb: 3 }}>
                 <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
                     <TextField
@@ -434,14 +440,15 @@ const RemoteCoderPage: React.FC = () => {
                     {loading && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <CircularProgress size={16} />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Loading sessions...
                             </Typography>
                         </Box>
                     )}
                 </CardContent>
             </Card>
-
             <Card sx={{ height: 'calc(100vh - 320px)', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {/* Chat Messages */}
@@ -481,8 +488,6 @@ const RemoteCoderPage: React.FC = () => {
                                     {msg.role === 'assistant' && msg.content && msg.content !== msg.summary && (
                                         <Typography
                                             variant="caption"
-                                            color="text.secondary"
-                                            sx={{ display: 'block', mt: 1, cursor: 'pointer', textDecoration: 'underline' }}
                                             onClick={() => {
                                                 setExpandedMessages((prev) => {
                                                     const next = new Set(prev);
@@ -494,14 +499,25 @@ const RemoteCoderPage: React.FC = () => {
                                                     return next;
                                                 });
                                             }}
-                                        >
+                                            sx={{
+                                                color: "text.secondary",
+                                                display: 'block',
+                                                mt: 1,
+                                                cursor: 'pointer',
+                                                textDecoration: 'underline'
+                                            }}>
                                             {expandedMessages.has(index)
                                                 ? 'Collapse response'
                                                 : `Show full response (${msg.content.length} chars)`}
                                         </Typography>
                                     )}
                                 </Paper>
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        color: "text.secondary",
+                                        mt: 0.5
+                                    }}>
                                     {new Date(msg.timestamp).toLocaleTimeString()}
                                 </Typography>
                             </Box>
@@ -509,7 +525,9 @@ const RemoteCoderPage: React.FC = () => {
                         {isChatBusy && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <CircularProgress size={16} />
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Claude Code is thinking...
                                 </Typography>
                             </Box>

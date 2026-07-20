@@ -85,7 +85,9 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
         <>
             <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
                         <IconKey />
                         <span>Sharing Keys</span>
                     </Stack>
@@ -125,7 +127,6 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                     />
                 </DialogContent>
             </Dialog>
-
             {/* Create Token Dialog */}
             <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Create Sharing Key</DialogTitle>
@@ -154,11 +155,12 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Delete Confirm Dialog */}
             <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
                         <IconTrash color="error" />
                         <span>Delete Token</span>
                     </Stack>

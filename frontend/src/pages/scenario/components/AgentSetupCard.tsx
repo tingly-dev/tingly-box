@@ -253,8 +253,16 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         <UnifiedCard
             size="header"
             title={
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={600}>Quick Start</Typography>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        alignItems: "center",
+                        flex: 1
+                    }}>
+                    <Typography variant="subtitle1" sx={{
+                        fontWeight: 600
+                    }}>Quick Start</Typography>
                     <Chip
                         label={progressLabel}
                         size="small"
@@ -262,7 +270,12 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         sx={{ height: 20, fontSize: '0.75rem' }}
                     />
                     {collapsed && !allDone && (
-                        <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "text.secondary",
+                                ml: 0.5
+                            }}>
                             {collapsedHint}
                         </Typography>
                     )}
@@ -282,16 +295,26 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     {/* Step 1 — Provider */}
                     <Box sx={stepRowSx(providerDone, firstIncomplete === 0)}>
                         <Stack
-                            direction="row" spacing={1.25} alignItems="center"
+                            direction="row"
+                            spacing={1.25}
                             onClick={providerDone ? () => toggleDoneStep(0) : undefined}
-                            sx={providerDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
-                        >
+                            sx={[{
+                                alignItems: "center"
+                            }, providerDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
-                            <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                            <Typography
+                                variant="body2"
+                                color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'}
+                                sx={{
+                                    fontWeight: 500,
+                                    flex: 1
+                                }}>
                                 Connect AI Provider
                             </Typography>
                             {providerDone && (
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     {providerCount} provider{providerCount !== 1 ? 's' : ''}
                                 </Typography>
                             )}
@@ -304,7 +327,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Stack>
                         <Collapse in={(!providerDone && firstIncomplete === 0) || expandedDoneSteps.has(0)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using {agentName}.
                                 </Typography>
                                 <Box>
@@ -319,16 +344,26 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     {/* Step 2 — Model */}
                     <Box sx={stepRowSx(modelDone, firstIncomplete === 1)}>
                         <Stack
-                            direction="row" spacing={1.25} alignItems="center"
+                            direction="row"
+                            spacing={1.25}
                             onClick={modelDone ? () => toggleDoneStep(1) : undefined}
-                            sx={modelDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
-                        >
+                            sx={[{
+                                alignItems: "center"
+                            }, modelDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
-                            <Typography variant="body2" fontWeight={500} color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                            <Typography
+                                variant="body2"
+                                color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'}
+                                sx={{
+                                    fontWeight: 500,
+                                    flex: 1
+                                }}>
                                 Select a Model
                             </Typography>
                             {modelDone && (
-                                <Typography variant="body2" color="text.secondary">Configured</Typography>
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>Configured</Typography>
                             )}
                             {modelDone && onSelectModel && (
                                 <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); onSelectModel(); }} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>Change</Button>
@@ -339,7 +374,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Stack>
                         <Collapse in={(!modelDone && firstIncomplete === 1) || expandedDoneSteps.has(1)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Choose which model {agentName} will use in the <em>Model Rules</em> section below.
                                 </Typography>
                                 {onSelectModel && (
@@ -356,16 +393,26 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     {/* Step 3 — Install */}
                     <Box sx={stepRowSx(installDone, firstIncomplete === 2)}>
                         <Stack
-                            direction="row" spacing={1.25} alignItems="center"
+                            direction="row"
+                            spacing={1.25}
                             onClick={installDone ? () => toggleDoneStep(2) : undefined}
-                            sx={installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
-                        >
+                            sx={[{
+                                alignItems: "center"
+                            }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
-                            <Typography variant="body2" fontWeight={500} color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                            <Typography
+                                variant="body2"
+                                color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'}
+                                sx={{
+                                    fontWeight: 500,
+                                    flex: 1
+                                }}>
                                 Install {agentName}
                             </Typography>
                             {installDone && (
-                                <Typography variant="body2" color="text.secondary">Installed</Typography>
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>Installed</Typography>
                             )}
                             {installDone && (
                                 expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
@@ -376,7 +423,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 {installActions?.length ? (
                                     <>
                                         {installStepDescription && (
-                                            <Typography variant="body2" color="text.secondary">{installStepDescription}</Typography>
+                                            <Typography variant="body2" sx={{
+                                                color: "text.secondary"
+                                            }}>{installStepDescription}</Typography>
                                         )}
                                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
                                             {installActions.map((action) => (
@@ -396,11 +445,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     </>
                                 ) : (
                                     <>
-                                        <Typography variant="body2" color="text.secondary">
+                                        <Typography variant="body2" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {installStepDescription || `Install ${agentName} on your local machine — copy and run the command below.`}
                                         </Typography>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
-                                            <Typography variant="body2" color="text.secondary" sx={{ minWidth: '80px' }}>npm official</Typography>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    minWidth: '80px'
+                                                }}>npm official</Typography>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
                                                 <Tooltip title={copied ? 'Copied!' : 'Copy'}>
                                                     <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
@@ -410,7 +466,12 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         </Box>
                                         {installMirrorCommand && (
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
-                                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: '80px' }}>npm mirror</Typography>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: "text.secondary",
+                                                        minWidth: '80px'
+                                                    }}>npm mirror</Typography>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
                                                     <Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}>
                                                         <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
@@ -433,16 +494,26 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     {/* Step 4 — Apply */}
                     <Box sx={stepRowSx(applyDone, firstIncomplete === 3)}>
                         <Stack
-                            direction="row" spacing={1.25} alignItems="center"
+                            direction="row"
+                            spacing={1.25}
                             onClick={applyDone ? () => toggleDoneStep(3) : undefined}
-                            sx={applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
-                        >
+                            sx={[{
+                                alignItems: "center"
+                            }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
-                            <Typography variant="body2" fontWeight={500} color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                            <Typography
+                                variant="body2"
+                                color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'}
+                                sx={{
+                                    fontWeight: 500,
+                                    flex: 1
+                                }}>
                                 {applyStepLabel}
                             </Typography>
                             {applyDone && (
-                                <Typography variant="body2" color="text.secondary">Applied</Typography>
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>Applied</Typography>
                             )}
                             {applyDone && (
                                 expandedDoneSteps.has(3) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
@@ -450,10 +521,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Stack>
                         <Collapse in={(!applyDone && firstIncomplete === 3) || expandedDoneSteps.has(3)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     {applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file.`}
                                 </Typography>
-                                <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
+                                <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    sx={{
+                                        flexWrap: "wrap",
+                                        gap: 0.5
+                                    }}>
                                     {onApply && (
                                         <Button variant="contained" size="small" disabled={isApplyLoading} onClick={handleApplyWithStatusLine} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
                                             {applyButtonLabel}
@@ -477,7 +556,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 0.5, py: 0.5 }}>
                                         {applyResult.success ? (
                                             <Box>
-                                                <Typography variant="body2" fontWeight={600}>{applySuccessLabel}</Typography>
+                                                <Typography variant="body2" sx={{
+                                                    fontWeight: 600
+                                                }}>{applySuccessLabel}</Typography>
                                                 {applyResult.files?.map(f => (
                                                     <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
                                                 ))}

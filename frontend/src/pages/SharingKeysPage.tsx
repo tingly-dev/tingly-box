@@ -140,7 +140,6 @@ const SharingKeysPage = () => {
                     />
                 </UnifiedCard>
             </Stack>
-
             {/* Create Token Dialog */}
             <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Create API Token</DialogTitle>
@@ -169,11 +168,12 @@ const SharingKeysPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             {/* Delete Confirm Dialog */}
             <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
                         <IconTrash color="error" />
                         <span>Delete Token</span>
                     </Stack>

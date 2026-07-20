@@ -301,7 +301,9 @@ const UseClaudeCodePageContent: React.FC = () => {
                         <Typography variant="body1" sx={{ mb: 1 }}>
                             You are about to switch from <strong>{configMode}</strong> to <strong>{pendingMode}</strong> mode.
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
                         </Typography>
                     </DialogContent>

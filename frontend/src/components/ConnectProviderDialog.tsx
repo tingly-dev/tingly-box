@@ -61,10 +61,15 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
     return (
         <Stack
             direction="row"
-            alignItems="center"
             spacing={1.25}
-            sx={{mt: 2, mb: 1.25, pb: 0.75, borderBottom: 1, borderColor: 'divider'}}
-        >
+            sx={{
+                alignItems: "center",
+                mt: 2,
+                mb: 1.25,
+                pb: 0.75,
+                borderBottom: 1,
+                borderColor: 'divider'
+            }}>
             <Box
                 sx={{
                     width: 26, height: 26, borderRadius: '50%',
@@ -75,7 +80,9 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
             >
                 {icon}
             </Box>
-            <Typography variant="subtitle2" fontWeight={700}>{title}</Typography>
+            <Typography variant="subtitle2" sx={{
+                fontWeight: 700
+            }}>{title}</Typography>
             {typeof count === 'number' && (
                 <Chip label={count} size="small" sx={{height: 18, fontWeight: 600}}/>
             )}
@@ -116,20 +123,28 @@ const ProviderCard: React.FC<{
             <Box sx={{minWidth: 0, flex: 1}}>
                 <Typography
                     variant="body2"
-                    fontWeight={600}
+                    title={name}
                     sx={{
+                        fontWeight: 600,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
-                        lineHeight: 1.3,
-                    }}
-                    title={name}
-                >
+                        lineHeight: 1.3
+                    }}>
                     {name}
                 </Typography>
-                <Typography variant="caption" color="text.disabled" noWrap sx={{display: 'block', mt: 0.25, fontSize: '0.68rem', letterSpacing: '0.01em'}}>
+                <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                        color: "text.disabled",
+                        display: 'block',
+                        mt: 0.25,
+                        fontSize: '0.68rem',
+                        letterSpacing: '0.01em'
+                    }}>
                     {meta}
                 </Typography>
             </Box>
@@ -272,7 +287,12 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     return (
         <Box>
             {!hideOfficialInfo && (
-                <Typography variant="body2" color="text.secondary" sx={{mb: 1.5}}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: "text.secondary",
+                        mb: 1.5
+                    }}>
                     Search for your provider below — most are preseted. Not listed? Pick <Box component="span" sx={{fontWeight: 600, color: 'text.primary'}}>Custom endpoint</Box> to enter any base URL yourself.
                 </Typography>
             )}
@@ -282,14 +302,16 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                 placeholder="Search providers…"
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
-                InputProps={{
-                    startAdornment: (
-                        <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
-                    ),
-                    sx: {
-                        borderRadius: 1,
-                        mb: 2,
-                    },
+                slotProps={{
+                    input: {
+                        startAdornment: (
+                            <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
+                        ),
+                        sx: {
+                            borderRadius: 1,
+                            mb: 2,
+                        },
+                    }
                 }}
             />
             <Box
@@ -374,9 +396,18 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
 
                         {cnKeyProviders.length > 0 && (
                             <Box sx={{mb: 2}}>
-                                <Stack direction="row" alignItems="center" spacing={1} sx={{px: 0.5, mb: 1}}>
+                                <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    sx={{
+                                        alignItems: "center",
+                                        px: 0.5,
+                                        mb: 1
+                                    }}>
                                     <RegionBadge region="cn" size="medium" />
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {cnKeyProviders.length} providers
                                     </Typography>
                                 </Stack>
@@ -400,9 +431,18 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
 
                         {globalKeyProviders.length > 0 && (
                             <Box>
-                                <Stack direction="row" alignItems="center" spacing={1} sx={{px: 0.5, mb: 1}}>
+                                <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    sx={{
+                                        alignItems: "center",
+                                        px: 0.5,
+                                        mb: 1
+                                    }}>
                                     <RegionBadge region="global" size="medium" />
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {globalKeyProviders.length} providers
                                     </Typography>
                                 </Stack>
@@ -427,7 +467,13 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                 )}
 
                 {nothing && (
-                    <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 3}}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            textAlign: 'center',
+                            py: 3
+                        }}>
                         No providers match &ldquo;{query}&rdquo;.
                     </Typography>
                 )}
@@ -446,11 +492,18 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
             maxWidth="sm"
             fullWidth
             scroll="paper"
-            PaperProps={{sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column', maxWidth: {lg: '900px'}}}}
+            slotProps={{
+                paper: {sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column', maxWidth: {lg: '900px'}}}
+            }}
         >
             {/* Locked header: title and close button never scroll. */}
             <DialogTitle sx={{pb: 1, flexShrink: 0}}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack
+                    direction="row"
+                    sx={{
+                        alignItems: "center",
+                        justifyContent: "space-between"
+                    }}>
                     <Typography variant="h6">Connect AI</Typography>
                     <IconButton onClick={onClose} size="small"><Close/></IconButton>
                 </Stack>

@@ -66,7 +66,7 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                         title={mode.description}
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                            <ListItemText primary={mode.label} primaryTypographyProps={{ variant: 'body2' }} />
+                            <ListItemText primary={mode.label} slotProps={{ primary: { variant: 'body2' } }} />
                             {mode.value === value && <IconCheck sx={{ fontSize: 16 }} />}
                         </Box>
                     </MenuItem>

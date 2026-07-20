@@ -76,14 +76,19 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
             <Box sx={{display: 'flex', alignItems: 'flex-start', gap: 1}}>
                 <Box sx={{mt: 0.2, flexShrink: 0}}>{brand.icon}</Box>
                 <Box sx={{flex: 1, minWidth: 0}}>
-                    <Typography variant="body2" fontWeight={500}>
+                    <Typography variant="body2" sx={{
+                        fontWeight: 500
+                    }}>
                         {t(brand.labelKey, {defaultValue: brand.defaultLabel})}
                     </Typography>
                     <Typography
                         variant="caption"
-                        color="text.secondary"
-                        sx={{display: 'block', lineHeight: 1.3, mt: 0.15}}
-                    >
+                        sx={{
+                            color: "text.secondary",
+                            display: 'block',
+                            lineHeight: 1.3,
+                            mt: 0.15
+                        }}>
                         {helper}
                     </Typography>
                 </Box>
@@ -95,13 +100,17 @@ const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
                     onChange={onToggle}
                 />
             </Box>
-
             {enabled && (
                 <Tooltip
                     open={v1Hint?.show ?? false}
                     title={
                         <Stack spacing={1} sx={{maxWidth: 160}}>
-                            <Typography variant="caption" color="text.secondary" sx={{lineHeight: 1.4}}>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: "text.secondary",
+                                    lineHeight: 1.4
+                                }}>
                                 {t('providerDialog.v1Hint.message', {
                                     defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
                                 })}

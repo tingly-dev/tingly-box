@@ -29,7 +29,9 @@ const Context1MChangeBanner: React.FC<Context1MChangeBannerProps> = ({ enabled, 
                 ? 'Model names have been updated with [1m] suffix for extended context support.'
                 : 'Model names have been updated to remove [1m] suffix.'}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+            color: "text.secondary"
+        }}>
             {requiresApply
                 ? `Please apply the configuration below and restart ${clientName} for changes to take effect.`
                 : `Please restart ${clientName} and re-select the model for changes to take effect.`}

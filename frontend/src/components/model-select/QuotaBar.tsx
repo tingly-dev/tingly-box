@@ -65,7 +65,7 @@ export function QuotaBar({ quota, window: explicitWindow, windowIndex = 0 }: Quo
       title={tooltipContent}
       arrow={false}
       placement="top"
-      componentsProps={{
+      slotProps={{
         tooltip: {
           sx: {
             backgroundColor: 'transparent',

@@ -51,13 +51,14 @@ const SkillFilterBar = ({
                 placeholder="Search locations..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                InputProps={{
-                    startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
                 size="small"
                 sx={{ minWidth: 250 }}
+                slotProps={{
+                    input: {
+                        startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
+                    }
+                }}
             />
-
             <FormControl size="small" sx={{ minWidth: 180 }}>
                 <InputLabel>IDE Source</InputLabel>
                 <Select
@@ -73,11 +74,11 @@ const SkillFilterBar = ({
                     ))}
                 </Select>
             </FormControl>
-
             <Box sx={{ flex: 1 }} />
-
             {hasActiveFilters && (
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: "center"
+                }}>
                     {(searchQuery || ideSourceFilter) && (
                         <Chip
                             label="Clear filters"
@@ -89,7 +90,6 @@ const SkillFilterBar = ({
                     )}
                 </Stack>
             )}
-
             <Stack direction="row" spacing={1}>
                 <Button
                     variant="outlined"

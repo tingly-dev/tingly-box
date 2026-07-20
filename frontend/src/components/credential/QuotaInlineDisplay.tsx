@@ -62,11 +62,18 @@ export function QuotaInlineDisplay({
           <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
             {label}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {formatQuotaUsage(window, { includePercent: true })}
           </Typography>
           {window.resets_at && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: 'block'
+              }}>
               Resets: {new Date(window.resets_at).toLocaleString()}
             </Typography>
           )}
@@ -77,7 +84,9 @@ export function QuotaInlineDisplay({
           <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
             Cost
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {quota.cost.currency_code || '$'}{quota.cost.used.toFixed(2)} / {quota.cost.currency_code || '$'}{quota.cost.limit.toFixed(2)}
           </Typography>
         </Box>
@@ -98,7 +107,9 @@ export function QuotaInlineDisplay({
       }}
     >
       {/* Actions */}
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{
+        alignItems: "center"
+      }}>
         {/* Info icon for hidden items */}
         {hasHiddenItems && (
           <Tooltip title={hiddenItemsTooltip} arrow disableInteractive>
@@ -145,9 +156,20 @@ export function QuotaInlineDisplay({
         {/* Fetched time */}
         {quota?.fetched_at && !isRefreshing && (
           <Tooltip title={`Fetched at ${new Date(quota.fetched_at).toLocaleString()}`} arrow>
-            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ cursor: 'default' }}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{
+                alignItems: "center",
+                cursor: 'default'
+              }}>
               <AccessTimeIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
-              <Typography variant="caption" color="text.disabled" sx={{ whiteSpace: 'nowrap' }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.disabled",
+                  whiteSpace: 'nowrap'
+                }}>
                 {(() => {
                   const diffMs = Date.now() - new Date(quota.fetched_at!).getTime();
                   const mins = Math.floor(diffMs / 60000);
@@ -162,7 +184,6 @@ export function QuotaInlineDisplay({
           </Tooltip>
         )}
       </Stack>
-
       {/* Quota bar row — visible windows + resource items */}
       <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
         {visibleWindows.map(({ key, window }) => (

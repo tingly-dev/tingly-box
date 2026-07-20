@@ -48,11 +48,12 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
             }}
             maxWidth="lg"
             fullWidth
-            disableEscapeKeyDown
-            PaperProps={{
-                sx: {
-                    borderRadius: 3,
-                    maxHeight: '90vh',
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: 3,
+                        maxHeight: '90vh',
+                    }
                 }
             }}
         >
@@ -61,19 +62,27 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                 borderBottom: 1,
                 borderColor: 'divider',
             }}>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography variant="h6" sx={{
+                    fontWeight: 600
+                }}>
                     Configure OpenCode
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: "text.secondary",
+                        mt: 0.5
+                    }}>
                     Set up OpenCode to use Tingly Box as your AI model proxy
                 </Typography>
             </DialogTitle>
-
             <DialogContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Config file location info */}
                     <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: 1 }}>
-                        <Typography variant="body2" color="info.dark">
+                        <Typography variant="body2" sx={{
+                            color: "info.dark"
+                        }}>
                             <strong>Config Location:</strong> ~/.config/opencode/opencode.json
                         </Typography>
                     </Box>
@@ -81,7 +90,9 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                     {/* Config section */}
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2" color="text.secondary">
+                            <Typography variant="subtitle2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Configuration
                             </Typography>
                             <Tabs
@@ -141,7 +152,6 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                     </Box>
                 </Box>
             </DialogContent>
-
             <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end' }}>
                 <Button onClick={onClose} color="inherit">
                     Cancel

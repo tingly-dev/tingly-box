@@ -1,7 +1,8 @@
 import { Alert, Box, Card, CardContent, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
+import { EMPTY_SX } from '@/constants/defaults';
 
 interface UnifiedCardProps {
   title?: string | ReactNode;
@@ -55,7 +56,7 @@ const presetCardDimensions: Record<string, PresetDimensions> = {
 
 // Function to calculate card dimensions
 const getCardDimensions = (
-  size: 'small' | 'medium' | 'large' | 'full' | 'header',
+  size: 'small' | 'medium' | 'large' | 'full' | 'header' | 'footer',
   customWidth?: number | string,
   customHeight?: number | string
 ) => {
@@ -111,7 +112,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
   onClearMessage,
   leftAction,
   rightAction,
-  sx = {},
+  sx = EMPTY_SX,
   id,
 }, ref) => {
   return (

@@ -1525,6 +1525,8 @@ export const api = {
         default_agent?: string;
         default_cwd?: string;
         require_pairing?: boolean;
+        smartguide_provider?: string;
+        smartguide_model?: string;
     }): Promise<any> => {
         try {
             const client = await getClient();

@@ -234,7 +234,14 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
         const matchedIdx = typeof fields.matched_rule_index === 'number' ? fields.matched_rule_index : -1;
         return (
             <Stack spacing={0.75} sx={{ mt: 0.5 }}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{
+                        alignItems: "center",
+                        flexWrap: "wrap"
+                    }}>
                     {fields.outcome && (
                         <Chip size="small" label={`outcome: ${fields.outcome}`} sx={{ fontSize: '0.65rem', height: 18 }} />
                     )}
@@ -257,7 +264,9 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                                 backgroundColor: isWinner ? 'rgba(16,185,129,0.05)' : 'transparent',
                             }}
                         >
-                            <Stack direction="row" spacing={1} alignItems="center">
+                            <Stack direction="row" spacing={1} sx={{
+                                alignItems: "center"
+                            }}>
                                 <Chip size="small" label={`#${rule.rule_index}`} sx={{ fontSize: '0.65rem', height: 18 }} />
                                 <Typography sx={{ fontSize: '0.75rem', flex: 1 }}>
                                     {rule.description || '(no description)'}
@@ -323,7 +332,14 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                 borderColor: 'divider',
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                sx={{
+                    alignItems: "center",
+                    flexWrap: "wrap"
+                }}>
                 <Typography sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary', minWidth: 90 }}>
                     {formatTimeShort(ev.time)}
                 </Typography>
@@ -342,8 +358,20 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
 
     return (
         <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ flexShrink: 0, minHeight: 40, py: 0.75 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+                direction="row"
+                spacing={1.5}
+                useFlexGap
+                sx={{
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    flexShrink: 0,
+                    minHeight: 40,
+                    py: 0.75
+                }}>
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: "center"
+                }}>
                     <Button
                         variant={autoRefresh ? 'contained' : 'outlined'}
                         size="small"
@@ -362,11 +390,18 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                     >
                         Refresh
                     </Button>
-                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            whiteSpace: 'nowrap'
+                        }}>
                         {requests.length} requests
                     </Typography>
                 </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} sx={{
+                    alignItems: "center"
+                }}>
                     {/* Quick-filter chip: one click to apply/remove the context scenario */}
                     {initialScenario && (
                         <Chip
@@ -381,17 +416,17 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                     )}
                 </Stack>
                 <Box sx={{ flex: 1 }} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                }}>
                     One row per request. Expand for the full pipeline timeline (routing → conversion → upstream).
                 </Typography>
             </Stack>
-
             {error && (
                 <Alert severity="error" onClose={() => setError(null)}>
                     {error}
                 </Alert>
             )}
-
             <Box
                 ref={tableContainerRef}
                 sx={{ flex: 1, overflow: 'auto', minHeight: 0, backgroundColor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}
@@ -461,7 +496,9 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                             {requests.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                                        <Typography color="text.secondary">
+                                        <Typography sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {loading ? 'Loading...' : 'No model requests yet — send a request through the gateway.'}
                                         </Typography>
                                     </TableCell>
@@ -483,7 +520,9 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                                                     </IconButton>
                                                 </TableCell>
                                                 <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                                    <Stack direction="row" spacing={0.5} alignItems="center">
+                                                    <Stack direction="row" spacing={0.5} sx={{
+                                                        alignItems: "center"
+                                                    }}>
                                                         {req.has_error && <ErrorOutlineIcon sx={{ fontSize: 16, color: 'error.main' }} />}
                                                         <span>{formatTime(req.time)}</span>
                                                     </Stack>
@@ -534,12 +573,19 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                                                                     detail.events.length > 0 ? (
                                                                         detail.events.map(renderEvent)
                                                                     ) : (
-                                                                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                                                        <Typography
+                                                                            variant="body2"
+                                                                            sx={{
+                                                                                color: "text.secondary",
+                                                                                fontStyle: 'italic'
+                                                                            }}>
                                                                             No events recorded.
                                                                         </Typography>
                                                                     )
                                                                 ) : (
-                                                                    <Typography variant="body2" color="text.secondary">
+                                                                    <Typography variant="body2" sx={{
+                                                                        color: "text.secondary"
+                                                                    }}>
                                                                         Loading timeline...
                                                                     </Typography>
                                                                 )}

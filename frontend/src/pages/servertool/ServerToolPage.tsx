@@ -215,7 +215,9 @@ const ServerToolPage = () => {
                         <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
                             Config your server tools
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             In-process tools injected by the gateway into every AI request.
                         </Typography>
                     </Box>

@@ -11,7 +11,9 @@ const CommandPage = () => {
         <Typography variant="h4" sx={{ fontWeight: 600, mb: 2, color: 'text.primary' }}>
           Commands
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" sx={{
+          color: "text.secondary"
+        }}>
           Command management feature coming soon...
         </Typography>
       </Box>

@@ -94,14 +94,13 @@ export function QuotaBarRow({ quota }: QuotaBarRowProps) {
     <Stack
       direction="row"
       spacing={2}
-      alignItems="center"
       sx={{
+        alignItems: "center",
         overflowX: 'auto',
         '&::-webkit-scrollbar': { display: 'none' },
         msOverflowStyle: 'none',
-        scrollbarWidth: 'none',
-      }}
-    >
+        scrollbarWidth: 'none'
+      }}>
       {windows.map(({ key, window }) => (
         <QuotaBarItem key={key} window={window} />
       ))}

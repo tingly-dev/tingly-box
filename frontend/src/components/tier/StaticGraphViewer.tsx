@@ -1,7 +1,8 @@
 import { Box, type SxProps } from '@mui/material';
 import React from 'react';
 import { UnifiedRoutingGraph } from '@/components/UnifiedRoutingGraph';
-import type { ConfigRecord, Provider } from '@/components';
+import type { ConfigRecord } from '@/components/RoutingGraphTypes';
+import type { Provider } from '@/types/provider';
 import { TIER_DIAGRAM_DATA } from './diagrams';
 
 export interface StaticGraphViewerProps {

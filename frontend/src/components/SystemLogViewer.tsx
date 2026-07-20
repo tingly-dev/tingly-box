@@ -181,18 +181,23 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
             <Stack
                 direction="row"
                 spacing={1.5}
-                alignItems="center"
-                flexWrap="wrap"
                 useFlexGap
                 sx={{
+                    alignItems: "center",
+                    flexWrap: "wrap",
                     flexShrink: 0,
                     minHeight: 40,
                     py: 0.75,
-                    alignContent: 'center',
-                }}
-            >
+                    alignContent: 'center'
+                }}>
                 {/* Actions */}
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 30 }}>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        alignItems: "center",
+                        minHeight: 30
+                    }}>
                     <Button
                         variant={autoRefresh ? 'contained' : 'outlined'}
                         size="small"
@@ -211,7 +216,13 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     >
                         Refresh
                     </Button>
-                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "text.secondary",
+                            whiteSpace: 'nowrap',
+                            lineHeight: 1.4
+                        }}>
                         {logs.length}{allLogs.length !== logs.length ? ` / ${allLogs.length}` : ''}
                     </Typography>
                 </Stack>
@@ -219,7 +230,16 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                 <Box sx={{ flex: 1 }} />
 
                 {/* Level filter tags */}
-                <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ minHeight: 30, alignContent: 'center' }}>
+                <Stack
+                    direction="row"
+                    spacing={0.5}
+                    useFlexGap
+                    sx={{
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        minHeight: 30,
+                        alignContent: 'center'
+                    }}>
                     {LOG_LEVELS.map((level) => {
                         const active = selectedLevels.has(level);
                         return (
@@ -259,7 +279,6 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     )}
                 </Stack>
             </Stack>
-
             {/* Logs Table — fills remaining space */}
             <Box
                 ref={tableContainerRef}
@@ -320,7 +339,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         {logs.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                                    <Typography color="text.secondary">
+                                    <Typography sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {loading ? 'Loading...' : 'No logs available'}
                                     </Typography>
                                 </TableCell>
@@ -415,7 +436,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 ))}
                                                         </Stack>
                                                     ) : (
-                                                        <Typography variant="body2" color="text.secondary">
+                                                        <Typography variant="body2" sx={{
+                                                            color: "text.secondary"
+                                                        }}>
                                                             No additional fields
                                                         </Typography>
                                                     )}

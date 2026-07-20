@@ -407,7 +407,9 @@ const GuardrailsCredentialsPage = () => {
                     </Alert>
                     {credentials.length === 0 ? (
                         <Box sx={{ py: 8, textAlign: 'center' }}>
-                            <Stack spacing={2} alignItems="center">
+                            <Stack spacing={2} sx={{
+                                alignItems: "center"
+                            }}>
                                 <Box
                                     sx={{
                                         width: 72,
@@ -422,11 +424,18 @@ const GuardrailsCredentialsPage = () => {
                                 >
                                     <VpnKey sx={{ fontSize: 34 }} />
                                 </Box>
-                                <Stack spacing={1} alignItems="center">
+                                <Stack spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
                                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
                                         No protected credentials
                                     </Typography>
-                                    <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 560 }}>
+                                    <Typography
+                                        variant="body1"
+                                        sx={{
+                                            color: "text.secondary",
+                                            maxWidth: 560
+                                        }}>
                                         Add credentials here to keep real secrets out of model-visible content.
                                     </Typography>
                                 </Stack>
@@ -492,7 +501,9 @@ const GuardrailsCredentialsPage = () => {
                                                 </Typography>
                                             </TableCell>
                                             <TableCell onClick={(event) => event.stopPropagation()}>
-                                                <Stack direction="row" alignItems="center" spacing={0.75}>
+                                                <Stack direction="row" spacing={0.75} sx={{
+                                                    alignItems: "center"
+                                                }}>
                                                     <Switch
                                                         size="small"
                                                         checked={credential.enabled}
@@ -521,7 +532,6 @@ const GuardrailsCredentialsPage = () => {
                     )}
                 </UnifiedCard>
             </Stack>
-
             <Dialog open={editorOpen} onClose={handleCloseEditor} fullWidth maxWidth="sm" disableRestoreFocus>
                 <DialogTitle>{editingCredentialId ? 'Edit Protected Credential' : 'New Protected Credential'}</DialogTitle>
                 <DialogContent>
@@ -611,10 +621,14 @@ const GuardrailsCredentialsPage = () => {
                                             }}
                                         >
                                             <Stack spacing={0.5}>
-                                                <Typography variant="body2" fontWeight={600}>
+                                                <Typography variant="body2" sx={{
+                                                    fontWeight: 600
+                                                }}>
                                                     {option.label}
                                                 </Typography>
-                                                <Typography variant="caption" color="text.secondary">
+                                                <Typography variant="caption" sx={{
+                                                    color: "text.secondary"
+                                                }}>
                                                     {option.description}
                                                 </Typography>
                                             </Stack>
@@ -641,7 +655,6 @@ const GuardrailsCredentialsPage = () => {
                     <Button variant="contained" disabled={pendingSave || editorLoading} onClick={handleSaveCredential}>Save</Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog
                 open={!!deleteCredentialId}
                 onClose={() => {
@@ -652,7 +665,9 @@ const GuardrailsCredentialsPage = () => {
             >
                 <DialogTitle>Delete Protected Credential</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         Delete this protected credential?
                     </Typography>
                 </DialogContent>
@@ -668,7 +683,6 @@ const GuardrailsCredentialsPage = () => {
                     <Button color="error" variant="contained" onClick={handleDeleteCredential}>Delete</Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog
                 open={deleteSelectedOpen}
                 onClose={() => {
@@ -679,7 +693,9 @@ const GuardrailsCredentialsPage = () => {
             >
                 <DialogTitle>Delete Selected Credentials</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {selectedIDs.length === 1
                             ? 'Delete the selected protected credential?'
                             : `Delete ${selectedIDs.length} selected protected credentials?`}
@@ -699,7 +715,6 @@ const GuardrailsCredentialsPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog
                 open={importDialogOpen}
                 onClose={() => {
@@ -719,7 +734,9 @@ const GuardrailsCredentialsPage = () => {
                             Import existing credentials from the main Credentials page into Guardrails protection. The imported value will be stored locally as a protected credential with its own alias token.
                         </Alert>
                         {importableProviders.length === 0 ? (
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 No importable credentials found.
                             </Typography>
                         ) : (

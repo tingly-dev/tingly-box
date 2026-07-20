@@ -614,7 +614,13 @@ export default function DashboardPage() {
                                     {identity.label}{!identity.enabled ? ' (disabled)' : ''}
                                 </Typography>
                                 <Tooltip title={identity.userId} placement="right">
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', flexShrink: 0 }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            fontFamily: 'monospace',
+                                            flexShrink: 0
+                                        }}>
                                         {shortenUserId(identity.userId)}
                                     </Typography>
                                 </Tooltip>
@@ -689,7 +695,6 @@ export default function DashboardPage() {
                 subtitle={TIME_RANGE_CONFIG[timeRange].label}
                 actions={headerActions}
             />
-
             {/* Main Content: Three Column Layout */}
             <Box
                 sx={{
@@ -833,7 +838,9 @@ export default function DashboardPage() {
                         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1, overflow: 'hidden' }}>
                             {tokenChartData.length === 0 ? (
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                                    <Typography variant="body2" color="text.secondary">No models found</Typography>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>No models found</Typography>
                                 </Box>
                             ) : (
                                 <>
@@ -847,7 +854,18 @@ export default function DashboardPage() {
                                 return (
                                     <Tooltip
                                         key={index}
-                                        componentsProps={{
+                                        title={
+                                            <Box>
+                                                <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', mb: 0.5 }}>{item.model}</Typography>
+                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
+                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
+                                                    Total: {formatNumber(totalTokens)} | Input: {formatNumber(item.inputTokens)} | Output: {formatNumber(item.outputTokens)}
+                                                </Typography>
+                                            </Box>
+                                        }
+                                        arrow
+                                        placement="left"
+                                        slotProps={{
                                             tooltip: {
                                                 sx: {
                                                     backgroundColor: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
@@ -863,17 +881,6 @@ export default function DashboardPage() {
                                                 },
                                             },
                                         }}
-                                        title={
-                                            <Box>
-                                                <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', mb: 0.5 }}>{item.model}</Typography>
-                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
-                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
-                                                    Total: {formatNumber(totalTokens)} | Input: {formatNumber(item.inputTokens)} | Output: {formatNumber(item.outputTokens)}
-                                                </Typography>
-                                            </Box>
-                                        }
-                                        arrow
-                                        placement="left"
                                     >
                                         <Box
                                             onClick={() => {
@@ -1017,7 +1024,6 @@ export default function DashboardPage() {
                     </Paper>
                 </Box>
             </Box>
-
             {/* Stats Table */}
             <ServiceStatsTable stats={stats} />
         </Box>

@@ -9,7 +9,13 @@ interface PageLoadingProps {
 
 export const PageLoading: React.FC<PageLoadingProps> = ({ minHeight = 400 }) => {
   return (
-    <Box display="flex" justifyContent="center" alignItems="center" minHeight={minHeight}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: minHeight
+      }}>
       <CircularProgress />
     </Box>
   );
@@ -29,6 +35,9 @@ interface PageLayoutProps {
   children: React.ReactNode;
   loadingMinHeight?: number;
   notification?: NotificationConfig;
+  title?: string;
+  subtitle?: string;
+  rightAction?: React.ReactNode;
 }
 
 export const PageLayout: React.FC<PageLayoutProps> = ({
@@ -36,6 +45,9 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   children,
   loadingMinHeight = 400,
   notification,
+  title,
+  subtitle,
+  rightAction,
 }) => {
   const timeoutRef = useRef<TimerId | null>(null);
 
@@ -78,16 +90,36 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
 
   return (
     <Box
-      position="relative"
       sx={{
+        position: "relative",
         width: '100%',
         height: '100%',
         display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+        flexDirection: 'column'
+      }}>
+      {(title || subtitle || rightAction) && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 2,
+            mb: 2,
+          }}>
+          <Box sx={{ minWidth: 0 }}>
+            {title && (
+              <Box sx={{ typography: 'h6', fontWeight: 600 }}>{title}</Box>
+            )}
+            {subtitle && (
+              <Box sx={{ typography: 'body2', color: 'text.secondary', mt: title ? 0.5 : 0 }}>
+                {subtitle}
+              </Box>
+            )}
+          </Box>
+          {rightAction && <Box sx={{ flexShrink: 0 }}>{rightAction}</Box>}
+        </Box>
+      )}
       <Box sx={{ flex: 1 }}>{children}</Box>
-
       {/* Unified Notification System */}
       {notification?.open && (
         <Box

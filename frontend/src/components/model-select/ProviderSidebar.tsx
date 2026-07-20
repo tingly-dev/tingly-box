@@ -65,7 +65,6 @@ export function ProviderSidebar({
                     sx={{ width: 200 }}
                 />
             </Box>
-
             {/* Vertical Navigation with Auth Type Grouping */}
             <Box
                 sx={{
@@ -96,14 +95,15 @@ export function ProviderSidebar({
                                     zIndex: 1,
                                 }}
                             >
-                                <Stack direction="row" alignItems="center" spacing={1}>
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
                                     <AuthTypeBadge authType={group.authType} />
                                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                                         ({group.providers.length})
                                     </Typography>
                                 </Stack>
                             </Box>
-
                             {/* Provider Items */}
                             {group.providers.map((provider) => {
                                 const isProviderSelected = selectedProvider === provider.uuid;
@@ -126,13 +126,29 @@ export function ProviderSidebar({
                                             transition: 'all 0.2s',
                                         }}
                                     >
-                                        <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%', justifyContent: 'space-between' }}>
-                                            <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            sx={{
+                                                alignItems: "center",
+                                                width: '100%',
+                                                justifyContent: 'space-between'
+                                            }}>
+                                            <Stack
+                                                direction="row"
+                                                spacing={1}
+                                                sx={{
+                                                    alignItems: "center",
+                                                    flex: 1,
+                                                    minWidth: 0
+                                                }}>
                                                 <Typography
                                                     variant="body2"
-                                                    fontWeight={isSelectedTab ? 600 : 400}
                                                     color={isSelectedTab ? 'primary.main' : 'text.primary'}
                                                     noWrap
+                                                    sx={{
+                                                        fontWeight: isSelectedTab ? 600 : 400
+                                                    }}
                                                 >
                                                     {provider.name}
                                                 </Typography>

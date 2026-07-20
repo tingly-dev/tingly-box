@@ -21,7 +21,7 @@ export interface ChartDataPoint {
     cacheRatio: number;
 }
 
-type SeriesKey = 'cache' | 'input' | 'output';
+export type SeriesKey = 'cache' | 'input' | 'output';
 export interface SeriesVisibility {
     cache: boolean;
     input: boolean;

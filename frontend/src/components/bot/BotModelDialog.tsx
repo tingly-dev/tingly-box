@@ -68,8 +68,10 @@ export const useBotModelDialog = (options: BotModelDialogOptions) => {
                 onClose={closeDialog}
                 maxWidth="lg"
                 fullWidth
-                PaperProps={{
-                    sx: { height: '80vh' }
+                slotProps={{
+                    paper: {
+                        sx: { height: '80vh' }
+                    }
                 }}
             >
                 <DialogTitle sx={{ textAlign: 'center' }}>

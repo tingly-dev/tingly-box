@@ -120,12 +120,14 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
             aria-labelledby="entry-guide-dialog-title"
             aria-describedby="entry-guide-dialog-description"
             onKeyDown={handleKeyDown}
-            PaperProps={{
-                sx: {
-                    borderRadius: fullScreen ? 0 : 2,
-                    maxHeight: '90vh',
-                    width: fullScreen ? '100%' : '90vw',
-                    maxWidth: fullScreen ? '100vw' : '900px',
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: fullScreen ? 0 : 2,
+                        maxHeight: '90vh',
+                        width: fullScreen ? '100%' : '90vw',
+                        maxWidth: fullScreen ? '100vw' : '900px',
+                    }
                 }
             }}
         >
@@ -134,7 +136,9 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                     <Typography variant="h6" component="div">
                         {guideTitle}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('rule.routing.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: safeActiveStep + 1, total: totalSteps })}
                     </Typography>
                 </Box>

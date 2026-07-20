@@ -362,7 +362,9 @@ const GuardrailsGroupsPage = () => {
                     <Stack spacing={1.5}>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
                         {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             Groups are collections. A policy can appear in multiple groups, and a group only contributes activation when it is enabled.
                         </Typography>
                     </Stack>
@@ -400,7 +402,14 @@ const GuardrailsGroupsPage = () => {
                                         onClick={() => setSelectedGroupId(group.id)}
                                     >
                                         <Box sx={{ minWidth: { md: 180 }, flexShrink: 0 }}>
-                                            <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                            <Stack
+                                                direction="row"
+                                                spacing={1}
+                                                useFlexGap
+                                                sx={{
+                                                    alignItems: "center",
+                                                    flexWrap: "wrap"
+                                                }}>
                                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                     {group.name || group.id}
                                                 </Typography>
@@ -410,10 +419,21 @@ const GuardrailsGroupsPage = () => {
                                         </Box>
 
                                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                                            <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'normal' }}>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: "text.primary",
+                                                    whiteSpace: 'normal'
+                                                }}>
                                                 {buildGroupSummary(group)}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: "text.secondary",
+                                                    mt: 0.5,
+                                                    display: 'block'
+                                                }}>
                                                 {groupPolicyCount(group.id)} polic{groupPolicyCount(group.id) === 1 ? 'y' : 'ies'} assigned
                                             </Typography>
                                         </Box>
@@ -421,14 +441,13 @@ const GuardrailsGroupsPage = () => {
                                         <Stack
                                             direction="row"
                                             spacing={1}
-                                            alignItems="center"
                                             sx={{
+                                                alignItems: "center",
                                                 width: { xs: '100%', md: 220 },
                                                 minWidth: { md: 220 },
                                                 justifyContent: { xs: 'space-between', md: 'flex-end' },
-                                                flexShrink: 0,
-                                            }}
-                                        >
+                                                flexShrink: 0
+                                            }}>
                                             <Chip size="small" label={group.enabled === true ? 'Enabled' : 'Disabled'} />
                                             <Switch
                                                 size="small"
@@ -485,7 +504,9 @@ const GuardrailsGroupsPage = () => {
                     <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
                         {visiblePolicies.length === 0 ? (
                             <ListItem>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     No enabled policies are available.
                                 </Typography>
                             </ListItem>
@@ -497,18 +518,37 @@ const GuardrailsGroupsPage = () => {
                                         key={policy.id}
                                         sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 'none' } }}
                                     >
-                                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+                                        <Stack
+                                            direction="row"
+                                            spacing={1.5}
+                                            sx={{
+                                                alignItems: "center",
+                                                width: '100%'
+                                            }}>
                                             <Switch
                                                 size="small"
                                                 checked={checked}
                                                 onChange={(e) => handleAssignPolicy(policy, e.target.checked)}
                                             />
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                                <Stack
+                                                    direction="row"
+                                                    spacing={1}
+                                                    useFlexGap
+                                                    sx={{
+                                                        alignItems: "center",
+                                                        flexWrap: "wrap"
+                                                    }}>
                                                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{policy.name || policy.id}</Typography>
                                                     <Chip size="small" label={buildPolicyKindLabel(policy)} variant="outlined" />
                                                 </Stack>
-                                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: "text.secondary",
+                                                        mt: 0.5,
+                                                        display: 'block'
+                                                    }}>
                                                     <Box
                                                         component="span"
                                                         sx={{
@@ -530,7 +570,6 @@ const GuardrailsGroupsPage = () => {
                     </List>
                 </UnifiedCard>
             </Stack>
-
             <Dialog
                 open={groupDialogOpen}
                 onClose={() => {
@@ -577,10 +616,19 @@ const GuardrailsGroupsPage = () => {
                                 <Typography variant="subtitle2">Group State</Typography>
 
                                 <Box>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Severity
                                     </Typography>
-                                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        useFlexGap
+                                        sx={{
+                                            flexWrap: "wrap",
+                                            mt: 1
+                                        }}>
                                         {[
                                             { value: 'low', label: 'Low' },
                                             { value: 'medium', label: 'Medium' },
@@ -598,7 +646,9 @@ const GuardrailsGroupsPage = () => {
                                     </Stack>
                                     <FormHelperText sx={{ mt: 1 }}>Used for risk grouping and UI labeling.</FormHelperText>
                                 </Box>
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
                                     <Switch
                                         size="small"
                                         checked={groupEditorState.enabled}
@@ -617,11 +667,12 @@ const GuardrailsGroupsPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog open={!!deleteGroupId} onClose={() => setDeleteGroupId(null)} disableRestoreFocus>
                 <DialogTitle>Delete Group</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {deleteGroupId
                             ? `Delete group "${deleteGroupId}"? This only works when no policies still reference it.`
                             : 'Delete this group?'}

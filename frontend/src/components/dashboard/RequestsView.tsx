@@ -118,7 +118,9 @@ function TokenDonut({ records }: { records: UsageRecord[] }) {
             <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', mb: 2 }}>Token Breakdown</Typography>
             {total === 0 ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 140 }}>
-                    <Typography variant="caption" color="text.disabled">No data</Typography>
+                    <Typography variant="caption" sx={{
+                        color: "text.disabled"
+                    }}>No data</Typography>
                 </Box>
             ) : (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
@@ -222,7 +224,9 @@ function LatencyHistogram({ records }: { records: UsageRecord[] }) {
             </Box>
             {!hasData ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, gap: 0.5 }}>
-                    <Typography variant="caption" color="text.disabled">
+                    <Typography variant="caption" sx={{
+                        color: "text.disabled"
+                    }}>
                         {metric === 'ttft' ? 'No TTFT data — backend field not yet exposed' : 'No data'}
                     </Typography>
                 </Box>
@@ -295,7 +299,6 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                     <ToggleButton value="error">Error</ToggleButton>
                 </ToggleButtonGroup>
             </Box>
-
             {/* Table */}
             <TableContainer sx={{ maxHeight: 420, maxWidth: '100%', overflow: 'auto', position: 'relative' }}>
                 {loading && (
@@ -322,8 +325,12 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                         {records.length === 0 && !loading ? (
                             <TableRow>
                                 <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
-                                    <Typography variant="body2" color="text.secondary">No requests found</Typography>
-                                    <Typography variant="caption" color="text.disabled">Try changing the status filter</Typography>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>No requests found</Typography>
+                                    <Typography variant="caption" sx={{
+                                        color: "text.disabled"
+                                    }}>Try changing the status filter</Typography>
                                 </TableCell>
                             </TableRow>
                         ) : records.map(r => (
@@ -428,7 +435,6 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                     </TableBody>
                 </Table>
             </TableContainer>
-
             <TablePagination
                 rowsPerPageOptions={[20, 50, 100]}
                 component="div"

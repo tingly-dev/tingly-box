@@ -46,8 +46,9 @@ interface EnvironmentModeSwitcherProps {
     value: EnvironmentMode;
     /** Callback when mode changes */
     onChange: (mode: EnvironmentMode) => void;
-    /** Available mode options (defaults to local + docker) */
-    modes?: EnvironmentModeOption[];
+    /** Available mode options (defaults to local + docker).
+     *  Accepts full option objects or a plain list of mode strings (mapped to defaults). */
+    modes?: EnvironmentModeOption[] | EnvironmentMode[];
 }
 
 // ============================================================================
@@ -65,11 +66,17 @@ interface EnvironmentModeSwitcherProps {
 export const EnvironmentModeSwitcher: React.FC<EnvironmentModeSwitcherProps> = ({
     value,
     onChange,
-    modes = DEFAULT_MODES,
+    modes,
 }) => {
+    const resolvedModes: EnvironmentModeOption[] = (() => {
+        if (!modes || modes.length === 0) return DEFAULT_MODES;
+        return typeof modes[0] === 'string'
+            ? DEFAULT_MODES.filter((m) => (modes as EnvironmentMode[]).includes(m.value))
+            : (modes as EnvironmentModeOption[]);
+    })();
     return (
         <Box sx={{ display: 'flex', gap: 0.25 }}>
-            {modes.map((mode) => {
+            {resolvedModes.map((mode) => {
                 const isActive = value === mode.value;
 
                 return (

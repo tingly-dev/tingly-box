@@ -282,7 +282,9 @@ const OAuthTable = ({
                                 >
                                     {/* Status */}
                                     <TableCell>
-                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Stack direction="row" spacing={1} sx={{
+                                            alignItems: "center"
+                                        }}>
                                             <Switch
                                                 checked={provider.enabled}
                                                 onChange={() => onToggle?.(provider.uuid)}
@@ -300,7 +302,9 @@ const OAuthTable = ({
                                     </TableCell>
                                     {/* Name */}
                                     <TableCell>
-                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Stack direction="row" spacing={1} sx={{
+                                            alignItems: "center"
+                                        }}>
                                             <Typography
                                                 variant="body2"
                                                 sx={{fontWeight: 500, minWidth: 120}}
@@ -327,7 +331,9 @@ const OAuthTable = ({
                                     </TableCell>
                                     {/* Expires At */}
                                     <TableCell>
-                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Stack direction="row" spacing={1} sx={{
+                                            alignItems: "center"
+                                        }}>
                                             <Schedule
                                                 fontSize="small"
                                                 color={getExpirationColor(expiresAt) as any}
@@ -358,7 +364,9 @@ const OAuthTable = ({
                                                 />
                                             </Tooltip>
                                         ) : (
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{
+                                                color: "text.secondary"
+                                            }}>
                                                 -
                                             </Typography>
                                         )}
@@ -436,7 +444,6 @@ const OAuthTable = ({
                                         </Box>
                                     </TableCell>
                                 </TableRow>
-
                                 {/* Quota detail row */}
                                 {providerQuotas && onQuotaRefresh && (
                                     <ProviderQuotaDetailRow
@@ -451,7 +458,6 @@ const OAuthTable = ({
                     })}
                 </TableBody>
             </Table>
-
             {/* Overflow menu (shared) */}
             <Menu
                 anchorEl={moreMenu.anchorEl}
@@ -534,7 +540,6 @@ const OAuthTable = ({
                     ].filter(Boolean);
                 })()}
             </Menu>
-
             {/* Delete Confirmation Modal */}
             <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
                 <Box
@@ -558,7 +563,9 @@ const OAuthTable = ({
                         Are you sure you want to delete the OAuth provider "
                         {deleteModal.providerName}"? This action cannot be undone.
                     </Typography>
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Stack direction="row" spacing={2} sx={{
+                        justifyContent: "flex-end"
+                    }}>
                         <Button onClick={handleCloseDeleteModal} color="inherit">
                             Cancel
                         </Button>
@@ -572,7 +579,6 @@ const OAuthTable = ({
                     </Stack>
                 </Box>
             </Modal>
-
             {/* Refresh Token Confirmation Modal */}
             <Modal open={refreshModal.open} onClose={handleCloseRefreshModal}>
                 <Box
@@ -597,7 +603,9 @@ const OAuthTable = ({
                         {refreshModal.providerName}"? This will update the access token
                         using the refresh token.
                     </Typography>
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Stack direction="row" spacing={2} sx={{
+                        justifyContent: "flex-end"
+                    }}>
                         <Button
                             onClick={handleCloseRefreshModal}
                             color="inherit"
@@ -623,7 +631,6 @@ const OAuthTable = ({
                     </Stack>
                 </Box>
             </Modal>
-
             {/* Model List Dialog */}
             <ModelListDialog
                 open={modelListDialog.open}

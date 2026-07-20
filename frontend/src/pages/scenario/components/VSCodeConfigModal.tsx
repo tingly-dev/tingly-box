@@ -19,21 +19,26 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
             onClose={onClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{
-                sx: {
-                    borderRadius: 3,
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: 3,
+                    }
                 }
             }}
         >
             <DialogTitle sx={{ pb: 1 }}>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography variant="h6" sx={{
+                    fontWeight: 600
+                }}>
                     Configure VS Code
                 </Typography>
             </DialogTitle>
-
             <DialogContent sx={{ pt: 1 }}>
                 <Stack spacing={2}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         Install the Tingly Box extension, then follow the setup guide inside VS Code.
                         The extension handles the required endpoint and API key configuration for you.
                     </Typography>
@@ -60,7 +65,6 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
                     </Stack>
                 </Stack>
             </DialogContent>
-
             <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
                 <Button onClick={onClose} variant="contained">
                     Done

@@ -53,7 +53,12 @@ interface ConfigRowProps {
 const ConfigRow: React.FC<ConfigRowProps> = ({ label, hint, hintLink, children }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1.25, maxWidth: 700 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 160, flexShrink: 0 }}>
-            <Typography variant="subtitle2" color="text.secondary" fontWeight={500}>
+            <Typography
+                variant="subtitle2"
+                sx={{
+                    color: "text.secondary",
+                    fontWeight: 500
+                }}>
                 {label}
             </Typography>
             {hint && (
@@ -92,15 +97,17 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, plac
             onChange={(e) => onChange(e.target.value)}
             onBlur={onBlur}
             placeholder={placeholder || 'Enter value'}
-            InputProps={{
-                endAdornment: (
-                    <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setVisible((v) => !v)} edge="end">
-                            {visible ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                        </IconButton>
-                    </InputAdornment>
-                ),
-                sx: { fontFamily: 'monospace', fontSize: '0.8rem' },
+            slotProps={{
+                input: {
+                    endAdornment: (
+                        <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => setVisible((v) => !v)} edge="end">
+                                {visible ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                            </IconButton>
+                        </InputAdornment>
+                    ),
+                    sx: { fontFamily: 'monospace', fontSize: '0.8rem' },
+                }
             }}
         />
     );
@@ -168,7 +175,12 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
                     hint="Uses Jina Reader to convert web pages to clean markdown. No API key required."
                     hintLink="https://jina.ai/reader"
                 >
-                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: "text.secondary",
+                            fontFamily: 'monospace'
+                        }}>
                         jina.ai/reader
                     </Typography>
                 </ConfigRow>
@@ -230,10 +242,17 @@ const AddServerCard: React.FC<AddServerCardProps> = ({ onClick }) => (
         }}
     >
         <AddIcon sx={{ fontSize: 36 }} />
-        <Typography variant="body2" fontWeight={500}>
+        <Typography variant="body2" sx={{
+            fontWeight: 500
+        }}>
             Connect a server
         </Typography>
-        <Typography variant="caption" color="text.disabled" textAlign="center">
+        <Typography
+            variant="caption"
+            sx={{
+                color: "text.disabled",
+                textAlign: "center"
+            }}>
             Add a remote MCP server via stdio, HTTP or SSE.
         </Typography>
     </Box>
@@ -377,7 +396,9 @@ const MCPRegisteredServers = () => {
                             <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
                                 Config your tools
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Built-in and remote MCP tools available to your agents.
                             </Typography>
                         </Box>
@@ -423,7 +444,9 @@ const MCPRegisteredServers = () => {
                                         }]}
                                         tags={source.transport ? [(source.transport).toUpperCase()] : []}
                                         actions={
-                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                            <Stack direction="row" spacing={0.5} sx={{
+                                                alignItems: "center"
+                                            }}>
                                                 <Tooltip title="Edit">
                                                     <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
                                                         <EditIcon fontSize="small" />
@@ -448,7 +471,6 @@ const MCPRegisteredServers = () => {
                     </Stack>
                 </Box>
             </Stack>
-
             {/* Add / Edit dialog */}
             <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="md" fullWidth>
                 <DialogTitle>{editingSource ? `Edit — ${editingSource.id}` : 'Connect custom MCP server'}</DialogTitle>

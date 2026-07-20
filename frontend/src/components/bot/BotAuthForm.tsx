@@ -99,21 +99,42 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                         }}
                     >
                         <Stack spacing={1.5}>
-                            <Stack direction="row" alignItems="center" spacing={1}>
+                            <Stack direction="row" spacing={1} sx={{
+                                alignItems: "center"
+                            }}>
                                 <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
-                                <Typography variant="body2" color="success.main" fontWeight={500}>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        color: "success.main",
+                                        fontWeight: 500
+                                    }}>
                                     {t('remoteControl.authForm.weixinAccountBound', { defaultValue: 'Weixin account bound' })}
                                 </Typography>
                             </Stack>
                             {authData.bot_id && (
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>{t('remoteControl.authForm.botId', { defaultValue: 'Bot ID:' })}</Typography>
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            minWidth: 60
+                                        }}>{t('remoteControl.authForm.botId', { defaultValue: 'Bot ID:' })}</Typography>
                                     <Chip label={authData.bot_id} size="small" variant="outlined" />
                                 </Stack>
                             )}
                             {authData.user_id && (
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60 }}>{t('remoteControl.authForm.userId', { defaultValue: 'User ID:' })}</Typography>
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            minWidth: 60
+                                        }}>{t('remoteControl.authForm.userId', { defaultValue: 'User ID:' })}</Typography>
                                     <Chip label={authData.user_id} size="small" variant="outlined" />
                                 </Stack>
                             )}
@@ -150,7 +171,9 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
     if (!fields || fields.length === 0) {
         return (
             <Box sx={{ p: 2, bgcolor: 'warning.main', borderRadius: 1 }}>
-                <Typography variant="body2" color="warning.contrastText">
+                <Typography variant="body2" sx={{
+                    color: "warning.contrastText"
+                }}>
                     {t('remoteControl.authForm.noFieldsDefined', { defaultValue: 'No auth fields defined for this platform.' })}
                 </Typography>
             </Box>
@@ -163,7 +186,9 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
         <Stack spacing={2}>
             <Box>
                 {authType === 'oauth' && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {t('remoteControl.authForm.oauthIntro', { defaultValue: 'Enter your App credentials from the developer console.' })}
                         {helpLink && (
                             <Link

@@ -788,7 +788,9 @@ const GuardrailsRulesPage = () => {
             ]);
 
             if (guardrailsConfig.status !== 'fulfilled' || builtinResponse.status !== 'fulfilled') {
-                throw (guardrailsConfig.status === 'rejected' ? guardrailsConfig.reason : builtinResponse.reason);
+                throw (guardrailsConfig.status === 'rejected'
+                    ? (guardrailsConfig as PromiseRejectedResult).reason
+                    : (builtinResponse as PromiseRejectedResult).reason);
             }
 
             const config = guardrailsConfig.value?.config || {};
@@ -1318,7 +1320,12 @@ const GuardrailsRulesPage = () => {
         kind: 'resource_access' | 'command_execution' | 'content'
     ) => (
         <Box sx={{ mb: 3 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <Typography
+                variant="body2"
+                sx={{
+                    color: "text.secondary",
+                    mb: 1.5
+                }}>
                 {description}
             </Typography>
             {items.length === 0 ? (
@@ -1375,7 +1382,14 @@ const GuardrailsRulesPage = () => {
                                     onClick={() => openPolicyEditor(policy)}
                                 >
                                     <Box sx={{ minWidth: { lg: 220 }, flexShrink: 0, minHeight: 0 }}>
-                                        <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                                        <Stack
+                                            direction="row"
+                                            spacing={0.75}
+                                            useFlexGap
+                                            sx={{
+                                                alignItems: "center",
+                                                flexWrap: "wrap"
+                                            }}>
                                             <Typography
                                                 variant="body2"
                                                 sx={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}
@@ -1396,9 +1410,15 @@ const GuardrailsRulesPage = () => {
                                         </Stack>
                                         <Typography
                                             variant="caption"
-                                            color="text.secondary"
-                                            sx={{ display: 'block', mt: 0.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                        >
+                                            sx={{
+                                                color: "text.secondary",
+                                                display: 'block',
+                                                mt: 0.5,
+                                                minWidth: 0,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}>
                                             {policy.name || 'Unnamed policy'}
                                         </Typography>
                                     </Box>
@@ -1406,13 +1426,12 @@ const GuardrailsRulesPage = () => {
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
                                         <Typography
                                             variant="body2"
-                                            color="text.primary"
                                             sx={{
+                                                color: "text.primary",
                                                 whiteSpace: 'nowrap',
                                                 overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}
-                                        >
+                                                textOverflow: 'ellipsis'
+                                            }}>
                                             {buildPolicySummary(policy)}
                                         </Typography>
                                     </Box>
@@ -1420,15 +1439,14 @@ const GuardrailsRulesPage = () => {
                                     <Stack
                                         direction={{ xs: 'row', sm: 'row' }}
                                         spacing={1}
-                                        alignItems="center"
                                         sx={{
+                                            alignItems: "center",
                                             width: { xs: '100%', lg: 220 },
                                             minWidth: { lg: 220 },
                                             justifyContent: { xs: 'space-between', lg: 'flex-end' },
                                             flexShrink: 0,
-                                            alignSelf: 'center',
-                                        }}
-                                    >
+                                            alignSelf: 'center'
+                                        }}>
                                         <Chip
                                             size="small"
                                             label={
@@ -1514,7 +1532,9 @@ const GuardrailsRulesPage = () => {
             <Stack spacing={1.5}>
                 <Box>
                     <Typography variant="subtitle2">{title}</Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                    }}>
                         {description}
                     </Typography>
                 </Box>
@@ -1522,16 +1542,15 @@ const GuardrailsRulesPage = () => {
                     <Stack
                         direction="row"
                         spacing={0.5}
-                        justifyContent="space-between"
-                        alignItems="center"
                         sx={{
+                            justifyContent: "space-between",
+                            alignItems: "center",
                             px: 1,
                             py: 0.5,
                             borderBottom: '1px solid',
                             borderColor: 'divider',
-                            bgcolor: 'action.hover',
-                        }}
-                    >
+                            bgcolor: 'action.hover'
+                        }}>
                         <Stack direction="row" spacing={0.5}>
                             <IconButton
                                 size="small"
@@ -1695,7 +1714,13 @@ const GuardrailsRulesPage = () => {
             <Stack spacing={1.5}>
                 <Box>
                     <Typography variant="subtitle2">{title}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: "text.secondary",
+                            display: 'block',
+                            mt: 0.5
+                        }}>
                         {description}
                     </Typography>
                 </Box>
@@ -1725,9 +1750,18 @@ const GuardrailsRulesPage = () => {
                                 }}
                             >
                                 <Stack spacing={0.75}>
-                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        useFlexGap
+                                        sx={{
+                                            alignItems: "center",
+                                            flexWrap: "wrap"
+                                        }}>
                                         {presentation.icon}
-                                        <Typography variant="body2" fontWeight={600}>
+                                        <Typography variant="body2" sx={{
+                                            fontWeight: 600
+                                        }}>
                                             {presentation.label}
                                         </Typography>
                                         {selected && (
@@ -1736,7 +1770,9 @@ const GuardrailsRulesPage = () => {
                                             </Tooltip>
                                         )}
                                     </Stack>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         {presentation.description}
                                     </Typography>
                                 </Stack>
@@ -1889,45 +1925,53 @@ const GuardrailsRulesPage = () => {
                                     const isEnabled = installedPolicy?.enabled === true;
                                     const isInstalling = pendingRegistryInstallIds.has(policy.id);
                                     return (
-                                    <ListItem
-                                        key={policy.id}
-                                        sx={{
-                                            px: 2,
-                                            py: 1.5,
-                                            borderBottom: '1px solid',
-                                            borderColor: 'divider',
-                                            '&:last-child': { borderBottom: 'none' },
-                                        }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, width: '100%' }}>
-                                            <Box sx={{ minWidth: { md: 240 }, flexShrink: 0 }}>
-                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                    {policy.id}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                    {policy.name || policy.path}
-                                                </Typography>
+                                        <ListItem
+                                            key={policy.id}
+                                            sx={{
+                                                px: 2,
+                                                py: 1.5,
+                                                borderBottom: '1px solid',
+                                                borderColor: 'divider',
+                                                '&:last-child': { borderBottom: 'none' },
+                                            }}
+                                        >
+                                            <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, width: '100%' }}>
+                                                <Box sx={{ minWidth: { md: 240 }, flexShrink: 0 }}>
+                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                        {policy.id}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            color: "text.secondary",
+                                                            display: 'block',
+                                                            mt: 0.5
+                                                        }}>
+                                                        {policy.name || policy.path}
+                                                    </Typography>
+                                                </Box>
+                                                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                                                    <Typography variant="body2" sx={{
+                                                        color: "text.primary"
+                                                    }}>
+                                                        {policy.reason || 'Download this policy fragment from the remote registry and manage enable/disable from the local policy list.'}
+                                                    </Typography>
+                                                </Box>
+                                                <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', alignSelf: 'center' }}>
+                                                    {isInstalled && isEnabled && (
+                                                        <Chip size="small" color="success" label="Enabled" sx={{ mr: 1 }} />
+                                                    )}
+                                                    <Button
+                                                        variant={isInstalled ? 'outlined' : 'contained'}
+                                                        size="small"
+                                                        disabled={isInstalled || isInstalling}
+                                                        onClick={() => handleInstallRegistryPolicy(policy.id)}
+                                                    >
+                                                        {isInstalled ? 'Installed' : isInstalling ? 'Installing…' : 'Install'}
+                                                    </Button>
+                                                </Box>
                                             </Box>
-                                            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                                                <Typography variant="body2" color="text.primary">
-                                                    {policy.reason || 'Download this policy fragment from the remote registry and manage enable/disable from the local policy list.'}
-                                                </Typography>
-                                            </Box>
-                                            <Box sx={{ width: { xs: '100%', md: 'auto' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', alignSelf: 'center' }}>
-                                                {isInstalled && isEnabled && (
-                                                    <Chip size="small" color="success" label="Enabled" sx={{ mr: 1 }} />
-                                                )}
-                                                <Button
-                                                    variant={isInstalled ? 'outlined' : 'contained'}
-                                                    size="small"
-                                                    disabled={isInstalled || isInstalling}
-                                                    onClick={() => handleInstallRegistryPolicy(policy.id)}
-                                                >
-                                                    {isInstalled ? 'Installed' : isInstalling ? 'Installing…' : 'Install'}
-                                                </Button>
-                                            </Box>
-                                        </Box>
-                                    </ListItem>
+                                        </ListItem>
                                     );
                                 })}
                             </List>
@@ -1935,14 +1979,15 @@ const GuardrailsRulesPage = () => {
                     </Stack>
                 </UnifiedCard>
             </Stack>
-
             <Dialog open={editorOpen} onClose={handleCloseEditor} disableRestoreFocus fullWidth maxWidth="md">
                 <DialogTitle>{isNewPolicy ? 'New Policy' : `Edit Policy${selectedPolicyId ? ` · ${selectedPolicyId}` : ''}`}</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={2} sx={{ pt: 1 }}>
                         {actionMessage && <Alert severity={actionMessage.type}>{actionMessage.text}</Alert>}
                         <Stack spacing={1}>
-                            <Stack direction="row" spacing={0.75} alignItems="center">
+                            <Stack direction="row" spacing={0.75} sx={{
+                                alignItems: "center"
+                            }}>
                                 <Typography variant="subtitle2">Basic Settings</Typography>
                                 <Tooltip title="Choose the policy type first, then fill in only the fields that apply to that type.">
                                     <IconButton size="small" sx={{ p: 0.25 }}>
@@ -1971,7 +2016,14 @@ const GuardrailsRulesPage = () => {
                                     }}
                                 >
                                     <Stack spacing={1}>
-                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            useFlexGap
+                                            sx={{
+                                                alignItems: "center",
+                                                flexWrap: "wrap"
+                                            }}>
                                             <Terminal fontSize="small" color={editorState.kind === 'resource_access' ? 'primary' : 'action'} />
                                             <Typography variant="subtitle2">Resource Access</Typography>
                                             <Tooltip title="Inspect access to files, directories, and other resources. Best for reads, writes, deletes, and protected paths like ~/.ssh or .env.">
@@ -2002,7 +2054,14 @@ const GuardrailsRulesPage = () => {
                                     }}
                                 >
                                     <Stack spacing={1}>
-                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            useFlexGap
+                                            sx={{
+                                                alignItems: "center",
+                                                flexWrap: "wrap"
+                                            }}>
                                             <Terminal fontSize="small" color={editorState.kind === 'command_execution' ? 'primary' : 'action'} />
                                             <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>
                                                 Command Execution
@@ -2035,7 +2094,14 @@ const GuardrailsRulesPage = () => {
                                     }}
                                 >
                                     <Stack spacing={1}>
-                                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                                        <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            useFlexGap
+                                            sx={{
+                                                alignItems: "center",
+                                                flexWrap: "wrap"
+                                            }}>
                                             <ArticleOutlined fontSize="small" color={editorState.kind === 'content' ? 'primary' : 'action'} />
                                             <Typography variant="subtitle2">Privacy Policy</Typography>
                                             <Tooltip title="Inspect returned text from the model or tools. Use privacy patterns to review or block sensitive content.">
@@ -2115,7 +2181,14 @@ const GuardrailsRulesPage = () => {
                                                                 '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                                                             }}
                                                         >
-                                                            <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                                                            <Stack
+                                                                direction="row"
+                                                                spacing={0.75}
+                                                                useFlexGap
+                                                                sx={{
+                                                                    alignItems: "center",
+                                                                    flexWrap: "wrap"
+                                                                }}>
                                                                 <Typography variant="subtitle2">
                                                                     {option.label}
                                                                 </Typography>
@@ -2143,7 +2216,9 @@ const GuardrailsRulesPage = () => {
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                             <Stack spacing={1.5}>
-                                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                                <Stack direction="row" spacing={0.75} sx={{
+                                                    alignItems: "center"
+                                                }}>
                                                     <Typography variant="subtitle2">Choose Actions</Typography>
                                                     <Tooltip title="Choose the type of resource access you want to control. These actions focus on files, directories, and other protected resources.">
                                                         <IconButton size="small" sx={{ p: 0.25 }}>
@@ -2181,8 +2256,17 @@ const GuardrailsRulesPage = () => {
                                                                 }}
                                                             >
                                                                 <Stack spacing={0.75}>
-                                                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                                        <Typography variant="body2" fontWeight={600}>
+                                                                    <Stack
+                                                                        direction="row"
+                                                                        spacing={1}
+                                                                        useFlexGap
+                                                                        sx={{
+                                                                            alignItems: "center",
+                                                                            flexWrap: "wrap"
+                                                                        }}>
+                                                                        <Typography variant="body2" sx={{
+                                                                            fontWeight: 600
+                                                                        }}>
                                                                             {option.label}
                                                                         </Typography>
                                                                         {selected && (
@@ -2191,7 +2275,9 @@ const GuardrailsRulesPage = () => {
                                                                             </Tooltip>
                                                                         )}
                                                                     </Stack>
-                                                                    <Typography variant="caption" color="text.secondary">
+                                                                    <Typography variant="caption" sx={{
+                                                                        color: "text.secondary"
+                                                                    }}>
                                                                         {option.description}
                                                                     </Typography>
                                                                 </Stack>
@@ -2248,7 +2334,9 @@ const GuardrailsRulesPage = () => {
                                     >
                                         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                             <Stack spacing={1.5}>
-                                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                                <Stack direction="row" spacing={0.75} sx={{
+                                                    alignItems: "center"
+                                                }}>
                                                     <Typography variant="subtitle2">Command Category</Typography>
                                                     <Tooltip title="Choose whether this policy targets general command execution patterns or normalized install commands.">
                                                         <IconButton size="small" sx={{ p: 0.25 }}>
@@ -2286,8 +2374,17 @@ const GuardrailsRulesPage = () => {
                                                                 }}
                                                             >
                                                                 <Stack spacing={0.75}>
-                                                                    <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                                        <Typography variant="body2" fontWeight={600}>
+                                                                    <Stack
+                                                                        direction="row"
+                                                                        spacing={1}
+                                                                        useFlexGap
+                                                                        sx={{
+                                                                            alignItems: "center",
+                                                                            flexWrap: "wrap"
+                                                                        }}>
+                                                                        <Typography variant="body2" sx={{
+                                                                            fontWeight: 600
+                                                                        }}>
                                                                             {option.label}
                                                                         </Typography>
                                                                         {selected && (
@@ -2296,7 +2393,9 @@ const GuardrailsRulesPage = () => {
                                                                             </Tooltip>
                                                                         )}
                                                                     </Stack>
-                                                                    <Typography variant="caption" color="text.secondary">
+                                                                    <Typography variant="caption" sx={{
+                                                                        color: "text.secondary"
+                                                                    }}>
                                                                         {option.description}
                                                                     </Typography>
                                                                 </Stack>
@@ -2422,12 +2521,19 @@ const GuardrailsRulesPage = () => {
                                         <Stack
                                             direction={{ xs: 'column', md: 'row' }}
                                             spacing={1.5}
-                                            justifyContent="space-between"
-                                            alignItems={{ xs: 'stretch', md: 'flex-start' }}
-                                        >
+                                            sx={{
+                                                justifyContent: "space-between",
+                                                alignItems: { xs: 'stretch', md: 'flex-start' }
+                                            }}>
                                             <Box>
                                                 <Typography variant="subtitle2">Reason</Typography>
-                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: "text.secondary",
+                                                        display: 'block',
+                                                        mt: 0.5
+                                                    }}>
                                                     This message is shown when the policy blocks or reviews content. Keep it short, explicit, and user-facing.
                                                 </Typography>
                                             </Box>
@@ -2469,7 +2575,9 @@ const GuardrailsRulesPage = () => {
                                     <AccordionSummary expandIcon={<ExpandMore />}>
                                         <Stack spacing={0.5}>
                                             <Typography variant="subtitle2">Advanced Settings</Typography>
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" sx={{
+                                                color: "text.secondary"
+                                            }}>
                                                 Review or override the default verdict and scenario scope for this policy.
                                             </Typography>
                                         </Stack>
@@ -2480,7 +2588,13 @@ const GuardrailsRulesPage = () => {
                                                 <Stack spacing={2}>
                                                     <Box>
                                                         <Typography variant="subtitle2">Set Verdict</Typography>
-                                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: "text.secondary",
+                                                                display: 'block',
+                                                                mt: 0.5
+                                                            }}>
                                                             The verdict defines what Guardrails should do once this policy matches.
                                                         </Typography>
                                                         <Box
@@ -2531,8 +2645,17 @@ const GuardrailsRulesPage = () => {
                                                                             }}
                                                                         >
                                                                             <Stack spacing={0.75}>
-                                                                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                                                                                    <Typography variant="body2" fontWeight={600}>
+                                                                                <Stack
+                                                                                    direction="row"
+                                                                                    spacing={1}
+                                                                                    useFlexGap
+                                                                                    sx={{
+                                                                                        alignItems: "center",
+                                                                                        flexWrap: "wrap"
+                                                                                    }}>
+                                                                                    <Typography variant="body2" sx={{
+                                                                                        fontWeight: 600
+                                                                                    }}>
                                                                                         {option.label}
                                                                                     </Typography>
                                                                                     {selected && (
@@ -2541,7 +2664,9 @@ const GuardrailsRulesPage = () => {
                                                                                         </Tooltip>
                                                                                     )}
                                                                                 </Stack>
-                                                                                <Typography variant="caption" color="text.secondary">
+                                                                                <Typography variant="caption" sx={{
+                                                                                    color: "text.secondary"
+                                                                                }}>
                                                                                     {option.description}
                                                                                 </Typography>
                                                                             </Stack>
@@ -2580,11 +2705,12 @@ const GuardrailsRulesPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog open={confirmCloseOpen} onClose={() => handleConfirmClose('cancel')} disableRestoreFocus>
                 <DialogTitle>Unsaved changes</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         You have unsaved changes in this policy. What would you like to do?
                     </Typography>
                 </DialogContent>
@@ -2600,11 +2726,12 @@ const GuardrailsRulesPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
             <Dialog open={!!deletePolicyId} onClose={() => setDeletePolicyId(null)} disableRestoreFocus>
                 <DialogTitle>Delete policy</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {deletePolicyId
                             ? `Delete policy "${deletePolicyId}"? This will update the Guardrails config and reload the engine.`
                             : 'Delete this policy?'}
@@ -2619,7 +2746,6 @@ const GuardrailsRulesPage = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
         </PageLayout>
     );
 };

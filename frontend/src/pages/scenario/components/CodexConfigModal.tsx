@@ -248,18 +248,27 @@ EOF`;
             }}
             maxWidth="lg"
             fullWidth
-            PaperProps={{
-                sx: {
-                    borderRadius: 3,
-                    maxHeight: '90vh',
-                },
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderRadius: 3,
+                        maxHeight: '90vh',
+                    },
+                }
             }}
         >
             <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider', position: 'relative' }}>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography variant="h6" sx={{
+                    fontWeight: 600
+                }}>
                     Configure Codex
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: "text.secondary",
+                        mt: 0.5
+                    }}>
                     Configure Codex to use Tingly Box through `~/.codex/config.toml` and `~/.codex/auth.json`
                 </Typography>
                 {/* Reset only touches the Quick Config prefs, so it's shown only
@@ -284,7 +293,6 @@ EOF`;
                     <Tab label="Manual" value="manual" sx={{ minHeight: 40, textTransform: 'none' }} />
                 </Tabs>
             </DialogTitle>
-
             <DialogContent sx={{ p: 3 }}>
                 {pendingContext1MChange != null && (
                     <Context1MChangeBanner enabled={pendingContext1MChange} clientName="Codex" />
@@ -309,7 +317,9 @@ EOF`;
                             label={
                                 <Box>
                                     <Typography variant="body2">Tingly Box gateway</Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         codex routes through Tingly Box. Gateway key written to <code>~/.codex/auth.json</code>.
                                     </Typography>
                                 </Box>
@@ -324,7 +334,9 @@ EOF`;
                                     <Typography variant="body2">
                                         Tingly Box gateway + keep official ChatGPT login
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Routes through Tingly Box, but the gateway key moves into <code>config.toml</code> so
                                         your ChatGPT login in <code>auth.json</code> stays intact — Codex App still recognizes
                                         your account (remote control, plugins, account display).
@@ -339,7 +351,9 @@ EOF`;
                             label={
                                 <Box>
                                     <Typography variant="body2">Direct to OpenAI</Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         codex talks to OpenAI directly using your official ChatGPT login. No gateway.
                                     </Typography>
                                 </Box>
@@ -416,7 +430,9 @@ EOF`;
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Typography variant="subtitle2" color="text.secondary">
+                                <Typography variant="subtitle2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Step 1 · Create or update `~/.codex/config.toml`
                                 </Typography>
                                 <Tabs
@@ -476,7 +492,9 @@ EOF`;
                         ) : (
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Typography variant="subtitle2" color="text.secondary">
+                                <Typography variant="subtitle2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Step 2 · Create or update `~/.codex/auth.json`
                                 </Typography>
                                 <Tabs
@@ -491,7 +509,9 @@ EOF`;
                                 </Tabs>
                             </Box>
                             <Box sx={{ mb: 1.5 }}>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Set `OPENAI_API_KEY` in `~/.codex/auth.json` to the API key generated by Tingly Box. If the file already exists, update the existing value.
                                 </Typography>
                             </Box>
@@ -536,7 +556,9 @@ EOF`;
                         {writeCatalog && previewModels.length > 0 && catalogJson && (
                             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                                 <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2" color="text.secondary">
+                                    <Typography variant="subtitle2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Step 3 · Create or update `~/.codex/tingly-model-catalog.json`
                                     </Typography>
                                     <Tabs
@@ -551,7 +573,9 @@ EOF`;
                                     </Tabs>
                                 </Box>
                                 <Box sx={{ mb: 1.5 }}>
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Lets Codex's <code>/model</code> picker list tingly-served models. Required when <code>model_catalog_json</code> is set in config.toml.
                                     </Typography>
                                 </Box>
@@ -595,10 +619,14 @@ EOF`;
 
                         {SHOW_CODEX_SESSION_IMPORT && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                <Typography variant="subtitle2" color="text.secondary">
+                                <Typography variant="subtitle2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Step 3 · Optional: import previous OpenAI sessions
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     If you previously used Codex with the built-in OpenAI provider, import those local sessions so they remain visible after switching to `tingly-box`. If needed, you can undo the import later.
                                 </Typography>
                                 <Box sx={{ display: 'flex', gap: 1 }}>
@@ -631,7 +659,6 @@ EOF`;
                     </Box>
                 )}
             </DialogContent>
-
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, width: '100%' }}>
                     <Button onClick={onClose} variant="outlined">
@@ -647,7 +674,6 @@ EOF`;
                     </Button>
                 </Box>
             </DialogActions>
-
             <Dialog
                 open={SHOW_CODEX_SESSION_IMPORT && sessionAction !== null}
                 onClose={(event, reason) => {
@@ -663,12 +689,16 @@ EOF`;
                     {sessionAction === 'import' ? 'Import Sessions' : 'Undo Import'}
                 </DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {sessionAction === 'import'
                             ? 'This will rewrite local Codex session metadata from `openai` to `tingly-box`, and update the local SQLite thread index so those sessions are visible after switching providers.'
                             : 'This will rewrite local Codex session metadata from `tingly-box` back to `openai`, and update the local SQLite thread index so those sessions are visible again under the default OpenAI provider.'}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                        color: "text.secondary"
+                    }}>
                         {sessionAction === 'import'
                             ? 'Backups are optional. Enable them only if you need a rollback copy of local session files and the SQLite thread index.'
                             : 'Undo import rewrites local session metadata back to `openai` without creating backups.'}

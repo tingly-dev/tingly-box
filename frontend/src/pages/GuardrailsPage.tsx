@@ -299,25 +299,48 @@ const GuardrailsPage = () => {
                             }
                         >
                             <Stack spacing={1.75}>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                    color: "text.secondary"
+                                }}>
                                     Format: enabled / total
                                 </Typography>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Stack direction="row" spacing={1.25} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         <FolderOpen color="primary" fontSize="small" />
                                         <Typography variant="body2">Resource Access</Typography>
                                     </Stack>
                                     <Chip size="small" label={`${stats.resourceAccessEnabled}/${stats.resourceAccess}`} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Stack direction="row" spacing={1.25} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         <Terminal color="primary" fontSize="small" />
                                         <Typography variant="body2">Command Execution</Typography>
                                     </Stack>
                                     <Chip size="small" label={`${stats.commandExecutionEnabled}/${stats.commandExecution}`} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Stack direction="row" spacing={1.25} alignItems="center">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Stack direction="row" spacing={1.25} sx={{
+                                        alignItems: "center"
+                                    }}>
                                         <ArticleOutlined color="primary" fontSize="small" />
                                         <Typography variant="body2">Privacy</Typography>
                                     </Stack>
@@ -339,32 +362,67 @@ const GuardrailsPage = () => {
                             }
                         >
                             <Stack spacing={1.75}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Total Events
                                     </Typography>
                                     <Chip size="small" label={`${stats.historyCount}`} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Allow
                                     </Typography>
                                     <Chip size="small" variant="outlined" label={`${stats.allowedEvents}`} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Review
                                     </Typography>
                                     <Chip size="small" color="warning" variant="outlined" label={`${stats.reviewedEvents}`} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Blocked
                                     </Typography>
                                     <Chip size="small" color="error" label={`${stats.blockedEvents}`} />
                                 </Stack>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="body2" color="text.secondary">
+                                <Stack
+                                    direction="row"
+                                    sx={{
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}>
+                                    <Typography variant="body2" sx={{
+                                        color: "text.secondary"
+                                    }}>
                                         Masked
                                     </Typography>
                                     <Chip size="small" color="warning" label={`${stats.maskedEvents}`} />
@@ -389,7 +447,9 @@ const GuardrailsPage = () => {
                                 {actionMessage.text}
                             </Alert>
                         )}
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             Import a YAML or JSON policy fragment containing one or more policies. Imported policies are appended to `guardrails/custom/import.yaml`.
                         </Typography>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
@@ -435,7 +495,9 @@ const GuardrailsPage = () => {
                                 {actionMessage.text}
                             </Alert>
                         )}
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                        }}>
                             Choose one or more imported fragment files to download as-is.
                         </Typography>
                         <Stack direction="row" spacing={1}>
@@ -452,9 +514,13 @@ const GuardrailsPage = () => {
                                     key={item.path}
                                     direction="row"
                                     spacing={1.5}
-                                    alignItems="flex-start"
-                                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}
-                                >
+                                    sx={{
+                                        alignItems: "flex-start",
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        borderRadius: 2,
+                                        p: 1.5
+                                    }}>
                                     <Checkbox
                                         checked={selectedExportPaths.includes(item.path)}
                                         onChange={() => handleToggleExportPath(item.path)}
@@ -464,10 +530,14 @@ const GuardrailsPage = () => {
                                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                             {item.name || item.path}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {item.path}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary">
+                                        <Typography variant="caption" sx={{
+                                            color: "text.secondary"
+                                        }}>
                                             {`${item.policy_count || 0} policies`}
                                             {item.policy_ids && item.policy_ids.length > 0 ? ` · ${item.policy_ids.join(', ')}` : ''}
                                         </Typography>

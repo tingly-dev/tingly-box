@@ -100,7 +100,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
             if (data?.success && data?.platforms) {
                 setBotPlatforms(data.platforms);
                 // Set current platform config
-                const config = data.platforms.find(p => p.platform === platformId);
+                const config = data.platforms.find((p: { platform: string }) => p.platform === platformId);
                 if (config) {
                     setCurrentPlatformConfig(config);
                 }
@@ -382,7 +382,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                     defaultExpanded={filteredBots.length === 0}
                 />
             )}
-
             <UnifiedCard
                 title={t('remoteControl.bots.title', { defaultValue: '{{platform}} Bots', platform: platformName })}
                 subtitle={t('remoteControl.bots.configuredCount', {
@@ -433,7 +432,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                     ))
                 )}
             </UnifiedCard>
-
             {/* Bot Add/Edit Dialog */}
             <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
                 <Box
@@ -468,7 +466,9 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                     </Typography>
                     <Stack spacing={2}>
                         <Stack spacing={1}>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
                                 {t('remoteControl.dialog.platform', { defaultValue: 'Platform' })}
                             </Typography>
                             <BotPlatformSelector
@@ -563,7 +563,9 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                         />
                     </Stack>
 
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Stack direction="row" spacing={2} sx={{
+                        justifyContent: "flex-end"
+                    }}>
                         <Button
                             onClick={() => setBotTokenDialogOpen(false)}
                             color="inherit"
@@ -584,10 +586,8 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                 </Stack>
                 </Box>
             </Modal>
-
             {/* SmartGuide Selector Dialog */}
             <BotModelDialog open={BotModelDialogOpen} />
-
             {/* Snackbar for notifications */}
             <Snackbar
                 open={snackbar.open}
