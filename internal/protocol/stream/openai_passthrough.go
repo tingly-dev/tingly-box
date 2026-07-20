@@ -308,6 +308,8 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
 	usage := protocol.ZeroTokenUsage()
+	streamStart := time.Now()
+	sawTerminal := false
 
 	protocol.RunLoop(c, func(w io.Writer) bool {
 		select {
@@ -327,6 +329,11 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		// strings.Clone breaks the gjson backing reference to the SSE buffer.
 		eventRaw := strings.Clone(evt.RawJSON())
 		eventType := evt.Type
+
+		switch eventType {
+		case "response.completed", "response.failed", "response.incomplete", "response.cancelled", "error":
+			sawTerminal = true
+		}
 
 		// Usage extraction and model rewriting only apply to events that carry
 		// a "response" object (created/in_progress/completed/...). The
@@ -416,6 +423,28 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		}
 		OpenAIResponsesEvent(c, "error", errorChunk)
 		return usage, err
+	}
+
+	// Upstream closed the SSE body cleanly but never sent a terminal event
+	// (response.completed/failed/incomplete): the turn was truncated on the
+	// provider side. Surface an honest error event — mirroring the
+	// responsesToAnthropicConverter's EOF handling — instead of a bare EOF,
+	// which strict clients (Codex) report as "stream closed before
+	// response.completed" with nothing to diagnose. The logged elapsed time
+	// distinguishes a fixed proxy/gateway timeout upstream (constant duration)
+	// from random provider drops (issue #1384).
+	if !sawTerminal && c.Request.Context().Err() == nil {
+		elapsed := time.Since(streamStart).Round(time.Second)
+		truncErr := fmt.Errorf("upstream ended responses stream without a terminal event after %s", elapsed)
+		logrus.WithContext(c.Request.Context()).Warn(truncErr)
+		OpenAIResponsesEvent(c, "error", map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": truncErr.Error(),
+				"type":    "stream_error",
+				"code":    "upstream_truncated",
+			},
+		})
+		return usage, truncErr
 	}
 
 	return usage, nil
