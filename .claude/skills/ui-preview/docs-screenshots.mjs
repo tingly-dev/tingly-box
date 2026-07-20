@@ -24,7 +24,9 @@
  *   6-routing.png        – OpenAI SDK smart routing
  *   7-remote.png         – Telegram remote control bot
  *   8-guardrails.png     – Guardrails policies
- *   9-heatmap.png        – Token heatmap (180d)
+ *   9-heatmap.png        – Token heatmap (Activity view on the dashboard; the
+ *                          old standalone /overview/:range route now redirects
+ *                          to /dashboard/7d — the heatmap is a view-mode toggle)
  *   theme-preview/light-dashboard.png
  *   theme-preview/dark-dashboard.png
  *   theme-preview/claude-dashboard.png
@@ -92,7 +94,8 @@ await shoot(browser, '/credentials', '3-connect-ai.png', {
     settle: 2500,
     interact: async (page) => {
         try {
-            const btn = page.getByRole('button', { name: /Connect AI/i });
+            // Two matches when the empty-state CTA is also present; the toolbar one is first.
+            const btn = page.getByRole('button', { name: /Connect AI/i }).first();
             await btn.waitFor({ timeout: 6000 });
             await btn.click();
             await page.waitForTimeout(1800);
@@ -135,9 +138,19 @@ await shoot(browser, '/remote-control/telegram', '7-remote.png', { settle: 4000 
 // ── 8: Guardrails ─────────────────────────────────────────────────────────
 await shoot(browser, '/guardrails', '8-guardrails.png', { settle: 3000 });
 
-// ── 9: Token Heatmap (180d) ───────────────────────────────────────────────
-await shoot(browser, '/overview/180d', '9-heatmap.png', {
-    waitFor: '.MuiGrid-root', settle: 4500,
+// ── 9: Token Heatmap ──────────────────────────────────────────────────────
+// /overview/:range now redirects to /dashboard/7d. The heatmap lives inside
+// the Dashboard page as a view-mode toggle ("Activity"), not its own route.
+await shoot(browser, '/dashboard/90d', '9-heatmap.png', {
+    waitFor: '.MuiGrid-root', settle: 3500,
+    interact: async (page) => {
+        try {
+            const activityBtn = page.getByRole('button', { name: 'Activity' });
+            await activityBtn.waitFor({ timeout: 6000 });
+            await activityBtn.click();
+            await page.waitForTimeout(1500);
+        } catch (e) { console.warn('  ⚠ activity heatmap toggle failed:', e.message.slice(0, 80)); }
+    },
 });
 
 // ── Theme previews ────────────────────────────────────────────────────────
