@@ -98,13 +98,21 @@ type PlatformInfo struct {
 	Capabilities *PlatformCapabilities `json:"capabilities"`
 }
 
-// NewPlatformInfo creates a new PlatformInfo
+// NewPlatformInfo creates a new PlatformInfo with an explicit display name.
+// Prefer NewPlatformInfoFor unless the display name is not derivable from the
+// platform id (e.g. the Feishu/Lark domain split).
 func NewPlatformInfo(platform Platform, name string) *PlatformInfo {
 	return &PlatformInfo{
 		ID:           platform,
 		Name:         name,
 		Capabilities: GetPlatformCapabilities(platform),
 	}
+}
+
+// NewPlatformInfoFor creates a PlatformInfo whose display name is derived from
+// the single PlatformNames table, so bots don't hardcode name literals.
+func NewPlatformInfoFor(platform Platform) *PlatformInfo {
+	return NewPlatformInfo(platform, GetPlatformName(platform))
 }
 
 // PlatformNames returns the human-readable name for each platform

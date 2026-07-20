@@ -220,7 +220,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information.
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformWeixin, "Weixin")
+	return core.NewPlatformInfoFor(core.PlatformWeixin)
 }
 
 // GetInteractionHandler returns the interaction handler for this bot.

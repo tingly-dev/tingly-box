@@ -217,7 +217,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformDiscord, "Discord")
+	return core.NewPlatformInfoFor(core.PlatformDiscord)
 }
 
 // onReady is called when the bot is ready

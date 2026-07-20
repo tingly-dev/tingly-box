@@ -150,7 +150,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns WeCom platform metadata.
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformWecom, "WeCom")
+	return core.NewPlatformInfoFor(core.PlatformWecom)
 }
 
 // Close releases resources.

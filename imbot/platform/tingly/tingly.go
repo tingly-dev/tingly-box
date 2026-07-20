@@ -121,5 +121,5 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo implements core.Bot.
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformTingly, "Tingly")
+	return core.NewPlatformInfoFor(core.PlatformTingly)
 }

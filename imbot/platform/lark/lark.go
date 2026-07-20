@@ -39,7 +39,7 @@ func NewBot(config *core.Config) (*Bot, error) {
 // All other core.Bot methods (Connect, SendMessage, React, StartReceiving, …)
 // are promoted from the embedded *feishu.Bot and need no explicit override.
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(PlatformLark, "Lark")
+	return core.NewPlatformInfoFor(PlatformLark)
 }
 
 // GetWebhookURL returns the webhook URL for Lark. This differs from the

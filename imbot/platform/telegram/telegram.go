@@ -382,7 +382,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformTelegram, "Telegram")
+	return core.NewPlatformInfoFor(core.PlatformTelegram)
 }
 
 // sendText sends a text message

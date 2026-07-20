@@ -200,7 +200,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformSlack, "Slack")
+	return core.NewPlatformInfoFor(core.PlatformSlack)
 }
 
 // startRTM starts the Real-Time Messaging connection

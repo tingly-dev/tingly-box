@@ -251,7 +251,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformWhatsApp, "WhatsApp")
+	return core.NewPlatformInfoFor(core.PlatformWhatsApp)
 }
 
 // authenticate performs authentication test

@@ -282,7 +282,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformDingTalk, "DingTalk")
+	return core.NewPlatformInfoFor(core.PlatformDingTalk)
 }
 
 // sendText sends a text message using SDK's ChatbotReplier
