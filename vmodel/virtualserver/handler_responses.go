@@ -223,6 +223,8 @@ func (h *Handler) handleResponsesStreaming(c *gin.Context, model, inputText stri
 	respID := newRespID()
 	itemID := "item-" + respID
 	createdAt := time.Now().Unix()
+	midInj := midStreamInjection(vm)
+	gate := newMidStreamGate(midInj)
 	send := func(payload map[string]interface{}) {
 		data, _ := json.Marshal(payload)
 		c.SSEvent("", string(data))
@@ -254,6 +256,16 @@ func (h *Handler) handleResponsesStreaming(c *gin.Context, model, inputText stri
 			case <-c.Request.Context().Done():
 				return
 			default:
+			}
+			if gate != nil {
+				switch ev.(type) {
+				case openaivm.DoneEvent, openaivm.UsageEvent:
+					return // suppress terminal events; handler applies break instead
+				default:
+					if !gate.Allow() {
+						return
+					}
+				}
 			}
 			switch e := ev.(type) {
 			case openaivm.DeltaEvent:
@@ -298,6 +310,11 @@ func (h *Handler) handleResponsesStreaming(c *gin.Context, model, inputText stri
 					"message": err.Error(),
 				},
 			})
+			return false
+		}
+
+		if midInj != nil {
+			applyMidStreamBreakResponses(c, w, midInj)
 			return false
 		}
 

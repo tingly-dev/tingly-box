@@ -72,6 +72,33 @@ func TestDuoFunctional(t *testing.T) {
 	}
 }
 
+// TestDuoCodexPassthrough drives the Codex Responses passthrough end-to-end
+// through both processes: a healthy stream and both upstream truncation
+// shapes (clean EOF / abrupt TCP drop), asserting the gateway converts a
+// truncated upstream into an explicit in-band error event (#1384).
+func TestDuoCodexPassthrough(t *testing.T) {
+	if testing.Short() {
+		t.Skip("duo e2e is not a -short test")
+	}
+	env, err := NewDuoEnv(DuoEnvConfig{})
+	if err != nil {
+		t.Fatalf("boot duo env: %v", err)
+	}
+	defer env.Close()
+
+	checks := env.RunCodexPassthroughChecks()
+	if len(checks) == 0 {
+		t.Fatal("no checks ran")
+	}
+	for _, c := range checks {
+		if !c.Pass {
+			t.Errorf("[%s] check %s failed: %s", c.Route, c.Name, c.Detail)
+		} else {
+			t.Logf("[%s] check %s ok %s", c.Route, c.Name, c.Detail)
+		}
+	}
+}
+
 func TestDuoMemoryRegression(t *testing.T) {
 	if testing.Short() {
 		t.Skip("duo e2e is not a -short test")

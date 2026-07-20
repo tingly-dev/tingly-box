@@ -1,5 +1,30 @@
 package vmodel
 
+import (
+	"context"
+	"net"
+)
+
+// connContextKey carries the accepted net.Conn in the request context (see
+// ConnContext).
+type connContextKey struct{}
+
+// ConnContext stores the accepted net.Conn in the request context. Install it
+// on the serving http.Server (srv.ConnContext = vmodel.ConnContext) so that
+// MidStreamModeConnectionClose can actually sever the TCP connection: gin
+// refuses ResponseWriter.Hijack once body bytes are written, so the injection
+// falls back to closing the raw connection taken from the context. Without it
+// a mid-stream ConnectionClose silently degrades to a clean EOF.
+func ConnContext(ctx context.Context, c net.Conn) context.Context {
+	return context.WithValue(ctx, connContextKey{}, c)
+}
+
+// ConnFromContext returns the net.Conn stored by ConnContext, or nil.
+func ConnFromContext(ctx context.Context) net.Conn {
+	conn, _ := ctx.Value(connContextKey{}).(net.Conn)
+	return conn
+}
+
 // ErrorCategory categorizes error models for filtering and catalog purposes.
 type ErrorCategory string
 
@@ -40,16 +65,26 @@ const (
 type MidStreamMode int
 
 const (
-	// MidStreamModeConnectionClose hijacks the underlying TCP connection and
-	// closes it. The client sees an EOF / abrupt disconnect mid-stream —
-	// exactly the shape an unstable upstream produces when it dies during a
-	// long response.
+	// MidStreamModeConnectionClose severs the underlying TCP connection. The
+	// client sees an abrupt disconnect mid-stream (unexpected EOF inside the
+	// chunked body) — exactly the shape an unstable upstream produces when it
+	// dies during a long response. Requires the serving http.Server to
+	// install vmodel.ConnContext; gin cannot Hijack a written response, so
+	// without it the break degrades to a clean EOF (and logs a warning).
 	MidStreamModeConnectionClose MidStreamMode = iota
 
 	// MidStreamModeErrorEvent emits one final protocol-specific error event
 	// (SSE "event: error" frame) before returning. The stream is well-formed
 	// up to that point; the client sees an in-band error.
 	MidStreamModeErrorEvent
+
+	// MidStreamModeCleanEOF ends the HTTP response cleanly (proper chunked
+	// terminator) after AfterEvents events, without any terminal protocol
+	// event. The client's reader sees a well-formed body that simply stops —
+	// the shape an upstream reverse proxy or gateway produces when it times
+	// out an idle stream, and the shape behind "stream closed before
+	// response.completed" reports (#1384).
+	MidStreamModeCleanEOF
 )
 
 // ErrorInjection describes a synthetic failure that a mock virtual model

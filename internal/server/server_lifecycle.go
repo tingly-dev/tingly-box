@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/network"
+	"github.com/tingly-dev/tingly-box/vmodel"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -62,6 +63,10 @@ func (s *Server) Start(port int) error {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      10 * time.Minute,
 		IdleTimeout:       120 * time.Second,
+		// Expose the accepted conn to handlers: vmodel's mid-stream
+		// ConnectionClose injection needs it because gin cannot hijack an
+		// already-written response (see vmodel.ConnContext).
+		ConnContext: vmodel.ConnContext,
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
