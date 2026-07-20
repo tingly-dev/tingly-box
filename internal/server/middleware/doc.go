@@ -60,4 +60,12 @@
 //
 // Token-bucket rate limiter keyed by client IP.  Limits are configurable
 // per scenario and fall back to a global default.
+//
+// ClearServerDeadlines (deadline.go)
+//
+// Applied to the AI protocol route groups (/tingly/:scenario[/v1]) only.
+// Clears the per-connection read/write deadlines armed by http.Server's
+// ReadTimeout/WriteTimeout so long-running SSE streams and large request
+// bodies are bounded by the upstream provider timeout and client disconnect,
+// not by wall-clock from request start (issue #1384).
 package middleware
