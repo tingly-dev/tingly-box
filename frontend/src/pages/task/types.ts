@@ -60,6 +60,7 @@ export interface AgentTask {
   created_at: string;
   updated_at: string;
   recurrence?: { cron: string; timezone: string };
+  trigger_paused?: boolean;
   steps?: TaskStep[];
   current_step: number;
   step_outcomes?: StepOutcome[];

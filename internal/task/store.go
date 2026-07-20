@@ -40,6 +40,9 @@ type Store interface {
 	// from stomping each other's fields.
 	UpdateStatus(ctx context.Context, taskID string, fields map[string]interface{}) error
 
+	// Delete removes a task and its run history. Returns ErrNotFound if absent.
+	Delete(ctx context.Context, taskID string) error
+
 	CreateRun(ctx context.Context, run *TaskRun) error
 	GetRun(ctx context.Context, taskID, runID string) (*TaskRun, error)
 	ListRuns(ctx context.Context, filter RunListFilter) ([]TaskRun, error)

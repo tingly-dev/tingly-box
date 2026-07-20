@@ -47,4 +47,15 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	router.POST("/tasks/:id/stop", handler.Stop,
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Stop an agent task"))
+	router.POST("/tasks/:id/pause", handler.Pause,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Pause a task's trigger without losing history or schedule"),
+		swagger.WithResponseModel(TaskResponse{}))
+	router.POST("/tasks/:id/resume", handler.Resume,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Resume a paused task's trigger"),
+		swagger.WithResponseModel(TaskResponse{}))
+	router.DELETE("/tasks/:id", handler.Delete,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Delete a task and its run history"))
 }

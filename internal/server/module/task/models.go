@@ -80,6 +80,7 @@ type TaskView struct {
 	CurrentStep   int                       `json:"current_step"`
 	StepOutcomes  []agenttask.StepOutcome   `json:"step_outcomes,omitempty"`
 	Execution     agenttask.ExecutionPolicy `json:"execution"`
+	TriggerPaused bool                      `json:"trigger_paused"`
 	ActiveRunID   string                    `json:"active_run_id,omitempty"`
 }
 

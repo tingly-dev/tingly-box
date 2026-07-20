@@ -61,6 +61,12 @@ type Task struct {
 	// ParentTaskID is retained for storage compatibility with the original
 	// task prototype. The current recurrence model does not create child tasks.
 	ParentTaskID string
+
+	// TriggerPaused disables scheduling without changing Status. A paused
+	// task keeps its schedule and history but the scheduler skips it until
+	// resumed. This is the trigger's own enabled/paused axis, orthogonal to
+	// the run-status projection (design §6.2 / §7.3).
+	TriggerPaused bool
 }
 
 // OutcomeKind tells the manager how a successful handler invocation should

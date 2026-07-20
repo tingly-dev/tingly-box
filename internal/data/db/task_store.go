@@ -36,8 +36,9 @@ type TaskRecord struct {
 	// Recurrence stores the schedule definition. ParentTaskID is retained for
 	// compatibility with the original task prototype; recurrence now reuses the
 	// same task row instead of creating child tasks.
-	Recurrence   string    `gorm:"column:recurrence;type:text"`
-	ParentTaskID string    `gorm:"column:parent_task_id;size:64"`
+	Recurrence    string `gorm:"column:recurrence;type:text"`
+	ParentTaskID  string `gorm:"column:parent_task_id;size:64"`
+	TriggerPaused bool   `gorm:"column:trigger_paused;not null;default:false;index:idx_tasks_status_scheduled"`
 	CreatedAt    time.Time `gorm:"column:created_at;index:idx_tasks_owner;index:idx_tasks_key_status"`
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
 }
@@ -161,7 +162,7 @@ func (s *TaskStore) FindDueTasks(ctx context.Context, now time.Time, limit int) 
 	defer s.mu.Unlock()
 	var records []TaskRecord
 	err := s.db.WithContext(ctx).
-		Where("status = ? AND (scheduled_at IS NULL OR scheduled_at <= ?)", string(task.StatusPending), now).
+		Where("status = ? AND trigger_paused = ? AND (scheduled_at IS NULL OR scheduled_at <= ?)", string(task.StatusPending), false, now).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&records).Error
@@ -202,6 +203,22 @@ func (s *TaskStore) UpdateStatus(ctx context.Context, taskID string, fields map[
 		Updates(fields).Error
 }
 
+// Delete removes a task and its run history in one transaction.
+func (s *TaskStore) Delete(ctx context.Context, taskID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("task_id = ?", taskID).Delete(&TaskRecord{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return task.ErrNotFound
+		}
+		return tx.Where("task_id = ?", taskID).Delete(&TaskRunRecord{}).Error
+	})
+}
+
 // ---- conversion helpers ----
 
 func taskFromRecord(r *TaskRecord) *task.Task {
@@ -222,6 +239,7 @@ func taskFromRecord(r *TaskRecord) *task.Task {
 		FinishedAt:       r.FinishedAt,
 		CancelledAt:      r.CancelledAt,
 		ParentTaskID:     r.ParentTaskID,
+		TriggerPaused:    r.TriggerPaused,
 		CreatedAt:        r.CreatedAt,
 		UpdatedAt:        r.UpdatedAt,
 	}
@@ -255,6 +273,7 @@ func recordFromTask(t *task.Task) *TaskRecord {
 		FinishedAt:       t.FinishedAt,
 		CancelledAt:      t.CancelledAt,
 		ParentTaskID:     t.ParentTaskID,
+		TriggerPaused:    t.TriggerPaused,
 		CreatedAt:        t.CreatedAt,
 		UpdatedAt:        t.UpdatedAt,
 	}

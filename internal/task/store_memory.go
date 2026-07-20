@@ -51,6 +51,21 @@ func (s *MemoryStore) Update(_ context.Context, t *Task) error {
 	return nil
 }
 
+func (s *MemoryStore) Delete(_ context.Context, taskID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.tasks[taskID]; !ok {
+		return ErrNotFound
+	}
+	delete(s.tasks, taskID)
+	for runID, run := range s.runs {
+		if run.TaskID == taskID {
+			delete(s.runs, runID)
+		}
+	}
+	return nil
+}
+
 func (s *MemoryStore) List(_ context.Context, filter ListFilter) ([]Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,7 +141,7 @@ func (s *MemoryStore) FindDueTasks(_ context.Context, now time.Time, limit int) 
 
 	var result []Task
 	for _, t := range s.tasks {
-		if t.Status != StatusPending {
+		if t.Status != StatusPending || t.TriggerPaused {
 			continue
 		}
 		if t.ScheduledAt != nil && t.ScheduledAt.After(now) {
@@ -194,6 +209,10 @@ func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[
 				} else {
 					t.Recurrence = json.RawMessage(sv)
 				}
+			}
+		case "trigger_paused":
+			if bv, ok := v.(bool); ok {
+				t.TriggerPaused = bv
 			}
 		case "payload":
 			if sv, ok := v.(string); ok {

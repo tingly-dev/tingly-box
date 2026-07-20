@@ -53,6 +53,16 @@ type Manager interface {
 	// the next occurrence is rematerialized immediately.
 	UpdateRecurrence(ctx context.Context, taskID string, recurrence json.RawMessage) error
 
+	// SetPaused toggles the trigger's paused axis. A paused task keeps its
+	// schedule and history but the scheduler skips it. Resuming a recurring
+	// task whose occurrence elapsed while paused rematerializes the next one
+	// so it does not immediately fire a stale tick.
+	SetPaused(ctx context.Context, taskID string, paused bool) error
+
+	// Delete removes a task and its run history. A running task must be
+	// stopped first (returns ErrNotCancellable while running or queued).
+	Delete(ctx context.Context, taskID string) error
+
 	// Start runs restart recovery and launches the scheduler goroutine.
 	Start(ctx context.Context) error
 
@@ -299,6 +309,40 @@ func (m *taskManager) UpdateRecurrence(ctx context.Context, taskID string, recur
 		}
 	}
 	return m.store.UpdateStatus(ctx, taskID, updates)
+}
+
+func (m *taskManager) SetPaused(ctx context.Context, taskID string, paused bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, err := m.store.Get(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	updates := map[string]interface{}{"trigger_paused": paused}
+	// On resume, if a recurring task's occurrence elapsed while paused,
+	// roll it forward so it does not fire a burst of stale ticks.
+	if !paused && len(t.Recurrence) > 0 && t.Status == StatusPending &&
+		t.ScheduledAt != nil && t.ScheduledAt.Before(time.Now()) {
+		if next, nerr := NextOccurrence(t.Recurrence, time.Now()); nerr == nil {
+			updates["scheduled_at"] = next
+		}
+	}
+	return m.store.UpdateStatus(ctx, taskID, updates)
+}
+
+func (m *taskManager) Delete(ctx context.Context, taskID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, err := m.store.Get(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	// A running or queued task owns a live serialization slot / cancel fn;
+	// require Stop first so we never orphan a running process.
+	if t.Status == StatusRunning || t.Status == StatusQueued {
+		return ErrNotCancellable
+	}
+	return m.store.Delete(ctx, taskID)
 }
 
 func (m *taskManager) Start(ctx context.Context) error {

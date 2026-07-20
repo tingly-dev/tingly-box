@@ -480,6 +480,55 @@ func (h *Handler) Stop(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// Pause / Resume toggle a task's trigger paused axis without touching its
+// history, session, or run status.
+func (h *Handler) Pause(c *gin.Context)  { h.setPaused(c, true) }
+func (h *Handler) Resume(c *gin.Context) { h.setPaused(c, false) }
+
+func (h *Handler) setPaused(c *gin.Context, paused bool) {
+	ctx := c.Request.Context()
+	task, err := h.manager.Get(ctx, c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if !isBoardTask(task.Type) {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	if err := h.manager.SetPaused(ctx, task.ID, paused); err != nil {
+		writeError(c, err)
+		return
+	}
+	updated, err := h.manager.Get(ctx, task.ID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	view, _ := toView(updated)
+	c.JSON(http.StatusOK, TaskResponse{Data: view})
+}
+
+// Delete removes a task and its run history. Running tasks must be stopped
+// first.
+func (h *Handler) Delete(c *gin.Context) {
+	ctx := c.Request.Context()
+	task, err := h.manager.Get(ctx, c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if !isBoardTask(task.Type) {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	if err := h.manager.Delete(ctx, task.ID); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handler) Agents(c *gin.Context) {
 	data := make([]AgentAvailability, 0, 2)
 	for _, kind := range []agenttask.AgentKind{agenttask.AgentClaude, agenttask.AgentCodex} {
@@ -513,7 +562,7 @@ func toView(task *coretask.Task) (TaskView, error) {
 	payload.ApplyDefaults()
 	view := TaskView{
 		ID: task.ID, Title: payload.Title, Goal: payload.Goal, Agent: payload.Agent,
-		Status: task.Status, Progress: task.Progress, Error: task.Error,
+		Status: task.Status, TriggerPaused: task.TriggerPaused, Progress: task.Progress, Error: task.Error,
 		WorkspacePath: payload.WorkspacePath, SessionID: payload.SessionID,
 		FollowUp: payload.FollowUp, WakeCount: payload.WakeCount,
 		ScheduledAt: task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
@@ -733,7 +782,7 @@ func shellToView(task *coretask.Task) (TaskView, error) {
 	}
 	view := TaskView{
 		ID: task.ID, Title: payload.Title, Goal: payload.Command, Agent: agentShell,
-		Status: task.Status, Progress: task.Progress, Error: task.Error,
+		Status: task.Status, TriggerPaused: task.TriggerPaused, Progress: task.Progress, Error: task.Error,
 		WorkspacePath: payload.WorkspacePath,
 		ScheduledAt:   task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
