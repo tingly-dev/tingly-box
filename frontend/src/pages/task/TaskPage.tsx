@@ -68,12 +68,45 @@ const formatTime = (value?: string) => value ? new Intl.DateTimeFormat(undefined
   month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
 }).format(new Date(value)) : '—';
 
+const formatAge = (value?: string) => {
+  if (!value) return '—';
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+};
+
 const isActive = (task: AgentTask) => ['pending', 'queued', 'running'].includes(task.status);
 const canStop = (task: AgentTask) => ['pending', 'queued', 'running', 'needs_input', 'handoff_required'].includes(task.status);
 const isTerminal = (task: AgentTask) => ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(task.status);
 
-function CreateTaskDialog({ open, agents, onClose, onCreated }: {
-  open: boolean; agents: AgentAvailability[]; onClose: () => void; onCreated: (task: AgentTask) => void;
+export interface TaskTemplate {
+  label: string; description: string; goal: string; agent: TaskAgent;
+  when: 'now' | 'later' | 'repeat'; cron?: string; keepChecking?: boolean;
+}
+
+// Starting points for the empty state — each prefills the create dialog
+// (education embedded in the product instead of a blank textarea).
+const TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    label: 'Daily code review', description: 'Every morning, review recent changes and flag risks.',
+    goal: "Review the commits from the last 24 hours in this workspace. Summarize risky changes, missing tests, and anything that needs a human decision into .tb/daily-review.md.",
+    agent: 'claude', when: 'repeat', cron: '0 9 * * *',
+  },
+  {
+    label: 'Fix until tests pass', description: 'Keep working unattended until the test suite is green.',
+    goal: 'Run the test suite, fix the failures you are confident about, and repeat until everything passes. Report done only when the full suite is green.',
+    agent: 'claude', when: 'now', keepChecking: true,
+  },
+  {
+    label: 'One-shot command', description: 'Run a shell command once in an isolated directory.',
+    goal: 'pnpm up --latest && pnpm test', agent: 'shell', when: 'now',
+  },
+];
+
+function CreateTaskDialog({ open, agents, preset, onClose, onCreated }: {
+  open: boolean; agents: AgentAvailability[]; preset?: TaskTemplate | null; onClose: () => void; onCreated: (task: AgentTask) => void;
 }) {
   const [goal, setGoal] = useState('');
   const [agent, setAgent] = useState<TaskAgent>('claude');
@@ -104,6 +137,15 @@ function CreateTaskDialog({ open, agents, onClose, onCreated }: {
     const firstAvailable = agents.find((item) => item.available);
     if (firstAvailable) chooseAgent(firstAvailable.agent);
   }, [agent, agents]);
+
+  useEffect(() => {
+    if (!open || !preset) return;
+    setGoal(preset.goal);
+    chooseAgent(preset.agent);
+    setWhen(preset.when);
+    if (preset.cron) setCron(preset.cron);
+    setKeepChecking(Boolean(preset.keepChecking));
+  }, [open, preset]);
 
   const chooseProfile = (profile: LaunchProfile) => {
     setExecution((current) => {
@@ -257,6 +299,24 @@ function TaskSteps({ task }: { task: AgentTask }) {
       })}
     </Stack>
   </Box>;
+}
+
+// LiveActivity answers "what is it doing right now": the active run's most
+// recent persisted events, refreshed by the detail poll.
+function LiveActivity({ run }: { run: TaskRun }) {
+  const events = (run.events || []).slice(-6);
+  return <Paper variant="outlined" sx={{ p: 1.5, borderColor: 'primary.main', borderRadius: 1.5 }}>
+    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: events.length ? 1 : 0 }}>
+      <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={14} /><Typography variant="subtitle2">Live activity</Typography></Stack>
+      <Typography variant="caption" color="text.secondary">{run.progress || 'Working'} · started {formatTime(run.started_at)}</Typography>
+    </Stack>
+    {events.length ? <Stack spacing={0.5}>
+      {events.map((event) => <Stack key={event.id} direction="row" spacing={1} alignItems="baseline">
+        <Typography variant="caption" color="text.secondary" fontFamily="monospace" sx={{ flexShrink: 0 }}>{new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} {event.kind}</Typography>
+        <Typography variant="body2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }} noWrap>{event.summary}</Typography>
+      </Stack>)}
+    </Stack> : <Typography variant="body2" color="text.secondary">Waiting for the first event…</Typography>}
+  </Paper>;
 }
 
 function ExecutionSummary({ task }: { task: AgentTask }) {
@@ -418,11 +478,15 @@ function TaskDetail({ task, runs, usage, onUpdate, onWake, onStop }: {
         </Stack>
       </Alert>}
       <TaskSteps task={task} />
-      {(task.latest_result?.summary || task.error || task.progress) && !['needs_input', 'handoff_required'].includes(task.status) && <Box>
+      {task.status === 'running' && runs[0] && ['running', 'waiting_approval', 'waiting_input'].includes(runs[0].status) && <LiveActivity run={runs[0]} />}
+      {(task.latest_result?.summary || task.error || task.progress) && !['needs_input', 'handoff_required'].includes(task.status) && !(task.status === 'running' && runs[0]) && <Box>
         <Typography variant="overline" color="text.secondary">Latest outcome</Typography>
         {task.latest_result?.summary
           ? <TaskMarkdown>{task.latest_result.summary}</TaskMarkdown>
           : <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{task.error || task.progress}</Typography>}
+        {task.latest_result?.artifacts?.length ? <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+          {task.latest_result.artifacts.map((artifact) => <Tooltip key={artifact} title="Copy full path"><Chip size="small" variant="outlined" icon={<ContentCopy fontSize="small" />} label={artifact} onClick={() => copy(`${task.workspace_path}/${artifact}`)} /></Tooltip>)}
+        </Stack> : null}
       </Box>}
       <Divider />
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={4}>
@@ -443,6 +507,8 @@ export default function TaskPage() {
   const { enableTasks } = useFeatureFlags();
   const [tasks, setTasks] = useState<AgentTask[]>([]); const [agents, setAgents] = useState<AgentAvailability[]>([]);
   const [selectedId, setSelectedId] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [createOpen, setCreateOpen] = useState(false);
+  const [createPreset, setCreatePreset] = useState<TaskTemplate | null>(null);
+  const openCreate = (preset?: TaskTemplate) => { setCreatePreset(preset || null); setCreateOpen(true); };
   const [detail, setDetail] = useState<AgentTask>(); const [runs, setRuns] = useState<TaskRun[]>([]); const [usage, setUsage] = useState<TaskUsage>();
   const load = useCallback(async (quiet = false) => { if (!quiet) setLoading(true); try { const [items, available] = await Promise.all([taskApi.list(), taskApi.agents()]); setTasks(items); setAgents(available); setSelectedId((current) => current && items.some((item) => item.id === current) ? current : items[0]?.id || ''); setError(''); } catch (err) { setError((err as Error).message); } finally { setLoading(false); } }, []);
   useEffect(() => { load(); const timer = window.setInterval(() => load(true), 5000); return () => window.clearInterval(timer); }, [load]);
@@ -471,13 +537,13 @@ export default function TaskPage() {
   const wake = async (instruction?: string) => { if (!selected) return; update(await taskApi.wake(selected.id, instruction)); };
   const stop = async () => { if (!selected) return; await taskApi.stop(selected.id); await load(true); };
   return <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: '100%' }}>
-    <PageHeader title="Tasks" subtitle="Schedule unattended Claude Code, Codex, or shell runs; step in only for business input or native takeover." actions={<><Tooltip title="Refresh"><Button onClick={() => load()} startIcon={<Refresh />}>Refresh</Button></Tooltip><Button variant="contained" startIcon={<Add />} disabled={!enableTasks} onClick={() => setCreateOpen(true)}>New task</Button></>} />
+    <PageHeader title="Tasks" subtitle="Schedule unattended Claude Code, Codex, or shell runs; step in only for business input or native takeover." actions={<><Tooltip title="Refresh"><Button onClick={() => load()} startIcon={<Refresh />}>Refresh</Button></Tooltip><Button variant="contained" startIcon={<Add />} disabled={!enableTasks} onClick={() => openCreate()}>New task</Button></>} />
     {!enableTasks && <Alert severity="info">Task creation is disabled. Existing tasks remain available so you can stop, inspect, or resume them.</Alert>}
     {error && <Alert severity="error">{error}</Alert>}
-    {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box> : tasks.length === 0 ? <Paper variant="outlined" sx={{ py: 10, textAlign: 'center', borderRadius: 2 }}><Schedule sx={{ fontSize: 40, color: 'text.secondary' }} /><Typography variant="h5" sx={{ mt: 2 }}>No tasks yet</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Create one goal. Tingly Box will handle the workspace, schedule, and native session.</Typography>{enableTasks && <Button variant="contained" startIcon={<Add />} sx={{ mt: 3 }} onClick={() => setCreateOpen(true)}>Create your first task</Button>}</Paper> : <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
-      <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320, lg: 340 }, flexShrink: 0, p: 1.5, borderRadius: 2 }}><Stack spacing={2}>{groups.map((group) => <Box key={group.label}><Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>{group.label}</Typography><Stack spacing={0.5}>{group.items.map((task) => { const meta = statusMeta[task.status]; return <Box key={task.id} onClick={() => setSelectedId(task.id)} sx={{ p: 1.25, borderRadius: 1.5, cursor: 'pointer', bgcolor: selectedId === task.id ? 'action.selected' : 'transparent', border: '1px solid', borderColor: selectedId === task.id ? 'primary.main' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography variant="subtitle2" noWrap>{task.title || task.goal}</Typography><Chip size="small" label={meta.label} color={meta.color} /></Stack><Typography variant="caption" color="text.secondary">{agentLabel(task.agent)}{task.steps?.length ? ` · Step ${Math.min((task.current_step ?? 0) + 1, task.steps.length)}/${task.steps.length}` : ''} · {task.status === 'pending' ? formatTime(task.scheduled_at) : formatTime(task.updated_at)}</Typography></Box>; })}</Stack></Box>)}</Stack></Paper>
+    {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box> : tasks.length === 0 ? <Paper variant="outlined" sx={{ py: 10, textAlign: 'center', borderRadius: 2 }}><Schedule sx={{ fontSize: 40, color: 'text.secondary' }} /><Typography variant="h5" sx={{ mt: 2 }}>No tasks yet</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Create one goal. Tingly Box will handle the workspace, schedule, and native session.</Typography>{enableTasks && <><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mt: 4, px: 3 }}>{TASK_TEMPLATES.map((template) => <Paper key={template.label} variant="outlined" onClick={() => openCreate(template)} sx={{ p: 2, width: { sm: 240 }, textAlign: 'left', cursor: 'pointer', borderRadius: 2, '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' } }}><Typography variant="subtitle2">{template.label}</Typography><Typography variant="caption" color="text.secondary">{template.description}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{agentLabel(template.agent)}{template.when === 'repeat' ? ` · ${template.cron}` : template.keepChecking ? ' · keeps checking' : ''}</Typography></Paper>)}</Stack><Button variant="text" startIcon={<Add />} sx={{ mt: 2.5 }} onClick={() => openCreate()}>Or start from scratch</Button></>}</Paper> : <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
+      <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320, lg: 340 }, flexShrink: 0, p: 1.5, borderRadius: 2 }}><Stack spacing={2}>{groups.map((group) => <Box key={group.label}><Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>{group.label}</Typography><Stack spacing={0.5}>{group.items.map((task) => { const meta = statusMeta[task.status]; return <Box key={task.id} onClick={() => setSelectedId(task.id)} sx={{ p: 1.25, borderRadius: 1.5, cursor: 'pointer', bgcolor: selectedId === task.id ? 'action.selected' : 'transparent', border: '1px solid', borderColor: selectedId === task.id ? 'primary.main' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography variant="subtitle2" noWrap>{task.title || task.goal}</Typography><Chip size="small" label={meta.label} color={meta.color} /></Stack><Typography variant="caption" color="text.secondary">{agentLabel(task.agent)}{task.steps?.length ? ` · Step ${Math.min((task.current_step ?? 0) + 1, task.steps.length)}/${task.steps.length}` : ''} · {task.status === 'pending' ? formatTime(task.scheduled_at) : ['needs_input', 'handoff_required'].includes(task.status) ? `waiting ${formatAge(task.updated_at)}` : formatTime(task.updated_at)}</Typography></Box>; })}</Stack></Box>)}</Stack></Paper>
       {selected && <TaskDetail task={selected} runs={runs} usage={usage} onUpdate={edit} onWake={wake} onStop={stop} />}
     </Stack>}
-    <CreateTaskDialog open={createOpen} agents={agents} onClose={() => setCreateOpen(false)} onCreated={(task) => { setTasks((items) => [task, ...items]); setDetail(task); setRuns([]); setSelectedId(task.id); }} />
+    <CreateTaskDialog open={createOpen} agents={agents} preset={createPreset} onClose={() => setCreateOpen(false)} onCreated={(task) => { setTasks((items) => [task, ...items]); setDetail(task); setRuns([]); setSelectedId(task.id); }} />
   </Box>;
 }
