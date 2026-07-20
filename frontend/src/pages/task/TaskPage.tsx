@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, FormControlLabel, FormGroup, IconButton, Paper, Stack, Switch,
+  Divider, FormControlLabel, FormGroup, IconButton, ListItemIcon, ListItemText,
+  Menu, MenuItem, Paper, Stack, Switch,
   TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
-import { Add, Block, ContentCopy, Delete, Edit, History, Pause, PlayArrow, PlayCircle, Refresh, Schedule, Security, Send, Terminal } from '@/components/icons';
+import { Add, Block, ContentCopy, Delete, Edit, History, MoreVert, Pause, PlayArrow, PlayCircle, Refresh, Schedule, Security, Send, Terminal } from '@/components/icons';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { taskApi } from '@/services/taskApi';
 import TaskMarkdown from './TaskMarkdown';
@@ -471,12 +472,13 @@ function EditTaskDialog({ task, open, onClose, onSaved }: {
   </Dialog>;
 }
 
-function TaskDetail({ task, runs, usage, onUpdate, onWake, onStop, onPause, onDelete }: {
-  task: AgentTask; runs: TaskRun[]; usage?: TaskUsage; onUpdate: (input: UpdateTaskInput) => Promise<void>; onWake: (instruction?: string) => Promise<void>; onStop: () => Promise<void>; onPause: (paused: boolean) => Promise<void>; onDelete: () => Promise<void>;
+function TaskDetail({ task, runs, usage, onUpdate, onWake, onStop, onPause, onDelete, onClone }: {
+  task: AgentTask; runs: TaskRun[]; usage?: TaskUsage; onUpdate: (input: UpdateTaskInput) => Promise<void>; onWake: (instruction?: string) => Promise<void>; onStop: () => Promise<void>; onPause: (paused: boolean) => Promise<void>; onDelete: () => Promise<void>; onClone: () => Promise<void>;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [instructionOpen, setInstructionOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [instruction, setInstruction] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -504,15 +506,27 @@ function TaskDetail({ task, runs, usage, onUpdate, onWake, onStop, onPause, onDe
       {quietMinutes >= 3 && <Alert severity="warning">No activity for {quietMinutes} min. The run may be stuck: it still ends on its own at the run timeout; Stop cancels it now — the native session stays resumable via the takeover command below, and Run now continues from where it left off.</Alert>}
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={2}>
         <Box><Stack direction="row" spacing={1} alignItems="center"><Typography variant="h4">{task.title || task.goal}</Typography><Chip size="small" label={statusMeta[task.status].label} color={statusMeta[task.status].color} />{task.trigger_paused && <Tooltip title="Scheduling is paused; the task keeps its history and can be resumed"><Chip size="small" variant="outlined" color="warning" icon={<Pause fontSize="small" />} label="Trigger paused" /></Tooltip>}</Stack><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{task.goal}</Typography></Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
           {canStop(task) && <Button color="inherit" startIcon={<Block />} disabled={busy} onClick={() => act(onStop)}>Stop</Button>}
-          {!executionLocked && (task.trigger_paused
-            ? <Button color="inherit" startIcon={<PlayCircle />} disabled={busy} onClick={() => act(() => onPause(false))}>Resume</Button>
-            : <Button color="inherit" startIcon={<Pause />} disabled={busy} onClick={() => act(() => onPause(true))}>Pause</Button>)}
-          <Button color="inherit" startIcon={<Edit />} disabled={busy || executionLocked} onClick={() => setEditOpen(true)}>Edit task</Button>
           {!['needs_input', 'handoff_required'].includes(task.status) && <Button startIcon={<PlayArrow />} disabled={busy || executionLocked} onClick={() => act(() => onWake())}>{isTerminal(task) ? 'Run again' : 'Run now'}</Button>}
           {task.status !== 'needs_input' && task.agent !== 'shell' && <Button variant="contained" startIcon={<Send />} disabled={busy || executionLocked} onClick={() => setInstructionOpen(true)}>Run with instruction</Button>}
-          <Tooltip title={executionLocked ? 'Stop the task before deleting' : 'Delete task'}><span><IconButton color="error" disabled={busy || executionLocked} onClick={() => setDeleteOpen(true)} aria-label="Delete task"><Delete /></IconButton></span></Tooltip>
+          <Tooltip title="More actions"><IconButton disabled={busy} onClick={(event) => setMenuAnchor(event.currentTarget)} aria-label="More actions"><MoreVert /></IconButton></Tooltip>
+          <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+            {!executionLocked && <MenuItem onClick={() => { setMenuAnchor(null); act(() => onPause(!task.trigger_paused)); }}>
+              <ListItemIcon>{task.trigger_paused ? <PlayCircle fontSize="small" /> : <Pause fontSize="small" />}</ListItemIcon>
+              <ListItemText>{task.trigger_paused ? 'Resume schedule' : 'Pause schedule'}</ListItemText>
+            </MenuItem>}
+            <MenuItem disabled={executionLocked} onClick={() => { setMenuAnchor(null); setEditOpen(true); }}>
+              <ListItemIcon><Edit fontSize="small" /></ListItemIcon><ListItemText>Edit task</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={() => { setMenuAnchor(null); act(onClone); }}>
+              <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon><ListItemText>Clone task</ListItemText>
+            </MenuItem>
+            <Divider />
+            <MenuItem disabled={executionLocked} onClick={() => { setMenuAnchor(null); setDeleteOpen(true); }} sx={{ color: 'error.main' }}>
+              <ListItemIcon><Delete fontSize="small" color="error" /></ListItemIcon><ListItemText>Delete task</ListItemText>
+            </MenuItem>
+          </Menu>
         </Stack>
       </Stack>
       {task.status === 'handoff_required' && <Alert severity="warning" icon={<Terminal />} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
@@ -610,13 +624,14 @@ export default function TaskPage() {
   const stop = async () => { if (!selected) return; await taskApi.stop(selected.id); await load(true); };
   const pause = async (paused: boolean) => { if (!selected) return; update(paused ? await taskApi.pause(selected.id) : await taskApi.resume(selected.id)); };
   const remove = async () => { if (!selected) return; await taskApi.remove(selected.id); setDetail(undefined); setRuns([]); setSelectedId(''); await load(true); };
+  const clone = async () => { if (!selected) return; const created = await taskApi.clone(selected.id); setTasks((items) => [created, ...items]); setDetail(created); setRuns([]); setSelectedId(created.id); };
   return <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: '100%' }}>
     <PageHeader title="Tasks" subtitle="Schedule unattended Claude Code, Codex, or shell runs; step in only for business input or native takeover." actions={<><Tooltip title="Refresh"><Button onClick={() => load()} startIcon={<Refresh />}>Refresh</Button></Tooltip><Button variant="contained" startIcon={<Add />} disabled={!enableTasks} onClick={() => openCreate()}>New task</Button></>} />
     {!enableTasks && <Alert severity="info">Task creation is disabled. Existing tasks remain available so you can stop, inspect, or resume them.</Alert>}
     {error && <Alert severity="error">{error}</Alert>}
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box> : tasks.length === 0 ? <Paper variant="outlined" sx={{ py: 10, textAlign: 'center', borderRadius: 2 }}><Schedule sx={{ fontSize: 40, color: 'text.secondary' }} /><Typography variant="h5" sx={{ mt: 2 }}>No tasks yet</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Create one goal. Tingly Box will handle the workspace, schedule, and native session.</Typography>{enableTasks && <><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mt: 4, px: 3 }}>{TASK_TEMPLATES.map((template) => <Paper key={template.label} variant="outlined" onClick={() => openCreate(template)} sx={{ p: 2, width: { sm: 240 }, textAlign: 'left', cursor: 'pointer', borderRadius: 2, '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' } }}><Typography variant="subtitle2">{template.label}</Typography><Typography variant="caption" color="text.secondary">{template.description}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{agentLabel(template.agent)}{template.when === 'repeat' ? ` · ${template.cron}` : template.keepChecking ? ' · keeps checking' : ''}</Typography></Paper>)}</Stack><Button variant="text" startIcon={<Add />} sx={{ mt: 2.5 }} onClick={() => openCreate()}>Or start from scratch</Button></>}</Paper> : <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
       <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320, lg: 340 }, flexShrink: 0, p: 1.5, borderRadius: 2 }}><Stack spacing={2}>{groups.map((group) => <Box key={group.label}><Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>{group.label}</Typography><Stack spacing={0.5}>{group.items.map((task) => { const meta = statusMeta[task.status]; return <Box key={task.id} onClick={() => setSelectedId(task.id)} sx={{ p: 1.25, borderRadius: 1.5, cursor: 'pointer', bgcolor: selectedId === task.id ? 'action.selected' : 'transparent', border: '1px solid', borderColor: selectedId === task.id ? 'primary.main' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography variant="subtitle2" noWrap>{task.title || task.goal}</Typography><Chip size="small" label={meta.label} color={meta.color} /></Stack><Typography variant="caption" color="text.secondary">{agentLabel(task.agent)}{task.steps?.length ? ` · Step ${Math.min((task.current_step ?? 0) + 1, task.steps.length)}/${task.steps.length}` : ''} · {task.status === 'pending' ? formatTime(task.scheduled_at) : ['needs_input', 'handoff_required'].includes(task.status) ? `waiting ${formatAge(task.updated_at)}` : formatTime(task.updated_at)}{task.trigger_paused ? ' · paused' : ''}</Typography></Box>; })}</Stack></Box>)}</Stack></Paper>
-      {selected && <TaskDetail task={selected} runs={runs} usage={usage} onUpdate={edit} onWake={wake} onStop={stop} onPause={pause} onDelete={remove} />}
+      {selected && <TaskDetail task={selected} runs={runs} usage={usage} onUpdate={edit} onWake={wake} onStop={stop} onPause={pause} onDelete={remove} onClone={clone} />}
     </Stack>}
     <CreateTaskDialog open={createOpen} agents={agents} preset={createPreset} onClose={() => setCreateOpen(false)} onCreated={(task) => { setTasks((items) => [task, ...items]); setDetail(task); setRuns([]); setSelectedId(task.id); }} />
   </Box>;

@@ -538,3 +538,103 @@ run 级成本归因。
   修正 2/4 对 agenttask 包的侵入程度，实现前先做一次改造成本评估。
 
 （原命名问题已由 feat/task 的 Task + TaskRun 拆分解决，不再悬置。）
+
+## 12. Loop 重设计（调研 + 目标模型）
+
+> 首版把大量 CRUD/打磨叠在了 feat/task 遗留的 loop 模型上，但那个模型
+> 不是 §4 设计的模型。本节记录诊断、业界调研、目标模型与 UX。
+
+### 12.1 诊断：三套机制拍平成一个列表
+
+代码现状（审计确认）：**三套并存的 loop 机制**，都借引擎的
+`TaskResult.Outcome` 推进，但语义各异——
+
+1. **follow-up 唤醒**：agent 在 outcome 里报 `continue` → 隔 delay 再
+   唤醒，`max_wake_ups` 封顶。**循环条件是 agent 判断**，埋在那个我们
+   已知不可靠的 outcome 信封里；且"直到完成"被表达成"最多 20 次唤醒、
+   每次隔 5 分钟"这种别扭代理。
+2. **step 游标**：固定指令列表，`done` 推进。`when`（条件跳过）
+   **未实现**。
+3. **cron recurrence**：原地物化下一次。
+
+`when` / `until` 只在本文档，代码里没有（grep 无匹配）。前端
+`RunHistory` 是**单层扁平时间线**：pipeline 步骤、follow-up 重排、cron
+再触发全是同级 `Run N` 行，cron tick 和手动 Run now 无法区分，迭代
+（repeat）根本没有模型可渲染。→ 违反 ux #1（按用户心智组织）：用户
+分不清看的是"每日三次触发 / 朝目标三次迭代 / 流水线三个阶段"。
+
+### 12.2 调研（业界范式）
+
+- **Airflow Grid**：列=每次运行、行=每个 task、格子着色、点进日志；
+  重试历史保留；backfill/scheduled/manual 用图标区分；单次运行切
+  Gantt。→ recurrence + pipeline 的黄金可视化。
+- **Temporal**：循环=代码 + 平台持久化；signal=外部/人输入喂进运行中
+  workflow；continue-as-new=循环但历史不膨胀。→ 对应 needs_input(signal)
+  与 step-fresh-session(防上下文膨胀)。
+- **Devin/Cursor 后台 agent**：checkpoint 重新介入而非全程盯、进度默认
+  可见、多 agent 网格、人编辑时暂停。
+- **GitHub Actions**：steps 顺序 + `if:` 条件 + continue-on-error +
+  重跑失败 + 每步实时日志。
+
+核心洞察：**循环条件应是某个确定性步骤的结构化信号，而非 agent 判断**。
+"fix until tests pass" 正解 = `repeat[ test(shell) → fix(claude) when
+test.failed ] until test.exit==0`——agent 判断留在 run 内（修什么），
+循环控制由 tb 确定判（查 exit code）。既可靠又能看见收敛（失败数 4→1→0）。
+
+### 12.3 目标模型：repeat { until | agent, max }（关键统一）
+
+不是推翻 follow-up，而是**把它归位成 `until: agent` 这一个特例**：
+
+```
+repeat:
+  until: <structured-expr> | agent   # 谁来判"够了没"
+  max: N                             # 迭代上限（护栏）
+  delay: <duration>                  # 可选，迭代间隔，默认立即
+```
+
+- `until: steps.test.exit == 0`（或 `steps.bump.succeeded`）→ **tb 评估**
+  结构化字段。有确定性 oracle 的循环用这个：可靠、可读、可见收敛。
+- `until: agent` → **agent 评估**（报 `done`/`continue`）。开放式循环
+  （"改进文档直到够好"，没有确定性 oracle）用这个——就是今天的
+  follow-up，但诚实地表述为"迭代直到 agent 判定完成，最多 N 次"，
+  而不是"20 次唤醒、每 5 分钟"。
+
+两者都是"带上限的重复"，只差**谁评估 until**。这个统一同时消解了
+§10 修正 4（三机制归位）：cron=recurrence 轴、repeat=迭代轴、
+steps=pipeline 轴，三条正交轴，不再共享状态字段。
+
+`when: <structured-expr>`（步骤级条件跳过）配套加到 `Step`，让
+test→fix→repeat 可表达。`when`/`until` 的表达式**只允许引用结构化结果
+字段**（status / exit_code / summary 字段），不允许嵌 LLM 判断（守则 1）。
+
+### 12.4 UX：三种形态各自可读（而非拍平）
+
+任务详情按其形态呈现对应视图（可组合：cron 装 pipeline，pipeline 装 repeat）：
+
+- **Pipeline**（有 steps 无 repeat）→ **stepper**：① → ② → ③，当前高亮，
+  每步状态 + 摘要。（现 `TaskSteps` 基本到位。）
+- **Repeat / 收敛**（有 repeat）→ **迭代追踪器**：`第 2/3 轮 · until:
+  tests pass`，并列出每轮的 until 信号值形成**收敛趋势**（失败 4→1→0）。
+  ——全新，是"好 loop"最缺的一块。
+- **Recurrence**（cron）→ **runs grid / 时间线**（Airflow 范式）：每次
+  触发一行，着色状态 + 成本 + 时间，点进去看该次的 pipeline/迭代与日志；
+  cron tick 与手动 Run now 用标记区分。
+
+`RunHistory` 从扁平列表改为**按 occurrence（cron 次）/ iteration（repeat
+轮）分组**。后端需给 `TaskRun` 加两个归属标：`OccurrenceID`（同一次 cron
+触发下的所有 run）与 `Iteration`（repeat 轮次），trigger 增加 `scheduled`
+以区分 cron tick。
+
+### 12.5 分片与影响面
+
+- **Phase A（模型，需 buy-in）**：`Step.When` + `Payload.Repeat{Until,Max,
+  Delay}`；agenttask handler 用结构化 `until`/`when` 求值取代 follow-up
+  的重排逻辑（follow-up 以 `until: agent` 语义保留，旧任务不破）；
+  创建/编辑对话框加 repeat（until 选择器 + max）与 step 的 when。
+  **这改变现有任务的循环语义表述，落地前需确认。**
+- **Phase B（UX，模型就绪后）**：三形态视图 + RunHistory 分组（后端加
+  OccurrenceID/Iteration 标 + scheduled trigger）。
+- **CRUD 补齐（与模型正交，可独立先做）**：clone 任务【已做：
+  `POST /tasks/:id/clone`，复制定义、runtime 清零、生成型 workspace 换新
+  目录/自定义路径复用、cron 克隆默认暂停待审】、list 筛选/搜索【待做】、
+  （可选）重跑某次历史 run【待做】。动作栏收进溢出菜单（ux #9）。

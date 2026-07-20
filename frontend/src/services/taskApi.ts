@@ -33,6 +33,7 @@ export const taskApi = {
   pause: async (id: string): Promise<AgentTask> => (await request<{ data: AgentTask }>(`/tasks/${id}/pause`, { method: 'POST' })).data,
   resume: async (id: string): Promise<AgentTask> => (await request<{ data: AgentTask }>(`/tasks/${id}/resume`, { method: 'POST' })).data,
   remove: async (id: string): Promise<void> => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
+  clone: async (id: string): Promise<AgentTask> => (await request<{ data: AgentTask }>(`/tasks/${id}/clone`, { method: 'POST' })).data,
   runs: async (id: string): Promise<TaskRun[]> => (await request<{ data: TaskRun[] }>(`/tasks/${id}/runs`)).data,
   usage: async (id: string): Promise<TaskUsage> => (await request<{ data: TaskUsage }>(`/tasks/${id}/usage`)).data,
 };

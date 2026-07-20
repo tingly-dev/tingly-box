@@ -55,6 +55,10 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Resume a paused task's trigger"),
 		swagger.WithResponseModel(TaskResponse{}))
+	router.POST("/tasks/:id/clone", handler.Clone,
+		swagger.WithTags("tasks"),
+		swagger.WithDescription("Create a new task from an existing task's definition (fresh runtime state)"),
+		swagger.WithResponseModel(TaskResponse{}))
 	router.DELETE("/tasks/:id", handler.Delete,
 		swagger.WithTags("tasks"),
 		swagger.WithDescription("Delete a task and its run history"))

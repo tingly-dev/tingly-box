@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -507,6 +508,119 @@ func (h *Handler) setPaused(c *gin.Context, paused bool) {
 	}
 	view, _ := toView(updated)
 	c.JSON(http.StatusOK, TaskResponse{Data: view})
+}
+
+// Clone creates a new task from an existing one's definition (goal, executor,
+// execution policy, steps, follow-up, schedule, timeout). Runtime state —
+// session, runs, cursor, wake count — is NOT copied; the clone starts fresh.
+// A generated workspace yields a new isolated directory; a user-specified
+// custom path is reused (the intent "watch ~/repo" clones to the same repo).
+func (h *Handler) Clone(c *gin.Context) {
+	ctx := c.Request.Context()
+	src, err := h.manager.Get(ctx, c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	if !isBoardTask(src.Type) {
+		writeError(c, coretask.ErrNotFound)
+		return
+	}
+	newID := uuid.NewString()
+	workspace, err := h.cloneWorkspace(src, newID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	payloadJSON, err := clonePayload(src, workspace)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	created, err := h.manager.Submit(ctx, coretask.SubmitRequest{
+		ID:               newID,
+		Type:             src.Type,
+		Source:           "webui",
+		SerializationKey: workspace,
+		Payload:          payloadJSON,
+		MaxAttempts:      1,
+		Recurrence:       append(json.RawMessage(nil), src.Recurrence...),
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	// A clone starts paused when scheduled, so a copied cron does not fire
+	// before the user has reviewed it. Manual clones stay ready to run.
+	if len(src.Recurrence) > 0 {
+		_ = h.manager.SetPaused(ctx, created.ID, true)
+		created, _ = h.manager.Get(ctx, created.ID)
+	}
+	view, _ := toView(created)
+	c.JSON(http.StatusCreated, TaskResponse{Data: view})
+}
+
+// cloneWorkspace picks the clone's workspace: reuse a user-provided custom
+// path, but give a fresh isolated directory when the source used a generated
+// one (never share a generated workspace between two tasks).
+func (h *Handler) cloneWorkspace(src *coretask.Task, newID string) (string, error) {
+	srcWorkspace := taskWorkspacePath(src)
+	generatedRoot, err := filepath.Abs(filepath.Join(h.configDir, "tasks"))
+	if err == nil && strings.HasPrefix(srcWorkspace, generatedRoot+string(filepath.Separator)) {
+		return agenttask.CreateWorkspace(h.configDir, newID)
+	}
+	if srcWorkspace == "" {
+		return agenttask.CreateWorkspace(h.configDir, newID)
+	}
+	return agenttask.ResolveExistingWorkspace(srcWorkspace)
+}
+
+func taskWorkspacePath(t *coretask.Task) string {
+	if t.Type == shelltask.TaskType {
+		var p shelltask.Payload
+		if json.Unmarshal(t.Payload, &p) == nil {
+			return p.WorkspacePath
+		}
+		return ""
+	}
+	var p agenttask.Payload
+	if json.Unmarshal(t.Payload, &p) == nil {
+		return p.WorkspacePath
+	}
+	return ""
+}
+
+// clonePayload copies the source definition onto a fresh workspace, dropping
+// all runtime state.
+func clonePayload(src *coretask.Task, workspace string) (json.RawMessage, error) {
+	if src.Type == shelltask.TaskType {
+		var p shelltask.Payload
+		if err := json.Unmarshal(src.Payload, &p); err != nil {
+			return nil, err
+		}
+		clone := shelltask.Payload{Title: cloneTitle(p.Title), Command: p.Command, WorkspacePath: workspace, TimeoutSeconds: p.TimeoutSeconds}
+		clone.ApplyDefaults()
+		return json.Marshal(clone)
+	}
+	var p agenttask.Payload
+	if err := json.Unmarshal(src.Payload, &p); err != nil {
+		return nil, err
+	}
+	clone := agenttask.Payload{
+		Version: 2, Title: cloneTitle(p.Title), Goal: p.Goal, Agent: p.Agent,
+		WorkspacePath: workspace, FollowUp: p.FollowUp, TimeoutSeconds: p.TimeoutSeconds,
+		Steps: append([]agenttask.Step{}, p.Steps...), Execution: p.Execution,
+	}
+	clone.ApplyDefaults()
+	return json.Marshal(clone)
+}
+
+func cloneTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	return title + " (copy)"
 }
 
 // Delete removes a task and its run history. Running tasks must be stopped
