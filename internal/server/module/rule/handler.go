@@ -122,6 +122,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		})
 		return
 	}
+	applyScenarioCreateDefaults(&rule)
 	rule.UUID = uuid.NewString()
 
 	if h.config == nil {
@@ -276,6 +277,29 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// applyScenarioCreateDefaults seeds sensible per-scenario flag defaults on a
+// freshly created rule. It runs only at creation time (not on update), so users
+// remain free to toggle any of these off afterwards without a later save
+// re-enabling them.
+//
+// Team: rules under the team scenario are almost always fronted by Claude Code
+// clients pointed at /tingly/team, so they hit the same third-party-provider
+// incompatibilities the built-in Claude Code rules already default around —
+// mid-conversation system-role messages that strict Anthropic-compatible
+// providers reject (ClaudeCodeCompat) and Claude Code's injected billing header
+// that must not leak upstream (CleanHeader). Default both on so team rules work
+// out of the box. Only seed when the client sent no flags, so an explicit
+// create payload that sets flags is left untouched.
+func applyScenarioCreateDefaults(rule *typ.Rule) {
+	if rule == nil {
+		return
+	}
+	if rule.Scenario.Is(typ.ScenarioTeam) && rule.Flags == (typ.RuleFlags{}) {
+		rule.Flags.ClaudeCodeCompat = true
+		rule.Flags.CleanHeader = true
+	}
 }
 
 // GetFlagRegistry returns the catalog of supported rule-level flags.

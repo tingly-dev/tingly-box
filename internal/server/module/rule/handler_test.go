@@ -229,6 +229,132 @@ func TestCreateRule_Success(t *testing.T) {
 	assert.Contains(t, bodyResp, `"uuid"`)
 }
 
+// TestCreateRule_TeamSeedsDefaultFlags locks the team-scenario default: a new
+// team rule created without flags gets ClaudeCodeCompat + CleanHeader seeded on,
+// since team rules are almost always fronted by Claude Code clients that hit the
+// same third-party-provider incompatibilities the built-in Claude Code rules
+// already default around.
+func TestCreateRule_TeamSeedsDefaultFlags(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+	router.POST("/rules", handler.CreateRule)
+
+	rule := typ.Rule{
+		RequestModel: "team-model",
+		Scenario:     typ.ScenarioTeam,
+		Active:       true,
+	}
+	body, _ := json.Marshal(rule)
+	req, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("create failed: %d %s", w.Code, w.Body.String())
+	}
+
+	var response UpdateRuleResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	saved := cfg.GetRuleByUUID(response.Data.UUID)
+	if saved == nil {
+		t.Fatal("rule not found after create")
+	}
+	if !saved.Flags.ClaudeCodeCompat {
+		t.Error("expected ClaudeCodeCompat seeded on for a new team rule")
+	}
+	if !saved.Flags.CleanHeader {
+		t.Error("expected CleanHeader seeded on for a new team rule")
+	}
+}
+
+// TestCreateRule_TeamRespectsExplicitFlags verifies the seeding only fills an
+// empty flag set: a create payload that already carries flags is left untouched,
+// so an operator who deliberately turns the defaults off is not overridden.
+func TestCreateRule_TeamRespectsExplicitFlags(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+	router.POST("/rules", handler.CreateRule)
+
+	// Explicitly set a single, unrelated flag. The flag set is non-empty, so the
+	// team defaults must NOT be layered on top.
+	rule := typ.Rule{
+		RequestModel: "team-model",
+		Scenario:     typ.ScenarioTeam,
+		Active:       true,
+		Flags:        typ.RuleFlags{SkipUsage: true},
+	}
+	body, _ := json.Marshal(rule)
+	req, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("create failed: %d %s", w.Code, w.Body.String())
+	}
+
+	var response UpdateRuleResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	saved := cfg.GetRuleByUUID(response.Data.UUID)
+	if saved == nil {
+		t.Fatal("rule not found after create")
+	}
+	if !saved.Flags.SkipUsage {
+		t.Error("explicit SkipUsage flag was lost")
+	}
+	if saved.Flags.ClaudeCodeCompat || saved.Flags.CleanHeader {
+		t.Error("team defaults must not override an explicit flag set")
+	}
+}
+
+// TestCreateRule_NonTeamNoDefaultFlags guards the scope: seeding is team-only,
+// so a rule created under any other scenario keeps its empty flag set.
+func TestCreateRule_NonTeamNoDefaultFlags(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
+
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+	router.POST("/rules", handler.CreateRule)
+
+	rule := typ.Rule{
+		RequestModel: "gpt-4",
+		Scenario:     "test-scenario",
+		Active:       true,
+	}
+	body, _ := json.Marshal(rule)
+	req, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("create failed: %d %s", w.Code, w.Body.String())
+	}
+
+	var response UpdateRuleResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	saved := cfg.GetRuleByUUID(response.Data.UUID)
+	if saved == nil {
+		t.Fatal("rule not found after create")
+	}
+	if saved.Flags != (typ.RuleFlags{}) {
+		t.Errorf("non-team rule should keep empty flags, got %+v", saved.Flags)
+	}
+}
+
 func TestCreateRule_DuplicateNameSameScenario(t *testing.T) {
 	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
 
