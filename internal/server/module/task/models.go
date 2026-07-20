@@ -24,9 +24,22 @@ type CreateStep struct {
 	Instruction string `json:"instruction" binding:"required"`
 }
 
+// UpdateRequest edits a non-running task's durable configuration.
+// Workspace and executor are the task's identity and stay fixed; completed
+// steps are immutable history. Everything else is editable between runs —
+// each run snapshots its effective policy, so audit is unaffected.
 type UpdateRequest struct {
 	Title *string `json:"title,omitempty"`
 	Goal  *string `json:"goal,omitempty"`
+	// FollowUp / TimeoutSeconds / Execution / Steps apply to agent tasks.
+	FollowUp       *agenttask.FollowUpPolicy  `json:"follow_up,omitempty"`
+	TimeoutSeconds *int                       `json:"timeout_seconds,omitempty"`
+	Execution      *agenttask.ExecutionPolicy `json:"execution,omitempty"`
+	// Steps replaces the not-yet-completed tail of the step list.
+	Steps *[]CreateStep `json:"steps,omitempty"`
+	// Recurrence replaces the schedule; ClearRecurrence switches to manual.
+	Recurrence      *coretask.RecurrenceSpec `json:"recurrence,omitempty"`
+	ClearRecurrence bool                     `json:"clear_recurrence,omitempty"`
 }
 
 type WakeRequest struct {

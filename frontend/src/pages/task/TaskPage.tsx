@@ -379,19 +379,46 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
 function EditTaskDialog({ task, open, onClose, onSaved }: {
   task: AgentTask; open: boolean; onClose: () => void; onSaved: (input: UpdateTaskInput) => Promise<void>;
 }) {
+  const isShell = task.agent === 'shell';
   const [title, setTitle] = useState('');
   const [goal, setGoal] = useState('');
+  const [cronEnabled, setCronEnabled] = useState(false);
+  const [cron, setCron] = useState('0 9 * * *');
+  const [keepChecking, setKeepChecking] = useState(false);
+  const [delay, setDelay] = useState(300);
+  const [maxWakeUps, setMaxWakeUps] = useState(20);
+  const [execution, setExecution] = useState<ExecutionPolicy>(defaultExecution(task.agent));
+  const [futureSteps, setFutureSteps] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const completedCount = task.step_outcomes?.length ?? 0;
+  const hasSteps = Boolean(task.steps?.length || futureSteps.length);
   useEffect(() => {
     if (!open) return;
     setTitle(task.title || ''); setGoal(task.goal); setError('');
-  }, [open, task.id, task.title, task.goal]);
+    setCronEnabled(Boolean(task.recurrence)); setCron(task.recurrence?.cron || '0 9 * * *');
+    setKeepChecking(task.follow_up?.enabled ?? false);
+    setDelay(task.follow_up?.delay_seconds ?? 300); setMaxWakeUps(task.follow_up?.max_wake_ups ?? 20);
+    setExecution(task.execution || defaultExecution(task.agent));
+    setFutureSteps((task.steps || []).slice(task.step_outcomes?.length ?? 0).map((step) => step.instruction));
+  }, [open, task.id]);
+  const toggleTool = (tool: ToolCapability) => setExecution((current) => {
+    const selected = current.tools || [];
+    return { ...current, tools: selected.includes(tool) ? selected.filter((item) => item !== tool) : [...selected, tool] };
+  });
   const save = async () => {
     if (!goal.trim()) return;
     setSaving(true); setError('');
+    const input: UpdateTaskInput = { title: title.trim(), goal: goal.trim() };
+    if (cronEnabled && cron.trim()) input.recurrence = { cron: cron.trim(), timezone: task.recurrence?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
+    if (!cronEnabled && task.recurrence) input.clear_recurrence = true;
+    if (!isShell) {
+      input.follow_up = { enabled: keepChecking, delay_seconds: delay, max_wake_ups: maxWakeUps };
+      input.execution = execution;
+      if (task.steps?.length || futureSteps.length) input.steps = futureSteps.filter((step) => step.trim()).map((instruction) => ({ instruction: instruction.trim() }));
+    }
     try {
-      await onSaved({ title: title.trim(), goal: goal.trim() });
+      await onSaved(input);
       onClose();
     } catch (err) { setError((err as Error).message); } finally { setSaving(false); }
   };
@@ -401,11 +428,46 @@ function EditTaskDialog({ task, open, onClose, onSaved }: {
       <Stack spacing={2}>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField autoFocus label="Task name (optional)" value={title} onChange={(event) => setTitle(event.target.value)} helperText="Leave empty to use the goal as the task name." />
-        <TextField multiline minRows={4} label="Goal" value={goal} onChange={(event) => setGoal(event.target.value)} required />
-        <Alert severity="info" variant="outlined">Saving changes the durable goal for future runs. It does not start a run or change the workspace, session, or steps.</Alert>
+        <TextField multiline minRows={3} label={isShell ? 'Command to run' : 'Goal'} value={goal} onChange={(event) => setGoal(event.target.value)} required slotProps={isShell ? { htmlInput: { spellCheck: false, style: { fontFamily: 'monospace' } } } : undefined} />
+        <Box>
+          <FormControlLabel control={<Switch checked={cronEnabled} onChange={(event) => setCronEnabled(event.target.checked)} />} label="Repeat on a schedule" />
+          {cronEnabled && <TextField fullWidth label="Cron schedule" value={cron} onChange={(event) => setCron(event.target.value)} helperText={`Five fields · ${task.recurrence?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}`} sx={{ mt: 1 }} />}
+        </Box>
+        {!isShell && <>
+          <Box>
+            <FormControlLabel control={<Switch checked={keepChecking} onChange={(event) => setKeepChecking(event.target.checked)} />} label="Keep checking until done" />
+            {keepChecking && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+              <TextField type="number" label="Follow-up delay (seconds)" value={delay} onChange={(event) => setDelay(Number(event.target.value))} fullWidth />
+              <TextField type="number" label="Maximum wake-ups" value={maxWakeUps} onChange={(event) => setMaxWakeUps(Number(event.target.value))} fullWidth />
+            </Stack>}
+          </Box>
+          <Box>
+            <Typography variant="subtitle2">Automation boundary</Typography>
+            <ToggleButtonGroup exclusive value={execution.launch_profile} onChange={(_, value) => value && setExecution((current) => ({ ...current, launch_profile: value }))} fullWidth size="small" sx={{ mt: 1 }}>
+              {(task.agent === 'claude' ? ['plan', 'accept_edits'] : ['read_only', 'workspace_write']).map((profile) => <ToggleButton key={profile} value={profile} sx={{ textTransform: 'none' }}>{getProfileMeta(profile).label}</ToggleButton>)}
+            </ToggleButtonGroup>
+            {task.agent === 'claude' && <FormGroup row sx={{ mt: 0.5 }}>
+              {(Object.keys(toolMeta) as ToolCapability[]).map((tool) => <Tooltip key={tool} title={toolNative[tool]}><FormControlLabel label={toolMeta[tool]} control={<Checkbox size="small" checked={execution.tools?.includes(tool) || false} onChange={() => toggleTool(tool)} />} /></Tooltip>)}
+            </FormGroup>}
+          </Box>
+          {hasSteps && <Box>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="subtitle2">Upcoming steps</Typography>
+              <Button size="small" startIcon={<Add />} onClick={() => setFutureSteps((items) => [...items, ''])}>Add step</Button>
+            </Stack>
+            {completedCount > 0 && <Typography variant="caption" color="text.secondary">{completedCount} completed step{completedCount > 1 ? 's' : ''} stay as immutable history.</Typography>}
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              {futureSteps.map((step, index) => <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
+                <TextField multiline minRows={1} fullWidth label={`Step ${completedCount + index + 1}`} value={step} onChange={(event) => setFutureSteps((items) => items.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />
+                <IconButton aria-label={`Remove step ${completedCount + index + 1}`} onClick={() => setFutureSteps((items) => items.filter((_, itemIndex) => itemIndex !== index))} sx={{ mt: 0.5 }}><Delete fontSize="small" /></IconButton>
+              </Stack>)}
+            </Stack>
+          </Box>}
+        </>}
+        <Alert severity="info" variant="outlined">Changes apply from the next run. The workspace, executor, and completed steps stay fixed.</Alert>
       </Stack>
     </DialogContent>
-    <DialogActions><Button onClick={onClose} disabled={saving}>Cancel</Button><Button variant="contained" onClick={save} disabled={saving || !goal.trim()}>{saving ? <CircularProgress size={18} /> : 'Save changes'}</Button></DialogActions>
+    <DialogActions><Button onClick={onClose} disabled={saving}>Cancel</Button><Button variant="contained" onClick={save} disabled={saving || !goal.trim() || (cronEnabled && !cron.trim())}>{saving ? <CircularProgress size={18} /> : 'Save changes'}</Button></DialogActions>
   </Dialog>;
 }
 

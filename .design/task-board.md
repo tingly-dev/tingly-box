@@ -415,6 +415,24 @@ run 面板内（ux #12）。
 - **等待时长可见**：needs_input / handoff 的列表行显示 "waiting 2h"，
   详情页 running 静默 3 分钟出卡住提示——等待与卡住都有年龄。
 
+### 7.2 可改性矩阵（ux #10：完成 ≠ 锁死）
+
+创建即冻结是首版实验的一个坑：改 cron 时间都要删了重建（历史、session、
+workspace 全丢）。规则改为——**任务的身份固定，任务的配置可改**：
+
+| 配置 | 可改性 | 依据 |
+|---|---|---|
+| Title / Goal（shell 为 Command） | 非 running 可改 | 既有 |
+| Schedule（cron/timezone，可清除转 manual） | 非 running 可改；pending/暂停态立即重物化下次触发 | 纯 run 之间的属性 |
+| Follow-up（enabled/delay/max） | 非 running 可改 | 同上 |
+| ExecutionPolicy（boundary/tools） | 非 running 可改，下次 run 生效 | 每次 run 已快照生效策略，审计不受影响 |
+| Timeout | 非 running 可改 | 同上 |
+| Steps | 已完成的 = 不可变历史；当前及未开始的可整体替换/追加 | 游标与 outcome 的不变量保持 |
+| Workspace / Executor | **固定** | 任务的身份：session 与文件都长在上面，换 = 新任务 |
+
+running/queued 时一律拒绝（引擎 ErrNotEditable 单点把关），编辑不触发
+运行。实现：`PATCH /tasks/:id` 全量扩展 + `Manager.UpdateRecurrence`。
+
 已识别、排期在后的：per-run 成本分解（usage 记录已带 run_id，差一个
 group-by 查询与 run 行内展示）；创建对话框的 cron 未来 N 次触发预览
 （需后端一个轻端点）；SSE 实时事件流替代 2s 轮询。

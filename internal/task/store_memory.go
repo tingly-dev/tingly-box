@@ -187,6 +187,14 @@ func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[
 					t.Result = json.RawMessage(sv)
 				}
 			}
+		case "recurrence":
+			if sv, ok := v.(string); ok {
+				if sv == "" {
+					t.Recurrence = nil
+				} else {
+					t.Recurrence = json.RawMessage(sv)
+				}
+			}
 		case "payload":
 			if sv, ok := v.(string); ok {
 				if sv == "" {

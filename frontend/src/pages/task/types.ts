@@ -1,3 +1,5 @@
+export interface TaskRecurrence { cron: string; timezone: string }
+
 export type TaskAgent = 'claude' | 'codex' | 'shell';
 export type TaskStatus = 'pending' | 'queued' | 'running' | 'needs_input' | 'handoff_required' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
 export type TaskRunStatus = 'running' | 'succeeded' | 'rescheduled' | 'needs_input' | 'handoff_required' | 'failed' | 'cancelled' | 'interrupted';
@@ -90,6 +92,12 @@ export interface CreateTaskInput {
 export interface UpdateTaskInput {
   title?: string;
   goal?: string;
+  follow_up?: FollowUpPolicy;
+  timeout_seconds?: number;
+  execution?: ExecutionPolicy;
+  steps?: { instruction: string }[];
+  recurrence?: TaskRecurrence;
+  clear_recurrence?: boolean;
 }
 
 export interface TaskRunEvent {

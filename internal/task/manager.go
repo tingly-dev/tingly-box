@@ -48,6 +48,11 @@ type Manager interface {
 	// Running handlers checkpoint through Controller.UpdatePayload instead.
 	UpdatePayload(ctx context.Context, taskID string, payload json.RawMessage) error
 
+	// UpdateRecurrence changes a non-running task's schedule. An empty
+	// recurrence switches the task to manual. For pending or paused tasks
+	// the next occurrence is rematerialized immediately.
+	UpdateRecurrence(ctx context.Context, taskID string, recurrence json.RawMessage) error
+
 	// Start runs restart recovery and launches the scheduler goroutine.
 	Start(ctx context.Context) error
 
@@ -269,6 +274,31 @@ func (m *taskManager) UpdatePayload(ctx context.Context, taskID string, payload 
 		return ErrNotEditable
 	}
 	return m.store.UpdateStatus(ctx, taskID, map[string]interface{}{"payload": string(payload)})
+}
+
+func (m *taskManager) UpdateRecurrence(ctx context.Context, taskID string, recurrence json.RawMessage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, err := m.store.Get(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	if t.Status == StatusRunning || t.Status == StatusQueued {
+		return ErrNotEditable
+	}
+	updates := map[string]interface{}{"recurrence": string(recurrence)}
+	if len(recurrence) > 0 {
+		next, err := NextOccurrence(recurrence, time.Now())
+		if err != nil {
+			return err
+		}
+		// Reschedulable states pick the new cadence up immediately; terminal
+		// tasks store it and rematerialize on their next completion.
+		if t.Status == StatusPending || t.Status == StatusNeedsInput || t.Status == StatusHandoff {
+			updates["scheduled_at"] = next
+		}
+	}
+	return m.store.UpdateStatus(ctx, taskID, updates)
 }
 
 func (m *taskManager) Start(ctx context.Context) error {

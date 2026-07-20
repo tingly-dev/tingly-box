@@ -131,8 +131,14 @@ func (h *Handler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Title == nil && req.Goal == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title or goal is required"})
+	hasEdit := req.Title != nil || req.Goal != nil || req.FollowUp != nil || req.TimeoutSeconds != nil ||
+		req.Execution != nil || req.Steps != nil || req.Recurrence != nil || req.ClearRecurrence
+	if !hasEdit {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
+		return
+	}
+	if req.Recurrence != nil && req.ClearRecurrence {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "recurrence and clear_recurrence are mutually exclusive"})
 		return
 	}
 
@@ -147,6 +153,10 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	if task.Type == shelltask.TaskType {
+		if req.FollowUp != nil || req.Execution != nil || req.Steps != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "follow-up, execution policy, and steps do not apply to shell tasks"})
+			return
+		}
 		var payload shelltask.Payload
 		if err := json.Unmarshal(task.Payload, &payload); err != nil {
 			writeError(c, err)
@@ -163,8 +173,16 @@ func (h *Handler) Update(c *gin.Context) {
 			}
 			payload.Command = command
 		}
+		if req.TimeoutSeconds != nil {
+			payload.TimeoutSeconds = *req.TimeoutSeconds
+			payload.ApplyDefaults()
+		}
 		data, _ := json.Marshal(payload)
 		if err := h.manager.UpdatePayload(ctx, task.ID, data); err != nil {
+			writeError(c, err)
+			return
+		}
+		if err := h.applyRecurrenceEdit(ctx, task.ID, req); err != nil {
 			writeError(c, err)
 			return
 		}
@@ -193,12 +211,48 @@ func (h *Handler) Update(c *gin.Context) {
 		}
 		payload.Goal = goal
 	}
+	if req.FollowUp != nil {
+		payload.FollowUp = *req.FollowUp
+	}
+	if req.TimeoutSeconds != nil {
+		payload.TimeoutSeconds = *req.TimeoutSeconds
+	}
+	if req.Execution != nil {
+		execution := *req.Execution
+		execution.ApplyDefaults(payload.Agent, false)
+		if err := execution.Validate(payload.Agent, false); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		payload.Execution = execution
+	}
+	if req.Steps != nil {
+		// Completed steps are immutable history; the current (not yet
+		// successful) step and everything after it are replaceable.
+		tail, err := normalizeSteps(*req.Steps)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		completed := payload.Steps[:len(payload.StepOutcomes)]
+		payload.Steps = append(append([]agenttask.Step{}, completed...), tail...)
+		payload.CurrentStep = len(payload.StepOutcomes)
+	}
+	payload.ApplyDefaults()
+	if err := payload.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 	if err := h.manager.UpdatePayload(ctx, task.ID, data); err != nil {
+		writeError(c, err)
+		return
+	}
+	if err := h.applyRecurrenceEdit(ctx, task.ID, req); err != nil {
 		writeError(c, err)
 		return
 	}
@@ -592,6 +646,22 @@ func writeError(c *gin.Context, err error) {
 // agent/executor axis of the API. It is not an agenttask kind: shell tasks
 // use shelltask payloads and have no session, steps, or launch profiles.
 const agentShell = agenttask.AgentKind(shelltask.TaskType)
+
+// applyRecurrenceEdit applies a schedule change from an UpdateRequest.
+func (h *Handler) applyRecurrenceEdit(ctx context.Context, taskID string, req UpdateRequest) error {
+	if req.Recurrence == nil && !req.ClearRecurrence {
+		return nil
+	}
+	var recurrence json.RawMessage
+	if req.Recurrence != nil {
+		data, err := json.Marshal(req.Recurrence)
+		if err != nil {
+			return err
+		}
+		recurrence = data
+	}
+	return h.manager.UpdateRecurrence(ctx, taskID, recurrence)
+}
 
 func isBoardTask(taskType string) bool {
 	return taskType == agenttask.TaskType || taskType == shelltask.TaskType
