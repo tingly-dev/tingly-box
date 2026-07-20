@@ -24,26 +24,26 @@ import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 
 // Module-level cache so we only fetch the flag catalog once per session.
 // `undefined` = never fetched; `[]` = fetched but empty (don't re-fetch).
-let _flagRegistryCache: FlagSpec[] | undefined = undefined;
-let _flagRegistryPromise: Promise<FlagSpec[]> | null = null;
+let flagRegistryCache: FlagSpec[] | undefined = undefined;
+let flagRegistryPromise: Promise<FlagSpec[]> | null = null;
 
 async function loadFlagRegistry(): Promise<FlagSpec[]> {
-    if (_flagRegistryCache !== undefined) return _flagRegistryCache;
-    if (_flagRegistryPromise) return _flagRegistryPromise;
-    _flagRegistryPromise = (async () => {
+    if (flagRegistryCache !== undefined) return flagRegistryCache;
+    if (flagRegistryPromise) return flagRegistryPromise;
+    flagRegistryPromise = (async () => {
         try {
             const result = await api.getRuleFlagRegistry();
             const data: FlagSpec[] = Array.isArray(result?.data) ? result.data : [];
-            _flagRegistryCache = data;
+            flagRegistryCache = data;
             return data;
         } catch {
             // Don't cache failures — allow retry on next mount.
             return [];
         } finally {
-            _flagRegistryPromise = null;
+            flagRegistryPromise = null;
         }
     })();
-    return _flagRegistryPromise;
+    return flagRegistryPromise;
 }
 
 export interface RuleCardProps {
@@ -136,8 +136,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Catalog dialog state + registry
     const [catalogOpen, setCatalogOpen] = useState(false);
-    const [flagRegistry, setFlagRegistry] = useState<FlagSpec[]>(_flagRegistryCache ?? []);
-    const [registryLoaded, setRegistryLoaded] = useState(_flagRegistryCache !== undefined);
+    const [flagRegistry, setFlagRegistry] = useState<FlagSpec[]>(flagRegistryCache ?? []);
+    const [registryLoaded, setRegistryLoaded] = useState(flagRegistryCache !== undefined);
     const [registryLoading, setRegistryLoading] = useState(false);
 
     useEffect(() => {

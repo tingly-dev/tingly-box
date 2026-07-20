@@ -9,10 +9,12 @@ interface SurfaceProps {
   sx?: SxProps<Theme>;
 }
 
+const DEFAULT_PADDING = { xs: 2, sm: 2.5 };
+
 export default function Surface({
   children,
   variant = 'outlined',
-  padding = { xs: 2, sm: 2.5 },
+  padding = DEFAULT_PADDING,
   sx,
 }: SurfaceProps) {
   const variantSx: Record<NonNullable<SurfaceProps['variant']>, SxProps<Theme>> = {

@@ -1,6 +1,7 @@
 import type { ChipProps, SxProps } from '@mui/material';
 import { Chip } from '@mui/material';
 import { LocationOn as LocationOnIcon } from '@/components/icons';
+import { EMPTY_SX } from '@/constants/defaults';
 
 export interface RegionBadgeProps {
   region: 'cn' | 'global' | 'self-hosted';
@@ -41,7 +42,7 @@ const sizeStyles: Record<'small' | 'medium', { height: number; fontSize: string 
   },
 };
 
-const RegionBadge: React.FC<RegionBadgeProps> = ({ region, size = 'small', sx = {} }) => {
+const RegionBadge: React.FC<RegionBadgeProps> = ({ region, size = 'small', sx = EMPTY_SX }) => {
   const colors = getRegionColor(region);
   const sizeStyle = sizeStyles[size];
 

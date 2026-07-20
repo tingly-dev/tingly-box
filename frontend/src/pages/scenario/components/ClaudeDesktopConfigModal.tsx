@@ -43,12 +43,14 @@ const buildInferenceModelsJson = (modelRules: any[]): string => {
     return `"inferenceModels": [\n${entries.join(',\n')}\n  ]`;
 };
 
+const EMPTY_RULES: any[] = [];
+
 const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
     open,
     onClose,
     baseUrl,
     copyToClipboard,
-    rules = [],
+    rules = EMPTY_RULES,
     onRulesRefresh,
     pendingContext1MChange,
 }) => {

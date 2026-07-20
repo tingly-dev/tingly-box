@@ -122,14 +122,17 @@ const Tag: React.FC<{ label: string }> = ({ label }) => (
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
+const EMPTY_BADGES: ToolCardBadge[] = [];
+const EMPTY_TAGS: string[] = [];
+
 export const ToolCard: React.FC<ToolCardProps> = ({
     icon,
     name,
     description,
     enabled,
     onToggle,
-    badges = [],
-    tags = [],
+    badges = EMPTY_BADGES,
+    tags = EMPTY_TAGS,
     settings,
     actions,
     toggleDisabled = false,

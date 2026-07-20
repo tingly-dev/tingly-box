@@ -2,6 +2,7 @@ import { Alert, Box, Card, CardContent, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 import { forwardRef } from 'react';
+import { EMPTY_SX } from '@/constants/defaults';
 
 interface UnifiedCardProps {
   title?: string | ReactNode;
@@ -111,7 +112,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
   onClearMessage,
   leftAction,
   rightAction,
-  sx = {},
+  sx = EMPTY_SX,
   id,
 }, ref) => {
   return (

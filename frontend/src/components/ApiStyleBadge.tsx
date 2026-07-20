@@ -1,5 +1,6 @@
 import {Box, useTheme, alpha} from '@mui/material';
 import type {SxProps, Theme} from '@mui/material';
+import { EMPTY_SX } from '@/constants/defaults';
 
 interface ApiStyleBadgeProps {
     apiStyle: string;
@@ -9,7 +10,7 @@ interface ApiStyleBadgeProps {
 }
 
 // Helper function to render API style badge with icon and colored background
-export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false, minimal = false}: ApiStyleBadgeProps) => {
+export const ApiStyleBadge = ({apiStyle, sx = EMPTY_SX, compact = false, minimal = false}: ApiStyleBadgeProps) => {
     const theme = useTheme();
     const isOpenAI = apiStyle === 'openai';
     const isAnthropic = apiStyle === 'anthropic';

@@ -3,6 +3,7 @@ import { Box, IconButton, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import type { Language } from 'prism-react-renderer';
+import { EMPTY_STYLE } from '@/constants/defaults';
 
 export interface CodeBlockProps {
     code: string;
@@ -49,7 +50,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     filename,
     showCopy = true,
     onCopy,
-    sx = {},
+    sx = EMPTY_STYLE,
     maxHeight = 400,
     minHeight,
     headerActions,

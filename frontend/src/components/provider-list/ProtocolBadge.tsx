@@ -1,6 +1,7 @@
 import React from 'react';
 import { Chip } from '@mui/material';
 import type { SxProps } from '@mui/material';
+import { EMPTY_SX } from '@/constants/defaults';
 
 
 interface ProtocolBadgeProps {
@@ -29,7 +30,7 @@ const protocolConfig: Record<
 const ProtocolBadge: React.FC<ProtocolBadgeProps> = ({
   protocol,
   size = 'small',
-  sx = {},
+  sx = EMPTY_SX,
   onClick,
 }) => {
   const config = protocolConfig[protocol];
