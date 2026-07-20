@@ -153,12 +153,6 @@ func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfo(core.PlatformWecom, "WeCom")
 }
 
-// StartReceiving is a no-op; receiving is handled inside Connect.
-func (b *Bot) StartReceiving(ctx context.Context) error { return nil }
-
-// StopReceiving is a no-op; receiving is stopped via Disconnect.
-func (b *Bot) StopReceiving(ctx context.Context) error { return nil }
-
 // Close releases resources.
 func (b *Bot) Close() error {
 	if b.cancel != nil {

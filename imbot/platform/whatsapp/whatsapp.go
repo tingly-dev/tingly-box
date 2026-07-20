@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,7 +197,7 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 
 	// Parse phone number from messageID if in format "phone:message_id"
 	phoneNumber := messageID
-	if idx := findIndex(messageID, ":"); idx != -1 {
+	if idx := strings.Index(messageID, ":"); idx != -1 {
 		phoneNumber = messageID[:idx]
 		messageID = messageID[idx+1:]
 	}
@@ -251,16 +252,6 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfo(core.PlatformWhatsApp, "WhatsApp")
-}
-
-// StartReceiving starts receiving messages
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil
-}
-
-// StopReceiving stops receiving messages
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil
 }
 
 // authenticate performs authentication test
@@ -519,7 +510,7 @@ func (b *Bot) handleWhatsAppMessages(messages []struct {
 
 		// Extract phone number from wa_id if available
 		// Format: 1234567890@s.whatsapp.net
-		if idx := findIndex(msg.From, "@"); idx != -1 {
+		if idx := strings.Index(msg.From, "@"); idx != -1 {
 			sender.DisplayName = msg.From[:idx]
 		}
 
@@ -559,14 +550,4 @@ func parseWhatsAppTimestamp(ts string) int64 {
 		return ms / 1000
 	}
 	return 0
-}
-
-// findIndex finds the index of a substring in a string
-func findIndex(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

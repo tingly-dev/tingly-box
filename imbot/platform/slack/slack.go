@@ -3,6 +3,7 @@ package slack
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/slack-go/slack"
@@ -158,7 +159,7 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 
 	// Parse thread ID if present (for threaded messages)
 	var threadTimestamp string
-	if threadIDIdx := findIndex(messageID, ":thread:"); threadIDIdx != -1 {
+	if threadIDIdx := strings.Index(messageID, ":thread:"); threadIDIdx != -1 {
 		threadTimestamp = messageID[threadIDIdx+8:]
 	}
 
@@ -200,16 +201,6 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfo(core.PlatformSlack, "Slack")
-}
-
-// StartReceiving starts receiving messages (already started in Connect)
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil
-}
-
-// StopReceiving stops receiving messages (already handled in Disconnect)
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil
 }
 
 // startRTM starts the Real-Time Messaging connection
@@ -511,12 +502,17 @@ func (b *Bot) handleAttachments(attachments []slack.Attachment) core.Content {
 func parseSlackMessageReference(ref string) []string {
 	// Slack uses "channelID:timestamp" format
 	// Also handle thread format: "channelID:thread:threadTimestamp"
-	if idx := findIndex(ref, ":thread:"); idx != -1 {
+	if idx := strings.Index(ref, ":thread:"); idx != -1 {
 		// Thread reference
 		return []string{ref[:idx], ref[idx+1:]}
 	}
 
-	return splitStringN(ref, ":", 2)
+	// Always return exactly two elements ("" padded) — callers assert len == 2.
+	parts := strings.SplitN(ref, ":", 2)
+	if len(parts) < 2 {
+		parts = append(parts, "")
+	}
+	return parts
 }
 
 func parseSlackTimestamp(ts string) int64 {
@@ -532,46 +528,4 @@ func parseSlackTimestamp(ts string) int64 {
 	}
 
 	return 0
-}
-
-func findIndex(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
-}
-
-func splitStringN(s, sep string, n int) []string {
-	parts := make([]string, 0, n)
-	current := ""
-	count := 0
-
-	for i := 0; i < len(s); i++ {
-		if count == n-1 {
-			parts = append(parts, s[i:])
-			break
-		}
-
-		if i+len(sep) <= len(s) && s[i:i+len(sep)] == sep {
-			parts = append(parts, current)
-			current = ""
-			i += len(sep) - 1
-			count++
-		} else {
-			current += string(s[i])
-		}
-	}
-
-	if current != "" && count < n {
-		parts = append(parts, current)
-	}
-
-	// Pad with empty strings if needed
-	for len(parts) < n {
-		parts = append(parts, "")
-	}
-
-	return parts
 }

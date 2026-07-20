@@ -220,16 +220,6 @@ func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfo(core.PlatformDiscord, "Discord")
 }
 
-// StartReceiving starts receiving messages (already started in Connect)
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil
-}
-
-// StopReceiving stops receiving messages (already handled in Disconnect)
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil
-}
-
 // onReady is called when the bot is ready
 func (b *Bot) onReady(s *discordgo.Session, event *discordgo.Ready) {
 	b.UpdateReady(true)

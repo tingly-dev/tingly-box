@@ -385,16 +385,6 @@ func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfo(core.PlatformTelegram, "Telegram")
 }
 
-// StartReceiving starts receiving messages (already started in Connect)
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil // Already started in Connect
-}
-
-// StopReceiving stops receiving messages (already handled in Disconnect)
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil // Already handled in Disconnect
-}
-
 // sendText sends a text message
 func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	var parseMode models.ParseMode

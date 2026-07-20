@@ -12,7 +12,7 @@ import (
 // Adapter converts Weixin channel messages to core.Message format.
 type Adapter struct {
 	*core.BaseAdapter
-	account *types.WeChatAccount
+	account  *types.WeChatAccount
 	platform core.Platform
 }
 

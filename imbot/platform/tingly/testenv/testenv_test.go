@@ -35,7 +35,7 @@ func TestEnv_RoundTrip(t *testing.T) {
 	chat := alice.OpenDM(uuid)
 	chat.SendText("hello")
 
-	chat.WaitText(2 * time.Second).AssertEquals(t, "echo: hello")
+	chat.WaitText(2*time.Second).AssertEquals(t, "echo: hello")
 }
 
 func TestEnv_ButtonClick(t *testing.T) {
@@ -87,7 +87,7 @@ func TestEnv_ButtonClick(t *testing.T) {
 	require.True(t, ok)
 	btn.Click()
 
-	chat.WaitText(2 * time.Second).AssertEquals(t, "got: ia:perm:approve")
+	chat.WaitText(2*time.Second).AssertEquals(t, "got: ia:perm:approve")
 
 	mu.Lock()
 	defer mu.Unlock()

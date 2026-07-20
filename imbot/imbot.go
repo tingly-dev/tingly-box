@@ -1,4 +1,4 @@
-// Package pkg provides the public API for the imbot package
+// Package imbot provides the public API for the imbot package.
 package imbot
 
 import (
