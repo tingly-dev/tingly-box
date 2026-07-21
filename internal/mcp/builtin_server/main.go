@@ -17,10 +17,18 @@ import (
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 )
 
-const (
+// Endpoints are variables so tests can point them at a local httptest server.
+var (
 	serperAPIEndpoint  = "https://google.serper.dev/search"
 	jinaReaderEndpoint = "https://r.jina.ai/"
 )
+
+// The Serper backend can transiently fail or rate-limit under parallel bursts,
+// sometimes as an HTTP 200 whose body carries no results; retry with a short
+// backoff instead of surfacing a silent empty result.
+const webSearchMaxAttempts = 3
+
+var webSearchRetryBaseWait = 500 * time.Millisecond
 
 // Serve starts the builtin MCP server on stdio.
 // This is the main entry point for the builtin MCP server.
@@ -250,45 +258,36 @@ func webSearchImpl(ctx context.Context, args map[string]interface{}) (string, er
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Make HTTP request with API key in header
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "POST", serperAPIEndpoint, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("X-API-KEY", apiKey)
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute search: %w", err)
-	}
-	defer resp.Body.Close()
+	var result serperSearchResult
+	var lastErr error
+	for attempt := 1; attempt <= webSearchMaxAttempts; attempt++ {
+		if attempt > 1 {
+			wait := webSearchRetryBaseWait << (attempt - 2) // 500ms, 1s, ...
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(wait):
+			}
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096000))
-		return "", fmt.Errorf("search failed with status %d: %s", resp.StatusCode, string(body))
+		var retryable bool
+		result, retryable, lastErr = serperSearchOnce(ctx, client, apiKey, payloadBytes)
+		if lastErr != nil {
+			if !retryable {
+				return "", lastErr
+			}
+			fmt.Fprintf(os.Stderr, "mcp_web_search: attempt %d/%d failed: %v\n", attempt, webSearchMaxAttempts, lastErr)
+			continue
+		}
+		if len(result.Organic) > 0 || result.AnswerBox.Answer != "" {
+			break
+		}
+		fmt.Fprintf(os.Stderr, "mcp_web_search: attempt %d/%d returned no results for %q\n", attempt, webSearchMaxAttempts, finalQuery)
 	}
-
-	// Parse response
-	var result struct {
-		Organic []struct {
-			Title   string `json:"title"`
-			Link    string `json:"link"`
-			Snippet string `json:"snippet"`
-		} `json:"organic"`
-		AnswerBox struct {
-			Answer string `json:"answer"`
-		} `json:"answerBox"`
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	if lastErr != nil {
+		return "", lastErr
 	}
 
 	// Format results
@@ -307,7 +306,78 @@ func webSearchImpl(ctx context.Context, args map[string]interface{}) (string, er
 		output.WriteString(fmt.Sprintf("   %s\n\n", item.Snippet))
 	}
 
+	if result.AnswerBox.Answer == "" && len(result.Organic) == 0 {
+		output.WriteString("No results found for this query. Try rewording it or removing site: filters.\n")
+	}
+
 	return output.String(), nil
+}
+
+// serperSearchResult mirrors the fields of a Serper response we consume.
+// searchParameters is echoed back on every well-formed response, so its
+// absence on an HTTP 200 marks a backend error body rather than a result set.
+type serperSearchResult struct {
+	SearchParameters json.RawMessage `json:"searchParameters"`
+	Message          string          `json:"message"`
+	Organic          []struct {
+		Title   string `json:"title"`
+		Link    string `json:"link"`
+		Snippet string `json:"snippet"`
+	} `json:"organic"`
+	AnswerBox struct {
+		Answer string `json:"answer"`
+	} `json:"answerBox"`
+}
+
+// serperSearchOnce performs a single Serper API call. retryable reports
+// whether the failure is worth another attempt (network errors, 429/5xx,
+// malformed 200 bodies) as opposed to a hard client error such as a bad key.
+func serperSearchOnce(ctx context.Context, client *http.Client, apiKey string, payload []byte) (serperSearchResult, bool, error) {
+	var result serperSearchResult
+
+	req, err := http.NewRequestWithContext(ctx, "POST", serperAPIEndpoint, bytes.NewReader(payload))
+	if err != nil {
+		return result, false, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("X-API-KEY", apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return result, true, fmt.Errorf("failed to execute search: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096000))
+	if err != nil {
+		return result, true, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+		return result, retryable, fmt.Errorf("search failed with status %d: %s", resp.StatusCode, truncateForError(body))
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return result, true, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if result.Message != "" {
+		return result, true, fmt.Errorf("search backend returned error: %s", result.Message)
+	}
+	if len(result.SearchParameters) == 0 {
+		return result, true, fmt.Errorf("search backend returned malformed response: %s", truncateForError(body))
+	}
+
+	return result, true, nil
+}
+
+func truncateForError(body []byte) string {
+	const max = 512
+	if len(body) > max {
+		return string(body[:max]) + "..."
+	}
+	return string(body)
 }
 
 // webFetchImpl implements the actual web fetch logic
