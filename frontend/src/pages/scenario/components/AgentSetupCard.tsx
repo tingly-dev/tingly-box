@@ -13,7 +13,6 @@ import {
     Stack,
     Tooltip,
     Typography,
-    alpha,
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -237,16 +236,10 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     // Which step is the first incomplete one (determines which expands)
     const firstIncomplete = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : -1;
 
-    const stepRowSx = (done: boolean, active: boolean) => ({
-        py: active ? 1.25 : 0.75,
+    const stepRowSx = () => ({
+        py: 0.75,
         px: 1.5,
         borderRadius: 1.5,
-        transition: 'background-color 0.15s ease',
-        ...(active && !done ? {
-            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
-            border: 1,
-            borderColor: 'divider',
-        } : {}),
     });
 
     return (
@@ -293,7 +286,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                 <Stack spacing={0.5}>
 
                     {/* Step 1 — Provider */}
-                    <Box sx={stepRowSx(providerDone, firstIncomplete === 0)}>
+                    <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -342,7 +335,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Box>
 
                     {/* Step 2 — Model */}
-                    <Box sx={stepRowSx(modelDone, firstIncomplete === 1)}>
+                    <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -391,7 +384,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Box>
 
                     {/* Step 3 — Install */}
-                    <Box sx={stepRowSx(installDone, firstIncomplete === 2)}>
+                    <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
@@ -492,7 +485,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Box>
 
                     {/* Step 4 — Apply */}
-                    <Box sx={stepRowSx(applyDone, firstIncomplete === 3)}>
+                    <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
