@@ -59,7 +59,6 @@ export function buildProviderFormData(selection: ConnectSelection): ConnectFormR
             enabled: true,
             noKeyRequired: isLocal ? !((p as any).defaultApiKey) : false,
             proxyUrl: '',
-            userAgent: '',
             providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
             selectedProviderId: p.id,
         },
@@ -144,7 +143,6 @@ export const useProviderDialog = (
             token: fd.token,
             no_key_required: fd.noKeyRequired,
             proxy_url: fd.proxyUrl,
-            user_agent: fd.userAgent ?? '',
         };
 
         const result = await api.addProvider(providerData);

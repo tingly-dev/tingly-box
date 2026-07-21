@@ -14,40 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// userAgentRoundTripper forces the outbound User-Agent header to a fixed
-// value. It is layered as the INNERMOST wrapper (closer to the network) so it
-// takes precedence over any provider-specific UA set by outer round trippers
-// (claudeRoundTripper, antigravityRoundTripper, codexRoundTripper, etc.) that
-// rewrite headers before delegating downstream.
-type userAgentRoundTripper struct {
-	http.RoundTripper
-	userAgent string
-}
-
-func (t *userAgentRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if t.userAgent != "" {
-		req.Header.Set("User-Agent", t.userAgent)
-	}
-	return t.RoundTripper.RoundTrip(req)
-}
-
-// wrapWithUserAgent wraps a transport with a User-Agent override when the
-// provider has a custom UA configured. Returns the original transport unchanged
-// when no override is set.
-//
-// Design note: provider.UserAgent is treated as a deliberate debug knob — when
-// non-empty it intentionally overrides even vendor-pinned UAs (claude-cli,
-// GeminiCLI, codex, …) because we don't want to hide the configured value
-// behind silent precedence rules. Operators who set this should know what
-// they're doing; the catch lives in ai/provider.go's UserAgent doc comment.
-// Rule-level custom_user_agent layers innermost so it still wins over both.
-func wrapWithUserAgent(inner http.RoundTripper, provider *typ.Provider) http.RoundTripper {
-	if provider == nil || provider.UserAgent == "" {
-		return inner
-	}
-	return &userAgentRoundTripper{RoundTripper: inner, userAgent: provider.UserAgent}
-}
-
 // CreateHTTPClientWithProxy creates an HTTP client with proxy support.
 // Supports http(s) and socks5 proxy URLs; falls back to http.DefaultClient
 // for any parse/scheme failure (logged).
@@ -279,9 +245,10 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 // their dedicated xxx_client.go files and layer their RoundTripper on top of
 // what this returns.
 //
-// A custom User-Agent override (provider.UserAgent) is layered here at the
-// innermost position so it wins against any outer adapter that rewrites
-// headers before delegating downstream.
+// It deliberately does NOT touch the User-Agent: this transport underpins the
+// vendor-specialized clients (Claude Code OAuth, Codex, Kimi, Gemini,
+// Antigravity), whose round trippers pin the vendor handshake UA outside it.
+// Keeping UA out of here is what makes that vendor pin decisive.
 func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
 	var issuer ai.Issuer
 	if provider.OAuthDetail != nil {
@@ -292,13 +259,11 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.ProxyURL)
 	}
 
-	base := &SessionBoundTransport{
+	return &SessionBoundTransport{
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
 		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
 	}
-
-	return wrapWithUserAgent(base, provider)
 }

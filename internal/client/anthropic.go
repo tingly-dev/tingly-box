@@ -85,11 +85,12 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 			transport = &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)}
 		}
 	} else {
-		// Generic non-OAuth Anthropic provider. Apply the same User-Agent
-		// layering as the generic OpenAI client (rule > provider): rule-UA
-		// wraps innermost so it overwrites the header last, provider-UA sits
-		// outside. OAuth issuers above keep their dedicated transport chain
-		// unchanged because vendor-specific round-trippers manage UA themselves.
+		// Generic non-OAuth Anthropic provider. The rule/scenario
+		// custom_user_agent override (via customUserAgentTransport) is the only
+		// outbound-UA layer; there is deliberately no provider-level UA override
+		// (UA is a request-path concern, not provider config). OAuth issuers
+		// above keep their dedicated transport chain unchanged because
+		// vendor-specific round-trippers pin the handshake UA themselves.
 		//
 		// Use the transport pool instead of http.DefaultTransport so that env
 		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
@@ -97,7 +98,6 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 		transport = &context1mBetaTransport{base: base}
 		transport = &customUserAgentTransport{base: transport}
-		transport = wrapWithUserAgent(transport, provider)
 		transport = wrapWithLogging(transport, provider)
 	}
 

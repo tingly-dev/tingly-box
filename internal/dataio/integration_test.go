@@ -200,7 +200,6 @@ func TestProviderRoundTripByAuthType(t *testing.T) {
 				NoKeyRequired:      false,
 				Enabled:            true,
 				ProxyURL:           "http://localhost:7890",
-				UserAgent:          "custom-agent/1.0",
 				Timeout:            45,
 				Tags:               []string{"prod", "fast"},
 				Models:             []string{"gpt-4", "gpt-4o"},
@@ -310,7 +309,7 @@ func TestProviderRoundTripByAuthType(t *testing.T) {
 			// owns — this isolates the export/import fix from the separate
 			// DB persistence layer (internal/data/db), which has its own,
 			// independent field-mapping gaps (e.g. Models isn't a column at
-			// all, UserAgent/DeviceID aren't copied in toRecord/toProvider)
+			// all, DeviceID isn't copied in toRecord/toProvider)
 			// that are out of scope for this change.
 			decodedProvider := decodeExportedProvider(t, exportResult.Content, tt.provider.UUID)
 
@@ -505,9 +504,6 @@ func assertProviderFieldsEqual(t *testing.T, want, got *typ.Provider) {
 	}
 	if want.ProxyURL != got.ProxyURL {
 		t.Errorf("ProxyURL = %q, want %q", got.ProxyURL, want.ProxyURL)
-	}
-	if want.UserAgent != got.UserAgent {
-		t.Errorf("UserAgent = %q, want %q", got.UserAgent, want.UserAgent)
 	}
 	if want.Timeout != got.Timeout {
 		t.Errorf("Timeout = %d, want %d", got.Timeout, want.Timeout)

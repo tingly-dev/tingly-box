@@ -48,7 +48,6 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
             no_key_required: fd.noKeyRequired || false,
             enabled: fd.enabled,
             proxy_url: fd.proxyUrl ?? '',
-            user_agent: fd.userAgent ?? '',
             api_base_openai: fd.apiBaseOpenAI ?? '',
             api_base_anthropic: fd.apiBaseAnthropic ?? '',
         };
@@ -83,7 +82,6 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                     enabled: provider.enabled,
                     noKeyRequired: provider.no_key_required || false,
                     proxyUrl: provider.proxy_url || '',
-                    userAgent: (provider as any).user_agent || '',
                     authType: provider.auth_type || 'api_key',
                 } as any);
                 setApiKeyDialogOpen(true);

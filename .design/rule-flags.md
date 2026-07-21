@@ -284,48 +284,36 @@ handler                            transformXxxx                       chain
 
 ## 8. UA 链层 — 实操中最易踩坑的部分
 
-User-Agent 优先级（每一层都是"set then delegate"，**innermost wins**）：
+**UA 是请求链路的关注点,不是 provider 配置。** 没有 provider 级 UA 字段(历史上的
+`provider.UserAgent` 已彻底移除,理由见 §11 取舍表)。走哪条 client 实现决定适用哪套规则:
+
+**A. 通用 pass-through 链**（通用 OpenAI `openai.go`、通用非-OAuth Anthropic
+`anthropic.go` else 分支）——rule/scenario `custom_user_agent` 是唯一 UA override 层:
 
 ```
-   ┌────────────────────────────────────┐
-   │  outer adapter (e.g. claudeRT)     │ ← vendor 硬编码 UA，先 set
-   │     │  set "claude-cli/2.1.86"     │
-   │     ▼ delegates to                 │
-   │  wrapWithUserAgent(provider)       │ ← provider.UserAgent（调试 override）
-   │     │  if non-empty: set provider  │   非空时覆盖 vendor 硬编码
-   │     ▼                              │
-   │  customUserAgentTransport          │ ← rule-level custom_user_agent
-   │     │  if ctx has UA: set rule UA  │   非空时覆盖一切（innermost wins）
-   │     ▼                              │
-   │  base http.Transport (sends wire)  │
-   └────────────────────────────────────┘
+   customUserAgentTransport          ← rule/scenario custom_user_agent（非空即赢）
+     base http.Transport → wire      ← 否则 SDK 默认 UA
 ```
 
-最终结果：
+优先级：**rule/scenario custom_user_agent > SDK 默认 UA**（`none` 哨兵 = 完全去掉 UA）。
 
-| 场景 | rule UA | provider UA | vendor 硬编码 | 实际发出 |
-|------|---------|-------------|--------------|---------|
-| 默认 | 空 | 空 | claude-cli/… | claude-cli/… |
-| Provider 配了 | 空 | "MyOrg/1.0" | claude-cli/… | MyOrg/1.0 |
-| Rule 配了 | "Bench/1" | "MyOrg/1.0" | claude-cli/… | Bench/1 |
-| Rule 配了 | "Bench/1" | 空 | — | Bench/1 |
+**B. 内建特种（vendor）链**（Claude Code OAuth / Codex / Kimi / Gemini / Antigravity）
+——vendor round-tripper 硬编码的**特种握手 UA 是决定性的**,`custom_user_agent` 完全不参与
+（这些链上没有 `customUserAgentTransport`）,也没有任何 provider 配置能覆盖它。
+`createSessionBoundTransport`(vendor 链底座)只做 session 绑定,不碰 UA。
 
-⚠️ `provider.UserAgent` 一旦设置就会覆盖 vendor 硬编码——这是**有意为之**
-的调试通道（见 `ai/provider.go` 该字段的 doc comment）。Claude Code OAuth
-等端点对 UA 有真实校验，错配会让 OAuth 直接被拒；设置该字段时要清楚自己
-在干嘛。
+| 场景（通用链 A） | rule UA | 实际发出 |
+|------------------|---------|----------|
+| 默认 | 空 | SDK 默认 |
+| Rule 配了 | "Bench/1" | Bench/1 |
+| Rule = `none` | "none" | （无 UA，strip 生效）|
 
-并非所有 client 都接入这条链：
+| 场景（特种链 B） | 实际发出 |
+|------------------|----------|
+| 任意 rule/配置 | **vendor 特种 UA**（Codex：SDK 默认,round-tripper 不设 UA）|
 
-| Client | Provider UA | Rule UA |
-|--------|-------------|---------|
-| 通用 OpenAI (`client/openai.go`) | ✅ | ✅ |
-| 通用 Anthropic 非-OAuth (`client/anthropic.go` else 分支) | ✅ | ✅ |
-| Claude Code OAuth (`claudeRoundTripper`) | ✅ | ❌ |
-| Codex / Kimi / Gemini / Google | ✅ | ❌ |
-
-vendor-specialized 路径不接 rule UA：它们 UA 跟整个 OAuth/握手协议绑
-定，rule 级覆盖反而会破坏 vendor 校验。这条边界写进了
+vendor-specialized 路径不接 rule UA：它们 UA 跟整个 OAuth/握手/指纹协议绑定,任何级别的
+覆盖都会破坏 vendor 校验,所以 vendor 特种 UA 对它是**决定性**的。这条边界写进了
 `flag_registry.go` 中 `custom_user_agent` 的 description 里。
 
 ⚠️ **重要不变量**：`applyCustomUserAgent`（由 `resolveRuleFlagsWithScenario`
@@ -495,7 +483,7 @@ Plugins Card 操作。
 | Registry 由后端 owner | ✅ | 前端硬编码 + 后端硬编码两边对 | 单一可信源，新 flag 只动一处元数据 |
 | 卡片放路由图内 vs 固定右侧 | 固定右侧 | 卡片随路由图滚动 | flag 是 rule 级而非 provider 级，常驻可见更符合心智模型 |
 | string flag 的"启用"语义 | 空 = 未启用 | 独立 enable Switch + 文本 | 一个字段一个状态，UI 更简单；权衡是无法区分"空字符串"和"未配置" |
-| UA 链 vendor pin 是否不可覆盖 | 否，可被 provider/rule 覆盖 | vendor pin 强制 | 把 `provider.UserAgent` 当调试 override 更灵活；用 doc comment 规约 |
+| UA 链 vendor pin 是否不可覆盖 | **是,vendor pin 决定性** | 保留 `provider.UserAgent` 调试 override | provider 是静态配置,不该耦合进请求链路去改写 vendor 握手/指纹 UA(footgun)。`provider.UserAgent` 字段已彻底移除;UA 只保留请求侧来源(rule custom_user_agent)与 vendor pin 两个正交轴 |
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
 | preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |

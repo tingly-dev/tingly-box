@@ -103,7 +103,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "custom_user_agent",
 			Label:           "Custom User-Agent",
-			Description:     "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
+			Description:     "Override the outbound User-Agent header sent to the upstream provider, for generic OpenAI / Anthropic clients. Vendor-specific clients (Claude Code OAuth, Codex, Kimi, Gemini, Antigravity) keep their dedicated handshake User-Agent and ignore this. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
 			Type:            FlagTypeString,
 			Category:        FlagCategoryRequestOpenAI,
 			Placeholder:     "e.g. MyApp/1.0",

@@ -146,37 +146,3 @@ func TestCustomUserAgentTransport_EmptyContextValueIsNoOp(t *testing.T) {
 	}
 }
 
-func TestWrapWithUserAgent_RuleAndProviderLayering(t *testing.T) {
-	// Simulate the full chain used by client/openai.go and client/anthropic.go:
-	//   wrapWithUserAgent(provider)  -> outer
-	//     customUserAgentTransport   -> rule UA, innermost
-	//       captureTransport         -> wire
-	// Rule UA should win when both are present.
-	cap := &captureTransport{}
-	prov := &typ.Provider{UserAgent: "ProviderUA/1.0"}
-
-	var transport http.RoundTripper = cap
-	transport = &customUserAgentTransport{base: transport}
-	transport = wrapWithUserAgent(transport, prov)
-
-	t.Run("rule overrides provider", func(t *testing.T) {
-		ctx := typ.WithCustomUserAgent(context.Background(), "RuleUA/1.0")
-		req := newReq(t, ctx, "")
-		if _, err := transport.RoundTrip(req); err != nil {
-			t.Fatalf("RoundTrip: %v", err)
-		}
-		if cap.lastUA != "RuleUA/1.0" {
-			t.Errorf("UA = %q, want rule wins (%q)", cap.lastUA, "RuleUA/1.0")
-		}
-	})
-
-	t.Run("provider wins when rule absent", func(t *testing.T) {
-		req := newReq(t, context.Background(), "")
-		if _, err := transport.RoundTrip(req); err != nil {
-			t.Fatalf("RoundTrip: %v", err)
-		}
-		if cap.lastUA != "ProviderUA/1.0" {
-			t.Errorf("UA = %q, want provider fallback (%q)", cap.lastUA, "ProviderUA/1.0")
-		}
-	})
-}
