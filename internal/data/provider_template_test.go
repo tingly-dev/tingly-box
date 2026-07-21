@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -449,6 +450,102 @@ func TestTemplateManagerConcurrentAccess(t *testing.T) {
 	templates := tm.GetAllTemplates()
 	if len(templates) == 0 {
 		t.Error("Templates map should not be empty after concurrent access")
+	}
+}
+
+// TestEmbeddedTemplatesAreValid exhaustively loads every provider template from the
+// embedded providers.json and checks it individually, instead of spot-checking a
+// couple of hand-picked provider ids. This is meant to catch structural mistakes
+// (missing required fields, malformed model entries) introduced by hand-edits to
+// providers.json before they reach production.
+func TestEmbeddedTemplatesAreValid(t *testing.T) {
+	tm := NewEmbeddedOnlyTemplateManager()
+	if err := tm.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	templates := tm.GetAllTemplates()
+	if len(templates) < 50 {
+		t.Fatalf("expected at least 50 embedded provider templates, got %d", len(templates))
+	}
+
+	for id, tmpl := range templates {
+		t.Run(id, func(t *testing.T) {
+			if tmpl.ID != id {
+				t.Errorf("map key %q does not match template.ID %q", id, tmpl.ID)
+			}
+			if err := ValidateTemplate(tmpl); err != nil {
+				t.Errorf("template %q failed ValidateTemplate: %v", id, err)
+			}
+			if tmpl.VendorFamily == "" {
+				t.Errorf("template %q missing vendor_family", id)
+			}
+			if tmpl.Region == "" {
+				t.Errorf("template %q missing region", id)
+			}
+			if tmpl.Plan == "" {
+				t.Errorf("template %q missing plan", id)
+			}
+
+			seenModelID := make(map[string]bool, len(tmpl.Models))
+			for _, m := range tmpl.Models {
+				if m.ID == "" {
+					t.Errorf("template %q has a model with an empty id", id)
+					continue
+				}
+				if seenModelID[m.ID] {
+					t.Errorf("template %q has duplicate model id %q", id, m.ID)
+				}
+				seenModelID[m.ID] = true
+				if m.Context < 0 {
+					t.Errorf("template %q model %q has negative context %d", id, m.ID, m.Context)
+				}
+				if m.MaxOutput < 0 {
+					t.Errorf("template %q model %q has negative max_output %d", id, m.ID, m.MaxOutput)
+				}
+			}
+		})
+	}
+}
+
+// TestEmbeddedTemplatesLastUpdatedSourcesPaired checks the optional per-provider
+// last_updated/sources convention documented in providers.json's
+// _naming_rules.provider_meta_fields: whenever one is set, the other must be too,
+// and sources must be a non-empty list. These fields aren't part of the ProviderTemplate
+// Go struct (unknown JSON fields are silently ignored by encoding/json), so this reads
+// the embedded bytes directly rather than through the typed loader.
+func TestEmbeddedTemplatesLastUpdatedSourcesPaired(t *testing.T) {
+	var raw struct {
+		Providers map[string]map[string]interface{} `json:"providers"`
+	}
+	if err := json.Unmarshal(embeddedTemplatesJSON, &raw); err != nil {
+		t.Fatalf("failed to parse embedded templates as raw JSON: %v", err)
+	}
+	if len(raw.Providers) < 50 {
+		t.Fatalf("expected at least 50 providers in raw JSON, got %d", len(raw.Providers))
+	}
+
+	for id, fields := range raw.Providers {
+		_, hasLastUpdated := fields["last_updated"]
+		sources, hasSources := fields["sources"]
+		if hasLastUpdated != hasSources {
+			t.Errorf("provider %q: last_updated and sources must be set together (has last_updated=%v, has sources=%v)", id, hasLastUpdated, hasSources)
+			continue
+		}
+		if !hasSources {
+			continue
+		}
+		list, ok := sources.([]interface{})
+		if !ok || len(list) == 0 {
+			t.Errorf("provider %q: sources must be a non-empty array", id)
+			continue
+		}
+		for i, s := range list {
+			url, ok := s.(string)
+			if !ok || url == "" {
+				t.Errorf("provider %q: sources[%d] must be a non-empty string", id, i)
+			}
+		}
 	}
 }
 
