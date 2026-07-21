@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -92,66 +91,28 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		return nil, fmt.Errorf("shell task: %w", err)
 	}
 	runCtl, _ := ctl.(task.RunController)
-
-	// A stale result file must never masquerade as this run's outcome.
-	resultPath := filepath.Join(payload.WorkspacePath, resultFileRelPath)
-	_ = os.Remove(resultPath)
-
-	runCtx, cancel := context.WithTimeout(ctx, time.Duration(payload.TimeoutSeconds)*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(runCtx, "sh", "-c", payload.Command)
-	cmd.Dir = payload.WorkspacePath
-	// Don't block on orphaned grandchildren holding the output pipes after
-	// the shell itself is killed at the deadline.
-	cmd.WaitDelay = 2 * time.Second
-	appendEvent(ctx, runCtl, "run_started", fmt.Sprintf("Started shell run: %s", clipRunes(payload.Command, 200)), nil)
 	_ = ctl.UpdateProgress(ctx, "Shell command running")
 
-	started := time.Now()
-	output, runErr := cmd.CombinedOutput()
-	duration := time.Since(started)
-	tail := clipTailRunes(string(output), maxOutputTailRunes)
-	if tail != "" {
-		appendEvent(ctx, runCtl, "output", tail, nil)
-	}
-
-	if runCtx.Err() == context.DeadlineExceeded {
-		return nil, fmt.Errorf("shell task: timed out after %ds", payload.TimeoutSeconds)
-	}
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	exitCode := 0
-	if runErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(runErr, &exitErr) {
-			exitCode = exitErr.ExitCode()
-		} else {
-			return nil, fmt.Errorf("shell task: start command: %w", runErr)
-		}
-	}
-	if exitCode != 0 {
-		// Non-zero exit is a deterministic failure; a plain (non-retryable)
-		// error fails the task without pointless backoff retries.
-		return nil, fmt.Errorf("shell task: exit code %d: %s", exitCode, clipTailRunes(string(output), 500))
-	}
-
-	result := outcomeFromResultFile(resultPath)
-	if result == nil {
-		result = &Result{State: "done", Summary: tail}
-	}
-	result.ExitCode = &exitCode
-	result.DurationMS = duration.Milliseconds()
-	if result.ExitReason == "" {
-		result.ExitReason = result.State
-	}
-	data, err := json.Marshal(result)
+	result, err := RunOnce(ctx, RunSpec{
+		Command:        payload.Command,
+		WorkspacePath:  payload.WorkspacePath,
+		TimeoutSeconds: payload.TimeoutSeconds,
+	}, func(kind, summary string, data json.RawMessage) {
+		appendEvent(ctx, runCtl, kind, summary, data)
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("shell task: %w", err)
 	}
-	appendEvent(ctx, runCtl, "outcome", result.Summary, data)
+	// Standalone shell task: a non-zero exit is a task failure (non-retryable),
+	// unlike a shell step inside a pipeline where it is a signal for when/until.
+	if result.State == "failed" {
+		code := 0
+		if result.ExitCode != nil {
+			code = *result.ExitCode
+		}
+		return nil, fmt.Errorf("shell task: exit code %d: %s", code, clipRunes(result.Summary, 500))
+	}
+	data, _ := json.Marshal(result)
 	if result.State == "needs_input" {
 		return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
 	}

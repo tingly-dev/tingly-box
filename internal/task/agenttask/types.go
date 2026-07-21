@@ -193,11 +193,27 @@ type FollowUpPolicy struct {
 	MaxWakeUps   int  `json:"max_wake_ups"`
 }
 
+// StepExecutor selects how a step runs. Empty inherits the task's Agent.
+// "shell" runs Step.Command as a bounded shell command instead of an agent.
+type StepExecutor string
+
+const (
+	StepExecutorShell StepExecutor = "shell"
+)
+
 type Step struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Instruction string `json:"instruction"`
+	// Executor overrides the step's run core. Empty = the task's Agent
+	// (claude/codex). "shell" runs Command deterministically.
+	Executor StepExecutor `json:"executor,omitempty"`
+	// Command is the shell command for shell steps (ignored otherwise).
+	Command string `json:"command,omitempty"`
 }
+
+// IsShell reports whether the step runs as a shell command.
+func (s Step) IsShell() bool { return s.Executor == StepExecutorShell }
 
 type StepOutcome struct {
 	StepID      string    `json:"step_id"`
@@ -283,7 +299,11 @@ func (p Payload) Validate() error {
 		if strings.TrimSpace(step.Title) == "" {
 			return fmt.Errorf("step %d title is required", i+1)
 		}
-		if strings.TrimSpace(step.Instruction) == "" {
+		if step.IsShell() {
+			if strings.TrimSpace(step.Command) == "" {
+				return fmt.Errorf("step %d shell command is required", i+1)
+			}
+		} else if strings.TrimSpace(step.Instruction) == "" {
 			return fmt.Errorf("step %d instruction is required", i+1)
 		}
 		if i < len(p.StepOutcomes) && p.StepOutcomes[i].StepID != step.ID {

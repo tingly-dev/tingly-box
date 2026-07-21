@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/task"
+	"github.com/tingly-dev/tingly-box/internal/task/shelltask"
 )
 
 const (
@@ -60,13 +61,6 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		return nil, fmt.Errorf("agent task: %w", err)
 	}
 
-	agent, ok := h.agents[payload.Agent]
-	if !ok || agent == nil {
-		return nil, fmt.Errorf("agent task: %s worker is not registered", payload.Agent)
-	}
-	if !agent.IsAvailable() {
-		return nil, fmt.Errorf("agent task: %s CLI is not available", payload.Agent)
-	}
 	if len(payload.Steps) > 0 && payload.CurrentStep == len(payload.Steps) && strings.TrimSpace(payload.PendingInput) == "" {
 		payload.CurrentStep = 0
 		payload.StepOutcomes = nil
@@ -74,6 +68,20 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
 			return nil, err
 		}
+	}
+
+	// A shell step runs deterministically without an agent — dispatch it
+	// before requiring an agent CLI to be available (A0 heterogeneous steps).
+	if payload.HasCurrentStep() && payload.Steps[payload.CurrentStep].IsShell() {
+		return h.runShellStep(ctx, ctl, &payload)
+	}
+
+	agent, ok := h.agents[payload.Agent]
+	if !ok || agent == nil {
+		return nil, fmt.Errorf("agent task: %s worker is not registered", payload.Agent)
+	}
+	if !agent.IsAvailable() {
+		return nil, fmt.Errorf("agent task: %s CLI is not available", payload.Agent)
 	}
 
 	resume := payload.SessionID != ""
@@ -369,9 +377,49 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 			}
 		}
 		return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
+	case "failed":
+		// Only shell steps produce "failed" (non-zero exit). Without a
+		// when/until policy to react to it (A1), a failed step stops the
+		// pipeline by failing the task.
+		return nil, RetryableIfConfigured(fmt.Errorf("agent task: step failed: %s", clipRunes(result.Summary, 300)))
 	default:
 		return nil, fmt.Errorf("agent task: invalid normalized state %q", result.State)
 	}
+}
+
+// RetryableIfConfigured is a passthrough today; a hook for A1 to decide
+// whether a failed step should retry, continue, or fail the task.
+func RetryableIfConfigured(err error) error { return err }
+
+// runShellStep executes the current shell step deterministically (no agent,
+// no native session) and advances the cursor via taskResult.
+func (h *Handler) runShellStep(ctx context.Context, ctl task.Controller, payload *Payload) (*task.TaskResult, error) {
+	step := payload.Steps[payload.CurrentStep]
+	runCtl, _ := ctl.(task.RunController)
+	appendRuntimeEvent(ctx, runCtl, "run_started", fmt.Sprintf("Shell step %d of %d — %s", payload.CurrentStep+1, len(payload.Steps), step.Title), eventData(map[string]any{"executor": "shell"}))
+	_ = ctl.UpdateProgress(ctx, "Shell step running")
+
+	shellResult, err := shelltask.RunOnce(ctx, shelltask.RunSpec{
+		Command:        step.Command,
+		WorkspacePath:  payload.WorkspacePath,
+		TimeoutSeconds: payload.TimeoutSeconds,
+	}, func(kind, summary string, data json.RawMessage) {
+		appendRuntimeEvent(ctx, runCtl, kind, summary, data)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("agent task: shell step %q: %w", step.Title, err)
+	}
+	// A shell step owns no native session; keep the step boundary fresh.
+	payload.SessionID = ""
+	if strings.TrimSpace(payload.PendingInput) != "" {
+		payload.PendingInput = ""
+	}
+	result := Result{
+		State: shellResult.State, Summary: shellResult.Summary, Artifacts: shellResult.Artifacts,
+		ExitCode: shellResult.ExitCode, DurationMS: shellResult.DurationMS, ExitReason: shellResult.ExitReason,
+	}
+	appendRuntimeEvent(ctx, runCtl, "outcome", result.Summary, eventData(result))
+	return h.taskResult(ctx, ctl, payload, result)
 }
 
 func checkpointPayload(ctx context.Context, ctl task.Controller, payload *Payload) error {

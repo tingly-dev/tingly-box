@@ -772,18 +772,31 @@ func normalizeSteps(input []CreateStep) ([]agenttask.Step, error) {
 	}
 	steps := make([]agenttask.Step, 0, len(input))
 	for i, item := range input {
-		instruction := strings.TrimSpace(item.Instruction)
-		if instruction == "" {
-			return nil, fmt.Errorf("step %d instruction is required", i+1)
+		step := agenttask.Step{ID: fmt.Sprintf("step-%d", i+1)}
+		var titleSource string
+		if item.Executor == string(agenttask.StepExecutorShell) {
+			command := strings.TrimSpace(item.Command)
+			if command == "" {
+				return nil, fmt.Errorf("step %d shell command is required", i+1)
+			}
+			step.Executor = agenttask.StepExecutorShell
+			step.Command = command
+			titleSource = command
+		} else {
+			instruction := strings.TrimSpace(item.Instruction)
+			if instruction == "" {
+				return nil, fmt.Errorf("step %d instruction is required", i+1)
+			}
+			step.Instruction = instruction
+			titleSource = instruction
 		}
-		title := strings.TrimSpace(strings.SplitN(instruction, "\n", 2)[0])
+		title := strings.TrimSpace(strings.SplitN(titleSource, "\n", 2)[0])
 		runes := []rune(title)
 		if len(runes) > 80 {
 			title = string(runes[:80]) + "…"
 		}
-		steps = append(steps, agenttask.Step{
-			ID: fmt.Sprintf("step-%d", i+1), Title: title, Instruction: instruction,
-		})
+		step.Title = title
+		steps = append(steps, step)
 	}
 	return steps, nil
 }

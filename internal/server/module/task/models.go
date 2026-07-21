@@ -21,7 +21,11 @@ type CreateRequest struct {
 }
 
 type CreateStep struct {
-	Instruction string `json:"instruction" binding:"required"`
+	// Executor: "" (agent) or "shell". Shell steps run Command; agent steps
+	// run Instruction. (A0 heterogeneous steps.)
+	Executor    string `json:"executor,omitempty"`
+	Instruction string `json:"instruction,omitempty"`
+	Command     string `json:"command,omitempty"`
 }
 
 // UpdateRequest edits a non-running task's durable configuration.
