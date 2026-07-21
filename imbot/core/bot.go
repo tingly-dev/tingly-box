@@ -115,41 +115,5 @@ func NewPlatformInfoFor(platform Platform) *PlatformInfo {
 	return NewPlatformInfo(platform, GetPlatformName(platform))
 }
 
-// PlatformNames returns the human-readable name for each platform
-var PlatformNames = map[Platform]string{
-	PlatformWhatsApp:    "WhatsApp",
-	PlatformTelegram:    "Telegram",
-	PlatformDiscord:     "Discord",
-	PlatformSlack:       "Slack",
-	PlatformGoogleChat:  "Google Chat",
-	PlatformSignal:      "Signal",
-	PlatformBlueBubbles: "BlueBubbles (iMessage)",
-	PlatformFeishu:      "Feishu",
-	PlatformLark:        "Lark",
-	PlatformDingTalk:    "DingTalk",
-	PlatformWeixin:      "Weixin",
-	PlatformWecom:       "WeCom",
-	PlatformTingly:      "Tingly",
-}
-
-// GetPlatformName returns the human-readable name for a platform
-func GetPlatformName(platform Platform) string {
-	if name, ok := PlatformNames[platform]; ok {
-		return name
-	}
-	return string(platform)
-}
-
-// IsValidPlatform checks if a platform string is valid
-func IsValidPlatform(platform string) bool {
-	switch Platform(platform) {
-	case PlatformWhatsApp, PlatformTelegram, PlatformDiscord,
-		PlatformSlack, PlatformGoogleChat, PlatformSignal,
-		PlatformBlueBubbles, PlatformFeishu, PlatformLark,
-		PlatformDingTalk, PlatformWeixin, PlatformWecom,
-		PlatformTingly:
-		return true
-	default:
-		return false
-	}
-}
+// PlatformNames, GetPlatformName and IsValidPlatform live in platforms.go,
+// backed by the single platform-descriptor table.
