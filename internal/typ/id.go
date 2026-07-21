@@ -163,10 +163,9 @@ func GetCustomUserAgent(ctx context.Context) string {
 }
 
 // ClientUserAgentKey carries the *inbound* client's User-Agent header down to
-// the outbound HTTP transport so it can be forwarded upstream. This is distinct
-// from CustomUserAgentKey (the explicit rule/scenario override): the client UA
-// is only a fallback, applied at a lower precedence than the rule/scenario
-// override, and above the vendor SDK's default UA.
+// the outbound HTTP transport so it can be forwarded upstream. Distinct from
+// CustomUserAgentKey (the explicit rule/scenario override); userAgentTransport
+// resolves the precedence between them.
 const ClientUserAgentKey contextKey = "client_user_agent"
 
 // WithClientUserAgent attaches the inbound client's User-Agent so an outbound

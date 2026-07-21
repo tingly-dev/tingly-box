@@ -162,14 +162,12 @@ func ResolveRuleFlagsWithScenario(
 	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
 	applyCustomUserAgent(c, flags)
 
-	// Attach the inbound client's own User-Agent as a lower-precedence fallback:
-	// the generic (non-vendor) transport forwards it upstream only when no
-	// rule/scenario custom_user_agent override is in effect, so we respect who
-	// the real caller is instead of leaking the SDK's generic default. Attached
-	// for every request; only clients whose transport chain includes
-	// userAgentTransport read it — vendor OAuth / specialized paths ignore
-	// it and keep their pinned, decisive UA.
-	applyClientUserAgent(c)
+	// Inbound client UA is a lower-precedence fallback (see applyClientUserAgent).
+	// Skip it when an override is set: the transport would ignore the client UA
+	// anyway, so attaching it is pure allocation.
+	if flags.CustomUserAgent == "" {
+		applyClientUserAgent(c)
+	}
 
 	// Attach the 1M-context hint the same way: the outbound Anthropic transport
 	// (context1mBetaTransport) appends the context-1m beta flag at RoundTrip
@@ -209,16 +207,10 @@ func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
 
 // applyClientUserAgent attaches the inbound client's own User-Agent header to
 // the request context so the generic outbound transport (userAgentTransport)
-// can forward it upstream as a fallback. It sits at a lower precedence than the
-// explicit rule/scenario custom_user_agent override, and above the vendor SDK's
-// default UA, so it only takes effect when no override is configured. No-op when
-// the client sent no User-Agent, so the SDK/vendor default is preserved
-// unchanged (兜底).
-//
-// Like applyCustomUserAgent this runs for every request, but only clients whose
-// transport chain carries userAgentTransport (the two generic
-// pass-through paths) actually read it. Vendor-specialized paths never wire that
-// transport, so their pinned UA stays decisive.
+// can forward it upstream. Only the two generic pass-through clients wire that
+// transport; vendor-specialized paths never read it, keeping their pinned UA
+// decisive. No-op when the client sent no User-Agent (SDK default stands).
+// The caller only invokes this when no custom_user_agent override is set.
 func applyClientUserAgent(c *gin.Context) {
 	if c == nil || c.Request == nil {
 		return
