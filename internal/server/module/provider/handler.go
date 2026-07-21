@@ -47,7 +47,6 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 		NoKeyRequired:    p.NoKeyRequired,
 		Enabled:          p.Enabled,
 		ProxyURL:         p.ProxyURL,
-		UserAgent:        p.UserAgent,
 		AuthType:         string(p.AuthType),
 		Source:           string(p.Source),
 	}
@@ -175,7 +174,6 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		NoKeyRequired:    req.NoKeyRequired,
 		Enabled:          true, // always make new provider enabled
 		ProxyURL:         req.ProxyURL,
-		UserAgent:        req.UserAgent,
 		AuthType:         typ.AuthType(req.AuthType),
 		Timeout:          constant.DefaultRequestTimeout,
 	}
@@ -300,9 +298,6 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	}
 	if req.ProxyURL != nil {
 		p.ProxyURL = *req.ProxyURL
-	}
-	if req.UserAgent != nil {
-		p.UserAgent = *req.UserAgent
 	}
 
 	// Dual-mode constraints: validate post-merge so we catch combinations

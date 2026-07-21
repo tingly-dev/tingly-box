@@ -6348,11 +6348,6 @@
             "type": "string",
             "description": "API token",
             "example": "sk-..."
-          },
-          "user_agent": {
-            "type": "string",
-            "description": "Custom outbound HTTP User-Agent; empty uses the built-in/default for this provider",
-            "example": "my-gateway/1.0"
           }
         },
         "required": [
@@ -9630,11 +9625,6 @@
             "description": "Field token",
             "example": "sk-***...***"
           },
-          "user_agent": {
-            "type": "string",
-            "description": "Field user_agent",
-            "example": "my-gateway/1.0"
-          },
           "uuid": {
             "type": "string",
             "description": "Field uuid",
@@ -11602,10 +11592,6 @@
           "token": {
             "type": "string",
             "description": "New API token"
-          },
-          "user_agent": {
-            "type": "string",
-            "description": "Custom outbound HTTP User-Agent (empty string clears it and reverts to default)"
           }
         }
       },
@@ -11784,6 +11770,9 @@
                 "type": "string",
                 "description": "Field description",
                 "example": "My rule description"
+              },
+              "flags": {
+                "$ref": "#/components/schemas/RuleFlags"
               },
               "provider": {
                 "type": "string",

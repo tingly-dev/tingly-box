@@ -42,7 +42,6 @@ export interface EnhancedProviderFormData {
     noKeyRequired?: boolean;
     enabled?: boolean;
     proxyUrl?: string;
-    userAgent?: string;
     authType?: 'api_key' | 'oauth';
     protocols?: ('openai' | 'anthropic')[];
     providerBaseUrls?: { openai?: string; anthropic?: string };
@@ -703,14 +702,6 @@ const ProviderFormDialog = ({
                                             onChange('name', value);
                                             setNameIsAutoFilled(false);
                                         }}
-                                    />
-                                    <TextField
-                                        size="small" fullWidth
-                                        label={t('providerDialog.advanced.userAgent.label', {defaultValue: 'User-Agent'})}
-                                        placeholder={t('providerDialog.advanced.userAgent.placeholder', {defaultValue: 'Leave empty to use built-in default'})}
-                                        value={data.userAgent || ''}
-                                        onChange={(e) => onChange('userAgent', e.target.value)}
-                                        helperText={t('providerDialog.advanced.userAgent.help', {defaultValue: 'Custom outbound HTTP User-Agent. Empty falls back to the provider\'s built-in UA.'})}
                                     />
                                     {mode === 'edit' && (
                                         <FormControlLabel
