@@ -79,7 +79,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install pnpm
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable
 
       - name: Install frontend dependencies
         run: |
@@ -374,7 +374,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Install pnpm
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable
 
       - name: Install frontend dependencies
         shell: bash
