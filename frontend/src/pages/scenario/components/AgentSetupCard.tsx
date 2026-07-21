@@ -285,15 +285,12 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             <Collapse in={!collapsed} unmountOnExit={false}>
                 <Stack spacing={0.5}>
 
-                    {/* Step 1 — Provider */}
+                    {/* Step 1 — Provider (always a single flat row — no expand needed) */}
                     <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
-                            onClick={providerDone ? () => toggleDoneStep(0) : undefined}
-                            sx={[{
-                                alignItems: "center"
-                            }, providerDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
+                            sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
                             {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
                             <Typography
                                 variant="body2"
@@ -311,38 +308,27 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     {providerCount} provider{providerCount !== 1 ? 's' : ''}
                                 </Typography>
                             )}
-                            {providerDone && onConnectProvider && (
-                                <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); onConnectProvider(); }} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>+ Connect</Button>
-                            )}
-                            {providerDone && (
-                                expandedDoneSteps.has(0) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                            {onConnectProvider && (
+                                <Tooltip title={providerDone ? '' : `Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using ${agentName}.`}>
+                                    <Button
+                                        size="small"
+                                        variant={providerDone ? 'text' : 'contained'}
+                                        onClick={onConnectProvider}
+                                        sx={providerDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
+                                    >
+                                        {providerDone ? '+ Connect' : 'Connect AI'}
+                                    </Button>
+                                </Tooltip>
                             )}
                         </Stack>
-                        <Collapse in={(!providerDone && firstIncomplete === 0) || expandedDoneSteps.has(0)}>
-                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using {agentName}.
-                                </Typography>
-                                <Box>
-                                    <Button size="small" variant="contained" onClick={onConnectProvider} sx={{ py: 0.25 }}>
-                                        Connect AI
-                                    </Button>
-                                </Box>
-                            </Stack>
-                        </Collapse>
                     </Box>
 
-                    {/* Step 2 — Model */}
+                    {/* Step 2 — Model (always a single flat row — no expand needed) */}
                     <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
-                            onClick={modelDone ? () => toggleDoneStep(1) : undefined}
-                            sx={[{
-                                alignItems: "center"
-                            }, modelDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
+                            sx={{ alignItems: "center", flexWrap: 'wrap', rowGap: 0.5 }}>
                             <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
                             <Typography
                                 variant="body2"
@@ -358,29 +344,22 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     color: "text.secondary"
                                 }}>Configured</Typography>
                             )}
-                            {modelDone && onSelectModel && (
-                                <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); onSelectModel(); }} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>Change</Button>
-                            )}
-                            {modelDone && (
-                                expandedDoneSteps.has(1) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                            {onSelectModel && (
+                                <Tooltip title={modelDone ? '' : `Choose which model ${agentName} will use in the Model Rules section below.`}>
+                                    <span>
+                                        <Button
+                                            size="small"
+                                            variant={modelDone ? 'text' : 'contained'}
+                                            disabled={!modelDone && !providerDone}
+                                            onClick={onSelectModel}
+                                            sx={modelDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
+                                        >
+                                            {modelDone ? 'Change' : 'Choose Model'}
+                                        </Button>
+                                    </span>
+                                </Tooltip>
                             )}
                         </Stack>
-                        <Collapse in={(!modelDone && firstIncomplete === 1) || expandedDoneSteps.has(1)}>
-                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    Choose which model {agentName} will use in the <em>Model Rules</em> section below.
-                                </Typography>
-                                {onSelectModel && (
-                                    <Box>
-                                        <Button size="small" variant="contained" disabled={!providerDone} onClick={onSelectModel} sx={{ py: 0.25 }}>
-                                            Choose Model
-                                        </Button>
-                                    </Box>
-                                )}
-                            </Stack>
-                        </Collapse>
                     </Box>
 
                     {/* Step 3 — Install */}
@@ -484,14 +463,16 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Collapse>
                     </Box>
 
-                    {/* Step 4 — Apply */}
+                    {/* Step 4 — Apply (flat row while active; re-expandable once done for re-view) */}
                     <Box sx={stepRowSx()}>
                         <Stack
                             direction="row"
                             spacing={1.25}
                             onClick={applyDone ? () => toggleDoneStep(3) : undefined}
                             sx={[{
-                                alignItems: "center"
+                                alignItems: "center",
+                                flexWrap: 'wrap',
+                                rowGap: 0.5
                             }, applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
                             <Typography
@@ -508,11 +489,52 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     color: "text.secondary"
                                 }}>Applied</Typography>
                             )}
+                            {!applyDone && firstIncomplete === 3 && (
+                                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+                                    {onApply && (
+                                        <Tooltip title={applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file.`}>
+                                            <span>
+                                                <Button variant="contained" size="small" disabled={isApplyLoading} onClick={(e) => { e.stopPropagation(); handleApplyWithStatusLine(); }} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined} sx={{ py: 0.25 }}>
+                                                    {applyButtonLabel}
+                                                </Button>
+                                            </span>
+                                        </Tooltip>
+                                    )}
+                                    {onViewConfig && (
+                                        <Button variant="text" size="small" onClick={(e) => { e.stopPropagation(); onViewConfig(); }} sx={{ py: 0, textTransform: 'none', color: 'text.secondary', minWidth: 0 }}>
+                                            {viewConfigButtonLabel}
+                                        </Button>
+                                    )}
+                                    <Button variant="text" size="small" onClick={(e) => {
+                                        e.stopPropagation();
+                                        localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
+                                        setApplyDone(true);
+                                    }} sx={{ py: 0, textTransform: 'none', color: 'text.disabled', minWidth: 0 }}>
+                                        Skip
+                                    </Button>
+                                </Stack>
+                            )}
                             {applyDone && (
                                 expandedDoneSteps.has(3) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
                             )}
                         </Stack>
-                        <Collapse in={(!applyDone && firstIncomplete === 3) || expandedDoneSteps.has(3)}>
+                        {applyResult && (
+                            <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 0.75, ml: 4.25, py: 0.5 }}>
+                                {applyResult.success ? (
+                                    <Box>
+                                        <Typography variant="body2" sx={{
+                                            fontWeight: 600
+                                        }}>{applySuccessLabel}</Typography>
+                                        {applyResult.files?.map(f => (
+                                            <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
+                                        ))}
+                                    </Box>
+                                ) : (
+                                    <Typography variant="body2">{applyResult.error ?? 'Apply failed'}</Typography>
+                                )}
+                            </Alert>
+                        )}
+                        <Collapse in={applyDone && expandedDoneSteps.has(3)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
@@ -536,31 +558,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                             {viewConfigButtonLabel} (Advanced)
                                         </Button>
                                     )}
-                                    {!applyDone && (
-                                        <Button variant="text" size="small" onClick={() => {
-                                            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
-                                            setApplyDone(true);
-                                        }} sx={{ textTransform: 'none', color: 'text.disabled' }}>
-                                            Skip
-                                        </Button>
-                                    )}
                                 </Stack>
-                                {applyResult && (
-                                    <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 0.5, py: 0.5 }}>
-                                        {applyResult.success ? (
-                                            <Box>
-                                                <Typography variant="body2" sx={{
-                                                    fontWeight: 600
-                                                }}>{applySuccessLabel}</Typography>
-                                                {applyResult.files?.map(f => (
-                                                    <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
-                                                ))}
-                                            </Box>
-                                        ) : (
-                                            <Typography variant="body2">{applyResult.error ?? 'Apply failed'}</Typography>
-                                        )}
-                                    </Alert>
-                                )}
                             </Stack>
                         </Collapse>
                     </Box>
