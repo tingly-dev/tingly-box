@@ -12,7 +12,7 @@ import (
 // Hybrid mode keeps requests on the tingly-box gateway while leaving
 // ~/.codex/auth.json free to hold a native ChatGPT login. The gateway token
 // therefore rides in config.toml's provider stanza as experimental_bearer_token
-// (with requires_openai_auth=false) rather than in auth.json.
+// (with requires_openai_auth=true) rather than in auth.json.
 
 func TestRenderCodexConfigTOML_HybridEmbedsBearerToken(t *testing.T) {
 	tomlBytes, err := RenderCodexConfigTOML("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), false, "tingly-box-secret")
@@ -28,8 +28,8 @@ func TestRenderCodexConfigTOML_HybridEmbedsBearerToken(t *testing.T) {
 	if tb["experimental_bearer_token"] != "tingly-box-secret" {
 		t.Errorf("experimental_bearer_token = %v, want tingly-box-secret", tb["experimental_bearer_token"])
 	}
-	if tb["requires_openai_auth"] != false {
-		t.Errorf("requires_openai_auth = %v, want false", tb["requires_openai_auth"])
+	if tb["requires_openai_auth"] != true {
+		t.Errorf("requires_openai_auth = %v, want true", tb["requires_openai_auth"])
 	}
 	// Managed routing fields are still present so requests go through tingly.
 	if cfg["model_provider"] != "tingly-box" {

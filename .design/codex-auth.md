@@ -46,10 +46,10 @@ name = "OpenAI using Tingly Box"
 base_url = "http://127.0.0.1:12580/tingly/codex"
 wire_api = "responses"
 experimental_bearer_token = "tingly-box-…"   # gateway token, provider-scoped
-requires_openai_auth = false                  # tingly token isn't sk-shaped
+requires_openai_auth = true                   # provider still uses the OpenAI auth path
 ```
 
-> Gateway (`apikey`) mode instead emits `requires_openai_auth = true` (no bearer
+> Gateway (`apikey`) mode also emits `requires_openai_auth = true` (no bearer
 > token) so Codex sources the provider credential from `auth.json`'s
 > `OPENAI_API_KEY`. Neither mode writes `preferred_auth_method` — it is **not** in
 > Codex's `config-schema.json` (which is `additionalProperties: false`), so
@@ -60,12 +60,12 @@ Result: **Codex App still sees the official account; `codex` requests still
 route through tingly-box.** This mirrors `cc-switch`'s "Codex App Enhancements /
 keep official login" toggle (v3.16.1).
 
-### `requires_openai_auth = false`
+### `requires_openai_auth = true`
 
-`experimental_bearer_token` is an OpenAI-labeled *experimental* field, and Codex
-otherwise assumes an `sk-`-shaped key for a provider. `requires_openai_auth =
-false` drops that assumption so the `tingly-box-`-prefixed JWT is accepted. Both
-keys are written together and only when a bearer token is supplied.
+`experimental_bearer_token` is an OpenAI-labeled *experimental* field.
+`requires_openai_auth = true` keeps this provider on the OpenAI auth path so the
+provider-scoped bearer token is honored. Both keys are written together and only
+when a bearer token is supplied.
 
 ### auth.json: materialize vs leave untouched
 
@@ -170,9 +170,9 @@ Facts that constrain our output (JSON Schema draft-07):
   ("Additional properties are not allowed"). It is gone from both the provider
   object and the root.
 - `requires_openai_auth` defaults to **`false`** = *"key comes from the `env_key`
-  env var"*; **`true`** = *"key/token comes from `auth.json`"*. Gateway (apikey)
-  mode sets `true` (sources `OPENAI_API_KEY` from `auth.json`); hybrid sets
-  `false` (uses the provider-scoped `experimental_bearer_token`).
+  env var"*; **`true`** = *"provider uses the OpenAI auth path"*. Gateway (apikey)
+  mode sets `true` (sources `OPENAI_API_KEY` from `auth.json`); hybrid also sets
+  `true` while supplying the provider-scoped `experimental_bearer_token`.
 - `model_reasoning_effort` is schema-typed as any non-empty string
   (`ReasoningEffort`, `minLength: 1`) — values are model-advertised, so our
   whitelist stays a superset rather than a fixed enum.
