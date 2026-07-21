@@ -82,6 +82,19 @@ const isActive = (task: AgentTask) => ['pending', 'queued', 'running'].includes(
 const canStop = (task: AgentTask) => ['pending', 'queued', 'running', 'needs_input', 'handoff_required'].includes(task.status);
 const isTerminal = (task: AgentTask) => ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(task.status);
 
+type StepExecKind = 'agent' | 'shell';
+type StepWhen = 'always' | 'prev_failed' | 'prev_succeeded';
+interface StepDraft { executor: StepExecKind; text: string; when: StepWhen }
+
+// Map a draft step's `when` to the structured condition over the PREVIOUS
+// step (ids are assigned server-side as step-1, step-2… so step index i's
+// previous step is step-i).
+const draftWhenExpr = (when: StepWhen, index: number): string => {
+  if (when === 'always' || index === 0) return '';
+  if (when === 'prev_failed') return `steps.step-${index}.failed`;
+  return `steps.step-${index}.succeeded`;
+};
+
 export interface TaskTemplate {
   label: string; description: string; goal: string; agent: TaskAgent;
   when: 'now' | 'later' | 'repeat'; cron?: string; keepChecking?: boolean;
@@ -118,7 +131,10 @@ function CreateTaskDialog({ open, agents, preset, onClose, onCreated }: {
   const [keepChecking, setKeepChecking] = useState(false);
   const [delay, setDelay] = useState(300);
   const [maxWakeUps, setMaxWakeUps] = useState(20);
-  const [steps, setSteps] = useState<string[]>([]);
+  const [steps, setSteps] = useState<StepDraft[]>([]);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatUntilStep, setRepeatUntilStep] = useState(0);
+  const [repeatMax, setRepeatMax] = useState(3);
   const [workspacePath, setWorkspacePath] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -173,13 +189,18 @@ function CreateTaskDialog({ open, agents, preset, onClose, onCreated }: {
         timeout_seconds: 1800,
         execution,
       };
-    if (agent !== 'shell' && steps.length) input.steps = steps.map((instruction) => ({ instruction: instruction.trim() }));
+    if (agent !== 'shell' && steps.length) {
+      input.steps = steps.map((step, index) => step.executor === 'shell'
+        ? { executor: 'shell', command: step.text.trim(), when: draftWhenExpr(step.when, index) }
+        : { instruction: step.text.trim(), when: draftWhenExpr(step.when, index) });
+      if (repeatEnabled && steps[repeatUntilStep]) input.repeat = { until: `steps.step-${repeatUntilStep + 1}.succeeded`, max: repeatMax };
+    }
     if (workspacePath.trim()) input.workspace_path = workspacePath.trim();
     if (when === 'later' && scheduledAt) input.scheduled_at = new Date(scheduledAt).toISOString();
     if (when === 'repeat') input.recurrence = { cron: cron.trim(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
     try {
       const created = await taskApi.create(input);
-      setGoal(''); setSteps([]); setWorkspacePath(''); onCreated(created); onClose();
+      setGoal(''); setSteps([]); setRepeatEnabled(false); setWorkspacePath(''); onCreated(created); onClose();
     } catch (err) { setError((err as Error).message); } finally { setSaving(false); }
   };
 
@@ -191,15 +212,36 @@ function CreateTaskDialog({ open, agents, preset, onClose, onCreated }: {
         <TextField autoFocus multiline minRows={3} label={agent === 'shell' ? 'Command to run' : 'What should be done?'} value={goal} onChange={(e) => setGoal(e.target.value)} fullWidth slotProps={agent === 'shell' ? { htmlInput: { spellCheck: false, style: { fontFamily: 'monospace' } } } : undefined} />
         {agent !== 'shell' && <Box>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: steps.length ? 1.5 : 0 }}>
-            <Box><Typography variant="subtitle2">Steps <Typography component="span" variant="body2" color="text.secondary">(optional)</Typography></Typography>{!steps.length && <Typography variant="caption" color="text.secondary">Run explicit steps separately, in order.</Typography>}</Box>
-            <Button size="small" startIcon={<Add />} disabled={steps.length >= 50} onClick={() => setSteps((items) => [...items, ''])}>Add step</Button>
+            <Box><Typography variant="subtitle2">Steps <Typography component="span" variant="body2" color="text.secondary">(optional)</Typography></Typography>{!steps.length && <Typography variant="caption" color="text.secondary">Run explicit steps in order, each on its own executor.</Typography>}</Box>
+            <Button size="small" startIcon={<Add />} disabled={steps.length >= 50} onClick={() => setSteps((items) => [...items, { executor: 'agent', text: '', when: 'always' }])}>Add step</Button>
           </Stack>
-          {steps.length > 0 && <Stack spacing={1.25}>
-            <Typography variant="caption" color="text.secondary">Each step gets its own run and reuses this task's workspace and session.</Typography>
-            {steps.map((step, index) => <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
-              <TextField multiline minRows={2} fullWidth label={`Step ${index + 1}`} value={step} onChange={(e) => setSteps((items) => items.map((item, itemIndex) => itemIndex === index ? e.target.value : item))} />
-              <Tooltip title="Remove step"><IconButton aria-label={`Remove step ${index + 1}`} onClick={() => setSteps((items) => items.filter((_, itemIndex) => itemIndex !== index))} sx={{ mt: 1 }}><Delete fontSize="small" /></IconButton></Tooltip>
-            </Stack>)}
+          {steps.length > 0 && <Stack spacing={1.5}>
+            <Typography variant="caption" color="text.secondary">Each step is its own run in this workspace. Sessions are fresh across steps; state passes via files and prior outcomes.</Typography>
+            {steps.map((step, index) => <Paper key={index} variant="outlined" sx={{ p: 1.25, borderRadius: 1.5 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <ToggleButtonGroup exclusive size="small" value={step.executor} onChange={(_, value) => value && setSteps((items) => items.map((item, i) => i === index ? { ...item, executor: value } : item))}>
+                  <ToggleButton value="agent" sx={{ textTransform: 'none', py: 0.25 }}>{agentLabel(agent)}</ToggleButton>
+                  <ToggleButton value="shell" sx={{ textTransform: 'none', py: 0.25 }}>Shell</ToggleButton>
+                </ToggleButtonGroup>
+                <Tooltip title="Remove step"><IconButton size="small" aria-label={`Remove step ${index + 1}`} onClick={() => setSteps((items) => items.filter((_, i) => i !== index))}><Delete fontSize="small" /></IconButton></Tooltip>
+              </Stack>
+              <TextField multiline minRows={step.executor === 'shell' ? 1 : 2} fullWidth size="small" label={step.executor === 'shell' ? `Step ${index + 1} command` : `Step ${index + 1} instruction`} value={step.text} onChange={(e) => setSteps((items) => items.map((item, i) => i === index ? { ...item, text: e.target.value } : item))} slotProps={step.executor === 'shell' ? { htmlInput: { spellCheck: false, style: { fontFamily: 'monospace' } } } : undefined} />
+              {index > 0 && <TextField select size="small" fullWidth sx={{ mt: 1 }} label="Run this step" value={step.when} onChange={(e) => setSteps((items) => items.map((item, i) => i === index ? { ...item, when: e.target.value as StepWhen } : item))}>
+                <MenuItem value="always">Always</MenuItem>
+                <MenuItem value="prev_failed">Only if step {index} failed</MenuItem>
+                <MenuItem value="prev_succeeded">Only if step {index} succeeded</MenuItem>
+              </TextField>}
+            </Paper>)}
+            <Box>
+              <FormControlLabel control={<Switch checked={repeatEnabled} onChange={(e) => setRepeatEnabled(e.target.checked)} />} label="Repeat until a step succeeds" />
+              {repeatEnabled && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 0.5 }}>
+                <TextField select size="small" fullWidth label="Repeat until" value={repeatUntilStep} onChange={(e) => setRepeatUntilStep(Number(e.target.value))}>
+                  {steps.map((step, index) => <MenuItem key={index} value={index}>Step {index + 1}{step.text.trim() ? ` · ${step.text.trim().slice(0, 24)}` : ''} succeeds</MenuItem>)}
+                </TextField>
+                <TextField type="number" size="small" label="Max iterations" value={repeatMax} onChange={(e) => setRepeatMax(Math.max(1, Number(e.target.value)))} sx={{ width: { sm: 160 } }} />
+              </Stack>}
+              {repeatEnabled && <Typography variant="caption" color="text.secondary">The whole pipeline reruns until that step's structured result succeeds, or the cap is hit (then it pauses for you).</Typography>}
+            </Box>
           </Stack>}
         </Box>}
         <TextField
@@ -268,34 +310,51 @@ function CreateTaskDialog({ open, agents, preset, onClose, onCreated }: {
         </Stack>}
       </Stack>
     </DialogContent>
-    <DialogActions><Button onClick={onClose}>Cancel</Button><Button variant="contained" onClick={submit} disabled={saving || !goal.trim() || (agent !== 'shell' && steps.some((step) => !step.trim())) || !availability(agent) || ((agentInfo(agent)?.tool_filtering ?? agent === 'claude') && !execution.tools?.length) || (when === 'later' && !scheduledAt) || (when === 'repeat' && !cron.trim())}>{saving ? <CircularProgress size={18} /> : 'Create task'}</Button></DialogActions>
+    <DialogActions><Button onClick={onClose}>Cancel</Button><Button variant="contained" onClick={submit} disabled={saving || !goal.trim() || (agent !== 'shell' && steps.some((step) => !step.text.trim())) || !availability(agent) || ((agentInfo(agent)?.tool_filtering ?? agent === 'claude') && !execution.tools?.length) || (when === 'later' && !scheduledAt) || (when === 'repeat' && !cron.trim())}>{saving ? <CircularProgress size={18} /> : 'Create task'}</Button></DialogActions>
   </Dialog>;
 }
+
+// stepWhenLabel renders a structured `when` expression as a short human hint.
+const stepWhenLabel = (when?: string): string => {
+  if (!when) return '';
+  const m = when.match(/^steps\.(\S+)\.(succeeded|failed|skipped)$/);
+  if (m) { const n = m[1].replace('step-', ''); return `runs if step ${n} ${m[2]}`; }
+  return `when ${when}`;
+};
 
 function TaskSteps({ task }: { task: AgentTask }) {
   if (!task.steps?.length) return null;
   const outcomes = new Map((task.step_outcomes || []).map((outcome) => [outcome.step_id, outcome]));
   const current = task.current_step ?? 0;
+  const repeat = task.repeat;
 
   return <Box>
     <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 1 }}>
-      <Typography variant="overline" color="text.secondary">Steps</Typography>
-      <Typography variant="caption" color="text.secondary">{outcomes.size} of {task.steps.length} complete</Typography>
+      <Typography variant="overline" color="text.secondary">Pipeline</Typography>
+      <Typography variant="caption" color="text.secondary">
+        {repeat?.until ? `Iteration ${(repeat.iteration ?? 0) + 1}/${repeat.max ?? 1} · until ${stepWhenLabel(repeat.until).replace('runs if ', '')}` : `${outcomes.size} of ${task.steps.length} complete`}
+      </Typography>
     </Stack>
     <Stack spacing={1}>
       {task.steps.map((step, index) => {
         const outcome = outcomes.get(step.id);
+        const skipped = outcome?.result.state === 'skipped';
+        const failed = outcome?.result.state === 'failed' || (outcome?.result.exit_code != null && outcome.result.exit_code !== 0);
         const isCurrent = !outcome && index === current;
         const waitsForYou = task.status === 'needs_input' || task.status === 'handoff_required';
-        const label = outcome ? 'Done' : isCurrent ? (waitsForYou ? (task.status === 'handoff_required' ? 'Take over' : 'Needs you') : task.status === 'running' ? 'Working' : 'Current') : 'Next';
-        const color = outcome ? 'success' : isCurrent ? (waitsForYou ? 'warning' : 'primary') : 'default';
-        return <Box key={step.id} sx={{ p: 1.5, border: '1px solid', borderColor: isCurrent ? 'primary.main' : 'divider', borderRadius: 1.5, bgcolor: isCurrent ? 'action.hover' : 'transparent' }}>
+        const label = outcome ? (skipped ? 'Skipped' : failed ? 'Failed' : 'Done') : isCurrent ? (waitsForYou ? (task.status === 'handoff_required' ? 'Take over' : 'Needs you') : task.status === 'running' ? 'Working' : 'Current') : 'Next';
+        const color = outcome ? (skipped ? 'default' : failed ? 'error' : 'success') : isCurrent ? (waitsForYou ? 'warning' : 'primary') : 'default';
+        return <Box key={step.id} sx={{ p: 1.5, border: '1px solid', borderColor: isCurrent ? 'primary.main' : 'divider', borderRadius: 1.5, bgcolor: isCurrent ? 'action.hover' : 'transparent', opacity: skipped ? 0.6 : 1 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-            <Typography variant="subtitle2">{index + 1}. {step.title}</Typography>
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2" noWrap>{index + 1}. {step.title}</Typography>
+              <Chip size="small" variant="outlined" label={step.executor === 'shell' ? 'Shell' : agentLabel(task.agent)} sx={{ height: 18, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }} />
+            </Stack>
             <Chip size="small" label={label} color={color} variant={isCurrent ? 'filled' : 'outlined'} />
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{step.instruction}</Typography>
-          {outcome?.result.summary && <Box sx={{ mt: 1 }}><TaskMarkdown compact>{outcome.result.summary}</TaskMarkdown></Box>}
+          {step.when && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>{stepWhenLabel(step.when)}</Typography>}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'pre-wrap', fontFamily: step.executor === 'shell' ? 'monospace' : undefined }}>{step.executor === 'shell' ? step.command : step.instruction}</Typography>
+          {!skipped && outcome?.result.summary && <Box sx={{ mt: 1 }}><TaskMarkdown compact>{outcome.result.summary}</TaskMarkdown></Box>}
         </Box>;
       })}
     </Stack>
@@ -353,7 +412,7 @@ function RunHistory({ runs }: { runs: TaskRun[] }) {
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={0.5}>
             <Box>
               <Stack direction="row" spacing={1} alignItems="center"><Typography variant="subtitle2">{title}</Typography><Chip size="small" label={meta.label} color={meta.color} variant="outlined" /></Stack>
-              <Typography variant="caption" color="text.secondary">{formatTime(run.started_at)} · {getProfileMeta(run.execution.launch_profile).label}</Typography>
+              <Typography variant="caption" color="text.secondary">{formatTime(run.started_at)}{run.execution?.launch_profile ? ` · ${getProfileMeta(run.execution.launch_profile).label}` : ''}</Typography>
             </Box>
             {run.finished_at && <Typography variant="caption" color="text.secondary">Finished {formatTime(run.finished_at)}</Typography>}
           </Stack>

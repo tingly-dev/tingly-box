@@ -642,6 +642,13 @@ executor**。所以：
 - Phase A 因此重定义为两步：**A0 异构 steps**（Step 加 `Executor` +
   `Command`/`Prompt`，handler 按 step 类型分发到 shelltask/agenttask 的
   run 核）→ **A1 when/until 求值**（读各 step 的结构化 outcome）。
+  **【均已实现】** A0：`Step.Executor`+`Command`，shelltask.RunOnce 抽出
+  复用，handler 分发 shell step；A1：`condition.go` 紧语法求值器、
+  step `When` 跳过、`Repeat{Until,Max}` 流水线重复（满足即完成 / 未满足
+  未到 max 重跑 / 到 max 未满足暂停等人）、follow-up 保留为 until:agent。
+  前端：创建对话框结构化 steps（每步 executor + 文本 + when）+ repeat
+  控件；详情 Pipeline 视图（执行器徽章 + when 人话 + 迭代/收敛）。
+  canonical test→fix→repeat 已可端到端表达并测试通过。
 
 ### 12.6 分片与影响面
 

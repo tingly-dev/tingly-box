@@ -18,7 +18,7 @@ export interface FollowUpPolicy {
 }
 
 export interface TaskResult {
-  state: 'done' | 'continue' | 'needs_input' | 'handoff_required';
+  state: 'done' | 'continue' | 'needs_input' | 'handoff_required' | 'failed' | 'skipped';
   summary: string;
   question?: string;
   artifacts?: string[];
@@ -32,6 +32,9 @@ export interface TaskStep {
   id: string;
   title: string;
   instruction: string;
+  executor?: 'shell';
+  command?: string;
+  when?: string;
 }
 
 export interface StepOutcome {
@@ -61,6 +64,7 @@ export interface AgentTask {
   updated_at: string;
   recurrence?: { cron: string; timezone: string };
   trigger_paused?: boolean;
+  repeat?: RepeatPolicy;
   steps?: TaskStep[];
   current_step: number;
   step_outcomes?: StepOutcome[];
@@ -77,6 +81,19 @@ export interface AgentAvailability {
   unattended: boolean;
 }
 
+export interface StepInput {
+  executor?: 'shell';
+  instruction?: string;
+  command?: string;
+  when?: string;
+}
+
+export interface RepeatPolicy {
+  until?: string;
+  max?: number;
+  iteration?: number;
+}
+
 export interface CreateTaskInput {
   title?: string;
   goal: string;
@@ -86,8 +103,9 @@ export interface CreateTaskInput {
   recurrence?: { cron: string; timezone: string };
   follow_up: FollowUpPolicy;
   timeout_seconds: number;
-  steps?: Array<{ instruction: string }>;
+  steps?: StepInput[];
   execution: ExecutionPolicy;
+  repeat?: RepeatPolicy;
 }
 
 export interface UpdateTaskInput {
@@ -96,7 +114,9 @@ export interface UpdateTaskInput {
   follow_up?: FollowUpPolicy;
   timeout_seconds?: number;
   execution?: ExecutionPolicy;
-  steps?: { instruction: string }[];
+  steps?: StepInput[];
+  repeat?: RepeatPolicy;
+  clear_repeat?: boolean;
   recurrence?: TaskRecurrence;
   clear_recurrence?: boolean;
 }
