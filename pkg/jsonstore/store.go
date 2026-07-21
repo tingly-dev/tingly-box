@@ -37,6 +37,12 @@ import (
 	"time"
 )
 
+// Model is the interface that all models must implement.
+// Use a pointer to your model type as the type parameter.
+type Model interface {
+	any // Allows any type as a model
+}
+
 // StoreData represents the JSON file structure.
 // Version allows for future schema migrations.
 type StoreData[T any] struct {

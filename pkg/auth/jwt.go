@@ -51,6 +51,27 @@ func (j *JWTManager) GenerateTokenWithExpiry(clientID string, expiry time.Durati
 	return tokenString, nil
 }
 
+// ValidateToken validates a JWT token and returns the claims
+func (j *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(j.secretKey), nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return claims, nil
+}
+
 // GenerateAPIKey generates a JWT token and encodes it with tingly-box- prefix
 func (j *JWTManager) GenerateAPIKey(clientID string) (string, error) {
 	// Generate regular JWT token
@@ -123,4 +144,12 @@ func (j *JWTManager) validateJWT(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+// IsAPIKeyFormat checks if the token follows API key format (tingly-box-xxx)
+func (j *JWTManager) IsAPIKeyFormat(tokenString string) bool {
+	if strings.HasPrefix(tokenString, "Bearer ") {
+		tokenString = tokenString[7:]
+	}
+	return strings.HasPrefix(tokenString, "tingly-box-")
 }

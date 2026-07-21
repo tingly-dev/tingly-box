@@ -13,6 +13,9 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/notify/internal/httpx"
 )
 
+// Result is an alias for notify.Result
+type Result = notify.Result
+
 // Config holds Slack provider configuration
 type Config struct {
 	// Token is the Slack bot token (xoxb-...)
