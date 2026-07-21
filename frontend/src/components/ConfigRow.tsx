@@ -40,7 +40,13 @@ const TabButton: React.FC<{
             px: 1.5,
             py: 0.5,
             fontSize: '0.8125rem',
-            fontWeight: isActive ? 700 : 500,
+            // Keep fontWeight fixed so the label's rendered width never
+            // changes on selection — toggling font-weight here shifts every
+            // tab/separator to its right. Fake the bold via text-shadow
+            // instead, which affects stroke, not glyph metrics.
+            fontWeight: 500,
+            color: isActive ? 'text.primary' : 'text.secondary',
+            textShadow: isActive ? '0 0 0.4px currentColor, 0 0 0.4px currentColor' : 'none',
             cursor: 'pointer',
             userSelect: 'none',
             transition: 'all 0.15s ease-in-out',
