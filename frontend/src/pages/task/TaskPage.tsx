@@ -6,7 +6,7 @@ import {
   TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
-import { Add, Block, ContentCopy, Delete, Edit, History, MoreVert, Pause, PlayArrow, PlayCircle, Refresh, Schedule, Security, Send, Terminal } from '@/components/icons';
+import { Add, Block, ContentCopy, Delete, Edit, History, MoreVert, Pause, PlayArrow, PlayCircle, Refresh, Schedule, Search, Security, Send, Terminal } from '@/components/icons';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { taskApi } from '@/services/taskApi';
 import TaskMarkdown from './TaskMarkdown';
@@ -594,6 +594,7 @@ export default function TaskPage() {
   const [tasks, setTasks] = useState<AgentTask[]>([]); const [agents, setAgents] = useState<AgentAvailability[]>([]);
   const [selectedId, setSelectedId] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [createOpen, setCreateOpen] = useState(false);
   const [createPreset, setCreatePreset] = useState<TaskTemplate | null>(null);
+  const [query, setQuery] = useState(''); const [executorFilter, setExecutorFilter] = useState<'all' | TaskAgent>('all');
   const openCreate = (preset?: TaskTemplate) => { setCreatePreset(preset || null); setCreateOpen(true); };
   const [detail, setDetail] = useState<AgentTask>(); const [runs, setRuns] = useState<TaskRun[]>([]); const [usage, setUsage] = useState<TaskUsage>();
   const load = useCallback(async (quiet = false) => { if (!quiet) setLoading(true); try { const [items, available] = await Promise.all([taskApi.list(), taskApi.agents()]); setTasks(items); setAgents(available); setSelectedId((current) => current && items.some((item) => item.id === current) ? current : items[0]?.id || ''); setError(''); } catch (err) { setError((err as Error).message); } finally { setLoading(false); } }, []);
@@ -613,11 +614,17 @@ export default function TaskPage() {
     return () => { active = false; window.clearInterval(timer); };
   }, [selectedId]);
   const selected = detail?.id === selectedId ? detail : tasks.find((task) => task.id === selectedId);
+  const visibleTasks = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return tasks.filter((task) => (executorFilter === 'all' || task.agent === executorFilter)
+      && (!q || (task.title || '').toLowerCase().includes(q) || task.goal.toLowerCase().includes(q)));
+  }, [tasks, query, executorFilter]);
   const groups = useMemo(() => [
-    { label: 'Needs you', items: tasks.filter((task) => task.status === 'needs_input' || task.status === 'handoff_required') },
-    { label: 'Active & scheduled', items: tasks.filter((task) => isActive(task)) },
-    { label: 'Completed', items: tasks.filter((task) => !isActive(task) && !['needs_input', 'handoff_required'].includes(task.status)) },
-  ].filter((group) => group.items.length), [tasks]);
+    { label: 'Needs you', items: visibleTasks.filter((task) => task.status === 'needs_input' || task.status === 'handoff_required') },
+    { label: 'Active & scheduled', items: visibleTasks.filter((task) => isActive(task)) },
+    { label: 'Completed', items: visibleTasks.filter((task) => !isActive(task) && !['needs_input', 'handoff_required'].includes(task.status)) },
+  ].filter((group) => group.items.length), [visibleTasks]);
+  const executorsPresent = useMemo(() => Array.from(new Set(tasks.map((task) => task.agent))), [tasks]);
   const update = (task: AgentTask) => { setTasks((items) => items.map((item) => item.id === task.id ? task : item)); setDetail(task); };
   const edit = async (input: UpdateTaskInput) => { if (!selected) return; update(await taskApi.update(selected.id, input)); };
   const wake = async (instruction?: string) => { if (!selected) return; update(await taskApi.wake(selected.id, instruction)); };
@@ -630,7 +637,16 @@ export default function TaskPage() {
     {!enableTasks && <Alert severity="info">Task creation is disabled. Existing tasks remain available so you can stop, inspect, or resume them.</Alert>}
     {error && <Alert severity="error">{error}</Alert>}
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box> : tasks.length === 0 ? <Paper variant="outlined" sx={{ py: 10, textAlign: 'center', borderRadius: 2 }}><Schedule sx={{ fontSize: 40, color: 'text.secondary' }} /><Typography variant="h5" sx={{ mt: 2 }}>No tasks yet</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Create one goal. Tingly Box will handle the workspace, schedule, and native session.</Typography>{enableTasks && <><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mt: 4, px: 3 }}>{TASK_TEMPLATES.map((template) => <Paper key={template.label} variant="outlined" onClick={() => openCreate(template)} sx={{ p: 2, width: { sm: 240 }, textAlign: 'left', cursor: 'pointer', borderRadius: 2, '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' } }}><Typography variant="subtitle2">{template.label}</Typography><Typography variant="caption" color="text.secondary">{template.description}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{agentLabel(template.agent)}{template.when === 'repeat' ? ` · ${template.cron}` : template.keepChecking ? ' · keeps checking' : ''}</Typography></Paper>)}</Stack><Button variant="text" startIcon={<Add />} sx={{ mt: 2.5 }} onClick={() => openCreate()}>Or start from scratch</Button></>}</Paper> : <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
-      <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320, lg: 340 }, flexShrink: 0, p: 1.5, borderRadius: 2 }}><Stack spacing={2}>{groups.map((group) => <Box key={group.label}><Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>{group.label}</Typography><Stack spacing={0.5}>{group.items.map((task) => { const meta = statusMeta[task.status]; return <Box key={task.id} onClick={() => setSelectedId(task.id)} sx={{ p: 1.25, borderRadius: 1.5, cursor: 'pointer', bgcolor: selectedId === task.id ? 'action.selected' : 'transparent', border: '1px solid', borderColor: selectedId === task.id ? 'primary.main' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography variant="subtitle2" noWrap>{task.title || task.goal}</Typography><Chip size="small" label={meta.label} color={meta.color} /></Stack><Typography variant="caption" color="text.secondary">{agentLabel(task.agent)}{task.steps?.length ? ` · Step ${Math.min((task.current_step ?? 0) + 1, task.steps.length)}/${task.steps.length}` : ''} · {task.status === 'pending' ? formatTime(task.scheduled_at) : ['needs_input', 'handoff_required'].includes(task.status) ? `waiting ${formatAge(task.updated_at)}` : formatTime(task.updated_at)}{task.trigger_paused ? ' · paused' : ''}</Typography></Box>; })}</Stack></Box>)}</Stack></Paper>
+      <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320, lg: 340 }, flexShrink: 0, p: 1.5, borderRadius: 2 }}><Stack spacing={2}>
+        <Stack spacing={1}>
+          <TextField size="small" fullWidth placeholder="Search tasks…" value={query} onChange={(event) => setQuery(event.target.value)} slotProps={{ input: { startAdornment: <Search fontSize="small" sx={{ mr: 0.75, color: 'text.secondary' }} /> } }} />
+          {executorsPresent.length > 1 && <ToggleButtonGroup exclusive size="small" value={executorFilter} onChange={(_, value) => value && setExecutorFilter(value)} fullWidth>
+            <ToggleButton value="all" sx={{ textTransform: 'none', py: 0.25 }}>All</ToggleButton>
+            {executorsPresent.map((kind) => <ToggleButton key={kind} value={kind} sx={{ textTransform: 'none', py: 0.25 }}>{agentLabel(kind)}</ToggleButton>)}
+          </ToggleButtonGroup>}
+        </Stack>
+        {groups.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 2, textAlign: 'center' }}>No tasks match.</Typography>}
+        {groups.map((group) => <Box key={group.label}><Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>{group.label}</Typography><Stack spacing={0.5}>{group.items.map((task) => { const meta = statusMeta[task.status]; return <Box key={task.id} onClick={() => setSelectedId(task.id)} sx={{ p: 1.25, borderRadius: 1.5, cursor: 'pointer', bgcolor: selectedId === task.id ? 'action.selected' : 'transparent', border: '1px solid', borderColor: selectedId === task.id ? 'primary.main' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography variant="subtitle2" noWrap>{task.title || task.goal}</Typography><Chip size="small" label={meta.label} color={meta.color} /></Stack><Typography variant="caption" color="text.secondary">{agentLabel(task.agent)}{task.steps?.length ? ` · Step ${Math.min((task.current_step ?? 0) + 1, task.steps.length)}/${task.steps.length}` : ''} · {task.status === 'pending' ? formatTime(task.scheduled_at) : ['needs_input', 'handoff_required'].includes(task.status) ? `waiting ${formatAge(task.updated_at)}` : formatTime(task.updated_at)}{task.trigger_paused ? ' · paused' : ''}</Typography></Box>; })}</Stack></Box>)}</Stack></Paper>
       {selected && <TaskDetail task={selected} runs={runs} usage={usage} onUpdate={edit} onWake={wake} onStop={stop} onPause={pause} onDelete={remove} onClone={clone} />}
     </Stack>}
     <CreateTaskDialog open={createOpen} agents={agents} preset={createPreset} onClose={() => setCreateOpen(false)} onCreated={(task) => { setTasks((items) => [task, ...items]); setDetail(task); setRuns([]); setSelectedId(task.id); }} />
