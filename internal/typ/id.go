@@ -189,8 +189,8 @@ func GetClientUserAgent(ctx context.Context) string {
 	return ""
 }
 
-// Context1MKey carries the rule-level 1M-context hint down to the outbound
-// Anthropic transport, which appends the context-1m beta flag at request time.
+// Context1MKey carries the rule-level 1M-context hint down to the Anthropic
+// client, whose Beta/Messages methods add the context-1m beta flag per request.
 const Context1MKey contextKey = "context_1m"
 
 // WithContext1M marks the request as wanting Anthropic's 1M context window.

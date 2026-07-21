@@ -169,18 +169,18 @@ func ResolveRuleFlagsWithScenario(
 		applyClientUserAgent(c)
 	}
 
-	// Attach the 1M-context hint the same way: the outbound Anthropic transport
-	// (context1mBetaTransport) appends the context-1m beta flag at RoundTrip
-	// time.
+	// Attach the 1M-context hint the same way: the Anthropic client's Beta/
+	// Messages methods read it and add the context-1m beta per request.
 	applyContext1M(c, flags)
 
 	return flags
 }
 
 // applyContext1M attaches the 1M-context hint to the request context so the
-// outbound Anthropic transport injects the context-1m beta flag upstream.
-// Without this, the flag would only ever be advertised to clients ([1m] model
-// names) and never reach providers whose clients don't send it themselves.
+// Anthropic client (generic and Claude Code OAuth) injects the context-1m beta
+// flag upstream. Without this, the flag would only ever be advertised to
+// clients ([1m] model names) and never reach providers whose clients don't send
+// it themselves.
 func applyContext1M(c *gin.Context, flags typ.RuleFlags) {
 	if !flags.Context1M || c == nil || c.Request == nil {
 		return

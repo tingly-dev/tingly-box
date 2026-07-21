@@ -83,12 +83,6 @@ func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *t
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
 
-	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
-	// Note: Currently commented out as per original claude.go
-	// if model != "" && supportsContext1M(model) {
-	// 	baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
-	// }
-
 	baseBetas = strings.TrimRight(baseBetas, ",")
 
 	// Ensure oauth is always present at the end
