@@ -466,7 +466,8 @@ func ruleFlagCases() []flagCase {
 		// model still routes to its bare-named rule (suffix-normalized
 		// matching), and (2) the rule flag alone — the client sends no beta
 		// header here — gets the context-1m beta flag injected into the
-		// upstream request (context1mBetaTransport via the context hint).
+		// upstream request (the Anthropic client's Beta methods read the
+		// context hint and add it to the request Betas).
 		{key: "context_1m", run: func(t flagTB, env *TestEnv) {
 			s := flagScenario()
 			env.virtual.RegisterScenario(s)

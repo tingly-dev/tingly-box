@@ -66,15 +66,17 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
 
-	// Create HTTP client with session-bound transport
+	// Create HTTP client with session-bound transport.
+	//
+	// context-1m is NOT injected here: it's a request-body/header concern
+	// applied per-call in the Beta/Messages methods (withContext1MBeta /
+	// context1MHeaderOpts) from the typ.WithContext1M hint, so it reaches both
+	// this generic client and ClaudeClient without a dedicated transport.
 	var transport http.RoundTripper
 	if provider.AuthType == typ.AuthTypeOAuth {
 		if provider.OAuthDetail != nil && provider.OAuthDetail.Issuer == ai.IssuerClaudeCode {
-			// context1m sits inside claudeRoundTripper so the 1M beta flag is
-			// appended after the fingerprint-managed header merge (context-1m
-			// is on the fingerprint-safe allowlist, so this is equivalent).
 			transport = &claudeRoundTripper{
-				RoundTripper: &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)},
+				RoundTripper: createSessionBoundTransport(provider, sessionID),
 			}
 			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s",
 				provider.OAuthDetail.GetIssuer(), sessionID.Value)
@@ -82,7 +84,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 			// OAuth provider with an issuer other than ClaudeCode (or missing OAuthDetail).
 			// Use a session-bound transport so proxy_url is respected and env proxy is
 			// not inherited — same guarantee as the non-OAuth path below.
-			transport = &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)}
+			transport = createSessionBoundTransport(provider, sessionID)
 		}
 	} else {
 		// Generic non-OAuth Anthropic provider. A single userAgentTransport
@@ -98,8 +100,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 		// proxy is explicitly configured for the provider.
 		base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-		transport = &context1mBetaTransport{base: base}
-		transport = &userAgentTransport{base: transport}
+		transport = &userAgentTransport{base: base}
 		transport = wrapWithLogging(transport, provider)
 	}
 
@@ -150,32 +151,64 @@ func (c *AnthropicClient) HttpClient() *http.Client {
 	return c.httpClient
 }
 
+// withContext1MBeta appends Anthropic's context-1m beta to a beta request's
+// Betas when the request context carries the 1M hint (typ.WithContext1M, set by
+// the gateway from the context_1m rule / [1m] alias). Deduped, so a client that
+// already sent it is left untouched. The SDK serializes Betas into the
+// anthropic-beta header via WithHeaderAdd *after* the client's base options, so
+// this also reaches ClaudeClient — its static anthropic-beta header gets the
+// value appended. No transport needed.
+func withContext1MBeta(ctx context.Context, betas []anthropic.AnthropicBeta) []anthropic.AnthropicBeta {
+	if !typ.GetContext1M(ctx) {
+		return betas
+	}
+	for _, b := range betas {
+		if b == anthropic.AnthropicBetaContext1m2025_08_07 {
+			return betas
+		}
+	}
+	return append(betas, anthropic.AnthropicBetaContext1m2025_08_07)
+}
+
+// context1MHeaderOpts carries the context-1m beta via the anthropic-beta header
+// for the non-beta Messages API, whose params have no Betas field. No-op
+// without the 1M hint.
+func context1MHeaderOpts(ctx context.Context) []anthropicOption.RequestOption {
+	if !typ.GetContext1M(ctx) {
+		return nil
+	}
+	return []anthropicOption.RequestOption{anthropicOption.WithHeaderAdd("anthropic-beta", AnthropicContext1m)}
+}
+
 // MessagesNew creates a new message request
 func (c *AnthropicClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
-	return c.client.Messages.New(ctx, *req)
+	return c.client.Messages.New(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
 // MessagesNewStreaming creates a new streaming message request
 func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	return c.client.Messages.NewStreaming(ctx, *req)
+	return c.client.Messages.NewStreaming(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
 // MessagesCountTokens counts tokens for a message request
 func (c *AnthropicClient) MessagesCountTokens(ctx context.Context, req *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
-	return c.client.Messages.CountTokens(ctx, *req)
+	return c.client.Messages.CountTokens(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
 func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
+	req.Betas = withContext1MBeta(ctx, req.Betas)
 	return c.client.Beta.Messages.CountTokens(ctx, *req)
 }
 
 // BetaMessagesNew creates a new beta message request
 func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+	req.Betas = withContext1MBeta(ctx, req.Betas)
 	return c.client.Beta.Messages.New(ctx, *req)
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request
 func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
+	req.Betas = withContext1MBeta(ctx, req.Betas)
 	return c.client.Beta.Messages.NewStreaming(ctx, *req)
 }
 
