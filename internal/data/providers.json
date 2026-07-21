@@ -2317,7 +2317,7 @@
       "api_doc": "https://docs.cohere.com/v2/reference/about",
       "model_doc": "https://docs.cohere.com/v2/docs/models",
       "pricing_doc": "https://cohere.com/pricing",
-      "base_url_openai": null,
+      "base_url_openai": "https://api.cohere.ai/compatibility/v1",
       "base_url_anthropic": null,
       "models": [
         {
@@ -2373,7 +2373,8 @@
       "sources": [
         "https://docs.cohere.com/docs/command-a",
         "https://docs.cohere.com/docs/command-a-plus",
-        "https://docs.cohere.com/docs/models"
+        "https://docs.cohere.com/docs/models",
+        "https://docs.cohere.com/docs/compatibility-api"
       ]
     },
     "nvidia-com": {
