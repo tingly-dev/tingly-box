@@ -140,6 +140,13 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		return
 	}
 
+	// Echo what was actually persisted: AddRule seeds per-scenario creation
+	// defaults (e.g. team rules get claude_code_compat + clean_header), so the
+	// client refreshes its local state from the stored rule, not the raw payload.
+	if saved := h.config.GetRuleByUUID(rule.UUID); saved != nil {
+		rule = *saved
+	}
+
 	// Log the action
 	logrus.WithFields(logrus.Fields{
 		"action":        "update_rule",
@@ -161,6 +168,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 	response.Data.Active = rule.Active
 	response.Data.SmartEnabled = rule.SmartEnabled
 	response.Data.SmartRouting = rule.SmartRouting
+	response.Data.Flags = rule.Flags
 
 	c.JSON(http.StatusOK, response)
 }
@@ -238,6 +246,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 	response.Data.Active = rule.Active
 	response.Data.SmartEnabled = rule.SmartEnabled
 	response.Data.SmartRouting = rule.SmartRouting
+	response.Data.Flags = rule.Flags
 
 	c.JSON(http.StatusOK, response)
 }

@@ -575,10 +575,33 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 	return 0
 }
 
+// applyScenarioCreateDefaults seeds sensible per-scenario flag defaults on a
+// rule at creation time. It lives here, in the AddRule choke point, so every
+// creation path benefits — HTTP, CLI, TUI, agent, and import all funnel through
+// AddRule. Loading an existing config never calls AddRule, so a user who later
+// turns a default off is never re-seeded.
+//
+// Team: rules under the team scenario are almost always fronted by Claude Code
+// clients pointed at /tingly/team, so they hit the same third-party-provider
+// incompatibilities the built-in Claude Code rules already default around —
+// mid-conversation system-role messages that strict Anthropic-compatible
+// providers reject (ClaudeCodeCompat) and Claude Code's injected billing header
+// that must not leak upstream (CleanHeader). Default both on so team rules work
+// out of the box. Only seed when the caller sent no flags at all, so an explicit
+// payload that sets any flag is left untouched.
+func applyScenarioCreateDefaults(rule *typ.Rule) {
+	if rule.Scenario.Is(typ.ScenarioTeam) && rule.Flags == (typ.RuleFlags{}) {
+		rule.Flags.ClaudeCodeCompat = true
+		rule.Flags.CleanHeader = true
+	}
+}
+
 // AddRule updates the default Rule
 func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	applyScenarioCreateDefaults(&rule)
 
 	// Validate that all service provider UUIDs exist
 	if err := c.validateRuleServices(rule); err != nil {
