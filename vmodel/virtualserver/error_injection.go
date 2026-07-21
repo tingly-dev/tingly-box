@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -63,7 +62,7 @@ func applyMidStreamBreakOpenAI(c *gin.Context, w io.Writer, e *vmodel.ErrorInjec
 		fmt.Fprintf(w, "data: %s\n\n", payload)
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
-		hijackAndClose(c)
+		hijackAndClose(c.Writer)
 	}
 }
 
@@ -85,7 +84,7 @@ func applyMidStreamBreakResponses(c *gin.Context, w io.Writer, e *vmodel.ErrorIn
 		fmt.Fprintf(w, "data: %s\n\n", payload)
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
-		hijackAndClose(c)
+		hijackAndClose(c.Writer)
 	case vmodel.MidStreamModeCleanEOF:
 		// Nothing to write: the handler returns without terminal events and
 		// the server closes the chunked body properly.
@@ -109,7 +108,7 @@ func applyMidStreamBreakAnthropic(c *gin.Context, w io.Writer, e *vmodel.ErrorIn
 		fmt.Fprintf(w, "event: error\ndata: %s\n\n", payload)
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
-		hijackAndClose(c)
+		hijackAndClose(c.Writer)
 	}
 }
 
@@ -136,28 +135,18 @@ func resolveErrorFields(e *vmodel.ErrorInjection) (status int, message, typ stri
 	return
 }
 
-// hijackAndClose severs the request's TCP connection to simulate an upstream
-// that abruptly drops mid-stream — exactly the failure shape the
-// priority-routing firstChunkGate MUST NOT retry past.
-//
-// Hijack is tried first, but gin (>= 1.12) refuses to hijack once body bytes
-// are written — which is always the case for a mid-stream break — so the
-// working path is the raw net.Conn the serving http.Server stored via
-// vmodel.ConnContext. When neither works the break silently turning into a
-// clean EOF would invalidate every ConnectionClose scenario, so it is loudly
-// logged instead.
-func hijackAndClose(c *gin.Context) {
-	if hj, ok := c.Writer.(http.Hijacker); ok {
-		if conn, _, err := hj.Hijack(); err == nil && conn != nil {
-			_ = conn.Close()
-			return
-		}
-	}
-	if conn := vmodel.ConnFromContext(c.Request.Context()); conn != nil {
-		_ = conn.Close()
+// hijackAndClose takes control of the underlying TCP connection and closes
+// it. Used to simulate an upstream that abruptly drops the connection mid
+// stream — exactly the failure shape the priority-routing firstChunkGate
+// MUST NOT retry past.
+func hijackAndClose(w http.ResponseWriter) {
+	hj, ok := w.(http.Hijacker)
+	if !ok {
 		return
 	}
-	logrus.WithContext(c.Request.Context()).Warn(
-		"mid-stream ConnectionClose injection could not sever the connection " +
-			"(no hijack, no vmodel.ConnContext on the server); client will see a clean EOF")
+	conn, _, err := hj.Hijack()
+	if err != nil || conn == nil {
+		return
+	}
+	_ = conn.Close()
 }

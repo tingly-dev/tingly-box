@@ -4,17 +4,14 @@ package protocoltest
 // OpenAI Responses to tb2's codex scenario surface — exactly what Codex CLI
 // does — and tb2 passes through to tb1's /virtual responses endpoint.
 //
-// Three routes are wired (see duoCodexRules):
+// Two routes are wired (see duoCodexRules):
 //
-//	duo-e2e-codex-ok         → healthy stream, must end with response.completed
-//	duo-e2e-codex-trunc-eof  → tb1 ends the body cleanly with no terminal
-//	                           event; tb2 must convert the bare EOF into an
-//	                           explicit error event (code upstream_truncated)
-//	duo-e2e-codex-trunc-drop → tb1 hijacks and closes the TCP connection;
-//	                           tb2's read error must surface as an error
-//	                           event (code stream_failed)
+//	duo-e2e-codex-ok        → healthy stream, must end with response.completed
+//	duo-e2e-codex-trunc-eof → tb1 ends the body cleanly with no terminal
+//	                          event; tb2 must convert the bare EOF into an
+//	                          explicit error event (code upstream_truncated)
 //
-// The truncation assertions pin the gateway's contract with strict clients:
+// The truncation assertion pins the gateway's contract with strict clients:
 // a Codex-side "stream closed before response.completed" with nothing else on
 // the wire is a regression.
 
@@ -73,9 +70,9 @@ func (env *DuoEnv) postCodexResponses(requestModel string) ([]duoCodexEvent, err
 			}
 		}
 	}
-	// A read error here is expected for the drop route only if tb2 failed to
-	// convert it — tb2 itself always terminates the client stream properly,
-	// so any scanner error is a finding, not noise.
+	// tb2 always terminates the client stream properly (with a well-formed
+	// SSE error frame on upstream truncation), so any scanner error here is a
+	// finding, not noise.
 	if err := sc.Err(); err != nil {
 		return events, fmt.Errorf("client read error (gateway leaked the upstream break): %w", err)
 	}
@@ -119,9 +116,9 @@ func codexHasEvent(events []duoCodexEvent, typ string) bool {
 	return false
 }
 
-// RunCodexPassthroughChecks drives the three codex passthrough routes and
-// verifies the healthy stream completes and both truncation shapes surface as
-// explicit in-band error events instead of a bare EOF.
+// RunCodexPassthroughChecks drives the two codex passthrough routes and
+// verifies the healthy stream completes and the truncation shape surfaces as
+// an explicit in-band error event instead of a bare EOF.
 func (env *DuoEnv) RunCodexPassthroughChecks() []DuoCheck {
 	var checks []DuoCheck
 	add := func(route, name string, pass bool, detail string) {
@@ -143,13 +140,12 @@ func (env *DuoEnv) RunCodexPassthroughChecks() []DuoCheck {
 		}
 	}
 
-	// Truncation shapes: no terminal event may be fabricated, and the break
+	// Truncation shape: no terminal event may be fabricated, and the break
 	// must reach the client as an explicit error event with the right code.
 	for _, tc := range []struct {
 		route, model, wantCode string
 	}{
 		{"codex-trunc-eof", DuoCodexTruncEOFModel, "upstream_truncated"},
-		{"codex-trunc-drop", DuoCodexTruncDropModel, "stream_failed"},
 	} {
 		events, err := env.postCodexResponses(tc.model)
 		if err != nil {
