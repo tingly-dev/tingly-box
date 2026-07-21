@@ -134,7 +134,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 | Key | Type | 类别 | Shared | 继承 | 作用 | 注入点 |
 |-----|------|------|--------|------|------|--------|
-| `custom_user_agent` | string | request | **yes** | override | 覆盖出站 User-Agent header。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header。| `customUserAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2）|
+| `custom_user_agent` | string | request | **yes** | override | 覆盖出站 User-Agent header。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header。| `userAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | — | — | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 | `use_max_completion_tokens` | bool | request | — | — | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b-post）|
 | `use_max_tokens` | bool | request | — | — | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b-post）|
@@ -284,50 +284,80 @@ handler                            transformXxxx                       chain
 
 ## 8. UA 链层 — 实操中最易踩坑的部分
 
-**UA 是请求链路的关注点,不是 provider 配置。** 没有 provider 级 UA 字段(历史上的
-`provider.UserAgent` 已彻底移除,理由见 §11 取舍表)。走哪条 client 实现决定适用哪套规则:
+> 出站 UA 的**权威说明**（含各 client 路径逐一对照的结果表）见
+> `.design/user-agent.md`。本节从 rule flag 视角给出链层与注入机制。
+
+**不存在一条统一线性优先级。** UA 是**请求链路**的关注点,不是 provider 配置——历史上
+的 `provider.UserAgent` 已彻底移除(理由见 §11 取舍表)。走哪条 client 实现决定适用哪一套
+规则,有两套(每层"set then delegate",**innermost wins**):
 
 **A. 通用 pass-through 链**（通用 OpenAI `openai.go`、通用非-OAuth Anthropic
-`anthropic.go` else 分支）——rule/scenario `custom_user_agent` 是唯一 UA override 层:
+`anthropic.go` else 分支）——client 入站 UA 会被**兜底转发**：
 
 ```
-   customUserAgentTransport          ← rule/scenario custom_user_agent（非空即赢）
-     base http.Transport → wire      ← 否则 SDK 默认 UA
+   userAgentTransport                  ← 一处解析优先级(不靠多层叠放)
+     base http.Transport → wire
 ```
 
-优先级：**rule/scenario custom_user_agent > SDK 默认 UA**（`none` 哨兵 = 完全去掉 UA）。
+优先级（在 `userAgentTransport` 一个 RoundTrip 内解析）：**rule/scenario custom_user_agent
+> 入站 client UA > SDK 默认**。它读 ctx 两个候选值显式取胜者,避免"包裹顺序 vs 执行顺序
+相反"的易错点。
 
-**B. 内建特种（vendor）链**（Claude Code OAuth / Codex / Kimi / Gemini / Antigravity）
-——vendor round-tripper 硬编码的**特种握手 UA 是决定性的**,`custom_user_agent` 完全不参与
-（这些链上没有 `customUserAgentTransport`）,也没有任何 provider 配置能覆盖它。
-`createSessionBoundTransport`(vendor 链底座)只做 session 绑定,不碰 UA。
+**B. 内建特种（vendor）链**（Claude Code OAuth / Codex / Kimi / Gemini /
+Antigravity）——**client UA 与 rule/scenario custom_user_agent 完全不参与,也没有任何
+provider 配置入口**：
 
-| 场景（通用链 A） | rule UA | 实际发出 |
-|------------------|---------|----------|
-| 默认 | 空 | SDK 默认 |
-| Rule 配了 | "Bench/1" | Bench/1 |
-| Rule = `none` | "none" | （无 UA，strip 生效）|
+```
+   vendorRoundTripper                  ← 设 vendor 特种 UA（Codex 例外：不设）
+     createSessionBoundTransport       ← 只做 session 绑定,不碰 UA
+       SessionBoundTransport → wire
+```
 
-| 场景（特种链 B） | 实际发出 |
-|------------------|----------|
-| 任意 rule/配置 | **vendor 特种 UA**（Codex：SDK 默认,round-tripper 不设 UA）|
+唯一 UA 来源:**vendor 特种 UA,决定性、不可被任何配置覆盖**。
 
-vendor-specialized 路径不接 rule UA：它们 UA 跟整个 OAuth/握手/指纹协议绑定,任何级别的
-覆盖都会破坏 vendor 校验,所以 vendor 特种 UA 对它是**决定性**的。这条边界写进了
-`flag_registry.go` 中 `custom_user_agent` 的 description 里。
+⚠️ **别把两套写成一条链。** vendor 链上没有 `userAgentTransport`（Gemini 更是
+`req.Header = http.Header{}` 清空整个 header），`createSessionBoundTransport` 也只做
+session 绑定不碰 UA——所以 client 发什么、rule 配
+什么,都**动不了 vendor 特种 UA**。边界靠"vendor 链自带 `WithHTTPClient` 在 SDK option
+末尾覆盖掉通用 httpClient / 自建不含 UA-transport 的链"保证(详见本节末尾的不变量)。
 
-⚠️ **重要不变量**：`applyCustomUserAgent`（由 `resolveRuleFlagsWithScenario`
-统一调用）把 UA 写进 `c.Request.Context()`（对**所有**请求，无论
-scenario/provider），但 UA 只在 transport 链里
-**有** `customUserAgentTransport` 的 client 上生效——它读 `req.Context()`。
-`customUserAgentTransport` 只在两处接入：通用 `NewOpenAIClient`（openai.go）
-与通用非-OAuth Anthropic 分支（anthropic.go else）。vendor 路径
-（Codex / Kimi 等）虽然内部复用 `NewOpenAIClient`，但用 `extraOptions` 里
-自带的 `WithHTTPClient`（含 `codexRoundTripper` / `kimiRoundTripper`，
-**不含** `customUserAgentTransport`）在 SDK option 末尾覆盖掉通用 httpClient
-（"extra 最后应用"）；Claude OAuth 走 `NewClaudeClient` 自建链。所以即便
-ctx 里带着 UA，vendor client 也没有任何 transport 去读它——握手 UA 不会被
-flag 污染。**给 vendor 链新增 transport 时切勿引入 `customUserAgentTransport`。**
+结果（**通用链 A**，client 入站发了 `cherry/1.2`）：
+
+| 场景 | rule UA | client 入站 UA | 实际发出 |
+|------|---------|----------------|----------|
+| 什么都没配 | 空 | 空 | SDK 默认 |
+| client 发了 UA | 空 | "cherry/1.2" | **cherry/1.2**（兜底转发）|
+| Rule 配了 | "Bench/1" | "cherry/1.2" | Bench/1 |
+| Rule = `none` | "none" | "cherry/1.2" | （无 UA，strip 生效）|
+
+结果（**特种链 B**）：任意 rule/client/配置 → **vendor 特种 UA**（Codex：SDK 默认）。
+
+并非所有 client 都接入这些层（`✅` = 该层生效；`❌` = 该链上没有对应 transport 去读，
+对该 client 完全不可见）：
+
+| Client | Rule/Scenario UA | Client 入站 UA |
+|--------|:----------------:|:--------------:|
+| 通用 OpenAI (`client/openai.go`) | ✅ | ✅ |
+| 通用 Anthropic 非-OAuth (`client/anthropic.go` else 分支) | ✅ | ✅ |
+| Claude Code OAuth (`claudeRoundTripper`) | ❌ | ❌ |
+| Codex / Kimi / Gemini / Antigravity | ❌ | ❌ |
+
+vendor-specialized 路径既不接 rule UA、也不接 client 入站 UA：它们的 UA 跟整个
+OAuth / 握手 / 指纹协议绑定，任何级别的覆盖都会破坏 vendor 校验，所以 vendor 特种 UA
+对它们是**决定性**的。这条边界写进了 `flag_registry.go` 中 `custom_user_agent` 的
+description 里，逐路径对照见 `.design/user-agent.md` §3。
+
+⚠️ **重要不变量**：`applyCustomUserAgent` 与 `applyClientUserAgent`（都由
+`resolveRuleFlagsWithScenario` 统一调用）把 UA 写进 `c.Request.Context()`（对**所有**
+请求，无论 scenario/provider），但这两个 UA 只在 transport 链里**有**
+`userAgentTransport` 的 client 上生效——它读 `req.Context()` 的两个候选值并按固定优先级
+取胜者。`userAgentTransport` 只在两处接入：通用 `NewOpenAIClient`（openai.go）与通用
+非-OAuth Anthropic 分支（anthropic.go else）。vendor 路径（Codex / Kimi 等）虽然内部复用
+`NewOpenAIClient`，但用 `extraOptions` 里自带的 `WithHTTPClient`（含 `codexRoundTripper` /
+`kimiRoundTripper`，**不含** `userAgentTransport`）在 SDK option 末尾覆盖掉通用 httpClient
+（"extra 最后应用"）；Gemini / Antigravity / Claude OAuth 自建 transport 链。所以即便 ctx
+里带着 UA，vendor client 也没有任何 transport 去读它——握手 / 特种 UA 不会被 flag 或
+client UA 污染。**给 vendor 链新增 transport 时切勿引入 `userAgentTransport`。**
 
 ---
 
@@ -483,7 +513,7 @@ Plugins Card 操作。
 | Registry 由后端 owner | ✅ | 前端硬编码 + 后端硬编码两边对 | 单一可信源，新 flag 只动一处元数据 |
 | 卡片放路由图内 vs 固定右侧 | 固定右侧 | 卡片随路由图滚动 | flag 是 rule 级而非 provider 级，常驻可见更符合心智模型 |
 | string flag 的"启用"语义 | 空 = 未启用 | 独立 enable Switch + 文本 | 一个字段一个状态，UI 更简单；权衡是无法区分"空字符串"和"未配置" |
-| UA 链 vendor pin 是否不可覆盖 | **是,vendor pin 决定性** | 保留 `provider.UserAgent` 调试 override | provider 是静态配置,不该耦合进请求链路去改写 vendor 握手/指纹 UA(footgun)。`provider.UserAgent` 字段已彻底移除;UA 只保留请求侧来源(rule custom_user_agent)与 vendor pin 两个正交轴 |
+| UA 链 vendor pin 是否不可覆盖 | **是,vendor pin 决定性** | 保留 `provider.UserAgent` 调试 override | provider 是静态配置,不该耦合进请求链路去改写 vendor 握手/指纹 UA(footgun)。`provider.UserAgent` 字段已彻底移除;UA 只保留请求侧来源(client 入站 / rule custom_user_agent)与 vendor pin 两个正交轴。详见 `.design/user-agent.md` §5 |
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
 | preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |

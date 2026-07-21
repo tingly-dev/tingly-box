@@ -63,16 +63,17 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	// Create HTTP client with session-bound transport
 	var transport http.RoundTripper
 
-	// User-Agent: the rule/scenario custom_user_agent override (via
-	// customUserAgentTransport) is the only outbound-UA layer here. There is
-	// deliberately no provider-level UA override — UA is a request-path concern,
-	// not provider config.
+	// User-Agent: a single transport resolves the fixed precedence
+	// (rule/scenario custom_user_agent > inbound client UA > SDK default) in one
+	// place — see userAgentTransport. There is deliberately no provider-level UA
+	// layer; UA is a request-path concern, not provider config
+	// (see .design/user-agent.md).
 	//
 	// Use the transport pool instead of http.DefaultTransport so that env
 	// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 	// proxy is explicitly configured for the provider.
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-	transport = &customUserAgentTransport{base: base}
+	transport = &userAgentTransport{base: base}
 	transport = wrapWithLogging(transport, provider)
 
 	httpClient := &http.Client{

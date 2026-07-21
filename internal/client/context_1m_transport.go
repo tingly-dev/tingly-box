@@ -11,7 +11,7 @@ import (
 // anthropic-beta header when the request context carries the 1M hint
 // (typ.WithContext1M, attached by the gateway when the matched rule has the
 // context_1m flag). This is the Type-2
-// (context-passed hint) injection point, mirroring customUserAgentTransport:
+// (context-passed hint) injection point, mirroring userAgentTransport:
 // upstream providers only honor 1M when this beta flag is present, so the
 // rule flag must reach the wire even for clients that don't send it.
 type context1mBetaTransport struct {

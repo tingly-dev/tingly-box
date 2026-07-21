@@ -162,6 +162,33 @@ func GetCustomUserAgent(ctx context.Context) string {
 	return ""
 }
 
+// ClientUserAgentKey carries the *inbound* client's User-Agent header down to
+// the outbound HTTP transport so it can be forwarded upstream. Distinct from
+// CustomUserAgentKey (the explicit rule/scenario override); userAgentTransport
+// resolves the precedence between them.
+const ClientUserAgentKey contextKey = "client_user_agent"
+
+// WithClientUserAgent attaches the inbound client's User-Agent so an outbound
+// HTTP transport may forward it upstream when nothing else overrides the UA.
+// Empty values are not attached (no client UA to forward).
+func WithClientUserAgent(ctx context.Context, ua string) context.Context {
+	if ua == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, ClientUserAgentKey, ua)
+}
+
+// GetClientUserAgent returns the inbound client's User-Agent, or "" if none.
+func GetClientUserAgent(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if ua, ok := ctx.Value(ClientUserAgentKey).(string); ok {
+		return ua
+	}
+	return ""
+}
+
 // Context1MKey carries the rule-level 1M-context hint down to the outbound
 // Anthropic transport, which appends the context-1m beta flag at request time.
 const Context1MKey contextKey = "context_1m"

@@ -162,6 +162,13 @@ func ResolveRuleFlagsWithScenario(
 	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
 	applyCustomUserAgent(c, flags)
 
+	// Inbound client UA is a lower-precedence fallback (see applyClientUserAgent).
+	// Skip it when an override is set: the transport would ignore the client UA
+	// anyway, so attaching it is pure allocation.
+	if flags.CustomUserAgent == "" {
+		applyClientUserAgent(c)
+	}
+
 	// Attach the 1M-context hint the same way: the outbound Anthropic transport
 	// (context1mBetaTransport) appends the context-1m beta flag at RoundTrip
 	// time.
@@ -183,7 +190,7 @@ func applyContext1M(c *gin.Context, flags typ.RuleFlags) {
 
 // applyCustomUserAgent attaches the effective custom User-Agent (already merged
 // across rule + scenario) to the request context, so the outbound transport
-// (customUserAgentTransport) can read it at RoundTrip time. This is the Type-2
+// (userAgentTransport) can read it at RoundTrip time. This is the Type-2
 // (context-passed hint) injection point: the dispatch path forwards
 // c.Request.Context() down to the SDK call, where the transport applies the
 // override. No-op when no override is configured, so the vendor/provider
@@ -196,6 +203,23 @@ func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
 		return
 	}
 	c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), flags.CustomUserAgent))
+}
+
+// applyClientUserAgent attaches the inbound client's own User-Agent header to
+// the request context so the generic outbound transport (userAgentTransport)
+// can forward it upstream. Only the two generic pass-through clients wire that
+// transport; vendor-specialized paths never read it, keeping their pinned UA
+// decisive. No-op when the client sent no User-Agent (SDK default stands).
+// The caller only invokes this when no custom_user_agent override is set.
+func applyClientUserAgent(c *gin.Context) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	ua := c.GetHeader("User-Agent")
+	if ua == "" {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithClientUserAgent(c.Request.Context(), ua))
 }
 
 // ShouldStripUsage merges the cursor_compat and skip_usage hints carried in
