@@ -2,54 +2,12 @@
 
 package daemon
 
-import (
-	"fmt"
-	"os"
-	"os/exec"
-	"syscall"
-)
+import "syscall"
 
-// Daemonize detaches the process from the terminal and runs in the background
-// This works on Unix-like systems (Linux, macOS).
-//
-// overrideArgs pins flags the parent resolved (e.g. "--port", "9000") so the
-// detached child binds exactly what the parent decided instead of re-resolving
-// its own command line. See buildDaemonArgs.
-func Daemonize(overrideArgs ...string) error {
-	// Check if we're already the child process
-	if IsDaemonProcess() {
-		return nil
-	}
-
-	// Get the current executable path
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
-	// Get original arguments, pinning any resolved flags for the child
-	args := buildDaemonArgs(os.Args[1:], overrideArgs)
-
-	// Set environment variable to mark the child as daemon
-	cmd := exec.Command(execPath, args...)
-	cmd.Env = append(os.Environ(), "_TINGLY_BOX_DAEMON=1")
-
-	// Redirect stdin, stdout, stderr
-	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	// Set process attributes to detach from terminal
-	cmd.SysProcAttr = &syscall.SysProcAttr{
+// daemonSysProcAttr returns the process attributes that detach the daemon
+// child from the terminal on Unix-like systems (Linux, macOS).
+func daemonSysProcAttr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{
 		Setsid: true, // Create new session
 	}
-
-	// Start the daemonized process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start daemon process: %w", err)
-	}
-
-	// Parent process exits
-	os.Exit(0)
-	return nil
 }

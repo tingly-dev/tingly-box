@@ -44,14 +44,11 @@ func (h *MemoryLogHook) AddWriter(w io.Writer) {
 
 // Levels returns the log levels this hook processes.
 func (h *MemoryLogHook) Levels() []logrus.Level {
-	return logrus.AllLevels[:]
+	return logrus.AllLevels
 }
 
 // Fire processes each log entry.
 func (h *MemoryLogHook) Fire(entry *logrus.Entry) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	// Store a DETACHED copy, not the entry's own values. Entries retained in
 	// this ring outlive their request, and field values frequently alias
 	// request-scoped storage: gjson-parsed strings are substrings of the full
@@ -71,18 +68,24 @@ func (h *MemoryLogHook) Fire(entry *logrus.Entry) error {
 		copied.Data[k] = detachValue(v)
 	}
 
+	h.mu.Lock()
 	// Rotate: circular buffer automatically overwrites oldest entry
 	h.entries[h.writeIdx] = copied
 	h.writeIdx = (h.writeIdx + 1) % h.maxEntries
 	if h.count < h.maxEntries {
 		h.count++
 	}
+	writers := h.writers
+	h.mu.Unlock()
 
-	// Tee: output to all registered writers
-	msg, err := entry.String()
-	if err == nil {
-		for _, w := range h.writers {
-			w.Write([]byte(msg))
+	// Tee: output to all registered writers. Formatting and writer I/O happen
+	// outside the lock so slow writers can't block readers or other Fires; the
+	// snapshot taken under the lock keeps this safe against AddWriter.
+	if len(writers) > 0 {
+		if msg, err := entry.String(); err == nil {
+			for _, w := range writers {
+				_, _ = w.Write([]byte(msg))
+			}
 		}
 	}
 
@@ -124,70 +127,34 @@ func detachValue(v any) any {
 func (h *MemoryLogHook) GetEntries() []*logrus.Entry {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	if h.count == 0 {
-		return []*logrus.Entry{}
-	}
-
-	result := make([]*logrus.Entry, 0, h.count)
-	if h.count < h.maxEntries {
-		// Buffer not full, return from 0 to count
-		for i := 0; i < h.count; i++ {
-			result = append(result, h.entries[i])
-		}
-	} else {
-		// Buffer full, start from writeIdx (oldest entry)
-		for i := 0; i < h.maxEntries; i++ {
-			idx := (h.writeIdx + i) % h.maxEntries
-			result = append(result, h.entries[idx])
-		}
-	}
-	return result
+	return h.getOrderedEntries()
 }
 
 // GetEntriesSince returns log entries after the specified time.
 func (h *MemoryLogHook) GetEntriesSince(since time.Time) []*logrus.Entry {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	result := make([]*logrus.Entry, 0)
-	entries := h.getOrderedEntries()
-	for _, e := range entries {
-		if e.Time.After(since) {
-			result = append(result, e)
-		}
-	}
-	return result
+	return h.filterEntries(func(e *logrus.Entry) bool {
+		return e.Time.After(since)
+	})
 }
 
 // GetEntriesByLevel returns log entries matching the specified level.
 func (h *MemoryLogHook) GetEntriesByLevel(level logrus.Level) []*logrus.Entry {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	result := make([]*logrus.Entry, 0)
-	entries := h.getOrderedEntries()
-	for _, e := range entries {
-		if e.Level == level {
-			result = append(result, e)
-		}
-	}
-	return result
+	return h.filterEntries(func(e *logrus.Entry) bool {
+		return e.Level == level
+	})
 }
 
 // GetEntriesByLevelRange returns log entries within the specified level range.
 func (h *MemoryLogHook) GetEntriesByLevelRange(minLevel, maxLevel logrus.Level) []*logrus.Entry {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-
-	result := make([]*logrus.Entry, 0)
-	entries := h.getOrderedEntries()
-	for _, e := range entries {
-		if e.Level >= minLevel && e.Level <= maxLevel {
-			result = append(result, e)
-		}
-	}
-	return result
+	return h.filterEntries(func(e *logrus.Entry) bool {
+		return e.Level >= minLevel && e.Level <= maxLevel
+	})
 }
 
 // Clear removes all log entries.
@@ -226,20 +193,24 @@ func (h *MemoryLogHook) GetLatest(n int) []*logrus.Entry {
 }
 
 // getOrderedEntries returns all log entries in chronological order.
+// Caller must hold h.mu.
 func (h *MemoryLogHook) getOrderedEntries() []*logrus.Entry {
-	if h.count == 0 {
-		return []*logrus.Entry{}
-	}
+	return h.filterEntries(nil)
+}
 
+// filterEntries walks the ring once in chronological order and collects the
+// entries matching pred (all of them when pred is nil). Caller must hold h.mu.
+func (h *MemoryLogHook) filterEntries(pred func(*logrus.Entry) bool) []*logrus.Entry {
 	result := make([]*logrus.Entry, 0, h.count)
-	if h.count < h.maxEntries {
-		for i := 0; i < h.count; i++ {
-			result = append(result, h.entries[i])
-		}
-	} else {
-		for i := 0; i < h.maxEntries; i++ {
-			idx := (h.writeIdx + i) % h.maxEntries
-			result = append(result, h.entries[idx])
+	start := 0
+	if h.count == h.maxEntries {
+		// Buffer full: the oldest entry is at writeIdx.
+		start = h.writeIdx
+	}
+	for i := 0; i < h.count; i++ {
+		e := h.entries[(start+i)%h.maxEntries]
+		if pred == nil || pred(e) {
+			result = append(result, e)
 		}
 	}
 	return result

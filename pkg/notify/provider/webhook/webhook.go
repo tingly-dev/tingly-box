@@ -2,15 +2,13 @@
 package webhook
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/pkg/notify"
+	"github.com/tingly-dev/tingly-box/pkg/notify/internal/httpx"
 )
 
 // Provider sends notifications to HTTP webhooks
@@ -74,10 +72,10 @@ func WithTimeout(timeout time.Duration) Option {
 // New creates a new webhook provider
 func New(url string, opts ...Option) *Provider {
 	p := &Provider{
-		name:   "webhook",
-		url:    url,
-		method: "POST",
-		client: &http.Client{Timeout: 30 * time.Second},
+		name:    "webhook",
+		url:     url,
+		method:  "POST",
+		client:  &http.Client{Timeout: 30 * time.Second},
 		headers: make(map[string]string),
 	}
 
@@ -99,44 +97,26 @@ func (p *Provider) Send(ctx context.Context, notification *notify.Notification) 
 		return nil, fmt.Errorf("invalid notification: %w", err)
 	}
 
-	// Build payload
-	payload, err := json.Marshal(notification)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal notification: %w", err)
-	}
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, p.method, p.url, bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
+	headers := make(map[string]string, len(p.headers)+1)
 	for k, v := range p.headers {
-		req.Header.Set(k, v)
+		headers[k] = v
 	}
 	if p.authHeader != "" {
-		req.Header.Set("Authorization", p.authHeader)
+		headers["Authorization"] = p.authHeader
 	}
 
-	// Send request
-	resp, err := p.client.Do(req)
+	status, body, err := httpx.DoJSON(ctx, p.client, p.method, p.url, headers, notification, 1024)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
 
-	// Read response body for error messages
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-
-	// Check status
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if status < 200 || status >= 300 {
+		sendErr := fmt.Errorf("webhook returned status %d: %s", status, body)
 		return &notify.Result{
 			Provider: p.name,
 			Success:  false,
-			Error:    fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, string(body)),
-		}, fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, string(body))
+			Error:    sendErr,
+		}, sendErr
 	}
 
 	return &notify.Result{

@@ -9,10 +9,10 @@ import (
 // TestNotificationValidate tests notification validation
 func TestNotificationValidate(t *testing.T) {
 	tests := []struct {
-		name          string
-		notification  *Notification
-		wantErr       bool
-		errContains   string
+		name         string
+		notification *Notification
+		wantErr      bool
+		errContains  string
 	}{
 		{
 			name: "valid notification",

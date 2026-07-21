@@ -64,6 +64,12 @@ func (fl *FileLock) TryLock() error {
 	// This allows other processes to read the PID even while lock is held
 	fl.pid = os.Getpid()
 	if err := os.WriteFile(fl.pidFile, []byte(strconv.Itoa(fl.pid)+"\n"), 0644); err != nil {
+		// Release the lock and close the handle so a failed TryLock never
+		// leaks the fd or keeps the lock held.
+		var overlapped windows.Overlapped
+		_ = windows.UnlockFileEx(windows.Handle(fl.file.Fd()), 0, 0xFFFFFFFF, 0xFFFFFFFF, &overlapped)
+		_ = fl.file.Close()
+		fl.file = nil
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
@@ -132,58 +138,10 @@ func (fl *FileLock) IsLocked() bool {
 	return false
 }
 
-// GetLockFilePath returns the lock file path for debugging purposes.
-func (fl *FileLock) GetLockFilePath() string {
-	return fl.lockFile
-}
-
 // GetPID returns the PID stored in the PID file.
 // Returns error if the PID file doesn't exist or contains invalid data.
 // On Windows, we use a separate PID file because the lock file cannot be read
 // while it's exclusively locked by another process.
 func (fl *FileLock) GetPID() (int, error) {
-	data, err := os.ReadFile(fl.pidFile)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read PID file: %w", err)
-	}
-
-	if len(data) == 0 {
-		return 0, fmt.Errorf("PID file is empty")
-	}
-
-	// Find newline and take first line only
-	pidStr := string(data)
-	for i, c := range pidStr {
-		if c == '\n' {
-			pidStr = pidStr[:i]
-			break
-		}
-	}
-
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid PID in PID file: %w", err)
-	}
-
-	return pid, nil
-}
-
-// WritePort records the port the running server is listening on. It is a
-// runtime artifact tied to this lock's lifetime: written after TryLock and
-// removed by Unlock (or RemovePort for a crashed server the stopper cleans up).
-func (fl *FileLock) WritePort(port int) error {
-	return fl.portFile.Write(port)
-}
-
-// ReadPort returns the port recorded by the running server. Callers must gate
-// on IsLocked() and treat any error as "port unknown" (fall back to config).
-func (fl *FileLock) ReadPort() (int, error) {
-	return fl.portFile.Read()
-}
-
-// RemovePort deletes the runtime port file. Unlock already does this for the
-// lock holder; the stop command uses it to clean up after a server that was
-// killed without releasing the lock itself.
-func (fl *FileLock) RemovePort() error {
-	return fl.portFile.Remove()
+	return readPIDFile(fl.pidFile, "PID file")
 }

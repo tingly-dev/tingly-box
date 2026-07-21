@@ -224,46 +224,33 @@ func (p *Provider) sendEmail(ctx context.Context, to []string, subject, body str
 		}
 	}
 
-	// Get writer
+	// Build the full message, then write it in one shot
+	var msg bytes.Buffer
+	fmt.Fprintf(&msg, "From: %s\r\n", p.config.From)
+	fmt.Fprintf(&msg, "To: %s\r\n", strings.Join(to, ", "))
+	if len(p.config.CC) > 0 {
+		fmt.Fprintf(&msg, "Cc: %s\r\n", strings.Join(p.config.CC, ", "))
+	}
+	fmt.Fprintf(&msg, "Subject: %s\r\n", subject)
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	fmt.Fprintf(&msg, "\r\n%s\r\n", body)
+
 	w, err := client.Data()
 	if err != nil {
 		return err
 	}
-	defer w.Close()
-
-	// Write headers and body
-	_, err = fmt.Fprintf(w, "From: %s\r\n", p.config.From)
-	if err != nil {
+	if _, err := w.Write(msg.Bytes()); err != nil {
+		w.Close()
 		return err
 	}
-	_, err = fmt.Fprintf(w, "To: %s\r\n", joinStrings(to))
-	if err != nil {
-		return err
-	}
-	if len(p.config.CC) > 0 {
-		_, err = fmt.Fprintf(w, "Cc: %s\r\n", joinStrings(p.config.CC))
-		if err != nil {
-			return err
-		}
-	}
-	_, err = fmt.Fprintf(w, "Subject: %s\r\n", subject)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "MIME-Version: 1.0\r\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "Content-Type: text/plain; charset=UTF-8\r\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "\r\n%s\r\n", body)
-	if err != nil {
+	if err := w.Close(); err != nil {
 		return err
 	}
 
-	return nil
+	// Quit performs the SMTP QUIT handshake, ensuring the server has accepted
+	// the message; the deferred Close is then a no-op safety net.
+	return client.Quit()
 }
 
 // buildSubject creates the email subject line
@@ -285,7 +272,7 @@ func (p *Provider) buildBody(notification *notify.Notification) string {
 		buf.WriteString(fmt.Sprintf("Category: %s\n", notification.Category))
 	}
 	if len(notification.Tags) > 0 {
-		buf.WriteString(fmt.Sprintf("Tags: %s\n", joinStrings(notification.Tags)))
+		buf.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(notification.Tags, ", ")))
 	}
 	if !notification.Timestamp.IsZero() {
 		buf.WriteString(fmt.Sprintf("Time: %s\n", notification.Timestamp.Format(time.RFC3339)))
@@ -311,15 +298,4 @@ func (p *Provider) Close() error {
 func containsPort(hostPort, port string) bool {
 	_, p, _ := net.SplitHostPort(hostPort)
 	return p == port
-}
-
-func joinStrings(strs []string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for _, s := range strs[1:] {
-		result += ", " + s
-	}
-	return result
 }

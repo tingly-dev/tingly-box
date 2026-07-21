@@ -27,10 +27,10 @@ import (
 
 // Notification levels
 const (
-	LevelDebug   Level = "debug"
-	LevelInfo    Level = "info"
-	LevelWarning Level = "warning"
-	LevelError   Level = "error"
+	LevelDebug    Level = "debug"
+	LevelInfo     Level = "info"
+	LevelWarning  Level = "warning"
+	LevelError    Level = "error"
 	LevelCritical Level = "critical"
 )
 

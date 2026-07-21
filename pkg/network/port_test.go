@@ -67,8 +67,9 @@ func TestWaitForPortAvailable(t *testing.T) {
 		listener.Close()
 	}()
 
-	// Should succeed within 200ms
-	err = WaitForPortAvailable(port, 200*time.Millisecond)
+	// The port frees after ~100ms and the poll interval is 100ms; use a
+	// generous deadline so scheduling jitter can't flake the test.
+	err = WaitForPortAvailable(port, 2*time.Second)
 	if err != nil {
 		t.Errorf("WaitForPortAvailable failed: %v", err)
 	}

@@ -2,7 +2,6 @@
 package slack
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/pkg/notify"
+	"github.com/tingly-dev/tingly-box/pkg/notify/internal/httpx"
 )
 
 // Result is an alias for notify.Result
@@ -95,11 +95,12 @@ func (p *Provider) Send(ctx context.Context, notification *notify.Notification) 
 		channel = ch
 	}
 	if channel == "" {
-		return &Result{
+		sendErr := fmt.Errorf("channel is required")
+		return &notify.Result{
 			Provider: p.name,
 			Success:  false,
-			Error:    fmt.Errorf("channel is required"),
-		}, fmt.Errorf("channel is required")
+			Error:    sendErr,
+		}, sendErr
 	}
 
 	// Build message blocks
@@ -121,25 +122,12 @@ func (p *Provider) Send(ctx context.Context, notification *notify.Notification) 
 		payload["icon_url"] = p.config.IconURL
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
 	// Send to Slack API
-	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat.postMessage", bytes.NewReader(body))
+	headers := map[string]string{"Authorization": "Bearer " + p.config.Token}
+	_, body, err := httpx.DoJSON(ctx, p.client, "POST", p.baseURL+"/chat.postMessage", headers, payload, 64<<10)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.config.Token)
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
 
 	var slackResp struct {
 		OK      bool   `json:"ok"`
@@ -148,16 +136,17 @@ func (p *Provider) Send(ctx context.Context, notification *notify.Notification) 
 		Channel string `json:"channel,omitempty"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&slackResp); err != nil {
+	if err := json.Unmarshal(body, &slackResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	if !slackResp.OK {
+		sendErr := fmt.Errorf("slack API error: %s", slackResp.Error)
 		return &notify.Result{
 			Provider: p.name,
 			Success:  false,
-			Error:    fmt.Errorf("slack API error: %s", slackResp.Error),
-		}, fmt.Errorf("slack API error: %s", slackResp.Error)
+			Error:    sendErr,
+		}, sendErr
 	}
 
 	return &notify.Result{
@@ -230,7 +219,7 @@ func (p *Provider) buildBlocks(notification *notify.Notification) []map[string]i
 			})
 		}
 		blocks = append(blocks, map[string]interface{}{
-			"type":   "actions",
+			"type":     "actions",
 			"elements": actions,
 		})
 	}

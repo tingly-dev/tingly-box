@@ -4,11 +4,12 @@ import (
 	"net"
 )
 
-// getLocalIP returns the first non-loopback local IP address
+// getLocalIP returns the first non-loopback local IPv4 address,
+// falling back to "localhost" when none can be determined.
 func getLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return "127.0.0.1" // fallback to loopback
+		return "localhost"
 	}
 
 	for _, addr := range addrs {
