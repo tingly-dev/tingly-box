@@ -210,6 +210,9 @@ type Step struct {
 	Executor StepExecutor `json:"executor,omitempty"`
 	// Command is the shell command for shell steps (ignored otherwise).
 	Command string `json:"command,omitempty"`
+	// When is a condition over prior step outcomes; when it evaluates false
+	// the step is skipped (A1). Empty = always run. See evalCondition.
+	When string `json:"when,omitempty"`
 }
 
 // IsShell reports whether the step runs as a shell command.
@@ -237,6 +240,9 @@ type Payload struct {
 	Steps            []Step           `json:"steps,omitempty"`
 	CurrentStep      int              `json:"current_step,omitempty"`
 	StepOutcomes     []StepOutcome    `json:"step_outcomes,omitempty"`
+	// Repeat re-runs the whole pipeline until a structured condition holds,
+	// bounded by Max (A1). nil = run the pipeline once.
+	Repeat *RepeatPolicy `json:"repeat,omitempty"`
 }
 
 func (p *Payload) ApplyDefaults() {
@@ -308,6 +314,24 @@ func (p Payload) Validate() error {
 		}
 		if i < len(p.StepOutcomes) && p.StepOutcomes[i].StepID != step.ID {
 			return fmt.Errorf("step outcome %d does not match its step", i+1)
+		}
+	}
+	// Condition references (when / repeat.until) must name existing steps.
+	stepIDs := make(map[string]bool, len(p.Steps))
+	for _, step := range p.Steps {
+		stepIDs[step.ID] = true
+	}
+	for i, step := range p.Steps {
+		if err := validateConditionRefs(step.When, stepIDs); err != nil {
+			return fmt.Errorf("step %d when: %w", i+1, err)
+		}
+	}
+	if p.Repeat != nil {
+		if len(p.Steps) == 0 {
+			return errors.New("repeat requires steps")
+		}
+		if err := validateConditionRefs(p.Repeat.Until, stepIDs); err != nil {
+			return fmt.Errorf("repeat until: %w", err)
 		}
 	}
 	return nil

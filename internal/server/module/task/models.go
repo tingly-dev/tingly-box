@@ -18,6 +18,7 @@ type CreateRequest struct {
 	TimeoutSeconds int                        `json:"timeout_seconds,omitempty"`
 	Steps          []CreateStep               `json:"steps,omitempty"`
 	Execution      *agenttask.ExecutionPolicy `json:"execution,omitempty"`
+	Repeat         *agenttask.RepeatPolicy    `json:"repeat,omitempty"`
 }
 
 type CreateStep struct {
@@ -26,6 +27,7 @@ type CreateStep struct {
 	Executor    string `json:"executor,omitempty"`
 	Instruction string `json:"instruction,omitempty"`
 	Command     string `json:"command,omitempty"`
+	When        string `json:"when,omitempty"`
 }
 
 // UpdateRequest edits a non-running task's durable configuration.
@@ -41,6 +43,9 @@ type UpdateRequest struct {
 	Execution      *agenttask.ExecutionPolicy `json:"execution,omitempty"`
 	// Steps replaces the not-yet-completed tail of the step list.
 	Steps *[]CreateStep `json:"steps,omitempty"`
+	// Repeat replaces the repeat policy; ClearRepeat removes it.
+	Repeat      *agenttask.RepeatPolicy `json:"repeat,omitempty"`
+	ClearRepeat bool                    `json:"clear_repeat,omitempty"`
 	// Recurrence replaces the schedule; ClearRecurrence switches to manual.
 	Recurrence      *coretask.RecurrenceSpec `json:"recurrence,omitempty"`
 	ClearRecurrence bool                     `json:"clear_recurrence,omitempty"`
@@ -83,6 +88,7 @@ type TaskView struct {
 	Steps         []agenttask.Step          `json:"steps,omitempty"`
 	CurrentStep   int                       `json:"current_step"`
 	StepOutcomes  []agenttask.StepOutcome   `json:"step_outcomes,omitempty"`
+	Repeat        *agenttask.RepeatPolicy   `json:"repeat,omitempty"`
 	Execution     agenttask.ExecutionPolicy `json:"execution"`
 	TriggerPaused bool                      `json:"trigger_paused"`
 	ActiveRunID   string                    `json:"active_run_id,omitempty"`

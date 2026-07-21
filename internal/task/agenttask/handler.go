@@ -65,8 +65,42 @@ func (h *Handler) Run(ctx context.Context, t *task.Task, ctl task.Controller) (*
 		payload.CurrentStep = 0
 		payload.StepOutcomes = nil
 		payload.SessionID = ""
+		if payload.Repeat != nil {
+			payload.Repeat.Iteration = 0
+		}
 		if err := checkpointPayload(ctx, ctl, &payload); err != nil {
 			return nil, err
+		}
+	}
+
+	// Skip leading steps whose `when` is unmet (A1), recording a skipped
+	// outcome for each so downstream conditions can see it. If nothing
+	// runnable remains, finish the pipeline (repeat/until decision).
+	if len(payload.Steps) > 0 {
+		skipped := false
+		for payload.HasCurrentStep() {
+			step := payload.Steps[payload.CurrentStep]
+			run, err := evalCondition(step.When, outcomesByID(payload.StepOutcomes))
+			if err != nil {
+				return nil, fmt.Errorf("agent task: step %d when: %w", payload.CurrentStep+1, err)
+			}
+			if run {
+				break
+			}
+			payload.StepOutcomes = append(payload.StepOutcomes, StepOutcome{
+				StepID: step.ID, Result: Result{State: "skipped", Summary: "Skipped: condition not met", ExitReason: "when_false"}, CompletedAt: h.now(),
+			})
+			payload.CurrentStep++
+			payload.SessionID = ""
+			skipped = true
+		}
+		if skipped {
+			if err := checkpointPayload(ctx, ctl, &payload); err != nil {
+				return nil, err
+			}
+		}
+		if !payload.HasCurrentStep() {
+			return h.finishPipeline(ctx, ctl, &payload)
 		}
 	}
 
@@ -355,7 +389,11 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 			return nil, err
 		}
 		return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
-	case "done":
+	case "done", "failed":
+		// In a stepped pipeline both done and failed record the step outcome
+		// and advance the cursor; a downstream `when` step or the repeat
+		// `until` reacts to a failure (A1). Only a free-goal (no-steps) task
+		// completes directly on "done".
 		if payload.HasCurrentStep() {
 			step := payload.Steps[payload.CurrentStep]
 			payload.StepOutcomes = append(payload.StepOutcomes, StepOutcome{
@@ -364,9 +402,7 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 			payload.CurrentStep++
 			// Session continuity ends at the step boundary: the next step
 			// starts a fresh native session and receives prior-step state
-			// via the workspace plus completedStepContext summaries. A
-			// shared session across steps accretes context and degrades
-			// later rounds.
+			// via the workspace plus completedStepContext summaries.
 			payload.SessionID = ""
 			if err := checkpointPayload(ctx, ctl, payload); err != nil {
 				return nil, err
@@ -375,21 +411,72 @@ func (h *Handler) taskResult(ctx context.Context, ctl task.Controller, payload *
 				next := h.now()
 				return &task.TaskResult{Outcome: task.OutcomeReschedule, Result: data, NextRunAt: &next}, nil
 			}
+			return h.finishPipeline(ctx, ctl, payload)
+		}
+		if result.State == "failed" {
+			return nil, fmt.Errorf("agent task: run failed: %s", clipRunes(result.Summary, 300))
 		}
 		return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
-	case "failed":
-		// Only shell steps produce "failed" (non-zero exit). Without a
-		// when/until policy to react to it (A1), a failed step stops the
-		// pipeline by failing the task.
-		return nil, RetryableIfConfigured(fmt.Errorf("agent task: step failed: %s", clipRunes(result.Summary, 300)))
 	default:
 		return nil, fmt.Errorf("agent task: invalid normalized state %q", result.State)
 	}
 }
 
-// RetryableIfConfigured is a passthrough today; a hook for A1 to decide
-// whether a failed step should retry, continue, or fail the task.
-func RetryableIfConfigured(err error) error { return err }
+// finishPipeline is called when the step cursor reaches the end. It applies
+// the repeat policy: satisfied `until` (or no repeat) completes; an unmet
+// `until` with iterations left restarts the pipeline; an unmet `until` at the
+// iteration cap pauses for a human. Without a repeat, the pipeline succeeds
+// unless its last step failed.
+func (h *Handler) finishPipeline(ctx context.Context, ctl task.Controller, payload *Payload) (*task.TaskResult, error) {
+	outcomes := payload.StepOutcomes
+	final := Result{State: "done", Summary: "Pipeline complete"}
+	if n := len(outcomes); n > 0 {
+		final = outcomes[n-1].Result
+	}
+
+	if payload.Repeat != nil && strings.TrimSpace(payload.Repeat.Until) != "" {
+		met, err := evalCondition(payload.Repeat.Until, outcomesByID(outcomes))
+		if err != nil {
+			return nil, fmt.Errorf("agent task: repeat until: %w", err)
+		}
+		maxIter := payload.Repeat.Max
+		if maxIter <= 0 {
+			maxIter = 1
+		}
+		if met {
+			final.State = "done"
+			data, _ := json.Marshal(final)
+			return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
+		}
+		if payload.Repeat.Iteration+1 < maxIter {
+			payload.Repeat.Iteration++
+			payload.CurrentStep = 0
+			payload.StepOutcomes = nil
+			payload.SessionID = ""
+			if err := checkpointPayload(ctx, ctl, payload); err != nil {
+				return nil, err
+			}
+			next := h.now()
+			data, _ := json.Marshal(final)
+			return &task.TaskResult{Outcome: task.OutcomeReschedule, Result: data, NextRunAt: &next}, nil
+		}
+		// Hit the iteration cap without meeting the condition: pause for a
+		// human rather than silently completing an unmet loop.
+		final.State = "needs_input"
+		final.Question = fmt.Sprintf("Repeated %d× without meeting the exit condition (%s). Review and decide.", maxIter, payload.Repeat.Until)
+		final.ExitReason = "repeat_exhausted"
+		data, _ := json.Marshal(final)
+		return &task.TaskResult{Outcome: task.OutcomeNeedsInput, Result: data}, nil
+	}
+
+	// No repeat: the last step's outcome is the pipeline's verdict.
+	if n := len(outcomes); n > 0 && outcomeFailed(outcomes[n-1]) {
+		return nil, fmt.Errorf("agent task: pipeline ended with a failed step: %s", clipRunes(final.Summary, 300))
+	}
+	final.State = "done"
+	data, _ := json.Marshal(final)
+	return &task.TaskResult{Outcome: task.OutcomeComplete, Result: data}, nil
+}
 
 // runShellStep executes the current shell step deterministically (no agent,
 // no native session) and advances the cursor via taskResult.

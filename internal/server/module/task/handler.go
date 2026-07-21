@@ -133,7 +133,8 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	hasEdit := req.Title != nil || req.Goal != nil || req.FollowUp != nil || req.TimeoutSeconds != nil ||
-		req.Execution != nil || req.Steps != nil || req.Recurrence != nil || req.ClearRecurrence
+		req.Execution != nil || req.Steps != nil || req.Recurrence != nil || req.ClearRecurrence ||
+		req.Repeat != nil || req.ClearRepeat
 	if !hasEdit {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
 		return
@@ -238,6 +239,11 @@ func (h *Handler) Update(c *gin.Context) {
 		completed := payload.Steps[:len(payload.StepOutcomes)]
 		payload.Steps = append(append([]agenttask.Step{}, completed...), tail...)
 		payload.CurrentStep = len(payload.StepOutcomes)
+	}
+	if req.Repeat != nil {
+		payload.Repeat = req.Repeat
+	} else if req.ClearRepeat {
+		payload.Repeat = nil
 	}
 	payload.ApplyDefaults()
 	if err := payload.Validate(); err != nil {
@@ -375,6 +381,7 @@ func (h *Handler) Create(c *gin.Context) {
 		TimeoutSeconds: req.TimeoutSeconds,
 		Steps:          steps,
 		Execution:      execution,
+		Repeat:         req.Repeat,
 	}
 	payload.ApplyDefaults()
 	payloadJSON, err := json.Marshal(payload)
@@ -611,6 +618,10 @@ func clonePayload(src *coretask.Task, workspace string) (json.RawMessage, error)
 		WorkspacePath: workspace, FollowUp: p.FollowUp, TimeoutSeconds: p.TimeoutSeconds,
 		Steps: append([]agenttask.Step{}, p.Steps...), Execution: p.Execution,
 	}
+	if p.Repeat != nil {
+		// Fresh runtime: copy the policy but reset the iteration counter.
+		clone.Repeat = &agenttask.RepeatPolicy{Until: p.Repeat.Until, Max: p.Repeat.Max}
+	}
 	clone.ApplyDefaults()
 	return json.Marshal(clone)
 }
@@ -682,7 +693,7 @@ func toView(task *coretask.Task) (TaskView, error) {
 		ScheduledAt: task.ScheduledAt, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 		CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt,
 		Steps: payload.Steps, CurrentStep: payload.CurrentStep, StepOutcomes: payload.StepOutcomes,
-		Execution: payload.Execution,
+		Execution: payload.Execution, Repeat: payload.Repeat,
 	}
 	if payload.SessionID != "" {
 		workspace := shellQuote(payload.WorkspacePath)
@@ -796,6 +807,7 @@ func normalizeSteps(input []CreateStep) ([]agenttask.Step, error) {
 			title = string(runes[:80]) + "…"
 		}
 		step.Title = title
+		step.When = strings.TrimSpace(item.When)
 		steps = append(steps, step)
 	}
 	return steps, nil

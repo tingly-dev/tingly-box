@@ -70,7 +70,7 @@ func TestHandler_ShellStepFailureStopsPipeline(t *testing.T) {
 		Steps:     []Step{{ID: "s1", Title: "Test", Executor: StepExecutorShell, Command: "exit 7"}},
 	}
 	_, err := handler.Run(context.Background(), &task.Task{ID: uuid.NewString(), Type: TaskType, Payload: rawPayload(t, payload)}, &fakeController{})
-	if err == nil || !strings.Contains(err.Error(), "step failed") {
+	if err == nil || !strings.Contains(err.Error(), "failed step") {
 		t.Fatalf("failed shell step should fail the task, got %v", err)
 	}
 }
