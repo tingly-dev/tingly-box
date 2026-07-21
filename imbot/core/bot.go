@@ -98,7 +98,9 @@ type PlatformInfo struct {
 	Capabilities *PlatformCapabilities `json:"capabilities"`
 }
 
-// NewPlatformInfo creates a new PlatformInfo
+// NewPlatformInfo creates a new PlatformInfo with an explicit display name.
+// Prefer NewPlatformInfoFor unless the display name is not derivable from the
+// platform id (e.g. the Feishu/Lark domain split).
 func NewPlatformInfo(platform Platform, name string) *PlatformInfo {
 	return &PlatformInfo{
 		ID:           platform,
@@ -107,41 +109,11 @@ func NewPlatformInfo(platform Platform, name string) *PlatformInfo {
 	}
 }
 
-// PlatformNames returns the human-readable name for each platform
-var PlatformNames = map[Platform]string{
-	PlatformWhatsApp:    "WhatsApp",
-	PlatformTelegram:    "Telegram",
-	PlatformDiscord:     "Discord",
-	PlatformSlack:       "Slack",
-	PlatformGoogleChat:  "Google Chat",
-	PlatformSignal:      "Signal",
-	PlatformBlueBubbles: "BlueBubbles (iMessage)",
-	PlatformFeishu:      "Feishu",
-	PlatformLark:        "Lark",
-	PlatformDingTalk:    "DingTalk",
-	PlatformWeixin:      "Weixin",
-	PlatformWecom:       "WeCom",
-	PlatformTingly:      "Tingly",
+// NewPlatformInfoFor creates a PlatformInfo whose display name is derived from
+// the single PlatformNames table, so bots don't hardcode name literals.
+func NewPlatformInfoFor(platform Platform) *PlatformInfo {
+	return NewPlatformInfo(platform, GetPlatformName(platform))
 }
 
-// GetPlatformName returns the human-readable name for a platform
-func GetPlatformName(platform Platform) string {
-	if name, ok := PlatformNames[platform]; ok {
-		return name
-	}
-	return string(platform)
-}
-
-// IsValidPlatform checks if a platform string is valid
-func IsValidPlatform(platform string) bool {
-	switch Platform(platform) {
-	case PlatformWhatsApp, PlatformTelegram, PlatformDiscord,
-		PlatformSlack, PlatformGoogleChat, PlatformSignal,
-		PlatformBlueBubbles, PlatformFeishu, PlatformLark,
-		PlatformDingTalk, PlatformWeixin, PlatformWecom,
-		PlatformTingly:
-		return true
-	default:
-		return false
-	}
-}
+// PlatformNames, GetPlatformName and IsValidPlatform live in platforms.go,
+// backed by the single platform-descriptor table.

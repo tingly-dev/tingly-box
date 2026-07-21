@@ -6,20 +6,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
-// DefaultMessageLimit is a fallback value for unknown platforms
-const DefaultMessageLimit = 4000
-
-// GetMessageLimit returns the message length limit for each platform.
-// Deprecated: Use core.GetPlatformCapabilities(platform).TextLimit instead.
-// This function is kept for backward compatibility.
-func GetMessageLimit(platform Platform) int {
-	caps := core.GetPlatformCapabilities(core.Platform(platform))
-	if caps != nil && caps.TextLimit > 0 {
-		return caps.TextLimit
-	}
-	return DefaultMessageLimit
-}
-
 // ChunkText splits text into chunks based on the platform's message limit.
 // It uses smart break-point detection to avoid breaking words or code blocks.
 //

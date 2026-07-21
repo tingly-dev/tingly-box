@@ -33,9 +33,9 @@ type Bot struct {
 	webhookMap map[string]string // conversationID -> webhook URL
 
 	// access token cache for REST API calls (e.g. reactions)
-	tokenMu      sync.Mutex
-	cachedToken  string
-	tokenExpiry  time.Time
+	tokenMu     sync.Mutex
+	cachedToken string
+	tokenExpiry time.Time
 }
 
 // NewDingTalkBot creates a new DingTalk bot
@@ -282,17 +282,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformDingTalk, "DingTalk")
-}
-
-// StartReceiving starts receiving messages (already started in Connect)
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil // Already started in Connect
-}
-
-// StopReceiving stops receiving messages (already handled in Disconnect)
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil // Already handled in Disconnect
+	return core.NewPlatformInfoFor(core.PlatformDingTalk)
 }
 
 // sendText sends a text message using SDK's ChatbotReplier

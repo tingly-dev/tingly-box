@@ -217,17 +217,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 
 // PlatformInfo returns platform information
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(core.PlatformDiscord, "Discord")
-}
-
-// StartReceiving starts receiving messages (already started in Connect)
-func (b *Bot) StartReceiving(ctx context.Context) error {
-	return nil
-}
-
-// StopReceiving stops receiving messages (already handled in Disconnect)
-func (b *Bot) StopReceiving(ctx context.Context) error {
-	return nil
+	return core.NewPlatformInfoFor(core.PlatformDiscord)
 }
 
 // onReady is called when the bot is ready

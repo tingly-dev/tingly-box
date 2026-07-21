@@ -1,4 +1,4 @@
-// Package itx provides interaction types for cross-package use.
+// Package interaction provides interaction types for cross-package use.
 // This package contains the core types needed by both the interaction handler
 // and platform-specific adapters, avoiding import cycles.
 package interaction

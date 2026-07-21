@@ -1,5 +1,7 @@
 package imbot
 
+import "github.com/tingly-dev/tingly-box/imbot/core"
+
 // PlatformAuthConfig defines the authentication requirements for each platform
 type PlatformAuthConfig struct {
 	Platform    string      `json:"platform"`     // Platform identifier
@@ -22,10 +24,9 @@ type FieldSpec struct {
 // PlatformConfigs maps platform identifiers to their auth configurations
 var PlatformConfigs = map[string]PlatformAuthConfig{
 	"telegram": {
-		Platform:    "telegram",
-		AuthType:    "token",
-		DisplayName: "Telegram",
-		Category:    "im",
+		Platform: "telegram",
+		AuthType: "token",
+		Category: "im",
 		Fields: []FieldSpec{
 			{
 				Key:         "token",
@@ -38,10 +39,9 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"slack": {
-		Platform:    "slack",
-		AuthType:    "token",
-		DisplayName: "Slack",
-		Category:    "im",
+		Platform: "slack",
+		AuthType: "token",
+		Category: "im",
 		Fields: []FieldSpec{
 			{
 				Key:         "token",
@@ -54,10 +54,9 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"discord": {
-		Platform:    "discord",
-		AuthType:    "token",
-		DisplayName: "Discord",
-		Category:    "im",
+		Platform: "discord",
+		AuthType: "token",
+		Category: "im",
 		Fields: []FieldSpec{
 			{
 				Key:         "token",
@@ -70,10 +69,9 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"dingtalk": {
-		Platform:    "dingtalk",
-		AuthType:    "oauth",
-		DisplayName: "DingTalk",
-		Category:    "enterprise",
+		Platform: "dingtalk",
+		AuthType: "oauth",
+		Category: "enterprise",
 		Fields: []FieldSpec{
 			{
 				Key:         "clientId",
@@ -94,10 +92,9 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"feishu": {
-		Platform:    "feishu",
-		AuthType:    "oauth",
-		DisplayName: "Feishu",
-		Category:    "enterprise",
+		Platform: "feishu",
+		AuthType: "oauth",
+		Category: "enterprise",
 		Fields: []FieldSpec{
 			{
 				Key:         "clientId",
@@ -118,10 +115,9 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"lark": {
-		Platform:    "lark",
-		AuthType:    "oauth",
-		DisplayName: "Lark",
-		Category:    "enterprise",
+		Platform: "lark",
+		AuthType: "oauth",
+		Category: "enterprise",
 		Fields: []FieldSpec{
 			{
 				Key:         "clientId",
@@ -142,10 +138,9 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"whatsapp": {
-		Platform:    "whatsapp",
-		AuthType:    "token",
-		DisplayName: "WhatsApp",
-		Category:    "business",
+		Platform: "whatsapp",
+		AuthType: "token",
+		Category: "business",
 		Fields: []FieldSpec{
 			{
 				Key:         "token",
@@ -166,17 +161,15 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"weixin": {
-		Platform:    "weixin",
-		AuthType:    "qr",
-		DisplayName: "Weixin",
-		Category:    "enterprise",
-		Fields:      []FieldSpec{}, // No fields - credentials set via QR flow
+		Platform: "weixin",
+		AuthType: "qr",
+		Category: "enterprise",
+		Fields:   []FieldSpec{}, // No fields - credentials set via QR flow
 	},
 	"wecom": {
-		Platform:    "wecom",
-		AuthType:    "oauth",
-		DisplayName: "WeCom",
-		Category:    "enterprise",
+		Platform: "wecom",
+		AuthType: "oauth",
+		Category: "enterprise",
 		Fields: []FieldSpec{
 			{
 				Key:         "clientId",
@@ -197,12 +190,21 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 		},
 	},
 	"tingly": {
-		Platform:    "tingly",
-		AuthType:    "none",
-		DisplayName: "Tingly",
-		Category:    "im",
-		Fields:      []FieldSpec{}, // No required credentials
+		Platform: "tingly",
+		AuthType: "none",
+		Category: "im",
+		Fields:   []FieldSpec{}, // No required credentials
 	},
+}
+
+// init derives each platform's DisplayName from the single source of truth in
+// core (PlatformNames), so the settings-UI metadata cannot drift from the
+// runtime metadata.
+func init() {
+	for id, cfg := range PlatformConfigs {
+		cfg.DisplayName = core.GetPlatformName(core.Platform(id))
+		PlatformConfigs[id] = cfg
+	}
 }
 
 // GetPlatformConfig returns the auth config for a given platform
@@ -229,7 +231,11 @@ func GetAllPlatforms() []PlatformAuthConfig {
 	return platforms
 }
 
-// IsValidPlatform checks if a platform identifier is valid
+// IsValidPlatform reports whether the platform has a settings/auth-config
+// entry (i.e. it can be configured from the UI). This is deliberately narrower
+// than core.IsValidPlatform, which reports whether the identifier is a known
+// platform at all — the latter also covers reserved platforms (signal,
+// googlechat, bluebubbles) that have no configuration form yet.
 func IsValidPlatform(platform string) bool {
 	_, exists := PlatformConfigs[platform]
 	return exists
