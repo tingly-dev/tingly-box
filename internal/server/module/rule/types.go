@@ -42,6 +42,11 @@ type UpdateRuleResponse struct {
 		Active        bool                        `json:"active" example:"true"`
 		SmartEnabled  bool                        `json:"smart_enabled" example:"false"`
 		SmartRouting  []smartrouting.SmartRouting `json:"smart_routing,omitempty"`
+		// Flags echoes the rule's persisted feature flags. Creation seeds
+		// per-scenario defaults (e.g. team rules get claude_code_compat +
+		// clean_header), so the client must read them back from here to reflect
+		// the true stored state without a follow-up refresh.
+		Flags typ.RuleFlags `json:"flags,omitempty"`
 	} `json:"data"`
 }
 

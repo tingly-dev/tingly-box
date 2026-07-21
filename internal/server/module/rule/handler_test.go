@@ -270,6 +270,12 @@ func TestCreateRule_TeamSeedsDefaultFlags(t *testing.T) {
 	if !saved.Flags.CleanHeader {
 		t.Error("expected CleanHeader seeded on for a new team rule")
 	}
+	// The response body must echo the seeded flags so a client that reads
+	// result.data directly (without a follow-up refresh) reflects the true
+	// stored state.
+	if !response.Data.Flags.ClaudeCodeCompat || !response.Data.Flags.CleanHeader {
+		t.Errorf("create response did not echo seeded flags: %+v", response.Data.Flags)
+	}
 }
 
 // TestCreateRule_TeamRespectsExplicitFlags verifies the seeding only fills an
