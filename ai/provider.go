@@ -179,10 +179,10 @@ type Provider struct {
 	ProxyURL      string   `json:"proxy_url"` // HTTP or SOCKS proxy URL (e.g., "http://localhost:7890" or "socks5://localhost:1080")
 	// NOTE: there is deliberately no provider-level User-Agent override. The
 	// outbound User-Agent is a request-path concern, not provider config: it is
-	// decided by the request (rule/scenario custom_user_agent) on generic
-	// pass-through clients, and pinned by the vendor handshake on specialized
-	// clients (Claude Code OAuth, Codex, Kimi, Gemini, Antigravity), where the
-	// pin is decisive.
+	// decided by the request (rule/scenario custom_user_agent > inbound client
+	// UA) on generic pass-through clients, and pinned by the vendor handshake on
+	// specialized clients (Claude Code OAuth, Codex, Kimi, Gemini, Antigravity),
+	// where the pin is decisive. See .design/user-agent.md.
 	Timeout     int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
 	Tags        []string `json:"tags,omitempty"`         // Provider tags for categorization
 	Models      []string `json:"models,omitempty"`       // Available models for this provider (cached)

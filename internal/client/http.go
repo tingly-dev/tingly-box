@@ -248,7 +248,9 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 // It deliberately does NOT touch the User-Agent: this transport underpins the
 // vendor-specialized clients (Claude Code OAuth, Codex, Kimi, Gemini,
 // Antigravity), whose round trippers pin the vendor handshake UA outside it.
-// Keeping UA out of here is what makes that vendor pin decisive.
+// Keeping UA out of here is what makes that vendor pin decisive — no
+// provider/request-path override can reach into the handshake. See
+// .design/user-agent.md.
 func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
 	var issuer ai.Issuer
 	if provider.OAuthDetail != nil {

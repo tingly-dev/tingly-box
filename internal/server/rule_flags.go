@@ -162,6 +162,15 @@ func ResolveRuleFlagsWithScenario(
 	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
 	applyCustomUserAgent(c, flags)
 
+	// Attach the inbound client's own User-Agent as a lower-precedence fallback:
+	// the generic (non-vendor) transport forwards it upstream only when no
+	// rule/scenario custom_user_agent override is in effect, so we respect who
+	// the real caller is instead of leaking the SDK's generic default. Attached
+	// for every request; only clients whose transport chain includes
+	// userAgentTransport read it — vendor OAuth / specialized paths ignore
+	// it and keep their pinned, decisive UA.
+	applyClientUserAgent(c)
+
 	// Attach the 1M-context hint the same way: the outbound Anthropic transport
 	// (context1mBetaTransport) appends the context-1m beta flag at RoundTrip
 	// time.
@@ -183,7 +192,7 @@ func applyContext1M(c *gin.Context, flags typ.RuleFlags) {
 
 // applyCustomUserAgent attaches the effective custom User-Agent (already merged
 // across rule + scenario) to the request context, so the outbound transport
-// (customUserAgentTransport) can read it at RoundTrip time. This is the Type-2
+// (userAgentTransport) can read it at RoundTrip time. This is the Type-2
 // (context-passed hint) injection point: the dispatch path forwards
 // c.Request.Context() down to the SDK call, where the transport applies the
 // override. No-op when no override is configured, so the vendor/provider
@@ -196,6 +205,29 @@ func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
 		return
 	}
 	c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), flags.CustomUserAgent))
+}
+
+// applyClientUserAgent attaches the inbound client's own User-Agent header to
+// the request context so the generic outbound transport (userAgentTransport)
+// can forward it upstream as a fallback. It sits at a lower precedence than the
+// explicit rule/scenario custom_user_agent override, and above the vendor SDK's
+// default UA, so it only takes effect when no override is configured. No-op when
+// the client sent no User-Agent, so the SDK/vendor default is preserved
+// unchanged (兜底).
+//
+// Like applyCustomUserAgent this runs for every request, but only clients whose
+// transport chain carries userAgentTransport (the two generic
+// pass-through paths) actually read it. Vendor-specialized paths never wire that
+// transport, so their pinned UA stays decisive.
+func applyClientUserAgent(c *gin.Context) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	ua := c.GetHeader("User-Agent")
+	if ua == "" {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithClientUserAgent(c.Request.Context(), ua))
 }
 
 // ShouldStripUsage merges the cursor_compat and skip_usage hints carried in

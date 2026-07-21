@@ -493,6 +493,71 @@ func TestResolveRuleFlagsWithScenario_CustomUserAgent(t *testing.T) {
 	}
 }
 
+func TestApplyClientUserAgent_AttachesInboundUA(t *testing.T) {
+	c := newGinContext(t)
+	c.Request.Header.Set("User-Agent", "cherry-studio/1.2")
+
+	applyClientUserAgent(c)
+
+	if got := typ.GetClientUserAgent(c.Request.Context()); got != "cherry-studio/1.2" {
+		t.Errorf("GetClientUserAgent = %q, want %q", got, "cherry-studio/1.2")
+	}
+}
+
+func TestApplyClientUserAgent_NoHeaderIsNoOp(t *testing.T) {
+	c := newGinContext(t)
+	// No User-Agent header set on the inbound request.
+
+	applyClientUserAgent(c)
+
+	if got := typ.GetClientUserAgent(c.Request.Context()); got != "" {
+		t.Errorf("GetClientUserAgent = %q, want empty (no inbound UA to forward)", got)
+	}
+}
+
+func TestApplyClientUserAgent_NilRequestIsNoOp(t *testing.T) {
+	// A gin.Context with a nil Request must not panic.
+	c, _ := gin.CreateTestContext(nil)
+	applyClientUserAgent(c) // must not panic
+}
+
+// TestResolveRuleFlagsWithScenario_AttachesClientUserAgent verifies the single
+// merge point forwards the inbound client UA into the request context (which the
+// generic transport later reads), alongside — and independent of — the explicit
+// custom_user_agent override. Precedence between the two is enforced in the
+// transport chain, not here: both hints coexist in the context.
+func TestResolveRuleFlagsWithScenario_AttachesClientUserAgent(t *testing.T) {
+	t.Run("inbound UA attached when no explicit override", func(t *testing.T) {
+		c := newGinContext(t)
+		c.Request.Header.Set("User-Agent", "cherry-studio/1.2")
+		rule := &typ.Rule{Flags: typ.RuleFlags{}}
+
+		ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioAnthropic, &typ.ScenarioConfig{},
+			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+
+		if got := typ.GetClientUserAgent(c.Request.Context()); got != "cherry-studio/1.2" {
+			t.Errorf("client UA in ctx = %q, want %q", got, "cherry-studio/1.2")
+		}
+	})
+
+	t.Run("both explicit override and inbound UA coexist in ctx", func(t *testing.T) {
+		c := newGinContext(t)
+		c.Request.Header.Set("User-Agent", "cherry-studio/1.2")
+		rule := &typ.Rule{Flags: typ.RuleFlags{CustomUserAgent: "Rule/2.0"}}
+
+		ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioAnthropic, &typ.ScenarioConfig{},
+			protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+
+		ctx := c.Request.Context()
+		if got := typ.GetCustomUserAgent(ctx); got != "Rule/2.0" {
+			t.Errorf("custom UA in ctx = %q, want %q", got, "Rule/2.0")
+		}
+		if got := typ.GetClientUserAgent(ctx); got != "cherry-studio/1.2" {
+			t.Errorf("client UA in ctx = %q, want %q", got, "cherry-studio/1.2")
+		}
+	})
+}
+
 func TestResolveRuleFlagsWithScenario_CleanHeaderSuppressedForClaudeOAuth(t *testing.T) {
 	oauthProvider := &typ.Provider{
 		AuthType:    typ.AuthTypeOAuth,
