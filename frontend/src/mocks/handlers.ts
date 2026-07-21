@@ -2285,7 +2285,7 @@ export const handlers = [
             // Hybrid keeps the gateway token in config.toml so auth.json can hold
             // a native ChatGPT login.
             lines.push(`experimental_bearer_token = "${token}"`)
-            lines.push('requires_openai_auth = false')
+            lines.push('requires_openai_auth = true')
         } else {
             // Gateway: Codex sources the key from auth.json's OPENAI_API_KEY.
             lines.push('requires_openai_auth = true')

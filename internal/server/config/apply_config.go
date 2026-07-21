@@ -1137,11 +1137,11 @@ func RenderCodexConfigTOML(baseURL string, models []string, prefs *CodexPrefs, w
 // don't want to point Codex at a file we never wrote).
 //
 // bearerToken, when non-empty, is written into the tingly-box provider stanza
-// as `experimental_bearer_token` (with `requires_openai_auth = false` so Codex
-// doesn't reject the non-`sk-` tingly token). This is the hybrid-mode path: it
-// keeps the gateway credential provider-scoped inside config.toml so
-// ~/.codex/auth.json can retain a native ChatGPT login instead. Pass "" for the
-// classic gateway path where the key lives in auth.json's OPENAI_API_KEY.
+// as `experimental_bearer_token` (with `requires_openai_auth = true`). This is
+// the hybrid-mode path: it keeps the gateway credential provider-scoped inside
+// config.toml so ~/.codex/auth.json can retain a native ChatGPT login instead.
+// Pass "" for the classic gateway path where the key lives in auth.json's
+// OPENAI_API_KEY.
 func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []string, catalogPath string, prefs *CodexPrefs, bearerToken string) {
 	// User-tunable, whitelist-validated keys. Applied at the top level (global
 	// default) and stamped into each generated profile so profiles are
@@ -1173,10 +1173,10 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if bearerToken != "" {
 		// Hybrid: provider-scoped credential keeps the gateway token out of
 		// auth.json so a native ChatGPT login can coexist there.
-		// requires_openai_auth=false tells Codex not to source this provider's
-		// credential from auth.json (it comes from the bearer token instead).
+		// requires_openai_auth=true tells Codex this provider still requires the
+		// OpenAI auth path (the credential arrives via the bearer token above).
 		providerStanza["experimental_bearer_token"] = bearerToken
-		providerStanza["requires_openai_auth"] = false
+		providerStanza["requires_openai_auth"] = true
 	} else {
 		// Gateway (apikey): the token lives in ~/.codex/auth.json's
 		// OPENAI_API_KEY. requires_openai_auth=true is the schema-documented way
