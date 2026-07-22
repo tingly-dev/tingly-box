@@ -108,7 +108,12 @@ tasks:
   frontend:dev:pnpm:
     dir: frontend
     cmds:
-      - pnpm run dev -- --port {{.VITE_PORT}} --strictPort
+      # Invoke vite directly instead of `pnpm run dev -- ...`: the dev script
+      # already hardcodes --port, and duplicated flags confuse vite's CLI.
+      # Bind to 127.0.0.1 explicitly — the wails3 asset proxy dials the dev
+      # server with tcp4 only, so a vite bound to ::1 (what `localhost` can
+      # resolve to) yields 502 Bad Gateway on every request in the GUI window.
+      - pnpm exec vite --mode development --host 127.0.0.1 --port {{.VITE_PORT}} --strictPort
 
   update:build-assets:
     summary: Updates the build assets
