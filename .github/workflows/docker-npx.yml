@@ -8,7 +8,7 @@ on:
         required: true
         type: string
 
-env:
+env: {}
 
 jobs:
   build-and-push:
@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Validate release tag
         id: validate
