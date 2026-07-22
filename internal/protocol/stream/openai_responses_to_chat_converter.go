@@ -30,6 +30,13 @@ type responsesToChatConverter struct {
 	completed       bool
 	toolCallIndexes map[string]int
 	toolCalls       map[int]*responsesToChatToolCall
+	// nextChatIndex assigns each tool call a dense 0-based Chat tool_calls[].index
+	// in first-seen order. The Responses output_index cannot be reused directly:
+	// a Responses stream reserves slot 0 for the assistant message (and further
+	// slots for reasoning), so a function_call at output_index 1 would emit a
+	// Chat tool_call at index 1, leaving a phantom empty index-0 call after
+	// client-side accumulation. Chat tool-call indices are their own sequence.
+	nextChatIndex int
 
 	// internal event queue
 	pending []interface{}
@@ -40,6 +47,32 @@ type responsesToChatToolCall struct {
 	callID    string
 	name      string
 	arguments strings.Builder
+	// chatIndex is the dense 0-based index emitted on the Chat wire, distinct
+	// from the Responses output slot this call is tracked under.
+	chatIndex int
+}
+
+// toolCallForSlot returns the tool call tracked under a Responses output slot,
+// creating it (and assigning the next dense Chat index) on first sight. The
+// id/callID/name are filled in when non-empty so late-arriving fields (e.g. the
+// name on output_item.added, arguments on .done) accumulate onto one call.
+func (c *responsesToChatConverter) toolCallForSlot(slot int, itemID, callID, name string) *responsesToChatToolCall {
+	tc, ok := c.toolCalls[slot]
+	if !ok {
+		tc = &responsesToChatToolCall{chatIndex: c.nextChatIndex}
+		c.nextChatIndex++
+		c.toolCalls[slot] = tc
+	}
+	if itemID != "" {
+		tc.id = itemID
+	}
+	if callID != "" {
+		tc.callID = callID
+	}
+	if name != "" {
+		tc.name = name
+	}
+	return tc
 }
 
 // newResponsesToChatConverter creates a converter that reads from a Responses
@@ -127,9 +160,9 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 				callID = evt.Item.ID
 			}
 			c.toolCallIndexes[evt.Item.ID] = index
-			c.toolCalls[index] = &responsesToChatToolCall{id: evt.Item.ID, callID: callID, name: evt.Item.Name}
+			tc := c.toolCallForSlot(index, evt.Item.ID, callID, evt.Item.Name)
 			c.hasToolCalls = true
-			c.pending = append(c.pending, c.toolCallStartChunk(index, callID, evt.Item.Name))
+			c.pending = append(c.pending, c.toolCallStartChunk(tc.chatIndex, callID, evt.Item.Name))
 		}
 
 	case "response.function_call_arguments.delta":
@@ -140,11 +173,10 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		if !ok {
 			index = int(evt.OutputIndex)
 		}
-		if toolCall, ok := c.toolCalls[index]; ok {
-			toolCall.arguments.WriteString(evt.Delta)
-		}
+		tc := c.toolCallForSlot(index, evt.ItemID, "", "")
+		tc.arguments.WriteString(evt.Delta)
 		c.hasToolCalls = true
-		c.pending = append(c.pending, c.toolCallDeltaChunk(index, evt.Delta))
+		c.pending = append(c.pending, c.toolCallDeltaChunk(tc.chatIndex, evt.Delta))
 
 	case "response.function_call_arguments.done":
 		index, ok := c.toolCallIndexes[evt.ItemID]
@@ -165,14 +197,8 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			if callID == "" {
 				callID = evt.Item.ID
 			}
-			toolCall, ok := c.toolCalls[index]
-			if !ok {
-				toolCall = &responsesToChatToolCall{id: evt.Item.ID}
-				c.toolCalls[index] = toolCall
-			}
-			toolCall.id = evt.Item.ID
-			toolCall.callID = callID
-			toolCall.name = evt.Item.Name
+			c.toolCallIndexes[evt.Item.ID] = index
+			toolCall := c.toolCallForSlot(index, evt.Item.ID, callID, evt.Item.Name)
 			if toolCall.arguments.Len() == 0 {
 				toolCall.arguments.WriteString(evt.Item.Arguments.OfString)
 			}
@@ -230,15 +256,15 @@ func (c *responsesToChatConverter) emitCompletedOutput(output []responses.Respon
 			if !c.hasSentCreated {
 				c.pending = append(c.pending, c.roleChunk())
 			}
-			index := outputIndex
 			callID := item.CallID
 			if callID == "" {
 				callID = item.ID
 			}
+			tc := c.toolCallForSlot(outputIndex, item.ID, callID, item.Name)
 			c.hasToolCalls = true
-			c.pending = append(c.pending, c.toolCallStartChunk(index, callID, item.Name))
+			c.pending = append(c.pending, c.toolCallStartChunk(tc.chatIndex, callID, item.Name))
 			if item.Arguments.OfString != "" {
-				c.pending = append(c.pending, c.toolCallDeltaChunk(index, item.Arguments.OfString))
+				c.pending = append(c.pending, c.toolCallDeltaChunk(tc.chatIndex, item.Arguments.OfString))
 			}
 		}
 	}

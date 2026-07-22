@@ -36,9 +36,11 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 
 	finishReason := ""
 	messageContent := ""
+	var toolCalls []openai.ChatCompletionMessageToolCallUnion
 	if len(resp.Choices) > 0 {
 		messageContent = resp.Choices[0].Message.Content
 		finishReason = string(resp.Choices[0].FinishReason)
+		toolCalls = resp.Choices[0].Message.ToolCalls
 	}
 
 	status, incompleteDetails := chatFinishReasonToResponsesStatus(finishReason)
@@ -58,6 +60,28 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 				// output_text; strict clients (AI SDK zod) require it.
 				{"type": "output_text", "text": messageContent, "annotations": []any{}},
 			},
+		})
+	}
+	// Mirror the tool_use handling BuildResponsesPayloadFromAnthropicBeta
+	// already has below: a Chat message's tool_calls must surface as
+	// function_call output items, or the Responses-formatted response silently
+	// loses every tool call the model made.
+	for _, tc := range toolCalls {
+		if tc.Type != "" && tc.Type != "function" {
+			continue
+		}
+		callID := tc.ID
+		itemID := callID
+		if itemID == "" {
+			itemID = "fc_" + resp.ID
+		}
+		output = append(output, map[string]any{
+			"type":      "function_call",
+			"id":        itemID,
+			"call_id":   callID,
+			"name":      tc.Function.Name,
+			"arguments": tc.Function.Arguments,
+			"status":    itemStatus,
 		})
 	}
 

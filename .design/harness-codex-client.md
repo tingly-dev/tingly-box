@@ -183,11 +183,15 @@ Needs `node` on PATH plus `npm install --prefix tests/clients/codex`
 `.github/workflows/harness-matrix.yml` (setup-node + `npm install`, same
 pattern as the `node`/`aisdk` legs).
 
-## 5. Known-defect interaction
+## 5. `tool_use` coverage
 
-The Responses-**source** `tool_use` path is already on the matrix skip list
-(`protocoltest.skipSourceScenarios["openai_responses|tool_use"]`), so the Codex
-driver inherits that skip for the tool_use cells until the gateway's
-Responses-source tool_call conversion is completed — the driver does not paper
-over it. This is a pre-existing, separately-tracked gateway defect; closing it
-is out of scope for the client driver itself.
+The Responses-**source** `tool_use`/`streaming_tool_use` cells are exercised
+end-to-end by this driver, including tool-call name/arguments and the Chat
+`tool_calls[].index` sequence — verified by mutation testing (breaking the
+driver's argument extraction makes the matrix fail, confirming the assertions
+are real, not vacuous). `skipSourceScenarios` no longer has an
+`openai_responses|tool_use` entry: it was closed by three targeted fixes —
+`nonstream.BuildResponsesPayloadFromChat` (Chat→Responses non-stream tool-call
+emission), `openai_responses_to_chat_converter.go` (Responses→Chat stream
+tool-call indexing), and the harness's `assembleFromEvents` fallback
+(`internal/protocoltest/testenv.go`).
