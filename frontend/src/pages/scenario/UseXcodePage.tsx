@@ -5,6 +5,7 @@ import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import XcodeConfigModal from './components/XcodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
@@ -22,7 +23,7 @@ const UseXcodePageContent: React.FC = () => {
         setConfigModalOpen(true);
     };
     return (
-        <PageLayout loading={isLoading} notification={notification}>
+        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     title={

@@ -10,6 +10,7 @@ import { Box, Button, IconButton, Tooltip, Dialog, DialogActions, DialogContent,
 import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
@@ -59,7 +60,7 @@ const UseCodexPageContent: React.FC = () => {
         setConfigModalOpen(true);
     };
     return (
-        <PageLayout loading={isLoading} notification={notification}>
+        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     title={

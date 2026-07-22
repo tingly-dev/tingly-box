@@ -3,6 +3,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box } from '@mui/material';
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
@@ -18,7 +19,7 @@ const UseAgentPageContent: React.FC = () => {
     } = useScenarioPageInternal(scenario);
 
     return (
-        <PageLayout loading={isLoading} notification={notification}>
+        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     title={

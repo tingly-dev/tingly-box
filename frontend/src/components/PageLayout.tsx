@@ -34,6 +34,13 @@ interface PageLayoutProps {
   loading: boolean;
   children: React.ReactNode;
   loadingMinHeight?: number;
+  /**
+   * Rendered instead of the default centered spinner while `loading` is
+   * true. Use a skeleton that mirrors the page's real layout (see
+   * ScenarioPageSkeleton) to avoid a jarring blank-to-content pop once
+   * data arrives.
+   */
+  loadingContent?: React.ReactNode;
   notification?: NotificationConfig;
   title?: string;
   subtitle?: string;
@@ -44,6 +51,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   loading,
   children,
   loadingMinHeight = 400,
+  loadingContent,
   notification,
   title,
   subtitle,
@@ -85,7 +93,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   }, [notification?.open, notification?.onClose]);
 
   if (loading) {
-    return <PageLoading minHeight={loadingMinHeight} />;
+    return loadingContent ? <>{loadingContent}</> : <PageLoading minHeight={loadingMinHeight} />;
   }
 
   return (

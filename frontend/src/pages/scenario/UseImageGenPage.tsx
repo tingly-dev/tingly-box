@@ -7,6 +7,7 @@ import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
@@ -33,7 +34,7 @@ const UseImageGenPageContent: React.FC = () => {
     const firstModel = rules.find((rule) => rule.active !== false && rule.request_model)?.request_model;
 
     return (
-        <PageLayout loading={isLoading} notification={notification}>
+        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     title={
