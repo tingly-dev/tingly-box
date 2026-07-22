@@ -40,7 +40,7 @@ type CLI struct {
 
 func main() {
 	// Duo child mode: when the parent (harness duo) re-executes this binary
-	// under the TINGLY_DUO_* env contract, run a full server instance instead
+	// under the TINGLY_DUO_SPEC contract, run a full server instance instead
 	// of the CLI. Never returns in that case.
 	protocoltest.MaybeRunDuoServe()
 

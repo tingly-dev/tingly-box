@@ -95,7 +95,7 @@ var (
 // mustMarshal is retained as a protocoltest-local helper because it is used by
 // testenv.go and flags.go to build request bodies. The scenario package has its
 // own unexported copy.
-func mustMarshal(v interface{}) []byte {
+func mustMarshal(v any) []byte {
 	b, err := json.Marshal(v)
 	if err != nil {
 		panic(fmt.Sprintf("mustMarshal: %v", err))

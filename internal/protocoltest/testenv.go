@@ -446,47 +446,47 @@ func (env *TestEnv) findRouteModel(source, target protocol.APIType, scenarioName
 func buildRequest(source protocol.APIType, model string, streaming bool) (path string, body []byte) {
 	switch source {
 	case protocol.TypeAnthropicV1:
-		return "/tingly/anthropic/v1/messages", mustMarshal(map[string]interface{}{
+		return "/tingly/anthropic/v1/messages", mustMarshal(map[string]any{
 			"model":      model,
 			"max_tokens": 1024,
-			"messages": []map[string]interface{}{
+			"messages": []map[string]any{
 				{"role": "user", "content": "What is the capital of France?"},
 			},
 			"stream": streaming,
 		})
 	case protocol.TypeAnthropicBeta:
-		return "/tingly/anthropic/v1/messages?beta=true", mustMarshal(map[string]interface{}{
+		return "/tingly/anthropic/v1/messages?beta=true", mustMarshal(map[string]any{
 			"model":      model,
 			"max_tokens": 1024,
-			"messages": []map[string]interface{}{
-				{"role": "user", "content": []map[string]interface{}{
+			"messages": []map[string]any{
+				{"role": "user", "content": []map[string]any{
 					{"type": "text", "text": "What is the capital of France?"},
 				}},
 			},
 			"stream": streaming,
 		})
 	case protocol.TypeOpenAIChat:
-		return "/tingly/openai/v1/chat/completions", mustMarshal(map[string]interface{}{
+		return "/tingly/openai/v1/chat/completions", mustMarshal(map[string]any{
 			"model": model,
-			"messages": []map[string]interface{}{
+			"messages": []map[string]any{
 				{"role": "user", "content": "What is the capital of France?"},
 			},
 			"stream": streaming,
 		})
 	case protocol.TypeOpenAIResponses:
-		return "/tingly/openai/v1/responses", mustMarshal(map[string]interface{}{
+		return "/tingly/openai/v1/responses", mustMarshal(map[string]any{
 			"model": model,
-			"input": []map[string]interface{}{
-				{"type": "message", "role": "user", "content": []map[string]interface{}{
+			"input": []map[string]any{
+				{"type": "message", "role": "user", "content": []map[string]any{
 					{"type": "input_text", "text": "What is the capital of France?"},
 				}},
 			},
 			"stream": streaming,
 		})
 	default:
-		return "/tingly/openai/v1/chat/completions", mustMarshal(map[string]interface{}{
+		return "/tingly/openai/v1/chat/completions", mustMarshal(map[string]any{
 			"model":    model,
-			"messages": []map[string]interface{}{{"role": "user", "content": "What is the capital of France?"}},
+			"messages": []map[string]any{{"role": "user", "content": "What is the capital of France?"}},
 			"stream":   streaming,
 		})
 	}
@@ -543,7 +543,7 @@ func sourceToStyle(source protocol.APIType) protocol.APIStyle {
 }
 
 func parseFromJSON(raw []byte, style protocol.APIStyle) sse.ParsedResult {
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return sse.ParsedResult{}
 	}

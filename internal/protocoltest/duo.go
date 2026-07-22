@@ -10,7 +10,7 @@ package protocoltest
 // tb1 and tb2 are SEPARATE PROCESSES, each a full production server booted
 // through server.Start (background refreshers, config watcher, production
 // http.Server timeouts) — the parent re-executes its own binary via the
-// TINGLY_DUO_* env contract in duo_serve.go. Because each instance has its
+// typed duoInstanceSpec contract in duo_serve.go. Because each instance has its
 // own Go runtime, memory is observed PER INSTANCE over the production
 // /api/v1/debug/{memstats,pprof/heap} endpoints: a leak attributes directly
 // to tb2 (gateway/conversion path) or tb1 (vmodel serving path) instead of
@@ -47,7 +47,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -308,24 +307,25 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 	cfg.withDefaults()
 	env := &DuoEnv{client: &http.Client{Timeout: 120 * time.Second}}
 
-	tb1, err := env.startInstance("tb1", cfg, map[string]string{
-		duoEnvStreamKB: strconv.Itoa(cfg.StreamKB),
-		duoEnvStreamMS: strconv.Itoa(cfg.StreamMS),
-	})
+	tb1, err := env.startInstance(duoInstanceSpec{
+		Name:     "tb1",
+		Role:     duoRoleUpstream,
+		StreamKB: cfg.StreamKB,
+		StreamMS: cfg.StreamMS,
+	}, cfg)
 	if err != nil {
 		env.Close()
 		return nil, fmt.Errorf("boot tb1: %w", err)
 	}
 	env.TB1 = tb1
 
-	tb2Env := map[string]string{
-		duoEnvUpstreamURL:   tb1.BaseURL,
-		duoEnvUpstreamToken: tb1.ModelToken,
-	}
-	if cfg.TB2WriteTimeoutMS > 0 {
-		tb2Env[duoEnvWriteTimeoutMS] = strconv.Itoa(cfg.TB2WriteTimeoutMS)
-	}
-	tb2, err := env.startInstance("tb2", cfg, tb2Env)
+	tb2, err := env.startInstance(duoInstanceSpec{
+		Name:           "tb2",
+		Role:           duoRoleGateway,
+		UpstreamURL:    tb1.BaseURL,
+		UpstreamToken:  tb1.ModelToken,
+		WriteTimeoutMS: cfg.TB2WriteTimeoutMS,
+	}, cfg)
 	if err != nil {
 		env.Close()
 		return nil, fmt.Errorf("boot tb2: %w", err)
@@ -335,16 +335,28 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 }
 
 // startInstance spawns one child instance (re-executing this binary under
-// the duo env contract), waits for it to become healthy, and reads its
-// tokens from the child's config.json.
-func (env *DuoEnv) startInstance(name string, cfg DuoEnvConfig, extra map[string]string) (*DuoInstance, error) {
-	dir, err := os.MkdirTemp("", "duo-"+name+"-*")
+// the duo spec contract), waits for it to become healthy, and reads its
+// tokens from the child's config.json. The caller fills the role-specific
+// spec fields; config dir and port are allocated here.
+func (env *DuoEnv) startInstance(spec duoInstanceSpec, cfg DuoEnvConfig) (*DuoInstance, error) {
+	dir, err := os.MkdirTemp("", "duo-"+spec.Name+"-*")
 	if err != nil {
 		return nil, err
 	}
 	env.dirs = append(env.dirs, dir)
+	spec.ConfigDir = dir
 
-	port, err := pickFreePort()
+	spec.Port, err = pickFreePort()
+	if err != nil {
+		return nil, err
+	}
+
+	// Fail fast on a malformed spec here, in-process — a child boot failure
+	// would surface the same error, but only after a spawn and as a tail dump.
+	if err := spec.validate(); err != nil {
+		return nil, err
+	}
+	specEnv, err := spec.encode()
 	if err != nil {
 		return nil, err
 	}
@@ -355,25 +367,17 @@ func (env *DuoEnv) startInstance(name string, cfg DuoEnvConfig, extra map[string
 	}
 
 	inst := &DuoInstance{
-		Name:      name,
+		Name:      spec.Name,
 		ConfigDir: dir,
-		Port:      port,
-		BaseURL:   fmt.Sprintf("http://127.0.0.1:%d", port),
+		Port:      spec.Port,
+		BaseURL:   fmt.Sprintf("http://127.0.0.1:%d", spec.Port),
 		out:       newTailBuffer(64 * 1024),
 		done:      make(chan struct{}),
 		hc:        &http.Client{Timeout: 60 * time.Second},
 	}
 
 	cmd := exec.Command(exe)
-	cmd.Env = append(os.Environ(),
-		duoEnvRole+"="+duoRoleServe,
-		duoEnvName+"="+name,
-		duoEnvConfigDir+"="+dir,
-		duoEnvPort+"="+strconv.Itoa(port),
-	)
-	for k, v := range extra {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
+	cmd.Env = append(os.Environ(), specEnv)
 	var sink io.Writer = inst.out
 	if cfg.ChildLog != nil {
 		sink = io.MultiWriter(inst.out, cfg.ChildLog)
@@ -381,7 +385,7 @@ func (env *DuoEnv) startInstance(name string, cfg DuoEnvConfig, extra map[string
 	cmd.Stdout = sink
 	cmd.Stderr = sink
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("spawn %s: %w", name, err)
+		return nil, fmt.Errorf("spawn %s: %w", spec.Name, err)
 	}
 	inst.cmd = cmd
 	go func() {
@@ -390,10 +394,10 @@ func (env *DuoEnv) startInstance(name string, cfg DuoEnvConfig, extra map[string
 	}()
 
 	if err := inst.waitReady(cfg.BootTimeout); err != nil {
-		return inst, fmt.Errorf("%s not ready: %w\n--- %s output tail ---\n%s", name, err, name, inst.OutputTail())
+		return inst, fmt.Errorf("%s not ready: %w\n--- %s output tail ---\n%s", spec.Name, err, spec.Name, inst.OutputTail())
 	}
 	if err := inst.readTokens(); err != nil {
-		return inst, fmt.Errorf("%s tokens: %w", name, err)
+		return inst, fmt.Errorf("%s tokens: %w", spec.Name, err)
 	}
 	return inst, nil
 }
