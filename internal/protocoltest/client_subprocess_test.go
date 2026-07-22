@@ -80,6 +80,27 @@ func TestSubprocessClient_Contract(t *testing.T) {
 	}
 }
 
+// TestCodexClient_SupportsResponsesOnly verifies the Codex driver is restricted
+// to the openai_responses source (Codex speaks only the Responses API), so
+// --client=codex visibly skips every other source instead of sending a
+// non-Codex request. Cheap (no node) — runs on every PR.
+func TestCodexClient_SupportsResponsesOnly(t *testing.T) {
+	c := NewCodexClient(testdataDriver(t, ".."))
+	if c.Name() != "codex" {
+		t.Errorf("name: got %q, want codex", c.Name())
+	}
+	if !c.Supports(protocol.TypeOpenAIResponses) {
+		t.Error("codex client must support openai_responses")
+	}
+	for _, src := range []protocol.APIType{
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat,
+	} {
+		if c.Supports(src) {
+			t.Errorf("codex client must not support %s", src)
+		}
+	}
+}
+
 // TestSubprocessClient_DriverFailure verifies a broken driver (non-zero exit)
 // surfaces as a Send error including stderr for debuggability.
 func TestSubprocessClient_DriverFailure(t *testing.T) {

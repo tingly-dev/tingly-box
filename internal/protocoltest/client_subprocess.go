@@ -25,6 +25,9 @@ type subprocessClient struct {
 	name    string
 	argv    []string
 	timeout time.Duration
+	// sources, when non-nil, restricts which source protocols the driver
+	// speaks. nil means all four (the default for the generic SDK drivers).
+	sources map[protocol.APIType]bool
 }
 
 // NewSubprocessClient returns a client driver that shells out to argv for
@@ -50,6 +53,30 @@ func NewNodeClient(driverDir string) Client {
 // the tests/clients root.
 func NewAISDKClient(driverDir string) Client {
 	return NewSubprocessClient("aisdk", "node", filepath.Join(driverDir, "aisdk", "driver.mjs"))
+}
+
+// NewCodexClient returns a driver backed by tests/clients/codex/driver.mjs — a
+// faithful TS/Node port of the OpenAI Codex CLI's Responses-API client
+// (raw fetch, no SDK, mirroring codex-rs core/src/client.rs). It reconstructs
+// Codex's exact request shape (instructions, reasoning, include,
+// reasoning.encrypted_content, store=false, prompt_cache_key, tool_choice=auto,
+// the shell function tool + apply_patch custom/freeform tool, and Codex's
+// identity headers) and accumulates the SSE with a Codex-style state machine.
+//
+// Codex speaks only the Responses API (its built-in openai provider sets
+// wire_api=responses), so the driver is restricted to openai_responses; every
+// other source is a visible skip. driverDir is the tests/clients root. The
+// driver uses Node's built-in fetch, so it needs no npm dependencies.
+//
+// See .design/harness-codex-client.md for the wire reference and the rationale
+// for a subprocess driver over an in-process replica.
+func NewCodexClient(driverDir string) Client {
+	return &subprocessClient{
+		name:    "codex",
+		argv:    []string{"node", filepath.Join(driverDir, "codex", "driver.mjs")},
+		timeout: 60 * time.Second,
+		sources: map[protocol.APIType]bool{protocol.TypeOpenAIResponses: true},
+	}
 }
 
 // driverRequest is the JSON object written to the driver's stdin.
@@ -101,6 +128,9 @@ type driverErrorEnvelope struct {
 func (c *subprocessClient) Name() string { return c.name }
 
 func (c *subprocessClient) Supports(source protocol.APIType) bool {
+	if c.sources != nil {
+		return c.sources[source]
+	}
 	switch source {
 	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta,
 		protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses:

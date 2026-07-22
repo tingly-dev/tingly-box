@@ -1,0 +1,6 @@
+{
+  "name": "tingly-box-harness-codex-driver",
+  "private": true,
+  "type": "module",
+  "description": "Faithful OpenAI Codex CLI Responses-API client (raw fetch, no deps) subprocess driver for the protocol matrix harness"
+}

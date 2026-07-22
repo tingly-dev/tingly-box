@@ -286,3 +286,50 @@ func TestHandleAnthropicToGoogle(t *testing.T) {
 		}
 	})
 }
+
+// TestBuildResponsesPayloadFromChat_ToolCalls guards the Chat → Responses
+// non-stream conversion of tool calls: a Chat completion whose assistant
+// message carries tool_calls must surface as function_call output items in the
+// Responses payload (they were previously dropped). Built by unmarshaling a
+// realistic Chat response so the openai-go tool-call union is populated exactly
+// as the SDK would decode it off the wire.
+func TestBuildResponsesPayloadFromChat_ToolCalls(t *testing.T) {
+	raw := `{
+      "id": "chatcmpl-1",
+      "object": "chat.completion",
+      "model": "gpt-4o",
+      "choices": [{
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [{
+            "id": "call_abc",
+            "type": "function",
+            "function": {"name": "get_weather", "arguments": "{\"location\":\"Paris\"}"}
+          }]
+        },
+        "finish_reason": "tool_calls"
+      }],
+      "usage": {"prompt_tokens": 15, "completion_tokens": 20, "total_tokens": 35}
+    }`
+	var resp openai.ChatCompletion
+	require.NoError(t, json.Unmarshal([]byte(raw), &resp))
+
+	payload := BuildResponsesPayloadFromChat(&resp, "resp-model", "gpt-4o")
+
+	output, ok := payload["output"].([]map[string]any)
+	require.True(t, ok, "output should be a []map[string]any")
+
+	var fnCalls []map[string]any
+	for _, item := range output {
+		if item["type"] == "function_call" {
+			fnCalls = append(fnCalls, item)
+		}
+	}
+	require.Len(t, fnCalls, 1, "expected exactly one function_call output item")
+	assert.Equal(t, "get_weather", fnCalls[0]["name"])
+	assert.Equal(t, "call_abc", fnCalls[0]["call_id"])
+	assert.Equal(t, `{"location":"Paris"}`, fnCalls[0]["arguments"])
+	assert.Equal(t, "completed", payload["status"])
+}

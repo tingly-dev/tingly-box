@@ -26,7 +26,7 @@ type MatrixCmd struct {
 	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
 	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
 	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (single + transitive + idempotent + flags), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only)'"`
-	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
+	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk,codex',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver), codex (faithful in-process replica of the OpenAI Codex CLI Responses-API client)'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -61,6 +61,7 @@ func (*MatrixCmd) Help() string {
   harness matrix --mode=single --client=python   # real Python SDKs (subprocess driver)
   harness matrix --mode=single --client=node     # real Node SDKs (subprocess driver)
   harness matrix --mode=single --client=aisdk    # AI SDK by Vercel (subprocess driver)
+  harness matrix --mode=single --client=codex    # OpenAI Codex CLI Responses wire shape (Node subprocess driver, no deps)
 
   # Run specific scenario only
   harness matrix --scenario text
@@ -215,6 +216,18 @@ func resolveClient(name string) (protocoltest.Client, error) {
 			return nil, err
 		}
 		return protocoltest.NewAISDKClient(dir), nil
+	case "codex":
+		// Faithful TS/Node port of the Codex Responses client. It uses Node's
+		// built-in fetch (no SDK), so — unlike node/aisdk — it needs no
+		// node_modules; only node itself must be on PATH.
+		dir, err := driverDir()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := exec.LookPath("node"); err != nil {
+			return nil, fmt.Errorf("--client=codex requires node on PATH")
+		}
+		return protocoltest.NewCodexClient(dir), nil
 	default:
 		return nil, fmt.Errorf("unknown client driver %q", name)
 	}

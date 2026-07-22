@@ -573,8 +573,12 @@ func assembleFromEvents(events []string, style protocol.APIStyle) sse.ParsedResu
 	case protocol.APIStyleOpenAI:
 		// Try to assemble as Responses API first
 		r = sse.AssembleOpenAIResponsesStream(events)
-		// If that failed, try Chat Completions
-		if r == nil || len(r.Content) == 0 {
+		// Fall back to Chat Completions only when the Responses assembler found
+		// NOTHING — not merely when content is empty. A tool-only Responses
+		// stream (function_call with no assistant text) has empty Content but a
+		// populated ToolCalls/Usage; the old `len(Content) == 0` fallback
+		// re-parsed those events as Chat and silently dropped the tool calls.
+		if r == nil || (len(r.Content) == 0 && len(r.ToolCalls) == 0 && r.Usage == nil) {
 			r = sse.AssembleOpenAIStream(events)
 		}
 	case protocol.APIStyleAnthropic:

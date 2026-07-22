@@ -103,6 +103,11 @@ jobs:
             focus: aisdk
             setup: aisdk
             cmd: matrix --mode=single --client=aisdk --json
+          - name: matrix-single-codex
+            tier: matrix
+            focus: codex
+            setup: codex
+            cmd: matrix --mode=single --client=codex --json
           - name: replay-virtual
             tier: replay
             focus: replay
@@ -179,11 +184,13 @@ jobs:
         run: pip install -r tests/clients/python/requirements.txt
 
       - name: Setup Node
-        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
+        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk' || matrix.leg.setup == 'codex')
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
+      # The codex driver uses Node's built-in fetch (no SDK), so it needs the
+      # runtime but no npm install — omit it from this step.
       - name: Install Node driver dependencies
         if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
         run: npm install --prefix tests/clients/${{ matrix.leg.setup }}

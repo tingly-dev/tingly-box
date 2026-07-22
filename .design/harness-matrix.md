@@ -156,6 +156,7 @@ scenarios, and assertions:
 | `python` | real `anthropic` + `openai` Python SDKs via subprocess driver | `matrix-single-python` |
 | `node` | real `@anthropic-ai/sdk` + `openai` Node SDKs via subprocess driver | `matrix-single-node` |
 | `aisdk` | AI SDK by Vercel (`ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`) via subprocess driver — the strictest client: zod-validates every response and stream event | `matrix-single-aisdk` |
+| `codex` | Faithful port of the **OpenAI Codex CLI** Responses-API client (raw `fetch`, no SDK) via subprocess driver — `openai_responses` source only, sends Codex's exact request shape + a Codex-style SSE accumulator. Needs `node` on PATH, **no npm deps**. See [`harness-codex-client.md`](./harness-codex-client.md) | `matrix-single-codex` |
 
 Every client mode runs as its own leg in the harness-matrix workflow; the
 subprocess legs install their toolchain (setup-python / setup-node +
@@ -189,8 +190,10 @@ not as a `Send` error — error-scenario assertions must still run. A non-nil
 `Send` error means the driver itself broke.
 
 **Subprocess contract** (`client_subprocess.go` ⇄
-`tests/clients/{python,node}/driver.*`): one JSON object on stdin, one on
-stdout; non-zero exit = broken driver, API errors go in-band:
+`tests/clients/{python,node,aisdk,codex}/driver.*`): one JSON object on stdin,
+one on stdout; non-zero exit = broken driver, API errors go in-band. A driver
+may restrict which sources it speaks (`subprocessClient.sources`): the `codex`
+driver is `openai_responses`-only, so every other source is a visible skip.
 
 ```jsonc
 // stdin

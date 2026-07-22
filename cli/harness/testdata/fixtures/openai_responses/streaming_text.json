@@ -1,6 +1,14 @@
 {
   "model": "tingly-codex",
+  "instructions": "You are Codex, based on GPT-5. You are running as a coding agent in the Codex CLI on a user's computer. Use the tools available to you to assist the user with their coding tasks.",
   "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        { "type": "input_text", "text": "<environment_context>\n  <cwd>/repo</cwd>\n  <approval_policy>on-request</approval_policy>\n  <sandbox_mode>workspace-write</sandbox_mode>\n</environment_context>" }
+      ]
+    },
     {
       "type": "message",
       "role": "user",
@@ -9,5 +17,40 @@
       ]
     }
   ],
-  "stream": true
+  "tools": [
+    {
+      "type": "function",
+      "name": "shell",
+      "description": "Runs a shell command and returns its output.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "array", "items": { "type": "string" } },
+          "workdir": { "type": "string" },
+          "timeout_ms": { "type": "number" }
+        },
+        "required": ["command"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "custom",
+      "name": "apply_patch",
+      "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+      "format": {
+        "type": "grammar",
+        "syntax": "lark",
+        "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" NEWLINE\nend_patch: \"*** End Patch\" NEWLINE?\nhunk: /[^\\n]+/ NEWLINE\n%import common.NEWLINE"
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": false,
+  "reasoning": { "effort": "medium", "summary": "auto" },
+  "store": false,
+  "stream": true,
+  "include": ["reasoning.encrypted_content"],
+  "prompt_cache_key": "00000000-0000-4000-8000-000000000001",
+  "text": { "verbosity": "medium" }
 }
