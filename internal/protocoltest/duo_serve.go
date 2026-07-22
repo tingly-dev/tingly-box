@@ -47,6 +47,12 @@ const (
 	duoEnvStreamKB = "TINGLY_DUO_STREAM_KB"
 	duoEnvStreamMS = "TINGLY_DUO_STREAM_MS"
 
+	// Overrides Start()'s hardcoded http.Server.WriteTimeout via
+	// server.WithHTTPTimeouts, on whichever instance receives it (set on
+	// tb2 by TestDuoWriteTimeoutSurvivesClearedDeadline: #1384 is about the
+	// gateway's own outbound write to the client, not tb1's).
+	duoEnvWriteTimeoutMS = "TINGLY_DUO_WRITE_TIMEOUT_MS"
+
 	duoRoleServe = "serve"
 )
 
@@ -118,10 +124,16 @@ func runDuoServe() error {
 		return fmt.Errorf("init multi logger: %w", err)
 	}
 
-	srv := server.NewServer(appCfg.GetGlobalConfig(),
+	opts := []server.ServerOption{
 		server.WithOpenBrowser(false),
 		server.WithMultiLogger(multiLogger),
-	)
+	}
+	if ms := duoEnvInt(duoEnvWriteTimeoutMS); ms > 0 {
+		opts = append(opts, server.WithHTTPTimeouts(server.HTTPTimeouts{
+			WriteTimeout: time.Duration(ms) * time.Millisecond,
+		}))
+	}
+	srv := server.NewServer(appCfg.GetGlobalConfig(), opts...)
 
 	if !isGateway {
 		// tb1 role: register the duo-only vmodels before serving — the

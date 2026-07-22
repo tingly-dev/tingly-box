@@ -4,7 +4,9 @@ package protocoltest
 // route matrix are documented on the engine in duo.go. TestDuoFunctional
 // covers every route; TestDuoMemoryRegression guards the #1255 class of leak
 // per instance (numbers with the threshold below); TestDuoBackpressure runs
-// the slow-stream + slow-reader variant. Heap profiles are written when
+// the slow-stream + slow-reader variant; TestDuoWriteTimeoutSurvivesClearedDeadline
+// proves the #1384 WriteTimeout fix under a real per-process http.Server, not
+// just the isolated middleware unit test. Heap profiles are written when
 // OOM_PROFILE_DIR is set:
 //
 //	OOM_PROFILE_DIR=/tmp go test ./internal/protocoltest/ -run TestDuo -v
@@ -153,4 +155,34 @@ func TestDuoBackpressure(t *testing.T) {
 		t.Fatalf("memory phase: %v", err)
 	}
 	assertDuoSlopes(t, report)
+}
+
+// TestDuoWriteTimeoutSurvivesClearedDeadline is the full-stack regression
+// proof for #1384: tb2 boots with a real, short http.Server.WriteTimeout
+// (server.WithHTTPTimeouts, not Start()'s 10-minute default), and the slow
+// route's total stream time is set to comfortably outlive it. Without
+// ClearServerDeadlines this would truncate the SSE stream mid-flight — with
+// it, the request must complete normally through the real two-process
+// production stack (both tb1's and tb2's actual http.Server, not the
+// synthetic gin.Engine in middleware/deadline_test.go).
+func TestDuoWriteTimeoutSurvivesClearedDeadline(t *testing.T) {
+	if testing.Short() {
+		t.Skip("duo e2e is not a -short test")
+	}
+	env, err := NewDuoEnv(DuoEnvConfig{StreamKB: 64, StreamMS: 600, TB2WriteTimeoutMS: 300})
+	if err != nil {
+		t.Fatalf("boot duo env: %v", err)
+	}
+	defer env.Close()
+
+	route := DuoDefaultRoute.SlowVariant()
+	checks := env.RunFunctionalChecks(route, 64*1024)
+	if len(checks) == 0 {
+		t.Fatal("no functional checks ran")
+	}
+	for _, c := range checks {
+		if !c.Pass {
+			t.Errorf("check %s failed: %s (tb2's real WriteTimeout was not cleared — stream truncated)", c.Name, c.Detail)
+		}
+	}
 }

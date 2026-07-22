@@ -271,6 +271,12 @@ type DuoEnvConfig struct {
 	// BootTimeout caps how long each instance may take to become healthy
 	// (default 90s — first boot may attempt a provider-template fetch).
 	BootTimeout time.Duration
+	// TB2WriteTimeoutMS, when > 0, overrides tb2's real http.Server.WriteTimeout
+	// (server.WithHTTPTimeouts) instead of Start()'s 10-minute default. Lets a
+	// test arm a short deadline and prove ClearServerDeadlines still lets a
+	// slower stream complete under the full two-process production stack
+	// (#1384) — not just the isolated middleware unit test.
+	TB2WriteTimeoutMS int
 }
 
 func (c *DuoEnvConfig) withDefaults() {
@@ -312,10 +318,14 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 	}
 	env.TB1 = tb1
 
-	tb2, err := env.startInstance("tb2", cfg, map[string]string{
+	tb2Env := map[string]string{
 		duoEnvUpstreamURL:   tb1.BaseURL,
 		duoEnvUpstreamToken: tb1.ModelToken,
-	})
+	}
+	if cfg.TB2WriteTimeoutMS > 0 {
+		tb2Env[duoEnvWriteTimeoutMS] = strconv.Itoa(cfg.TB2WriteTimeoutMS)
+	}
+	tb2, err := env.startInstance("tb2", cfg, tb2Env)
 	if err != nil {
 		env.Close()
 		return nil, fmt.Errorf("boot tb2: %w", err)
