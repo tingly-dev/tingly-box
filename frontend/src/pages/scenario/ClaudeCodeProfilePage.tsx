@@ -65,10 +65,10 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
-    // Prefer the CLI already installed alongside the running server. An npx
-    // package can be an older published build during local/dev testing and may
-    // regenerate this profile with a schema that predates persistent overrides.
-    const [commandMode, setCommandMode] = useState<'npx' | 'global'>('global');
+    // npx matches the primary installation path and does not assume that the
+    // package has also installed a permanent executable on PATH. Keep the
+    // global command available as an explicit alternative for those who have.
+    const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
     const [settingsArtifact, setSettingsArtifact] = useState<ClaudeCodeProfileSettingsArtifact | null>(null);
 
     // Update unified mode when profile changes
@@ -138,8 +138,9 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     // Profile quick start command. Keep the old `cc --profile` form compatible
     // in the CLI, but surface the new direct `profile <name>` form in the UI.
     const ccCommand = React.useMemo(() => {
-        if (commandMode === 'npx' && appVersion) {
-            return `npx -y tingly-box@${appVersion} profile ${profileId}`;
+        if (commandMode === 'npx') {
+            const packageSpec = appVersion ? `tingly-box@${appVersion}` : 'tingly-box';
+            return `npx -y ${packageSpec} profile ${profileId}`;
         }
         return `tingly-box profile ${profileId}`;
     }, [commandMode, appVersion, profileId]);
