@@ -144,7 +144,7 @@ jobs:
 
       - name: Checkout code
         if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: true
 
@@ -180,9 +180,9 @@ jobs:
 
       - name: Setup Node
         if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Install Node driver dependencies
         if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
