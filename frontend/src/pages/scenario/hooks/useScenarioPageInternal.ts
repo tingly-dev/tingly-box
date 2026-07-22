@@ -58,10 +58,8 @@ export const useScenarioPageInternal = (scenario: string) => {
     // Function panel data (token, providers, notifications, etc.)
     const functionPanelData = useFunctionPanelData();
 
-    // Rule management (rules loading, CRUD operations). Passing scenario
-    // lets it seed initial state from the shared rules cache synchronously
-    // (see useRuleManagement's doc comment).
-    const ruleManagement = useRuleManagement(scenario);
+    // Rule management (rules loading, CRUD operations)
+    const ruleManagement = useRuleManagement();
 
     // Scenario page data (header ref, base URL, header height)
     const scenarioPageData = useScenarioPageData(functionPanelData.providers);

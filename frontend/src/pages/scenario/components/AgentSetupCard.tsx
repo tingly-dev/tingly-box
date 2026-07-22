@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import UnifiedCard from '@/components/UnifiedCard';
-import { providersDataCache } from '@/services/scenarioDataCache';
+import { api } from '@/services/api';
 import { SPOTLIGHT_ADD_MODEL_EVENT } from '@/components/nodes/ActionAddNode';
 
 export interface AgentApplyResult {
@@ -145,23 +145,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     };
 
     useEffect(() => {
-        const applyProviders = (providers: any[]) => {
+        let cancelled = false;
+        api.getProviders().then((result) => {
+            if (cancelled) return;
+            const providers = Array.isArray(result?.data) ? result.data : [];
             const enabled = providers.filter((p: any) => p.enabled);
             setHasProvider(enabled.length > 0);
             setProviderCount(enabled.length);
             setProviderLoading(false);
-        };
-
-        // Scenario pages on this route already fetch providers into the
-        // shared cache (see scenarioDataCache.ts); read from it instead of
-        // firing a second, independent request that would otherwise show
-        // its own spinner right after the page's own loading resolves.
-        const cached = providersDataCache.getCached();
-        if (cached) applyProviders(cached);
-
-        const unsubscribe = providersDataCache.subscribe(applyProviders);
-        if (!cached) void providersDataCache.refresh();
-        return unsubscribe;
+        }).catch(() => {
+            if (!cancelled) setProviderLoading(false);
+        });
+        return () => { cancelled = true; };
     }, []);
 
     const providerDone = hasProvider;

@@ -20,7 +20,6 @@ import createAppTheme from './theme';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import { api } from './services/api';
-import { providersDataCache } from './services/scenarioDataCache';
 import SharingKeysPage from './pages/SharingKeysPage.tsx';
 import VirtualModelsPage from './pages/VirtualModelsPage';
 import UseOpenAIPage from './pages/scenario/UseOpenAIPage';
@@ -134,10 +133,6 @@ const OnboardingGate: React.FC = () => {
                 const result = await api.getProviders();
                 if (cancelled) return;
                 const providers = Array.isArray(result?.data) ? result.data : [];
-                // Prime the shared providers cache so the agent page this
-                // gate is about to land on paints instantly instead of
-                // re-fetching and showing its own loading state.
-                providersDataCache.prime(providers);
                 if (providers.length === 0) {
                     setTarget('/onboarding');
                     localStorage.removeItem('layout.activeActivity');

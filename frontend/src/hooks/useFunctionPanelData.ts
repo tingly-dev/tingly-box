@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import type { Provider } from '../types/provider';
 import { notify } from '@/utils/notify';
-import { providersDataCache } from '@/services/scenarioDataCache';
 
 export interface NotificationState {
     open: boolean;
@@ -20,12 +19,8 @@ export const useFunctionPanelData = () => {
     const [showTokenModal, setShowTokenModal] = useState(false);
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [apiKey, setApiKey] = useState<string>('');
-    // Seed synchronously from the shared cache when another mount (this
-    // page renders up to 3 instances of this hook — modal provider, page,
-    // TemplatePage) already has fresh providers, so this instance paints
-    // immediately instead of re-showing a loading spinner.
-    const [providers, setProviders] = useState<Provider[]>(() => providersDataCache.getCached() ?? []);
-    const [loading, setLoading] = useState(() => providersDataCache.getCached() === undefined);
+    const [providers, setProviders] = useState<Provider[]>([]);
+    const [loading, setLoading] = useState(true);
 
     const showNotification = useCallback((
         message: string,
@@ -51,23 +46,12 @@ export const useFunctionPanelData = () => {
         }
     }, []);
 
-    // Always fetches fresh (correct after mutations like add/import
-    // provider), but concurrent mounts of this hook on the same page
-    // (ScenarioPageModalProvider + the page + TemplatePage each call it)
-    // share one in-flight request instead of firing one apiece. Combined
-    // with the cache-seeded initial state above, navigating to a page
-    // that already has warm data paints instantly and revalidates quietly.
     const loadProviders = useCallback(async () => {
-        const data = await providersDataCache.refresh();
-        setProviders(data);
+        const result = await api.getProviders();
+        if (result.success) {
+            setProviders(result.data);
+        }
         setLoading(false);
-    }, []);
-
-    // Stay in sync with fetches triggered by other concurrent mounts of
-    // this hook so a revalidation started elsewhere still updates this
-    // instance's state.
-    useEffect(() => {
-        return providersDataCache.subscribe(setProviders);
     }, []);
 
     const loadData = useCallback(async () => {
