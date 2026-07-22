@@ -1,6 +1,7 @@
 package statusline
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
@@ -118,10 +119,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 
 	// Build status line
 	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
-	ccModel := merged.Model.DisplayName
-	if ccModel == "" {
-		ccModel = "unknown"
-	}
+	ccModel := cmp.Or(merged.Model.DisplayName, "unknown")
 
 	usedPct := int(merged.ContextWindow.UsedPercentage)
 	cost := merged.Cost.TotalCostUSD
@@ -153,10 +151,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario))
 
 	// Build output: [ruleModel @ p1:name] -> realModel @ providerName | bar pct | cost
-	ruleModel := merged.Model.ID
-	if ruleModel == "" {
-		ruleModel = ccModel
-	}
+	ruleModel := cmp.Or(merged.Model.ID, ccModel)
 
 	output := fmt.Sprintf("[%s", ruleModel)
 	if profileLabel != "" {

@@ -1,6 +1,9 @@
 package statusline
 
-import "sync"
+import (
+	"cmp"
+	"sync"
+)
 
 const maxSize = 500
 
@@ -66,37 +69,23 @@ func (c *Cache) evict() {
 func mergeStatusInput(input, cached *StatusInput) *StatusInput {
 	merged := *input
 
-	merged.Model.DisplayName = mergeIfEmpty(merged.Model.DisplayName, cached.Model.DisplayName)
-	merged.Model.ID = mergeIfEmpty(merged.Model.ID, cached.Model.ID)
+	merged.Model.DisplayName = cmp.Or(merged.Model.DisplayName, cached.Model.DisplayName)
+	merged.Model.ID = cmp.Or(merged.Model.ID, cached.Model.ID)
 
-	merged.ContextWindow.UsedPercentage = mergeIfZero(merged.ContextWindow.UsedPercentage, cached.ContextWindow.UsedPercentage)
-	merged.ContextWindow.ContextWindowSize = mergeIfZero(merged.ContextWindow.ContextWindowSize, cached.ContextWindow.ContextWindowSize)
-	merged.ContextWindow.TotalInputTokens = mergeIfZero(merged.ContextWindow.TotalInputTokens, cached.ContextWindow.TotalInputTokens)
-	merged.ContextWindow.TotalOutputTokens = mergeIfZero(merged.ContextWindow.TotalOutputTokens, cached.ContextWindow.TotalOutputTokens)
-	merged.ContextWindow.CurrentUsage.InputTokens = mergeIfZero(merged.ContextWindow.CurrentUsage.InputTokens, cached.ContextWindow.CurrentUsage.InputTokens)
-	merged.ContextWindow.CurrentUsage.OutputTokens = mergeIfZero(merged.ContextWindow.CurrentUsage.OutputTokens, cached.ContextWindow.CurrentUsage.OutputTokens)
-	merged.ContextWindow.CurrentUsage.CacheRead = mergeIfZero(merged.ContextWindow.CurrentUsage.CacheRead, cached.ContextWindow.CurrentUsage.CacheRead)
-	merged.ContextWindow.CurrentUsage.CacheWrite = mergeIfZero(merged.ContextWindow.CurrentUsage.CacheWrite, cached.ContextWindow.CurrentUsage.CacheWrite)
+	merged.ContextWindow.UsedPercentage = cmp.Or(merged.ContextWindow.UsedPercentage, cached.ContextWindow.UsedPercentage)
+	merged.ContextWindow.ContextWindowSize = cmp.Or(merged.ContextWindow.ContextWindowSize, cached.ContextWindow.ContextWindowSize)
+	merged.ContextWindow.TotalInputTokens = cmp.Or(merged.ContextWindow.TotalInputTokens, cached.ContextWindow.TotalInputTokens)
+	merged.ContextWindow.TotalOutputTokens = cmp.Or(merged.ContextWindow.TotalOutputTokens, cached.ContextWindow.TotalOutputTokens)
+	merged.ContextWindow.CurrentUsage.InputTokens = cmp.Or(merged.ContextWindow.CurrentUsage.InputTokens, cached.ContextWindow.CurrentUsage.InputTokens)
+	merged.ContextWindow.CurrentUsage.OutputTokens = cmp.Or(merged.ContextWindow.CurrentUsage.OutputTokens, cached.ContextWindow.CurrentUsage.OutputTokens)
+	merged.ContextWindow.CurrentUsage.CacheRead = cmp.Or(merged.ContextWindow.CurrentUsage.CacheRead, cached.ContextWindow.CurrentUsage.CacheRead)
+	merged.ContextWindow.CurrentUsage.CacheWrite = cmp.Or(merged.ContextWindow.CurrentUsage.CacheWrite, cached.ContextWindow.CurrentUsage.CacheWrite)
 
-	merged.Cost.TotalCostUSD = mergeIfZero(merged.Cost.TotalCostUSD, cached.Cost.TotalCostUSD)
-	merged.Cost.TotalDurationMs = mergeIfZero(merged.Cost.TotalDurationMs, cached.Cost.TotalDurationMs)
-	merged.Cost.TotalAPIDurationMs = mergeIfZero(merged.Cost.TotalAPIDurationMs, cached.Cost.TotalAPIDurationMs)
-	merged.Cost.TotalLinesAdded = mergeIfZero(merged.Cost.TotalLinesAdded, cached.Cost.TotalLinesAdded)
-	merged.Cost.TotalLinesRemoved = mergeIfZero(merged.Cost.TotalLinesRemoved, cached.Cost.TotalLinesRemoved)
+	merged.Cost.TotalCostUSD = cmp.Or(merged.Cost.TotalCostUSD, cached.Cost.TotalCostUSD)
+	merged.Cost.TotalDurationMs = cmp.Or(merged.Cost.TotalDurationMs, cached.Cost.TotalDurationMs)
+	merged.Cost.TotalAPIDurationMs = cmp.Or(merged.Cost.TotalAPIDurationMs, cached.Cost.TotalAPIDurationMs)
+	merged.Cost.TotalLinesAdded = cmp.Or(merged.Cost.TotalLinesAdded, cached.Cost.TotalLinesAdded)
+	merged.Cost.TotalLinesRemoved = cmp.Or(merged.Cost.TotalLinesRemoved, cached.Cost.TotalLinesRemoved)
 
 	return &merged
-}
-
-func mergeIfEmpty(target, cached string) string {
-	if target == "" && cached != "" {
-		return cached
-	}
-	return target
-}
-
-func mergeIfZero[T int | int64 | float64](target, cached T) T {
-	if target == 0 && cached != 0 {
-		return cached
-	}
-	return target
 }

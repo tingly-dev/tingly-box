@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"fmt"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -62,36 +63,13 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 	}
 
 	// Model configuration
-	defaultModel := p.ModelConfig.Default
-	if defaultModel == "" {
-		defaultModel = "tingly/cc"
-	}
+	defaultModel := cmp.Or(p.ModelConfig.Default, "tingly/cc")
 
 	env["ANTHROPIC_MODEL"] = defaultModel
-
-	if p.ModelConfig.Haiku != "" {
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = p.ModelConfig.Haiku
-	} else {
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = defaultModel
-	}
-
-	if p.ModelConfig.Opus != "" {
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = p.ModelConfig.Opus
-	} else {
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = defaultModel
-	}
-
-	if p.ModelConfig.Sonnet != "" {
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = p.ModelConfig.Sonnet
-	} else {
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = defaultModel
-	}
-
-	if p.ModelConfig.SubAgent != "" {
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = p.ModelConfig.SubAgent
-	} else {
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = defaultModel
-	}
+	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = cmp.Or(p.ModelConfig.Haiku, defaultModel)
+	env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = cmp.Or(p.ModelConfig.Opus, defaultModel)
+	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = cmp.Or(p.ModelConfig.Sonnet, defaultModel)
+	env["CLAUDE_CODE_SUBAGENT_MODEL"] = cmp.Or(p.ModelConfig.SubAgent, defaultModel)
 
 	// Add extra env vars
 	for k, v := range p.ExtraEnv {

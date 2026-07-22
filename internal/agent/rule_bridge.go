@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -195,10 +196,7 @@ func (aa *AgentApply) collectCodexRuleModels() []string {
 
 // getBaseURLAndToken returns the base URL and API token for configuration
 func (aa *AgentApply) getBaseURLAndToken() (string, string) {
-	port := aa.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
+	port := cmp.Or(aa.config.ServerPort, 12580)
 	baseURL := fmt.Sprintf("http://%s:%d", aa.host, port)
 	apiKey := aa.config.GetModelToken()
 	return baseURL, apiKey
