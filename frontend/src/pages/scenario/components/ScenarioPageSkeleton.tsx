@@ -7,10 +7,13 @@ const ROUNDED_SX = { borderRadius: 2 } as const;
  * card + model rules list), shown while `useScenarioPageInternal` is
  * loading. Mirrors UnifiedCard's chrome (1px divider border, radius 2,
  * 24px padding) so the swap to real content doesn't cause a layout jump —
- * same pattern as DashboardPage's DashboardSkeleton.
+ * same pattern as DashboardPage's DashboardSkeleton. Deliberately full
+ * width, no max-width/centering: the real CardGrid content it stands in
+ * for isn't centered either, so a narrower/centered skeleton would jump
+ * sideways the instant real content replaces it.
  */
 export const ScenarioPageSkeleton: React.FC<{ ruleRows?: number }> = ({ ruleRows = 2 }) => (
-    <Box sx={{ maxWidth: 1280, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Skeleton variant="text" width={160} height={32} />
