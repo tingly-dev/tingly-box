@@ -77,7 +77,7 @@ go build -o harness ./cli/harness
 ./harness matrix --mode=single --client=python   # pip install -r tests/clients/python/requirements.txt
 ./harness matrix --mode=single --client=node     # npm install --prefix tests/clients/node
 ./harness matrix --mode=single --client=aisdk    # npm install --prefix tests/clients/aisdk (AI SDK by Vercel)
-./harness matrix --mode=single --client=codex    # OpenAI Codex CLI Responses wire shape (Node driver, no deps; see .design/harness-codex-client.md)
+./harness matrix --mode=single --client=codex    # OpenAI Codex CLI Responses wire shape (npm install --prefix tests/clients/codex; see .design/harness-codex-client.md)
 
 # Tier B — replay captured fixtures through the gateway
 ./harness replay batch --upstream virtual     # deterministic mock upstream

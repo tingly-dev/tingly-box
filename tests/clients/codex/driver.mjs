@@ -14,8 +14,16 @@
 // store=false, prompt_cache_key, tool_choice=auto, parallel_tool_calls,
 // text.verbosity, the shell function tool + the apply_patch custom/freeform
 // tool, and Codex's identity headers) and accumulates the SSE with a
-// Codex-style ResponseEvent state machine. Codex hand-rolls its own HTTP (no
-// SDK), so this driver uses Node's built-in fetch — no npm dependencies.
+// Codex-style ResponseEvent state machine.
+//
+// Codex does not use an official OpenAI SDK — it hand-writes its own Responses
+// client on top of two crates: `reqwest` for HTTP and `eventsource-stream` for
+// SSE parsing (codex-rs/core/Cargo.toml; wired in core/src/client.rs as
+// resp.bytes_stream().eventsource()). This driver matches that stack
+// dependency-for-dependency: Node's built-in `fetch` for HTTP (the platform
+// equivalent of reqwest — Node doesn't need an extra crate/package for it) and
+// the `eventsource-parser` npm package for SSE parsing (the Node-ecosystem
+// equivalent of `eventsource-stream`, not a hand-rolled line splitter).
 //
 // It only speaks openai_responses (Codex's built-in openai provider uses
 // wire_api=responses); the Go-side driver restricts Supports() accordingly.
@@ -24,6 +32,8 @@
 // exit code means the driver itself is broken.
 //
 // Wire reference & rationale: .design/harness-codex-client.md.
+
+import { EventSourceParserStream } from "eventsource-parser/stream";
 
 // A fixed conversation UUID: Codex uses it for prompt_cache_key and the
 // conversation_id/session_id headers, and all three must agree. Fixed (not
@@ -293,36 +303,28 @@ class CodexAccumulator {
   }
 }
 
-// Parse an SSE byte stream into "data:" JSON payloads, feeding each to the
-// accumulator. Mirrors codex's line-based SSE reader.
+// Decode the response body into SSE events and feed each to the accumulator.
+// codex-rs wires reqwest's byte stream through the `eventsource-stream` crate
+// (resp.bytes_stream() -> .eventsource() -> process_sse, core/src/client.rs)
+// rather than hand-parsing "data:" lines itself; this driver mirrors that with
+// eventsource-parser's EventSourceParserStream, the Node-ecosystem equivalent
+// dedicated SSE-parsing library, piped the same way (bytes -> text -> SSE
+// events) instead of a hand-rolled buffer/line splitter.
 async function accumulateStream(body, acc) {
   let count = 0;
-  let buf = "";
-  const decoder = new TextDecoder();
-  for await (const chunk of body) {
-    buf += decoder.decode(chunk, { stream: true });
-    let nl;
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl).replace(/\r$/, "");
-      buf = buf.slice(nl + 1);
-      const data = parseSSEData(line);
-      if (data === null || data === "[DONE]") continue;
-      count++;
-      let ev;
-      try {
-        ev = JSON.parse(data);
-      } catch {
-        continue;
-      }
-      acc.handle(ev);
+  const events = body.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream());
+  for await (const event of events) {
+    if (event.data === "[DONE]") continue;
+    count++;
+    let ev;
+    try {
+      ev = JSON.parse(event.data);
+    } catch {
+      continue;
     }
+    acc.handle(ev);
   }
   return count;
-}
-
-function parseSSEData(line) {
-  if (!line.startsWith("data:")) return null;
-  return line.slice(5).trimStart();
 }
 
 // ── error mapping ─────────────────────────────────────────────────────────────

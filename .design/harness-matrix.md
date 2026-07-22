@@ -156,7 +156,7 @@ scenarios, and assertions:
 | `python` | real `anthropic` + `openai` Python SDKs via subprocess driver | `matrix-single-python` |
 | `node` | real `@anthropic-ai/sdk` + `openai` Node SDKs via subprocess driver | `matrix-single-node` |
 | `aisdk` | AI SDK by Vercel (`ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`) via subprocess driver — the strictest client: zod-validates every response and stream event | `matrix-single-aisdk` |
-| `codex` | Faithful port of the **OpenAI Codex CLI** Responses-API client (raw `fetch`, no SDK) via subprocess driver — `openai_responses` source only, sends Codex's exact request shape + a Codex-style SSE accumulator. Needs `node` on PATH, **no npm deps**. See [`harness-codex-client.md`](./harness-codex-client.md) | `matrix-single-codex` |
+| `codex` | Faithful port of the **OpenAI Codex CLI** Responses-API client via subprocess driver — `openai_responses` source only. Matches Codex's own dependency stack: `fetch` for HTTP + `eventsource-parser` for SSE parsing (the Node equivalents of Codex's `reqwest` + `eventsource-stream` crates), no official OpenAI SDK on either side. See [`harness-codex-client.md`](./harness-codex-client.md) | `matrix-single-codex` |
 
 Every client mode runs as its own leg in the harness-matrix workflow; the
 subprocess legs install their toolchain (setup-python / setup-node +

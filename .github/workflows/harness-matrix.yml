@@ -189,10 +189,8 @@ jobs:
         with:
           node-version: '22'
 
-      # The codex driver uses Node's built-in fetch (no SDK), so it needs the
-      # runtime but no npm install — omit it from this step.
       - name: Install Node driver dependencies
-        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
+        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk' || matrix.leg.setup == 'codex')
         run: npm install --prefix tests/clients/${{ matrix.leg.setup }}
 
       - name: Run harness — ${{ matrix.leg.name }}

@@ -35,7 +35,7 @@ driver under `tests/clients/`, the same home as the other real-client drivers
 |----------|---------|
 | **Subprocess running the real Codex binary** | Rejected. Codex is an *interactive agent*, not a one-shot "send one request / read one response" tool, so it does not fit the subprocess driver's stdin/stdout contract. Real-binary compatibility is already covered by **Tier C** (`harness agent codex`), which spawns the actual Codex CLI against an in-process gateway. |
 | **In-process Go replica** (a `client_codex.go` alongside `client_gosdk.go`) | Rejected. It would duplicate request-shaping logic *outside* the established `tests/clients/*` "real client driver" convention, in a different language from every other foreign-client driver. The `--client` seam exists specifically to drive the gateway from **foreign client stacks**; a hand-rolled Go body is the least foreign option. |
-| **A TS/Node subprocess driver that reconstructs Codex's exact request + a Codex-style SSE accumulator** | **Chosen.** Lives at `tests/clients/codex/driver.mjs`, next to `node`/`aisdk`, and speaks the same JSON-over-stdin/stdout contract. Codex itself hand-rolls raw HTTP (no SDK), so the faithful analog is **raw `fetch` + a manual SSE state machine** — a TS port of `codex-rs` `core/src/client.rs`. Because it uses Node's built-in `fetch`, it needs **no npm dependencies** (unlike `node`/`aisdk`), so the CI leg is just `node` on PATH. |
+| **A TS/Node subprocess driver that reconstructs Codex's exact request + a Codex-style SSE accumulator** | **Chosen.** Lives at `tests/clients/codex/driver.mjs`, next to `node`/`aisdk`, and speaks the same JSON-over-stdin/stdout contract. Codex itself uses no official OpenAI SDK — it hand-writes its Responses client on `reqwest` (HTTP) + `eventsource-stream` (SSE parsing) (`codex-rs/core/Cargo.toml`). The driver matches that dependency shape rather than reinventing it: Node's built-in `fetch` for HTTP (no extra package needed, unlike Rust) and the `eventsource-parser` npm package for SSE parsing — the Node-ecosystem equivalent of `eventsource-stream`, not a hand-rolled line splitter. |
 
 > Note on Codex's implementation language: today's `openai/codex` is **Rust**
 > (`codex-rs`); an older revision was TypeScript. The driver does not *run*
@@ -119,6 +119,16 @@ sequence. The built-in `openai` provider uses `wire_api:"responses"`, which is
 what this driver models. (Codex's Chat path is not modeled by the driver; the
 gateway's Chat handling is already covered by the other Responses/Chat cells.)
 
+**HTTP/SSE dependency stack** (`codex-rs/core/Cargo.toml`, verified at
+`rust-v0.46.0`) — Codex depends on no official/community OpenAI SDK
+(`async-openai` is absent from `Cargo.lock`). It hand-writes its Responses
+client directly on two crates:
+- `reqwest = "0.12"` (features `json`, `stream`) for the HTTP client.
+- `eventsource-stream = "0.2.3"` for SSE parsing — a dedicated crate, not
+  hand-rolled: `client.rs` does `resp.bytes_stream()` then
+  `.eventsource()` (the `Eventsource` trait from that crate) before
+  matching on parsed `sse.data` in `process_sse`.
+
 ## 3. What the Node driver reproduces (`tests/clients/codex/driver.mjs`)
 
 - **Request:** the `ResponsesApiRequest` shape above — `instructions`, two
@@ -127,14 +137,22 @@ gateway's Chat handling is already covered by the other Responses/Chat cells.)
   (lark grammar) tool, `tool_choice:"auto"`, `parallel_tool_calls:false`,
   `reasoning{effort,summary}`, `store:false`, `include:[reasoning.encrypted_content]`,
   `prompt_cache_key`, and `text.verbosity`.
-- **Headers:** the full Codex identity set (§2), via raw `fetch` (no SDK).
+- **Headers:** the full Codex identity set (§2), sent via `fetch` (the HTTP
+  client — no request/response modeling SDK on top of it, matching `reqwest`'s
+  role in Codex).
+- **SSE parsing:** `response.body` is piped through `TextDecoderStream` then
+  `eventsource-parser`'s `EventSourceParserStream` (the `/stream` subpath
+  export) to get parsed `{event, data, id}` frames — the same
+  bytes→text→SSE-event pipeline shape as Codex's
+  `resp.bytes_stream().eventsource()`, using a real SSE-parsing library
+  instead of splitting on `"data:"` by hand.
 - **Streaming vs. not:** real Codex is always `stream:true`. The matrix drives a
   streaming *axis*, so the driver honors the request's `stream` flag: streaming
-  sends `stream:true` + `Accept: text/event-stream` and accumulates the SSE with
-  a Codex-style `CodexAccumulator` (mirrors the `ResponseEvent` loop);
-  non-streaming sends `stream:false` and parses the JSON body. The non-streaming
-  path is the one documented deviation from real Codex, kept so the driver
-  covers the matrix's non-streaming Responses cells.
+  sends `stream:true` + `Accept: text/event-stream` and accumulates the parsed
+  SSE events with a Codex-style `CodexAccumulator` (mirrors the `ResponseEvent`
+  loop); non-streaming sends `stream:false` and parses the JSON body. The
+  non-streaming path is the one documented deviation from real Codex, kept so
+  the driver covers the matrix's non-streaming Responses cells.
 - **Response accumulation** (`CodexAccumulator`): prefers whole items from
   `response.output_item.done` **and** the terminal
   `response.completed`/`incomplete` `output[]` array for message text and
@@ -159,9 +177,11 @@ go run ./cli/harness matrix --mode=single --client=codex --scenario text --strea
 go test -tags e2e ./internal/protocoltest/... -run TestHarness_Codex
 ```
 
-Needs only `node` on PATH (built-in `fetch`, no `npm install`). CI: a
-`matrix-single-codex` leg in `.github/workflows/harness-matrix.yml` (setup-node,
-no dependency install step).
+Needs `node` on PATH plus `npm install --prefix tests/clients/codex`
+(the driver's one dependency, `eventsource-parser`, mirroring Codex's own
+`eventsource-stream` crate). CI: a `matrix-single-codex` leg in
+`.github/workflows/harness-matrix.yml` (setup-node + `npm install`, same
+pattern as the `node`/`aisdk` legs).
 
 ## 5. Known-defect interaction
 

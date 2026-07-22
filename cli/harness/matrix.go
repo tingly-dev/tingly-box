@@ -61,7 +61,7 @@ func (*MatrixCmd) Help() string {
   harness matrix --mode=single --client=python   # real Python SDKs (subprocess driver)
   harness matrix --mode=single --client=node     # real Node SDKs (subprocess driver)
   harness matrix --mode=single --client=aisdk    # AI SDK by Vercel (subprocess driver)
-  harness matrix --mode=single --client=codex    # OpenAI Codex CLI Responses wire shape (Node subprocess driver, no deps)
+  harness matrix --mode=single --client=codex    # OpenAI Codex CLI Responses wire shape (npm install --prefix tests/clients/codex)
 
   # Run specific scenario only
   harness matrix --scenario text
@@ -217,15 +217,13 @@ func resolveClient(name string) (protocoltest.Client, error) {
 		}
 		return protocoltest.NewAISDKClient(dir), nil
 	case "codex":
-		// Faithful TS/Node port of the Codex Responses client. It uses Node's
-		// built-in fetch (no SDK), so — unlike node/aisdk — it needs no
-		// node_modules; only node itself must be on PATH.
-		dir, err := driverDir()
+		// Faithful TS/Node port of the Codex Responses client: Node's built-in
+		// fetch for HTTP (matching codex-rs's reqwest) + the eventsource-parser
+		// npm package for SSE parsing (matching codex-rs's eventsource-stream
+		// crate) — same dependency shape as node/aisdk, not dependency-free.
+		dir, err := nodeDriverDir(name, "codex")
 		if err != nil {
 			return nil, err
-		}
-		if _, err := exec.LookPath("node"); err != nil {
-			return nil, fmt.Errorf("--client=codex requires node on PATH")
 		}
 		return protocoltest.NewCodexClient(dir), nil
 	default:
