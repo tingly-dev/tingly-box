@@ -6,58 +6,44 @@ replace github.com/openai/openai-go/v3 => ./../../libs/openai-go
 
 replace github.com/anthropics/anthropic-sdk-go => ./../../libs/anthropic-sdk-go
 
+replace google.golang.org/genai => ./../../libs/go-genai
+
 replace github.com/tingly-dev/tingly-box => ../../
 
 replace github.com/tingly-dev/tingly-box/imbot => ../../imbot
+
+replace github.com/tingly-dev/tingly-box/ai => ../../ai
+
+replace github.com/tingly-dev/tingly-box/agentboot => ../../agentboot
+
+replace github.com/tingly-dev/tingly-box/swagger => ../../swagger
+
+replace github.com/tingly-dev/tingly-box/afk => ../../afk
 
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
-	github.com/tingly-dev/tingly-box v0.260204.1200
+	github.com/tingly-dev/tingly-box v0.260423.0
 )
 
 // wails
-require github.com/wailsapp/wails/v3 v3.0.0-alpha.71
+require github.com/wailsapp/wails/v3 v3.0.0-alpha2.114
 
 require (
-	dario.cat/mergo v1.0.2 // indirect
-	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/ProtonMail/go-crypto v1.3.0 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
-	github.com/bep/debounce v1.2.1 // indirect
-	github.com/cloudflare/circl v1.6.3 // indirect
-	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
-	github.com/ebitengine/purego v0.9.1 // indirect
-	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
-	github.com/go-git/go-billy/v5 v5.7.0 // indirect
-	github.com/go-git/go-git/v5 v5.16.5 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
-	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
-	github.com/kevinburke/ssh_config v1.4.0 // indirect
-	github.com/leaanthony/go-ansi-parser v1.6.1 // indirect
-	github.com/leaanthony/u v1.1.1 // indirect
-	github.com/lmittmann/tint v1.1.3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/pjbgf/sha1cd v0.5.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/samber/lo v1.52.0 // indirect
-	github.com/sergi/go-diff v1.4.0 // indirect
-	github.com/skeema/knownhosts v1.3.2 // indirect
-	github.com/wailsapp/go-webview2 v1.0.23 // indirect
-	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
 require (
@@ -162,6 +148,8 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tiktoken-go/tokenizer v0.8.0 // indirect
 	github.com/tingly-dev/tingly-box/afk v0.0.0-20260706041525-46cbb39cc7ff // indirect
+	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000 // indirect
+	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/imbot v0.1.0 // indirect
 	github.com/tingly-dev/tingly-box/swagger v0.0.0-20260706041525-46cbb39cc7ff // indirect
 	github.com/tingly-dev/weixin v0.2.0 // indirect
@@ -176,7 +164,9 @@ require (
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.44.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.44.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.44.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0 // indirect
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.44.0 // indirect
