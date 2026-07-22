@@ -1,6 +1,7 @@
 package statusline
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
@@ -118,25 +119,15 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 
 	// Build status line
 	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
-	ccModel := merged.Model.DisplayName
-	if ccModel == "" {
-		ccModel = "unknown"
-	}
+	ccModel := cmp.Or(merged.Model.DisplayName, "unknown")
 
 	usedPct := int(merged.ContextWindow.UsedPercentage)
 	cost := merged.Cost.TotalCostUSD
 
 	// Build context bar (8 characters wide)
 	barWidth := 8
-	filled := usedPct * barWidth / 100
-	empty := barWidth - filled
-	bar := ""
-	for i := 0; i < filled; i++ {
-		bar += "▓"
-	}
-	for i := 0; i < empty; i++ {
-		bar += "░"
-	}
+	filled := min(max(usedPct*barWidth/100, 0), barWidth)
+	bar := strings.Repeat("▓", filled) + strings.Repeat("░", barWidth-filled)
 
 	// Build profile label: "p1:name" or empty
 	profileLabel := ""
@@ -153,10 +144,7 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario))
 
 	// Build output: [ruleModel @ p1:name] -> realModel @ providerName | bar pct | cost
-	ruleModel := merged.Model.ID
-	if ruleModel == "" {
-		ruleModel = ccModel
-	}
+	ruleModel := cmp.Or(merged.Model.ID, ccModel)
 
 	output := fmt.Sprintf("[%s", ruleModel)
 	if profileLabel != "" {
@@ -345,26 +333,18 @@ func (h *Handler) formatQuotaWindow(window *quota.UsageWindow) string {
 		return ""
 	}
 
-	// Format based on unit
-	switch window.Unit {
-	case quota.UsageUnitTokens:
-		if limit >= 1000000 {
-			return fmt.Sprintf("%.1fM/%.1fM", used/1000000, limit/1000000)
-		} else if limit >= 10000 {
-			return fmt.Sprintf("%.0fK/%.0fK", used/1000, limit/1000)
-		}
+	// Requests and credits always show actual numbers, never a K/M suffix.
+	if window.Unit == quota.UsageUnitRequests || window.Unit == quota.UsageUnitCredits {
 		return fmt.Sprintf("%.0f/%.0f", used, limit)
-	case quota.UsageUnitRequests:
-		// For requests, don't use K suffix - show actual numbers
-		return fmt.Sprintf("%.0f/%.0f", used, limit)
-	case quota.UsageUnitCredits:
-		return fmt.Sprintf("%.0f/%.0f", used, limit)
+	}
+
+	// Tokens (and any other unit) get a K/M suffix for large limits.
+	switch {
+	case limit >= 1000000:
+		return fmt.Sprintf("%.1fM/%.1fM", used/1000000, limit/1000000)
+	case limit >= 10000:
+		return fmt.Sprintf("%.0fK/%.0fK", used/1000, limit/1000)
 	default:
-		if limit >= 1000000 {
-			return fmt.Sprintf("%.1fM/%.1fM", used/1000000, limit/1000000)
-		} else if limit >= 10000 {
-			return fmt.Sprintf("%.0fK/%.0fK", used/1000, limit/1000)
-		}
 		return fmt.Sprintf("%.0f/%.0f", used, limit)
 	}
 }

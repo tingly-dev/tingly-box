@@ -1,6 +1,7 @@
 package configapply
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// defaultServerPort is used when no server port is configured.
+const defaultServerPort = 12580
+
+// resolvedPort returns the configured server port, falling back to the default.
+func (h *Handler) resolvedPort() int {
+	return cmp.Or(h.config.ServerPort, defaultServerPort)
+}
 
 // Handler handles config apply HTTP requests
 type Handler struct {
@@ -151,10 +160,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	}
 
 	// Get base URL from the user's request (respects reverse proxy headers)
-	port := h.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
+	port := h.resolvedPort()
 	baseURL := middleware.BaseURLFromRequest(c, port)
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
@@ -285,10 +291,7 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	}
 
 	// Get base URL from the user's request (respects reverse proxy headers)
-	port := h.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
+	port := h.resolvedPort()
 	baseURL := middleware.BaseURLFromRequest(c, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
@@ -342,10 +345,7 @@ func (h *Handler) restoreAgent(c *gin.Context, agentType agent.AgentType) {
 		return
 	}
 
-	host := h.host
-	if host == "" {
-		host = "localhost"
-	}
+	host := cmp.Or(h.host, "localhost")
 	apply := agent.NewAgentApply(h.config, host)
 
 	result, err := apply.RestoreAgent(&agent.RestoreAgentRequest{
@@ -391,10 +391,7 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	}
 
 	// Get base URL from the user's request (respects reverse proxy headers)
-	port := h.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
+	port := h.resolvedPort()
 	baseURL := middleware.BaseURLFromRequest(c, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
@@ -546,10 +543,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	// Build context windows map from rules for models with context_1m flag
 	contextWindows := config.BuildContextWindowsFromRules(cfg)
 
-	port := h.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
+	port := h.resolvedPort()
 	codexBaseURL := middleware.BaseURLFromRequest(c, port) + "/tingly/codex"
 	apiKey := h.config.GetModelToken()
 
@@ -560,8 +554,9 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	// one (materialized into auth.json) but also works without (auth.json left
 	// untouched so an existing `codex login` survives).
 	var chatgptTokens *config.CodexChatGPTTokens
-	switch authMode {
-	case config.CodexAuthChatGPT:
+	needsTokens := authMode == config.CodexAuthChatGPT ||
+		(authMode == config.CodexAuthHybrid && req.OAuthProviderUUID != "")
+	if needsTokens {
 		tokens, err := h.loadCodexChatGPTTokens(req.OAuthProviderUUID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, ApplyCodexConfigResponse{
@@ -571,18 +566,6 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 			return
 		}
 		chatgptTokens = tokens
-	case config.CodexAuthHybrid:
-		if req.OAuthProviderUUID != "" {
-			tokens, err := h.loadCodexChatGPTTokens(req.OAuthProviderUUID)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, ApplyCodexConfigResponse{
-					Success: false,
-					Message: err.Error(),
-				})
-				return
-			}
-			chatgptTokens = tokens
-		}
 	}
 
 	// ChatGPT mode: clear tingly gateway keys from config.toml so codex CLI
@@ -677,10 +660,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 	// Build context windows map from rules for models with context_1m flag
 	contextWindows := config.BuildContextWindowsFromRules(cfg)
 
-	port := h.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
+	port := h.resolvedPort()
 	codexBaseURL := middleware.BaseURLFromRequest(c, port) + "/tingly/codex"
 	apiKey := h.config.GetModelToken()
 

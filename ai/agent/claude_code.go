@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"cmp"
 	"fmt"
+	"strings"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
@@ -62,36 +64,13 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 	}
 
 	// Model configuration
-	defaultModel := p.ModelConfig.Default
-	if defaultModel == "" {
-		defaultModel = "tingly/cc"
-	}
+	defaultModel := cmp.Or(p.ModelConfig.Default, "tingly/cc")
 
 	env["ANTHROPIC_MODEL"] = defaultModel
-
-	if p.ModelConfig.Haiku != "" {
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = p.ModelConfig.Haiku
-	} else {
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = defaultModel
-	}
-
-	if p.ModelConfig.Opus != "" {
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = p.ModelConfig.Opus
-	} else {
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = defaultModel
-	}
-
-	if p.ModelConfig.Sonnet != "" {
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = p.ModelConfig.Sonnet
-	} else {
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = defaultModel
-	}
-
-	if p.ModelConfig.SubAgent != "" {
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = p.ModelConfig.SubAgent
-	} else {
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = defaultModel
-	}
+	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = cmp.Or(p.ModelConfig.Haiku, defaultModel)
+	env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = cmp.Or(p.ModelConfig.Opus, defaultModel)
+	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = cmp.Or(p.ModelConfig.Sonnet, defaultModel)
+	env["CLAUDE_CODE_SUBAGENT_MODEL"] = cmp.Or(p.ModelConfig.SubAgent, defaultModel)
 
 	// Add extra env vars
 	for k, v := range p.ExtraEnv {
@@ -176,6 +155,16 @@ func applyClaudeOnboarding() (*serverconfig.ApplyResult, error) {
 	return serverconfig.ApplyClaudeOnboarding(payload)
 }
 
+// configFileStatusPrefixes maps the leading words of an ApplyResult.Message
+// (e.g. "Created /path/to/file") to the status shown alongside the path.
+var configFileStatusPrefixes = []struct {
+	prefix string
+	status string
+}{
+	{"Created ", "created"},
+	{"Updated ", "updated"},
+}
+
 // collectConfigFiles collects the config file paths from apply results
 func collectConfigFiles(results ...*serverconfig.ApplyResult) []string {
 	var files []string
@@ -183,18 +172,16 @@ func collectConfigFiles(results ...*serverconfig.ApplyResult) []string {
 		if r == nil {
 			continue
 		}
-		msg := r.Message
-		if len(msg) > 8 && containsPrefix(msg[8:], "Created ") {
-			// Find the file path after "Created "
-			file := extractFilePath(msg[8:])
-			if file != "" {
-				files = append(files, file+" (created)")
+		for _, p := range configFileStatusPrefixes {
+			rest, ok := strings.CutPrefix(r.Message, p.prefix)
+			if !ok {
+				continue
 			}
-		} else if len(msg) > 8 && containsPrefix(msg[8:], "Updated ") {
-			file := extractFilePath(msg[8:])
+			file, _, _ := strings.Cut(rest, " ")
 			if file != "" {
-				files = append(files, file+" (updated)")
+				files = append(files, fmt.Sprintf("%s (%s)", file, p.status))
 			}
+			break
 		}
 	}
 	return files
@@ -209,20 +196,4 @@ func collectBackupPaths(results ...*serverconfig.ApplyResult) []string {
 		}
 	}
 	return paths
-}
-
-// Helper functions to avoid importing strings package
-
-func containsPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-func extractFilePath(s string) string {
-	// Find the end of the file path (first space after prefix)
-	for i := 0; i < len(s); i++ {
-		if s[i] == ' ' || s[i] == '(' {
-			return s[:i]
-		}
-	}
-	return ""
 }
