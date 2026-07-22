@@ -430,21 +430,22 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 	// provider side. Surface an honest error event — mirroring the
 	// responsesToAnthropicConverter's EOF handling — instead of a bare EOF,
 	// which strict clients (Codex) report as "stream closed before
-	// response.completed" with nothing to diagnose. The logged elapsed time
-	// distinguishes a fixed proxy/gateway timeout upstream (constant duration)
-	// from random provider drops (issue #1384).
+	// response.completed" with nothing to diagnose.
 	if !sawTerminal && c.Request.Context().Err() == nil {
-		elapsed := time.Since(streamStart).Round(time.Second)
-		truncErr := fmt.Errorf("upstream ended responses stream without a terminal event after %s", elapsed)
-		logrus.WithContext(c.Request.Context()).Warn(truncErr)
+		// Elapsed is an ops-side diagnostic, not client-facing: a constant
+		// duration points at a fixed upstream gateway/proxy timeout, a random
+		// one at provider-side drops (issue #1384). Keep it in the log only.
+		logrus.WithContext(c.Request.Context()).
+			WithField("elapsed", time.Since(streamStart).Round(time.Second)).
+			Warn("upstream ended responses stream without a terminal event")
 		OpenAIResponsesEvent(c, "error", map[string]interface{}{
 			"error": map[string]interface{}{
-				"message": truncErr.Error(),
+				"message": "upstream ended responses stream without a terminal event",
 				"type":    "stream_error",
 				"code":    "upstream_truncated",
 			},
 		})
-		return usage, truncErr
+		return usage, fmt.Errorf("upstream ended responses stream without a terminal event")
 	}
 
 	return usage, nil
