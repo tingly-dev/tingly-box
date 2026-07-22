@@ -163,6 +163,21 @@ content that will land under the `env` key in `settings.json` — including
 the 1M suffix on the model string, the server-injected base URL, and the
 real auth token. Reused by the Manual tab.
 
+### 4.5 Applied-state persistence
+
+`~/.claude/settings.json` is also the durable state for the main Quick Config
+form. `GET /config/claude` reads only the typed preference keys plus
+`defaultMode` and whether a status line is configured; it never returns the
+server-injected token or base URL. Reopening the modal restores applied tuning
+values, while the five model slots are always regenerated from the current
+mode's well-known rule UUIDs. This keeps max-output, timeout, privacy, and
+network adjustments durable without allowing stale strings in the local file
+to mask a renamed rule `request_model` or a unified/separate mode change.
+
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS` stays in the first expanded Model routing group.
+It is adjusted often enough that hiding it with the advanced limits creates
+unnecessary repeated expansion work.
+
 ---
 
 ## 5. Rule ↔ model slot mapping
@@ -214,17 +229,19 @@ mode".
 ### 5.3 UUID-suffix lookup (modal side)
 
 `derivePrefsFromRules` in `ClaudeCodeQuickConfig.tsx` uses the UUIDs as
-keys:
+keys. It does not depend on array order or canonical `tingly/cc*` names:
 
 ```ts
 const modelForVariant = (variant, fallback) => {
-    if (mode === 'unified') return rules[0]?.request_model || fallback;
+    if (mode === 'unified') {
+        return rules.find(r => r.uuid === 'builtin:claude_code:cc')?.request_model || fallback;
+    }
     const rule = rules.find(r => r.uuid === `builtin:claude_code:${variant}`);
     return rule?.request_model || fallback;
 };
 ```
 
-- **unified**: `rules[0]` is the single `builtin:claude_code:cc` rule; its
+- **unified**: the `builtin:claude_code:cc` rule is found explicitly; its
   `request_model` populates all 5 slots.
 - **separate**: each of the 5 variants (`default` / `haiku` / `sonnet` /
   `opus` / `subagent`) does a UUID-exact `find` against
@@ -276,18 +293,34 @@ target a model name routed by a different gateway on the same proxy
 URL — without forcing the form to surface concepts ("rule", "service",
 "provider") that are normally hidden one level below.
 
-### 5.6 Profile settings are derived artifacts
+### 5.6 Profile settings are inherited, overridable derived artifacts
 
 The profile system at `/agent/claude_code/profile/:profileId` uses the
 scenario string `claude_code:<profileId>` and its **own** set of rules
-(short names like `default`/`haiku` instead of `tingly/cc-*`). The Quick
-Config modal remains scoped to the default page; profile env is generated
-by `GenerateCCEnv` and materialized by `BuildCCProfileSettings`.
+(short names like `default`/`haiku` instead of `tingly/cc-*`). The profile page
+shows a dedicated **Profile Overrides** card between its identity/Quick Start
+card and Model Rules. It renders only selected or persisted differences, not
+the main Auto Config form. The env is resolved by `ResolveCCProfileSettings`
+and materialized by `BuildCCProfileSettings`.
+
+This placement makes the page answer three questions in order: which profile
+and how to launch it; what runtime values this profile changes; how its models
+are routed. `Add override` promotes max output tokens and permission mode, and
+all other supported typed fields remain available without showing inherited
+values as editable noise. Saving is labeled **Save Profile**, while generated
+files remain a rebuildable runtime artifact.
+
+The profile identity card shows a **Settings File** row immediately below Quick
+Start. Its path is derived on every profile-config response by the same backend
+path helper used for materialization; it is never stored in profile metadata or
+reconstructed in the frontend. The row exposes the concrete path, copy action,
+and file-exists status, while warning that manual edits will be overwritten.
 
 There is deliberately no second profile manifest under the Claude
 directory. The sources of truth are:
 
-- global config for profile ID, name, mode, rules, and routing flags;
+- global config for profile ID, name, mode, rules, routing flags, and the
+  profile's minimal Claude Code override delta;
 - `~/.claude/settings.json` for the user's current local Claude settings.
 
 Everything under `~/.tingly-box/claude/` is a deterministic runtime
@@ -317,10 +350,20 @@ link to, and never modifies, the user's original file. A named profile uses
 `<profileID>--<profileName>/`. Legacy names that are not filesystem-safe fall
 back to the stable ID-only directory until renamed.
 
-On every materialization, `settings.json` is rebuilt from the current local
-settings (or `{}` if the local file no longer exists), then receives the
-generated env and profile-local `statusline.sh` command. This reset is
-important: a previously generated artifact must never become an accidental
+On every materialization, `settings.json` is rebuilt in this order:
+
+1. inherit the current local settings (or canonical defaults if the file does
+   not exist);
+2. apply rule-derived profile model slots and 1M behavior;
+3. apply the profile's persisted value/removal delta;
+4. inject the current server-owned URL/token and safe loopback `NO_PROXY`;
+5. install the profile-local `statusline.sh` command.
+
+The profile API accepts a complete desired typed configuration, compares it to
+the inherited base, and stores only changed values plus explicit removals. This
+keeps unchanged fields live-linked to later main-config changes while still
+allowing a profile to disable an inherited env. The reset endpoint deletes only
+this delta. A previously generated artifact must never become an accidental
 second source of truth.
 
 Profile CRUD follows the same derived-artifact rule:

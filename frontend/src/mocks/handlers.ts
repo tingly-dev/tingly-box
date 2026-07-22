@@ -897,6 +897,48 @@ const mockClaudeCodeProfiles = [
     },
 ]
 
+const mockMainClaudeCodePreferences: Record<string, string> = {
+    ANTHROPIC_MODEL: 'tingly/cc',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'tingly/cc',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'tingly/cc',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'tingly/cc',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'tingly/cc',
+    CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
+    API_TIMEOUT_MS: '3000000',
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: '200000',
+    CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '80',
+    DISABLE_TELEMETRY: '1',
+    DISABLE_ERROR_REPORTING: '1',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+}
+
+const mockProfileClaudeConfigs: Record<string, { preferences: Record<string, string>; defaultMode: string; hasOverrides: boolean }> = {}
+
+const mockProfileClaudeConfigData = (profileId: string) => {
+    const profile = mockClaudeCodeProfiles.find(item => item.id === profileId)
+    const model = profile?.unified ? 'cc' : 'default'
+    const basePreferences = {
+        ...mockMainClaudeCodePreferences,
+        ANTHROPIC_MODEL: model,
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: profile?.unified ? model : 'haiku',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: profile?.unified ? model : 'sonnet',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: profile?.unified ? model : 'opus',
+        CLAUDE_CODE_SUBAGENT_MODEL: profile?.unified ? model : 'subagent',
+    }
+    const stored = mockProfileClaudeConfigs[profileId]
+    return {
+        basePreferences,
+        preferences: stored?.preferences || basePreferences,
+        inheritedDefaultMode: 'acceptEdits',
+        defaultMode: stored?.defaultMode || 'acceptEdits',
+        hasOverrides: stored?.hasOverrides || false,
+        // Mirrors the backend contract: derive from current profile metadata;
+        // never remember the path in the stored override object.
+        settingsPath: `/Users/demo/.tingly-box/claude/${profileId}--${profile?.name}/settings.json`,
+        settingsExists: true,
+    }
+}
+
 // Counter for alternating probe responses
 let probeRequestCount = 0
 
@@ -2167,6 +2209,16 @@ export const handlers = [
     // ============================================
     // Claude Code Profiles API (v1)
     // ============================================
+    http.get('/api/v1/config/claude', () => {
+        return HttpResponse.json({
+            success: true,
+            exists: true,
+            preferences: mockMainClaudeCodePreferences,
+            defaultMode: 'acceptEdits',
+            installStatusLine: true,
+        })
+    }),
+
     http.get('/api/v1/scenario/:scenario/profiles', ({ params }) => {
         const { scenario } = params as { scenario: string }
         if (scenario === 'claude_code') {
@@ -2227,6 +2279,31 @@ export const handlers = [
             success: true,
             data: profile,
         })
+    }),
+
+    http.get('/api/v1/scenario/:scenario/profiles/:profileId/claude-config', ({ params }) => {
+        const { scenario, profileId } = params as { scenario: string; profileId: string }
+        if (scenario !== 'claude_code' || !mockClaudeCodeProfiles.some(profile => profile.id === profileId)) {
+            return HttpResponse.json({ success: false, error: 'Profile not found' }, { status: 404 })
+        }
+        return HttpResponse.json({ success: true, data: mockProfileClaudeConfigData(profileId) })
+    }),
+
+    http.put('/api/v1/scenario/:scenario/profiles/:profileId/claude-config', async ({ params, request }) => {
+        const { profileId } = params as { profileId: string }
+        const body = await request.json() as { preferences?: Record<string, string>; defaultMode?: string }
+        mockProfileClaudeConfigs[profileId] = {
+            preferences: body.preferences || {},
+            defaultMode: body.defaultMode || 'acceptEdits',
+            hasOverrides: true,
+        }
+        return HttpResponse.json({ success: true, data: mockProfileClaudeConfigData(profileId) })
+    }),
+
+    http.delete('/api/v1/scenario/:scenario/profiles/:profileId/claude-config', ({ params }) => {
+        const { profileId } = params as { profileId: string }
+        delete mockProfileClaudeConfigs[profileId]
+        return HttpResponse.json({ success: true, data: mockProfileClaudeConfigData(profileId) })
     }),
 
     http.delete('/api/v1/scenario/:scenario/profiles/:profileId', ({ params }) => {

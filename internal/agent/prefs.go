@@ -5,6 +5,28 @@ import (
 	"strings"
 )
 
+const DefaultClaudeCodeDefaultMode = "acceptEdits"
+
+var validClaudeCodeDefaultModes = map[string]struct{}{
+	"acceptEdits":       {},
+	"bypassPermissions": {},
+	"default":           {},
+	"delegate":          {},
+	"dontAsk":           {},
+	"plan":              {},
+	"auto":              {},
+}
+
+// NormalizeClaudeCodeDefaultMode applies the Tingly default for an empty value
+// and rejects values Claude Code does not recognize.
+func NormalizeClaudeCodeDefaultMode(mode string) (string, bool) {
+	if mode == "" {
+		return DefaultClaudeCodeDefaultMode, true
+	}
+	_, ok := validClaudeCodeDefaultModes[mode]
+	return mode, ok
+}
+
 // ClaudeCodePrefs is the user-tunable surface of Claude Code's env config.
 // JSON tags map 1:1 to the env var names Claude Code reads, so marshaling
 // produces exactly what should go under "env" in ~/.claude/settings.json.
@@ -30,8 +52,8 @@ type ClaudeCodePrefs struct {
 	MaxMcpOutputTokens        string `json:"MAX_MCP_OUTPUT_TOKENS,omitempty"`
 
 	// Auto-compact settings — control context window compaction
-	ClaudeCodeAutoCompactWindow      string `json:"CLAUDE_CODE_AUTO_COMPACT_WINDOW,omitempty"`
-	ClaudeAutocompactPctOverride     string `json:"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE,omitempty"`
+	ClaudeCodeAutoCompactWindow  string `json:"CLAUDE_CODE_AUTO_COMPACT_WINDOW,omitempty"`
+	ClaudeAutocompactPctOverride string `json:"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE,omitempty"`
 
 	// Privacy / behavior switches — "1" to enable, "" to omit.
 	DisableTelemetry                     string `json:"DISABLE_TELEMETRY,omitempty"`
@@ -52,20 +74,44 @@ type ClaudeCodePrefs struct {
 	Extra map[string]string `json:"-"`
 }
 
-// ToEnv materializes prefs into an env map ready to be written under "env"
-// in settings.json. baseURL and apiKey are sourced from the server context
-// (not from prefs) and are always injected.
-func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error) {
+// Values returns only the typed, user-tunable env values. Unlike ToEnv it does
+// not inject server-owned connection values.
+func (p ClaudeCodePrefs) Values() (map[string]string, error) {
 	b, err := json.Marshal(p)
 	if err != nil {
 		return nil, err
 	}
-	env := map[string]string{}
-	if err := json.Unmarshal(b, &env); err != nil {
+	values := map[string]string{}
+	if err := json.Unmarshal(b, &values); err != nil {
 		return nil, err
 	}
-	for k, v := range p.Extra {
-		env[k] = v
+	for key, value := range p.Extra {
+		values[key] = value
+	}
+	return values, nil
+}
+
+// ClaudeCodePrefsFromEnv selects the typed preference keys from an env map.
+// Unknown and server-owned keys are ignored.
+func ClaudeCodePrefsFromEnv(env map[string]string) (ClaudeCodePrefs, error) {
+	b, err := json.Marshal(env)
+	if err != nil {
+		return ClaudeCodePrefs{}, err
+	}
+	var prefs ClaudeCodePrefs
+	if err := json.Unmarshal(b, &prefs); err != nil {
+		return ClaudeCodePrefs{}, err
+	}
+	return prefs, nil
+}
+
+// ToEnv materializes prefs into an env map ready to be written under "env"
+// in settings.json. baseURL and apiKey are sourced from the server context
+// (not from prefs) and are always injected.
+func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error) {
+	env, err := p.Values()
+	if err != nil {
+		return nil, err
 	}
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey

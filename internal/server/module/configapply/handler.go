@@ -37,6 +37,32 @@ func NewHandler(cfg *config.Config, host string) *Handler {
 	}
 }
 
+// GetClaudeConfig reads the values previously applied to the user's main
+// Claude Code settings so reopening the editor restores durable state.
+func (h *Handler) GetClaudeConfig(c *gin.Context) {
+	snapshot, err := agent.ReadMainClaudeCodeSettings()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	prefs, err := agent.ClaudeCodePrefsFromEnv(snapshot.Env)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defaultMode, ok := agent.NormalizeClaudeCodeDefaultMode(snapshot.DefaultMode)
+	if !ok {
+		defaultMode = agent.DefaultClaudeCodeDefaultMode
+	}
+	c.JSON(http.StatusOK, ClaudeConfigResponse{
+		Success:           true,
+		Exists:            snapshot.Exists,
+		Preferences:       prefs,
+		DefaultMode:       defaultMode,
+		InstallStatusLine: snapshot.StatusLine,
+	})
+}
+
 // HTTPTransportConfigUpdate represents the update request for HTTP transport settings
 type HTTPTransportConfigUpdate struct {
 	RespectEnvProxy *bool   `json:"respect_env_proxy"` // nil = no change
@@ -150,7 +176,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		})
 		return
 	}
-	defaultMode, ok := normalizeClaudeCodeDefaultMode(req.DefaultMode)
+	defaultMode, ok := agent.NormalizeClaudeCodeDefaultMode(req.DefaultMode)
 	if !ok {
 		c.JSON(http.StatusBadRequest, config.ApplyResult{
 			Success: false,

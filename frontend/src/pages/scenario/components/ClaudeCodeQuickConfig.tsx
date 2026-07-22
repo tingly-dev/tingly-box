@@ -53,17 +53,17 @@ export interface ClaudeCodePrefs {
     NO_PROXY?: string;
 }
 
-type PrefsKey = keyof ClaudeCodePrefs;
+export type PrefsKey = keyof ClaudeCodePrefs;
 export type ClaudeCodeDefaultMode = 'acceptEdits' | 'bypassPermissions' | 'default' | 'delegate' | 'dontAsk' | 'plan' | 'auto';
-type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
-type Kind = 'model' | 'int' | 'text' | 'bool';
-type Lang = 'zh' | 'en';
+export type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
+export type Kind = 'model' | 'int' | 'text' | 'bool';
+export type Lang = 'zh' | 'en';
 
 // ── Field structure (language-agnostic) ────────────────────────────────
 // Adding a new env: append a row here AND add entries in FIELDS_TEXT_ZH /
 // FIELDS_TEXT_EN below (TS will flag the missing keys).
 
-interface FieldStruct {
+export interface FieldStruct {
     envName: PrefsKey;
     group: Group;
     kind: Kind;
@@ -71,16 +71,40 @@ interface FieldStruct {
     advanced?: boolean; // Mark advanced fields that should be collapsed by default
 }
 
-const FIELD_STRUCT: FieldStruct[] = [
+// Shared layout primitives for the main Auto Config form and profile
+// overrides. Keeping the same label / key / control axes makes both surfaces
+// read as one configuration system instead of two unrelated forms.
+export const CLAUDE_CONFIG_ROW_COLUMNS = {
+    xs: 'minmax(0, 1fr)',
+    md: '180px minmax(220px, 320px) minmax(260px, 1fr)',
+} as const;
+
+export const CLAUDE_CONFIG_KEY_SX = {
+    display: 'inline-flex',
+    maxWidth: '100%',
+    px: 0.75,
+    py: 0.25,
+    borderRadius: 0.75,
+    bgcolor: 'action.hover',
+    fontFamily: 'monospace',
+    fontSize: '0.72rem',
+    lineHeight: 1.5,
+    color: 'text.secondary',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+} as const;
+
+export const CLAUDE_CODE_FIELD_STRUCT: FieldStruct[] = [
     // Models (always visible - most commonly adjusted)
     { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'ANTHROPIC_DEFAULT_SONNET_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL', group: 'model', kind: 'model', advanced: false },
     { envName: 'CLAUDE_CODE_SUBAGENT_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'model', kind: 'int', unit: 'tokens', advanced: false },
     // Limits (advanced - rarely changed)
     { envName: 'API_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
-    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
     { envName: 'MAX_THINKING_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
     { envName: 'BASH_DEFAULT_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
     { envName: 'BASH_MAX_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
@@ -107,7 +131,7 @@ const FIELD_STRUCT: FieldStruct[] = [
 // facing, and likely to churn as we tune the wording. Two parallel maps
 // avoids the i18n locale file becoming a junk drawer.
 
-interface FieldText {
+export interface FieldText {
     label: string;
     purpose: string;
     tooltip: string;
@@ -396,7 +420,7 @@ interface DefaultModeOptionText {
     description: string;
 }
 
-const DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
+export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
 
 const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
     acceptEdits: { label: '接受编辑（推荐）', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
@@ -418,7 +442,7 @@ const DEFAULT_MODE_TEXT_EN: Record<ClaudeCodeDefaultMode, DefaultModeOptionText>
     bypassPermissions: { label: 'Bypass permissions', description: 'Skip permission checks; use only in fully trusted environments.' },
 };
 
-const DEFAULT_MODE_TEXT: Record<Lang, Record<ClaudeCodeDefaultMode, DefaultModeOptionText>> = {
+export const CLAUDE_CODE_DEFAULT_MODE_TEXT: Record<Lang, Record<ClaudeCodeDefaultMode, DefaultModeOptionText>> = {
     zh: DEFAULT_MODE_TEXT_ZH,
     en: DEFAULT_MODE_TEXT_EN,
 };
@@ -475,21 +499,18 @@ const SECTION_TEXT_EN: SectionTextMap = {
 };
 
 interface UIText {
-    panelHeader: string;
     oneMTooltip: string;
 }
 
 const UI_TEXT_ZH: UIText = {
-    panelHeader: '每行对应一个 Claude Code 环境变量。hover 信息图标查看含义；留空 / 关闭 = 不写入。',
     oneMTooltip: '启用 1M 上下文窗口（在模型 ID 末尾追加 [1m]，需路由的目标模型支持）',
 };
 
 const UI_TEXT_EN: UIText = {
-    panelHeader: 'Each row is one Claude Code env var. Hover the info icon for details. Blank / off = the env is not written.',
     oneMTooltip: 'Enable the 1M context window (appends [1m] to the model ID; the routed target model must support it).',
 };
 
-const FIELDS_TEXT: Record<Lang, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN };
+export const CLAUDE_CODE_FIELDS_TEXT: Record<Lang, FieldTextMap> = { zh: FIELDS_TEXT_ZH, en: FIELDS_TEXT_EN };
 const SECTION_TEXT: Record<Lang, SectionTextMap> = { zh: SECTION_TEXT_ZH, en: SECTION_TEXT_EN };
 const UI_TEXT: Record<Lang, UIText> = { zh: UI_TEXT_ZH, en: UI_TEXT_EN };
 
@@ -509,8 +530,9 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
+    const unifiedRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:cc');
     const modelForVariant = (variant: string, fallback: string): string => {
-        if (mode === 'unified') return rules[0]?.request_model || fallback;
+        if (mode === 'unified') return unifiedRule?.request_model || fallback;
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
         return rule?.request_model || fallback;
     };
@@ -526,8 +548,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     // Get the 1M state for a specific variant (only used in separate mode)
     const getContext1MStateForVariant = (variant: string): boolean => {
         if (mode === 'unified') {
-            // In unified mode, use the first rule's context1m state
-            return getContext1MStateForRule(rules[0]);
+            return getContext1MStateForRule(unifiedRule);
         }
         // In separate mode, check the specific rule for this variant
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
@@ -535,7 +556,7 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     };
 
     const context1MEnabled = mode === 'unified'
-        ? getContext1MStateForRule(rules[0])
+        ? getContext1MStateForRule(unifiedRule)
         : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
 
 
@@ -626,42 +647,34 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
     return (
         <Box
             sx={{
-                display: 'flex',
+                display: 'grid',
+                gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS,
                 alignItems: 'center',
-                gap: 2,
-                py: 1,
-                minHeight: 44,
+                columnGap: 2,
+                rowGap: 1,
+                px: 1.5,
+                py: 1.1,
+                minHeight: 56,
             }}
         >
             {/* Col 1 — Label + info icon */}
-            <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{
-                    fontWeight: 500
+                    fontWeight: 600,
+                    color: 'text.primary',
                 }}>{text.label}</Typography>
                 <Tooltip placement="top" arrow title={richTooltip}>
                     <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                 </Tooltip>
             </Box>
             {/* Col 2 — env name as a subtle code badge */}
-            <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
-                <Box
-                    component="span"
-                    sx={{
-                        px: 0.75,
-                        py: 0.25,
-                        borderRadius: 0.75,
-                        bgcolor: 'action.hover',
-                        fontFamily: 'monospace',
-                        fontSize: '0.72rem',
-                        color: 'text.secondary',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
+            <Box sx={{ minWidth: 0 }}>
+                <Box component="span" sx={CLAUDE_CONFIG_KEY_SX}>
                     {field.envName}
                 </Box>
             </Box>
             {/* Col 3 — control, right-aligned */}
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5, minWidth: 0 }}>
                 {field.kind === 'bool' && (
                     <Switch
                         size="small"
@@ -728,26 +741,39 @@ interface SectionProps {
 const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
     const [expanded, setExpanded] = React.useState(group === 'model'); // Only model group expanded by default
     const meta = SECTION_TEXT[lang][group];
-    const fieldsText = FIELDS_TEXT[lang];
+    const fieldsText = CLAUDE_CODE_FIELDS_TEXT[lang];
     const oneMTooltip = UI_TEXT[lang].oneMTooltip;
-    const fields = FIELD_STRUCT.filter(f => f.group === group);
+    const fields = CLAUDE_CODE_FIELD_STRUCT.filter(f => f.group === group);
     const hasAdvancedFields = fields.some(f => f.advanced);
 
     const toggleExpanded = () => setExpanded(!expanded);
 
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                    <Typography variant="caption" sx={{
-                        color: "text.secondary"
-                    }}>{meta.hint}</Typography>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+            <Box
+                onClick={hasAdvancedFields ? toggleExpanded : undefined}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    px: 1.5,
+                    py: 1.15,
+                    bgcolor: 'action.hover',
+                    cursor: hasAdvancedFields ? 'pointer' : 'default',
+                }}
+            >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{meta.hint}</Typography>
                 </Box>
                 {hasAdvancedFields && (
                     <IconButton
                         size="small"
-                        onClick={toggleExpanded}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpanded();
+                        }}
+                        aria-label={expanded ? `Collapse ${meta.title}` : `Expand ${meta.title}`}
                         sx={{
                             transition: 'transform 0.2s',
                             transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -759,8 +785,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
                 )}
             </Box>
             <Collapse in={expanded} timeout={300}>
-                <Divider />
-                <Stack divider={<Divider flexItem />}>
+                <Stack divider={<Divider flexItem sx={{ mx: 1.5 }} />} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                     {fields.map(f => (
                         <FieldRow
                             key={f.envName}
@@ -792,45 +817,31 @@ const DefaultModeSection: React.FC<{
     setDefaultMode: (mode: ClaudeCodeDefaultMode) => void;
 }> = ({ lang, defaultMode, setDefaultMode }) => {
     const meta = DEFAULT_MODE_SECTION_TEXT[lang];
-    const text = DEFAULT_MODE_TEXT[lang];
+    const text = CLAUDE_CODE_DEFAULT_MODE_TEXT[lang];
     const selectedText = text[defaultMode];
 
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                <Typography variant="caption" sx={{
-                    color: "text.secondary"
-                }}>{meta.hint}</Typography>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+            <Box sx={{ px: 1.5, py: 1.15, bgcolor: 'action.hover' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
+                <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{meta.hint}</Typography>
             </Box>
-            <Divider />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 52 }}>
-                <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS, alignItems: 'center', columnGap: 2, rowGap: 1, px: 1.5, py: 1.1, minHeight: 56, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                     <Typography variant="body2" noWrap sx={{
-                        fontWeight: 500
+                        fontWeight: 600,
+                        color: 'text.primary',
                     }}>Default Mode</Typography>
                     <Tooltip placement="top" arrow title={`${selectedText.label}: ${selectedText.description}`}>
                         <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                     </Tooltip>
                 </Box>
-                <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
-                    <Box
-                        component="span"
-                        sx={{
-                            px: 0.75,
-                            py: 0.25,
-                            borderRadius: 0.75,
-                            bgcolor: 'action.hover',
-                            fontFamily: 'monospace',
-                            fontSize: '0.72rem',
-                            color: 'text.secondary',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
+                <Box sx={{ minWidth: 0 }}>
+                    <Box component="span" sx={CLAUDE_CONFIG_KEY_SX}>
                         defaultMode
                     </Box>
                 </Box>
-                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 0 }}>
                     <FormControl size="small" sx={{ width: 360 }}>
                         <Select
                             value={defaultMode}
@@ -862,7 +873,7 @@ const DefaultModeSection: React.FC<{
                                 },
                             }}
                         >
-                            {DEFAULT_MODE_OPTIONS.map((mode) => (
+                            {CLAUDE_CODE_DEFAULT_MODE_OPTIONS.map((mode) => (
                                 <MenuItem key={mode} value={mode} sx={{ minHeight: 40, py: 1 }}>
                                     <Tooltip title={text[mode].description} arrow placement="left">
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
@@ -892,13 +903,9 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
     setDefaultMode,
 }) => {
     const lang = useLang();
-    const uiText = UI_TEXT[lang];
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Typography variant="body2" sx={{
-                color: "text.secondary"
-            }}>{uiText.panelHeader}</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />

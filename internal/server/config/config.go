@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1471,7 +1472,9 @@ func (c *Config) GetProfiles(baseScenario typ.RuleScenario) []typ.ProfileMeta {
 		return nil
 	}
 	result := make([]typ.ProfileMeta, len(profiles))
-	copy(result, profiles)
+	for i := range profiles {
+		result[i] = cloneProfileMeta(profiles[i])
+	}
 	return result
 }
 
@@ -1485,10 +1488,52 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 	profiles := c.Profiles[string(baseScenario)]
 	for _, p := range profiles {
 		if p.ID == profileID {
-			return p, true
+			return cloneProfileMeta(p), true
 		}
 	}
 	return typ.ProfileMeta{}, false
+}
+
+func cloneProfileMeta(profile typ.ProfileMeta) typ.ProfileMeta {
+	profile.ClaudeCode = cloneClaudeCodeProfileConfig(profile.ClaudeCode)
+	return profile
+}
+
+func cloneClaudeCodeProfileConfig(profileConfig *typ.ClaudeCodeProfileConfig) *typ.ClaudeCodeProfileConfig {
+	if profileConfig == nil {
+		return nil
+	}
+	cloned := *profileConfig
+	cloned.Env = maps.Clone(profileConfig.Env)
+	cloned.UnsetEnv = slices.Clone(profileConfig.UnsetEnv)
+	return &cloned
+}
+
+func hasClaudeCodeProfileOverrides(profileConfig *typ.ClaudeCodeProfileConfig) bool {
+	return profileConfig != nil && (len(profileConfig.Env) > 0 ||
+		len(profileConfig.UnsetEnv) > 0 || profileConfig.DefaultMode != "")
+}
+
+// UpdateClaudeCodeProfileConfig replaces the persistent Claude Code override
+// delta for a profile. Passing nil clears all overrides and restores pure
+// inheritance from the main Claude Code settings and profile routing rules.
+func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, profileID string, profileConfig *typ.ClaudeCodeProfileConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	profiles := c.Profiles[string(baseScenario)]
+	for i := range profiles {
+		if profiles[i].ID != profileID {
+			continue
+		}
+		profiles[i].ClaudeCode = nil
+		if hasClaudeCodeProfileOverrides(profileConfig) {
+			profiles[i].ClaudeCode = cloneClaudeCodeProfileConfig(profileConfig)
+		}
+		c.Profiles[string(baseScenario)] = profiles
+		return c.Save()
+	}
+	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
 }
 
 // newCCProfileRules builds fresh rules for a claude_code profile.

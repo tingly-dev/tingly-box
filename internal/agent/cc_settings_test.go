@@ -178,6 +178,121 @@ func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
 	}
 }
 
+func TestReadClaudeCodeSettings_RestoresAppliedState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	writeTestFile(t, path, `{
+		"env": {"API_TIMEOUT_MS":"1234", "NON_STRING": 42},
+		"defaultMode": "plan",
+		"statusLine": {"type":"command", "command":"status.sh"}
+	}`)
+
+	snapshot, err := readClaudeCodeSettings(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshot.Exists || snapshot.Env["API_TIMEOUT_MS"] != "1234" || snapshot.DefaultMode != "plan" || !snapshot.StatusLine {
+		t.Fatalf("unexpected snapshot: %#v", snapshot)
+	}
+	if _, ok := snapshot.Env["NON_STRING"]; ok {
+		t.Fatal("non-string env value should not be exposed as a Claude Code preference")
+	}
+}
+
+func TestResolveCCProfileSettings_InheritsThenAppliesOverrides(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), `{
+		"env": {
+			"API_TIMEOUT_MS":"1234",
+			"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"32000",
+			"DISABLE_TELEMETRY":"1",
+			"CUSTOM_INHERITED":"yes",
+			"ANTHROPIC_AUTH_TOKEN":"old-token"
+		},
+		"defaultMode":"plan"
+	}`)
+
+	cfg := &serverconfig.Config{Rules: []typ.Rule{
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "profile-fast", Active: true},
+	}}
+	profile := typ.ProfileMeta{
+		ID: "p1", Name: "work", Unified: false,
+		ClaudeCode: &typ.ClaudeCodeProfileConfig{
+			Env: map[string]string{
+				"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+				"ANTHROPIC_AUTH_TOKEN":          "profile-token-must-not-win",
+			},
+			UnsetEnv:    []string{"DISABLE_TELEMETRY"},
+			DefaultMode: "dontAsk",
+		},
+	}
+
+	resolved, err := ResolveCCProfileSettings(cfg, "http://localhost:12580", "current-token", "claude_code:p1", profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Env["API_TIMEOUT_MS"] != "1234" || resolved.Env["CUSTOM_INHERITED"] != "yes" {
+		t.Fatalf("main env was not inherited: %#v", resolved.Env)
+	}
+	if resolved.Env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] != "profile-fast" {
+		t.Fatalf("profile routing model was not applied: %#v", resolved.Env)
+	}
+	if resolved.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] != "64000" {
+		t.Fatalf("profile override was not applied: %#v", resolved.Env)
+	}
+	if _, ok := resolved.Env["DISABLE_TELEMETRY"]; ok {
+		t.Fatal("explicitly unset inherited key is still present")
+	}
+	if resolved.Env["ANTHROPIC_AUTH_TOKEN"] != "current-token" || resolved.Env["ANTHROPIC_BASE_URL"] != "http://localhost:12580/tingly/claude_code:p1" {
+		t.Fatalf("server-owned connection values did not win: %#v", resolved.Env)
+	}
+	if resolved.InheritedDefaultMode != "plan" || resolved.EffectiveDefaultMode != "dontAsk" || !resolved.HasOverrides {
+		t.Fatalf("unexpected default mode resolution: %#v", resolved)
+	}
+
+	profile.ClaudeCode = nil
+	inherited, err := ResolveCCProfileSettings(cfg, "http://localhost:12580", "current-token", "claude_code:p1", profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noDelta, err := DiffCCProfileConfig(inherited.BasePreferences, inherited.InheritedDefaultMode, inherited.EffectivePreferences, inherited.EffectiveDefaultMode)
+	if err != nil || noDelta != nil {
+		t.Fatalf("saving unchanged inherited preferences must not create an override: %#v, %v", noDelta, err)
+	}
+}
+
+func TestDiffCCProfileConfig_StoresOnlyDeltaAndExplicitRemovals(t *testing.T) {
+	base := ClaudeCodePrefs{
+		APITimeoutMs:              "1234",
+		ClaudeCodeMaxOutputTokens: "32000",
+		DisableTelemetry:          "1",
+	}
+	desired := ClaudeCodePrefs{
+		APITimeoutMs:              "1234",
+		ClaudeCodeMaxOutputTokens: "64000",
+	}
+
+	delta, err := DiffCCProfileConfig(base, "plan", desired, "dontAsk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delta == nil || len(delta.Env) != 1 || delta.Env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] != "64000" {
+		t.Fatalf("unexpected env delta: %#v", delta)
+	}
+	if len(delta.UnsetEnv) != 1 || delta.UnsetEnv[0] != "DISABLE_TELEMETRY" {
+		t.Fatalf("unexpected unset delta: %#v", delta.UnsetEnv)
+	}
+	if delta.DefaultMode != "dontAsk" {
+		t.Fatalf("default mode delta = %q", delta.DefaultMode)
+	}
+
+	noDelta, err := DiffCCProfileConfig(base, "plan", base, "plan")
+	if err != nil || noDelta != nil {
+		t.Fatalf("identical config should produce no delta, got %#v, %v", noDelta, err)
+	}
+}
+
 func TestCCProfileArtifactDir(t *testing.T) {
 	root := t.TempDir()
 	tests := []struct {
@@ -272,6 +387,48 @@ func TestBuildCCProfileSettings_MaterializesReadableDirectory(t *testing.T) {
 	settings = readJSONMap(t, defaultPath)
 	if _, exists := settings["theme"]; exists {
 		t.Errorf("removed local settings leaked from an older generated artifact: %#v", settings)
+	}
+}
+
+func TestInspectCCProfileSettings_DerivesPathWithoutPersistingIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	wantPath := filepath.Join(home, ".tingly-box", "claude", "p1--work", "settings.json")
+	path, exists, err := InspectCCProfileSettings("p1", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != wantPath || exists {
+		t.Fatalf("artifact before generation = (%q, %v), want (%q, false)", path, exists, wantPath)
+	}
+
+	writeTestFile(t, wantPath, `{}`)
+	path, exists, err = InspectCCProfileSettings("p1", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != wantPath || !exists {
+		t.Fatalf("artifact after generation = (%q, %v), want (%q, true)", path, exists, wantPath)
+	}
+	renamedPath, renamedExists, err := InspectCCProfileSettings("p1", "renamed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, ".tingly-box", "claude", "p1--renamed", "settings.json"); renamedPath != want || renamedExists {
+		t.Fatalf("renamed artifact = (%q, %v), want (%q, false)", renamedPath, renamedExists, want)
+	}
+
+	legacyPath, legacyExists, err := InspectCCProfileSettings("p1", "../legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, ".tingly-box", "claude", "p1", "settings.json"); legacyPath != want || legacyExists {
+		t.Fatalf("legacy artifact = (%q, %v), want (%q, false)", legacyPath, legacyExists, want)
+	}
+	if _, _, err := InspectCCProfileSettings("../p1", "work"); err == nil {
+		t.Fatal("expected unsafe profile ID to be rejected")
 	}
 }
 
