@@ -21,10 +21,11 @@ import (
 // pass one of these as the primary tier to drive a deterministic failure
 // without writing handler scaffolding.
 const (
-	FailMockPreContent429 = "virtual-fail-429"
-	FailMockPreContent500 = "virtual-fail-500"
-	FailMockMidStreamCut  = "virtual-fail-midstream-close"
-	FailMockMidStreamErr  = "virtual-fail-midstream-event"
+	FailMockPreContent429  = "virtual-fail-429"
+	FailMockPreContent500  = "virtual-fail-500"
+	FailMockMidStreamCut   = "virtual-fail-midstream-close"
+	FailMockMidStreamErr   = "virtual-fail-midstream-event"
+	FailMockMidStreamClean = "virtual-fail-midstream-cleaneof"
 )
 
 // FailoverRoute is the handle returned by SetupFailoverRoute / SetupBothFailingRoute.
@@ -81,13 +82,20 @@ func (env *TestEnv) SetupFailoverRoute(
 	primaryUUID := fmt.Sprintf("virtual-primary-%s-%s", successScenario.Name, primaryFailModel)
 	fallbackUUID := fmt.Sprintf("virtual-fallback-%s-%s", successScenario.Name, primaryFailModel)
 
+	// OpenAIEndpointMode must be set explicitly: without it ResolveOpenAIEndpoint
+	// falls back to chat for every OpenAI-style provider, so a target=openai_responses
+	// route would silently forward to /chat/completions instead of /responses (see
+	// targetToOpenAIEndpointMode's doc comment). Zero value for non-OpenAI targets
+	// is ignored, so this is a no-op for Anthropic/Google-target callers.
 	_ = env.appConfig.AddProvider(&typ.Provider{
 		UUID: primaryUUID, Name: primaryUUID, APIBase: primaryAPIBase, APIStyle: apiStyle,
 		Token: "primary-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+		OpenAIEndpointMode: targetToOpenAIEndpointMode(target),
 	})
 	_ = env.appConfig.AddProvider(&typ.Provider{
 		UUID: fallbackUUID, Name: fallbackUUID, APIBase: fallbackAPIBase, APIStyle: apiStyle,
 		Token: "fallback-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+		OpenAIEndpointMode: targetToOpenAIEndpointMode(target),
 	})
 
 	rule := newHarnessRule(requestModel, sourceToRuleScenario(source), requestModel, fallbackProviderModel,

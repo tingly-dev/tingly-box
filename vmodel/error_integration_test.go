@@ -13,8 +13,8 @@ func TestSharedDefaultMocksIncludesErrorModels(t *testing.T) {
 	// Find error models in SharedDefaultMocks
 	errorModels := findErrorModels(specs)
 
-	// Should have 4 basic error models
-	require.Len(t, errorModels, 4, "Should have 4 basic error models in SharedDefaultMocks")
+	// Should have 5 basic error models
+	require.Len(t, errorModels, 5, "Should have 5 basic error models in SharedDefaultMocks")
 
 	// Test virtual-fail-429 (renamed from virtual-fail-precontent-429)
 	spec429 := findSpecByID(errorModels, "virtual-fail-429")
@@ -45,6 +45,14 @@ func TestSharedDefaultMocksIncludesErrorModels(t *testing.T) {
 	require.NotNil(t, specEvent)
 	assert.Equal(t, ErrorCategoryUpstream, specEvent.ErrorCategory)
 	assert.False(t, specEvent.IsRetryable, "Mid-stream error should NOT be retryable")
+
+	// Test virtual-fail-midstream-cleaneof (#1384 regression coverage)
+	specCleanEOF := findSpecByID(errorModels, "virtual-fail-midstream-cleaneof")
+	require.NotNil(t, specCleanEOF)
+	assert.Equal(t, ErrorCategoryUpstream, specCleanEOF.ErrorCategory)
+	assert.False(t, specCleanEOF.IsRetryable, "Mid-stream clean EOF should NOT be retryable")
+	assert.Equal(t, ErrorStageMidStream, specCleanEOF.Error.Stage)
+	assert.Equal(t, MidStreamModeCleanEOF, specCleanEOF.Error.MidStreamMode)
 }
 
 func TestExtendedErrorSpecs(t *testing.T) {
@@ -87,17 +95,18 @@ func TestExtendedErrorSpecs(t *testing.T) {
 }
 
 func TestAllErrorSpecs(t *testing.T) {
-	// Total error models = 4 (basic in SharedDefaultMocks) + 5 (extended)
+	// Total error models = 5 (basic in SharedDefaultMocks) + 5 (extended)
 	basicErrorModels := findErrorModels(SharedDefaultMocks())
 	extendedSpecs := ExtendedErrorSpecs()
 
 	// Verify we have the expected counts
-	assert.Len(t, basicErrorModels, 4, "Should have 4 basic error models in SharedDefaultMocks")
+	assert.Len(t, basicErrorModels, 5, "Should have 5 basic error models in SharedDefaultMocks")
 	assert.Len(t, extendedSpecs, 5, "Should have 5 extended error specs")
 
 	// Verify basic specs are in SharedDefaultMocks
 	assert.Contains(t, specIDs(basicErrorModels), "virtual-fail-429")
 	assert.Contains(t, specIDs(basicErrorModels), "virtual-fail-midstream-close")
+	assert.Contains(t, specIDs(basicErrorModels), "virtual-fail-midstream-cleaneof")
 
 	// Verify extended specs
 	assert.Contains(t, specIDs(extendedSpecs), "virtual-fail-auth-401")

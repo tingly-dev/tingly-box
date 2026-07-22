@@ -27,7 +27,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
-	"github.com/tingly-dev/tingly-box/vmodel"
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
@@ -66,30 +65,6 @@ const (
 	DuoSlowOpenAIModel    = "duo-slow-gpt"
 	DuoSlowAnthropicModel = "duo-slow-claude"
 )
-
-// Truncating vmodel ID registered on tb1 for the Codex passthrough
-// truncation scenario (#1384): streams a few deltas, then ends the chunked
-// body cleanly without a terminal event — the shape an upstream gateway
-// timeout produces.
-const (
-	DuoTruncEOFVModel = "duo-trunc-eof-gpt"
-)
-
-// tb2 request models for the Codex (OpenAI Responses passthrough) routes.
-// Scenario is "codex", the surface Codex CLI actually uses.
-const (
-	DuoCodexOKModel       = "duo-e2e-codex-ok"
-	DuoCodexTruncEOFModel = "duo-e2e-codex-trunc-eof"
-)
-
-// duoCodexRules maps each codex-scenario request model to the tb1 vmodel
-// backing it via the responses (passthrough) provider.
-func duoCodexRules() map[string]string {
-	return map[string]string{
-		DuoCodexOKModel:       "virtual-gpt-4",
-		DuoCodexTruncEOFModel: DuoTruncEOFVModel,
-	}
-}
 
 // MaybeRunDuoServe runs a duo child instance and exits the process when the
 // duo env contract is present; otherwise it returns immediately. Call it
@@ -160,9 +135,6 @@ func runDuoServe() error {
 		if err := registerDuoServiceModels(srv.GetVirtualModelService()); err != nil {
 			return fmt.Errorf("register duo service models: %w", err)
 		}
-		if err := registerDuoTruncationModels(srv.GetVirtualModelService()); err != nil {
-			return fmt.Errorf("register duo truncation models: %w", err)
-		}
 	}
 
 	return srv.Start(port)
@@ -213,16 +185,6 @@ func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
 			harnessService(providers[route.Target].UUID, duoTargetVModel(route)))
 		if err := appCfg.GetGlobalConfig().AddRequestConfig(rule); err != nil {
 			return fmt.Errorf("add rule %s: %w", route.Name, err)
-		}
-	}
-
-	// Codex passthrough routes: codex-scenario rules through the responses
-	// provider, one per truncation shape plus the healthy control.
-	for reqModel, vm := range duoCodexRules() {
-		rule := newHarnessRule(reqModel, typ.ScenarioCodex, reqModel, vm,
-			harnessService(DuoProviderResponses, vm))
-		if err := appCfg.GetGlobalConfig().AddRequestConfig(rule); err != nil {
-			return fmt.Errorf("add rule %s: %w", reqModel, err)
 		}
 	}
 	return nil
@@ -299,32 +261,6 @@ func registerDuoServiceModels(svc *virtualserver.Service) error {
 		})); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// registerDuoTruncationModels registers the truncating vmodel into tb1's
-// openai registry: it emits a handful of real deltas, then the virtualserver
-// handler ends the stream cleanly per the injection's MidStreamMode — no
-// terminal event. Exercised by the Codex passthrough truncation route.
-func registerDuoTruncationModels(svc *virtualserver.Service) error {
-	if svc == nil {
-		return fmt.Errorf("virtual model service unavailable")
-	}
-	chunks := []string{"The ", "answer ", "is ", "being ", "truncated ", "here"}
-	if err := svc.GetOpenAIRegistry().Register(openaivm.NewMockModel(&openaivm.MockModelConfig{
-		ID:           DuoTruncEOFVModel,
-		Name:         "Duo truncation " + DuoTruncEOFVModel,
-		Description:  "duo truncation model: clean EOF without terminal event",
-		Content:      strings.Join(chunks, ""),
-		StreamChunks: chunks,
-		Error: &vmodel.ErrorInjection{
-			Stage:         vmodel.ErrorStageMidStream,
-			MidStreamMode: vmodel.MidStreamModeCleanEOF,
-			AfterEvents:   3,
-		},
-	})); err != nil {
-		return err
 	}
 	return nil
 }
