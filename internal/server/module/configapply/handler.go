@@ -554,8 +554,9 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	// one (materialized into auth.json) but also works without (auth.json left
 	// untouched so an existing `codex login` survives).
 	var chatgptTokens *config.CodexChatGPTTokens
-	switch authMode {
-	case config.CodexAuthChatGPT:
+	needsTokens := authMode == config.CodexAuthChatGPT ||
+		(authMode == config.CodexAuthHybrid && req.OAuthProviderUUID != "")
+	if needsTokens {
 		tokens, err := h.loadCodexChatGPTTokens(req.OAuthProviderUUID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, ApplyCodexConfigResponse{
@@ -565,18 +566,6 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 			return
 		}
 		chatgptTokens = tokens
-	case config.CodexAuthHybrid:
-		if req.OAuthProviderUUID != "" {
-			tokens, err := h.loadCodexChatGPTTokens(req.OAuthProviderUUID)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, ApplyCodexConfigResponse{
-					Success: false,
-					Message: err.Error(),
-				})
-				return
-			}
-			chatgptTokens = tokens
-		}
 	}
 
 	// ChatGPT mode: clear tingly gateway keys from config.toml so codex CLI

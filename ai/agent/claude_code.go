@@ -3,6 +3,7 @@ package agent
 import (
 	"cmp"
 	"fmt"
+	"strings"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
@@ -154,6 +155,16 @@ func applyClaudeOnboarding() (*serverconfig.ApplyResult, error) {
 	return serverconfig.ApplyClaudeOnboarding(payload)
 }
 
+// configFileStatusPrefixes maps the leading words of an ApplyResult.Message
+// (e.g. "Created /path/to/file") to the status shown alongside the path.
+var configFileStatusPrefixes = []struct {
+	prefix string
+	status string
+}{
+	{"Created ", "created"},
+	{"Updated ", "updated"},
+}
+
 // collectConfigFiles collects the config file paths from apply results
 func collectConfigFiles(results ...*serverconfig.ApplyResult) []string {
 	var files []string
@@ -161,18 +172,16 @@ func collectConfigFiles(results ...*serverconfig.ApplyResult) []string {
 		if r == nil {
 			continue
 		}
-		msg := r.Message
-		if len(msg) > 8 && containsPrefix(msg[8:], "Created ") {
-			// Find the file path after "Created "
-			file := extractFilePath(msg[8:])
-			if file != "" {
-				files = append(files, file+" (created)")
+		for _, p := range configFileStatusPrefixes {
+			rest, ok := strings.CutPrefix(r.Message, p.prefix)
+			if !ok {
+				continue
 			}
-		} else if len(msg) > 8 && containsPrefix(msg[8:], "Updated ") {
-			file := extractFilePath(msg[8:])
+			file, _, _ := strings.Cut(rest, " ")
 			if file != "" {
-				files = append(files, file+" (updated)")
+				files = append(files, fmt.Sprintf("%s (%s)", file, p.status))
 			}
+			break
 		}
 	}
 	return files
@@ -187,20 +196,4 @@ func collectBackupPaths(results ...*serverconfig.ApplyResult) []string {
 		}
 	}
 	return paths
-}
-
-// Helper functions to avoid importing strings package
-
-func containsPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-func extractFilePath(s string) string {
-	// Find the end of the file path (first space after prefix)
-	for i := 0; i < len(s); i++ {
-		if s[i] == ' ' || s[i] == '(' {
-			return s[:i]
-		}
-	}
-	return ""
 }
