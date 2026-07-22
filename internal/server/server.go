@@ -153,6 +153,11 @@ type Server struct {
 	host        string
 	debug       bool
 
+	// httpTimeouts overrides the http.Server ReadHeaderTimeout/ReadTimeout/
+	// WriteTimeout/IdleTimeout values Start() otherwise hardcodes. Zero
+	// fields fall back to those defaults — see WithHTTPTimeouts.
+	httpTimeouts HTTPTimeouts
+
 	// record options
 	recordMode obs.RecordMode
 	recordDir  string

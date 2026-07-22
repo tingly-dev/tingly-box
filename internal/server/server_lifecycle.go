@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log"
@@ -58,10 +59,10 @@ func (s *Server) Start(port int) error {
 	s.httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           s.engine,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      10 * time.Minute,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: cmp.Or(s.httpTimeouts.ReadHeaderTimeout, 10*time.Second),
+		ReadTimeout:       cmp.Or(s.httpTimeouts.ReadTimeout, 30*time.Second),
+		WriteTimeout:      cmp.Or(s.httpTimeouts.WriteTimeout, 10*time.Minute),
+		IdleTimeout:       cmp.Or(s.httpTimeouts.IdleTimeout, 120*time.Second),
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
