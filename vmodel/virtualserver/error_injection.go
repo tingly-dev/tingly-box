@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
@@ -62,6 +63,34 @@ func applyMidStreamBreakOpenAI(c *gin.Context, w io.Writer, e *vmodel.ErrorInjec
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
 		hijackAndClose(c.Writer)
+	case vmodel.MidStreamModeCleanEOF:
+		// Nothing to write — the Responses passthrough turns a clean body
+		// without terminal events into an upstream_truncated error (#1384).
+	}
+}
+
+// applyMidStreamBreakResponses applies a mid-stream break to an in-flight
+// OpenAI Responses SSE stream. The error-event shape follows the Responses
+// streaming protocol ({"type":"error",...} data frames); connection close and
+// clean EOF are protocol-neutral.
+func applyMidStreamBreakResponses(c *gin.Context, w io.Writer, e *vmodel.ErrorInjection) {
+	switch e.MidStreamMode {
+	case vmodel.MidStreamModeErrorEvent:
+		_, msg, typ := resolveErrorFields(e)
+		payload, _ := json.Marshal(gin.H{
+			"type": "error",
+			"error": gin.H{
+				"type":    typ,
+				"message": msg,
+			},
+		})
+		fmt.Fprintf(w, "data: %s\n\n", payload)
+		c.Writer.Flush()
+	case vmodel.MidStreamModeConnectionClose:
+		hijackAndClose(c.Writer)
+	case vmodel.MidStreamModeCleanEOF:
+		// Nothing to write: the handler returns without terminal events and
+		// the server closes the chunked body properly.
 	}
 }
 
@@ -83,6 +112,8 @@ func applyMidStreamBreakAnthropic(c *gin.Context, w io.Writer, e *vmodel.ErrorIn
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
 		hijackAndClose(c.Writer)
+	case vmodel.MidStreamModeCleanEOF:
+		// Nothing to write — same clean-EOF shape as the other protocols.
 	}
 }
 

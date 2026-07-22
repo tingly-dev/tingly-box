@@ -337,6 +337,58 @@ func TestHandleOpenAIResponsesStream_ZeroReasoningTokens(t *testing.T) {
 	assert.Equal(t, 0, usage.ReasoningTokens)
 }
 
+// TestHandleOpenAIResponsesStream_UpstreamTruncation: an upstream SSE body
+// that ends cleanly without any terminal event (completed/failed/incomplete)
+// must not be forwarded as a bare EOF — strict clients (Codex) turn that into
+// "stream closed before response.completed" with nothing to diagnose (#1384).
+// The handler must emit an explicit error event and return an error.
+func TestHandleOpenAIResponsesStream_UpstreamTruncation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	decoder := newFakeResponsesDecoder([]string{
+		`{"type":"response.created","response":{"id":"resp_1"}}`,
+		`{"type":"response.output_text.delta","item_id":"item_1","output_index":0,"delta":"partial"}`,
+	})
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+
+	hc := newTestHandleContext(c)
+
+	_, err := HandleOpenAIResponsesStream(hc, stream, "gpt-4o")
+	require.Error(t, err, "truncated upstream stream must surface an error")
+	assert.Contains(t, err.Error(), "without a terminal event")
+
+	body := w.Body.String()
+	// Partial content already forwarded stays forwarded.
+	assert.Contains(t, body, "partial")
+	// An explicit error event reaches the client instead of a bare EOF.
+	assert.Contains(t, body, "upstream_truncated")
+	// Nothing fabricated a clean completion.
+	assert.NotContains(t, body, "response.completed")
+}
+
+// TestHandleOpenAIResponsesStream_TerminalEventNoError: the guard above must
+// not fire on a normal stream that ends with response.completed.
+func TestHandleOpenAIResponsesStream_TerminalEventNoError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	decoder := newFakeResponsesDecoder([]string{
+		buildResponsesCompletedJSON(t, 50, 30, 7, 15),
+	})
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+
+	hc := newTestHandleContext(c)
+
+	_, err := HandleOpenAIResponsesStream(hc, stream, "gpt-4o")
+	require.NoError(t, err)
+	assert.NotContains(t, w.Body.String(), "upstream_truncated")
+}
+
 // ---------------------------------------------------------------------------
 // HandleOpenAIResponsesStreamToAnthropic
 // ---------------------------------------------------------------------------

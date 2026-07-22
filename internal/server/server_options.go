@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/data"
@@ -92,6 +94,30 @@ func WithGuardrails(runtime *guardrails.Guardrails) ServerOption {
 func WithDebug(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.debug = enabled
+	}
+}
+
+// HTTPTimeouts overrides the timeouts Start() arms on the underlying
+// http.Server. Zero fields keep Start()'s hardcoded default for that field —
+// see WithHTTPTimeouts.
+type HTTPTimeouts struct {
+	ReadHeaderTimeout time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
+}
+
+// WithHTTPTimeouts overrides the http.Server timeouts Start() otherwise
+// hardcodes (ReadHeaderTimeout: 10s, ReadTimeout: 30s, WriteTimeout: 10m,
+// IdleTimeout: 120s). Only non-zero fields in HTTPTimeouts are applied; the
+// rest keep Start()'s defaults. Production callers have no reason to use
+// this — it exists so tests can arm a real http.Server with a short
+// WriteTimeout/ReadTimeout to exercise deadline-dependent behavior (e.g.
+// ClearServerIOTimeouts, see internal/server/middleware/io_timeout_test.go)
+// without hand-rolling a parallel http.Server outside the real Start() path.
+func WithHTTPTimeouts(t HTTPTimeouts) ServerOption {
+	return func(s *Server) {
+		s.httpTimeouts = t
 	}
 }
 

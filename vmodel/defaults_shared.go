@@ -147,6 +147,25 @@ func SharedDefaultMocks() []SharedMockSpec {
 			IsRetryable:   false,
 			Severity:      "medium",
 		},
+		{
+			// Streams real content then ends the chunked body cleanly with no
+			// terminal protocol event (no response.completed / finish chunk) —
+			// the shape an upstream reverse proxy or gateway timeout produces.
+			// Regression coverage for #1384: the gateway must convert this bare
+			// EOF into an explicit error event instead of leaving the client to
+			// see "stream closed before response.completed".
+			ID:      "virtual-fail-midstream-cleaneof",
+			Name:    "Virtual Fail Midstream Clean EOF",
+			Content: "hello world this stream ends with no terminal event",
+			Error: &ErrorInjection{
+				Stage:         ErrorStageMidStream,
+				AfterEvents:   1,
+				MidStreamMode: MidStreamModeCleanEOF,
+			},
+			ErrorCategory: ErrorCategoryUpstream,
+			IsRetryable:   false,
+			Severity:      "high",
+		},
 	}
 }
 

@@ -120,6 +120,34 @@ func TestFailover_MidStream_NoRetry_GateCommitted(t *testing.T) {
 	assert.Contains(t, result.Content, "hello world", "client must see primary's truncated content, not fallback's")
 }
 
+// TestFailover_MidStream_CleanEOF_SurfacesUpstreamTruncated is the regression
+// coverage for #1384 on the OpenAI Responses passthrough: the primary streams
+// real deltas then ends the chunked body cleanly with no terminal event
+// (response.completed/failed/incomplete) — the shape an upstream reverse
+// proxy or gateway timeout produces, and the one Codex CLI reported as
+// "stream closed before response.completed" with nothing to diagnose. The
+// gateway (internal/protocol/stream.HandleOpenAIResponsesStream) must convert
+// that bare EOF into an explicit upstream_truncated error event instead of
+// leaving the client with silence. As with the ConnectionClose case, the gate
+// is already committed once real content is on the wire, so the fallback
+// must NOT be retried.
+func TestFailover_MidStream_CleanEOF_SurfacesUpstreamTruncated(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIResponses, protocol.TypeOpenAIResponses, pt.StreamingTextScenario(), pt.FailMockMidStreamClean)
+
+	result := env.SendWithModel(t, protocol.TypeOpenAIResponses, route.ModelName, true)
+
+	require.Equal(t, 200, result.HTTPStatus, "first chunk committed → client sees 200")
+	assert.Equal(t, int64(1), route.PrimaryCallCount.Load(), "primary attempted once, no retry past a committed gate")
+	require.NotEmpty(t, result.StreamEvents, "client must have received the committed first chunk")
+
+	body := string(result.RawBody)
+	assert.Contains(t, body, "upstream_truncated", "client must see an explicit error event, not a bare EOF")
+	assert.NotContains(t, body, "response.completed", "a truncated stream must not be reported as completed")
+}
+
 // TestFailover_CrossStyle_AnthropicToOpenAI_RetriesAndSucceeds is the e2e proof
 // of the lifted failover: the client sends an Anthropic request; the primary tier
 // is an Anthropic-style provider that returns 500; the orchestrator re-transforms

@@ -50,6 +50,14 @@ const (
 	// (SSE "event: error" frame) before returning. The stream is well-formed
 	// up to that point; the client sees an in-band error.
 	MidStreamModeErrorEvent
+
+	// MidStreamModeCleanEOF ends the HTTP response cleanly (proper chunked
+	// terminator) after AfterEvents events, without any terminal protocol
+	// event. The client's reader sees a well-formed body that simply stops —
+	// the shape an upstream reverse proxy or gateway produces when it times
+	// out an idle stream, and the shape behind "stream closed before
+	// response.completed" reports (#1384).
+	MidStreamModeCleanEOF
 )
 
 // ErrorInjection describes a synthetic failure that a mock virtual model
