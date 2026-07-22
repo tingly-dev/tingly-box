@@ -74,6 +74,7 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 	case strings.Contains(url, "api.anthropic.com"), strings.Contains(url, "claude.ai"):
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
+		ops.SanitizeAnthropicV1ServerToolUseIDs(req)
 	case strings.Contains(url, "api.deepseek.com"):
 		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
@@ -89,6 +90,7 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 	case strings.Contains(url, "api.anthropic.com"), strings.Contains(url, "claude.ai"):
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
+		ops.SanitizeAnthropicBetaServerToolUseIDs(req)
 	case strings.Contains(url, "api.deepseek.com"):
 		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)
