@@ -314,6 +314,28 @@
         }
       }
     },
+    "/api/v1/config/claude": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Get the currently applied Claude Code preferences",
+        "description": "Get the currently applied Claude Code preferences",
+        "operationId": "apiV1ConfigClaudeGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config/preview/codex": {
       "post": {
         "tags": [
@@ -3563,6 +3585,139 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}/profiles/{id}/claude-config": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Get the effective and inherited Claude Code profile configuration",
+        "description": "Get the effective and inherited Claude Code profile configuration",
+        "operationId": "apiV1ScenarioScenarioProfilesIdClaude-configGet",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileClaudeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Persist and materialize fine-grained Claude Code profile preferences",
+        "description": "Persist and materialize fine-grained Claude Code profile preferences",
+        "operationId": "apiV1ScenarioScenarioProfilesIdClaude-configPut",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileClaudeConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileClaudeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Clear Claude Code profile overrides and restore inheritance",
+        "description": "Clear Claude Code profile overrides and restore inheritance",
+        "operationId": "apiV1ScenarioScenarioProfilesIdClaude-configDelete",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileClaudeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario/{scenario}/string-flag/{flag}": {
       "get": {
         "tags": [
@@ -6035,6 +6190,37 @@
             "description": "Field USE_BUILTIN_RIPGREP"
           }
         }
+      },
+      "ClaudeConfigResponse": {
+        "type": "object",
+        "properties": {
+          "defaultMode": {
+            "type": "string",
+            "description": "Field defaultMode"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "Field exists"
+          },
+          "installStatusLine": {
+            "type": "boolean",
+            "description": "Field installStatusLine"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ClaudeCodePrefs"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "exists",
+          "preferences",
+          "defaultMode",
+          "installStatusLine"
+        ]
       },
       "ClientListResponse": {
         "type": "object",
@@ -9419,6 +9605,77 @@
           "id",
           "name",
           "input"
+        ]
+      },
+      "ProfileClaudeConfigData": {
+        "type": "object",
+        "properties": {
+          "basePreferences": {
+            "$ref": "#/components/schemas/ClaudeCodePrefs"
+          },
+          "defaultMode": {
+            "type": "string",
+            "description": "Field defaultMode"
+          },
+          "hasOverrides": {
+            "type": "boolean",
+            "description": "Field hasOverrides"
+          },
+          "inheritedDefaultMode": {
+            "type": "string",
+            "description": "Field inheritedDefaultMode"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ClaudeCodePrefs"
+          },
+          "settingsExists": {
+            "type": "boolean",
+            "description": "Field settingsExists"
+          },
+          "settingsPath": {
+            "type": "string",
+            "description": "Field settingsPath"
+          }
+        },
+        "required": [
+          "basePreferences",
+          "preferences",
+          "inheritedDefaultMode",
+          "defaultMode",
+          "hasOverrides",
+          "settingsPath",
+          "settingsExists"
+        ]
+      },
+      "ProfileClaudeConfigRequest": {
+        "type": "object",
+        "properties": {
+          "defaultMode": {
+            "type": "string",
+            "description": "Field defaultMode"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ClaudeCodePrefs"
+          }
+        },
+        "required": [
+          "preferences"
+        ]
+      },
+      "ProfileClaudeConfigResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ProfileClaudeConfigData"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
         ]
       },
       "ProfileCreateRequest": {

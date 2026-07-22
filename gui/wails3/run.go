@@ -260,9 +260,6 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 		server.WithDebug(opts.EnableDebug),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
-		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(recordMode),
 		server.WithRecordDir(opts.RecordDir),
 	)
@@ -310,9 +307,6 @@ func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.Sta
 		server.WithDebug(opts.EnableDebug),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
-		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(recordMode),
 		server.WithRecordDir(opts.RecordDir),
 	)
@@ -361,9 +355,6 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 		server.WithDebug(opts.EnableDebug),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
-		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(recordMode),
 		server.WithRecordDir(opts.RecordDir),
 	)

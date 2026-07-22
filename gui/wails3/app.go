@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -50,6 +51,18 @@ func newAppWithServerManager(appManager *command.AppManager, serverManager *comm
 					if strings.HasPrefix(r.URL.Path, "/api") || strings.HasPrefix(r.URL.Path, "/tingly") {
 						tinglyService.ServeHTTP(w, r)
 						return
+					}
+
+					// SPA fallback: client-side routes like /login/<token> have no
+					// matching file in the embedded dist, and the wails asset file
+					// server would 404 (blank window). Rewrite document navigations
+					// to "/" so index.html is served; BrowserRouter still sees the
+					// original route from the webview location. Keyed off the Accept
+					// header so extension-less vite dev-server module requests such
+					// as /@vite/client (Accept: */*) pass through untouched.
+					if r.Method == http.MethodGet && path.Ext(r.URL.Path) == "" &&
+						strings.Contains(r.Header.Get("Accept"), "text/html") {
+						r.URL.Path = "/"
 					}
 
 					embdHandler.ServeHTTP(w, r)

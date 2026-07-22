@@ -19,8 +19,9 @@ for managing the AI model proxy server. Supports both full GUI mode
 	rootCmd.AddCommand(GUICommand(appManager, launcher))
 	rootCmd.AddCommand(SlimCommand(appManager, launcher))
 	rootCmd.AddCommand(TrayCommand(appManager, launcher))
-	rootCmd.AddCommand(command.RestartCommand(appManager))
-	rootCmd.AddCommand(command.StartCommand(appManager))
-	rootCmd.AddCommand(command.StopCommand(appManager))
+	// Note: start/stop/restart server lifecycle subcommands were removed when
+	// internal/command migrated from cobra to Kong. The GUI binary does not need
+	// them — the server is started implicitly by TinglyService.ServiceStartup()
+	// when the Wails app runs.
 	return rootCmd
 }

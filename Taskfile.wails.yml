@@ -1,4 +1,10 @@
 # https://taskfile.dev
+#
+# Wails3 desktop GUI build orchestration. Resynced to the upstream wails3
+# alpha2 template layout: the common build steps live in build/Taskfile.yml
+# and per-OS steps in build/{darwin,windows,linux}/Taskfile.yml. Build/package
+#/run dispatch to the target OS via {{.GOOS}} (defaults to host OS, overridable
+# for cross-compilation, e.g. `GOOS=windows task wails:build`).
 
 version: '3'
 
@@ -11,27 +17,35 @@ includes:
 vars:
   APP_NAME: "TinglyBox"
   BIN_NAME: "tingly-box"
+  # Wails GUI package — the per-OS Taskfiles build this, not the repo root.
+  WAILS_PACKAGE_PATH: ./gui/wails3
   PACKAGE_PATH: ./gui/wails3
+  BIN_DIR: "bin"
+  # pnpm (we ship frontend/pnpm-lock.yaml).
+  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "pnpm"}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # Target OS for build/package/run. Defaults to the host OS, overridden by
+  # `GOOS=windows task wails:build` (or the GOOS env var) for cross-compilation.
+  GOOS: '{{.GOOS | default OS}}'
 
 tasks:
   wails:build:
     summary: Builds the application
     cmds:
       - task: codegen
-      - task: "{{OS}}:build"
+      - task: "{{.GOOS}}:build"
 
   wails:package:
     summary: Packages a production build of the application
     cmds:
       - task: codegen
-      - task: "{{OS}}:package"
+      - task: "{{.GOOS}}:package"
 
   wails:run:
     summary: Runs the application
     cmds:
       - task: codegen
-      - task: "{{OS}}:run"
+      - task: "{{.GOOS}}:run"
 
   wails:dev:
     summary: Runs the application in development mode

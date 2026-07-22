@@ -9,7 +9,7 @@ info:
   productName: "Tingly Box" # The name of the application
   productIdentifier: "dev.tingly.box" # The unique product identifier
   description: "A proxy server for AI model APIs" # The application description
-  copyright: "(c) 2025, Tingly Dev" # Copyright text
+  copyright: "© 2026, Tingly Dev" # Copyright text
   comments: "" # Comments
   version: "0.0.1" # The application version
 
@@ -28,6 +28,7 @@ dev_mode:
       - .DS_Store
       - .gitignore
       - .gitkeep
+      - "*_test.go"
     watched_extension:
       - "*.go"
       - "*.js" # Watch for changes to JS/TS files included using the //wails:include directive.
