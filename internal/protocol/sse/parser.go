@@ -120,13 +120,6 @@ func ParseOpenAIResponsesResult(m map[string]interface{}) *ParsedResult {
 			OutputTokens: parsedToInt(usage["output_tokens"]),
 		}
 	}
-	// A tool-only Responses response carries no "message" item, so no role was
-	// read above — but every Responses output is assistant-generated. Default
-	// the role so it matches the Chat/Anthropic tool responses (role=assistant)
-	// and the streaming Responses assembler, which already defaults to it.
-	if r.Role == "" && len(output) > 0 {
-		r.Role = "assistant"
-	}
 	return r
 }
 

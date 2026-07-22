@@ -133,11 +133,7 @@ func TestResponsesToChatConverter_GoldenSequence(t *testing.T) {
 	// 4. Tool call start chunk.
 	require.Len(t, got[3].Choices[0].Delta.ToolCalls, 1)
 	tc := got[3].Choices[0].Delta.ToolCalls[0]
-	// Chat tool_calls[].index is a dense 0-based sequence, independent of the
-	// Responses output slot (here output_index 1, since slot 0 is the assistant
-	// message). Emitting the raw slot index would leave a phantom empty index-0
-	// tool call after client-side accumulation.
-	assert.Equal(t, 0, tc.Index)
+	assert.Equal(t, 1, tc.Index)
 	assert.Equal(t, "call_1", tc.ID)
 	assert.Equal(t, "function", tc.Type)
 	assert.Equal(t, "get_weather", tc.Function.Name)

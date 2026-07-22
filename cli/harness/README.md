@@ -203,26 +203,14 @@ Known gateway defects are registered **once**, in protocoltest's
 `skipSourceScenarios` (the matrix reads it directly; replay derives its skips
 via `KnownDefectReason` + the agent's source protocol). Each entry is a
 **real defect**, not a test artifact — fixing one is a one-line deletion in
-one place. The registry is currently **empty**: the last entries
-(`openai_responses|tool_use` and its streaming variant) were closed by
-completing the Responses-source tool_call conversion. That fix had three
-parts, all now covered by CI:
+one place. Currently:
 
-- **Chat → Responses (non-stream)** — `nonstream.BuildResponsesPayloadFromChat`
-  now emits a `function_call` output item per `Message.ToolCalls` (it
-  previously dropped them, while the Anthropic → Responses path already
-  handled them).
-- **Responses → Chat (stream) tool-call index** — the converter now assigns
-  Chat `tool_calls[].index` its own dense 0-based sequence instead of reusing
-  the Responses `output_index` (slot 0 is the assistant message), which had
-  produced a phantom empty index-0 tool call after client accumulation.
-- **Responses stream assembly** — the harness's `assembleFromEvents` no longer
-  falls back to the Chat assembler for a *tool-only* Responses stream (empty
-  text but non-empty tool calls), and `ParseOpenAIResponsesResult` defaults
-  `role` to `assistant` for a message-less tool response.
+- `openai_responses|tool_use` (+ streaming variant) — the Responses-API
+  source path's tool_call conversion is incomplete; skips Tier A's
+  openai_responses-source cells and every `codex/tool_use` replay run.
 
-So `codex/tool_use` (matrix + replay) now runs green. Planned scenario
-expansion and fixture capture are tracked in [PLANNING.md](./PLANNING.md).
+Closing this list out — plus planned scenario expansion and fixture capture —
+is tracked in [PLANNING.md](./PLANNING.md).
 
 **Use it for:** exercising the real gateway pipeline (rules, dispatch, vmodel
 short-circuit) across every agent × scenario × upstream — fast and hermetic.

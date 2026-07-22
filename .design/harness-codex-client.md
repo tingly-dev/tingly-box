@@ -163,20 +163,11 @@ Needs only `node` on PATH (built-in `fetch`, no `npm install`). CI: a
 `matrix-single-codex` leg in `.github/workflows/harness-matrix.yml` (setup-node,
 no dependency install step).
 
-## 5. Companion fixture upgrade (Tier B replay)
-
-`cli/harness/testdata/fixtures/openai_responses/*.json` — the captured request
-bodies replayed by `harness replay` — are upgraded from the bare
-`{model,input,stream}` stub to the real Codex shape (instructions, the env-context
-+ prompt `input_text` messages, the shell + apply_patch tools, reasoning,
-include, store, prompt_cache_key, tool_choice, parallel_tool_calls, text). The
-`model` field is still rewritten to the built-in rule's `RequestModel` at replay
-time, so the fixtures stay upstream-agnostic.
-
-## 6. Known-defect interaction
+## 5. Known-defect interaction
 
 The Responses-**source** `tool_use` path is already on the matrix skip list
 (`protocoltest.skipSourceScenarios["openai_responses|tool_use"]`), so the Codex
-driver inherits that skip for the tool_use cells (matrix and replay) until the
-gateway's Responses-source tool_call conversion is completed — the driver does
-not paper over it.
+driver inherits that skip for the tool_use cells until the gateway's
+Responses-source tool_call conversion is completed — the driver does not paper
+over it. This is a pre-existing, separately-tracked gateway defect; closing it
+is out of scope for the client driver itself.

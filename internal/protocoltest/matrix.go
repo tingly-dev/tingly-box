@@ -211,12 +211,11 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 // test artifact; remove it when the defect is fixed. All tiers derive their
 // skips from this map (the matrix directly, replay via KnownDefectReason), so
 // closing a defect is a one-line deletion.
-// Currently empty: the last entries (openai_responses|tool_use and its
-// streaming variant) were closed by completing the Chat→Responses non-stream
-// tool_call conversion (nonstream.BuildResponsesPayloadFromChat) and the
-// Responses stream-assembly fallback (assembleFromEvents no longer drops
-// tool-only responses into the Chat assembler).
-var skipSourceScenarios = map[string]string{}
+var skipSourceScenarios = map[string]string{
+	// openai_responses source: tool_call conversion from provider back to Responses format loses tool calls
+	"openai_responses|tool_use":           "Responses API source: tool_use conversion incomplete",
+	"openai_responses|streaming_tool_use": "Responses API source: streaming tool_use conversion incomplete",
+}
 
 // KnownDefectReason reports whether a (source protocol, scenario) combination
 // is in the known-defect registry, and why. Consumers outside the matrix
