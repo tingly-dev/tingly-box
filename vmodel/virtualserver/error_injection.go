@@ -63,6 +63,9 @@ func applyMidStreamBreakOpenAI(c *gin.Context, w io.Writer, e *vmodel.ErrorInjec
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
 		hijackAndClose(c.Writer)
+	case vmodel.MidStreamModeCleanEOF:
+		// Nothing to write — the Responses passthrough turns a clean body
+		// without terminal events into an upstream_truncated error (#1384).
 	}
 }
 
@@ -109,6 +112,8 @@ func applyMidStreamBreakAnthropic(c *gin.Context, w io.Writer, e *vmodel.ErrorIn
 		c.Writer.Flush()
 	case vmodel.MidStreamModeConnectionClose:
 		hijackAndClose(c.Writer)
+	case vmodel.MidStreamModeCleanEOF:
+		// Nothing to write — same clean-EOF shape as the other protocols.
 	}
 }
 
