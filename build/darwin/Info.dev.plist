@@ -1,32 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-    <dict>
-        <key>CFBundlePackageType</key>
-            <string>APPL</string>
-        <key>CFBundleName</key>
-            <string>TinglyBox</string>
-        <key>CFBundleExecutable</key>
-            <string>tingly-box</string>
-        <key>CFBundleIdentifier</key>
-            <string>dev.tingly.box</string>
-        <key>CFBundleVersion</key>
-            <string>0.4.2602091630</string>
-        <key>CFBundleGetInfoString</key>
-            <string>This is a comment</string>
-        <key>CFBundleShortVersionString</key>
-            <string>0.4</string>
-        <key>CFBundleIconFile</key>
-            <string>icons</string>
-        <key>LSMinimumSystemVersion</key>
-            <string>10.15.0</string>
-        <key>NSHighResolutionCapable</key>
-            <string>true</string>
-        <key>NSHumanReadableCopyright</key>
-            <string>© 2026, Tingly Dev</string>
-        <key>NSAppTransportSecurity</key>
-        <dict>
-            <key>NSAllowsLocalNetworking</key>
-            <true/>
-        </dict>
-    </dict>
+	<dict>
+		<key>CFBundleExecutable</key>
+		<string>tingly-box</string>
+		<key>CFBundleGetInfoString</key>
+		<string>This is a comment</string>
+		<key>CFBundleIconFile</key>
+		<string>icons</string>
+		<key>CFBundleIdentifier</key>
+		<string>dev.tingly.box</string>
+		<key>CFBundleName</key>
+		<string>Tingly Box</string>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>0.0.1</string>
+		<key>CFBundleVersion</key>
+		<string>0.0.1</string>
+		<key>LSMinimumSystemVersion</key>
+		<string>12.0.0</string>
+		<key>NSAppTransportSecurity</key>
+		<dict>
+			<key>NSAllowsLocalNetworking</key>
+			<true/>
+		</dict>
+		<key>NSHighResolutionCapable</key>
+		<string>true</string>
+		<key>NSHumanReadableCopyright</key>
+		<string>© 2026, Tingly Dev</string>
+	</dict>
 </plist>

@@ -1,14 +1,14 @@
 {
 	"fixed": {
-		"file_version": "0.1.0"
+		"file_version": "0.0.1"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "My Product Description",
-			"LegalCopyright": "© now, My Company",
-			"ProductName": "My Product",
+			"ProductVersion": "0.0.1",
+			"CompanyName": "Tingly.Dev",
+			"FileDescription": "A proxy server for AI model APIs",
+			"LegalCopyright": "© 2026, Tingly Dev",
+			"ProductName": "Tingly Box",
 			"Comments": "This is a comment"
 		}
 	}
