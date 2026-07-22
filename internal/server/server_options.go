@@ -113,7 +113,7 @@ type HTTPTimeouts struct {
 // rest keep Start()'s defaults. Production callers have no reason to use
 // this — it exists so tests can arm a real http.Server with a short
 // WriteTimeout/ReadTimeout to exercise deadline-dependent behavior (e.g.
-// ClearServerDeadlines, see internal/server/middleware/deadline_test.go)
+// ClearServerIOTimeouts, see internal/server/middleware/io_timeout_test.go)
 // without hand-rolling a parallel http.Server outside the real Start() path.
 func WithHTTPTimeouts(t HTTPTimeouts) ServerOption {
 	return func(s *Server) {

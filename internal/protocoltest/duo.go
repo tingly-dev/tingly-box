@@ -273,7 +273,7 @@ type DuoEnvConfig struct {
 	BootTimeout time.Duration
 	// TB2WriteTimeoutMS, when > 0, overrides tb2's real http.Server.WriteTimeout
 	// (server.WithHTTPTimeouts) instead of Start()'s 10-minute default. Lets a
-	// test arm a short deadline and prove ClearServerDeadlines still lets a
+	// test arm a short deadline and prove ClearServerIOTimeouts still lets a
 	// slower stream complete under the full two-process production stack
 	// (#1384) — not just the isolated middleware unit test.
 	TB2WriteTimeoutMS int

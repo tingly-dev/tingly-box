@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ClearServerDeadlines removes the per-connection read/write deadlines that
+// ClearServerIOTimeouts removes the per-connection read/write deadlines that
 // http.Server arms from its ReadTimeout/WriteTimeout for the current request.
 //
 // The server-wide WriteTimeout is armed once, when the request headers are
@@ -26,7 +26,7 @@ import (
 // keep the server-wide protection. Request lifetime on these routes remains
 // bounded by the upstream timeout and by client-disconnect cancellation of
 // the request context.
-func ClearServerDeadlines() gin.HandlerFunc {
+func ClearServerIOTimeouts() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rc := http.NewResponseController(c.Writer)
 		if err := rc.SetReadDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {

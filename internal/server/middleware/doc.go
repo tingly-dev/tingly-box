@@ -61,7 +61,7 @@
 // Token-bucket rate limiter keyed by client IP.  Limits are configurable
 // per scenario and fall back to a global default.
 //
-// ClearServerDeadlines (deadline.go)
+// ClearServerIOTimeouts (io_timeout.go)
 //
 // Applied to the AI protocol route groups (/tingly/:scenario[/v1]) only.
 // Clears the per-connection read/write deadlines armed by http.Server's

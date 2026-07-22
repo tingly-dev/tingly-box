@@ -161,10 +161,10 @@ func TestDuoBackpressure(t *testing.T) {
 // proof for #1384: tb2 boots with a real, short http.Server.WriteTimeout
 // (server.WithHTTPTimeouts, not Start()'s 10-minute default), and the slow
 // route's total stream time is set to comfortably outlive it. Without
-// ClearServerDeadlines this would truncate the SSE stream mid-flight — with
+// ClearServerIOTimeouts this would truncate the SSE stream mid-flight — with
 // it, the request must complete normally through the real two-process
 // production stack (both tb1's and tb2's actual http.Server, not the
-// synthetic gin.Engine in middleware/deadline_test.go).
+// synthetic gin.Engine in middleware/io_timeout_test.go).
 func TestDuoWriteTimeoutSurvivesClearedDeadline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("duo e2e is not a -short test")

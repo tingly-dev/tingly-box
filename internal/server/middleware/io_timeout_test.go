@@ -52,18 +52,18 @@ func startServer(t *testing.T, engine *gin.Engine, writeTimeout time.Duration) s
 	return "http://" + ln.Addr().String()
 }
 
-// TestClearServerDeadlines_StreamOutlivesWriteTimeout is the regression test
+// TestClearServerIOTimeouts_StreamOutlivesWriteTimeout is the regression test
 // for issue #1384: an SSE response that runs longer than http.Server's
 // WriteTimeout must still reach its terminal event on routes wrapped with
-// ClearServerDeadlines. The control route without the middleware proves the
+// ClearServerIOTimeouts. The control route without the middleware proves the
 // truncation mechanism is real (connection killed before "completed").
-func TestClearServerDeadlines_StreamOutlivesWriteTimeout(t *testing.T) {
+func TestClearServerIOTimeouts_StreamOutlivesWriteTimeout(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 
 	const events = 6
 	const interval = 150 * time.Millisecond // total ~900ms vs 300ms WriteTimeout
-	engine.GET("/guarded", ClearServerDeadlines(), sseHandler(events, interval))
+	engine.GET("/guarded", ClearServerIOTimeouts(), sseHandler(events, interval))
 	engine.GET("/bare", sseHandler(events, interval))
 
 	base := startServer(t, engine, 300*time.Millisecond)
