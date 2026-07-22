@@ -71,6 +71,30 @@ export interface FieldStruct {
     advanced?: boolean; // Mark advanced fields that should be collapsed by default
 }
 
+// Shared layout primitives for the main Auto Config form and profile
+// overrides. Keeping the same label / key / control axes makes both surfaces
+// read as one configuration system instead of two unrelated forms.
+export const CLAUDE_CONFIG_ROW_COLUMNS = {
+    xs: 'minmax(0, 1fr)',
+    md: '180px minmax(220px, 320px) minmax(260px, 1fr)',
+} as const;
+
+export const CLAUDE_CONFIG_KEY_SX = {
+    display: 'inline-flex',
+    maxWidth: '100%',
+    px: 0.75,
+    py: 0.25,
+    borderRadius: 0.75,
+    bgcolor: 'action.hover',
+    fontFamily: 'monospace',
+    fontSize: '0.72rem',
+    lineHeight: 1.5,
+    color: 'text.secondary',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+} as const;
+
 export const CLAUDE_CODE_FIELD_STRUCT: FieldStruct[] = [
     // Models (always visible - most commonly adjusted)
     { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model', advanced: false },
@@ -475,17 +499,14 @@ const SECTION_TEXT_EN: SectionTextMap = {
 };
 
 interface UIText {
-    panelHeader: string;
     oneMTooltip: string;
 }
 
 const UI_TEXT_ZH: UIText = {
-    panelHeader: '每行对应一个 Claude Code 环境变量。hover 信息图标查看含义；留空 / 关闭 = 不写入。',
     oneMTooltip: '启用 1M 上下文窗口（在模型 ID 末尾追加 [1m]，需路由的目标模型支持）',
 };
 
 const UI_TEXT_EN: UIText = {
-    panelHeader: 'Each row is one Claude Code env var. Hover the info icon for details. Blank / off = the env is not written.',
     oneMTooltip: 'Enable the 1M context window (appends [1m] to the model ID; the routed target model must support it).',
 };
 
@@ -626,42 +647,34 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
     return (
         <Box
             sx={{
-                display: 'flex',
+                display: 'grid',
+                gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS,
                 alignItems: 'center',
-                gap: 2,
-                py: 1,
-                minHeight: 44,
+                columnGap: 2,
+                rowGap: 1,
+                px: 1.5,
+                py: 1.1,
+                minHeight: 56,
             }}
         >
             {/* Col 1 — Label + info icon */}
-            <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{
-                    fontWeight: 500
+                    fontWeight: 600,
+                    color: 'text.primary',
                 }}>{text.label}</Typography>
                 <Tooltip placement="top" arrow title={richTooltip}>
                     <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                 </Tooltip>
             </Box>
             {/* Col 2 — env name as a subtle code badge */}
-            <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
-                <Box
-                    component="span"
-                    sx={{
-                        px: 0.75,
-                        py: 0.25,
-                        borderRadius: 0.75,
-                        bgcolor: 'action.hover',
-                        fontFamily: 'monospace',
-                        fontSize: '0.72rem',
-                        color: 'text.secondary',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
+            <Box sx={{ minWidth: 0 }}>
+                <Box component="span" sx={CLAUDE_CONFIG_KEY_SX}>
                     {field.envName}
                 </Box>
             </Box>
             {/* Col 3 — control, right-aligned */}
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5, minWidth: 0 }}>
                 {field.kind === 'bool' && (
                     <Switch
                         size="small"
@@ -736,18 +749,31 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
     const toggleExpanded = () => setExpanded(!expanded);
 
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                    <Typography variant="caption" sx={{
-                        color: "text.secondary"
-                    }}>{meta.hint}</Typography>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+            <Box
+                onClick={hasAdvancedFields ? toggleExpanded : undefined}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    px: 1.5,
+                    py: 1.15,
+                    bgcolor: 'action.hover',
+                    cursor: hasAdvancedFields ? 'pointer' : 'default',
+                }}
+            >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{meta.hint}</Typography>
                 </Box>
                 {hasAdvancedFields && (
                     <IconButton
                         size="small"
-                        onClick={toggleExpanded}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpanded();
+                        }}
+                        aria-label={expanded ? `Collapse ${meta.title}` : `Expand ${meta.title}`}
                         sx={{
                             transition: 'transform 0.2s',
                             transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -759,8 +785,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
                 )}
             </Box>
             <Collapse in={expanded} timeout={300}>
-                <Divider />
-                <Stack divider={<Divider flexItem />}>
+                <Stack divider={<Divider flexItem sx={{ mx: 1.5 }} />} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                     {fields.map(f => (
                         <FieldRow
                             key={f.envName}
@@ -796,41 +821,27 @@ const DefaultModeSection: React.FC<{
     const selectedText = text[defaultMode];
 
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                <Typography variant="caption" sx={{
-                    color: "text.secondary"
-                }}>{meta.hint}</Typography>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+            <Box sx={{ px: 1.5, py: 1.15, bgcolor: 'action.hover' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
+                <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{meta.hint}</Typography>
             </Box>
-            <Divider />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 52 }}>
-                <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS, alignItems: 'center', columnGap: 2, rowGap: 1, px: 1.5, py: 1.1, minHeight: 56, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                     <Typography variant="body2" noWrap sx={{
-                        fontWeight: 500
+                        fontWeight: 600,
+                        color: 'text.primary',
                     }}>Default Mode</Typography>
                     <Tooltip placement="top" arrow title={`${selectedText.label}: ${selectedText.description}`}>
                         <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                     </Tooltip>
                 </Box>
-                <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
-                    <Box
-                        component="span"
-                        sx={{
-                            px: 0.75,
-                            py: 0.25,
-                            borderRadius: 0.75,
-                            bgcolor: 'action.hover',
-                            fontFamily: 'monospace',
-                            fontSize: '0.72rem',
-                            color: 'text.secondary',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
+                <Box sx={{ minWidth: 0 }}>
+                    <Box component="span" sx={CLAUDE_CONFIG_KEY_SX}>
                         defaultMode
                     </Box>
                 </Box>
-                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 0 }}>
                     <FormControl size="small" sx={{ width: 360 }}>
                         <Select
                             value={defaultMode}
@@ -892,13 +903,9 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
     setDefaultMode,
 }) => {
     const lang = useLang();
-    const uiText = UI_TEXT[lang];
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Typography variant="body2" sx={{
-                color: "text.secondary"
-            }}>{uiText.panelHeader}</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />

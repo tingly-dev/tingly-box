@@ -16,6 +16,7 @@ import {
     MenuItem,
     Select,
     Stack,
+    Switch,
     TextField,
     Tooltip,
     Typography,
@@ -30,6 +31,8 @@ import {
     CLAUDE_CODE_DEFAULT_MODE_TEXT,
     CLAUDE_CODE_FIELDS_TEXT,
     CLAUDE_CODE_FIELD_STRUCT,
+    CLAUDE_CONFIG_KEY_SX,
+    CLAUDE_CONFIG_ROW_COLUMNS,
     type ClaudeCodeDefaultMode,
     type ClaudeCodePrefs,
     type FieldStruct,
@@ -62,10 +65,6 @@ const TEXT = {
         more: '更多参数',
         permissionMode: '默认权限模式',
         permissionPurpose: '这个 Profile 启动 Claude Code 时使用的权限模式',
-        inheritedValue: '继承值',
-        notSet: '未设置',
-        enabled: '开启',
-        disabled: '关闭',
         remove: '移除覆盖并恢复继承',
         save: '保存 Profile',
         saved: 'Profile 覆盖已保存',
@@ -89,10 +88,6 @@ const TEXT = {
         more: 'More settings',
         permissionMode: 'Default permission mode',
         permissionPurpose: 'Permission mode used when this profile starts Claude Code',
-        inheritedValue: 'Inherited',
-        notSet: 'Not set',
-        enabled: 'On',
-        disabled: 'Off',
         remove: 'Remove override and restore inheritance',
         save: 'Save Profile',
         saved: 'Profile overrides saved',
@@ -286,19 +281,10 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         );
     };
 
-    const renderInheritedValue = (key: OverrideKey): string => {
-        if (key === 'defaultMode') return modeText[inheritedMode].label;
-        const value = basePrefs[key];
-        if (!value) return text.notSet;
-        const field = FIELD_BY_KEY.get(key);
-        if (field?.kind === 'bool') return value === '1' ? text.enabled : text.disabled;
-        return value;
-    };
-
     const renderControl = (key: OverrideKey) => {
         if (key === 'defaultMode') {
             return (
-                <FormControl size="small" fullWidth>
+                <FormControl size="small" sx={{ width: 360, maxWidth: '100%' }}>
                     <Select
                         value={defaultMode}
                         onChange={event => {
@@ -308,10 +294,10 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                     >
                         {CLAUDE_CODE_DEFAULT_MODE_OPTIONS.map(mode => (
                             <MenuItem key={mode} value={mode}>
-                                <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ width: '100%' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                     <Typography variant="body2">{modeText[mode].label}</Typography>
                                     <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{mode}</Typography>
-                                </Stack>
+                                </Box>
                             </MenuItem>
                         ))}
                     </Select>
@@ -324,27 +310,28 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         const value = prefs[key] ?? '';
         if (field.kind === 'bool') {
             return (
-                <FormControl size="small" fullWidth>
-                    <Select value={value === '1' ? '1' : '0'} onChange={event => updatePreference(key, event.target.value === '1' ? '1' : '')}>
-                        <MenuItem value="1">{text.enabled}</MenuItem>
-                        <MenuItem value="0">{text.disabled}</MenuItem>
-                    </Select>
-                </FormControl>
+                <Switch
+                    size="small"
+                    checked={value === '1'}
+                    onChange={(_, checked) => updatePreference(key, checked ? '1' : '')}
+                />
             );
         }
         return (
             <TextField
                 size="small"
-                fullWidth
                 value={value}
                 onChange={event => updatePreference(key, event.target.value)}
                 placeholder={fieldText[key].placeholder}
-                inputProps={field.kind === 'int' ? { inputMode: 'numeric' } : undefined}
-                InputProps={{
-                    endAdornment: field.unit
-                        ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
-                        : undefined,
-                    sx: { fontFamily: field.kind === 'model' ? 'monospace' : undefined, fontSize: '0.85rem' },
+                sx={{ width: field.kind === 'model' ? 280 : field.kind === 'text' ? 320 : 180, maxWidth: '100%' }}
+                slotProps={{
+                    input: {
+                        inputProps: field.kind === 'int' ? { inputMode: 'numeric' } : undefined,
+                        endAdornment: field.unit
+                            ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
+                            : undefined,
+                        sx: { fontFamily: field.kind === 'model' ? 'monospace' : undefined, fontSize: '0.85rem' },
+                    },
                 }}
             />
         );
@@ -365,7 +352,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 },
             }}
             rightAction={(
-                <Stack direction="row" spacing={0.75} alignItems="center">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                     {!loading && !loadError && (hasOverrides || isDirty) && (
                         <Tooltip title={text.restoreAll} arrow>
                             <span>
@@ -396,7 +383,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                             {savingAction === 'save' ? <CircularProgress size={15} color="inherit" /> : text.save}
                         </Button>
                     )}
-                </Stack>
+                </Box>
             )}
         >
 
@@ -412,7 +399,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 {availableCommon.map(key => (
                     <MenuItem key={key} onClick={() => addOverride(key)}>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="body2" fontWeight={500}>{fieldLabel(key)}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>{fieldLabel(key)}</Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>{fieldPurpose(key)}</Typography>
                         </Box>
                     </MenuItem>
@@ -424,7 +411,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 {availableMore.map(key => (
                     <MenuItem key={key} onClick={() => addOverride(key)}>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="body2" fontWeight={500}>{fieldLabel(key)}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>{fieldLabel(key)}</Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>{fieldPurpose(key)}</Typography>
                         </Box>
                     </MenuItem>
@@ -441,40 +428,45 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
             ) : null}
 
             <Collapse in={!loading && orderedSelectedKeys.length > 0} unmountOnExit>
-                <Box>
-                    <Stack divider={<Divider flexItem />}>
+                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+                    <Stack divider={<Divider flexItem sx={{ mx: 1.5 }} />}>
                         {orderedSelectedKeys.map(key => (
                             <Box
                                 key={key}
                                 sx={{
+                                    position: 'relative',
                                     display: 'grid',
                                     alignItems: 'center',
-                                    gap: { xs: 1, md: 2 },
-                                    gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(180px, 0.8fr) minmax(180px, 0.8fr) minmax(220px, 1fr) auto' },
-                                    py: 0.75,
+                                    gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS,
+                                    columnGap: 2,
+                                    rowGap: 1,
+                                    minHeight: 56,
+                                    px: 1.5,
+                                    py: 1.1,
+                                    pr: 6,
                                 }}
                             >
                                 <Box sx={{ minWidth: 0 }}>
-                                    <Stack direction="row" spacing={0.5} alignItems="center">
-                                        <Typography variant="body2" fontWeight={600} noWrap>{fieldLabel(key)}</Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <Typography variant="body2" noWrap sx={{ fontWeight: 600, color: 'text.primary' }}>{fieldLabel(key)}</Typography>
                                         <Tooltip title={fieldPurpose(key)} arrow>
-                                            <InfoOutlined sx={{ fontSize: 14, color: 'text.disabled' }} />
+                                            <InfoOutlined sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                                         </Tooltip>
-                                    </Stack>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }} noWrap>{key}</Typography>
+                                    </Box>
                                 </Box>
-                                <Box sx={{ minWidth: 0, gridColumn: { xs: '1', md: '2' } }}>
-                                    <Typography variant="caption" color="text.secondary">{text.inheritedValue}</Typography>
-                                    <Typography variant="body2" color="text.secondary" noWrap title={renderInheritedValue(key)}>{renderInheritedValue(key)}</Typography>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Box component="span" sx={CLAUDE_CONFIG_KEY_SX}>{key}</Box>
                                 </Box>
-                                <Box sx={{ minWidth: 0, gridColumn: { xs: '1', md: '3' } }}>{renderControl(key)}</Box>
+                                <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    {renderControl(key)}
+                                </Box>
                                 <Tooltip title={text.remove} arrow>
                                     <IconButton
                                         size="small"
                                         aria-label={text.remove}
                                         onClick={() => removeOverride(key)}
                                         disabled={saving}
-                                        sx={{ gridColumn: { xs: '2', md: '4' }, gridRow: { xs: '1 / 4', md: 'auto' } }}
+                                        sx={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}
                                     >
                                         <Close fontSize="small" />
                                     </IconButton>
