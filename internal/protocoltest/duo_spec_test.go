@@ -3,6 +3,9 @@ package protocoltest
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
 // The duoInstanceSpec is a cross-process contract (parent env → child boot),
@@ -11,13 +14,14 @@ import (
 
 func TestDuoSpecRoundTrip(t *testing.T) {
 	spec := duoInstanceSpec{
-		Name:           "tb2",
-		Role:           duoRoleGateway,
-		ConfigDir:      "/tmp/duo-tb2",
-		Port:           4242,
-		UpstreamURL:    "http://127.0.0.1:4141",
-		UpstreamToken:  "sk-tingly-upstream",
-		WriteTimeoutMS: 300,
+		Name:          "tb2",
+		Role:          duoRoleGateway,
+		ConfigDir:     "/tmp/duo-tb2",
+		Port:          4242,
+		UpstreamURL:   "http://127.0.0.1:4141",
+		UpstreamToken: "sk-tingly-upstream",
+		HTTPTimeouts:  server.HTTPTimeouts{WriteTimeout: 300 * time.Millisecond},
+		Stream:        DuoStreamShape{SizeKB: 64, Delay: 150 * time.Millisecond},
 	}
 	entry, err := spec.encode()
 	if err != nil {

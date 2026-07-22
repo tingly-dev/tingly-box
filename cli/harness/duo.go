@@ -86,7 +86,10 @@ func (cmd *DuoCmd) Run() error {
 	}
 
 	env, err := bootDuoEnv("duo", cmd.JSON, cmd.Verbose,
-		protocoltest.DuoEnvConfig{StreamKB: cmd.StreamKB, StreamMS: cmd.StreamMS})
+		protocoltest.DuoEnvConfig{Stream: protocoltest.DuoStreamShape{
+			SizeKB: cmd.StreamKB,
+			Delay:  time.Duration(cmd.StreamMS) * time.Millisecond,
+		}})
 	if err != nil {
 		return err
 	}

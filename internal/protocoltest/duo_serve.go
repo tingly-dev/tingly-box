@@ -65,16 +65,26 @@ type duoInstanceSpec struct {
 	// Gateway (tb2) wiring: where the upstream instance (tb1) lives.
 	UpstreamURL   string `json:"upstream_url,omitempty"`
 	UpstreamToken string `json:"upstream_token,omitempty"`
-	// WriteTimeoutMS, when > 0, overrides the real http.Server.WriteTimeout
-	// (server.WithHTTPTimeouts) instead of Start()'s 10-minute default.
-	// Only wired to the gateway role: #1384 is about the gateway's own
-	// outbound write to the client, not tb1's, so only the gateway under
-	// test needs a short armed deadline.
-	WriteTimeoutMS int `json:"write_timeout_ms,omitempty"`
 
-	// Upstream (tb1) wiring: shape of the slow/large backpressure vmodels.
-	StreamKB int `json:"stream_kb,omitempty"`
-	StreamMS int `json:"stream_ms,omitempty"`
+	// HTTPTimeouts overrides the child's real http.Server timeouts — the
+	// server's own packaged type (server.WithHTTPTimeouts), so all four
+	// deadlines are configurable here exactly as they are on a production
+	// boot; zero fields keep Start()'s defaults. Currently only wired to the
+	// gateway role (NewDuoEnv): #1384 is about the gateway's own outbound
+	// write to the client, not tb1's.
+	HTTPTimeouts server.HTTPTimeouts `json:"http_timeouts"`
+
+	// Stream shapes the slow/large backpressure vmodels (upstream role).
+	Stream DuoStreamShape `json:"stream"`
+}
+
+// DuoStreamShape parameterizes tb1's slow backpressure vmodels: an
+// approximately SizeKB-sized response whose Delay is applied once as TTFT by
+// the virtualserver handler and spread again across chunks by the mock's
+// stream loop, so a request's wall time is roughly 2×Delay.
+type DuoStreamShape struct {
+	SizeKB int           `json:"size_kb,omitempty"`
+	Delay  time.Duration `json:"delay,omitempty"`
 }
 
 // validate rejects a spec that cannot boot, with the field name in the
@@ -196,23 +206,20 @@ func runDuoServe(spec duoInstanceSpec) error {
 	// Option assembly mirrors the CLI's startServer (command/server.go): the
 	// same server.ServerOption vocabulary, minus interactive concerns
 	// (browser, banner, file lock) that have no place in a child process.
-	opts := []server.ServerOption{
+	// HTTPTimeouts is passed through unconditionally — zero fields keep
+	// Start()'s defaults by WithHTTPTimeouts's own contract.
+	srv := server.NewServer(appCfg.GetGlobalConfig(),
 		server.WithOpenBrowser(false),
 		server.WithMultiLogger(multiLogger),
-	}
-	if spec.WriteTimeoutMS > 0 {
-		opts = append(opts, server.WithHTTPTimeouts(server.HTTPTimeouts{
-			WriteTimeout: time.Duration(spec.WriteTimeoutMS) * time.Millisecond,
-		}))
-	}
-	srv := server.NewServer(appCfg.GetGlobalConfig(), opts...)
+		server.WithHTTPTimeouts(spec.HTTPTimeouts),
+	)
 
 	if spec.Role == duoRoleUpstream {
 		// Upstream role: register the duo-only vmodels before serving — the
 		// slow/large backpressure models and the service-identity pool the
 		// routing scenarios address.
-		if spec.StreamKB > 0 {
-			if err := registerDuoStreamModels(srv.GetVirtualModelService(), spec.StreamKB, spec.StreamMS); err != nil {
+		if spec.Stream.SizeKB > 0 {
+			if err := registerDuoStreamModels(srv.GetVirtualModelService(), spec.Stream); err != nil {
 				return fmt.Errorf("register duo stream models: %w", err)
 			}
 		}
@@ -271,34 +278,32 @@ func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
 
 // registerDuoStreamModels registers the slow/large vmodels into tb1's
 // registries. The response streams len(chunks) deltas of ~2 KB each; the
-// Delay parameter is applied by the virtualserver handler once up front
-// (TTFT) and spread again across chunks by the mock's stream loop, so a
-// request's wall time is roughly 2×delay.
-func registerDuoStreamModels(svc *virtualserver.Service, kb, ms int) error {
+// shape's Delay semantics are documented on DuoStreamShape.
+func registerDuoStreamModels(svc *virtualserver.Service, shape DuoStreamShape) error {
 	if svc == nil {
 		return fmt.Errorf("virtual model service unavailable")
 	}
-	chunks := duoStreamChunks(kb)
-	delay := time.Duration(ms) * time.Millisecond
+	chunks := duoStreamChunks(shape.SizeKB)
 	content := strings.Join(chunks, "")
+	description := fmt.Sprintf("duo backpressure model: ~%d KB streamed over ~%s", shape.SizeKB, 2*shape.Delay)
 
 	if err := svc.GetOpenAIRegistry().Register(openaivm.NewMockModel(&openaivm.MockModelConfig{
 		ID:           DuoSlowOpenAIModel,
 		Name:         "Duo slow GPT",
-		Description:  fmt.Sprintf("duo backpressure model: ~%d KB streamed over ~%d ms", kb, 2*ms),
+		Description:  description,
 		Content:      content,
 		StreamChunks: chunks,
-		Delay:        delay,
+		Delay:        shape.Delay,
 	})); err != nil {
 		return err
 	}
 	return svc.GetAnthropicRegistry().Register(anthropicvm.NewMockModel(&anthropicvm.MockModelConfig{
 		ID:           DuoSlowAnthropicModel,
 		Name:         "Duo slow Claude",
-		Description:  fmt.Sprintf("duo backpressure model: ~%d KB streamed over ~%d ms", kb, 2*ms),
+		Description:  description,
 		Content:      content,
 		StreamChunks: chunks,
-		Delay:        delay,
+		Delay:        shape.Delay,
 	}))
 }
 

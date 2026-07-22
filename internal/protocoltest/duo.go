@@ -52,6 +52,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/internal/server"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 )
 
@@ -259,31 +260,30 @@ func (inst *DuoInstance) WriteHeapProfile(dir, name string) (string, error) {
 
 // DuoEnvConfig parameterizes NewDuoEnv.
 type DuoEnvConfig struct {
-	// StreamKB / StreamMS shape tb1's slow backpressure vmodels: an
-	// approximately StreamKB-sized response streamed over roughly 2×StreamMS
-	// wall time. Defaults: 256 KB over ~1 s.
-	StreamKB int
-	StreamMS int
+	// Stream shapes tb1's slow backpressure vmodels (see DuoStreamShape).
+	// Defaults: 256 KB over ~1 s of wall time (Delay 500ms, applied twice).
+	Stream DuoStreamShape
 	// ChildLog, when non-nil, receives both children's stdout/stderr live
 	// (in addition to the per-instance tail buffer used for diagnostics).
 	ChildLog io.Writer
 	// BootTimeout caps how long each instance may take to become healthy
 	// (default 90s — first boot may attempt a provider-template fetch).
 	BootTimeout time.Duration
-	// TB2WriteTimeoutMS, when > 0, overrides tb2's real http.Server.WriteTimeout
-	// (server.WithHTTPTimeouts) instead of Start()'s 10-minute default. Lets a
-	// test arm a short deadline and prove ClearServerIOTimeouts still lets a
-	// slower stream complete under the full two-process production stack
-	// (#1384) — not just the isolated middleware unit test.
-	TB2WriteTimeoutMS int
+	// TB2HTTPTimeouts overrides tb2's real http.Server timeouts — the
+	// server's own packaged type (server.WithHTTPTimeouts), all four
+	// deadlines configurable; zero fields keep Start()'s defaults. Lets a
+	// test arm a short WriteTimeout and prove ClearServerIOTimeouts still
+	// lets a slower stream complete under the full two-process production
+	// stack (#1384) — not just the isolated middleware unit test.
+	TB2HTTPTimeouts server.HTTPTimeouts
 }
 
 func (c *DuoEnvConfig) withDefaults() {
-	if c.StreamKB <= 0 {
-		c.StreamKB = 256
+	if c.Stream.SizeKB <= 0 {
+		c.Stream.SizeKB = 256
 	}
-	if c.StreamMS <= 0 {
-		c.StreamMS = 500
+	if c.Stream.Delay <= 0 {
+		c.Stream.Delay = 500 * time.Millisecond
 	}
 	if c.BootTimeout <= 0 {
 		c.BootTimeout = 90 * time.Second
@@ -308,10 +308,9 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 	env := &DuoEnv{client: &http.Client{Timeout: 120 * time.Second}}
 
 	tb1, err := env.startInstance(duoInstanceSpec{
-		Name:     "tb1",
-		Role:     duoRoleUpstream,
-		StreamKB: cfg.StreamKB,
-		StreamMS: cfg.StreamMS,
+		Name:   "tb1",
+		Role:   duoRoleUpstream,
+		Stream: cfg.Stream,
 	}, cfg)
 	if err != nil {
 		env.Close()
@@ -320,11 +319,11 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 	env.TB1 = tb1
 
 	tb2, err := env.startInstance(duoInstanceSpec{
-		Name:           "tb2",
-		Role:           duoRoleGateway,
-		UpstreamURL:    tb1.BaseURL,
-		UpstreamToken:  tb1.ModelToken,
-		WriteTimeoutMS: cfg.TB2WriteTimeoutMS,
+		Name:          "tb2",
+		Role:          duoRoleGateway,
+		UpstreamURL:   tb1.BaseURL,
+		UpstreamToken: tb1.ModelToken,
+		HTTPTimeouts:  cfg.TB2HTTPTimeouts,
 	}, cfg)
 	if err != nil {
 		env.Close()
