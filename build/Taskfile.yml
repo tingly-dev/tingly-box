@@ -7,30 +7,40 @@ tasks:
   go:mod:tidy:
     summary: Runs `go mod tidy`
     internal: true
+    # Universal/multi-arch builds invoke this concurrently from parallel deps;
+    # two `go mod tidy` processes racing on go.mod can corrupt it (#4637).
+    run: once
     dir: gui/wails3
     cmds:
       - go mod tidy
 
   install:frontend:deps:
     summary: Install frontend dependencies
+    run: once
     dir: frontend
     sources:
       - package.json
-      - package-lock.json
+      - pnpm-lock.yaml
     generates:
       - node_modules
     preconditions:
-      - sh: pnpm version
-        msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
+      - sh: pnpm --version
+        msg: "pnpm not found. Install it via: npm install -g pnpm"
     cmds:
       - pnpm install
 
   build:frontend:
     label: build:frontend (PRODUCTION={{.PRODUCTION}})
     summary: Build the frontend project
+    # darwin:build:universal runs its per-arch builds as parallel deps, each of
+    # which depends on this task. Without run:once the two executions race:
+    # one regenerates frontend/src/bindings (-clean deletes it first) while the
+    # other's bundler is reading it, failing intermittently (#4637).
+    run: once
     dir: frontend
     sources:
       - "**/*"
+      - exclude: node_modules/**/*
     generates:
       - dist/**/*
     deps:
@@ -46,27 +56,30 @@ tasks:
         cd ..
         mkdir -p ./internal/web_wails3/dist
         cp -R frontend/dist/* ./internal/web_wails3/dist/
-        
+
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
+      # Our frontend build scripts (see frontend/package.json). The wails lite
+      # variants embed a token-free login shell suited to the desktop window.
       BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails:lite{{else}}build:dev:wails:lite{{end}}'
 
 
   generate:bindings:
     label: generate:bindings (BUILD_FLAGS={{.BUILD_FLAGS}})
     summary: Generates bindings for the frontend
+    run: once
     deps:
       - task: go:mod:tidy
     sources:
       - "**/*.[jt]s"
       - exclude: frontend/**/*
-      - frontend/bindings/**/*  # Rerun when switching between dev/production mode causes changes in output
+      - frontend/src/bindings/**/*  # Rerun when switching between dev/production mode causes changes in output
       - "**/*.go"
       - go.mod
       - go.sum
     generates:
-      - frontend/bindings/**/*
+      - frontend/src/bindings/**/*
     cmds:
       - |
         cd {{.WAILS_PACKAGE_PATH}}
@@ -75,6 +88,7 @@ tasks:
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image
+    run: once
     dir: build
     sources:
       - "appicon.png"
@@ -86,9 +100,13 @@ tasks:
 
   dev:frontend:
     summary: Runs the frontend in development mode
-    dir: frontend
     deps:
       - task: install:frontend:deps
+    cmds:
+      - task: frontend:dev:pnpm
+
+  frontend:dev:pnpm:
+    dir: frontend
     cmds:
       - pnpm run dev -- --port {{.VITE_PORT}} --strictPort
 
