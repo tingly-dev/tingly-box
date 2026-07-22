@@ -5,6 +5,7 @@ import {
     Chip,
     Grid,
     IconButton,
+    Skeleton,
     Stack,
     Tooltip,
     Typography,
@@ -226,9 +227,13 @@ const AgentOverviewPage: React.FC = () => {
     // Per-scenario rule counts drive the card status line ("3 rules" /
     // "Not configured yet"), so this overview answers the user's real question
     // — "which have I set up, which still need attention?" — instead of being a
-    // pure launcher (UX principle #1). undefined = still loading / unavailable,
-    // in which case the card simply omits the status line.
+    // pure launcher (UX principle #1). undefined (after loading) = the fetch
+    // for that scenario failed, in which case the card simply omits the
+    // status line. `countsLoaded` (distinct from undefined-per-count) gates
+    // a skeleton for the true in-flight window, so a fetch failure doesn't
+    // read as a permanently-loading card.
     const [ruleCounts, setRuleCounts] = useState<Record<string, number | undefined>>({});
+    const [countsLoaded, setCountsLoaded] = useState(false);
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -243,7 +248,10 @@ const AgentOverviewPage: React.FC = () => {
                     }
                 }),
             );
-            if (!cancelled) setRuleCounts(Object.fromEntries(entries));
+            if (!cancelled) {
+                setRuleCounts(Object.fromEntries(entries));
+                setCountsLoaded(true);
+            }
         })();
         return () => { cancelled = true; };
     }, []);
@@ -365,7 +373,9 @@ const AgentOverviewPage: React.FC = () => {
                                             {t(s.descKey)}
                                         </Typography>
                                         <Box sx={{ mt: 1, minHeight: 20, display: 'flex', alignItems: 'center' }}>
-                                            {count === undefined ? null : count > 0 ? (
+                                            {!countsLoaded ? (
+                                                <Skeleton variant="text" width={72} />
+                                            ) : count === undefined ? null : count > 0 ? (
                                                 <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 500 }}>
                                                     {count === 1
                                                         ? t('scenarioOverview.ruleCountOne', { defaultValue: '1 rule' })

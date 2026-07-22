@@ -5,6 +5,7 @@ import { Box, Button } from '@mui/material';
 import { Key as IconKey } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
 import SharingKeysDialog from './components/SharingKeysDialog.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
@@ -23,7 +24,7 @@ const UseTeamPageContent: React.FC = () => {
     const [sharingKeysOpen, setSharingKeysOpen] = useState(false);
 
     return (
-        <PageLayout loading={isLoading} notification={notification}>
+        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     title={

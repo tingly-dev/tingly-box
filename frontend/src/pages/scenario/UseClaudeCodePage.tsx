@@ -5,6 +5,7 @@ import ConnectProviderFlow from '@/components/ConnectProviderFlow';
 import { derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
 import type { ClaudeCodeDefaultMode } from './components/ClaudeCodeQuickConfig';
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import TemplatePage from './components/TemplatePage.tsx';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
@@ -209,7 +210,7 @@ const UseClaudeCodePageContent: React.FC = () => {
         applyPrefs(derivePrefsFromRules({ rules, mode: configMode }) as Record<string, string>, true);
 
     return (
-        <PageLayout loading={loadingRule} notification={notification}>
+        <PageLayout loading={loadingRule} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     title={

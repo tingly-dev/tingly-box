@@ -1,5 +1,6 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import PageLayout from '@/components/PageLayout';
+import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ConfigRow from "@/components/ConfigRow.tsx";
@@ -146,7 +147,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     }, [commandMode, appVersion, profileId]);
 
     return (
-        <PageLayout loading={isLoading} notification={notification}>
+        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
                     size="full"

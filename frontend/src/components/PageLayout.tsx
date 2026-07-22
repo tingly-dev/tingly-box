@@ -1,7 +1,14 @@
 import { CircularProgress, Box, Alert, IconButton } from '@mui/material';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type TimerId = ReturnType<typeof setTimeout>;
+
+// A loading indicator (spinner or skeleton) shown for less than this only
+// reads as a flash/glitch, not as "loading" — especially a skeleton, whose
+// grey placeholder blocks contrast much more with real content than a
+// spinner does. Below this threshold we show nothing at all rather than
+// pop the indicator in and immediately back out.
+const LOADING_SHOW_DELAY_MS = 200;
 
 interface PageLoadingProps {
   minHeight?: number;
@@ -34,6 +41,13 @@ interface PageLayoutProps {
   loading: boolean;
   children: React.ReactNode;
   loadingMinHeight?: number;
+  /**
+   * Rendered instead of the default centered spinner while `loading` is
+   * true. Use a skeleton that mirrors the page's real layout (see
+   * ScenarioPageSkeleton) to avoid a jarring blank-to-content pop once
+   * data arrives.
+   */
+  loadingContent?: React.ReactNode;
   notification?: NotificationConfig;
   title?: string;
   subtitle?: string;
@@ -44,12 +58,28 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   loading,
   children,
   loadingMinHeight = 400,
+  loadingContent,
   notification,
   title,
   subtitle,
   rightAction,
 }) => {
   const timeoutRef = useRef<TimerId | null>(null);
+
+  // Only start showing the loading state once `loading` has been true for
+  // LOADING_SHOW_DELAY_MS. If the data arrives before that, nothing is
+  // ever shown — a brief blank moment reads as instant, while a skeleton
+  // that appears and disappears within a couple hundred ms reads as a
+  // visual glitch.
+  const [showLoading, setShowLoading] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      setShowLoading(false);
+      return;
+    }
+    const t = setTimeout(() => setShowLoading(true), LOADING_SHOW_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   // Auto-hide notification after specified duration
   useEffect(() => {
@@ -85,7 +115,8 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   }, [notification?.open, notification?.onClose]);
 
   if (loading) {
-    return <PageLoading minHeight={loadingMinHeight} />;
+    if (!showLoading) return null;
+    return loadingContent ? <>{loadingContent}</> : <PageLoading minHeight={loadingMinHeight} />;
   }
 
   return (
