@@ -48,9 +48,9 @@ const (
 	duoEnvStreamMS = "TINGLY_DUO_STREAM_MS"
 
 	// Overrides Start()'s hardcoded http.Server.WriteTimeout via
-	// server.WithHTTPTimeouts, on whichever instance receives it (set on
-	// tb2 by TestDuoWriteTimeoutSurvivesClearedDeadline: #1384 is about the
-	// gateway's own outbound write to the client, not tb1's).
+	// server.WithHTTPTimeouts. Currently only wired to tb2 in NewDuoEnv:
+	// #1384 is about the gateway's own outbound write to the client, not
+	// tb1's, so only the gateway under test needs a short armed deadline.
 	duoEnvWriteTimeoutMS = "TINGLY_DUO_WRITE_TIMEOUT_MS"
 
 	duoRoleServe = "serve"
