@@ -12,9 +12,9 @@ services:
   - { provider: anthropic, model: claude-sonnet, tier: 0 }
   - { provider: anthropic, model: claude-haiku, tier: 1 }
 faults:
-  anthropic/claude-opus: [200]
-  anthropic/claude-sonnet: [200]
-  anthropic/claude-haiku: [200]
+  anthropic/claude-opus: { steps: [{ status: 200 }] }
+  anthropic/claude-sonnet: { steps: [{ status: 200 }] }
+  anthropic/claude-haiku: { steps: [{ status: 200 }] }
 expect:
   final_status: 200
   distinct_first_attempts: [anthropic/claude-opus, anthropic/claude-sonnet]   # both top-tier peers appear as first attempts

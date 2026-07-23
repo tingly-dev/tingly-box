@@ -9,8 +9,8 @@ services:
   - { provider: openai, model: gpt-5.5, tier: 0, inactive: true }
   - { provider: openai, model: gpt-4.1, tier: 1, inactive: false }
 faults:
-  openai/gpt-5.4: [200]
-  openai/gpt-4.1: [200]
+  openai/gpt-5.4: { steps: [{ status: 200 }] }
+  openai/gpt-4.1: { steps: [{ status: 200 }] }
 expect:
   final_status: 200
   attempts_exclude: [openai/gpt-5.5]   # inactive peer never appears

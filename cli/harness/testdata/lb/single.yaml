@@ -6,7 +6,7 @@ affinity_secs: 0
 services:
   - { provider: deepseek, model: deepseek-pro, tier: 0 }
 faults:
-  deepseek/deepseek-pro: [200, 500, 200]
+  deepseek/deepseek-pro: { steps: [{ status: 200 }, { status: 500 }, { status: 200 }] }
 expect:
   final_status: 200
   attempts: [deepseek/deepseek-pro]
