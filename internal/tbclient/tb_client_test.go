@@ -373,19 +373,6 @@ func TestGetClaudeCodeSettingsPathForProfile_MaterializesProfileSettings(t *test
 	assert.Equal(t, "team/coder", written.Env["ANTHROPIC_MODEL"])
 }
 
-func envToMap(env []string) map[string]string {
-	kv := map[string]string{}
-	for _, e := range env {
-		for i := 0; i < len(e); i++ {
-			if e[i] == '=' {
-				kv[e[:i]] = e[i+1:]
-				break
-			}
-		}
-	}
-	return kv
-}
-
 func TestGetScenarioEndpointPath(t *testing.T) {
 	client := NewTBClient(&serverconfig.Config{}, nil)
 	tests := []struct {

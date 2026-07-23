@@ -94,8 +94,9 @@ export function ccProfileIdFromDefaultAgent(defaultAgent?: string): string {
 }
 
 // defaultAgentForCCProfile builds the default_agent value for a profile
-// selection ('' → "claude_code", i.e. back to the main scenario — the update
-// API skips empty strings, so the explicit base value is used to clear).
+// selection ('' → the explicit base "claude_code", not an empty string — a
+// concrete value reads clearly in raw settings/logs, per the "show the
+// concrete value, not the alias" principle in .design/ux-principles.md).
 export function defaultAgentForCCProfile(profileId: string): string {
     return profileId ? `${CLAUDE_CODE_AGENT}:${profileId}` : CLAUDE_CODE_AGENT;
 }
