@@ -136,7 +136,9 @@ func TestDuoBackpressure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("duo e2e is not a -short test")
 	}
-	env, err := NewDuoEnv(DuoEnvConfig{Stream: DuoStreamShape{SizeKB: 64, Delay: 150 * time.Millisecond}})
+	env, err := NewDuoEnv(DuoEnvConfig{
+		Upstream: DuoUpstreamConfig{Stream: DuoStreamShape{SizeKB: 64, Delay: 150 * time.Millisecond}},
+	})
 	if err != nil {
 		t.Fatalf("boot duo env: %v", err)
 	}
@@ -172,8 +174,8 @@ func TestDuoWriteTimeoutSurvivesClearedDeadline(t *testing.T) {
 		t.Skip("duo e2e is not a -short test")
 	}
 	env, err := NewDuoEnv(DuoEnvConfig{
-		Stream:          DuoStreamShape{SizeKB: 64, Delay: 600 * time.Millisecond},
-		TB2HTTPTimeouts: server.HTTPTimeouts{WriteTimeout: 300 * time.Millisecond},
+		Upstream: DuoUpstreamConfig{Stream: DuoStreamShape{SizeKB: 64, Delay: 600 * time.Millisecond}},
+		Gateway:  DuoGatewayConfig{HTTPTimeouts: server.HTTPTimeouts{WriteTimeout: 300 * time.Millisecond}},
 	})
 	if err != nil {
 		t.Fatalf("boot duo env: %v", err)

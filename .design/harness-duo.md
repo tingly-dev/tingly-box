@@ -62,7 +62,7 @@ Design decisions, and why:
   the CLI binary *and* the `go test` binary — CI needs no extra build step.
 
 - **A typed boot spec, not an env-var scatter.** `TINGLY_DUO_SPEC` carries a
-  JSON-encoded `duoInstanceSpec` (`duo_serve.go`): explicit `role`
+  JSON-encoded `duoInstanceSpec` (`duo_spec.go`): explicit `role`
   (`gateway` / `upstream`), config dir, port, and the role's wiring fields —
   the duo analogue of the CLI's `options.StartServerOptions`, so tb boot
   parameters stay consistent with how every other server boot is expressed.
@@ -273,7 +273,8 @@ go test ./internal/protocoltest/ -run 'TestDuoFunctional|TestDuoMemoryRegression
 ```
 
 Code map: `internal/protocoltest/duo.go` (parent: routes, spawning, request
-driving) · `duo_serve.go` (child: boot + seeding, spec contract) ·
+driving) · `duo_spec.go` (parent↔child boot contract) · `duo_serve.go`
+(child: boot + seeding) ·
 `duo_checks.go` (functional phase — parses responses into the shared
 `RoundTripResult` and runs the `vmodel/benchmark/check` assertion library,
 same vocabulary as matrix/replay) · `duo_memory.go` (per-instance memory

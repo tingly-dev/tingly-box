@@ -10,7 +10,7 @@ package protocoltest
 // tb1 and tb2 are SEPARATE PROCESSES, each a full production server booted
 // through server.Start (background refreshers, config watcher, production
 // http.Server timeouts) — the parent re-executes its own binary via the
-// typed duoInstanceSpec contract in duo_serve.go. Because each instance has its
+// typed duoInstanceSpec contract in duo_spec.go. Because each instance has its
 // own Go runtime, memory is observed PER INSTANCE over the production
 // /api/v1/debug/{memstats,pprof/heap} endpoints: a leak attributes directly
 // to tb2 (gateway/conversion path) or tb1 (vmodel serving path) instead of
@@ -258,32 +258,47 @@ func (inst *DuoInstance) WriteHeapProfile(dir, name string) (string, error) {
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
-// DuoEnvConfig parameterizes NewDuoEnv.
+// DuoEnvConfig parameterizes NewDuoEnv. Role-specific knobs live in the
+// Upstream / Gateway sections — mirroring the child-side spec's role split —
+// so an instance-specific parameter has a structural home instead of a
+// name-prefixed field; top-level fields apply to the environment as a whole.
 type DuoEnvConfig struct {
-	// Stream shapes tb1's slow backpressure vmodels (see DuoStreamShape).
-	// Defaults: 256 KB over ~1 s of wall time (Delay 500ms, applied twice).
-	Stream DuoStreamShape
+	// Upstream configures tb1, the vmodel upstream.
+	Upstream DuoUpstreamConfig
+	// Gateway configures tb2, the gateway under test.
+	Gateway DuoGatewayConfig
 	// ChildLog, when non-nil, receives both children's stdout/stderr live
 	// (in addition to the per-instance tail buffer used for diagnostics).
 	ChildLog io.Writer
 	// BootTimeout caps how long each instance may take to become healthy
 	// (default 90s — first boot may attempt a provider-template fetch).
 	BootTimeout time.Duration
-	// TB2HTTPTimeouts overrides tb2's real http.Server timeouts — the
-	// server's own packaged type (server.WithHTTPTimeouts), all four
-	// deadlines configurable; zero fields keep Start()'s defaults. Lets a
-	// test arm a short WriteTimeout and prove ClearServerIOTimeouts still
-	// lets a slower stream complete under the full two-process production
-	// stack (#1384) — not just the isolated middleware unit test.
-	TB2HTTPTimeouts server.HTTPTimeouts
+}
+
+// DuoUpstreamConfig is the tb1 section of DuoEnvConfig.
+type DuoUpstreamConfig struct {
+	// Stream shapes tb1's slow backpressure vmodels (see DuoStreamShape).
+	// Defaults: 256 KB over ~1 s of wall time (Delay 500ms, applied twice).
+	Stream DuoStreamShape
+}
+
+// DuoGatewayConfig is the tb2 section of DuoEnvConfig.
+type DuoGatewayConfig struct {
+	// HTTPTimeouts overrides tb2's real http.Server timeouts — the server's
+	// own packaged type (server.WithHTTPTimeouts), all four deadlines
+	// configurable; zero fields keep Start()'s defaults. Lets a test arm a
+	// short WriteTimeout and prove ClearServerIOTimeouts still lets a slower
+	// stream complete under the full two-process production stack (#1384) —
+	// not just the isolated middleware unit test.
+	HTTPTimeouts server.HTTPTimeouts
 }
 
 func (c *DuoEnvConfig) withDefaults() {
-	if c.Stream.SizeKB <= 0 {
-		c.Stream.SizeKB = 256
+	if c.Upstream.Stream.SizeKB <= 0 {
+		c.Upstream.Stream.SizeKB = 256
 	}
-	if c.Stream.Delay <= 0 {
-		c.Stream.Delay = 500 * time.Millisecond
+	if c.Upstream.Stream.Delay <= 0 {
+		c.Upstream.Stream.Delay = 500 * time.Millisecond
 	}
 	if c.BootTimeout <= 0 {
 		c.BootTimeout = 90 * time.Second
@@ -310,7 +325,7 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 	tb1, err := env.startInstance(duoInstanceSpec{
 		Name:   "tb1",
 		Role:   duoRoleUpstream,
-		Stream: cfg.Stream,
+		Stream: cfg.Upstream.Stream,
 	}, cfg)
 	if err != nil {
 		env.Close()
@@ -323,7 +338,7 @@ func NewDuoEnv(cfg DuoEnvConfig) (*DuoEnv, error) {
 		Role:          duoRoleGateway,
 		UpstreamURL:   tb1.BaseURL,
 		UpstreamToken: tb1.ModelToken,
-		HTTPTimeouts:  cfg.TB2HTTPTimeouts,
+		HTTPTimeouts:  cfg.Gateway.HTTPTimeouts,
 	}, cfg)
 	if err != nil {
 		env.Close()
