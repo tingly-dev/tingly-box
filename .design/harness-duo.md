@@ -55,14 +55,23 @@ Design decisions, and why:
   or interacting with those components are on the measured path.
 
 - **Re-execution instead of a separate server binary.** The parent spawns
-  `os.Executable()` with the `TINGLY_DUO_*` env contract;
-  `MaybeRunDuoServe()` (called first thing in `cli/harness` `main()` and in
-  `duo_test.go`'s `TestMain`) intercepts and runs the server, never
-  returning. The same mechanism therefore works for the CLI binary *and* the
-  `go test` binary — CI needs no extra build step.
+  `os.Executable()` with the boot contract in a single `TINGLY_DUO_SPEC`
+  environment variable; `MaybeRunDuoServe()` (called first thing in
+  `cli/harness` `main()` and in `duo_test.go`'s `TestMain`) intercepts and
+  runs the server, never returning. The same mechanism therefore works for
+  the CLI binary *and* the `go test` binary — CI needs no extra build step.
+
+- **A typed boot spec, not an env-var scatter.** `TINGLY_DUO_SPEC` carries a
+  JSON-encoded `duoInstanceSpec` (`duo_spec.go`): explicit `role`
+  (`gateway` / `upstream`), config dir, port, and the role's wiring fields —
+  the duo analogue of the CLI's `options.StartServerOptions`, so tb boot
+  parameters stay consistent with how every other server boot is expressed.
+  The spec is validated on both sides (parent fails fast before spawning;
+  child rejects a malformed spec with the offending field named) and the
+  role is stated, never inferred from which fields happen to be set.
 
 - **Children self-seed their own config dirs.** tb2 receives tb1's URL/token
-  via env and writes its own providers + rules at boot. The parent never
+  in its spec and writes its own providers + rules at boot. The parent never
   opens an instance's SQLite store (no cross-process DB access); its only
   reads are each child's `config.json` (tokens) and HTTP.
 
@@ -264,7 +273,8 @@ go test ./internal/protocoltest/ -run 'TestDuoFunctional|TestDuoMemoryRegression
 ```
 
 Code map: `internal/protocoltest/duo.go` (parent: routes, spawning, request
-driving) · `duo_serve.go` (child: boot + seeding, env contract) ·
+driving) · `duo_spec.go` (parent↔child boot contract) · `duo_serve.go`
+(child: boot + seeding) ·
 `duo_checks.go` (functional phase — parses responses into the shared
 `RoundTripResult` and runs the `vmodel/benchmark/check` assertion library,
 same vocabulary as matrix/replay) · `duo_memory.go` (per-instance memory

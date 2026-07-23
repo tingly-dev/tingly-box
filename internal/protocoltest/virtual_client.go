@@ -42,7 +42,7 @@ func (vs *VirtualServer) Client() *VirtualClient {
 func (vc *VirtualClient) SendOpenAIChat(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
 	t.Helper()
 	vc.maybeRegister(s)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"model":    "gpt-4o",
 		"messages": []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
 		"stream":   streaming,
@@ -54,7 +54,7 @@ func (vc *VirtualClient) SendOpenAIChat(t *testing.T, s Scenario, streaming bool
 func (vc *VirtualClient) SendOpenAIResponses(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
 	t.Helper()
 	vc.maybeRegister(s)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"model":  "gpt-4o",
 		"input":  "What is the capital of France?",
 		"stream": streaming,
@@ -66,7 +66,7 @@ func (vc *VirtualClient) SendOpenAIResponses(t *testing.T, s Scenario, streaming
 func (vc *VirtualClient) SendAnthropicV1(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
 	t.Helper()
 	vc.maybeRegister(s)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"model":      "claude-3-5-sonnet-20241022",
 		"max_tokens": 1024,
 		"messages":   []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
@@ -79,8 +79,8 @@ func (vc *VirtualClient) SendAnthropicV1(t *testing.T, s Scenario, streaming boo
 func (vc *VirtualClient) SendGoogle(t *testing.T, s Scenario, streaming bool) *ParsedResponse {
 	t.Helper()
 	vc.maybeRegister(s)
-	body := map[string]interface{}{
-		"contents": []map[string]interface{}{
+	body := map[string]any{
+		"contents": []map[string]any{
 			{"role": "user", "parts": []map[string]string{{"text": "What is the capital of France?"}}},
 		},
 	}

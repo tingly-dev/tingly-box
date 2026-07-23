@@ -337,8 +337,8 @@ func (env *TestEnv) SendWithModel(t *testing.T, source protocol.APIType, modelNa
 
 // failoverJSONBody is a convenience helper for tests that need to peek at the
 // JSON error body returned by the gateway after all tiers fail.
-func failoverJSONBody(b []byte) map[string]interface{} {
-	var m map[string]interface{}
+func failoverJSONBody(b []byte) map[string]any {
+	var m map[string]any
 	_ = json.Unmarshal(b, &m)
 	return m
 }

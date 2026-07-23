@@ -42,10 +42,10 @@ func TestSetupRealProfile_ClaudeCode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build a minimal Anthropic v1 messages request (same format claude CLI sends)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"model":      "tingly/cc", // must match built-in-cc RequestModel
 		"max_tokens": 256,
-		"messages": []map[string]interface{}{
+		"messages": []map[string]any{
 			{"role": "user", "content": "Hello"},
 		},
 		"stream": false,
@@ -68,11 +68,11 @@ func TestSetupRealProfile_ClaudeCode(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.StatusCode, "unexpected status: %s", string(respBody))
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(respBody, &parsed), "response must be valid JSON: %s", string(respBody))
 
 	assert.Equal(t, "message", parsed["type"], "response type should be message")
-	content, ok := parsed["content"].([]interface{})
+	content, ok := parsed["content"].([]any)
 	require.True(t, ok && len(content) > 0, "response must have content blocks")
 }
 

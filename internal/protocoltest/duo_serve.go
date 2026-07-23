@@ -4,20 +4,18 @@ package protocoltest
 // production tingly-box instance booted via server.Start (background
 // refreshers, config watcher, real http.Server timeouts — everything a real
 // deployment runs). The parent (NewDuoEnv) re-executes its own binary with
-// the TINGLY_DUO_* environment variables below; MaybeRunDuoServe intercepts
-// that re-execution before normal CLI/test execution begins and never
-// returns.
+// the typed duoInstanceSpec contract (duo_spec.go); MaybeRunDuoServe
+// intercepts that re-execution before normal CLI/test execution begins and
+// never returns.
 //
 // The child self-seeds its own config dir, so the parent never opens the
-// instance's SQLite store — the only cross-process contract is this env
-// block plus reading the child's config.json for tokens.
+// instance's SQLite store — the only cross-process contract is the spec
+// plus reading the child's config.json for tokens.
 
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -30,30 +28,6 @@ import (
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
-)
-
-// Environment variable contract between the duo parent and child.
-const (
-	duoEnvRole      = "TINGLY_DUO_ROLE"
-	duoEnvName      = "TINGLY_DUO_NAME"
-	duoEnvConfigDir = "TINGLY_DUO_CONFIG_DIR"
-	duoEnvPort      = "TINGLY_DUO_PORT"
-
-	// Gateway (tb2) wiring: where the upstream instance (tb1) lives.
-	duoEnvUpstreamURL   = "TINGLY_DUO_UPSTREAM_URL"
-	duoEnvUpstreamToken = "TINGLY_DUO_UPSTREAM_TOKEN"
-
-	// Upstream (tb1) wiring: shape of the slow/large "backpressure" vmodels.
-	duoEnvStreamKB = "TINGLY_DUO_STREAM_KB"
-	duoEnvStreamMS = "TINGLY_DUO_STREAM_MS"
-
-	// Overrides Start()'s hardcoded http.Server.WriteTimeout via
-	// server.WithHTTPTimeouts. Currently only wired to tb2 in NewDuoEnv:
-	// #1384 is about the gateway's own outbound write to the client, not
-	// tb1's, so only the gateway under test needs a short armed deadline.
-	duoEnvWriteTimeoutMS = "TINGLY_DUO_WRITE_TIMEOUT_MS"
-
-	duoRoleServe = "serve"
 )
 
 // tb2 provider UUIDs wired by seedDuoGateway; duo_routing.go's scenario
@@ -73,40 +47,35 @@ const (
 )
 
 // MaybeRunDuoServe runs a duo child instance and exits the process when the
-// duo env contract is present; otherwise it returns immediately. Call it
-// first thing in main() (cli/harness) and TestMain (duo_test.go) so the
-// parent can re-execute the same binary as a server.
+// duo spec is present in the environment; otherwise it returns immediately.
+// Call it first thing in main() (cli/harness) and TestMain (duo_test.go) so
+// the parent can re-execute the same binary as a server.
 func MaybeRunDuoServe() {
-	if os.Getenv(duoEnvRole) != duoRoleServe {
+	raw := os.Getenv(duoEnvSpec)
+	if raw == "" {
 		return
 	}
-	if err := runDuoServe(); err != nil {
-		fmt.Fprintf(os.Stderr, "duo-serve[%s]: %v\n", os.Getenv(duoEnvName), err)
+	spec, err := decodeDuoSpec(raw)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "duo-serve: %v\n", err)
+		os.Exit(1)
+	}
+	if err := runDuoServe(spec); err != nil {
+		fmt.Fprintf(os.Stderr, "duo-serve[%s]: %v\n", spec.Name, err)
 		os.Exit(1)
 	}
 	os.Exit(0)
 }
 
-func runDuoServe() error {
-	dir := os.Getenv(duoEnvConfigDir)
-	if dir == "" {
-		return fmt.Errorf("%s not set", duoEnvConfigDir)
-	}
-	port, err := strconv.Atoi(os.Getenv(duoEnvPort))
-	if err != nil || port <= 0 {
-		return fmt.Errorf("invalid %s: %q", duoEnvPort, os.Getenv(duoEnvPort))
-	}
-
-	appCfg, err := config.NewAppConfig(config.WithConfigDir(dir))
+func runDuoServe(spec duoInstanceSpec) error {
+	appCfg, err := config.NewAppConfig(config.WithConfigDir(spec.ConfigDir))
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	isGateway := os.Getenv(duoEnvUpstreamURL) != ""
-
-	// tb2 role: wire providers + one rule per duo route to the upstream (tb1).
-	if isGateway {
-		if err := seedDuoGateway(appCfg, os.Getenv(duoEnvUpstreamURL), os.Getenv(duoEnvUpstreamToken)); err != nil {
+	// Gateway role: wire providers + one rule per duo route to the upstream.
+	if spec.Role == duoRoleGateway {
+		if err := seedDuoGateway(appCfg, spec.UpstreamURL, spec.UpstreamToken); err != nil {
 			return fmt.Errorf("seed gateway wiring: %w", err)
 		}
 		// Pipeline health scenarios need a non-zero recovery window so a 429
@@ -119,28 +88,28 @@ func runDuoServe() error {
 	// Production boots with a MultiLogger; without it the smart-routing and
 	// model-request memory sinks don't exist and /api/v1/requests has nothing
 	// to join, so the child would be less observable than a real deployment.
-	multiLogger, err := obs.NewMultiLogger(obs.DefaultMultiLoggerConfig(dir))
+	multiLogger, err := obs.NewMultiLogger(obs.DefaultMultiLoggerConfig(spec.ConfigDir))
 	if err != nil {
 		return fmt.Errorf("init multi logger: %w", err)
 	}
 
-	opts := []server.ServerOption{
+	// Option assembly mirrors the CLI's startServer (command/server.go): the
+	// same server.ServerOption vocabulary, minus interactive concerns
+	// (browser, banner, file lock) that have no place in a child process.
+	// HTTPTimeouts is passed through unconditionally — zero fields keep
+	// Start()'s defaults by WithHTTPTimeouts's own contract.
+	srv := server.NewServer(appCfg.GetGlobalConfig(),
 		server.WithOpenBrowser(false),
 		server.WithMultiLogger(multiLogger),
-	}
-	if ms := duoEnvInt(duoEnvWriteTimeoutMS); ms > 0 {
-		opts = append(opts, server.WithHTTPTimeouts(server.HTTPTimeouts{
-			WriteTimeout: time.Duration(ms) * time.Millisecond,
-		}))
-	}
-	srv := server.NewServer(appCfg.GetGlobalConfig(), opts...)
+		server.WithHTTPTimeouts(spec.HTTPTimeouts),
+	)
 
-	if !isGateway {
-		// tb1 role: register the duo-only vmodels before serving — the
+	if spec.Role == duoRoleUpstream {
+		// Upstream role: register the duo-only vmodels before serving — the
 		// slow/large backpressure models and the service-identity pool the
 		// routing scenarios address.
-		if kb := duoEnvInt(duoEnvStreamKB); kb > 0 {
-			if err := registerDuoStreamModels(srv.GetVirtualModelService(), kb, duoEnvInt(duoEnvStreamMS)); err != nil {
+		if spec.Stream.SizeKB > 0 {
+			if err := registerDuoStreamModels(srv.GetVirtualModelService(), spec.Stream); err != nil {
 				return fmt.Errorf("register duo stream models: %w", err)
 			}
 		}
@@ -149,12 +118,7 @@ func runDuoServe() error {
 		}
 	}
 
-	return srv.Start(port)
-}
-
-func duoEnvInt(key string) int {
-	n, _ := strconv.Atoi(os.Getenv(key))
-	return n
+	return srv.Start(spec.Port)
 }
 
 // seedDuoGateway persists the tb2 wiring into the child's own config dir:
@@ -204,34 +168,32 @@ func seedDuoGateway(appCfg *config.AppConfig, tb1URL, tb1Token string) error {
 
 // registerDuoStreamModels registers the slow/large vmodels into tb1's
 // registries. The response streams len(chunks) deltas of ~2 KB each; the
-// Delay parameter is applied by the virtualserver handler once up front
-// (TTFT) and spread again across chunks by the mock's stream loop, so a
-// request's wall time is roughly 2×delay.
-func registerDuoStreamModels(svc *virtualserver.Service, kb, ms int) error {
+// shape's Delay semantics are documented on DuoStreamShape.
+func registerDuoStreamModels(svc *virtualserver.Service, shape DuoStreamShape) error {
 	if svc == nil {
 		return fmt.Errorf("virtual model service unavailable")
 	}
-	chunks := duoStreamChunks(kb)
-	delay := time.Duration(ms) * time.Millisecond
+	chunks := duoStreamChunks(shape.SizeKB)
 	content := strings.Join(chunks, "")
+	description := fmt.Sprintf("duo backpressure model: ~%d KB streamed over ~%s", shape.SizeKB, 2*shape.Delay)
 
 	if err := svc.GetOpenAIRegistry().Register(openaivm.NewMockModel(&openaivm.MockModelConfig{
 		ID:           DuoSlowOpenAIModel,
 		Name:         "Duo slow GPT",
-		Description:  fmt.Sprintf("duo backpressure model: ~%d KB streamed over ~%d ms", kb, 2*ms),
+		Description:  description,
 		Content:      content,
 		StreamChunks: chunks,
-		Delay:        delay,
+		Delay:        shape.Delay,
 	})); err != nil {
 		return err
 	}
 	return svc.GetAnthropicRegistry().Register(anthropicvm.NewMockModel(&anthropicvm.MockModelConfig{
 		ID:           DuoSlowAnthropicModel,
 		Name:         "Duo slow Claude",
-		Description:  fmt.Sprintf("duo backpressure model: ~%d KB streamed over ~%d ms", kb, 2*ms),
+		Description:  description,
 		Content:      content,
 		StreamChunks: chunks,
-		Delay:        delay,
+		Delay:        shape.Delay,
 	}))
 }
 
