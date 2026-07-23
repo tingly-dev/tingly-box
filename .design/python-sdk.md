@@ -3,10 +3,9 @@
 > Audience: tingly-box contributors touching the SDK seam (`sdk/python/`), the
 > `/api/v1/sdk/session` endpoint, or the `experiment` scenario.
 
-Diagram: `.design/python-sdk.pencil.md` — the full request-flow / architecture
-pencil graphs (provisioning vs. inference, a plugin's request lifecycle, the
-two connection modes, `router_plugin.py`'s decide-then-pin flow, and a
-hop-count comparison across all four example plugins).
+Diagram: `.design/python-sdk.pencil.md` — four simple pencil graphs: the one
+idea, a request start to finish, the two ways to pick a provider, and
+`router_plugin.py`'s decision flow.
 
 ## Why
 
