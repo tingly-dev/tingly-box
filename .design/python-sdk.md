@@ -282,17 +282,51 @@ users can name parallel experiments via profiles (`experiment:p1`).
   names (contract with the SDK) and the transport-label logic;
   `internal/typ/scenario_registry_test.go` pins the experiment descriptor.
 
+## ⚠️ Naming collision to resolve before the lifecycle UI
+
+The frontend already has a deliberately-unified name **"Plugins"** for a
+completely different concept — per-rule feature flags (`smart_compact`,
+`vision_proxy_service`, `clean_header`, `session_affinity`, …), surfaced via
+`RulePluginsCard` / `FlagCatalogDialog` / `PluginFeatures` (see
+`.design/rule-flags.md` §"统一命名：Plugins"). That unification itself
+resolved an earlier "Plugin" / "Rule Extensions" mixed-usage collision — this
+exact kind of debt has already been paid down once in this codebase.
+
+The SDK's `tingly.Plugin` / `POST /api/v2/plugins` / the `"plugin"` provider
+tag names an unrelated concept — *external code acting as an upstream* — but
+reuses the same word. Per `.design/ux-principles.md` §3 ("一个词在产品中只能指
+一件事"), this has to be split before it becomes user-visible. It's silent
+today only because there's no lifecycle UI yet (see follow-up 4 below) — the
+moment that ships, both meanings of "Plugin" appear in the same product, on
+adjacent surfaces of the same rule (its flags card vs. its upstream
+binding). Rename one side **now**, while the surface is still an API +
+Python class and not yet UI copy — cheaper than renaming after users have
+`tingly.toml` manifests and muscle memory. This SDK side is the newer,
+smaller-footprint concept, so it's the one that should move; candidates:
+`upstream plugin`, `connector`, `extension provider`. Needs a product
+decision, not a unilateral rename — flagged here rather than acted on.
+
 ## Open follow-ups
 
-1. Scoped short-lived session tokens (`expires_at` + refresh on 401).
-2. Dedicated `GET /api/v1/sdk/usage?session=` so usage doesn't scan
+Roughly in priority order — 1–3 are backend/SDK-only (no naming exposure, safe
+to build regardless of the rename above); 4 is blocked on that decision for
+its UI portion specifically (the supervisor + reverse-proxy mount are not).
+
+1. Layer 2 tb-side remainder — Python side is **done** (`tingly.Plugin`,
+   manifest, OpenAI server, `register`); still missing: a sub-process
+   supervisor that boots plugins from their manifest (reuse
+   `agentboot/process`), a `/plugins/<name>/*` reverse-proxy mount, and the
+   install/enable/logs/disable lifecycle UI. The first two are ordinary
+   backend work; the UI is the piece that should wait on the naming decision
+   above. See the "Layer 2" section below.
+2. Scoped short-lived session tokens (`expires_at` + refresh on 401).
+3. Dedicated `GET /api/v1/sdk/usage?session=` so usage doesn't scan
    `/api/v1/requests`.
-3. Async client (`AsyncClient`, `aask`) — transports already have async builders.
-4. Layer 2 — Python side **done** (`tingly.Plugin`, manifest, OpenAI server,
-   `register`); remaining tb-side: sub-process supervisor from the manifest
-   (reuse `agentboot/process`), `/plugins/<name>/*` reverse proxy, lifecycle UI.
-   See the "Layer 2" section below.
-5. Layer 3: expose a plugin as a model tb can route to (see "Layer 3" below).
+4. Async client (`AsyncClient`, `aask`) — transports already have async builders.
+
+Layer 3 (expose a plugin as a model tb can route to) needed no new work of its
+own — it's already fully supported as provider-as-upstream (see "Layer 3"
+below) — so it's not listed as a follow-up.
 
 ## Layer 2: write an AI server (`tingly.Plugin`)
 
