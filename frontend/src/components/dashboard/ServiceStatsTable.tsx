@@ -21,6 +21,7 @@ export interface AggregatedStat {
     provider_name?: string;
     model?: string;
     scenario?: string;
+    user_id?: string;
     request_count: number;
     total_tokens?: number;
     total_input_tokens: number;

@@ -1682,7 +1682,39 @@ export const handlers = [
     // ============================================
     // Usage Stats API (v1)
     // ============================================
-    http.get('/api/v1/usage/stats', () => {
+    http.get('/api/v1/tokens', () => {
+        const now = Date.now()
+        return HttpResponse.json({
+            tokens: [
+                { token_id: 'tok-design', user_id: 'user-design', display_name: 'Design team', enabled: true, last_used_at: new Date(now - 12 * 60 * 1000).toISOString(), created_at: new Date(now - 72 * 86400000).toISOString() },
+                { token_id: 'tok-platform', user_id: 'user-platform', display_name: 'Platform engineering', enabled: true, last_used_at: new Date(now - 46 * 60 * 1000).toISOString(), created_at: new Date(now - 110 * 86400000).toISOString() },
+                { token_id: 'tok-mobile', user_id: 'user-mobile', display_name: 'Mobile app', enabled: true, last_used_at: new Date(now - 5 * 3600000).toISOString(), created_at: new Date(now - 38 * 86400000).toISOString() },
+                { token_id: 'tok-support', user_id: 'user-support', display_name: 'Customer support', enabled: true, last_used_at: new Date(now - 2 * 86400000).toISOString(), created_at: new Date(now - 21 * 86400000).toISOString() },
+                { token_id: 'tok-contractor', user_id: 'user-contractor', display_name: 'External contractor', enabled: false, created_at: new Date(now - 14 * 86400000).toISOString() },
+            ],
+            total: 5,
+        })
+    }),
+
+    http.get('/api/v1/usage/stats', ({ request }) => {
+        const url = new URL(request.url)
+        const groupBy = url.searchParams.get('group_by')
+        const userID = url.searchParams.get('user_id')
+        const userUsage = [
+            { key: 'admin', user_id: 'admin', request_count: 2310, total_tokens: 11200000, total_input_tokens: 6180000, total_output_tokens: 4220000, cache_input_tokens: 800000, error_count: 9, error_rate: 0.0039 },
+            { key: 'user-platform', user_id: 'user-platform', request_count: 1884, total_tokens: 8460000, total_input_tokens: 4620000, total_output_tokens: 3140000, cache_input_tokens: 700000, error_count: 13, error_rate: 0.0069 },
+            { key: 'user-design', user_id: 'user-design', request_count: 1256, total_tokens: 5790000, total_input_tokens: 3110000, total_output_tokens: 2260000, cache_input_tokens: 420000, error_count: 4, error_rate: 0.0032 },
+            { key: 'user-mobile', user_id: 'user-mobile', request_count: 934, total_tokens: 3680000, total_input_tokens: 2180000, total_output_tokens: 1420000, cache_input_tokens: 80000, error_count: 19, error_rate: 0.0203 },
+            { key: 'user-support', user_id: 'user-support', request_count: 226, total_tokens: 930000, total_input_tokens: 540000, total_output_tokens: 370000, cache_input_tokens: 20000, error_count: 1, error_rate: 0.0044 },
+        ]
+        if (groupBy === 'user') {
+            return HttpResponse.json({ success: true, data: userUsage })
+        }
+
+        const userScale = userID
+            ? (userUsage.find((item) => item.user_id === userID)?.total_tokens || 0) / 46480000
+            : 1
+        const scale = (value: number) => Math.round(value * userScale)
         return HttpResponse.json({
             success: true,
             data: [
@@ -1692,13 +1724,13 @@ export const handlers = [
                     provider_name: 'Anthropic',
                     model: 'claude-sonnet-5',
                     scenario: 'claude_code',
-                    request_count: 1842,
-                    total_tokens: 25920000,
-                    total_input_tokens: 1140000,
-                    total_output_tokens: 920000,
-                    cache_input_tokens: 23860000,
+                    request_count: scale(1842),
+                    total_tokens: scale(25920000),
+                    total_input_tokens: scale(1140000),
+                    total_output_tokens: scale(920000),
+                    cache_input_tokens: scale(23860000),
                     avg_latency_ms: 1240,
-                    error_count: 12,
+                    error_count: scale(12),
                     error_rate: 0.65,
                     streamed_count: 1800,
                 },
@@ -1708,13 +1740,13 @@ export const handlers = [
                     provider_name: 'Anthropic',
                     model: 'claude-opus-4-8',
                     scenario: 'claude_code',
-                    request_count: 420,
-                    total_tokens: 8180000,
-                    total_input_tokens: 620000,
-                    total_output_tokens: 380000,
-                    cache_input_tokens: 7180000,
+                    request_count: scale(420),
+                    total_tokens: scale(8180000),
+                    total_input_tokens: scale(620000),
+                    total_output_tokens: scale(380000),
+                    cache_input_tokens: scale(7180000),
                     avg_latency_ms: 2100,
-                    error_count: 3,
+                    error_count: scale(3),
                     error_rate: 0.71,
                     streamed_count: 415,
                 },
@@ -1724,13 +1756,13 @@ export const handlers = [
                     provider_name: 'OpenAI',
                     model: 'gpt-5.6-sol',
                     scenario: 'openai',
-                    request_count: 938,
-                    total_tokens: 6720000,
-                    total_input_tokens: 890000,
-                    total_output_tokens: 520000,
-                    cache_input_tokens: 5310000,
+                    request_count: scale(938),
+                    total_tokens: scale(6720000),
+                    total_input_tokens: scale(890000),
+                    total_output_tokens: scale(520000),
+                    cache_input_tokens: scale(5310000),
                     avg_latency_ms: 980,
-                    error_count: 8,
+                    error_count: scale(8),
                     error_rate: 0.85,
                     streamed_count: 920,
                 },
@@ -1740,13 +1772,13 @@ export const handlers = [
                     provider_name: 'OpenAI',
                     model: 'gpt-5.6-luna',
                     scenario: 'openai',
-                    request_count: 2150,
-                    total_tokens: 4310000,
-                    total_input_tokens: 390000,
-                    total_output_tokens: 410000,
-                    cache_input_tokens: 3510000,
+                    request_count: scale(2150),
+                    total_tokens: scale(4310000),
+                    total_input_tokens: scale(390000),
+                    total_output_tokens: scale(410000),
+                    cache_input_tokens: scale(3510000),
                     avg_latency_ms: 420,
-                    error_count: 5,
+                    error_count: scale(5),
                     error_rate: 0.23,
                     streamed_count: 2100,
                 },
@@ -1756,17 +1788,17 @@ export const handlers = [
                     provider_name: 'OpenRouter',
                     model: 'deepseek/deepseek-v4-pro',
                     scenario: 'agent',
-                    request_count: 312,
-                    total_tokens: 1350000,
-                    total_input_tokens: 1050000,
-                    total_output_tokens: 120000,
-                    cache_input_tokens: 180000,
+                    request_count: scale(312),
+                    total_tokens: scale(1350000),
+                    total_input_tokens: scale(1050000),
+                    total_output_tokens: scale(120000),
+                    cache_input_tokens: scale(180000),
                     avg_latency_ms: 3200,
-                    error_count: 2,
+                    error_count: scale(2),
                     error_rate: 0.64,
                     streamed_count: 308,
                 },
-            ],
+            ].filter((stat) => !userID || stat.total_tokens > 0),
         })
     }),
 
