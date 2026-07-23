@@ -49,6 +49,7 @@ func TestConsistencyTransform_normalizeToolSchemas(t *testing.T) {
 		wantTools bool
 		checkType bool
 		wantType  string
+		wantEmpty bool
 	}{
 		{
 			name:      "no tools",
@@ -82,6 +83,9 @@ func TestConsistencyTransform_normalizeToolSchemas(t *testing.T) {
 				}),
 			},
 			wantTools: true,
+			checkType: true,
+			wantType:  "object",
+			wantEmpty: true,
 		},
 	}
 
@@ -98,11 +102,33 @@ func TestConsistencyTransform_normalizeToolSchemas(t *testing.T) {
 			if tt.wantTools {
 				assert.NotNil(t, req.Tools)
 				if tt.checkType {
-					assert.Equal(t, tt.wantType, req.Tools[0].OfFunction.Function.Parameters["type"])
+					parameters := req.Tools[0].OfFunction.Function.Parameters
+					assert.Equal(t, tt.wantType, parameters["type"])
+					if tt.wantEmpty {
+						assert.Equal(t, map[string]interface{}{}, parameters["properties"])
+					}
 				}
 			}
 		})
 	}
+}
+
+func TestConsistencyTransform_normalizeResponseToolSchemas_EmptyParameters(t *testing.T) {
+	ct := NewConsistencyTransform(protocol.TypeOpenAIResponses)
+	req := &responses.ResponseNewParams{
+		Model: "gpt-4o",
+		Tools: []responses.ToolUnionParam{
+			{OfFunction: &responses.FunctionToolParam{Name: "get_status"}},
+		},
+	}
+	ctx := &TransformContext{Request: req}
+
+	err := ct.Apply(ctx)
+	require.NoError(t, err)
+
+	parameters := req.Tools[0].OfFunction.Parameters
+	assert.Equal(t, "object", parameters["type"])
+	assert.Equal(t, map[string]interface{}{}, parameters["properties"])
 }
 
 func TestConsistencyTransform_normalizeToolSchemas_MultipleTools(t *testing.T) {
