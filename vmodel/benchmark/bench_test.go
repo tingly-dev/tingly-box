@@ -1,12 +1,39 @@
 package benchmark
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
 	"github.com/tingly-dev/tingly-box/vmodel/vmodeltest"
 )
+
+func TestServerTracksExactPaths(t *testing.T) {
+	srv := NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, path := range []string{"/v1/chat/completions", "/chat/completions"} {
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"test"}`))
+		response := httptest.NewRecorder()
+		srv.ServeHTTP(response, request)
+	}
+
+	if got := srv.EndpointHits(EndpointChat); got != 2 {
+		t.Fatalf("chat endpoint hits: got %d, want 2", got)
+	}
+	for _, path := range []string{"/v1/chat/completions", "/chat/completions"} {
+		if got := srv.PathHits(path); got != 1 {
+			t.Fatalf("path hits for %q: got %d, want 1", path, got)
+		}
+		if request := srv.LastRequestForPath(path); request == nil || request.Path != path {
+			t.Fatalf("last request for %q: got %+v", path, request)
+		}
+	}
+}
 
 // TestProductionServer_RealModels verifies the production responder returns
 // wire-correct OpenAI and Anthropic responses and that the capture layer counts

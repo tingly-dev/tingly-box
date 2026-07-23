@@ -51,6 +51,12 @@ func NewServer(inner http.Handler) *Server {
 	return &Server{handler: captureMiddleware(rec, inner), rec: rec}
 }
 
+// ServeHTTP lets a Server be used directly as an http.Handler while preserving
+// the same capture and endpoint accounting as its managed transports.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.handler.ServeHTTP(w, r)
+}
+
 // NewModelServer builds a Server whose inner handler is the production
 // virtualserver.Service mounted under /v1, /openai/v1, and /anthropic/v1 — the
 // same wiring (and default model registries) as the production endpoint, so the
@@ -160,9 +166,18 @@ func (s *Server) CallCount() int { return s.rec.totalCalls() }
 // EndpointHits returns how many requests hit a specific provider endpoint.
 func (s *Server) EndpointHits(kind EndpointKind) int { return s.rec.hits(kind) }
 
+// PathHits returns how many requests were captured for one exact URL path.
+func (s *Server) PathHits(path string) int { return s.rec.hitsForPath(path) }
+
 // LastRequest returns the most recent request forwarded to the given provider
 // endpoint, or nil if that endpoint was never hit.
 func (s *Server) LastRequest(kind EndpointKind) *CapturedRequest { return s.rec.lastRequest(kind) }
+
+// LastRequestForPath returns the most recent request captured for one exact URL
+// path, or nil if that path was never hit.
+func (s *Server) LastRequestForPath(path string) *CapturedRequest {
+	return s.rec.lastRequestForPath(path)
+}
 
 // Reset clears all recorded counts and captured requests.
 func (s *Server) Reset() { s.rec.reset() }
