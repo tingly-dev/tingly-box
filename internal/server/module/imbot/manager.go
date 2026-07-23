@@ -90,13 +90,21 @@ func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error)
 	claudeAgent := claude.NewAgent(agentBootConfig)
 	agentService.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
-	// Create internal bot manager
-	internalMgr := bot.NewManager(store, sessionMgr, agentService)
-	internalMgr.SetDataPath(dataPath)
-
-	// Create TBClient
+	// Create TBClient (SmartGuide model configuration)
 	tbClient := tbclient.NewTBClient(cfg, sm.Provider())
-	internalMgr.SetTBClient(tbClient)
+
+	// Build the consumers — the users of each bot's channel — and inject them
+	// into the bot manager. The lifecycle depends on neither purpose:
+	//  - notify keeps a bot alive for /tingly/:scenario/notify scenario
+	//    traffic (the channel itself is bot-host infrastructure);
+	//  - remote_agent owns the agent/SmartGuide machinery and is the
+	//    inbound catch-all, so it goes last.
+	notifyConsumer := bot.NewNotifyConsumer()
+	remoteAgentConsumer := bot.NewRemoteAgentConsumer(sessionMgr, agentService, tbClient, store)
+
+	// Create internal bot manager
+	internalMgr := bot.NewManager(store, notifyConsumer, remoteAgentConsumer)
+	internalMgr.SetDataPath(dataPath)
 
 	bm := &BotManager{
 		manager:      internalMgr,

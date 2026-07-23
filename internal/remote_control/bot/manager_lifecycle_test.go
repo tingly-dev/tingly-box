@@ -47,6 +47,16 @@ func (s *fakeSettingsStore) ListEnabledSettingsInterface() (interface{}, error) 
 	return out, nil
 }
 
+// setScenarios mutates a bot's Scenarios blob (the mount list) in place so
+// tests can flip a mount on/off between Sync calls.
+func (s *fakeSettingsStore) setScenarios(uuid, scenarios string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec := s.settings[uuid]
+	rec.Scenarios = scenarios
+	s.settings[uuid] = rec
+}
+
 // newLifecycleManager spins up a bot.Manager with a fakeSettingsStore
 // containing a single enabled tingly bot, and registers an InProcessTransport
 // for that UUID so the bot can actually serve traffic. Returns the manager,
@@ -81,7 +91,8 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 	svc, err := agentboot.NewAgentService(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
 	require.NoError(t, err)
 
-	m := bot.NewManager(store, sessionMgr, svc)
+	consumer := bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store)
+	m := bot.NewManager(store, consumer)
 	m.SetDataPath(t.TempDir() + "/chats.json")
 
 	return m, uuid, tr
@@ -164,7 +175,8 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 	svc, err := agentboot.NewAgentService(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
 	require.NoError(t, err)
 
-	m := bot.NewManager(store, sessionMgr, svc)
+	consumer := bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store)
+	m := bot.NewManager(store, consumer)
 	m.SetDataPath(t.TempDir() + "/chats.json")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -191,4 +203,60 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 	m.Stop(uuidB)
 	require.True(t, m.WaitForStop(uuidA, 5*time.Second))
 	require.True(t, m.WaitForStop(uuidB, 5*time.Second))
+}
+
+// TestManager_MountGate_Tingly asserts the resource/consumer split: a bot is
+// Enabled but only runs while it has an active mount (remote_agent on). It must
+// not start with the mount off, must start once the mount turns on, and must
+// stop when the mount turns off again — all without changing Enabled.
+func TestManager_MountGate_Tingly(t *testing.T) {
+	uuid := fmt.Sprintf("mount-bot-%d", time.Now().UnixNano())
+
+	tr := tingly.NewInProcessTransport()
+	tingly.Register(uuid, tr)
+	t.Cleanup(func() { tingly.Unregister(uuid) })
+
+	store := &fakeSettingsStore{
+		settings: map[string]db.Settings{
+			uuid: {
+				UUID:      uuid,
+				Name:      "mount-test",
+				Platform:  "tingly",
+				AuthType:  "none",
+				Auth:      map[string]string{},
+				Enabled:   true,
+				Scenarios: `[{"name":"remote_agent","enabled":false}]`,
+			},
+		},
+	}
+
+	sessionMgr := session.NewManager(session.Config{
+		Timeout:          10 * time.Minute,
+		MessageRetention: time.Hour,
+	}, nil)
+	svc, err := agentboot.NewAgentService(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
+	require.NoError(t, err)
+
+	consumer := bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store)
+	m := bot.NewManager(store, consumer)
+	m.SetDataPath(t.TempDir() + "/chats.json")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Enabled but mount off → Start is a no-op; the bot does not run.
+	require.NoError(t, m.Start(ctx, uuid))
+	require.False(t, m.IsRunning(uuid), "bot with remote_agent mount off must not run")
+
+	// Turn the mount on → Sync starts it.
+	store.setScenarios(uuid, `[{"name":"remote_agent","enabled":true}]`)
+	require.NoError(t, m.Sync(ctx))
+	time.Sleep(50 * time.Millisecond)
+	require.True(t, m.IsRunning(uuid), "bot should run once its mount is on")
+
+	// Turn the mount off (Enabled stays true) → Sync stops it.
+	store.setScenarios(uuid, `[{"name":"remote_agent","enabled":false}]`)
+	require.NoError(t, m.Sync(ctx))
+	require.True(t, m.WaitForStop(uuid, 5*time.Second), "bot should stop when its mount turns off")
+	require.False(t, m.IsRunning(uuid))
 }

@@ -102,7 +102,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '📱',
         BrandIcon: Telegram,
         status: 'available',
-        path: '/remote-control/telegram',
+        path: '/bots/telegram',
         color: '#0088cc',
         guide: (
             <Stack spacing={2}>
@@ -154,7 +154,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '🚀',
         BrandIcon: Feishu,
         status: 'available',
-        path: '/remote-control/feishu',
+        path: '/bots/feishu',
         color: '#00d6b9',
         guide: buildFeishuFamilyGuide(t, {
             tip: t('remoteControl.guides.feishu.tip', { defaultValue: 'Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.' }),
@@ -170,7 +170,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '🐦',
         BrandIcon: Lark,
         status: 'available',
-        path: '/remote-control/lark',
+        path: '/bots/lark',
         color: '#00d6b9',
         guide: buildFeishuFamilyGuide(t, {
             tip: t('remoteControl.guides.lark.tip', { defaultValue: 'Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.' }),
@@ -186,7 +186,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '💬',
         BrandIcon: DingTalk,
         status: 'available',
-        path: '/remote-control/dingtalk',
+        path: '/bots/dingtalk',
         color: '#0089ff',
         guide: (
             <Stack spacing={2}>
@@ -242,7 +242,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '💚',
         BrandIcon: Weixin,
         status: 'beta',
-        path: '/remote-control/weixin',
+        path: '/bots/weixin',
         color: '#07c160',
         guide: (
             <Stack spacing={2}>
@@ -287,7 +287,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '💼',
         BrandIcon: WeCom,
         status: 'available',
-        path: '/remote-control/wecom',
+        path: '/bots/wecom',
         color: '#10a800',
         guide: (
             <Stack spacing={2}>
@@ -360,7 +360,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '🐧',
         BrandIcon: QQ,
         status: 'coming-soon',
-        path: '/remote-control/qq',
+        path: '/bots/qq',
         color: '#888',
         guide: buildComingSoonGuide(t, 'QQ'),
     },
@@ -371,7 +371,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '🎮',
         BrandIcon: Discord,
         status: 'coming-soon',
-        path: '/remote-control/discord',
+        path: '/bots/discord',
         color: '#888',
         guide: buildComingSoonGuide(t, 'Discord'),
     },
@@ -382,7 +382,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         icon: '💳',
         BrandIcon: Slack,
         status: 'coming-soon',
-        path: '/remote-control/slack',
+        path: '/bots/slack',
         color: '#888',
         guide: buildComingSoonGuide(t, 'Slack'),
     },

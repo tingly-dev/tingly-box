@@ -1566,6 +1566,7 @@ export const api = {
         require_pairing?: boolean;
         smartguide_provider?: string;
         smartguide_model?: string;
+        remote_agent?: boolean;
     }): Promise<any> => {
         try {
             const client = await getClient();

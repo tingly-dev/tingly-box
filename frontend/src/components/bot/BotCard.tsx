@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon, Warning as WarningIcon} from '@/components/icons';
+import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
 import {
     Box,
     Button,
@@ -14,18 +14,17 @@ import {
 } from '@mui/material';
 import {styled} from '@mui/material/styles';
 import type {BotSettings} from '@/types/bot';
-import type {Provider} from '@/types/provider';
-import RemoteControlGraph from './RemoteControlGraph';
+import {isRemoteAgentMounted} from '@/types/bot';
 import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 
 const RULE_GRAPH_STYLES = {
     header: { paddingX: 16, paddingY: 6 },
-    graphContainer: { paddingX: 16, paddingY: 10, marginX: 16, marginY: 8 },
 } as const;
 
-const {header, graphContainer} = RULE_GRAPH_STYLES;
+const {header} = RULE_GRAPH_STYLES;
 
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
@@ -60,41 +59,33 @@ const SummarySection = styled(Box)({
     padding: `${header.paddingY}px ${header.paddingX}px`,
 });
 
-const GraphContainer = styled(Box)(({theme}) => ({
-    padding: `${graphContainer.paddingY}px ${graphContainer.paddingX}px`,
-    backgroundColor: 'grey.50',
-    borderRadius: theme.shape.borderRadius,
-    margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
-    overflowX: 'auto',
-}));
-
 interface BotCardProps {
     bot: BotSettings;
-    providers: Provider[];
     onEdit: () => void;
     onDelete: () => void;
     onBotToggle: () => void;
     onRestart: () => void;
-    onModelClick: () => void;
-    onCWDChange: (cwd: string) => void;
     isToggling?: boolean;
     isRestarting?: boolean;
 }
 
+// BotCard is the RESOURCE card: it manages the bot connection itself
+// (enable/restart/edit/delete, pairing, proxy). What the bot is used FOR
+// (Remote Agent, notifications) is configured on the purpose pages — the card
+// only surfaces mount status as a link to the next action.
 const BotCard: React.FC<BotCardProps> = ({
     bot,
-    providers,
     onEdit,
     onDelete,
     onBotToggle,
     onRestart,
-    onModelClick,
-    onCWDChange,
     isToggling = false,
     isRestarting = false,
 }) => {
     const {t} = useTranslation();
+    const navigate = useNavigate();
     const isActive = bot.enabled ?? true;
+    const isMounted = isRemoteAgentMounted(bot.scenarios);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     const handleDeleteClick = useCallback(() => setDeleteModalOpen(true), []);
@@ -118,21 +109,17 @@ const BotCard: React.FC<BotCardProps> = ({
                         </Typography>
                     </Tooltip>
                     {bot.name && <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>}
-                    {isActive && !(bot.smartguide_provider && bot.smartguide_model) && (
-                        <Tooltip title={t('remoteControl.card.noModelConfigured', { defaultValue: 'No model configured - click to select a model' })}>
-                            <WarningIcon sx={{fontSize: '1.1rem', color: 'warning.main'}}/>
-                        </Tooltip>
-                    )}
-                    {bot.chat_id && (
-                        <Tooltip title={t('remoteControl.card.chatId', { defaultValue: 'Chat ID: {{id}}', id: bot.chat_id })}>
-                            <Typography variant="caption" sx={{
-                                color: 'text.secondary', overflow: 'hidden',
-                                textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px',
-                            }}>
-                                {bot.chat_id}
-                            </Typography>
-                        </Tooltip>
-                    )}
+                    {/* Purpose status: where this bot is used. Click-through to configure. */}
+                    <Tooltip title={t('bots.card.remoteAgentChipHint', { defaultValue: 'Configure on the Remote Agent page' })}>
+                        <Chip
+                            label={t('bots.card.remoteAgentChip', { defaultValue: 'Remote Agent' })}
+                            size="small"
+                            variant={isMounted ? 'filled' : 'outlined'}
+                            color={isMounted ? 'primary' : 'default'}
+                            onClick={() => navigate(`/remote-agent/${bot.platform}`)}
+                            sx={{opacity: isActive ? 1 : 0.5}}
+                        />
+                    </Tooltip>
                 </Box>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
                     <Tooltip title={isActive ? t('remoteControl.card.disableBot', { defaultValue: 'Disable Bot' }) : t('remoteControl.card.enableBot', { defaultValue: 'Enable Bot' })}>
@@ -158,33 +145,14 @@ const BotCard: React.FC<BotCardProps> = ({
                 </Box>
             </SummarySection>
 
-            {/* Graph */}
             <Collapse in timeout="auto" unmountOnExit>
                 <CardContent sx={{pt: 0, pb: 1}}>
-                    <GraphContainer>
-                        <RemoteControlGraph
-                            imbot={bot}
-                            providers={providers}
-                            isBotEnabled={isActive}
-                            readOnly={isToggling || isRestarting}
-                            onModelClick={onModelClick}
-                            onBotClick={onEdit}
-                        />
-                    </GraphContainer>
-
-                    <Box sx={{mt: 2, display: 'flex', flexDirection: 'column', gap: 1}}>
+                    <Box sx={{display: 'flex', flexDirection: 'column', gap: 1}}>
                         <PairingCodePanel bot={bot}/>
                         {bot.proxy_url && (
                             <Tooltip title={bot.proxy_url}>
                                 <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: 'monospace'}}>
                                     {t('remoteControl.card.proxyLabel', { defaultValue: 'Proxy:' })} {bot.proxy_url}
-                                </Typography>
-                            </Tooltip>
-                        )}
-                        {bot.bash_allowlist && bot.bash_allowlist.length > 0 && (
-                            <Tooltip title={bot.bash_allowlist.join(', ')}>
-                                <Typography variant="caption" sx={{color: 'text.secondary'}}>
-                                    {t('remoteControl.card.allowlistLabel', { defaultValue: 'Allowlist:' })} <span style={{fontFamily: 'monospace'}}>{bot.bash_allowlist.join(', ')}</span>
                                 </Typography>
                             </Tooltip>
                         )}

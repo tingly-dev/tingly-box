@@ -121,6 +121,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		agentService,
 		dirBrowser,
 		manager,
+		nil, // prompter — standalone: the handler creates (and routes) its own
 		nil, // tbClient — SmartGuide path not exercised by tests; falls back to mock/claude as configured
 		pairing,
 		auditLog,

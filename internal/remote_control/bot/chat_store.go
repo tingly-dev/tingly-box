@@ -28,6 +28,7 @@ type BotSetting struct {
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"` // Optional bash command allowlist
 	DefaultCwd    string            `json:"default_cwd,omitempty"`    // Default working directory if no project bound
 	Enabled       bool              `json:"enabled"`                  // Whether this bot is enabled
+	Scenarios     string            `json:"scenarios,omitempty"`      // Raw scenario/mount list (JSON, see remote/binding)
 
 	// Output behavior settings
 	Verbose *bool `json:"verbose,omitempty"` // Send intermediate messages (nil = true default)
