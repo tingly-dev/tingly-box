@@ -499,6 +499,12 @@ The refactor continued through the remaining structural boundaries:
 7. The unused Claude `Launcher`, stateful `ControlManager`/request builders, and
    duplicate JSONL helpers were removed. Runtime control is exclusively
    `ExecutionHandle → Runner → Transport`, and JSONL IO is owned by `protocol`.
+8. Provider assumptions were removed from root configuration and execution
+   options. Claude's history directory is configured with
+   `claude.WithProjectsDir`, Claude permission constants live only in the Claude
+   adapter, and transport routing uses provider-neutral `ControlMetadata`.
+9. `common.Event` is the single raw event contract; root and protocol aliases
+   were removed.
 
 Validation includes the agentboot module suite, core race tests, production
 composition consumers, and a real Claude Code CLI E2E.

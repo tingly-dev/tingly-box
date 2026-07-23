@@ -102,10 +102,13 @@ handle, err := service.Execute(
 ### Resuming a Claude session
 
 ```go
-service, _ := claude.NewService(agentboot.Config{
-    DefaultAgent:      agentboot.AgentTypeClaude,
-    ClaudeProjectsDir: "", // empty = ~/.claude/projects
-})
+service, _ := claude.NewService(agentboot.DefaultConfig())
+
+// To read history from a non-default location:
+// service, _ = claude.NewService(
+//     agentboot.DefaultConfig(),
+//     claude.WithProjectsDir("/path/to/claude-projects"),
+// )
 
 sessions, err := service.ListSessions(ctx, "/abs/project/path", 10)
 if err != nil {
@@ -186,19 +189,21 @@ Root configuration is plain Go and its defaults are provided by
 | `EnableStreamJSON`          | `true`                           |
 | `StreamBufferSize`          | `100`                            |
 | `DefaultExecutionTimeout`   | `0` (no timeout)                 |
-| `ClaudeProjectsDir`         | `""` (`~/.claude/projects` when using `claude.NewService`) |
 
 `ExecutionOptions` carries per-call overrides: project path, output format,
 timeout, env, session ID + resume flag, model and fallback model, max turns,
 allowed/disallowed tools, MCP servers, custom/append system prompts, permission
-mode, settings path, permission prompt tool, and a lifecycle store. A zero
-timeout uses the configured default; a negative timeout explicitly disables it.
+mode, settings path, permission prompt tool, provider-defined control metadata,
+and a lifecycle store. A zero timeout uses the configured default; a negative
+timeout explicitly disables it.
 
 The root `agentboot.NewAgentService` constructor is provider-neutral. It does
 not import Claude or assume a session format. `claude.NewService` is the
 composition helper for the production Claude Code path: it registers the Claude
 agent and injects the read-only Claude session history reader. Other providers
 can inject their own reader with `agentboot.WithSessionReader`.
+`claude.WithProjectsDir` overrides Claude Code's default
+`~/.claude/projects` history location.
 
 Claude Code CLI discovery also recognizes `CLAUDE_CLI_PATH`,
 `CLAUDE_USE_BUNDLED`, and `CLAUDE_USE_GLOBAL`. Every selected executable is
@@ -216,7 +221,7 @@ agentboot/
 ├── config.go             # Root defaults
 ├── errors.go             # Structured result/process/protocol errors
 ├── handle.go             # ExecutionHandle + ControlResponse types
-├── events.go             # Raw Event alias + typed StreamEvent sum
+├── events.go             # Typed StreamEvent sum
 ├── driver.go             # AgentDriver + process.LaunchSpec compatibility alias
 ├── transport.go          # AgentTransport + per-execution factory
 ├── runner.go             # Runner configuration and construction
@@ -225,7 +230,7 @@ agentboot/
 ├── run.go                # High-level Prompter/MessageSink consumer
 ├── service.go            # Public AgentService façade
 ├── ask/                  # Ask/permission prompter implementations
-├── common/               # Raw event, SessionReader, historical session types
+├── common/               # Canonical Event, SessionReader, history types
 ├── process/              # LaunchSpec + process abstraction (OS/fake)
 ├── protocol/             # Stream-JSON encoder / decoder
 ├── session/              # Runtime LifecycleStore interface
