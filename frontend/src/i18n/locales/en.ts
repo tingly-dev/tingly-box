@@ -91,6 +91,7 @@ export default {
     "yesterday": "Yesterday",
     "days": "Days",
     "remote": "Remote",
+    "bots": "Bots",
     "overview": "Overview",
     "platforms": {
       "weixin": "Weixin",

@@ -5,7 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
@@ -55,15 +55,16 @@ import SkillPage from './pages/prompt/SkillPage';
 import CommandPage from './pages/prompt/CommandPage';
 import RemoteCoderPage from './pages/remote-coder/RemoteCoderPage';
 import RemoteCoderSessionsPage from './pages/remote-coder/RemoteCoderSessionsPage';
-import TelegramPage from './pages/remote-control/TelegramPage';
-import FeishuPage from './pages/remote-control/FeishuPage';
-import LarkPage from './pages/remote-control/LarkPage';
-import DingTalkPage from './pages/remote-control/DingTalkPage';
-import WeixinPage from './pages/remote-control/WeixinPage';
-import WeComPage from './pages/remote-control/WeComPage';
-import QQPage from './pages/remote-control/QQPage';
-import DiscordPage from './pages/remote-control/DiscordPage';
-import SlackPage from './pages/remote-control/SlackPage';
+import TelegramPage from './pages/bots/TelegramPage';
+import FeishuPage from './pages/bots/FeishuPage';
+import LarkPage from './pages/bots/LarkPage';
+import DingTalkPage from './pages/bots/DingTalkPage';
+import WeixinPage from './pages/bots/WeixinPage';
+import WeComPage from './pages/bots/WeComPage';
+import QQPage from './pages/bots/QQPage';
+import DiscordPage from './pages/bots/DiscordPage';
+import SlackPage from './pages/bots/SlackPage';
+import PlatformRemoteAgentPage from './pages/remote-agent/PlatformRemoteAgentPage';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
 import ServerToolPage from './pages/servertool/ServerToolPage';
@@ -156,6 +157,16 @@ const OnboardingGate: React.FC = () => {
     return <Navigate to={target} replace />;
 };
 
+// LegacyBotSectionRedirect keeps old /remote-control/* bookmarks working. The
+// combined section was split into Bots (resource) + Remote Agent (purpose)
+// with identical per-platform pagination; old links land on the purpose side,
+// which links onward to Bots.
+const LegacyBotSectionRedirect = () => {
+    const location = useLocation();
+    const to = location.pathname.replace(/^\/remote-control/, '/remote-agent') + location.search;
+    return <Navigate to={to} replace />;
+};
+
 function AppContent() {
     const navigate = useNavigate();
 
@@ -233,18 +244,33 @@ function AppContent() {
                     <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace />} />
                     <Route path="/remote-coder/chat" element={<RemoteCoderPage />} />
                     <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
-                    {/* Remote Control routes */}
-                    <Route path="/remote-control" element={<Navigate to="/remote-control/weixin" replace />} />
-                    {/* Platform-specific bot pages */}
-                    <Route path="/remote-control/telegram" element={<TelegramPage />} />
-                    <Route path="/remote-control/feishu" element={<FeishuPage />} />
-                    <Route path="/remote-control/lark" element={<LarkPage />} />
-                    <Route path="/remote-control/dingtalk" element={<DingTalkPage />} />
-                    <Route path="/remote-control/weixin" element={<WeixinPage />} />
-                    <Route path="/remote-control/wecom" element={<WeComPage />} />
-                    <Route path="/remote-control/qq" element={<QQPage />} />
-                    <Route path="/remote-control/discord" element={<DiscordPage />} />
-                    <Route path="/remote-control/slack" element={<SlackPage />} />
+                    {/* Bots — the resource pages: manage bot connections per platform */}
+                    <Route path="/bots" element={<Navigate to="/bots/weixin" replace />} />
+                    <Route path="/bots/telegram" element={<TelegramPage />} />
+                    <Route path="/bots/feishu" element={<FeishuPage />} />
+                    <Route path="/bots/lark" element={<LarkPage />} />
+                    <Route path="/bots/dingtalk" element={<DingTalkPage />} />
+                    <Route path="/bots/weixin" element={<WeixinPage />} />
+                    <Route path="/bots/wecom" element={<WeComPage />} />
+                    <Route path="/bots/qq" element={<QQPage />} />
+                    <Route path="/bots/discord" element={<DiscordPage />} />
+                    <Route path="/bots/slack" element={<SlackPage />} />
+                    {/* Remote Agent — the purpose pages, mirroring the Bots pagination:
+                        same per-platform structure, but the content is the bots'
+                        Remote Agent configuration instead of the bot resource. */}
+                    <Route path="/remote-agent" element={<Navigate to="/remote-agent/weixin" replace />} />
+                    <Route path="/remote-agent/telegram" element={<PlatformRemoteAgentPage platformId="telegram" platformName="Telegram" />} />
+                    <Route path="/remote-agent/feishu" element={<PlatformRemoteAgentPage platformId="feishu" platformName="Feishu" />} />
+                    <Route path="/remote-agent/lark" element={<PlatformRemoteAgentPage platformId="lark" platformName="Lark" />} />
+                    <Route path="/remote-agent/dingtalk" element={<PlatformRemoteAgentPage platformId="dingtalk" platformName="DingTalk" />} />
+                    <Route path="/remote-agent/weixin" element={<PlatformRemoteAgentPage platformId="weixin" platformName="Weixin" />} />
+                    <Route path="/remote-agent/wecom" element={<PlatformRemoteAgentPage platformId="wecom" platformName="WeCom" />} />
+                    <Route path="/remote-agent/qq" element={<PlatformRemoteAgentPage platformId="qq" platformName="QQ" />} />
+                    <Route path="/remote-agent/discord" element={<PlatformRemoteAgentPage platformId="discord" platformName="Discord" />} />
+                    <Route path="/remote-agent/slack" element={<PlatformRemoteAgentPage platformId="slack" platformName="Slack" />} />
+                    {/* Back-compat: old /remote-control/* (the pre-split combined pages) → /remote-agent/* */}
+                    <Route path="/remote-control" element={<Navigate to="/remote-agent/weixin" replace />} />
+                    <Route path="/remote-control/*" element={<LegacyBotSectionRedirect />} />
                     {/* Guardrails */}
                     <Route path="/guardrails" element={<GuardrailsPage />} />
                     <Route path="/guardrails/groups" element={<GuardrailsGroupsPage />} />

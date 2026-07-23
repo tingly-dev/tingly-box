@@ -79,3 +79,23 @@ export function getAuthDisplayValue(settings: BotSettings, config: BotPlatformCo
 
     return 'Configured';
 }
+
+// REMOTE_AGENT_SCENARIO is the mount name for the remote-agent purpose
+// (control Claude Code / SmartGuide from chat). Mirrors the backend constant.
+export const REMOTE_AGENT_SCENARIO = 'remote_agent';
+
+// isRemoteAgentMounted reports whether the remote_agent purpose is mounted on a
+// bot, from its raw scenarios JSON. Mirrors the backend binding.ScenarioMounted:
+// an absent binding counts as mounted (legacy default on); an explicit
+// enabled:false turns it off; malformed JSON is treated as mounted.
+export function isRemoteAgentMounted(scenarios?: string): boolean {
+    if (!scenarios || !scenarios.trim()) return true;
+    try {
+        const rows = JSON.parse(scenarios) as Array<{ name?: string; enabled?: boolean }>;
+        const row = Array.isArray(rows) ? rows.find((r) => r?.name === REMOTE_AGENT_SCENARIO) : undefined;
+        if (!row) return true;
+        return row.enabled !== false;
+    } catch {
+        return true;
+    }
+}
