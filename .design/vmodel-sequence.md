@@ -138,6 +138,23 @@ wrappers in `anthropic/` and `openai/` only adapt a resolved step into their
 protocol's `MockModel`, mirroring how the always-fail specs are shared via
 `defaults_shared.go`.
 
+### Second consumer: the LB simulator's `faults`
+
+The harness `lb` scenario schema has always had a `faults` map — a per-service
+status program with "last entry repeats" semantics — that drove the
+`internal/server.LBSimulator` fake upstreams. That was an independent
+reimplementation of exactly this engine (`lbUpstreamScript.next()`), so it now
+delegates to `vmodel.Sequence` instead: a plain status list `[500,500,200]`
+compiles to a `SequenceConfig` with `ExhaustClamp` (preserving the historical
+behaviour), and the scenario YAML additionally accepts the structured form
+(`steps` with `repeat`, plus `on_exhaust: loop|clamp|fail`). This makes the
+sequence program **config-driven** through the existing, familiar lb YAML
+rather than requiring Go code, and collapses two "status sequence, last
+repeats" implementations into one. The simulator only reads each step's
+`HTTPStatus()`; the content/error metadata a `vmodel` step can carry is
+irrelevant there. See `internal/server.NewLBSimulatorWithSequences` and
+`cli/harness` `lbFaultSpec`.
+
 ## Registration
 
 `virtual-sequence-429` (`200, 200, 429`, looping) ships in **both** default
