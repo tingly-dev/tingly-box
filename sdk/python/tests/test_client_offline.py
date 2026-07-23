@@ -73,6 +73,72 @@ def test_ask_anthropic_passes_model_through_unmodified(monkeypatch):
     assert captured["model"] == "auto"
 
 
+def test_ask_pin_provider_sets_header(monkeypatch):
+    c = _client("anthropic")
+    captured = {}
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+
+            class R:
+                content = []
+
+            return R()
+
+    class _FakeAnthropic:
+        messages = _FakeMessages()
+
+    monkeypatch.setattr(Client, "anthropic", property(lambda self: _FakeAnthropic()))
+    c.ask("hi", pin_provider="p1")
+
+    assert captured["extra_headers"] == {"X-Tingly-Pin-Provider": "p1"}
+
+
+def test_ask_pin_provider_merges_with_caller_extra_headers(monkeypatch):
+    c = _client("anthropic")
+    captured = {}
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+
+            class R:
+                content = []
+
+            return R()
+
+    class _FakeAnthropic:
+        messages = _FakeMessages()
+
+    monkeypatch.setattr(Client, "anthropic", property(lambda self: _FakeAnthropic()))
+    c.ask("hi", pin_provider="p1", extra_headers={"X-Custom": "1"})
+
+    assert captured["extra_headers"] == {"X-Custom": "1", "X-Tingly-Pin-Provider": "p1"}
+
+
+def test_ask_without_pin_provider_sends_no_pin_header(monkeypatch):
+    c = _client("anthropic")
+    captured = {}
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+
+            class R:
+                content = []
+
+            return R()
+
+    class _FakeAnthropic:
+        messages = _FakeMessages()
+
+    monkeypatch.setattr(Client, "anthropic", property(lambda self: _FakeAnthropic()))
+    c.ask("hi")
+
+    assert "extra_headers" not in captured
+
+
 def test_client_passes_scenario_root_to_transports(monkeypatch):
     """The client hands the scenario root + model token to each builder;
     per-transport URL shaping (e.g. the OpenAI /v1 suffix) happens inside the

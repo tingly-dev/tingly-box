@@ -58,6 +58,30 @@ func (s *SimpleSelector) SelectService(
 	// Build context (session ID resolved internally)
 	ctx := NewSelectionContext(rule, req, c, scenario)
 
+	// X-Tingly-Pin-Provider: <provider_uuid> — an authenticated caller (this
+	// endpoint already required a valid model token to reach here) asking to
+	// use one SPECIFIC service already configured on THIS rule, instead of
+	// whatever affinity/smart-routing/load-balancing would otherwise pick.
+	// Deliberately scoped to rule.Services — unlike X-Tingly-Probe-Service
+	// above, this is safe to expose to normal clients precisely because it
+	// cannot reach a provider the rule wasn't already configured to use.
+	if pinnedUUID := c.GetHeader("X-Tingly-Pin-Provider"); pinnedUUID != "" {
+		svc := findActiveServiceByProvider(rule, pinnedUUID)
+		if svc == nil {
+			return nil, nil, fmt.Errorf("X-Tingly-Pin-Provider %q is not an active service on this rule", pinnedUUID)
+		}
+		provider, err := s.selector.config.GetProviderByUUID(pinnedUUID)
+		if err != nil || provider == nil {
+			return nil, nil, fmt.Errorf("pinned provider not found: %s", pinnedUUID)
+		}
+		if !provider.Enabled {
+			return nil, nil, fmt.Errorf("pinned provider disabled: %s", pinnedUUID)
+		}
+		result := &SelectionResult{Provider: provider, Service: svc, Source: SourceProviderPin, MatchedSmartRuleIndex: -1}
+		s.applySelectionResult(c, ctx, rule, scenario, result)
+		return provider, svc, nil
+	}
+
 	// Execute pipeline
 	result, err := s.selector.Select(ctx)
 	if err != nil {
@@ -68,6 +92,27 @@ func (s *SimpleSelector) SelectService(
 		return nil, nil, fmt.Errorf("selection returned nil result")
 	}
 
+	s.applySelectionResult(c, ctx, rule, scenario, result)
+
+	return result.Provider, result.Service, nil
+}
+
+// findActiveServiceByProvider returns the rule's own active service bound to
+// the given provider UUID, or nil if the rule has no such service — the
+// scoping check that makes X-Tingly-Pin-Provider safe to expose to clients.
+func findActiveServiceByProvider(rule *typ.Rule, providerUUID string) *loadbalance.Service {
+	for _, svc := range rule.GetActiveServices() {
+		if svc.Provider == providerUUID {
+			return svc
+		}
+	}
+	return nil
+}
+
+// applySelectionResult stores session/affinity/observability context and
+// emits debug headers for a selection result, however it was produced
+// (the normal pipeline, or the X-Tingly-Pin-Provider override above).
+func (s *SimpleSelector) applySelectionResult(c *gin.Context, ctx *SelectionContext, rule *typ.Rule, scenario typ.RuleScenario, result *SelectionResult) {
 	// Automatically store sessionID in gin context for downstream handlers
 	c.Set(constant.CtxKeySessionID, ctx.SessionID.String())
 	// The scoped affinity key (session + matched smart partition) — consumers
@@ -106,8 +151,6 @@ func (s *SimpleSelector) SelectService(
 	}).Infof("[routing] selected %s/%s via %s", result.Provider.UUID, result.Service.Model, result.Source)
 
 	setRoutingDebugHeaders(c, result.Provider.Name, result.Provider.UUID, result.Service.Model, result.Source, result.MatchedSmartRuleIndex, result.EvaluatedStages)
-
-	return result.Provider, result.Service, nil
 }
 
 // setRoutingDebugHeaders emits X-Tingly-Selected-* response headers describing

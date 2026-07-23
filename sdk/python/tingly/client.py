@@ -17,6 +17,7 @@ from . import scenarios as _scenarios
 from .errors import TinglyError
 from .helpers.guardrails import GuardrailsView
 from .helpers.quota import QuotaView
+from .helpers.rules import RulesView
 from .helpers.usage import UsageView
 from .transports import anthropic_compat, openai_compat
 
@@ -104,6 +105,7 @@ class Client:
         system: Optional[str] = None,
         max_tokens: int = 1024,
         stream: bool = False,
+        pin_provider: Optional[str] = None,
         **kwargs: Any,
     ):
         """One-shot prompt → text, routed through tingly-box.
@@ -111,7 +113,18 @@ class Client:
         Picks the transport from the scenario: Anthropic messages is tried
         first (tb's native protocol); OpenAI-only scenarios fall back to chat
         completions. ``model="auto"`` lets the gateway route.
+
+        ``pin_provider`` sends ``X-Tingly-Pin-Provider``, forcing tb to use
+        that exact provider instead of letting affinity/smart-routing/load-
+        balancing decide — but only if it's one of the resolved rule's own
+        configured services (see ``Client.rules``); tb rejects a pin to any
+        other provider. Omit it for tb's normal behavior.
         """
+        if pin_provider:
+            kwargs["extra_headers"] = {
+                **kwargs.get("extra_headers", {}),
+                "X-Tingly-Pin-Provider": pin_provider,
+            }
         if _scenarios.supports_anthropic(self._session.transport):
             return self._ask_anthropic(prompt, model, system, max_tokens, stream, **kwargs)
         return self._ask_openai(prompt, model, system, stream, **kwargs)
@@ -167,6 +180,10 @@ class Client:
     @property
     def quota(self) -> QuotaView:
         return QuotaView(self._gateway_url, self._admin_token, self._timeout)
+
+    @property
+    def rules(self) -> RulesView:
+        return RulesView(self._gateway_url, self._admin_token, self._timeout)
 
     # -- lifecycle -------------------------------------------------------
 

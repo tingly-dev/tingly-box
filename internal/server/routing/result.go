@@ -15,6 +15,10 @@ const (
 	// SourceProbePin marks the X-Tingly-Probe-Service bypass, which pins a
 	// specific service without running the pipeline.
 	SourceProbePin = "probe_pin"
+	// SourceProviderPin marks the X-Tingly-Pin-Provider override — a caller
+	// choosing which of the rule's OWN configured services to use, still
+	// authenticated and still scoped to that rule (contrast SourceProbePin).
+	SourceProviderPin = "provider_pin"
 )
 
 // SelectionResult represents the output of service selection pipeline.

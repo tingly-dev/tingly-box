@@ -98,7 +98,7 @@ gateway for its own LLM work.
 
 ### Example plugins
 
-`sdk/python/examples/` has three, each demonstrating a different real-world
+`sdk/python/examples/` has four, each demonstrating a different real-world
 pattern for the same idea — a plugin composing the box by calling back into
 other tb rules:
 
@@ -118,10 +118,28 @@ other tb rules:
   originate more than one call, against more than one rule, per request.
 - **`router_plugin.py`** — quota-aware dispatch (`model="plugin/router"`): a
   different shape from the three above — it generates nothing itself, it
-  only *decides* which one candidate rule/model to forward to, using live
-  quota headroom (`tb.quota`, below) to pick. Same idea as LiteLLM Router's
-  `usage-based-routing` strategy, implemented as a plugin instead of gateway
-  config.
+  only *decides* which one candidate to forward to, using quota headroom
+  (`tb.quota`) to pick. Same idea as LiteLLM Router's `usage-based-routing`
+  strategy. Forwards with `tb.ask(..., pin_provider=<uuid>)` so the provider
+  it checked quota for is *guaranteed* to be the one that serves the
+  request — see "Deterministic dispatch" below for why that matters.
+
+## Deterministic dispatch (`pin_provider`)
+
+Normally `tb.ask(model=X)` resolves `(scenario, model)` to a rule and lets tb
+itself pick which of that rule's services actually runs (affinity / smart
+routing / load balancing — unchanged, still the default). When code needs to
+*guarantee* a specific provider — like `router_plugin.py` above, which
+already checked that provider's quota — pass `pin_provider`:
+
+```python
+tb.ask("...", model="sonnet1", pin_provider=provider_uuid)
+```
+
+tb only allows pinning to a provider that's already one of the resolved
+rule's own configured services (`tb.rules.for_model(scenario, model)` lists
+them) — it rejects a pin to anything else. See `.design/python-sdk.md` §"Two
+connection modes" for the full mechanics.
 
 ## Status
 

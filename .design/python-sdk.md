@@ -190,7 +190,7 @@ sdk/python/
     config.py        # (base_url, admin_token) resolution precedence
     scenarios.py     # scenario + transport constants
     transports/      # build openai.OpenAI / anthropic.Anthropic bound to tb
-    helpers/         # usage + guardrails + quota views
+    helpers/         # usage + guardrails + quota + rules views
     plugin/          # Layer 2: be an AI server tb routes to
       core.py        #   Plugin class (@plugin.chat, .llm, .serve, api_style)
       server.py      #   stdlib HTTP server: /v1/messages (primary) + /v1/chat/completions (secondary), + SSE
@@ -216,6 +216,7 @@ connect(scenario="experiment")
           .usage       → GET /api/v1/requests        (admin token)
           .guardrails  → GET /api/v1/guardrails/config (admin token)
           .quota       → GET/POST /api/v1/provider-quota[...] (admin token)
+          .rules       → GET /api/v1/rules?scenario=       (admin token)
 ```
 
 ## How it works (pencil)
@@ -560,6 +561,56 @@ and `internal/loadbalance` have zero references to `ai/quota` as of this
 writing) — a plugin picking by remaining quota is genuinely new behavior,
 not a Python reimplementation of something the gateway already does.
 
+### Two connection modes: scenario+rule, and scenario+rule+pin
+
+Every call this SDK makes goes through `(scenario, model)` → tb resolves a
+**rule** → the rule's `Services[]` (possibly several, tiered) → tb's own
+affinity/smart-routing/load-balancer picks **which** service actually runs.
+That's mode 1 — "let tb decide" — and it's what `.ask()` has always done.
+
+Building `router_plugin.py` (below) surfaced a real gap: a plugin that picks
+a provider by quota and then calls `.ask(model=X)` has no guarantee that's
+the provider tb's load balancer actually uses when the rule has more than
+one active service — the "decision" and the execution are two unrelated
+code paths that happen to usually agree. Mode 2 closes that:
+
+- **`X-Tingly-Pin-Provider: <provider_uuid>`** (`internal/server/routing/simple.go`,
+  `SimpleSelector.SelectService`) — forces the resolved rule to use that
+  exact service, skipping affinity/smart-routing/load-balancing. The check
+  that makes this safe to expose to ordinary clients: the provider **must**
+  already be one of the resolved rule's own active `Services[]`, or tb
+  rejects the request (400) — this cannot be used to reach an unrelated
+  provider elsewhere on the box. It also runs on the *same* authenticated
+  data-plane path as every other call (the model token already required to
+  reach `/tingly/:scenario/...`), unlike the older `X-Tingly-Probe-Service`
+  (`internal/server/routing/simple.go`, `.design/probe.md`), which bypasses
+  auth entirely by convention (*"any caller that can reach the TB HTTP port
+  can send it"*) and pins to **any** provider — that header is only ever
+  injected internally by tb's own probe/diagnostics tooling, deliberately
+  never exposed to SDK users. `X-Tingly-Pin-Provider` is the scoped,
+  authenticated version of the same underlying mechanic
+  (`SourceProviderPin` vs. `SourceProbePin` in `internal/server/routing/result.go`).
+- SDK surface: `Client.ask(..., pin_provider=<uuid>)` sets the header
+  (merges with any caller-supplied `extra_headers`); `tb.openai` /
+  `tb.anthropic` accept it directly too, since both vendor SDKs already
+  support `extra_headers=` on `.create()` — no SDK change was even required
+  for that path, `ask()`'s kwarg is purely for convenience.
+- **`Client.rules`** (`tingly/helpers/rules.py`, wraps `GET /api/v1/rules?scenario=`,
+  admin token) is how a caller finds out what's *pinnable*:
+  `rules.for_model(scenario, model)` returns the resolved `Rule`, whose
+  `.active_services` are the only valid `pin_provider` values for that model.
+  A rule with more than one active service has more than one valid pin — use
+  quota (or whatever signal) to choose among them; a candidate whose rule
+  doesn't resolve to exactly one service isn't safely routable by an
+  external quota check at all (`router_plugin.py` skips those, rather than
+  guessing).
+
+Verified live against the real `tb` binary (not just mocked): a rule with
+provider A at tier 0 and B at tier 1 — an unpinned call selects A (normal
+tier order, confirmed via `X-Tingly-Debug-Routing`); the same call with
+`X-Tingly-Pin-Provider: <B>` selects B despite the tier order; a pin to a
+provider not on that rule is rejected with 400.
+
 ### Example plugins (`sdk/python/examples/`)
 
 Four, each a different real-world shape of "plugin composes the box by
@@ -595,22 +646,26 @@ pattern already in wide use:
   just one.
 - **`router_plugin.py`** (`model="plugin/router"`) — quota-aware dispatch: a
   different shape from the three above, which all *generate* an answer
-  themselves. A router generates nothing — it picks the ONE candidate
-  `(scenario, model, provider_uuid)` with the most quota headroom (via the
-  `Client.quota` view above) and forwards to just that one; one hop total,
-  by design, not N. Same idea as LiteLLM Router's `usage-based-routing`
-  strategy (route to whichever deployment has the most remaining rate-limit
-  capacity), implemented as a plugin instead of gateway config — deliberately
-  reads cached quota by default and only calls `.quota.refresh()` when a
-  caller opts in, since LiteLLM's own docs warn that a live usage check on
-  every request adds real per-request latency.
+  themselves. A router generates nothing — for each candidate model it
+  resolves the rule via `Client.rules` (skipping any candidate whose rule
+  isn't pinned to exactly one active service — see "Two connection modes"
+  above), checks quota for that one provider, picks the candidate with the
+  most headroom, and forwards with `pin_provider=` so the provider that was
+  quota-checked is *guaranteed* to be the one that serves the request — one
+  hop total, by design, not N. Same idea as LiteLLM Router's
+  `usage-based-routing` strategy (route to whichever deployment has the most
+  remaining rate-limit capacity), implemented as a plugin instead of gateway
+  config — deliberately reads cached quota by default and only calls
+  `.quota.refresh()` when a caller opts in, since LiteLLM's own docs warn
+  that a live usage check on every request adds real per-request latency.
 
 Every example plugin has unit tests (`tests/test_example_plugins.py`,
-`tests/test_router_plugin.py`, `tests/test_quota.py`) that monkeypatch
-`plugin.use`/`Client.quota` to fakes and pin the decision logic — JSON-verdict
-formatting and graceful degradation on non-JSON (critic); judge-skipped-on-
-agreement vs. judge-called-on-disagreement (fusion); highest-headroom
-candidate selection and single-hop forwarding (router) — without needing a
+`tests/test_router_plugin.py`, `tests/test_quota.py`, `tests/test_rules.py`)
+that monkeypatch `plugin.use`/`Client.quota`/`Client.rules` to fakes and pin
+the decision logic — JSON-verdict formatting and graceful degradation on
+non-JSON (critic); judge-skipped-on-agreement vs. judge-called-on-disagreement
+(fusion); multi-service rules skipped as non-routable, highest-headroom
+candidate selection, and `pin_provider=` forwarding (router) — without needing a
 live tb.
 
 ## Layer 3: can tb *use* a plugin as a model? (yes — as an upstream)
