@@ -1,6 +1,6 @@
-import { Box, Chip, Divider, Paper, Popover, Typography, styled } from '@mui/material';
+import { Box, Chip, Divider, Typography, styled } from '@mui/material';
 import { NODE_LAYER_STYLES } from './styles';
-import { useCallback, useRef, useState } from 'react';
+import NodeTooltip from './NodeTooltip';
 import { useTranslation } from 'react-i18next';
 
 type AgentType = 'claude-code' | 'smart-guide' | 'custom' | 'mock';
@@ -29,26 +29,22 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
         color: 'info',
         info: {
             en: {
-                description: 'A full-spectrum development agent powered by Claude Code CLI. Handles implementation, refactoring, testing, builds, and git operations — anything that requires deep code execution in your local environment.',
+                description: 'A full-spectrum development agent (Claude Code CLI) — implementation, refactors, tests, builds, and git operations in your local environment.',
                 features: [
-                    'Implement features, algorithms, and multi-file refactors',
-                    'Run tests, builds, and debug sessions',
-                    'Execute git operations: commits, pushes, rebases',
-                    'Manage dependencies and complex package changes',
-                    'Triggered via IM — type @cc to hand off from SmartGuide',
+                    'Multi-file implementation & refactors',
+                    'Run tests, builds, and debug',
+                    'Git operations: commit, push, rebase',
                 ],
-                config: 'Click this node to open the Claude Code scene and configure profiles.',
+                config: 'Click to open Claude Code and configure profiles.',
             },
             zh: {
-                description: '由 Claude Code CLI 驱动的全栈开发代理，负责功能实现、重构、测试、构建和 Git 操作——所有需要在本地环境深度执行的任务。',
+                description: '由 Claude Code CLI 驱动的全栈开发代理——功能实现、重构、测试、构建和 Git 操作。',
                 features: [
-                    '实现功能、算法及跨文件重构',
+                    '跨文件实现与重构',
                     '运行测试、构建与调试',
-                    '执行 Git 操作：提交、推送、变基',
-                    '管理依赖和复杂包变更',
-                    '通过 IM 触发——在 SmartGuide 中输入 @cc 即可切换',
+                    'Git 操作：提交、推送、变基',
                 ],
-                config: '点击此节点跳转到 Claude Code 场景页，配置 Profile 和运行参数。',
+                config: '点击跳转到 Claude Code 场景页配置 Profile。',
             },
         },
     },
@@ -57,26 +53,22 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
         color: 'success',
         info: {
             en: {
-                description: 'A navigation and coordination assistant (@tb). Understands your intent, explores the project, answers questions, handles small edits and workspace setup — then hands off heavy implementation to @cc.',
+                description: 'A navigation and coordination assistant (@tb) — explores the project, answers questions, and handles small edits, then hands off heavy implementation to @cc.',
                 features: [
-                    'Project exploration: read files, explain structure and architecture',
-                    'Answer questions about dependencies and configuration',
-                    'Small precise edits: config values, env vars, templates',
-                    'Workspace setup: clone repos, set working directory',
-                    'Persistent memory across sessions (MEMORY.md)',
+                    'Explore files & explain architecture',
+                    'Small precise edits: config, env vars',
+                    'Persistent memory (MEMORY.md)',
                 ],
-                config: 'Click the Model node to the right to select the provider and model for this agent.',
+                config: 'Click the Model node to select provider and model.',
             },
             zh: {
-                description: '导航与协调助手（@tb）。理解用户意图、探索项目、回答问题、处理小改动和工作区配置，重度实现任务交由 @cc 处理。',
+                description: '导航与协调助手（@tb）——探索项目、回答问题、处理小改动，重度实现交由 @cc。',
                 features: [
-                    '项目探索：读取文件，解释结构和架构',
-                    '回答依赖与配置相关问题',
-                    '精准小改动：配置值、环境变量、模板',
-                    '工作区配置：克隆仓库、设置工作目录',
+                    '探索文件并讲解架构',
+                    '精准小改动：配置、环境变量',
                     '跨会话持久记忆（MEMORY.md）',
                 ],
-                config: '点击右侧 Model 节点，为此代理选择服务商和模型。',
+                config: '点击右侧 Model 节点选择服务商和模型。',
             },
         },
     },
@@ -162,29 +154,33 @@ const AgentNode: React.FC<AgentNodeProps> = ({
     const displayLabel = label || config.label;
     const clickable = !!onClick;
 
-    const anchorEl = useRef<HTMLDivElement | null>(null);
-    const [open, setOpen] = useState(false);
-    const enterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const handleMouseEnter = useCallback(() => {
-        enterTimer.current = setTimeout(() => setOpen(true), 400);
-    }, []);
-
-    const handleMouseLeave = useCallback(() => {
-        if (enterTimer.current) clearTimeout(enterTimer.current);
-        setOpen(false);
-    }, []);
+    // NodeTooltip (MUI Tooltip) rather than a hand-rolled hover Popover: it
+    // has built-in enter/leave hysteresis and never needs to reposition
+    // itself under the cursor, so it can't fall into the open/close flicker
+    // loop a manually-timed Popover does when its content is tall enough to
+    // collide with the viewport edge.
+    const tooltipContent = (
+        <Box sx={{ maxWidth: 260 }}>
+            <Typography variant="body2" sx={{ mb: 1, lineHeight: 1.5 }}>
+                {info.description}
+            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2.25, mb: 1 }}>
+                {info.features.map((f) => (
+                    <Box component="li" key={f} sx={{ '&:not(:last-of-type)': { mb: 0.25 } }}>
+                        <Typography variant="caption">{f}</Typography>
+                    </Box>
+                ))}
+            </Box>
+            <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.2)' }} />
+            <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', opacity: 0.85 }}>
+                {info.config}
+            </Typography>
+        </Box>
+    );
 
     return (
-        <>
-            <StyledAgentNode
-                ref={anchorEl}
-                active={active}
-                clickable={clickable}
-                onClick={onClick}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-            >
+        <NodeTooltip title={tooltipContent} placement="top">
+            <StyledAgentNode active={active} clickable={clickable} onClick={onClick}>
                 <Box sx={NODE_LAYER_STYLES.topLayer}>
                     <Typography variant="body2" sx={NODE_LAYER_STYLES.typography}>Agent</Typography>
                 </Box>
@@ -200,70 +196,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                     />
                 </Box>
             </StyledAgentNode>
-            <Popover
-                open={open}
-                anchorEl={anchorEl.current}
-                onClose={() => setOpen(false)}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                disableRestoreFocus
-                slotProps={{ paper: { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } }}
-                sx={{ pointerEvents: 'none' }}
-            >
-                <Paper sx={{ p: 2, maxWidth: 300, pointerEvents: 'auto' }}>
-                    {/* Header */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <Chip
-                            label={config.label}
-                            size="small"
-                            color={config.color as any}
-                            sx={{ fontWeight: 700, fontSize: '0.75rem' }}
-                        />
-                        <Typography variant="caption" sx={{
-                            color: "text.secondary"
-                        }}>Agent</Typography>
-                    </Box>
-
-                    {/* Description */}
-                    <Typography variant="body2" sx={{ mb: 1.5, lineHeight: 1.55, color: 'text.primary' }}>
-                        {info.description}
-                    </Typography>
-
-                    <Divider sx={{ mb: 1.5 }} />
-
-                    {/* Features */}
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {lang === 'zh' ? '功能' : 'Features'}
-                    </Typography>
-                    <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5, mb: 1.5 }}>
-                        {info.features.map((f) => (
-                            <Box component="li" key={f} sx={{ mb: 0.25 }}>
-                                <Typography variant="caption" sx={{
-                                    color: "text.secondary"
-                                }}>{f}</Typography>
-                            </Box>
-                        ))}
-                    </Box>
-
-                    <Divider sx={{ mb: 1.5 }} />
-
-                    {/* Config hint */}
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {lang === 'zh' ? '配置' : 'Configuration'}
-                    </Typography>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            display: "block",
-                            mt: 0.5,
-                            color: 'text.secondary',
-                            lineHeight: 1.5
-                        }}>
-                        {info.config}
-                    </Typography>
-                </Paper>
-            </Popover>
-        </>
+        </NodeTooltip>
     );
 };
 
