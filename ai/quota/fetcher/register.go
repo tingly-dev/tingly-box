@@ -17,6 +17,7 @@ func RegisterAll(r quota.FetcherRegistrar, logger *logrus.Logger) {
 		NewZaiFetcher(),
 		NewGLMFetcher(),
 		NewKimiK2Fetcher(),
+		NewKimiCodeFetcher(),
 		NewOpenRouterFetcher(),
 		NewMiniMaxFetcher(),
 		NewMiniMaxCNFetcher(),

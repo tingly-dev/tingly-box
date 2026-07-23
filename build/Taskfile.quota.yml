@@ -282,6 +282,57 @@ tasks:
         {{ if .CODEX_ACCOUNT_ID }}-H "ChatGPT-Account-Id: {{.CODEX_ACCOUNT_ID}}"{{ end }} \
         {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
+  kimi-code:
+    cmds:
+      - |
+        echo "example"
+        cat << EOF
+        {
+          "user": {
+            "userId": "user-example",
+            "region": "REGION",
+            "membership": {
+              "level": "LEVEL_ADVANCED"
+            },
+            "businessId": ""
+          },
+          "usage": {
+            "limit": "100",
+            "used": "6",
+            "remaining": "94",
+            "resetTime": "2026-07-27T15:32:57.102261Z"
+          },
+          "limits": [
+            {
+              "window": {
+                "duration": 300,
+                "timeUnit": "TIME_UNIT_MINUTE"
+              },
+              "detail": {
+                "limit": "100",
+                "remaining": "100",
+                "resetTime": "2026-07-23T05:32:57.102261Z"
+              }
+            }
+          ],
+          "parallel": {
+            "limit": "30"
+          },
+          "totalQuota": {},
+          "authentication": {
+            "method": "METHOD_ACCESS_TOKEN",
+            "scope": "FEATURE_CODING"
+          },
+          "subType": "TYPE_PURCHASE",
+          "domain": "DOMAIN_NEXUS"
+        }
+        EOF
+      - |
+        curl https://api.kimi.com/coding/v1/usages \
+        -H "Authorization: Bearer {{.KIMI_CODE_TOKEN}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
+
   kimi-k2:
     cmds:
       - |
