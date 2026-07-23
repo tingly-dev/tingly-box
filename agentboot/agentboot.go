@@ -23,7 +23,10 @@ type Config struct {
 	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"`
 }
 
-// AgentBoot manages agent instances
+// AgentBoot manages agent instances.
+//
+// Deprecated: application code should use AgentService. AgentBoot remains
+// exported for one compatibility window for low-level registry consumers.
 type AgentBoot struct {
 	mu            sync.RWMutex
 	config        Config
@@ -35,6 +38,8 @@ type AgentBoot struct {
 //
 // Prefer [NewAgentService] for application code. Provider-specific integrations
 // such as Claude session history are composed outside the root package.
+//
+// Deprecated: use NewAgentService.
 func New(config Config) (*AgentBoot, error) {
 	if config.DefaultAgent == "" {
 		config.DefaultAgent = AgentTypeClaude

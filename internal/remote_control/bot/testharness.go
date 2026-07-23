@@ -105,7 +105,9 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	if opt.FixtureScript != nil {
 		fixtureAgent := claude.NewAgentWithFactory(claude.Config{}, fixture.Factory(opt.FixtureScript))
 		agentService.RegisterAgent(agentboot.AgentTypeClaude, fixtureAgent)
-		_ = agentService.Boot().SetDefaultAgent(agentboot.AgentTypeClaude)
+		if err := agentService.SetDefaultAgent(agentboot.AgentTypeClaude); err != nil {
+			t.Fatalf("BootForTest: set default agent: %v", err)
+		}
 	}
 
 	auditLog := audit.NewLogger(audit.Config{Console: false, MaxEntries: 1000})

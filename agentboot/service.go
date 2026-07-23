@@ -63,8 +63,26 @@ func (s *AgentService) RegisterAgent(agentType AgentType, agent Agent) {
 	s.boot.RegisterAgent(agentType, agent)
 }
 
-// Boot returns the underlying AgentBoot registry for callers that need
-// low-level access. Prefer the AgentService methods.
+// SetDefaultAgent selects the registered agent used when execution APIs receive
+// an empty AgentType.
+func (s *AgentService) SetDefaultAgent(agentType AgentType) error {
+	return s.boot.SetDefaultAgent(agentType)
+}
+
+// RegisteredAgents returns the currently registered agent types.
+func (s *AgentService) RegisteredAgents() []AgentType {
+	return s.boot.ListAgents()
+}
+
+// Config returns a snapshot of the service configuration.
+func (s *AgentService) Config() Config {
+	return s.boot.GetConfig()
+}
+
+// Boot returns the underlying compatibility registry.
+//
+// Deprecated: use AgentService methods such as RegisterAgent,
+// SetDefaultAgent, RegisteredAgents, and Config.
 func (s *AgentService) Boot() *AgentBoot {
 	return s.boot
 }
