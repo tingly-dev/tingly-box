@@ -524,6 +524,46 @@ their manifest (reuse `agentboot/process`), a `/plugins/<name>/*` reverse-proxy
 mount, and the install/enable/logs/disable lifecycle UI. The Python side and the
 provider wiring are complete; those are the remaining backend pieces.
 
+### Example plugins (`sdk/python/examples/`)
+
+Three, each a different real-world shape of "plugin composes the box by
+calling back into other rules" — not toys picked at random, each maps onto a
+pattern already in wide use:
+
+- **`rag_plugin.py`** — one call back into tb for generation over retrieved
+  context. The baseline shape.
+- **`critic_plugin.py`** (`model="plugin/critic"`) — cross-model critique:
+  forwards the artifact-to-review to a *different* rule/model, returns a
+  structured `{verdict, issues, suggestion}`. Chosen over self-critique
+  deliberately: Huang et al. (ICLR 2024) found LLMs can't reliably
+  self-correct without external feedback, so a plugin reviewing with a
+  different model is the robust variant, not a stylistic choice. This is the
+  pattern behind [Zen MCP](https://github.com/jray2123/zen-mcp-server) and
+  [Consult7](https://github.com/szeider/consult7) (both real MCP servers
+  coding agents use today to consult another model mid-task) and behind
+  aider's architect/editor split. Named "critic" deliberately, not "advisor"
+  — tb already has an unrelated, in-process `advisor` MCP tool
+  (`internal/mcp/runtime/advisor_virtual.go` + the response-hook machinery in
+  `internal/server/servertool/`); reusing that name for an architecturally
+  different thing (plugin-as-upstream calling back into the gateway, vs. a
+  direct in-process upstream call) would be the same collision already
+  flagged above for "Plugin" vs. rule-flag "Plugins" — same fix, applied
+  before it started rather than after.
+- **`fusion_plugin.py`** (`model="plugin/fusion"`) — multi-model consensus:
+  polls a panel of rules/models concurrently (`ThreadPoolExecutor`), skips
+  the judge call when the panel already agrees, otherwise a judge call
+  synthesizes. Mirrors Consult7's 2026 Fusion feature (a panel of frontier
+  models answers in parallel, a judge model merges). The clearest
+  illustration of the architecture line at the top of this document — a
+  plugin can freely originate calls against *any* number of other rules, not
+  just one.
+
+Both `critic_plugin.py` and `fusion_plugin.py` have unit tests
+(`tests/test_example_plugins.py`) that monkeypatch `plugin.use` to a fake
+client and pin the branching logic (JSON-verdict formatting and graceful
+degradation on non-JSON; judge-skipped-on-agreement vs. judge-called-on-
+disagreement) without needing a live tb.
+
 ## Layer 3: can tb *use* a plugin as a model? (yes — as an upstream)
 
 Layer 1 points the **data-flow into** tb: the plugin is a *consumer*. For tb to

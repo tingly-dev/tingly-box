@@ -96,6 +96,27 @@ The server is stdlib-only (no FastAPI), supports streaming on both routes, and
 `plugin.llm` calls back into tb (Anthropic-first) so the plugin reuses the
 gateway for its own LLM work.
 
+### Example plugins
+
+`sdk/python/examples/` has three, each demonstrating a different real-world
+pattern for the same idea — a plugin composing the box by calling back into
+other tb rules:
+
+- **`rag_plugin.py`** — retrieval-augmented answers from a toy corpus, one
+  call back into tb for generation.
+- **`critic_plugin.py`** — cross-model critique (`model="plugin/critic"`):
+  forwards the thing to review to a *different* rule/model and returns a
+  structured verdict. Self-critique is unreliable (a model can't reliably
+  catch its own mistakes); this is the pattern behind
+  [Zen MCP](https://github.com/jray2123/zen-mcp-server) and
+  [Consult7](https://github.com/szeider/consult7), and behind aider's
+  architect/editor split.
+- **`fusion_plugin.py`** — multi-model consensus (`model="plugin/fusion"`):
+  polls a panel of rules/models concurrently, skips the judge call when they
+  already agree, otherwise a judge call synthesizes. Mirrors Consult7's 2026
+  Fusion feature; the clearest illustration that a plugin can freely
+  originate more than one call, against more than one rule, per request.
+
 ## Status
 
 - **Layer 1** (consume tb): `connect()` → `Client`. Done — Anthropic tried
