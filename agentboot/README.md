@@ -1,6 +1,13 @@
 # AgentBoot Package
 
-AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It hides per-agent process management, protocol parsing, and permission/ask routing behind a small, agent-agnostic API.
+AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It
+hides per-agent process management, protocol parsing, and permission/ask
+routing behind a small, agent-agnostic API.
+
+The production adapter launches the **Claude Code CLI** as a subprocess and
+communicates with its stream-JSON/control protocol. AgentBoot does not embed the
+Python `claude-agent-sdk` and does not use Claude Desktop as an execution
+backend.
 
 ## Features
 
@@ -13,13 +20,13 @@ AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It 
 
 ## Supported Agents
 
-| Agent    | Status         | Description       |
-|----------|----------------|-------------------|
-| `claude` | Implemented    | Claude Code CLI   |
-| `mock`   | Test-only      | In-memory agent for tests |
-| `codex`  | Planned        | OpenAI Codex      |
-| `gemini` | Planned        | Google Gemini     |
-| `cursor` | Planned        | Cursor AI         |
+| Agent | Status | Backend |
+| --- | --- | --- |
+| `claude` | Implemented | Claude Code CLI |
+
+The generic driver/transport/runner seams support future providers. Test
+fixtures substitute the process factory; they are not registered production
+agents.
 
 ## Usage
 
@@ -150,19 +157,29 @@ when callers need structured handling.
 | `OutputFormatText`            | Plain text output                        |
 | `OutputFormatStreamJSON`      | Streaming JSON events (default)          |
 
-## Permission Modes
+## Claude Permission Modes
 
-| Mode                       | Description                            |
-|----------------------------|----------------------------------------|
-| `PermissionModeAuto`       | Auto-approve all requests              |
-| `PermissionModeManual`     | Require caller approval per request    |
-| `PermissionModeSkip`       | Skip permission prompts (CLI bypass)   |
+`ExecutionOptions.PermissionMode` is forwarded to Claude Code CLI. Prefer the
+constants in the `claude` package:
 
-Set per-execution via `ExecutionOptions.PermissionMode`, or globally on the Claude agent through `Agent.SetSkipPermissions`.
+| Mode | Claude Code behavior |
+| --- | --- |
+| `claude.PermissionModeDefault` | Use the CLI's default permission flow |
+| `claude.PermissionModeAuto` | Delegate decisions to Claude Code's rule classifier |
+| `claude.PermissionModeManual` | Require interactive approval |
+| `claude.PermissionModeDontAsk` | Do not ask for denied operations |
+| `claude.PermissionModeAcceptEdits` | Automatically accept edit operations |
+| `claude.PermissionModePlan` | Run in plan mode |
+| `claude.PermissionModeBypassPermissions` | Bypass permission checks |
+
+`Agent.SetSkipPermissions(true)` maps to Claude Code's separate
+`--dangerously-skip-permissions` flag. It is an explicit bypass and is not
+equivalent to `PermissionModeAuto`.
 
 ## Configuration
 
-`Config` is plain Go — no environment variables are read by the package itself. Defaults are provided by `agentboot.DefaultConfig()`:
+Root configuration is plain Go and its defaults are provided by
+`agentboot.DefaultConfig()`:
 
 | Field                       | Default                          |
 |-----------------------------|----------------------------------|
@@ -175,41 +192,53 @@ Set per-execution via `ExecutionOptions.PermissionMode`, or globally on the Clau
 
 `ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink. A zero timeout uses the configured default; a negative timeout explicitly disables it.
 
+Claude Code CLI discovery also recognizes `CLAUDE_CLI_PATH`,
+`CLAUDE_USE_BUNDLED`, and `CLAUDE_USE_GLOBAL`. Every selected executable is
+validated with `--version`; application-local bundled candidates mean a
+packaged Claude Code executable, never Claude Desktop.
+
 ## Package Structure
 
 ```
 agentboot/
-├── agentboot.go          # Internal agent registry
-├── config.go             # DefaultConfig / DefaultPermissionConfig
-├── types.go              # Agent interface, ExecutionOptions, Result, ...
+├── agentboot.go          # Agent registry and root Config
+├── agent.go              # AgentType and Agent interface
+├── options.go            # OutputFormat and ExecutionOptions
+├── result.go             # Aggregated Result read API
+├── config.go             # Root defaults
 ├── errors.go             # Structured result/process/protocol errors
 ├── handle.go             # ExecutionHandle + ControlResponse types
-├── events.go             # StreamEvent sum type (Message/Approval/Ask/Error)
+├── events.go             # Raw Event alias + typed StreamEvent sum
 ├── driver.go             # AgentDriver interface + LaunchSpec
 ├── transport.go          # AgentTransport + per-execution factory
-├── runner.go             # Generic per-execution lifecycle engine
+├── runner.go             # Runner configuration and construction
+├── runner_execute.go     # Generic per-execution lifecycle
+├── runner_state.go       # Run state and terminal error conversion
 ├── run.go                # High-level Prompter/MessageSink consumer
 ├── service.go            # Public AgentService façade
 ├── ask/                  # Ask/permission prompter implementations
-├── common/               # Shared event + session metadata types
+├── common/               # Raw event and historical session types
 ├── process/              # Process abstraction (osexec + fake for tests)
 ├── protocol/             # Stream-JSON encoder / decoder
-├── session/              # Generic session store interface
+├── session/              # Runtime lifecycle store interface
 └── claude/               # Claude Code agent implementation
     ├── agent.go          # claude.Agent (wraps Runner)
-    ├── driver.go         # CLI flag construction + binary discovery
+    ├── driver.go         # Launch preparation and CLI selection
     ├── transport.go      # Stream-JSON parsing
-    ├── launcher.go       # Process supervision
+    ├── launcher.go       # Legacy compatibility wrapper
     ├── cli_builder.go    # Argv construction
-    ├── cli_discovery.go  # Locate the claude binary
+    ├── discovery.go      # Verified Claude Code CLI discovery
+    ├── environment.go    # Clean/merged CLI environment
+    ├── jsonl.go          # Compatibility JSONL helpers
     ├── accumulator.go    # Per-message accumulation
-    ├── messages.go       # Claude message types
+    ├── message.go        # Claude wire message types
+    ├── content.go        # Content block decoding
+    ├── control.go        # Legacy control manager/builders
     ├── tool_renderer.go  # Tool-use rendering
     ├── formatter.go      # Output formatting helpers
     ├── prompt_builder.go # Prompt assembly
     ├── session/          # Claude-specific session store (~/.claude/projects)
-    ├── examples/         # query, server, session sample programs
-    └── ref/              # Reference docs
+    └── examples/session/ # Session query example
 ```
 
 ## Adding a New Agent
@@ -239,7 +268,7 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
    ```
    The factory must return a fresh transport; transports may own mutable
    per-run state.
-3. Add the constant to `types.go` and register the agent on an `AgentService`
+3. Add the constant to `agent.go` and register the agent on an `AgentService`
    with `RegisterAgent`.
 
 For agents that don't fit the process+protocol pipeline (in-process mocks, remote services), use `agentboot.NewControlledHandle` to drive an `ExecutionHandle` directly.
@@ -249,6 +278,21 @@ For agents that don't fit the process+protocol pipeline (in-process mocks, remot
 - `process.NewFakeFactory` substitutes the binary with a scripted in-memory process.
 - `claude.NewAgentWithFactory` wires a fake factory into the real Claude driver/transport so end-to-end stream-JSON parsing is exercised without spawning `claude`.
 - `NewControlledHandle` lets tests build an `ExecutionHandle` from closures.
+
+Run the deterministic module suite from `agentboot/`:
+
+```bash
+go test ./...
+```
+
+The opt-in E2E test exercises `AgentService → Runner → Claude Code CLI` and
+requires a discoverable CLI plus valid credentials:
+
+```bash
+go test -tags e2e -run TestE2E_ClaudeRun .
+```
+
+The test skips when Claude Code CLI is unavailable.
 
 See `agentboot/claude/fixture/fixture_test.go`,
 `agentboot/claude/agent_concurrency_test.go`, and
