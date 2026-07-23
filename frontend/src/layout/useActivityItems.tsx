@@ -149,7 +149,7 @@ export function useActivityItems(): ActivityItem[] {
                 path: '/dashboard/today',
                 defaultPath: '/dashboard/today',
                 children: [
-                    { path: '/dashboard/users', label: t('layout.userUsage', { defaultValue: 'User usage' }), icon: <IconUsers sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/users', label: t('layout.userUsage', { defaultValue: 'Team usage' }), icon: <IconUsers sx={{ fontSize: 20 }} /> },
                     { type: 'divider' },
                     { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock sx={{ fontSize: 20 }} /> },
                     { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar sx={{ fontSize: 20 }} /> },

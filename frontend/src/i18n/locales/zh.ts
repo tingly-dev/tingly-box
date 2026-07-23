@@ -87,7 +87,7 @@ export default {
     "easterEgg": "Hi，我是 Tingly-Box，为您掌控智能",
     "dashboard": "仪表盘",
     "usage": "用量",
-    "userUsage": "用户用量",
+    "userUsage": "团队用量",
     "heatmap": "热力图",
     "today": "今天",
     "yesterday": "昨天",
@@ -1044,7 +1044,7 @@ export default {
   },
   "dashboard": {
     "userUsage": {
-      "title": "用户用量",
+      "title": "团队用量",
       "subtitle": "查看每个在册用户如何使用共享的 AI 访问能力。",
       "timeRange": "时间范围",
       "registeredUsers": "在册用户",
@@ -1077,6 +1077,7 @@ export default {
       "input": "输入",
       "output": "输出",
       "cache": "缓存",
+      "allModels": "全部模型",
       "modelMix": "Token 用在了哪里",
       "noUsers": "没有匹配的用户。",
       "noUsage": "本周期暂无用量",

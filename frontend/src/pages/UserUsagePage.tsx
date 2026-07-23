@@ -181,7 +181,7 @@ export default function UserUsagePage() {
             setUserStats(statsResult?.data || []);
         } catch (loadError) {
             if (seq === requestSeq.current) {
-                setError(loadError instanceof Error ? loadError.message : 'Unable to load user usage');
+                setError(loadError instanceof Error ? loadError.message : 'Unable to load team usage');
             }
         } finally {
             if (seq === requestSeq.current) {
@@ -205,7 +205,7 @@ export default function UserUsagePage() {
                 group_by: 'model',
                 sort_by: 'total_tokens',
                 sort_order: 'desc',
-                limit: 20,
+                limit: 1000,
             });
             if (seq === detailSeq.current) setModelStats(result?.data || []);
         } catch {
@@ -329,7 +329,7 @@ export default function UserUsagePage() {
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <PageHeader
-                title={t('dashboard.userUsage.title', { defaultValue: 'User usage' })}
+                title={t('dashboard.userUsage.title', { defaultValue: 'Team usage' })}
                 subtitle={t('dashboard.userUsage.subtitle', {
                     defaultValue: 'See how every registered user is consuming shared AI access.',
                 })}
@@ -383,11 +383,21 @@ export default function UserUsagePage() {
                 ))}
             </Grid>
 
-            <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                <Grid container sx={{ alignItems: 'stretch' }}>
+            <Paper
+                variant="outlined"
+                sx={{
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    height: { xs: 'auto', lg: 640 },
+                }}
+            >
+                <Grid container sx={{ alignItems: 'stretch', height: '100%' }}>
                     <Grid
                         size={{ xs: 12, lg: 7, xl: 5 }}
                         sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0,
                             borderRight: { lg: '1px solid' },
                             borderBottom: { xs: '1px solid', lg: 0 },
                             borderColor: 'divider',
@@ -446,7 +456,14 @@ export default function UserUsagePage() {
                                 <MenuItem value="name">{t('dashboard.userUsage.sortName', { defaultValue: 'Name' })}</MenuItem>
                             </Select>
                         </Box>
-                        <TableContainer sx={{ maxHeight: { xs: 420, lg: 560 } }}>
+                        <TableContainer
+                            sx={{
+                                maxHeight: { xs: 420, lg: 'none' },
+                                flex: { lg: 1 },
+                                minHeight: 0,
+                                overscrollBehavior: 'contain',
+                            }}
+                        >
                             <Table stickyHeader>
                                 <TableHead>
                                     <TableRow
@@ -580,13 +597,17 @@ export default function UserUsagePage() {
                         ref={detailPanelRef}
                         size={{ xs: 12, lg: 5, xl: 7 }}
                         sx={{
+                            display: 'flex',
+                            height: '100%',
                             bgcolor: alpha(theme.palette.background.paper, 0.6),
                             scrollMarginTop: { xs: 72, lg: 0 },
+                            minHeight: 0,
+                            overflow: { lg: 'hidden' },
                         }}
                     >
-                        <Box sx={{ p: { xs: 2, sm: 2.5 }, height: '100%', minHeight: 420 }}>
+                        <Box sx={{ p: { xs: 2, sm: 2.5 }, width: '100%', height: '100%', minHeight: { xs: 420, lg: 0 } }}>
                         {selectedUser ? (
-                            <Stack spacing={2.5}>
+                            <Stack spacing={2.5} sx={{ height: '100%', minHeight: 0 }}>
                                 <Box>
                                     <Stack direction="row" gap={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <Box sx={{ minWidth: 0 }}>
@@ -672,22 +693,37 @@ export default function UserUsagePage() {
                                     ))}
                                 </Grid>
 
-                                <Box>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                                     <Stack direction="row" sx={{ mb: 1.25, justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                        <Typography variant="subtitle2" fontWeight={650}>
-                                            {t('dashboard.userUsage.modelMix', { defaultValue: 'Where their tokens went' })}
-                                        </Typography>
+                                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                            <Typography variant="subtitle2" fontWeight={650}>
+                                                {t('dashboard.userUsage.allModels', { defaultValue: 'All models' })}
+                                            </Typography>
+                                            <Chip size="small" label={modelStats.length} sx={{ height: 22 }} />
+                                        </Stack>
                                         <Typography variant="body2">
                                             {formatNumber(selectedUser.total_tokens)} {t('dashboard.userUsage.tokens', { defaultValue: 'tokens' }).toLocaleLowerCase()}
                                         </Typography>
                                     </Stack>
                                     {detailLoading ? (
-                                        <Stack spacing={1.5}>
+                                        <Stack spacing={1.5} sx={{ overflow: 'hidden' }}>
                                             {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} variant="rounded" height={44} />)}
                                         </Stack>
                                     ) : modelStats.length > 0 ? (
-                                        <Stack spacing={1.5}>
-                                            {modelStats.slice(0, 6).map((model) => {
+                                        <Stack
+                                            spacing={1.5}
+                                            role="region"
+                                            aria-label={t('dashboard.userUsage.allModels', { defaultValue: 'All models' })}
+                                            sx={{
+                                                flex: { xs: 'none', lg: 1 },
+                                                minHeight: 0,
+                                                maxHeight: { xs: 'none', lg: 360 },
+                                                overflowY: 'auto',
+                                                overscrollBehavior: 'contain',
+                                                pr: 0.75,
+                                            }}
+                                        >
+                                            {modelStats.map((model) => {
                                                 const value = model.total_tokens || 0;
                                                 const share = selectedUser.total_tokens ? (value / selectedUser.total_tokens) * 100 : 0;
                                                 return (
