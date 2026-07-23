@@ -74,3 +74,21 @@ func TestAssertFinishReasonOneOf(t *testing.T) {
 		t.Fatal("expected failure for unaccepted finish reason")
 	}
 }
+
+func TestAssertStreamFailure(t *testing.T) {
+	truncated := &RoundTripResult{IsStreaming: true, StreamError: "upstream truncated"}
+	if err := AssertStreamError().Check(truncated); err != nil {
+		t.Fatalf("stream_error: %v", err)
+	}
+	if err := AssertStreamNotCompleted().Check(truncated); err != nil {
+		t.Fatalf("stream_not_completed: %v", err)
+	}
+
+	completed := &RoundTripResult{IsStreaming: true, StreamCompleted: true}
+	if err := AssertStreamError().Check(completed); err == nil {
+		t.Fatal("expected missing stream error to fail")
+	}
+	if err := AssertStreamNotCompleted().Check(completed); err == nil {
+		t.Fatal("expected completed stream to fail")
+	}
+}

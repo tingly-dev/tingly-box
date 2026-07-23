@@ -352,7 +352,8 @@ func scenarioSupportsStreaming(s Scenario) bool {
 // scenarioRequiresStreaming returns true if the scenario has streaming-specific assertions.
 func scenarioRequiresStreaming(s Scenario) bool {
 	for _, a := range s.Assertions {
-		if strings.Contains(a.Name, "stream_event_count") {
+		if strings.Contains(a.Name, "stream_event_count") ||
+			a.Name == "stream_error" || a.Name == "stream_not_completed" {
 			return true
 		}
 	}

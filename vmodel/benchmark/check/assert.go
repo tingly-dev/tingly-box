@@ -212,6 +212,35 @@ func AssertStreamEventCount(min int) Assertion {
 	}
 }
 
+// AssertStreamError returns an Assertion that a streaming client explicitly
+// observed an error after the response had started.
+func AssertStreamError() Assertion {
+	return Assertion{
+		Name: "stream_error",
+		Check: func(r *RoundTripResult) error {
+			if r.StreamError == "" {
+				return fmt.Errorf("stream ended without a reported error")
+			}
+			return nil
+		},
+	}
+}
+
+// AssertStreamNotCompleted returns an Assertion that no normal completion
+// marker was observed. Error events and a clean terminal event are deliberately
+// separate states: a truncated turn must never be presented as completed.
+func AssertStreamNotCompleted() Assertion {
+	return Assertion{
+		Name: "stream_not_completed",
+		Check: func(r *RoundTripResult) error {
+			if r.StreamCompleted {
+				return fmt.Errorf("stream was marked completed despite the expected failure")
+			}
+			return nil
+		},
+	}
+}
+
 // AssertHTTPStatusAtLeast returns an Assertion that the HTTP status code is >= min.
 func AssertHTTPStatusAtLeast(min int) Assertion {
 	return Assertion{

@@ -37,6 +37,11 @@ type RoundTripResult struct {
 	HTTPStatus   int
 	RawBody      []byte
 	StreamEvents []string // raw SSE event lines (streaming only)
+	// StreamError records a failure reported after streaming had already
+	// started. It is distinct from an HTTP/API error: headers may already have
+	// committed a 200 response while the turn still failed to complete.
+	StreamError     string
+	StreamCompleted bool // true only when a normal completion marker was observed
 
 	// Extracted semantics (populated by the framework after parsing)
 	Content         string

@@ -44,6 +44,8 @@ var (
 	AssertUsageNonZero         = check.AssertUsageNonZero
 	AssertHTTPStatus           = check.AssertHTTPStatus
 	AssertStreamEventCount     = check.AssertStreamEventCount
+	AssertStreamError          = check.AssertStreamError
+	AssertStreamNotCompleted   = check.AssertStreamNotCompleted
 	AssertHTTPStatusAtLeast    = check.AssertHTTPStatusAtLeast
 	AssertErrorMessageContains = check.AssertErrorMessageContains
 	AssertModelContains        = check.AssertModelContains

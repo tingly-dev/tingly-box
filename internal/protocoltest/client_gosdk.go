@@ -102,11 +102,15 @@ func (c *goSDKClient) sendAnthropicV1(ctx context.Context, spec SendSpec) (*Roun
 	}
 	if err := stream.Err(); err != nil {
 		if res, rerr := anthropicErrorResult(result, err); rerr == nil {
+			if res.HTTPStatus == 200 {
+				res.StreamError = err.Error()
+			}
 			return res, nil
 		}
 		// Mid-stream error (e.g. an in-band error event for a truncated
 		// upstream): report it rather than presenting partial content as success.
 		result.HTTPStatus = 200
+		result.StreamError = err.Error()
 		result.RawBody = []byte(err.Error())
 		return result, nil
 	}
@@ -117,6 +121,7 @@ func (c *goSDKClient) sendAnthropicV1(ctx context.Context, spec SendSpec) (*Roun
 	}
 	result.RawBody = raw
 	normalizeResultJSON(result, raw, spec.Source, true)
+	classifyStreamEvents(result)
 	return result, nil
 }
 
@@ -153,9 +158,13 @@ func (c *goSDKClient) sendAnthropicBeta(ctx context.Context, spec SendSpec) (*Ro
 	}
 	if err := stream.Err(); err != nil {
 		if res, rerr := anthropicErrorResult(result, err); rerr == nil {
+			if res.HTTPStatus == 200 {
+				res.StreamError = err.Error()
+			}
 			return res, nil
 		}
 		result.HTTPStatus = 200
+		result.StreamError = err.Error()
 		result.RawBody = []byte(err.Error())
 		return result, nil
 	}
@@ -166,6 +175,7 @@ func (c *goSDKClient) sendAnthropicBeta(ctx context.Context, spec SendSpec) (*Ro
 	}
 	result.RawBody = raw
 	normalizeResultJSON(result, raw, spec.Source, true)
+	classifyStreamEvents(result)
 	return result, nil
 }
 
@@ -210,6 +220,7 @@ func (c *goSDKClient) sendOpenAIChat(ctx context.Context, spec SendSpec) (*Round
 			return res, nil
 		}
 		result.HTTPStatus = 200
+		result.StreamError = err.Error()
 		result.RawBody = []byte(err.Error())
 		return result, nil
 	}
@@ -220,6 +231,7 @@ func (c *goSDKClient) sendOpenAIChat(ctx context.Context, spec SendSpec) (*Round
 	}
 	result.RawBody = raw
 	normalizeResultJSON(result, raw, spec.Source, true)
+	classifyStreamEvents(result)
 	return result, nil
 }
 
@@ -256,6 +268,7 @@ func (c *goSDKClient) sendOpenAIResponses(ctx context.Context, spec SendSpec) (*
 		if len(result.StreamEvents) == 0 {
 			return nil, fmt.Errorf("openai responses SDK stream: %w", err)
 		}
+		result.StreamError = err.Error()
 	}
 	result.HTTPStatus = 200
 	// openai-go has no Responses stream accumulator; reuse the harness's SSE
@@ -265,6 +278,7 @@ func (c *goSDKClient) sendOpenAIResponses(ctx context.Context, spec SendSpec) (*
 	if len(sseLines) > 0 {
 		result.RawBody = []byte(sseLines[len(sseLines)-1])
 	}
+	classifyStreamEvents(result)
 	return result, nil
 }
 
