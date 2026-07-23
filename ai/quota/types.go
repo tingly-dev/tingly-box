@@ -21,6 +21,7 @@ const (
 	ProviderTypeZai        ProviderType = "zai"
 	ProviderTypeGLM        ProviderType = "glm"
 	ProviderTypeKimiK2     ProviderType = "kimi_k2"
+	ProviderTypeKimiCode   ProviderType = "kimi_code"
 	ProviderTypeOpenRouter ProviderType = "openrouter"
 	ProviderTypeMiniMax    ProviderType = "minimax"
 	ProviderTypeMiniMaxCN  ProviderType = "minimaxi"

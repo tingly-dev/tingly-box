@@ -100,6 +100,7 @@ func TestInferProviderTypeAPIBaseCaseInsensitive(t *testing.T) {
 		{"https://api.minimaxi.com/v1", ProviderTypeMiniMaxCN},
 		{"https://api.minimax.chat/v1", ProviderTypeMiniMax},
 		{"https://chatgpt.com/backend-api", ProviderTypeCodex},
+		{"https://api.kimi.com/coding/v1", ProviderTypeKimiCode},
 		{"https://example.com/v1", ""},
 	}
 
@@ -112,6 +113,21 @@ func TestInferProviderTypeAPIBaseCaseInsensitive(t *testing.T) {
 				t.Fatalf("inferProviderType() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestInferProviderTypeKimiCodeOAuth(t *testing.T) {
+	t.Parallel()
+
+	provider := &typ.Provider{
+		APIBase:  "https://gateway.example.com/v1",
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			Issuer: typ.IssuerKimiCode,
+		},
+	}
+	if got := inferProviderType(provider); got != ProviderTypeKimiCode {
+		t.Fatalf("inferProviderType() = %q, want %q", got, ProviderTypeKimiCode)
 	}
 }
 

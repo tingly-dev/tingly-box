@@ -327,6 +327,8 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 				return ProviderTypeCursor
 			case typ.IssuerCodex:
 				return ProviderTypeCodex
+			case typ.IssuerKimiCode:
+				return ProviderTypeKimiCode
 			}
 		}
 	}
@@ -352,6 +354,8 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeGLM
 	case strings.Contains(apiBase, "moonshot.cn"):
 		return ProviderTypeKimiK2
+	case strings.Contains(apiBase, "api.kimi.com/coding"):
+		return ProviderTypeKimiCode
 	case strings.Contains(apiBase, "openrouter.ai"):
 		return ProviderTypeOpenRouter
 	case strings.Contains(apiBase, "minimaxi.com"):
