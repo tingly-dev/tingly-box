@@ -16,6 +16,7 @@ from . import discovery as _discovery
 from . import scenarios as _scenarios
 from .errors import TinglyError
 from .helpers.guardrails import GuardrailsView
+from .helpers.quota import QuotaView
 from .helpers.usage import UsageView
 from .transports import anthropic_compat, openai_compat
 
@@ -162,6 +163,10 @@ class Client:
     @property
     def guardrails(self) -> GuardrailsView:
         return GuardrailsView(self._gateway_url, self._admin_token, self._timeout)
+
+    @property
+    def quota(self) -> QuotaView:
+        return QuotaView(self._gateway_url, self._admin_token, self._timeout)
 
     # -- lifecycle -------------------------------------------------------
 

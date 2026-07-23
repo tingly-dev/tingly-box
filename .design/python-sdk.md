@@ -190,7 +190,7 @@ sdk/python/
     config.py        # (base_url, admin_token) resolution precedence
     scenarios.py     # scenario + transport constants
     transports/      # build openai.OpenAI / anthropic.Anthropic bound to tb
-    helpers/         # usage + guardrails views
+    helpers/         # usage + guardrails + quota views
     plugin/          # Layer 2: be an AI server tb routes to
       core.py        #   Plugin class (@plugin.chat, .llm, .serve, api_style)
       server.py      #   stdlib HTTP server: /v1/messages (primary) + /v1/chat/completions (secondary), + SSE
@@ -215,6 +215,7 @@ connect(scenario="experiment")
           .ask()       → Anthropic first when the scenario supports both, else OpenAI
           .usage       → GET /api/v1/requests        (admin token)
           .guardrails  → GET /api/v1/guardrails/config (admin token)
+          .quota       → GET/POST /api/v1/provider-quota[...] (admin token)
 ```
 
 ## How it works (pencil)
@@ -524,9 +525,44 @@ their manifest (reuse `agentboot/process`), a `/plugins/<name>/*` reverse-proxy
 mount, and the install/enable/logs/disable lifecycle UI. The Python side and the
 provider wiring are complete; those are the remaining backend pieces.
 
+### `Client.quota` — provider usage/limit windows, and a live refresh
+
+Added for `router_plugin.py` below, but attached to `Client` like `.usage` /
+`.guardrails` so any caller can use it. Wraps
+`GET /api/v1/provider-quota[...]` (`internal/server/module/providerquota/`,
+admin token, same `apiV1` auth-middleware group as usage/guardrails):
+
+| SDK call | endpoint | shape |
+|---|---|---|
+| `quota.list()` | `GET /provider-quota` | `{meta, data:[ProviderUsage]}` |
+| `quota.get(uuid)` | `GET /provider-quota/:uuid` | bare `ProviderUsage` (no envelope) |
+| `quota.batch(uuids)` | `POST /provider-quota/batch` | `{data: {uuid: ProviderUsage}}` |
+| `quota.refresh(uuid?)` | `POST /provider-quota/:uuid?/refresh` | live re-fetch from the upstream account, bypassing tb's cache |
+
+These three response shapes are genuinely different (envelope vs. bare vs.
+uuid-keyed map) — not a Python-side inconsistency, that's what the Go handler
+(`internal/server/module/providerquota/handler.go:66-177`) actually returns
+for each; `QuotaView._from_json`-style parsing per method is intentional, not
+an oversight. `provider-quota` isn't in `openapi.json` (no swagger tags on
+that module yet), so these shapes were pinned by reading the handler
+directly, not generated — worth re-checking if that module ever gets
+swagger-annotated.
+
+A provider's quota is **not one number** — `ProviderUsage.windows` is a list
+(session/daily/weekly/monthly/balance/model/...), each with its own
+`used`/`limit`/`used_percent` (`ai/quota/types.go`). `ProviderQuota.headroom_percent`
+collapses that to the single most-constrained window's remaining percent —
+a deliberately naive heuristic for "which candidate is worse off right now"
+in a routing pick, not a replacement for reading `.windows` when the
+distinction between e.g. a session limit and a monthly cost budget matters.
+tb itself has **no built-in quota-aware routing** (`internal/smart_routing`
+and `internal/loadbalance` have zero references to `ai/quota` as of this
+writing) — a plugin picking by remaining quota is genuinely new behavior,
+not a Python reimplementation of something the gateway already does.
+
 ### Example plugins (`sdk/python/examples/`)
 
-Three, each a different real-world shape of "plugin composes the box by
+Four, each a different real-world shape of "plugin composes the box by
 calling back into other rules" — not toys picked at random, each maps onto a
 pattern already in wide use:
 
@@ -557,12 +593,25 @@ pattern already in wide use:
   illustration of the architecture line at the top of this document — a
   plugin can freely originate calls against *any* number of other rules, not
   just one.
+- **`router_plugin.py`** (`model="plugin/router"`) — quota-aware dispatch: a
+  different shape from the three above, which all *generate* an answer
+  themselves. A router generates nothing — it picks the ONE candidate
+  `(scenario, model, provider_uuid)` with the most quota headroom (via the
+  `Client.quota` view above) and forwards to just that one; one hop total,
+  by design, not N. Same idea as LiteLLM Router's `usage-based-routing`
+  strategy (route to whichever deployment has the most remaining rate-limit
+  capacity), implemented as a plugin instead of gateway config — deliberately
+  reads cached quota by default and only calls `.quota.refresh()` when a
+  caller opts in, since LiteLLM's own docs warn that a live usage check on
+  every request adds real per-request latency.
 
-Both `critic_plugin.py` and `fusion_plugin.py` have unit tests
-(`tests/test_example_plugins.py`) that monkeypatch `plugin.use` to a fake
-client and pin the branching logic (JSON-verdict formatting and graceful
-degradation on non-JSON; judge-skipped-on-agreement vs. judge-called-on-
-disagreement) without needing a live tb.
+Every example plugin has unit tests (`tests/test_example_plugins.py`,
+`tests/test_router_plugin.py`, `tests/test_quota.py`) that monkeypatch
+`plugin.use`/`Client.quota` to fakes and pin the decision logic — JSON-verdict
+formatting and graceful degradation on non-JSON (critic); judge-skipped-on-
+agreement vs. judge-called-on-disagreement (fusion); highest-headroom
+candidate selection and single-hop forwarding (router) — without needing a
+live tb.
 
 ## Layer 3: can tb *use* a plugin as a model? (yes — as an upstream)
 

@@ -116,6 +116,12 @@ other tb rules:
   already agree, otherwise a judge call synthesizes. Mirrors Consult7's 2026
   Fusion feature; the clearest illustration that a plugin can freely
   originate more than one call, against more than one rule, per request.
+- **`router_plugin.py`** — quota-aware dispatch (`model="plugin/router"`): a
+  different shape from the three above — it generates nothing itself, it
+  only *decides* which one candidate rule/model to forward to, using live
+  quota headroom (`tb.quota`, below) to pick. Same idea as LiteLLM Router's
+  `usage-based-routing` strategy, implemented as a plugin instead of gateway
+  config.
 
 ## Status
 
