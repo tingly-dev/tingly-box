@@ -91,12 +91,13 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		MessageRetention: time.Hour,
 	}, nil)
 
-	agentCfg := agentboot.Config{
-		ClaudeProjectsDir: filepath.Join(opt.DataDir, "claude-projects"),
-	}
-	agentService, err := claude.NewService(agentCfg)
+	agentCfg := agentboot.Config{}
+	agentService, err := claude.NewService(
+		agentCfg,
+		claude.WithProjectsDir(filepath.Join(opt.DataDir, "claude-projects")),
+	)
 	if err != nil {
-		// ClaudeProjectsDir failed; fall back to a config without it.
+		// Custom history initialization failed; fall back to Claude's default.
 		agentService, err = claude.NewService(agentboot.Config{})
 		if err != nil {
 			t.Fatalf("BootForTest: agent service: %v", err)

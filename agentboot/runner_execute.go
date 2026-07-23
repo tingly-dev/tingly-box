@@ -54,7 +54,10 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 	if transport == nil {
 		return nil, errors.New("agentboot: transport factory returned nil")
 	}
-	transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
+	transport.SetExecutionContext(ExecutionContext{
+		SessionID: opts.SessionID,
+		Metadata:  opts.ControlMetadata,
+	})
 
 	runCtx, cancel := context.WithCancel(ctx)
 	if opts.Timeout > 0 {

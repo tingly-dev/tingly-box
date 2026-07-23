@@ -58,6 +58,13 @@ const (
 
 const SDKControlPrefix = "control_"
 
+// Execution-context metadata keys understood by the Claude transport.
+const (
+	ContextKeyChatID   = "chat_id"
+	ContextKeyPlatform = "platform"
+	ContextKeyBotUUID  = "bot_uuid"
+)
+
 // System message subtypes
 const (
 	SystemSubtypeInit             = "init"

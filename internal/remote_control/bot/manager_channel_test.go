@@ -47,7 +47,7 @@ func newChannelTestManager(t *testing.T, uuid, scenarios string) (*bot.Manager, 
 		Timeout:          10 * time.Minute,
 		MessageRetention: time.Hour,
 	}, nil)
-	svc, err := agentboot.NewAgentService(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
+	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
 	registry := channel.NewRegistry()

@@ -6,8 +6,7 @@ import "context"
 type AgentType string
 
 const (
-	AgentTypeClaude    AgentType = "claude"
-	AgentTypeMockAgent AgentType = "mock" // Mock agent for testing
+	AgentTypeClaude AgentType = "claude"
 	// AgentTypeCodex  AgentType = "codex"  // Future
 	// AgentTypeGemini AgentType = "gemini" // Future
 	// AgentTypeCursor AgentType = "cursor" // Future

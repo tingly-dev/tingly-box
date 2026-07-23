@@ -19,19 +19,11 @@ func (f OutputFormat) String() string {
 	return string(f)
 }
 
-// PermissionMode defines how permission requests are handled.
-// Use ask.Mode for the ask-subsystem-specific mode values.
-type PermissionMode string
-
-const (
-	PermissionModeAuto   PermissionMode = "auto"   // Auto-approve all requests
-	PermissionModeManual PermissionMode = "manual" // Require user approval
-	PermissionModeSkip   PermissionMode = "skip"   // Skip permission prompts
-)
-
-// String returns the string representation of PermissionMode.
-func (m PermissionMode) String() string {
-	return string(m)
+// ExecutionContext carries provider-neutral metadata for one execution.
+// Transports may use Metadata to annotate interactive control events.
+type ExecutionContext struct {
+	SessionID string
+	Metadata  map[string]string
 }
 
 // ExecutionOptions controls agent execution.
@@ -48,12 +40,9 @@ type ExecutionOptions struct {
 	SessionID string
 	// Resume indicates whether to resume an existing session (true) or create a new one (false)
 	Resume bool
-	// ChatID is the chat ID for permission requests (used by mock agent)
-	ChatID string
-	// Platform is the platform for permission requests (used by mock agent)
-	Platform string
-	// BotUUID is the bot UUID for permission callbacks
-	BotUUID string
+	// ControlMetadata is passed to the per-execution transport through
+	// ExecutionContext. Keys and values are provider/integration-defined.
+	ControlMetadata map[string]string
 
 	// Model selection (per-execution override)
 	Model         string
@@ -90,15 +79,4 @@ type ExecutionOptions struct {
 	//   SetFailed   — if the process fails to start or Wait returns an error
 	//   SetCompleted — if Wait returns without error
 	Store agentsession.LifecycleStore
-}
-
-// PermissionConfig holds permission handler configuration.
-type PermissionConfig struct {
-	DefaultMode       PermissionMode `json:"default_mode"`
-	Timeout           time.Duration  `json:"timeout"`
-	EnableWhitelist   bool           `json:"enable_whitelist"`
-	Whitelist         []string       `json:"whitelist"`
-	Blacklist         []string       `json:"blacklist"`
-	RememberDecisions bool           `json:"remember_decisions"`
-	DecisionDuration  time.Duration  `json:"decision_duration"`
 }

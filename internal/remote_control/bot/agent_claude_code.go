@@ -172,11 +172,13 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		ProjectPath: projectPath,
 		Prompt:      req.Text,
 		Opts: agentboot.ExecutionOptions{
-			SessionID:            sessionID,
-			Resume:               shouldResume,
-			ChatID:               req.HCtx.ChatID,
-			Platform:             string(req.HCtx.Platform),
-			BotUUID:              req.HCtx.BotUUID,
+			SessionID: sessionID,
+			Resume:    shouldResume,
+			ControlMetadata: map[string]string{
+				claude.ContextKeyChatID:   req.HCtx.ChatID,
+				claude.ContextKeyPlatform: string(req.HCtx.Platform),
+				claude.ContextKeyBotUUID:  req.HCtx.BotUUID,
+			},
 			PermissionPromptTool: "stdio",
 			PermissionMode:       permissionMode,
 			Env:                  execEnv,

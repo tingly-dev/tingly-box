@@ -15,12 +15,6 @@ type Config struct {
 	EnableStreamJSON        bool          `json:"enable_stream_json"`
 	StreamBufferSize        int           `json:"stream_buffer_size"`
 	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout"`
-
-	// ClaudeProjectsDir is consumed by claude.NewService when composing the
-	// Claude Code adapter and its historical session reader.
-	//
-	// The provider-neutral agentboot core does not interpret this field.
-	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"`
 }
 
 // AgentBoot manages agent instances.
