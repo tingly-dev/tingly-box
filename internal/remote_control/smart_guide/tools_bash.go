@@ -239,7 +239,10 @@ func (t *GetStatusTool) Param() anthropic.BetaToolParam {
 	return anthropic.BetaToolParam{
 		Name:        "get_status",
 		Description: anthropic.String("Get the current bot status including agent, session, project path, and working directory."),
-		InputSchema: anthropic.BetaToolInputSchemaParam{},
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Type:       "object",
+			Properties: map[string]interface{}{},
+		},
 	}
 }
 

@@ -102,6 +102,8 @@ func TestNewGetStatusTool(t *testing.T) {
 	assert.NotNil(t, getStatusTool)
 	assert.Equal(t, "get_status", getStatusTool.Param().Name)
 	assert.Contains(t, getStatusTool.Param().Description.Value, "Get the current bot status")
+	assert.Equal(t, "object", string(getStatusTool.Param().InputSchema.Type))
+	assert.Equal(t, map[string]interface{}{}, getStatusTool.Param().InputSchema.Properties)
 }
 
 func TestGetStatusTool_Call(t *testing.T) {
