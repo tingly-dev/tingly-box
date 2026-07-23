@@ -16,19 +16,22 @@ import (
 // were being incorrectly handled.
 func TestConvertAnthropicInputSchemaToOpenAIParameters(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		properties any
 		required   []string
-		want      shared.FunctionParameters
+		want       shared.FunctionParameters
 	}{
 		{
-			name:      "nil properties and empty required",
+			name:       "nil properties and empty required",
 			properties: nil,
 			required:   []string{},
-			want:      nil,
+			want: shared.FunctionParameters{
+				"type":       "object",
+				"properties": map[string]any{},
+			},
 		},
 		{
-			name:      "nil properties with required",
+			name:       "nil properties with required",
 			properties: nil,
 			required:   []string{"path"},
 			want: shared.FunctionParameters{
@@ -119,6 +122,27 @@ func TestConvertAnthropicInputSchemaToOpenAIParameters(t *testing.T) {
 	}
 }
 
+func TestConvertAnthropicBetaToolsToOpenAI_ZeroArgumentSchema(t *testing.T) {
+	tools := []anthropic.BetaToolUnionParam{
+		anthropic.BetaToolUnionParamOfTool(
+			anthropic.BetaToolInputSchemaParam{},
+			"get_status",
+		),
+	}
+
+	result := ConvertAnthropicBetaToolsToOpenAI(tools)
+	require.Len(t, result, 1)
+
+	parameters := result[0].OfFunction.Function.Parameters
+	assert.Equal(t, "object", parameters["type"])
+	assert.Equal(t, map[string]any{}, parameters["properties"])
+
+	wireJSON, err := json.Marshal(result[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(wireJSON), `"parameters":{"properties":{},"type":"object"}`)
+	assert.NotContains(t, string(wireJSON), `"parameters":null`)
+}
+
 // TestConvertAnthropicToolsToOpenAI_DoubleEscapingFix tests the fix for
 // the double-escaping bug where tool schemas were incorrectly marshaled.
 func TestConvertAnthropicToolsToOpenAI_DoubleEscapingFix(t *testing.T) {
@@ -129,7 +153,7 @@ func TestConvertAnthropicToolsToOpenAI_DoubleEscapingFix(t *testing.T) {
 		InputSchema: anthropic.ToolInputSchemaParam{
 			Type: "object",
 			Properties: map[string]any{
-				"type":       "object",
+				"type": "object",
 				"properties": map[string]any{
 					"path": map[string]any{
 						"type":        "string",

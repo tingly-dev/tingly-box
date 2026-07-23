@@ -28,7 +28,10 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 
 func convertAnthropicInputSchemaToOpenAIParameters(properties any, required []string) shared.FunctionParameters {
 	if properties == nil && len(required) == 0 {
-		return nil
+		return shared.FunctionParameters{
+			"type":       "object",
+			"properties": map[string]any{},
+		}
 	}
 
 	if schema, ok := properties.(map[string]any); ok {

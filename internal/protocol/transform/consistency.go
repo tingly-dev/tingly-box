@@ -88,8 +88,8 @@ func (t *ConsistencyTransform) normalizeChatCompletion(ctx *TransformContext) er
 //
 // Normalization rules:
 //   - Ensure parameters type is "object"
-//   - Ensure properties exist if parameters are present
-//   - Normalize empty parameters to nil (avoids sending empty objects)
+//   - Ensure object schemas include properties
+//   - Represent zero-argument tools as a valid empty object schema
 func (t *ConsistencyTransform) normalizeToolSchemas(req *openai.ChatCompletionNewParams) {
 	if len(req.Tools) == 0 {
 		return
@@ -102,28 +102,19 @@ func (t *ConsistencyTransform) normalizeToolSchemas(req *openai.ChatCompletionNe
 
 		fn := toolUnion.OfFunction.Function
 
-		// Normalize tool parameters schema
-		if len(fn.Parameters) > 0 {
-			// Ensure type is "object" if not specified
-			if _, hasType := fn.Parameters["type"]; !hasType {
-				fn.Parameters["type"] = "object"
-			}
-
-			// If type is "object" but properties is missing/empty, normalize
-			if fn.Parameters["type"] == "object" {
-				if props, hasProps := fn.Parameters["properties"]; !hasProps || props == nil {
-					// Add empty properties to ensure valid schema
-					fn.Parameters["properties"] = map[string]interface{}{}
-				}
-			}
-
-			// Normalize: remove empty parameters map to avoid sending empty objects
-			if len(fn.Parameters) == 1 && fn.Parameters["type"] == "object" {
-				props, hasProps := fn.Parameters["properties"]
-				if !hasProps || (len(props.(map[string]interface{})) == 0) {
-					// Empty parameters, set to nil to avoid sending empty object
-					req.Tools[i].OfFunction.Function.Parameters = nil
-				}
+		// Some OpenAI-compatible providers validate an omitted schema as null,
+		// even though OpenAI permits omitting parameters for zero-argument
+		// functions. Always send a concrete empty object schema instead.
+		if fn.Parameters == nil {
+			fn.Parameters = map[string]interface{}{}
+			req.Tools[i].OfFunction.Function.Parameters = fn.Parameters
+		}
+		if _, hasType := fn.Parameters["type"]; !hasType {
+			fn.Parameters["type"] = "object"
+		}
+		if fn.Parameters["type"] == "object" {
+			if props, hasProps := fn.Parameters["properties"]; !hasProps || props == nil {
+				fn.Parameters["properties"] = map[string]interface{}{}
 			}
 		}
 	}
@@ -298,8 +289,8 @@ func (t *ConsistencyTransform) normalizeResponses(ctx *TransformContext) error {
 //
 // Normalization rules:
 //   - Ensure parameters type is "object"
-//   - Ensure properties exist if parameters are present
-//   - Normalize empty parameters to nil (avoids sending empty objects)
+//   - Ensure object schemas include properties
+//   - Represent zero-argument tools as a valid empty object schema
 func (t *ConsistencyTransform) normalizeResponseToolSchemas(req *responses.ResponseNewParams) {
 	if len(req.Tools) == 0 {
 		return
@@ -312,28 +303,16 @@ func (t *ConsistencyTransform) normalizeResponseToolSchemas(req *responses.Respo
 
 		fn := toolUnion.OfFunction
 
-		// Normalize tool parameters schema
-		if len(fn.Parameters) > 0 {
-			// Ensure type is "object" if not specified
-			if _, hasType := fn.Parameters["type"]; !hasType {
-				fn.Parameters["type"] = "object"
-			}
-
-			// If type is "object" but properties is missing/empty, normalize
-			if fn.Parameters["type"] == "object" {
-				if props, hasProps := fn.Parameters["properties"]; !hasProps || props == nil {
-					// Add empty properties to ensure valid schema
-					fn.Parameters["properties"] = map[string]interface{}{}
-				}
-			}
-
-			// Normalize: remove empty parameters map to avoid sending empty objects
-			if len(fn.Parameters) == 1 && fn.Parameters["type"] == "object" {
-				props, hasProps := fn.Parameters["properties"]
-				if !hasProps || (len(props.(map[string]interface{})) == 0) {
-					// Empty parameters, set to nil to avoid sending empty object
-					req.Tools[i].OfFunction.Parameters = nil
-				}
+		if fn.Parameters == nil {
+			fn.Parameters = map[string]interface{}{}
+			req.Tools[i].OfFunction.Parameters = fn.Parameters
+		}
+		if _, hasType := fn.Parameters["type"]; !hasType {
+			fn.Parameters["type"] = "object"
+		}
+		if fn.Parameters["type"] == "object" {
+			if props, hasProps := fn.Parameters["properties"]; !hasProps || props == nil {
+				fn.Parameters["properties"] = map[string]interface{}{}
 			}
 		}
 	}
