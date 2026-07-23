@@ -120,8 +120,8 @@ const UserUsageSkeleton = () => (
             ))}
         </Grid>
         <Grid container spacing={2}>
-            <Grid size={{ xs: 12, lg: 7 }}><Skeleton variant="rounded" height={520} /></Grid>
-            <Grid size={{ xs: 12, lg: 5 }}><Skeleton variant="rounded" height={520} /></Grid>
+            <Grid size={{ xs: 12, lg: 7, xl: 5 }}><Skeleton variant="rounded" height={520} /></Grid>
+            <Grid size={{ xs: 12, lg: 5, xl: 7 }}><Skeleton variant="rounded" height={520} /></Grid>
         </Grid>
     </Box>
 );
@@ -363,7 +363,7 @@ export default function UserUsagePage() {
             </Grid>
 
             <Grid container spacing={2} alignItems="stretch">
-                <Grid size={{ xs: 12, lg: 7 }}>
+                <Grid size={{ xs: 12, lg: 7, xl: 5 }}>
                     <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', height: '100%' }}>
                         <Box sx={{ p: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                             <Box sx={{ flex: '1 1 240px' }}>
@@ -509,7 +509,7 @@ export default function UserUsagePage() {
                     </Paper>
                 </Grid>
 
-                <Grid size={{ xs: 12, lg: 5 }}>
+                <Grid size={{ xs: 12, lg: 5, xl: 7 }}>
                     <Paper variant="outlined" sx={{ borderRadius: 2, p: { xs: 2, sm: 2.5 }, height: '100%', minHeight: 420 }}>
                         {selectedUser ? (
                             <Stack spacing={2.5}>
