@@ -39,6 +39,10 @@ type CreateRequest struct {
 	SmartGuideProvider string            `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    string            `json:"smartguide_model,omitempty"`    // Model identifier
 	RequirePairing     *bool             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → platform default
+	// RemoteAgent is the remote_agent mount switch: whether this bot is used to
+	// control Claude Code / SmartGuide from chat. nil → default (mounted). When
+	// set true it also enables the bot (a mount with no live bot is useless).
+	RemoteAgent *bool `json:"remote_agent,omitempty"`
 }
 
 // UpdateRequest represents the request to update ImBot settings
@@ -57,6 +61,11 @@ type UpdateRequest struct {
 	SmartGuideProvider *string           `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    *string           `json:"smartguide_model,omitempty"`    // Model identifier
 	RequirePairing     *bool             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → unchanged
+	// RemoteAgent toggles the remote_agent mount (control Claude Code / SmartGuide
+	// from chat). nil → unchanged. Setting it true also enables the bot (cascade);
+	// setting it false leaves Enabled as-is but the bot stops if it was the only
+	// active mount.
+	RemoteAgent *bool `json:"remote_agent,omitempty"`
 }
 
 // PairingCodeResponse represents the response for pairing-code reveal/rotate.

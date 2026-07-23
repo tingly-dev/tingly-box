@@ -6617,6 +6617,10 @@
             "type": "string",
             "description": "Field proxy_url"
           },
+          "remote_agent": {
+            "type": "boolean",
+            "description": "Field remote_agent"
+          },
           "require_pairing": {
             "type": "boolean",
             "description": "Field require_pairing"
@@ -11922,6 +11926,10 @@
           "proxy_url": {
             "type": "string",
             "description": "Field proxy_url"
+          },
+          "remote_agent": {
+            "type": "boolean",
+            "description": "Field remote_agent"
           },
           "require_pairing": {
             "type": "boolean",

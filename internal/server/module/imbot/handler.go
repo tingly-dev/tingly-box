@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 )
 
@@ -160,6 +161,20 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 		SmartGuideProvider: strings.TrimSpace(req.SmartGuideProvider),
 		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
 		RequirePairing:     req.RequirePairing,
+	}
+
+	// Apply the remote_agent mount switch at birth (nil → default mounted).
+	// Turning it on cascades Enabled, same as UpdateSettings.
+	if req.RemoteAgent != nil {
+		updated, err := binding.SetScenarioEnabled(settings.Scenarios, binding.RemoteAgentScenario, *req.RemoteAgent)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mount state", "details": err.Error()})
+			return
+		}
+		settings.Scenarios = updated
+		if *req.RemoteAgent {
+			settings.Enabled = true
+		}
 	}
 
 	created, err := h.store.CreateSettings(settings)
@@ -314,6 +329,24 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		settings.RequirePairing = req.RequirePairing
 	}
 
+	// Start from the current mount list so unrelated edits don't wipe it (the
+	// store writes the scenarios column unconditionally).
+	settings.Scenarios = currentSettings.Scenarios
+
+	// Handle the remote_agent mount toggle. Turning it on cascades the bot's
+	// Enabled flag on too, so the user flips one switch and the bot lights up.
+	if req.RemoteAgent != nil {
+		updated, err := binding.SetScenarioEnabled(settings.Scenarios, binding.RemoteAgentScenario, *req.RemoteAgent)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mount state", "details": err.Error()})
+			return
+		}
+		settings.Scenarios = updated
+		if *req.RemoteAgent {
+			settings.Enabled = true
+		}
+	}
+
 	if err := h.store.UpdateSettings(uuid, settings); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -339,27 +372,28 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		}
 	}
 
-	// Handle enabled status changes only
-	// Config changes (provider, model, etc.) take effect automatically via dynamic lookup
-	if currentSettings.Enabled != settings.Enabled {
-		if h.botMgr != nil {
-			ctx := context.Background()
-			if settings.Enabled {
-				// Disabled -> Enabled: start the bot
-				go func() {
-					if err := h.botMgr.StartBot(ctx, uuid); err != nil {
-						logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after enabling")
-					}
-				}()
+	// Reconcile this bot's running state: it should run iff Enabled AND some
+	// purpose is mounted — remote_agent via its mount switch, or the customer
+	// channel via an active outbound scenario binding. StartBot/StopBot are
+	// no-ops when already in the desired state, so this covers mount toggles
+	// as well as Enabled flips; pure config changes still take effect via
+	// dynamic lookup (no restart).
+	if h.botMgr != nil {
+		ctx := context.Background()
+		shouldRun := settings.Enabled &&
+			(binding.ScenarioMounted(settings.Scenarios, binding.RemoteAgentScenario) ||
+				binding.OutboundScenarioMounted(settings.Scenarios))
+		go func() {
+			if shouldRun {
+				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
+					logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after settings update")
+				}
 			} else {
-				// Enabled -> Disabled: stop the bot
-				go func() {
-					if err := h.botMgr.StopBot(uuid); err != nil {
-						logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after disabling")
-					}
-				}()
+				if err := h.botMgr.StopBot(uuid); err != nil {
+					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after settings update")
+				}
 			}
-		}
+		}()
 	}
 
 	// Fetch updated settings
