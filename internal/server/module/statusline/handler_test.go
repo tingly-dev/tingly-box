@@ -156,8 +156,8 @@ func TestGetClaudeCodeStatus_IncludesCacheUsage(t *testing.T) {
 			"current_usage": {
 				"input_tokens": 1500,
 				"output_tokens": 500,
-				"cache_read": 10000,
-				"cache_write": 2000
+				"cache_read_input_tokens": 10000,
+				"cache_creation_input_tokens": 2000
 			}
 		},
 		"session_id": "test-session-123"
@@ -191,8 +191,8 @@ func TestGetClaudeCodeStatusLine_IncludesCacheUsage(t *testing.T) {
 			"used_percentage": 10.0,
 			"current_usage": {
 				"input_tokens": 1500,
-				"cache_read": 10000,
-				"cache_write": 2000
+				"cache_read_input_tokens": 10000,
+				"cache_creation_input_tokens": 2000
 			}
 		},
 		"cost": {
