@@ -84,18 +84,12 @@ Gateway-level integration tests. Tests server features (auth, routing, load bala
 
 Uses `//go:build e2e` tag for some tests. Not imported by any other package.
 
-Real-config variants are intentionally opt-in:
-
-```bash
-TINGLY_BOX_TEST_REAL_CONFIG=1 \
-TINGLY_BOX_TEST_REAL_TIMEOUT_SECONDS=10 \
-go test -tags=e2e ./internal/servertest -timeout=60s
-```
-
-The real-config helper snapshots only `config.json` and provider records. It
-does not copy runtime data such as `record/`, `log/`, `image/`, or usage
-databases. Local mock providers use a two-second timeout; real providers use ten
-seconds by default, configurable through the environment variable above.
+Every test creates a fresh configuration under `t.TempDir()` and populates it
+with explicit fixtures. Tests must never discover, read, copy, migrate, or write
+the developer's default configuration directory, provider database, credentials,
+or runtime data. No-argument config constructors are therefore forbidden in
+tests; pass `config.WithConfigDir(t.TempDir())` instead. Local mock providers use
+a two-second timeout, and the e2e suite must run with an explicit Go test timeout.
 
 ## When to Use What
 

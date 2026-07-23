@@ -153,25 +153,17 @@ class ConfigLoader:
         Initialize config loader.
 
         Args:
-            config_path: Path to config file. If None, uses default locations.
+            config_path: Explicit test config path. If omitted, uses only the
+                TINGLY_BOX_TEST_CONFIG environment variable.
         """
-        self.config_path = config_path
+        self.config_path = config_path or os.environ.get("TINGLY_BOX_TEST_CONFIG")
 
     def find_config(self) -> Optional[Path]:
-        """Find config file in default locations."""
+        """Return only an explicitly selected test configuration."""
         if self.config_path:
             path = Path(self.config_path)
             if path.exists():
                 return path
-
-        default_locations = [
-            Path.home() / ".tingly-box" / "config.json",
-            Path.cwd() / "config.json",
-        ]
-
-        for loc in default_locations:
-            if loc.exists() and loc.stat().st_size > 0:
-                return loc
 
         return None
 

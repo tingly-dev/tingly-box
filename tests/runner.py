@@ -933,9 +933,9 @@ def main():
 Examples:
   python -m tests.runner --all --save
   python -m tests.runner --smoke -v
-  python -m tests.runner --adaptor --config ~/.tingly-box/config.json
-  python -m tests.runner --differential --config ~/.tingly-box/config.json
-  python -m tests.runner --backend --config ~/.tingly-box/config.json
+  python -m tests.runner --adaptor --config tests/fixtures/interface.json
+  python -m tests.runner --differential --config tests/fixtures/interface.json
+  python -m tests.runner --backend --config tests/fixtures/interface.json
   python -m tests.runner --all --html --save
         """,
     )
