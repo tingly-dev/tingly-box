@@ -605,11 +605,32 @@ code paths that happen to usually agree. Mode 2 closes that:
   external quota check at all (`router_plugin.py` skips those, rather than
   guessing).
 
-Verified live against the real `tb` binary (not just mocked): a rule with
-provider A at tier 0 and B at tier 1 — an unpinned call selects A (normal
-tier order, confirmed via `X-Tingly-Debug-Routing`); the same call with
-`X-Tingly-Pin-Provider: <B>` selects B despite the tier order; a pin to a
-provider not on that rule is rejected with 400.
+Verified live against the real `tb` binary (not just mocked) — a fixed,
+repeatable regression script, `sdk/python/examples/e2e_run_pin.sh` (three
+vmodel providers, no network/keys, `set -uo pipefail` + explicit pass/fail
+assertions, non-zero exit on any failure): a rule with provider A at tier 0
+and B at tier 1 — an unpinned call selects A (normal tier order, confirmed
+via `X-Tingly-Debug-Routing`); the same call with `X-Tingly-Pin-Provider: <B>`
+selects B despite the tier order; a pin to a provider not on that rule is
+rejected with 400; the same round-trip through `Client.ask(pin_provider=)`;
+and `router_plugin.py` run for real end-to-end, resolving `sonnet1`/`sonnet2`
+via `Client.rules`, and forwarding with a confirmed `provider_pin`-sourced
+selection in tb's own routing log.
+
+**A real bug this surfaced**, fixed alongside it: `Manager.GetQuota` /
+`GetQuotaNoCache` (`ai/quota/manager.go`) re-wrapped a not-found store lookup
+into a *new* `fmt.Errorf(...)` instead of returning `quota.ErrUsageNotFound`
+itself — silently breaking the `err == quota.ErrUsageNotFound` identity
+check every caller (`internal/server/module/providerquota/handler.go`, both
+`GetQuota` and `BatchGetQuota`) relies on to treat "no data yet" as a skip.
+The practical effect: `POST /provider-quota/batch` 500'd the *entire* batch
+the moment it included any provider with no quota fetcher (a vmodel/local
+provider, exactly what a no-network test setup uses) instead of just
+omitting that one provider from the result — `router_plugin.py`'s very first
+live run hit this immediately. Fixed by returning the sentinel unwrapped;
+covered by `ai/quota/manager_test.go::TestGetQuota_NotFoundIsUnwrapped` and
+`internal/server/module/providerquota/handler_test.go` (new — this module
+had no tests before).
 
 ### Example plugins (`sdk/python/examples/`)
 

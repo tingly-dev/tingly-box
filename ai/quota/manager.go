@@ -127,12 +127,15 @@ func (m *Manager) RefreshProvider(ctx context.Context, providerUUID string) (*Pr
 }
 
 // GetQuota returns cached quota data and refreshes it when expired.
+//
+// A not-found store lookup returns ErrUsageNotFound UNWRAPPED — callers
+// (e.g. the provider-quota HTTP handlers) compare against that sentinel
+// with == to treat "no data yet" as a skip rather than an error; wrapping it
+// here (as this used to do, via fmt.Errorf) silently broke that comparison
+// and turned every "no quota data" provider into a hard error upstream.
 func (m *Manager) GetQuota(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
 	usage, err := m.store.Get(ctx, providerUUID)
 	if err != nil {
-		if err == ErrUsageNotFound {
-			return nil, fmt.Errorf("quota not found for provider: %s", providerUUID)
-		}
 		return nil, err
 	}
 
@@ -146,15 +149,9 @@ func (m *Manager) GetQuota(ctx context.Context, providerUUID string) (*ProviderU
 }
 
 // GetQuotaNoCache returns the latest quota data stored in the database.
+// See GetQuota above for why ErrUsageNotFound must reach the caller unwrapped.
 func (m *Manager) GetQuotaNoCache(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
-	usage, err := m.store.Get(ctx, providerUUID)
-	if err != nil {
-		if err == ErrUsageNotFound {
-			return nil, fmt.Errorf("quota not found for provider: %s", providerUUID)
-		}
-		return nil, err
-	}
-	return usage, nil
+	return m.store.Get(ctx, providerUUID)
 }
 
 // ListQuota returns quota data for all providers.

@@ -151,5 +151,8 @@ connection modes" for the full mechanics.
 - **Layer 3** (tb routes to the plugin as a model): via provider-as-upstream.
   Done, verified end-to-end including a plugin forwarding to another tb rule
   and returning the result (`sdk/python/examples/e2e_run.sh`).
+- **Deterministic dispatch** (`pin_provider`, `Client.rules`): done, verified
+  end-to-end including `router_plugin.py` run for real
+  (`sdk/python/examples/e2e_run_pin.sh`).
 
 See `.design/python-sdk.md` in the repo for the full design and diagrams.
