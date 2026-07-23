@@ -214,6 +214,26 @@ func buildChatRoleOnlyChunkJSON(t *testing.T) string {
 	return string(data)
 }
 
+func buildChatFinishChunkJSON(t *testing.T) string {
+	t.Helper()
+	chunk := map[string]interface{}{
+		"id":      "chatcmpl-test",
+		"object":  "chat.completion.chunk",
+		"created": 1000,
+		"model":   "gpt-4o",
+		"choices": []interface{}{
+			map[string]interface{}{
+				"index":         0,
+				"delta":         map[string]interface{}{},
+				"finish_reason": "stop",
+			},
+		},
+	}
+	data, err := json.Marshal(chunk)
+	require.NoError(t, err)
+	return string(data)
+}
+
 // newTestHandleContext creates a minimal HandleContext wired to the given gin context.
 func newTestHandleContext(c *gin.Context) *protocol.HandleContext {
 	return protocol.NewHandleContext(c, "test-model")
@@ -594,6 +614,7 @@ func TestHandleOpenAIChatStream_Passthrough_MarksTTFT(t *testing.T) {
 	dec := &fakeChatDecoder{events: []string{
 		buildChatRoleOnlyChunkJSON(t), // structural frame — must NOT mark
 		buildChatContentChunkJSON(t, "hi"),
+		buildChatFinishChunkJSON(t),
 	}, current: -1}
 	stream := openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
 
@@ -604,6 +625,26 @@ func TestHandleOpenAIChatStream_Passthrough_MarksTTFT(t *testing.T) {
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
 	assert.True(t, ok, "OpenAI Chat passthrough must mark TTFT on the first content chunk")
+}
+
+func TestHandleOpenAIChatStream_Passthrough_TruncatedStreamErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	dec := &fakeChatDecoder{events: []string{
+		buildChatRoleOnlyChunkJSON(t),
+		buildChatContentChunkJSON(t, "partial"),
+	}, current: -1}
+	stream := openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
+
+	hc := newTestHandleContext(c)
+	hc.DisableStreamUsage = true
+	_, err := HandleOpenAIChatStream(hc, stream)
+	require.ErrorContains(t, err, "without a finish reason")
+	assert.Contains(t, w.Body.String(), `"type":"stream_error"`)
+	assert.NotContains(t, w.Body.String(), "[DONE]")
 }
 
 // TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly verifies no TTFT is

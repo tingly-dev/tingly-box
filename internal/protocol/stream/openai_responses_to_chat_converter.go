@@ -70,14 +70,8 @@ func (c *responsesToChatConverter) Next() (interface{}, bool, error) {
 			if err := c.stream.Err(); err != nil {
 				return nil, false, err
 			}
-			// Stream ended without response.completed — emit fallback completion
 			if !c.completed {
-				c.emitFallbackCompletion()
-				if len(c.pending) > 0 {
-					evt := c.pending[0]
-					c.pending = c.pending[1:]
-					return evt, false, nil
-				}
+				return nil, false, fmt.Errorf("responses stream ended without a terminal event")
 			}
 			return nil, true, nil
 		}
@@ -242,23 +236,6 @@ func (c *responsesToChatConverter) emitCompletedOutput(output []responses.Respon
 			}
 		}
 	}
-}
-
-func (c *responsesToChatConverter) emitFallbackCompletion() {
-	// Mark completed first: this runs when the upstream stream ended without a
-	// response.completed event (e.g. a truncated / mid-stream-cut stream). The
-	// terminal chunk is emitted exactly once — without this flag the Next() loop
-	// would re-enter on the next exhausted stream.Next() and re-emit the
-	// fallback forever, flushing chunks unboundedly until the process OOMs.
-	c.completed = true
-	if !c.hasSentCreated {
-		c.pending = append(c.pending, c.roleChunk())
-	}
-	finishReason := "stop"
-	if c.hasToolCalls {
-		finishReason = openaiFinishReasonToolCalls
-	}
-	c.pending = append(c.pending, c.finalChunk(finishReason))
 }
 
 // responsesToChatFinishReason maps a terminal Responses API response to the

@@ -41,6 +41,7 @@ type anthropicToOpenAIConverter struct {
 	// pending event queue
 	pending []interface{}
 	hookErr error
+	started bool
 	done    bool
 }
 
@@ -75,6 +76,12 @@ func (c *anthropicToOpenAIConverter) Next() (interface{}, bool, error) {
 
 	for {
 		if !c.stream.Next() {
+			if err := c.stream.Err(); err != nil {
+				return nil, false, err
+			}
+			if c.started && !c.done {
+				return nil, false, fmt.Errorf("anthropic stream ended without message_stop")
+			}
 			return nil, true, nil
 		}
 		event := c.stream.Current()
@@ -103,6 +110,7 @@ func (c *anthropicToOpenAIConverter) HookErr() error {
 func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
 	switch event.Type {
 	case "message_start":
+		c.started = true
 		c.emitChunk(wire.ChatStreamDelta{Role: "assistant"}, nil)
 		c.acc.ConsumeBeta(event)
 

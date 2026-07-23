@@ -74,17 +74,11 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 	// Read upstream chunks until we have at least one event to yield
 	for {
 		if !c.stream.Next() {
-			// Stream ended — emit completion events if not yet sent
 			if err := c.stream.Err(); err != nil {
 				return nil, false, err
 			}
 			if !c.completedSent {
-				c.emitCompletionEvents()
-				if len(c.pending) > 0 {
-					evt := c.pending[0]
-					c.pending = c.pending[1:]
-					return evt, false, nil
-				}
+				return nil, false, fmt.Errorf("chat stream ended without a finish reason")
 			}
 			return nil, true, nil
 		}

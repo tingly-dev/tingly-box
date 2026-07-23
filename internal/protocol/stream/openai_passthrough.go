@@ -44,6 +44,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	var hasUsage bool
 	var contentBuilder strings.Builder
 	var firstChunkID string
+	var sawFinish bool
 	// Obfuscation padding is cosmetic; generate at most one value per stream
 	// (lazily) instead of one crypto/rand read per chunk.
 	var obfuscationValue string
@@ -95,6 +96,9 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			}
 
 			choice := chunk.Choices[0]
+			if choice.FinishReason != "" {
+				sawFinish = true
+			}
 
 			// Accumulate content for estimation
 			if choice.Delta.Content != "" {
@@ -250,6 +254,21 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 		c.SSEvent("", string(errorJSON))
 		flusher.Flush()
 		return usage, err
+	}
+
+	if contentBuilder.Len() > 0 && !sawFinish && c.Request.Context().Err() == nil {
+		streamErr := fmt.Errorf("chat stream ended without a finish reason")
+		errorChunk := map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": streamErr.Error(),
+				"type":    "stream_error",
+				"code":    "upstream_truncated",
+			},
+		}
+		errorJSON, _ := json.Marshal(errorChunk)
+		c.SSEvent("", string(errorJSON))
+		flusher.Flush()
+		return usage, streamErr
 	}
 
 	if !hasUsage {
