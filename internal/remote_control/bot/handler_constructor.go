@@ -24,13 +24,20 @@ func NewBotHandler(
 	agentService *agentboot.AgentService,
 	directoryBrowser *feature.DirectoryBrowser,
 	manager *imbot.Manager,
+	prompter *imchannel.IMPrompter,
 	tbClient tbclient.TBClient,
 	pairing *PairingManager,
 	auditLog *audit.Logger,
 	store SettingsStore,
 ) *BotHandler {
-	// Create IM prompter for permission requests
-	imPrompter := imchannel.NewIMPrompter(manager)
+	// The bot's channel prompter for permission/ask requests. In the managed
+	// path the host supplies the bot's shared prompter (and routes replies to
+	// it before this handler runs); standalone callers (CLI, test harness)
+	// pass nil and get a private one, with this handler doing the routing.
+	imPrompter := prompter
+	if imPrompter == nil {
+		imPrompter = imchannel.NewIMPrompter(manager)
+	}
 
 	// Create interaction handler for platform-agnostic interactions
 	interactionHandler := imbot.NewInteractionHandler(manager)
@@ -156,6 +163,7 @@ func NewBotHandler(
 					BashAllowlist:      record.BashAllowlist,
 					DefaultCwd:         record.DefaultCwd,
 					Enabled:            record.Enabled,
+					Scenarios:          record.Scenarios,
 					SmartGuideProvider: record.SmartGuideProvider,
 					SmartGuideModel:    record.SmartGuideModel,
 					RequirePairing:     record.RequirePairing,

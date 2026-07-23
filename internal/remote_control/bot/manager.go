@@ -12,19 +12,23 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
-	"github.com/tingly-dev/tingly-box/remote/session"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
-// runBotWithSettings starts a bot using JSON file storage for chat state
-func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentService *agentboot.AgentService, tbClient tbclient.TBClient, pairing *PairingManager, auditLog *audit.Logger, store SettingsStore, channels *channel.Registry) error {
+// runBotWithSettings starts a bot using JSON file storage for chat state.
+// The host owns the bot's CHANNEL — the send/prompt surface: the shared
+// IMPrompter, the remote.channel.Channel registration, and the routing of
+// prompt replies — because the channel is a property of a running bot, not of
+// any one purpose. The bot's behavior is supplied by the injected Consumers
+// (remote_agent, notify, …), which are users of that channel; inbound
+// messages go to the host's prompt-reply router first, then through the
+// consumers in order until one claims, so the catch-all (remote_agent) sits
+// last.
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, consumers []Consumer, pairing *PairingManager, auditLog *audit.Logger, channels *channel.Registry) error {
 	// Create a JSON-based chat store
 	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
@@ -36,11 +40,9 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	authConfig := buildAuthConfig(setting)
 	platform := imbot.Platform(setting.Platform)
 
-	if sessionMgr == nil {
-		return fmt.Errorf("session manager is nil")
+	if len(consumers) == 0 {
+		return fmt.Errorf("no inbound consumer")
 	}
-
-	directoryBrowser := feature.NewDirectoryBrowser()
 
 	manager := imbot.NewManager(
 		imbot.WithAutoReconnect(true),
@@ -75,9 +77,39 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		return fmt.Errorf("failed to start %s bot: %w", setting.Platform, err)
 	}
 
-	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, directoryBrowser, manager, tbClient, pairing, auditLog, store)
-	manager.OnMessage(handler.HandleMessage)
+	// The bot's shared channel prompter. Consumers send prompts through it
+	// (directly or via the registered Channel below); the host routes every
+	// reply back to it ahead of consumer dispatch.
+	prompter := imchannel.NewIMPrompter(manager)
+
+	// Bind the bot's behavior through the injected consumers. This is the
+	// decoupling seam: the lifecycle here knows nothing about the agent /
+	// SmartGuide machinery — each consumer owns its own.
+	attachedList := make([]*Attached, 0, len(consumers))
+	for _, consumer := range consumers {
+		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing, auditLog, channels)
+		if err != nil {
+			return fmt.Errorf("attach inbound consumer %q: %w", consumer.Name(), err)
+		}
+		if attached.Cleanup != nil {
+			defer attached.Cleanup()
+		}
+		attachedList = append(attachedList, attached)
+	}
+	handlers := make([]OnMessage, 0, len(attachedList)+1)
+	handlers = append(handlers, promptReplyRouter(manager, prompter))
+	for _, attached := range attachedList {
+		if attached.OnMessage != nil {
+			handlers = append(handlers, attached.OnMessage)
+		}
+	}
+	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform, botUUID string) {
+		for _, h := range handlers {
+			if h(msg, platform, botUUID) {
+				return
+			}
+		}
+	})
 
 	if err := manager.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start bot manager: %w", err)
@@ -111,33 +143,45 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	bot := manager.GetBotByUUID(setting.UUID)
 	if bot != nil {
 		platform := bot.PlatformInfo().ID
-		cmdRegistry := handler.GetCommandRegistry()
 
-		// Register this bot's imbot-backed remote.channel.Channel so
-		// scenario plugins routed through /tingly/:scenario/notify can
-		// reach the same prompter machinery used for the SmartGuide
-		// flow. Unregistered on context cancellation below.
-		if channels != nil && handler.imPrompter != nil {
-			channels.Register(imchannel.New(setting.UUID, setting.Platform, bot, handler.imPrompter))
+		// Register the bot's channel: every running bot exposes itself as a
+		// remote.channel.Channel so scenario plugins routed through
+		// /tingly/:scenario/notify can Send/Prompt into its chats. This is
+		// host infrastructure, not a purpose — it lives exactly as long as
+		// the bot runs.
+		if channels != nil {
+			channels.Register(imchannel.New(setting.UUID, setting.Platform, bot, prompter))
 			defer channels.Unregister(setting.UUID)
 		}
 
-		var err error
-		switch platform {
-		case imbot.PlatformTelegram:
-			err = imbottelegram.SetupMenuButton(bot, cmdRegistry)
-		case imbot.PlatformFeishu, imbot.PlatformLark:
-			err = imbotfeishu.SetupQuickActions(bot, cmdRegistry)
-		default:
-			// Other platforms don't support menu configuration
-			err = nil
+		// Platform menu comes from the first consumer that supplies one
+		// (today only remote_agent does).
+		var commandRegistry *imbot.CommandRegistry
+		for _, attached := range attachedList {
+			if attached.CommandRegistry != nil {
+				commandRegistry = attached.CommandRegistry
+				break
+			}
 		}
 
-		if err != nil {
-			// Log warning but don't fail startup
-			logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
-		} else {
-			logrus.WithField("platform", setting.Platform).Info("Menu button configured successfully")
+		if commandRegistry != nil {
+			var err error
+			switch platform {
+			case imbot.PlatformTelegram:
+				err = imbottelegram.SetupMenuButton(bot, commandRegistry)
+			case imbot.PlatformFeishu, imbot.PlatformLark:
+				err = imbotfeishu.SetupQuickActions(bot, commandRegistry)
+			default:
+				// Other platforms don't support menu configuration
+				err = nil
+			}
+
+			if err != nil {
+				// Log warning but don't fail startup
+				logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
+			} else {
+				logrus.WithField("platform", setting.Platform).Info("Menu button configured successfully")
+			}
 		}
 	}
 
@@ -206,30 +250,46 @@ func getProjectPathForGroup(chatStore ChatStoreInterface, chatID string, platfor
 
 // Manager manages the lifecycle of running bot instances
 type Manager struct {
-	mu         sync.RWMutex
-	running    map[string]*runningBot // uuid -> runningBot
-	store      SettingsStore
-	dataPath   string // Data path for JSON chat store (replaces dbPath)
-	sessionMgr *session.Manager
-	agentService *agentboot.AgentService
-	tbClient   tbclient.TBClient // TB Client for SmartGuide model configuration
-	pairing    *PairingManager   // Pairing-code (TOFU) manager
-	audit      *audit.Logger     // Audit logger for security events
-	channels   *channel.Registry // Remote channel registry for /tingly/:scenario routing (optional)
+	mu        sync.RWMutex
+	running   map[string]*runningBot // uuid -> runningBot
+	store     SettingsStore
+	dataPath  string            // Data path for JSON chat store (replaces dbPath)
+	consumers []Consumer        // Supply each bot's inbound behavior, in dispatch order (the decoupling seam)
+	pairing   *PairingManager   // Pairing-code (TOFU) manager
+	audit     *audit.Logger     // Audit logger for security events
+	channels  *channel.Registry // Remote channel registry for /tingly/:scenario routing (optional)
 }
 
-// NewManager creates a new bot manager with a settings store
-func NewManager(store SettingsStore, sessionMgr *session.Manager, agentService *agentboot.AgentService,
-) *Manager {
+// NewManager creates a new bot manager with a settings store and the
+// consumers that supply every bot's behavior. The consumers are the
+// decoupling seam: swapping them changes what a bot does without touching the
+// lifecycle here.
+//
+// Order matters twice: inbound messages are dispatched (after the host's own
+// prompt-reply routing) to each mounted consumer in this order until one
+// claims the message, so the catch-all (remote_agent) goes last; and a bot
+// runs only while at least one consumer reports Mounted for it.
+func NewManager(store SettingsStore, consumers ...Consumer) *Manager {
 	auditLog := audit.NewLogger(audit.Config{Console: true})
 	return &Manager{
-		running:      make(map[string]*runningBot),
-		store:        store,
-		sessionMgr:   sessionMgr,
-		agentService: agentService,
-		audit:        auditLog,
-		pairing:      NewPairingManager(auditLog),
+		running:   make(map[string]*runningBot),
+		store:     store,
+		consumers: consumers,
+		audit:     auditLog,
+		pairing:   NewPairingManager(auditLog),
 	}
+}
+
+// mountedConsumers returns the subset of the manager's consumers that are
+// mounted on the given bot, preserving dispatch order.
+func (m *Manager) mountedConsumers(setting BotSetting) []Consumer {
+	mounted := make([]Consumer, 0, len(m.consumers))
+	for _, c := range m.consumers {
+		if c != nil && c.Mounted(setting) {
+			mounted = append(mounted, c)
+		}
+	}
+	return mounted
 }
 
 // SetChannelRegistry wires a remote channel registry so each running
@@ -264,13 +324,6 @@ func (m *Manager) ChatStore() (ChatStoreInterface, error) {
 		return nil, fmt.Errorf("data path not configured")
 	}
 	return NewChatStoreJSON(dataPath)
-}
-
-// SetTBClient sets the TBClient for SmartGuide configuration
-func (m *Manager) SetTBClient(tbClient tbclient.TBClient) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.tbClient = tbClient
 }
 
 // SetDataPath sets the data path for JSON chat store operations
@@ -327,6 +380,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		BashAllowlist:      record.BashAllowlist,
 		DefaultCwd:         record.DefaultCwd,
 		Enabled:            record.Enabled,
+		Scenarios:          record.Scenarios,
 		SmartGuideProvider: record.SmartGuideProvider,
 		SmartGuideModel:    record.SmartGuideModel,
 		RequirePairing:     record.RequirePairing,
@@ -367,56 +421,38 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		return fmt.Errorf("bot has no valid auth credentials for platform: %s", platform)
 	}
 
-	// Validate SmartGuide configuration if set as default agent
-	// This provides early warning at bot startup rather than at message handling time
-	// We already have the write lock, so we can access these fields directly
-	tbClient := m.tbClient
-	dataPath := m.dataPath
-
-	// Update SmartGuide routing rule when bot starts
-	// This ensures the route rule is always in sync with the current settings
-	if s.SmartGuideProvider != "" && s.SmartGuideModel != "" && tbClient != nil {
-		if err := tbClient.EnsureSmartGuideRuleForBot(parentCtx, s.UUID, s.Name, s.SmartGuideProvider, s.SmartGuideModel); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
-				"uuid":     uuid,
-				"name":     name,
-				"provider": s.SmartGuideProvider,
-				"model":    s.SmartGuideModel,
-			}).Error("Failed to update SmartGuide routing rule during bot start")
-			// Don't fail startup, SmartGuide will use fallback or error at execution time
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"uuid":     uuid,
-				"name":     name,
-				"provider": s.SmartGuideProvider,
-				"model":    s.SmartGuideModel,
-			}).Info("SmartGuide routing rule updated during bot start")
-		}
-	} else if s.SmartGuideProvider == "" || s.SmartGuideModel == "" {
+	// Mount gate: a bot is a resource that only runs when it has an active
+	// purpose mounted. Each consumer decides for itself whether it is mounted
+	// (remote_agent via its mount switch, notify via outbound scenario
+	// bindings); a bot with no mounted consumer stays offline even when
+	// Enabled — this is the "no mount, no bot" half of the resource/consumer
+	// split. Starting with no mount is a no-op (not an error) so reconcile
+	// stays quiet.
+	mounted := m.mountedConsumers(s)
+	if len(mounted) == 0 {
 		logrus.WithFields(logrus.Fields{
 			"uuid":     uuid,
 			"name":     name,
 			"platform": platform,
-		}).Warn("SmartGuide provider/model not configured, Claude Code will be used as fallback when SmartGuide is requested")
-	} else if tbClient == nil {
-		logrus.WithFields(logrus.Fields{
-			"uuid":     uuid,
-			"name":     name,
-			"platform": platform,
-		}).Warn("TBClient not configured, SmartGuide will fall back to Claude Code")
+		}).Info("Bot has no active mount, not starting")
+		return nil
 	}
+
+	// SmartGuide routing-rule sync is a remote_agent concern and now lives in
+	// the inbound consumer (NewBotHandler ensures the rule when it builds the
+	// handler), so the lifecycle no longer touches the TBClient here.
+	dataPath := m.dataPath
 
 	// Create cancellable context for this bot
 	ctx, cancel := context.WithCancel(parentCtx)
 	doneChan := make(chan struct{})
 	m.running[uuid] = &runningBot{cancel: cancel, doneChan: doneChan}
 
-	// Start bot in goroutine (dataPath and tbClient already captured above)
+	// Start bot in goroutine
 	pairing := m.pairing
 	auditLog := m.audit
-	store := m.store
 	channels := m.channels
-	go m.runBotSupervised(ctx, uuid, s, dataPath, tbClient, pairing, auditLog, store, channels, doneChan)
+	go m.runBotSupervised(ctx, uuid, s, dataPath, mounted, pairing, auditLog, channels, doneChan)
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
@@ -432,10 +468,9 @@ func (m *Manager) runBotSupervised(
 	uuid string,
 	s BotSetting,
 	dataPath string,
-	tbClient tbclient.TBClient,
+	consumers []Consumer,
 	pairing *PairingManager,
 	auditLog *audit.Logger,
-	store SettingsStore,
 	channels *channel.Registry,
 	doneChan chan struct{},
 ) {
@@ -463,7 +498,7 @@ func (m *Manager) runBotSupervised(
 		}
 	}()
 
-	if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentService, tbClient, pairing, auditLog, store, channels); err != nil {
+	if err := runBotWithSettings(ctx, s, dataPath, consumers, pairing, auditLog, channels); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 	}
 	logrus.WithField("uuid", uuid).Info("Bot stopped")
@@ -478,16 +513,9 @@ func (m *Manager) Stop(uuid string) {
 		logrus.WithField("uuid", uuid).Info("Stopping bot")
 		rb.stopped = true // Mark as stopping
 		rb.cancel()
-
-		// Clean up SmartGuide routing rule when bot stops
-		if m.tbClient != nil {
-			if err := m.tbClient.DeleteSmartGuideRuleForBot(context.Background(), uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to delete SmartGuide routing rule")
-			} else {
-				logrus.WithField("uuid", uuid).Info("SmartGuide routing rule deleted")
-			}
-		}
-		// Don't delete from map yet - let the goroutine clean up
+		// SmartGuide routing-rule cleanup is a remote_agent concern and runs
+		// via the inbound consumer's Cleanup when the bot goroutine exits on
+		// ctx cancel. Don't delete from map yet — let the goroutine clean up.
 	}
 }
 
@@ -581,27 +609,31 @@ func (m *Manager) Sync(ctx context.Context) error {
 		return err
 	}
 
-	// Get the set of enabled UUIDs
-	enabledUUIDs := make(map[string]bool)
+	// Compute the set of bots that SHOULD be running: enabled AND with at
+	// least one mounted consumer. A bot that is enabled but that no purpose
+	// uses (remote_agent off, no outbound bindings) is a resource nobody is
+	// using, so it must not run — and if it is running (last mount just
+	// turned off), the stop pass below takes it down.
+	shouldRun := make(map[string]bool)
 	switch s := settingsAny.(type) {
 	case []db.Settings:
 		for _, setting := range s {
-			if setting.UUID != "" {
-				enabledUUIDs[setting.UUID] = true
+			if setting.UUID != "" && len(m.mountedConsumers(BotSetting{Platform: setting.Platform, Scenarios: setting.Scenarios})) > 0 {
+				shouldRun[setting.UUID] = true
 			}
 		}
 	case []BotSetting:
 		for _, setting := range s {
-			if setting.UUID != "" {
-				enabledUUIDs[setting.UUID] = true
+			if setting.UUID != "" && len(m.mountedConsumers(setting)) > 0 {
+				shouldRun[setting.UUID] = true
 			}
 		}
 	default:
 		return fmt.Errorf("unknown settings list type")
 	}
 
-	// Start bots that are enabled but not running
-	for uuid := range enabledUUIDs {
+	// Start bots that should run but aren't (Start re-checks the mount gate).
+	for uuid := range shouldRun {
 		if !m.IsRunning(uuid) {
 			if err := m.Start(ctx, uuid); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot during sync")
@@ -609,11 +641,11 @@ func (m *Manager) Sync(ctx context.Context) error {
 		}
 	}
 
-	// Stop bots that are running but not enabled
+	// Stop bots that are running but should not be (disabled or mount off).
 	m.mu.Lock()
 	for uuid := range m.running {
-		if !enabledUUIDs[uuid] {
-			logrus.WithField("uuid", uuid).Info("Stopping disabled bot during sync")
+		if !shouldRun[uuid] {
+			logrus.WithField("uuid", uuid).Info("Stopping bot during sync (disabled or no active mount)")
 			// Mark as stopping and cancel
 			if rb, exists := m.running[uuid]; exists {
 				rb.stopped = true

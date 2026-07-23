@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 )
@@ -252,81 +251,14 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.Media
 	h.handleAgentMessage(hCtx, agentClaudeCode, message, projectPath)
 }
 
-// handlePermissionTextResponse handles text-based permission responses
-// Returns true if the message was a valid permission response, false otherwise
+// handlePermissionTextResponse handles text-based permission responses.
+// Returns true if the message was a valid permission response, false otherwise.
+// Only reachable in standalone (host-less) mode: the managed path's host
+// router claims prompt replies first. Mechanics shared via prompt_reply.go.
 func (h *BotHandler) handlePermissionTextResponse(hCtx HandlerContext) bool {
-	// Check if there are pending permission requests for this chat
-	pendingReqs := h.imPrompter.GetPendingRequestsForChat(hCtx.ChatID)
-	if len(pendingReqs) == 0 {
-		return false
-	}
-
-	input := hCtx.Text()
-
-	// Never consume handoff commands (@cc, @tb, @mock, /cc, /tb, /mock) as permission responses
-	trimmed := strings.TrimSpace(input)
-	if strings.HasPrefix(trimmed, "@cc") || strings.HasPrefix(trimmed, "@tb") || strings.HasPrefix(trimmed, "@mock") ||
-		strings.HasPrefix(trimmed, "/cc") || strings.HasPrefix(trimmed, "/tb") || strings.HasPrefix(trimmed, "/mock") {
-		return false
-	}
-
-	// Get the most recent pending request for this chat
-	// (usually there's only one at a time)
-	latestReq := pendingReqs[0]
-
-	// For AskUserQuestion, try to parse as option selection first
-	if latestReq.ToolName == "AskUserQuestion" {
-		// Try to submit as a text selection
-		if err := h.imPrompter.SubmitUserResponse(latestReq.ID, ask.Response{
-			Type: "text",
-			Data: input,
-		}); err == nil {
-			h.SendText(hCtx, fmt.Sprintf("✅ Selected: %s", input))
-			logrus.WithFields(logrus.Fields{
-				"request_id": latestReq.ID,
-				"tool_name":  latestReq.ToolName,
-				"user_id":    hCtx.SenderID,
-				"selection":  input,
-			}).Info("User selected option via text")
-			return true
-		}
-	}
-
-	// Try to parse the text as a standard permission response
-	approved, remember, isValid := ask.ParseTextResponse(input)
-	if !isValid {
-		// Not a valid permission response, let other handlers process it
-		return false
-	}
-
-	// Submit the decision
-	if err := h.imPrompter.SubmitDecision(latestReq.ID, approved, remember, ""); err != nil {
-		logrus.WithError(err).WithField("request_id", latestReq.ID).Error("Failed to submit permission decision")
-		h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
-		return true
-	}
-
-	// Send feedback to user
-	var resultText string
-	if remember {
-		resultText = "🔄 Always allowed"
-	} else if approved {
-		resultText = "✅ Permission granted"
-	} else {
-		resultText = "❌ Permission denied"
-	}
-
-	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, latestReq.ToolName))
-
-	logrus.WithFields(logrus.Fields{
-		"request_id": latestReq.ID,
-		"tool_name":  latestReq.ToolName,
-		"user_id":    hCtx.SenderID,
-		"approved":   approved,
-		"remember":   remember,
-	}).Info("User responded to permission request via text")
-
-	return true
+	return handlePromptTextReply(h.imPrompter,
+		func(text string) { h.SendText(hCtx, text) },
+		hCtx.ChatID, hCtx.SenderID, hCtx.Text())
 }
 
 // SendText sends a plain text message

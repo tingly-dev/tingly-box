@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
@@ -249,111 +248,12 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, true, result.MessageID)
 }
 
-// handlePermissionCallback handles permission request callback responses
+// handlePermissionCallback handles permission request callback responses.
+// Only reachable in standalone (host-less) mode: the managed path's host
+// router claims "perm" callbacks first. Mechanics shared via prompt_reply.go;
+// as the terminal handler it claims unknown request IDs and reports expired.
 func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []string) {
-	if len(parts) < 3 {
-		logrus.WithField("parts", parts).Warn("Invalid permission callback data")
-		return
-	}
-
-	subAction := parts[1]
-	requestID := parts[2]
-
-	// Check if the request exists
-	pendingReq, exists := h.imPrompter.GetPendingRequest(requestID)
-	if !exists {
-		logrus.WithField("request_id", requestID).Warn("Permission request not found or expired")
-		h.SendText(hCtx, "⚠️ This permission request has expired or already been answered.")
-		return
-	}
-
-	var resultText string
-
-	switch subAction {
-	case "noop":
-		// Label-only button (e.g., question header), do nothing
-		return
-
-	case "option":
-		// Handle multi-option selection (e.g., AskUserQuestion)
-		// Callback data format: perm:option:reqID:qIdx:optIdx
-		if len(parts) < 5 {
-			logrus.WithField("parts", parts).Warn("Invalid option callback data")
-			return
-		}
-		qIdxStr := parts[3]
-		optIdxStr := parts[4]
-
-		// Resolve question text and option label from the pending request
-		var questionText, optionLabel string
-		if questions, ok := pendingReq.Input["questions"].([]interface{}); ok {
-			var qIdx int
-			if _, err := fmt.Sscanf(qIdxStr, "%d", &qIdx); err == nil && qIdx >= 0 && qIdx < len(questions) {
-				if question, ok := questions[qIdx].(map[string]interface{}); ok {
-					questionText, _ = question["question"].(string)
-					if options, ok := question["options"].([]interface{}); ok {
-						var optIdx int
-						if _, err := fmt.Sscanf(optIdxStr, "%d", &optIdx); err == nil && optIdx >= 0 && optIdx < len(options) {
-							if option, ok := options[optIdx].(map[string]interface{}); ok {
-								optionLabel, _ = option["label"].(string)
-							}
-						}
-					}
-				}
-			}
-		}
-		if questionText == "" || optionLabel == "" {
-			logrus.WithField("parts", parts).Warn("Could not resolve question or option from callback data")
-			h.SendText(hCtx, "⚠️ Failed to process selection.")
-			return
-		}
-
-		done, err := h.imPrompter.SubmitPartialAnswer(requestID, questionText, optionLabel)
-		if err != nil {
-			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit partial answer")
-			h.SendText(hCtx, fmt.Sprintf("Failed to process option selection: %v", err))
-			return
-		}
-
-		if done {
-			resultText = fmt.Sprintf("✅ All answered")
-		} else {
-			h.SendText(hCtx, fmt.Sprintf("✅ Q: %s → %s", questionText, optionLabel))
-			return
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"request_id":   requestID,
-			"tool_name":    pendingReq.ToolName,
-			"question":     questionText,
-			"option_label": optionLabel,
-			"user_id":      hCtx.SenderID,
-		}).Info("User selected option")
-
-	default:
-		// Look up permission action from shared config
-		permOpt := ask.FindPermissionByAction(subAction)
-		if permOpt == nil {
-			logrus.WithField("action", subAction).Warn("Unknown permission action")
-			return
-		}
-
-		if err := h.imPrompter.SubmitDecision(requestID, permOpt.Approved, permOpt.Remember, permOpt.Label); err != nil {
-			logrus.WithError(err).WithField("request_id", requestID).Error("Failed to submit permission decision")
-			h.SendText(hCtx, fmt.Sprintf("Failed to process permission response: %v", err))
-			return
-		}
-		resultText = fmt.Sprintf("%s %s", permOpt.Icon, permOpt.Label)
-		logrus.WithFields(logrus.Fields{
-			"request_id": requestID,
-			"tool_name":  pendingReq.ToolName,
-			"action":     subAction,
-			"user_id":    hCtx.SenderID,
-		}).Info("User responded to permission request")
-	}
-
-	// Send feedback to user
-	h.SendText(hCtx, fmt.Sprintf("%s for tool: `%s`", resultText, pendingReq.ToolName))
+	handlePromptCallback(h.imPrompter, func(text string) { h.SendText(hCtx, text) }, hCtx.SenderID, parts, true)
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory
