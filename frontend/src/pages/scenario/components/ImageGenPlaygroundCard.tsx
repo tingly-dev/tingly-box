@@ -26,6 +26,7 @@ import { AutoAwesome, Close, Photo, ZoomIn } from '@/components/icons';
 import { getOpenAIClient } from '@/services/openaiClient';
 
 const IMAGE_SCENARIO = 'imagegen';
+const PLAYGROUND_PANEL_HEIGHT = 300;
 
 type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 
@@ -133,6 +134,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     }, [count, model, prompt, quality, showNotification, size]);
 
     const noModels = models.length === 0;
+    const desktopPanelHeight = noModels && !loadingRules ? 'auto' : PLAYGROUND_PANEL_HEIGHT;
 
     return (
         <>
@@ -143,16 +145,20 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 <Box
                     sx={{
                         display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', md: 'minmax(360px, 0.9fr) minmax(420px, 1.1fr)' },
+                        gridTemplateColumns: { xs: '1fr', lg: 'minmax(360px, 0.9fr) minmax(420px, 1.1fr)' },
                         gap: 3,
+                        // Both desktop panels consume the same height token below.
+                        // Do not introduce panel-specific desktop heights: generated
+                        // image content otherwise makes the two sides drift apart.
                         alignItems: 'stretch',
                     }}
                 >
                     <Stack
+                        data-testid="imagegen-controls-panel"
                         spacing={2}
                         sx={{
                             minWidth: 0,
-                            height: { xs: 'auto', md: 420 },
+                            height: { xs: 'auto', lg: desktopPanelHeight },
                         }}
                     >
                         {noModels && !loadingRules && (
@@ -182,7 +188,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
 
                         <TextField
                             multiline
-                            minRows={7}
+                            rows={5}
                             fullWidth
                             label={t('playground.prompt', { defaultValue: 'Prompt' })}
                             placeholder={t('playground.promptPlaceholder', {
@@ -192,15 +198,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             onChange={(event) => setPrompt(event.target.value)}
                             disabled={noModels}
                             sx={{
-                                flex: { xs: 'initial', md: 1 },
                                 minHeight: 0,
                                 '& .MuiInputBase-root': {
-                                    height: { xs: 'auto', md: '100%' },
+                                    minHeight: 0,
                                     alignItems: 'flex-start',
+                                    overflow: 'hidden',
                                 },
                                 '& .MuiInputBase-inputMultiline': {
-                                    height: { md: '100% !important' },
-                                    overflow: { md: 'auto !important' },
+                                    maxHeight: '100%',
+                                    boxSizing: 'border-box',
+                                    overflowY: 'auto !important',
+                                    overscrollBehavior: 'contain',
+                                    resize: 'none',
+                                    scrollbarWidth: 'thin',
                                 },
                             }}
                         />
@@ -208,7 +218,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         <Box
                             sx={{
                                 display: 'grid',
-                                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                gridTemplateColumns: {
+                                    xs: 'repeat(2, minmax(0, 1fr))',
+                                    sm: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                },
                                 gap: 1.5,
                             }}
                         >
@@ -256,6 +269,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     setCount(Number.isFinite(nextCount) && nextCount > 0 ? Math.min(nextCount, 10) : 1);
                                 }}
                                 slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                                sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
                             />
                         </Box>
 
@@ -274,11 +288,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                     </Stack>
 
                     <Box
+                        data-testid="imagegen-preview-panel"
                         sx={{
                             minWidth: 0,
-                            minHeight: { xs: 320, md: 420 },
-                            height: { xs: 'auto', md: 420 },
-                            maxHeight: { xs: 560, md: 420 },
+                            minHeight: 0,
+                            height: { xs: 320, lg: desktopPanelHeight },
                             border: '1px solid',
                             borderColor: 'divider',
                             borderRadius: 2,
@@ -312,13 +326,18 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             </Stack>
                         ) : (
                             <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                                    <Typography variant="subtitle2">
+                                <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
+                                    <Typography variant="subtitle2" sx={{ minWidth: 0 }}>
                                         {t('playground.sessionOutputs', { defaultValue: 'Session outputs' })}
                                     </Typography>
-                                    <Typography variant="caption" sx={{
-                                        color: "text.secondary"
-                                    }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.secondary",
+                                            flexShrink: 0,
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
                                         {t('playground.runCount', {
                                             defaultValue: runs.length === 1 ? '1 generation' : '{{count}} generations',
                                             count: runs.length,
@@ -388,7 +407,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         >
                                         <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
                                             <Stack spacing={1.25} sx={{ height: '100%' }}>
-                                                <Box>
+                                                <Box sx={{ minWidth: 0 }}>
                                                     <Typography
                                                         variant="body2"
                                                         sx={{
@@ -401,9 +420,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     >
                                                         {run.prompt}
                                                     </Typography>
-                                                    <Typography variant="caption" sx={{
-                                                        color: "text.secondary"
-                                                    }}>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            display: 'block',
+                                                            color: "text.secondary",
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
                                                         {run.model} · {run.size} · {run.quality}
                                                     </Typography>
                                                 </Box>
@@ -526,9 +552,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 slotProps={{
                     paper: {
                         sx: {
-                            width: 'calc(100vw - 48px)',
-                            height: 'calc(100vh - 48px)',
+                            width: { xs: 'calc(100vw - 16px)', sm: 'calc(100vw - 48px)' },
+                            height: { xs: 'calc(100dvh - 16px)', sm: 'calc(100dvh - 48px)' },
                             maxWidth: 'none',
+                            maxHeight: 'none',
+                            m: { xs: 1, sm: 3 },
                             borderRadius: 3,
                             bgcolor: 'grey.900',
                             color: 'common.white',
@@ -556,7 +584,17 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         >
                             {selectedImage?.prompt}
                         </Typography>
-                        <Typography component="span" variant="caption" sx={{ display: 'block', color: 'grey.400' }}>
+                        <Typography
+                            component="span"
+                            variant="caption"
+                            sx={{
+                                display: 'block',
+                                color: 'grey.400',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
                             {selectedImage?.model} · {selectedImage?.size} · {selectedImage?.quality}
                         </Typography>
                     </Box>
@@ -564,6 +602,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         onClick={() => setSelectedImage(null)}
                         aria-label={t('playground.closePreview', { defaultValue: 'Close image preview' })}
                         sx={{
+                            flexShrink: 0,
                             color: 'common.white',
                             bgcolor: 'rgba(255, 255, 255, 0.08)',
                             '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
