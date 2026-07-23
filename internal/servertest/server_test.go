@@ -488,7 +488,7 @@ func runDirectMockServerTest(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	mockServer.server.Config.Handler.ServeHTTP(w, req)
+	mockServer.ServeHTTP(w, req)
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t, 1, mockServer.GetCallCount("/v1/chat/completions"))
@@ -538,7 +538,7 @@ func runRequestForwardingVerification(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	mockServer.server.Config.Handler.ServeHTTP(w, req)
+	mockServer.ServeHTTP(w, req)
 
 	assert.Equal(t, 1, mockServer.GetCallCount("/v1/chat/completions"))
 
@@ -569,7 +569,7 @@ func runErrorHandling(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	mockServer.server.Config.Handler.ServeHTTP(w, req)
+	mockServer.ServeHTTP(w, req)
 
 	assert.Equal(t, 401, w.Code)
 
@@ -631,7 +631,6 @@ func TestSystem(t *testing.T) {
 			// Run with mock config
 			t.Run(tt.name+"_Mock", func(t *testing.T) {
 				ts := NewTestServer(t)
-				defer Cleanup()
 				ts.AddTestProviders(t)
 
 				if tt.fn != nil {

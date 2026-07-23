@@ -3,6 +3,7 @@ package servertest
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func TestPerformance_ConcurrentRequests(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer test-token")
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
-			mockServer.server.Config.Handler.ServeHTTP(w, req)
+			mockServer.ServeHTTP(w, req)
 
 			assert.Equal(t, 200, w.Code)
 		}()
@@ -98,7 +99,7 @@ func TestMockProviderServerConcurrency(t *testing.T) {
 				req := httptest.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
 				req.Header.Set("Authorization", "Bearer valid-test-token")
 
-				mockServer.server.Config.Handler.ServeHTTP(w, req)
+				mockServer.ServeHTTP(w, req)
 
 				// Verify response
 				assert.Equal(t, 200, w.Code)
@@ -148,7 +149,7 @@ func TestMockProviderServerResetConcurrency(t *testing.T) {
 				req := httptest.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
 				req.Header.Set("Authorization", "Bearer valid-test-token")
 
-				mockServer.server.Config.Handler.ServeHTTP(w, req)
+				mockServer.ServeHTTP(w, req)
 			}
 		}()
 	}
@@ -168,4 +169,62 @@ func TestMockProviderServerResetConcurrency(t *testing.T) {
 	callCount := mockServer.GetCallCount("/v1/chat/completions")
 	// Call count should be valid (non-negative)
 	assert.True(t, callCount >= 0)
+}
+
+func TestMockProviderServerConcurrentConfiguration(t *testing.T) {
+	mockServer := NewMockProviderServer()
+	defer mockServer.Close()
+
+	const workers = 8
+	const iterations = 25
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				mockServer.SetResponse("/v1/chat/completions", MockResponse{
+					StatusCode: http.StatusOK,
+					Body:       map[string]interface{}{"iteration": j},
+				})
+
+				request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+					"model": "test-model",
+				}))
+				response := httptest.NewRecorder()
+				mockServer.ServeHTTP(response, request)
+				assert.Equal(t, http.StatusOK, response.Code)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestMockProviderServerPreservesStreamingResponsesByEndpoint(t *testing.T) {
+	mockServer := NewMockProviderServer()
+	defer mockServer.Close()
+
+	mockServer.SetStreamingResponse("/v1/chat/completions", MockStreamingResponse{Events: []string{"data: openai"}})
+	mockServer.SetStreamingResponse("/v1/messages", MockStreamingResponse{Events: []string{"data: anthropic"}})
+
+	for _, testCase := range []struct {
+		endpoint string
+		event    string
+	}{
+		{endpoint: "/v1/chat/completions", event: "data: openai"},
+		{endpoint: "/v1/messages", event: "data: anthropic"},
+	} {
+		t.Run(testCase.endpoint, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, testCase.endpoint, strings.NewReader(`{"stream":true}`))
+			response := httptest.NewRecorder()
+
+			mockServer.ServeHTTP(response, request)
+
+			assert.Equal(t, http.StatusOK, response.Code)
+			assert.Equal(t, "text/event-stream", response.Header().Get("Content-Type"))
+			assert.Equal(t, testCase.event+"\n\n", response.Body.String())
+		})
+	}
 }
