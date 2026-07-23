@@ -119,12 +119,17 @@ func (f *TextFormatter) Format(msg Message) string {
 
 func (f *TextFormatter) formatSystem(m *SystemMessage) string {
 	switch m.SubType {
-	case SDKTaskStartedMessage:
+	case SystemSubtypeTaskStarted:
 		return f.formatTaskStarted(m)
 	case SystemSubtypeTaskCompleted:
 		return f.formatTaskCompleted(m)
-	case SDKTaskNotificationMessage:
+	case SystemSubtypeTaskNotification:
 		return f.formatTaskNotification(m)
+	case SystemSubtypeTaskProgress, SystemSubtypeTaskUpdated:
+		// Claude Code emits these frequently while a subagent is running. The
+		// raw message remains available to consumers; suppressing incremental
+		// patches here avoids flooding chat surfaces.
+		return ""
 	case SystemSubtypeInit:
 		var b strings.Builder
 		b.WriteString("[SYSTEM] ")
@@ -236,7 +241,7 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 			if content.Text != "" {
 				sections = append(sections, strings.TrimRight(content.Text, "\n"))
 			}
-		case ContentBlockTypeToolUse:
+		case ContentBlockTypeToolUse, ContentBlockTypeServerToolUse:
 			f.rememberToolName(content.ID, content.Name)
 			f.markAssistantToolID(content.ID)
 			tools = append(tools, ToolUseRef{
@@ -249,6 +254,19 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 			if f.Verbose && content.Thinking != "" {
 				sections = append(sections, "[THINKING] "+content.Thinking)
 			}
+		case ContentBlockTypeRedactedThinking:
+			// Redacted reasoning is intentionally never rendered.
+		case ContentBlockTypeWebSearchToolResult,
+			ContentBlockTypeWebFetchToolResult,
+			ContentBlockTypeCodeExecutionToolResult,
+			ContentBlockTypeBashCodeExecutionToolResult,
+			ContentBlockTypeTextEditorExecutionToolResult,
+			ContentBlockTypeToolSearchToolResult:
+			flushTools()
+			sections = append(sections, f.formatServerToolResult(content.Type, content.ToolUseID))
+		case ContentBlockTypeContainerUpload:
+			flushTools()
+			sections = append(sections, "Container upload ready")
 		}
 	}
 	flushTools()
@@ -261,6 +279,28 @@ func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
 		return ""
 	}
 	return strings.Join(sections, "\n")
+}
+
+func (f *TextFormatter) formatServerToolResult(blockType, toolUseID string) string {
+	if name := f.consumeToolName(toolUseID); name != "" {
+		return name + " result"
+	}
+	switch blockType {
+	case ContentBlockTypeWebSearchToolResult:
+		return "Web search result"
+	case ContentBlockTypeWebFetchToolResult:
+		return "Web fetch result"
+	case ContentBlockTypeCodeExecutionToolResult:
+		return "Code execution result"
+	case ContentBlockTypeBashCodeExecutionToolResult:
+		return "Bash execution result"
+	case ContentBlockTypeTextEditorExecutionToolResult:
+		return "Text editor execution result"
+	case ContentBlockTypeToolSearchToolResult:
+		return "Tool search result"
+	default:
+		return "Server tool result"
+	}
 }
 
 func (f *TextFormatter) formatUser(m *UserMessage) string {

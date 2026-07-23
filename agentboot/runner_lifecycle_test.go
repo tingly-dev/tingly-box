@@ -101,7 +101,7 @@ func TestRunner_PreservesStructuredResultError(t *testing.T) {
 	agent := claude.NewAgentWithFactory(claude.Config{}, fixture.Factory(fixture.Script{
 		fixture.Raw(map[string]any{
 			"type":     claude.SDKResultMessage,
-			"subtype":  "error_max_turns",
+			"subtype":  claude.ResultSubtypeErrorMaxTurns,
 			"is_error": true,
 			"errors":   []string{"maximum turns reached", "raise max_turns"},
 		}),
@@ -115,7 +115,7 @@ func TestRunner_PreservesStructuredResultError(t *testing.T) {
 
 	var resultErr *agentboot.ResultError
 	require.ErrorAs(t, waitErr, &resultErr)
-	assert.Equal(t, "error_max_turns", resultErr.Subtype)
+	assert.Equal(t, claude.ResultSubtypeErrorMaxTurns, resultErr.Subtype)
 	assert.Equal(t, []string{"maximum turns reached", "raise max_turns"}, resultErr.Details)
 	assert.True(t, strings.Contains(result.Error, "maximum turns reached"))
 	assert.False(t, result.IsSuccess())

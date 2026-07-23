@@ -27,7 +27,7 @@ type SystemMessage struct {
 	SessionID string    `json:"session_id"`
 	Timestamp time.Time `json:"timestamp"`
 
-	// Subagent task fields (populated when SubType is task_started/task_notification/task_completed)
+	// Subagent task fields (populated for task lifecycle subtypes).
 	Description string `json:"description,omitempty"`
 	Prompt      string `json:"prompt,omitempty"`
 	TaskID      string `json:"task_id,omitempty"`
@@ -183,6 +183,42 @@ func (b *ThinkingBlock) GetContentType() string {
 	return b.Type
 }
 
+// RedactedThinkingBlock represents reasoning withheld by the API.
+type RedactedThinkingBlock struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
+}
+
+// GetContentType implements ContentBlock.
+func (b *RedactedThinkingBlock) GetContentType() string {
+	return b.Type
+}
+
+// ServerToolResultContentBlock preserves the common envelope shared by
+// Claude's server-side tool result variants.
+type ServerToolResultContentBlock struct {
+	Type      string          `json:"type"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content,omitempty"`
+}
+
+// GetContentType implements ContentBlock.
+func (b *ServerToolResultContentBlock) GetContentType() string {
+	return b.Type
+}
+
+// ContainerUploadContentBlock represents a file uploaded to Claude's
+// server-side execution container.
+type ContainerUploadContentBlock struct {
+	Type   string `json:"type"`
+	FileID string `json:"file_id"`
+}
+
+// GetContentType implements ContentBlock.
+func (b *ContainerUploadContentBlock) GetContentType() string {
+	return b.Type
+}
+
 // ToolResultContentBlock represents tool result content (within message content array)
 type ToolResultContentBlock struct {
 	Type      string `json:"type"`
@@ -212,7 +248,7 @@ func UnmarshalContentBlock(data []byte) (ContentBlock, error) {
 			return nil, err
 		}
 		return &block, nil
-	case ContentBlockTypeToolUse:
+	case ContentBlockTypeToolUse, ContentBlockTypeServerToolUse:
 		var block ToolUseBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
@@ -224,8 +260,31 @@ func UnmarshalContentBlock(data []byte) (ContentBlock, error) {
 			return nil, err
 		}
 		return &block, nil
+	case ContentBlockTypeRedactedThinking:
+		var block RedactedThinkingBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return &block, nil
 	case ContentBlockTypeToolResult:
 		var block ToolResultContentBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return &block, nil
+	case ContentBlockTypeWebSearchToolResult,
+		ContentBlockTypeWebFetchToolResult,
+		ContentBlockTypeCodeExecutionToolResult,
+		ContentBlockTypeBashCodeExecutionToolResult,
+		ContentBlockTypeTextEditorExecutionToolResult,
+		ContentBlockTypeToolSearchToolResult:
+		var block ServerToolResultContentBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return &block, nil
+	case ContentBlockTypeContainerUpload:
+		var block ContainerUploadContentBlock
 		if err := json.Unmarshal(data, &block); err != nil {
 			return nil, err
 		}
