@@ -10,7 +10,13 @@ services:
   - { provider: openai, model: gpt-5.4, tier: 0 }
   - { provider: openai, model: gpt-5.5, tier: 1 }
 faults:
-  openai/gpt-5.4: [500, 500, 500, 200, 200]
+  # Structured form: `repeat` compacts consecutive identical statuses. Backed by
+  # vmodel.Sequence (default on_exhaust: clamp = last step repeats). Equivalent
+  # to the shorthand [500, 500, 500, 200, 200].
+  openai/gpt-5.4:
+    steps:
+      - { status: 500, repeat: 3 }
+      - { status: 200, repeat: 2 }
   openai/gpt-5.5: [200]
 expect:
   final_status: 200

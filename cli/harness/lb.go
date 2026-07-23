@@ -55,7 +55,7 @@ func listLBExamples() []string {
 // "Rule config shapes (taxonomy)".
 type LbCmd struct {
 	File    string `kong:"name='file',short='f',help='Scenario YAML file (see --example for the schema)'"`
-	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression|ratelimit|authflip|crossmodel|halfopen|degrade|inactive|withintier|multiaffinity|faultseq'"`
+	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression|ratelimit|authflip|crossmodel|halfopen|degrade|inactive|withintier|multiaffinity'"`
 	All     bool   `kong:"name='all',help='Run all built-in examples in sequence (useful for CI)'"`
 	JSON    bool   `kong:"name='json',help='Emit the trace as JSON'"`
 	Table   bool   `kong:"name='table',short='t',help='Compact table view (default is the pencil graph)'"`
