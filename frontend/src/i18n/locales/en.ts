@@ -85,7 +85,7 @@ export default {
     "easterEgg": "Hi, I'm Tingly-Box, Your Smart AI Orchestrator",
     "dashboard": "Dashboard",
     "usage": "Usage",
-    "userUsage": "User usage",
+    "userUsage": "Team usage",
     "heatmap": "Heatmap",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -1042,7 +1042,7 @@ export default {
   },
   "dashboard": {
     "userUsage": {
-      "title": "User usage",
+      "title": "Team usage",
       "subtitle": "See how every registered user is consuming shared AI access.",
       "timeRange": "Time range",
       "registeredUsers": "Registered users",
@@ -1077,6 +1077,7 @@ export default {
       "input": "Input",
       "output": "Output",
       "cache": "Cache",
+      "allModels": "All models",
       "modelMix": "Where their tokens went",
       "noUsers": "No users match your search.",
       "noUsage": "No usage in this period",
