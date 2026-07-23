@@ -39,10 +39,10 @@ type Prompter interface {
 }
 
 // MessageSink receives, in order, the [MessageEvent.Raw] value of each
-// message event and any terminal [ErrorEvent] the agent emits (passed as the
-// ErrorEvent value itself, so consumers can surface non-fatal errors that do
-// not fail handle.Wait()). Pass nil to drop these (e.g. when only completion
-// matters).
+// message event and any [ErrorEvent] the agent emits (passed as the ErrorEvent
+// value itself). An ErrorEvent may be recoverable or may mirror the fatal error
+// later returned by handle.Wait. Pass nil to drop these when only completion
+// matters.
 type MessageSink func(any)
 
 // RunWithPrompter is the convenience consumer of an [ExecutionHandle].

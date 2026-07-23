@@ -61,9 +61,9 @@ type AskRequestEvent struct {
 
 func (AskRequestEvent) isStreamEvent() {}
 
-// ErrorEvent reports a non-fatal error noticed during execution. The
-// runner continues processing after emitting an ErrorEvent. Fatal errors
-// are surfaced via [ExecutionHandle.Wait]'s returned error instead.
+// ErrorEvent reports an error noticed while consuming the execution stream.
+// It may be recoverable, or it may be a tail notification of the fatal error
+// that [ExecutionHandle.Wait] returns. Wait is the authoritative outcome.
 type ErrorEvent struct {
 	Err error
 }

@@ -329,27 +329,59 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 			case EventKindTerminalSuccess:
 				state.mu.Lock()
 				state.terminalSeen = true
-				state.terminalSuccess = true
 				state.mu.Unlock()
 				shutdownGracefully()
 
 			case EventKindTerminalError:
 				state.mu.Lock()
 				state.terminalSeen = true
-				state.terminalSuccess = false
+				state.terminalErr = resultErrorFromEvent(r.driver.Type(), ev)
 				state.mu.Unlock()
 				shutdownGracefully()
 			}
 		}
 
-		// Decoder closed (EOF, ctx, or error). Wait for the process to actually
-		// exit before considering execution done — this enforces the
-		// OnComplete-after-exit invariant the old runner violated.
-		_ = proc.Wait()
+		dErr := decoderErr()
+		state.mu.Lock()
+		terminalSeen := state.terminalSeen
+		state.mu.Unlock()
 
-		// Surface any decoder-level error as a tail ErrorEvent (non-fatal).
-		if dErr := decoderErr(); dErr != nil && !errors.Is(dErr, context.Canceled) {
-			handle.emit(runCtx, ErrorEvent{Err: dErr})
+		// A fatal decoder error means the read side can no longer make
+		// progress. Likewise, stream-json EOF without a result has no valid
+		// completion to wait for. Stop the process before joining it so a
+		// malformed or truncated stream cannot leave Wait blocked forever.
+		fatalDecode := dErr != nil &&
+			!errors.Is(dErr, context.Canceled) &&
+			!errors.Is(dErr, context.DeadlineExceeded)
+		if fatalDecode || (opts.OutputFormat == OutputFormatStreamJSON && !terminalSeen) {
+			_ = proc.Kill()
+		}
+
+		// Wait for the process to actually exit before considering execution
+		// done — this enforces the OnComplete-after-exit invariant.
+		processWaitErr := proc.Wait()
+		shutdownWG.Wait()
+
+		state.mu.Lock()
+		if processWaitErr != nil {
+			state.processErr = newProcessError(r.driver.Type(), processWaitErr)
+			state.exitCode = state.processErr.ExitCode
+		}
+		if dErr != nil && !errors.Is(dErr, context.Canceled) && !errors.Is(dErr, context.DeadlineExceeded) {
+			state.protocolErr = &ProtocolError{AgentType: r.driver.Type(), Err: dErr}
+		}
+		processErr := state.processErr
+		protocolErr := state.protocolErr
+		terminalErr := state.terminalErr
+		state.mu.Unlock()
+
+		// Match the SDK's error-in-stream behavior while keeping Wait as the
+		// authoritative terminal outcome.
+		switch {
+		case protocolErr != nil:
+			handle.emit(runCtx, ErrorEvent{Err: protocolErr})
+		case terminalErr == nil && processErr != nil:
+			handle.emit(runCtx, ErrorEvent{Err: processErr})
 		}
 	}()
 
@@ -361,6 +393,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		waitOnce.Do(func() {
 			pumpWG.Wait()
 			feederWG.Wait()
+			runCtxErr := runCtx.Err()
 			cancel()
 
 			// Compute result under state lock, then release before calling store
@@ -372,6 +405,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				defer state.mu.Unlock()
 
 				waitResult = &Result{
+					ExitCode: state.exitCode,
 					Format:   opts.OutputFormat,
 					Events:   append([]common.Event(nil), state.events...),
 					Duration: time.Since(state.startTime),
@@ -380,17 +414,23 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				if state.opts.SessionID != "" {
 					waitResult.Metadata["session_id"] = state.opts.SessionID
 				}
-				if state.terminalSeen && !state.terminalSuccess {
-					waitResult.Error = "agent reported error result"
-					waitErr = errors.New(waitResult.Error)
-				}
-				if rctxErr := runCtx.Err(); rctxErr != nil && !state.terminalSeen {
-					if errors.Is(rctxErr, context.DeadlineExceeded) {
-						waitResult.Error = "agent execution timed out"
-						waitErr = context.DeadlineExceeded
-					} else if errors.Is(rctxErr, context.Canceled) && ctx.Err() != nil {
-						waitErr = ctx.Err()
+				switch {
+				case state.terminalErr != nil:
+					waitErr = state.terminalErr
+				case runCtxErr != nil:
+					waitErr = runCtxErr
+				case state.protocolErr != nil:
+					waitErr = state.protocolErr
+				case state.processErr != nil:
+					waitErr = state.processErr
+				case opts.OutputFormat == OutputFormatStreamJSON && !state.terminalSeen:
+					waitErr = &ProtocolError{
+						AgentType: r.driver.Type(),
+						Err:       ErrNoTerminalResult,
 					}
+				}
+				if waitErr != nil {
+					waitResult.Error = waitErr.Error()
 				}
 				sessID = state.opts.SessionID
 			}()
@@ -415,10 +455,57 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 type runState struct {
 	mu sync.Mutex
 
-	opts            ExecutionOptions
-	startTime       time.Time
-	events          []common.Event
-	pendingInput    map[string]map[string]any
-	terminalSeen    bool
-	terminalSuccess bool
+	opts         ExecutionOptions
+	startTime    time.Time
+	events       []common.Event
+	pendingInput map[string]map[string]any
+	terminalSeen bool
+	terminalErr  *ResultError
+	processErr   *ProcessError
+	protocolErr  *ProtocolError
+	exitCode     int
+}
+
+func newProcessError(agentType AgentType, err error) *ProcessError {
+	exitCode := -1
+	type exitCoder interface {
+		ExitCode() int
+	}
+	var withExitCode exitCoder
+	if errors.As(err, &withExitCode) {
+		exitCode = withExitCode.ExitCode()
+	}
+	return &ProcessError{
+		AgentType: agentType,
+		ExitCode:  exitCode,
+		Err:       err,
+	}
+}
+
+func resultErrorFromEvent(agentType AgentType, event common.Event) *ResultError {
+	resultErr := &ResultError{
+		AgentType: agentType,
+		Subtype:   stringValue(event.Data["subtype"]),
+	}
+	if values, ok := event.Data["errors"].([]any); ok {
+		for _, value := range values {
+			if detail := stringValue(value); detail != "" {
+				resultErr.Details = append(resultErr.Details, detail)
+			}
+		}
+	}
+	if len(resultErr.Details) == 0 {
+		for _, key := range []string{"error", "result"} {
+			if detail := stringValue(event.Data[key]); detail != "" {
+				resultErr.Details = append(resultErr.Details, detail)
+				break
+			}
+		}
+	}
+	return resultErr
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }

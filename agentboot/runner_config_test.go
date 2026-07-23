@@ -43,6 +43,6 @@ func TestRunner_AppliesConfiguredBufferAndDefaultTimeout(t *testing.T) {
 	result, waitErr := handle.Wait()
 	require.ErrorIs(t, waitErr, context.DeadlineExceeded)
 	require.NotNil(t, result)
-	assert.NotEmpty(t, result.Error)
+	assert.Equal(t, waitErr.Error(), result.Error)
 	assert.Less(t, time.Since(started), 500*time.Millisecond)
 }

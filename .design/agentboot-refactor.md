@@ -406,9 +406,40 @@ not pursued: it would create an `agentboot → ask → agentboot` import cycle (
 `Prompter` interface lives in `agentboot`), and the single `event → ask.Request →
 ask.Result → response` hop in `imprompter.go` is already minimal.
 
-Net: the refactor stops after P1.5. The earlier P0/P1/P1.5 deletions removed a
-genuinely redundant *parallel paradigm*; this PR removes only the
-misleading/orphan accessors and keeps one coherent query + scalar surface.
+Net through P2: the earlier P0/P1/P1.5 deletions removed a genuinely redundant
+*parallel paradigm*; P2 removed only misleading/orphan accessors and kept one
+coherent query + scalar surface.
+
+### P3 — per-query state and lifecycle isolation — DONE
+
+Reference implementation: the locally installed Python `claude-agent-sdk`
+0.2.126. Its one-shot `query()` creates a fresh transport and query controller
+per call, treats decode/process failures as terminal, and closes stdin before
+terminate/kill escalation. Agentboot now adopts those lifecycle properties:
+
+1. `Runner` stores an `AgentTransportFactory`, not an `AgentTransport`.
+   `Execute` calls the factory once, so Claude's mutable message accumulator and
+   routing context cannot leak across concurrent bot chats. `Agent` and
+   `Launcher` no longer cache a transport.
+2. `RunnerConfig` makes the existing `StreamBufferSize` and
+   `DefaultExecutionTimeout` settings effective. A per-call zero timeout uses
+   the default; a negative timeout explicitly disables it.
+3. Terminal results close the protocol encoder/stdin first. A bounded grace
+   period lets Claude flush its session file before the runner escalates to
+   `Kill`.
+4. `ResultError`, `ProcessError`, and `ProtocolError` preserve the actual
+   failure class, CLI subtype/details, exit code, and wrapped cause.
+   `Result.ExitCode` and `Result.Error` now agree with `Wait`.
+5. Fatal decoder errors stop the process instead of waiting forever, and a
+   stream-json EOF without a result returns `ErrNoTerminalResult`.
+
+Deliberately not copied from the SDK: persistent bidirectional clients, hooks,
+in-process MCP servers, rewind/task controls, and dynamic model/permission
+mutation. None is required by the current remote-control product path.
+
+Regression coverage includes two overlapping runs on one Agent (routing
+isolation), configured buffer/timeout, non-zero process exit, malformed JSON,
+missing terminal result, structured result errors, and encoder-close behavior.
 
 ### Verification per phase
 
