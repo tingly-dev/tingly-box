@@ -40,22 +40,44 @@ on the @tb branch.
 
 ## 3. Execution path (reuse, not reimplementation)
 
+**Why env vars alone don't work.** The main scenario's routing has always
+been injected as process env vars (`ExecutionOptions.Env`) because Claude
+Code CLI, given no `--settings` flag, reads `~/.claude/settings.json` and
+those values happen to match (both derived from the same rules via Quick
+Config). A profile is different: its routing/models/overrides live in a
+*separate* derived file (`~/.tingly-box/claude/<id>--<name>/settings.json`),
+and the CLI's `--settings <path>` flag **replaces** `~/.claude/settings.json`
+rather than merging with it. So a profile selection only takes effect if that
+file is materialized and referenced via `--settings` — injecting its values
+as process env instead is silently ignored, because with no `--settings`
+flag the CLI still reads the main settings file, whose values win. (This is
+also why `BuildCCProfileSettings` copies the user's main settings.json as a
+base before layering the profile's deltas on top — nothing else backs it.)
+
 `ClaudeCodeExecutor.Execute`:
 
 1. Reads the bot setting via `deps.GetBotSetting()` (dynamic, straight from the
    store) and extracts the profile with `BotSetting.CCProfileID()` — so a
    profile switch in the web UI applies from the next message, no bot restart.
-2. Calls `TBClient.GetClaudeCodeEnvForProfile(ctx, profileID)`:
-   - `profileID == ""` → the existing `GetClaudeCodeEnv` (main scenario).
-   - otherwise → `agent.ResolveCCProfileSettings(...)` with the profiled
-     scenario path — the **same** resolution `tingly-box cc --profile` uses, so
-     remote and local launches produce identical env: `ANTHROPIC_BASE_URL`
-     pointing at `/tingly/claude_code:<id>`, tier models from the profile's
-     builtin rules, the profile's unified/separate mode, and its persisted env
-     overrides.
-3. If the profile cannot be resolved (deleted after selection), the executor
+2. If a profile is selected, calls
+   `TBClient.GetClaudeCodeSettingsPathForProfile(ctx, profileID)`, which
+   materializes the profile's settings.json via
+   `agent.MaterializeCCProfileSettings(...)` — the **same** on-disk artifact
+   and resolution `tingly-box cc --profile` produces — and returns its path.
+   That path is passed as `ExecutionOptions.SettingsPath`, which
+   `agentboot/claude`'s CLI builder turns into `--settings <path>` — the exact
+   mechanism the local launch uses.
+3. If no profile is selected (or profile materialization fails), falls back to
+   `TBClient.GetClaudeCodeEnv(ctx)` → `ExecutionOptions.Env` (the pre-existing
+   main-scenario mechanism, unchanged).
+4. If the profile cannot be resolved (deleted after selection), the executor
    warns in-chat and falls back to the main scenario for that run instead of
    failing or silently rerouting.
+
+`Env` and `SettingsPath` are mutually exclusive per run: a resolved profile
+sets only `SettingsPath` (mirroring the local CLI's `os.Environ()` passthrough
++ `--settings`, no extra env injected); the main-scenario fallback sets only
+`Env`.
 
 The status line ("⏳ CC: Processing new session... (profile: p1)") and the
 execution log both carry the profile so runs are attributable.
