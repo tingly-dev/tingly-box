@@ -19,7 +19,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -731,7 +730,6 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 
 	// Create test server with test utilities
 	ts := NewTestServer(t)
-	defer Cleanup()
 
 	// Add mock provider to test server config
 	provider := &typ.Provider{
@@ -739,7 +737,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		APIBase: mockServer.GetURL(),
 		Token:   "mock-token",
 		Enabled: true,
-		Timeout: int64(constant.DefaultRequestTimeout),
+		Timeout: defaultMockProviderTimeoutSeconds,
 	}
 	err := ts.appConfig.AddProvider(provider)
 	if err != nil {
