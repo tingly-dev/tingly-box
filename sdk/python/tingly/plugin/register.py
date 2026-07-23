@@ -39,17 +39,25 @@ def register(
     scenario: Optional[str] = None,
     token: str = "",
     tier: int = 0,
+    api_style: str = "anthropic",
     gateway_url: Optional[str] = None,
     admin_token: Optional[str] = None,
     timeout: float = 30.0,
 ) -> RegisterResult:
-    """Register (or update) this plugin as a tb provider, optionally binding a rule."""
+    """Register (or update) this plugin as a tb provider, optionally binding a rule.
+
+    ``api_style`` tells tb which wire protocol to use when it calls this
+    plugin's endpoint — ``"anthropic"`` (the plugin server's primary route,
+    ``/v1/messages``) or ``"openai"`` (``/v1/chat/completions``). The plugin
+    server answers both regardless; this only picks which one tb sends.
+    """
     resolved = _config.resolve(base_url=gateway_url, token=admin_token)
     headers = {"Authorization": f"Bearer {resolved.token or ''}"}
     url = resolved.base_url.rstrip("/") + "/api/v2/plugins"
     body = {
         "name": name, "endpoint": endpoint, "model_id": model_id,
         "scenario": scenario or "", "token": token, "tier": tier,
+        "api_style": api_style,
     }
     try:
         resp = httpx.post(url, json=body, headers=headers, timeout=timeout)

@@ -57,8 +57,12 @@ A green `tingly doctor` is a guarantee your code will run.
 
 ## Write a plugin (an AI server tb can route to)
 
-A plugin is an OpenAI-compatible upstream. Write one handler, serve it, register
-it — then any tb client can select it as a model.
+A plugin is an upstream tb can call two ways: **Anthropic Messages
+(`/v1/messages`, primary)** and **OpenAI chat completions
+(`/v1/chat/completions`, secondary)** — both real, both always served; which
+one tb actually uses is a registration choice (`api_style`, `"anthropic"` by
+default). Write one handler, serve it, register it — then any tb client can
+select it as a model, regardless of which protocol *that* client speaks.
 
 ```python
 from tingly import Plugin
@@ -88,14 +92,19 @@ next failed request trips the breaker and traffic tier-fails-over (when a
 fallback tier is configured). Retiring a plugin is the same as retiring any
 other provider — delete it in the tb UI.
 
-The server is stdlib-only (no FastAPI), supports streaming, and `plugin.llm`
-calls back into tb so the plugin reuses the gateway for its own LLM work.
+The server is stdlib-only (no FastAPI), supports streaming on both routes, and
+`plugin.llm` calls back into tb (Anthropic-first) so the plugin reuses the
+gateway for its own LLM work.
 
 ## Status
 
-- **Layer 1** (consume tb): `connect()` → `Client`. Done.
-- **Layer 2** (be an AI server): `tingly.Plugin` + manifest + `register`. Python
-  side done; tb-side supervisor/lifecycle UI pending.
+- **Layer 1** (consume tb): `connect()` → `Client`. Done — Anthropic tried
+  first when a scenario supports both transports.
+- **Layer 2** (be an AI server): `tingly.Plugin` + manifest + `register`. Done —
+  dual-protocol server (Anthropic primary, OpenAI secondary); tb-side
+  supervisor/lifecycle UI still pending (not required to use plugins today).
 - **Layer 3** (tb routes to the plugin as a model): via provider-as-upstream.
+  Done, verified end-to-end including a plugin forwarding to another tb rule
+  and returning the result (`sdk/python/examples/e2e_run.sh`).
 
 See `.design/python-sdk.md` in the repo for the full design and diagrams.

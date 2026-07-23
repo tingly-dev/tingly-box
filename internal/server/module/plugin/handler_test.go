@@ -87,6 +87,68 @@ func TestRegisterPlugin_BindsRule(t *testing.T) {
 	}
 }
 
+func TestRegisterPlugin_APIStyleDefaultsToOpenAI(t *testing.T) {
+	h := newTestHandler(t)
+
+	_, resp := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
+		Name: "no-style", Endpoint: "http://127.0.0.1:8765/v1",
+	})
+	uuid := resp["data"].(map[string]any)["provider_uuid"].(string)
+	prov, err := h.config.GetProviderByUUID(uuid)
+	if err != nil {
+		t.Fatalf("GetProviderByUUID: %v", err)
+	}
+	if prov.APIStyle != "openai" {
+		t.Fatalf("expected default api_style openai, got %q", prov.APIStyle)
+	}
+}
+
+func TestRegisterPlugin_APIStyleAnthropic(t *testing.T) {
+	h := newTestHandler(t)
+
+	_, resp := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
+		Name: "anthropic-plug", Endpoint: "http://127.0.0.1:8765", APIStyle: "anthropic",
+	})
+	uuid := resp["data"].(map[string]any)["provider_uuid"].(string)
+	prov, err := h.config.GetProviderByUUID(uuid)
+	if err != nil {
+		t.Fatalf("GetProviderByUUID: %v", err)
+	}
+	if prov.APIStyle != "anthropic" {
+		t.Fatalf("expected api_style anthropic, got %q", prov.APIStyle)
+	}
+}
+
+func TestRegisterPlugin_APIStyleRejectsUnknown(t *testing.T) {
+	h := newTestHandler(t)
+
+	w, resp := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
+		Name: "bad-style", Endpoint: "http://127.0.0.1:8765", APIStyle: "gemini",
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown api_style, got %d (%v)", w.Code, resp)
+	}
+}
+
+func TestRegisterPlugin_ReregisterUpdatesAPIStyle(t *testing.T) {
+	h := newTestHandler(t)
+
+	postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
+		Name: "switches", Endpoint: "http://127.0.0.1:8765",
+	})
+	_, second := postJSON(t, h.RegisterPlugin, RegisterPluginRequest{
+		Name: "switches", Endpoint: "http://127.0.0.1:8765", APIStyle: "anthropic",
+	})
+	uuid := second["data"].(map[string]any)["provider_uuid"].(string)
+	prov, err := h.config.GetProviderByUUID(uuid)
+	if err != nil {
+		t.Fatalf("GetProviderByUUID: %v", err)
+	}
+	if prov.APIStyle != "anthropic" {
+		t.Fatalf("expected re-register to update api_style to anthropic, got %q", prov.APIStyle)
+	}
+}
+
 func TestRegisterPlugin_ProviderOnly(t *testing.T) {
 	h := newTestHandler(t)
 

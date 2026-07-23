@@ -1,4 +1,4 @@
-"""A RAG plugin served as an OpenAI-compatible upstream for tingly-box.
+"""A RAG plugin served as an upstream for tingly-box (Anthropic primary, OpenAI secondary).
 
 Run it (serves on :8765 AND registers with tb on startup):
 
@@ -27,8 +27,8 @@ plugin = Plugin(
 CORPUS = {
     "tingly-box": "tingly-box is a personal intelligence orchestrator: an LLM "
     "gateway with remote control and guard rails.",
-    "plugin": "A tingly plugin is an OpenAI-compatible upstream that tingly-box "
-    "can route to as a model.",
+    "plugin": "A tingly plugin is an Anthropic/OpenAI-compatible upstream that "
+    "tingly-box can route to as a model.",
 }
 
 

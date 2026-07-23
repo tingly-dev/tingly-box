@@ -1,10 +1,12 @@
 """The ``Plugin`` class — write an AI server that tingly-box can route to.
 
-A plugin is an OpenAI-compatible upstream: the author registers a single chat
-handler, and ``serve()`` runs the HTTP server. tingly-box is then pointed at it
-as a provider (``api_base = http://host:port``, model ``model_id``), so the
-plugin composes with routing, fallback, guard rails, quota and logging like any
-other model.
+A plugin is an upstream tb can call two ways — Anthropic Messages (primary)
+and OpenAI chat completions (secondary), both always served regardless of
+registration — the author registers a single chat handler, and ``serve()``
+runs the HTTP server. tingly-box is then pointed at it as a provider
+(``api_base = http://host:port``, model ``model_id``, ``api_style`` picking
+which route tb calls), so the plugin composes with routing, fallback, guard
+rails, quota and logging like any other model.
 
 The handler may call **back into** tingly-box via ``plugin.llm`` (a Layer-1
 :class:`~tingly.client.Client`) for its own LLM needs — the recursion shown in
@@ -50,6 +52,7 @@ class Plugin:
         description: str = "",
         api_key: str = "",
         scenario: str = "experiment",
+        api_style: str = "anthropic",
     ):
         self.name = name
         self.model_id = model_id or f"plugin/{name}"
@@ -57,6 +60,10 @@ class Plugin:
         self.description = description
         self.api_key = api_key
         self.scenario = scenario
+        # Which wire protocol tb should use to *call* this plugin
+        # (/v1/messages vs /v1/chat/completions) — the server answers both
+        # regardless, this only picks what registration advertises.
+        self.api_style = api_style
 
         self._handler: Optional[ChatHandler] = None
         self._clients: dict = {}  # scenario -> lazily-connected client
@@ -113,14 +120,17 @@ class Plugin:
 
     # -- manifest --------------------------------------------------------
 
-    def manifest(self, entrypoint: str, port: int = 8765, transport: str = "openai") -> Manifest:
-        """Build a :class:`Manifest` describing this plugin for tingly-box."""
+    def manifest(self, entrypoint: str, port: int = 8765, transport: Optional[str] = None) -> Manifest:
+        """Build a :class:`Manifest` describing this plugin for tingly-box.
+
+        ``transport`` defaults to :attr:`api_style`.
+        """
         return Manifest(
             name=self.name,
             model_id=self.model_id,
             entrypoint=entrypoint,
             version=self.version,
-            transport=transport,
+            transport=transport or self.api_style,
             port=port,
             description=self.description,
         )
@@ -198,6 +208,7 @@ class Plugin:
             result = register(
                 self.name, endpoint, self.model_id,
                 scenario=self.scenario, token=self.api_key,
+                api_style=self.api_style,
             )
         except Exception as exc:  # noqa: BLE001 - registration is best-effort
             if verbose:

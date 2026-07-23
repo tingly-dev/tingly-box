@@ -89,7 +89,7 @@ def _live_check(session: "_discovery.Session") -> None:
     try:
         text = client.ask("Reply with the single word: pong", model="auto")
         ok = isinstance(text, str) and len(text) > 0
-        transport = "chat.completions" if _scenarios.supports_openai(session.transport) else "messages"
+        transport = "messages" if _scenarios.supports_anthropic(session.transport) else "chat.completions"
         _row("llm test", transport, OK if ok else FAIL)
     except Exception as exc:  # noqa: BLE001
         _row("llm test", "round-trip", FAIL)

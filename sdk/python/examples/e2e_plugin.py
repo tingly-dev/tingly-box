@@ -11,7 +11,7 @@ plugin = Plugin(name="rag-demo", scenario="experiment")
 
 CORPUS = {
     "tingly-box": "tingly-box is a personal intelligence orchestrator.",
-    "plugin": "A plugin is an OpenAI-compatible upstream tb can route to.",
+    "plugin": "A plugin is an Anthropic/OpenAI-compatible upstream tb can route to.",
 }
 
 

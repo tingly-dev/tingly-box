@@ -5,11 +5,12 @@ package plugin
 // process starts) updates the existing provider instead of duplicating it.
 type RegisterPluginRequest struct {
 	Name     string `json:"name" binding:"required" description:"Plugin / provider name" example:"my-rag"`
-	Endpoint string `json:"endpoint" binding:"required" description:"Plugin OpenAI base URL" example:"http://127.0.0.1:8765/v1"`
+	Endpoint string `json:"endpoint" binding:"required" description:"Plugin base URL" example:"http://127.0.0.1:8765/v1"`
 	ModelID  string `json:"model_id,omitempty" description:"Model id the plugin advertises" example:"plugin/my-rag"`
 	Token    string `json:"token,omitempty" description:"Token tingly-box should send to the plugin (empty = no key)"`
 	Scenario string `json:"scenario,omitempty" description:"Scenario to bind a rule under; omit to create only the provider" example:"experiment"`
 	Tier     int    `json:"tier,omitempty" description:"Tier for the bound service (0 = highest priority)"`
+	APIStyle string `json:"api_style,omitempty" description:"Wire protocol the plugin's endpoint speaks: \"openai\" or \"anthropic\"; empty defaults to \"openai\"" example:"anthropic"`
 }
 
 // RegisterPluginResponse reports what was created or updated.

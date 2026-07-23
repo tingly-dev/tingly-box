@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -46,7 +47,13 @@ func (h *Handler) RegisterPlugin(c *gin.Context) {
 		modelID = "plugin/" + req.Name
 	}
 
-	provider, err := h.upsertPluginProvider(req.Name, req.Endpoint, req.Token)
+	apiStyle, err := normalizeAPIStyle(req.APIStyle)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	provider, err := h.upsertPluginProvider(req.Name, req.Endpoint, req.Token, apiStyle)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -86,12 +93,29 @@ func (h *Handler) RegisterPlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": resp})
 }
 
+// normalizeAPIStyle validates the caller-supplied wire protocol, defaulting
+// the empty string to "openai" (the style tb assumed before plugins could
+// declare one). Anthropic is the SDK's own default for new plugins, but that
+// is a Python-side policy — the wire-level default stays put for anyone
+// calling this endpoint directly without an api_style.
+func normalizeAPIStyle(raw string) (ai.APIStyle, error) {
+	switch raw {
+	case "":
+		return ai.APIStyleOpenAI, nil
+	case string(ai.APIStyleOpenAI), string(ai.APIStyleAnthropic):
+		return ai.APIStyle(raw), nil
+	default:
+		return "", &bindError{"api_style must be \"openai\" or \"anthropic\", got " + raw}
+	}
+}
+
 // upsertPluginProvider creates a plugin-tagged provider, or updates the
-// endpoint/token of an existing one with the same name. Idempotent by name so
-// a plugin can safely re-register (e.g. on every process start).
-func (h *Handler) upsertPluginProvider(name, endpoint, token string) (*typ.Provider, error) {
+// endpoint/token/style of an existing one with the same name. Idempotent by
+// name so a plugin can safely re-register (e.g. on every process start).
+func (h *Handler) upsertPluginProvider(name, endpoint, token string, apiStyle ai.APIStyle) (*typ.Provider, error) {
 	if existing, err := h.config.GetProviderByName(name); err == nil && existing.IsPlugin() {
 		existing.APIBase = endpoint
+		existing.APIStyle = apiStyle
 		existing.Token = token
 		existing.NoKeyRequired = token == ""
 		existing.Enabled = true
@@ -105,7 +129,7 @@ func (h *Handler) upsertPluginProvider(name, endpoint, token string) (*typ.Provi
 		UUID:          config.GenerateUUID(),
 		Name:          name,
 		APIBase:       endpoint,
-		APIStyle:      "openai",
+		APIStyle:      apiStyle,
 		Token:         token,
 		NoKeyRequired: token == "",
 		Enabled:       true,

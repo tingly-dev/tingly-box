@@ -38,7 +38,17 @@ def test_plugin_builds_manifest():
     assert man.model_id == "plugin/my-rag"
     assert man.entrypoint == "rag_plugin:plugin"
     assert man.port == 8080
+    assert man.transport == "anthropic"
+
+
+def test_plugin_manifest_transport_follows_api_style_override():
+    plugin = Plugin(name="my-rag", api_style="openai")
+    man = plugin.manifest(entrypoint="rag_plugin:plugin")
     assert man.transport == "openai"
+
+    # an explicit transport= still wins over api_style
+    man2 = plugin.manifest(entrypoint="rag_plugin:plugin", transport="anthropic")
+    assert man2.transport == "anthropic"
 
 
 def test_plugin_use_caches_per_scenario(monkeypatch):

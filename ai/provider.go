@@ -360,6 +360,16 @@ func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {
 // value is never transmitted.
 const VModelSentinelToken = "EMPTY"
 
+// NoKeySentinelToken satisfies the same non-empty-APIKey check for real
+// outbound HTTP providers that genuinely take no key (NoKeyRequired=true;
+// e.g. a local plugin process). Unlike VModelSentinelToken this value IS
+// transmitted, as an Authorization/x-api-key header the receiving side is
+// expected to ignore. It exists because some client SDKs (anthropic-sdk-go)
+// treat an empty API key as "look for ambient credentials" and fail loudly
+// when none are found, instead of just sending an empty/absent header the
+// way the OpenAI client does.
+const NoKeySentinelToken = "tingly-no-key"
+
 // GetAccessToken returns the access token based on auth type
 func (p *Provider) GetAccessToken() string {
 	switch p.AuthType {
@@ -371,6 +381,9 @@ func (p *Provider) GetAccessToken() string {
 		return VModelSentinelToken
 	case AuthTypeAPIKey, "":
 		// Default to api_key for backward compatibility
+		if p.Token == "" && p.NoKeyRequired {
+			return NoKeySentinelToken
+		}
 		return p.Token
 	}
 	return ""

@@ -1,5 +1,7 @@
 """Active config + plugin registration tests."""
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -57,6 +59,8 @@ def test_register_binds_rule(monkeypatch):
     assert result.provider_uuid == "uuid-1"
     assert result.rule_uuid == "rule-1"
     assert result.ready is True
+    # anthropic is the SDK's default wire protocol for new plugins
+    assert json.loads(route.calls.last.request.content)["api_style"] == "anthropic"
 
 
 @respx.mock

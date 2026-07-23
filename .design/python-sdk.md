@@ -14,6 +14,42 @@ with the right base URL, token and scenario path. There was no fast seam for
 (prompt, retrieval, agent loop) and **reuses the gateway's power** — provider
 routing, tier/fallback, guard rails, quota, logging — for free.
 
+## Scope (current milestone)
+
+The near-term target is deliberately narrow — connect, send a message, and
+have a plugin work end-to-end including forwarding to another tb rule and
+back. All three are done and verified live (`examples/e2e_run.sh`, real `tb`
+binary, no mocks):
+
+1. `tingly.connect()` reaches tb and mints a session (Layer 1).
+2. `tb.ask(...)` / `tb.anthropic.messages.create(...)` send a message through
+   tb's pipeline and get a real answer back (Layer 1).
+3. A `tingly.Plugin` runs, tb routes a model to it, and the plugin's handler
+   calls `plugin.llm.ask(...)` / `plugin.use(scenario).ask(...)` to forward
+   into any other rule and get the result back before answering (Layer 2 +
+   Layer 3).
+
+**Protocol scope, deliberately narrowed:** Anthropic is primary everywhere in
+the SDK; OpenAI chat completions is a real secondary path — kept, not
+removed, but not what new work defaults to. Concretely:
+
+- `Client.ask()` tries the Anthropic transport first when a scenario supports
+  both (flipped from OpenAI-first — see "Two-token model" / Request flow).
+- The plugin's own HTTP server answers `POST /v1/messages` (Anthropic,
+  primary) and `POST /v1/chat/completions` (OpenAI, secondary) — both real,
+  sharing one handler and one normalized `ChatRequest`; only the response
+  shaping differs per route.
+- New plugins register with `api_style="anthropic"` by default
+  (`Plugin(api_style=...)` overrides it, per-plugin); the wire-level default
+  at `POST /api/v2/plugins` itself (a caller that omits the field entirely)
+  stays `"openai"`, for back-compat with anything hitting the endpoint
+  directly.
+
+Out of scope for now, unchanged from before: the tb-side plugin sub-process
+supervisor, the `/plugins/<name>/*` reverse-proxy mount, and the lifecycle UI
+(see Open follow-ups). None of the three milestone points above need them —
+a plugin author starts their own process today, same as any local dev server.
+
 ## Architecture (one idea, not three layers)
 
 There is a single concept:
@@ -51,7 +87,7 @@ today's pieces — three verbs for the one rule⇄plugin relationship:
 | verb | what it is | SDK surface |
 |------|------------|-------------|
 | **connect** | a plugin (or experiment) *consumes* a rule | `tingly.connect()` / `plugin.use(scenario).ask(model=…)` |
-| **serve**   | a plugin *is* a rule's upstream | `tingly.Plugin` (OpenAI server) |
+| **serve**   | a plugin *is* a rule's upstream | `tingly.Plugin` (Anthropic-primary server) |
 | **register**| point a rule's upstream at the plugin | `register_with_tb()` → tb provider + rule |
 
 The historical "Layer 1/2/3" headings below map exactly to connect / serve /
@@ -91,15 +127,32 @@ cautionary reference.
   provider + rule creation), and a `RegisterRoutes(group, handler)` mounted
   from `server_webui_api.go`. Plugin logic no longer lives as methods on the
   giant `*Server` struct.
-- A plugin is an ordinary provider (`APIStyle=openai`, `api_key`/`no_key`)
-  carrying the tag `"plugin"` in the existing, generic `Provider.Tags` field.
-  `Provider.IsPlugin()` checks for that tag. No new struct, no new DB column —
-  Tags already round-trips through the provider store unconditionally.
+- A plugin is an ordinary provider (`APIStyle=openai|anthropic`, `api_key`/
+  `no_key`) carrying the tag `"plugin"` in the existing, generic
+  `Provider.Tags` field. `Provider.IsPlugin()` checks for that tag. No new
+  struct, no new DB column — Tags already round-trips through the provider
+  store unconditionally.
 - **`POST /api/v2/plugins`** is an **idempotent upsert by name**: register once
   at startup (and again on every restart) and it updates the same provider
   instead of duplicating it. When `scenario` is given it also idempotently
-  ensures the rule. Response: `{provider_uuid, model_id, scenario, rule_uuid,
-  ready, note}`.
+  ensures the rule. Request carries `api_style` (`openai`|`anthropic`, empty
+  → `openai` at the wire level; the SDK's own default is `anthropic`, see
+  Scope above) — this is what tells tb which of the plugin's two routes to
+  call. Response: `{provider_uuid, model_id, scenario, rule_uuid, ready, note}`.
+- **A real, non-obvious fix underneath this:** `Provider.GetAccessToken()`
+  returned `""` for a no-key provider, and the vendored `anthropic-sdk-go`
+  treats an empty API key as "go look for ambient credentials" — it does its
+  own discovery (env vars, `anthropic auth login` profile, …) and errors
+  loudly when none exist, instead of just sending an empty/absent header the
+  way the OpenAI client does. This was invisible while every plugin was
+  `APIStyle=openai`; it surfaced immediately once Anthropic became the
+  default and broke the very first live end-to-end run. Fixed by
+  `ai.NoKeySentinelToken` (`ai/provider.go`): when `AuthType=api_key`,
+  `Token==""` and `NoKeyRequired=true`, `GetAccessToken()` returns that
+  sentinel instead of `""` — a real (if meaningless) value the SDK is happy
+  to send as the header, which the plugin's own auth check (`api_key=""` →
+  accept anything) ignores. General fix, not plugin-specific: any
+  no-key-required Anthropic-style provider benefits.
 - **`GET /api/v2/plugins`** lists plugin-tagged providers, deriving the display
   model id from the rule(s) bound to each (no extra field needed).
 - **Retiring a plugin** is the same as retiring any other provider: delete it
@@ -112,11 +165,19 @@ where there is no `~/.tingly-box`. This part was cheap and answers a real need,
 so it stayed. `Plugin.serve(register=True, scenario=…, tb=Connection(...))`
 registers once at startup — no background thread, no lease to manage.
 
-Verified end-to-end (`examples/e2e_run.sh`): the plugin registers once, a
-client call routes through it and back into tb (no network/keys); killing the
-plugin leaves its provider listed (same as any provider) and the next request
-fails with a plain connection error (add a tier-1 fallback to see failover
-instead); restarting the plugin upserts the same provider, no duplicate.
+Verified end-to-end (`examples/e2e_run.sh`, real `tb` binary, no network/keys):
+the plugin registers once as an `api_style=anthropic` provider; a client's
+OpenAI-shaped `chat/completions` call to `model=plugin/rag-demo` routes
+through tb, which forwards it to the plugin as `POST /v1/messages?beta=true`
+(tb's real Anthropic client — the `?beta=true` query string is why the
+server routes on path only, ignoring the query); the plugin's handler calls
+`plugin.use("experiment").ask(..., model="echo-model")`, itself now an
+Anthropic-transport call, which tb routes to a `vmodel` provider and back;
+the composed answer returns to the plugin, which tb reshapes back to
+OpenAI `chat.completion` for the original caller. Killing the plugin leaves
+its provider listed (same as any provider) and the next request fails with a
+plain connection error (add a tier-1 fallback to see failover instead);
+restarting the plugin upserts the same provider, no duplicate.
 
 
 ## Shape
@@ -131,9 +192,9 @@ sdk/python/
     transports/      # build openai.OpenAI / anthropic.Anthropic bound to tb
     helpers/         # usage + guardrails views
     plugin/          # Layer 2: be an AI server tb routes to
-      core.py        #   Plugin class (@plugin.chat, .llm, .serve)
-      server.py      #   stdlib OpenAI-compatible HTTP server (+ SSE)
-      types.py       #   ChatRequest / Message
+      core.py        #   Plugin class (@plugin.chat, .llm, .serve, api_style)
+      server.py      #   stdlib HTTP server: /v1/messages (primary) + /v1/chat/completions (secondary), + SSE
+      types.py       #   ChatRequest / Message (from_anthropic_body / from_openai_body)
       manifest.py    #   tingly.toml read/write
       register.py    #   one-shot, idempotent register with tb
     cli.py           # `tingly doctor` + `tingly plugin {init,run}`
@@ -151,7 +212,7 @@ connect(scenario="experiment")
    └─ Client(session, gateway_url, admin_token)
           .openai      → openai.OpenAI(base_url = scenario_root + "/v1")
           .anthropic   → anthropic.Anthropic(base_url = scenario_root)
-          .ask()       → picks transport from session.transport
+          .ask()       → Anthropic first when the scenario supports both, else OpenAI
           .usage       → GET /api/v1/requests        (admin token)
           .guardrails  → GET /api/v1/guardrails/config (admin token)
 ```
@@ -308,12 +369,14 @@ decision, not a unilateral rename — flagged here rather than acted on.
 
 ## Open follow-ups
 
-Roughly in priority order — 1–3 are backend/SDK-only (no naming exposure, safe
-to build regardless of the rename above); 4 is blocked on that decision for
-its UI portion specifically (the supervisor + reverse-proxy mount are not).
+The Scope milestone above (connect + send + plugin round-trip, Anthropic
+primary / OpenAI secondary) is **done**. What's left, roughly in priority
+order — 1–3 are backend/SDK-only (no naming exposure, safe to build
+regardless of the rename above); 4 is blocked on that decision for its UI
+portion specifically (the supervisor + reverse-proxy mount are not):
 
 1. Layer 2 tb-side remainder — Python side is **done** (`tingly.Plugin`,
-   manifest, OpenAI server, `register`); still missing: a sub-process
+   manifest, dual-protocol server, `register`); still missing: a sub-process
    supervisor that boots plugins from their manifest (reuse
    `agentboot/process`), a `/plugins/<name>/*` reverse-proxy mount, and the
    install/enable/logs/disable lifecycle UI. The first two are ordinary
@@ -330,8 +393,11 @@ below) — so it's not listed as a follow-up.
 
 ## Layer 2: write an AI server (`tingly.Plugin`)
 
-A plugin is an **OpenAI-compatible upstream**: the author writes one chat
-handler, and `serve()` runs the HTTP server. The whole surface is one class.
+A plugin is an upstream tb can call two ways — **Anthropic Messages
+(primary)** and **OpenAI chat completions (secondary)**, both real, both
+always served regardless of what registration advertises. The author writes
+one chat handler, and `serve()` runs the HTTP server. The whole surface is
+one class.
 
 ```python
 from tingly import Plugin
@@ -363,21 +429,24 @@ caller (step 3) and the upstream-for-the-plugin (step 5).
   │                                    │          │  provider:                   │
   │  @plugin.chat                      │          │   name=my-rag                │
   │  def handle(req): ...              │          │   api_base=http://…:8765/v1  │
-  │        │                           │          │   model=plugin/my-rag        │
-  │        │ returns str | iter[str]   │          │                              │
-  │        ▼                           │          │  rule: plugin/my-rag → ↑      │
-  │  serve()  →  stdlib HTTP server    │          └──────────────┬───────────────┘
-  │     POST /v1/chat/completions ◄────┼──── (3) POST /v1/chat ──┘   ▲
-  │     GET  /v1/models               │         (model=plugin/my-rag)│ (6) answer
-  │     GET  /health                  │                              │
-  │     · buffered  → chat.completion │                              │
-  │     · stream    → SSE chunks  ────┼──── (7) response ────────────┘
+  │        │                           │          │   api_style=anthropic (dflt) │
+  │        │ returns str | iter[str]   │          │   model=plugin/my-rag        │
+  │        ▼                           │          │                              │
+  │  serve()  →  stdlib HTTP server    │          │  rule: plugin/my-rag → ↑      │
+  │     POST /v1/messages         ◄────┼─ (3) POST /v1/messages?beta=true ──┘  ▲ │
+  │       (primary, api_style match)  │         (model=plugin/my-rag)         │ │
+  │     POST /v1/chat/completions ◄────┼─ (3') POST /v1/chat/completions ─────┘ │
+  │       (secondary, if api_style=openai)                          (6) answer │
+  │     GET  /v1/models               │                                        │
+  │     GET  /health                  │                                        │
+  │     · buffered → message / chat.completion                                 │
+  │     · stream    → SSE (message_* events / chat.completion.chunk) ── (7) ───┘
   │        │                          │
   │  plugin.llm  (lazy Layer-1 client)│
   │        │                          │
   └────────┼──────────────────────────┘
            │ (4) plugin.llm.ask("…", model="auto")
-           │     = tingly.connect(scenario="experiment") → POST /tingly/experiment/v1/chat
+           │     = tingly.connect(scenario="experiment") → POST /tingly/experiment/v1/messages
            ▼
    ┌──────────────────────────────────────────────────────────────┐
    │  tingly-box pipeline  (SAME as any client — see Layer 1 graph) │
@@ -387,13 +456,14 @@ caller (step 3) and the upstream-for-the-plugin (step 5).
                                                                                  OpenAI/…)
 
    request lifecycle:
-     (1) client sends model="plugin/my-rag" to tb         ── see Layer 3 graph
-     (2) tb resolves rule → provider my-rag (api_base = plugin)
-     (3) tb POSTs OpenAI /v1/chat/completions to the PLUGIN
-     (4) handler runs; calls plugin.llm.ask(...)  ── back INTO tb
+     (1) client sends model="plugin/my-rag" to tb, any protocol  ── see Layer 3 graph
+     (2) tb resolves rule → provider my-rag (api_base = plugin, api_style picks the route)
+     (3) tb calls the PLUGIN on whichever route matches provider.api_style
+         (Anthropic /v1/messages by default; /v1/chat/completions if registered openai)
+     (4) handler runs; calls plugin.llm.ask(...)  ── back INTO tb, Anthropic-first
      (5) tb routes that call to a real upstream, applies guard rails/quota/…
      (6) generated text returns to the handler
-     (7) handler's str/iterator → OpenAI response/SSE back to tb → back to client
+     (7) handler's str/iterator → response/SSE shaped for whichever route was hit → back to tb → back to client
 ```
 
 Key reading:
@@ -411,21 +481,30 @@ Key reading:
 Design choices:
 
 - **No framework dependency.** The server is `http.server.ThreadingHTTPServer`
-  (stdlib), so a plugin is one `pip install tingly` away. It serves
-  `POST /v1/chat/completions` (buffered **and** real SSE streaming),
-  `GET /v1/models`, `GET /health` — exactly what tb needs to treat it as an
-  OpenAI upstream.
-- **Handler contract is minimal.** Return a `str` (buffered) or an iterator of
-  `str` (streamed); the server shapes both into `chat.completion` /
-  `chat.completion.chunk`. The author never touches wire format.
+  (stdlib), so a plugin is one `pip install tingly` away. It always serves
+  both `POST /v1/messages` (Anthropic, buffered **and** real SSE) and
+  `POST /v1/chat/completions` (OpenAI, same), plus `GET /v1/models`,
+  `GET /health` — which route tb actually uses is a registration choice
+  (`api_style`), not a server capability limit.
+- **Handler contract is minimal and protocol-agnostic.** Return a `str`
+  (buffered) or an iterator of `str` (streamed); the server shapes it into
+  `message`/SSE `message_*` events for the Anthropic route or
+  `chat.completion`/`chat.completion.chunk` for the OpenAI route, whichever
+  was hit. The author never touches wire format either way.
+  `ChatRequest.from_anthropic_body` folds Anthropic's top-level `system`
+  field into a leading `role="system"` message so `req.system_text()` /
+  `req.last_user_text()` work the same regardless of which route the caller
+  used.
 - **`plugin.llm` is a lazy Layer-1 client.** The plugin reuses the gateway for
   its own generation instead of hard-coding a provider/key — the recursion in
-  the Layer 3 graph.
+  the Layer 3 graph. Its own `ask()` calls try Anthropic first (see Scope).
 - **`tingly.toml` manifest** (`manifest.py`) declares name / model_id /
-  entrypoint / transport / port, so a future tb-side supervisor can install and
-  run the plugin. `tingly plugin init` scaffolds a module + manifest.
+  entrypoint / transport (`anthropic` by default, tracks `Plugin.api_style`) /
+  port, so a future tb-side supervisor can install and run the plugin.
+  `tingly plugin init` scaffolds a module + manifest.
 - **Optional token auth.** `Plugin(api_key=...)` enforces a bearer token so only
-  tb (carrying the matching provider token) can call it.
+  tb (carrying the matching provider token) can call it — checked once,
+  ahead of both routes.
 
 CLI:
 
@@ -472,20 +551,22 @@ via the in-process `vmodel` package.
   │ tingly.ask() │ "plugin│   smart routing / TIERS  ──────┼──┤         └──────────────┘
   └──────────────┘ /my-rag"│   circuit-breaker failover    │  │ tier 0  ┌──────────────┐
                           │   quota + usage logging        │  └───────► │ my-rag PLUGIN│ ◄─ Layer 2
-                          │   provider.api_base = plugin    │   POST     │ POST /v1/chat│    Plugin.serve()
-                          └────────────────────────────────┘  /v1/chat  │ /completions │
-                                                                        └──────┬───────┘
+                          │   provider.api_base = plugin    │   POST     │ POST /v1/    │    Plugin.serve()
+                          │   provider.api_style picks route│  /v1/msgs  │ messages     │
+                          └────────────────────────────────┘  (dflt)    └──────┬───────┘
                                                               ctx.llm.ask() ┄┄┄┘  (plugin may
                                                               back INTO tb for its own LLM calls)
 ```
 
 Wiring (no new gateway hot-path code — it's just a provider):
 
-1. **Plugin serves** `POST /v1/chat/completions` (Layer 2 `Plugin.serve()`).
+1. **Plugin serves** both `POST /v1/messages` and `POST /v1/chat/completions`
+   (Layer 2 `Plugin.serve()`).
 2. **Register**: `POST /api/v2/plugins {name:"my-rag", endpoint:"http://127.0.0.1:<port>/v1",
-   model_id:"plugin/my-rag", scenario:"experiment"}` creates a *normal* provider
-   (not `AuthType=virtual`, tagged `"plugin"`) — this is exactly what
-   `Plugin.serve()` does on startup.
+   model_id:"plugin/my-rag", scenario:"experiment", api_style:"anthropic"}`
+   creates a *normal* provider (not `AuthType=virtual`, tagged `"plugin"`,
+   `APIStyle` set from `api_style`) — this is exactly what `Plugin.serve()`
+   does on startup, with `api_style` defaulting to `"anthropic"`.
 3. That same call **binds the rule/service**: model `plugin/my-rag` → that provider.
 4. Now `model:"plugin/my-rag"` from any client resolves through the same
    dispatcher as every other model. Put the plugin in tier 0 and a real model in

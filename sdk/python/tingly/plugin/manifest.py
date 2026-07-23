@@ -9,7 +9,9 @@ upstream provider. It is deliberately tiny:
     model_id = "plugin/my-rag"
     version = "0.1.0"
     entrypoint = "rag_plugin:plugin"   # module:attr that yields a Plugin
-    transport = "openai"               # openai | anthropic
+    transport = "anthropic"            # anthropic (primary) | openai (secondary) — the
+                                        # wire protocol tb should use to call this plugin;
+                                        # the server always answers both regardless
     port = 8765
     description = "Answers from my private corpus"
 """
@@ -38,7 +40,7 @@ class Manifest:
     model_id: str
     entrypoint: str
     version: str = "0.1.0"
-    transport: str = "openai"
+    transport: str = "anthropic"
     port: int = 8765
     description: str = ""
 
@@ -73,7 +75,7 @@ def load(path: Path) -> Manifest:
         model_id=plugin.get("model_id", f"plugin/{plugin['name']}"),
         entrypoint=plugin["entrypoint"],
         version=plugin.get("version", "0.1.0"),
-        transport=plugin.get("transport", "openai"),
+        transport=plugin.get("transport", "anthropic"),
         port=int(plugin.get("port", 8765)),
         description=plugin.get("description", ""),
     )

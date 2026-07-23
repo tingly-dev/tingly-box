@@ -107,13 +107,13 @@ class Client:
     ):
         """One-shot prompt → text, routed through tingly-box.
 
-        Picks the transport from the scenario: OpenAI-capable scenarios use
-        chat completions; Anthropic-only scenarios use messages. ``model="auto"``
-        lets the gateway route.
+        Picks the transport from the scenario: Anthropic messages is tried
+        first (tb's native protocol); OpenAI-only scenarios fall back to chat
+        completions. ``model="auto"`` lets the gateway route.
         """
-        if _scenarios.supports_openai(self._session.transport):
-            return self._ask_openai(prompt, model, system, stream, **kwargs)
-        return self._ask_anthropic(prompt, model, system, max_tokens, stream, **kwargs)
+        if _scenarios.supports_anthropic(self._session.transport):
+            return self._ask_anthropic(prompt, model, system, max_tokens, stream, **kwargs)
+        return self._ask_openai(prompt, model, system, stream, **kwargs)
 
     def _ask_openai(self, prompt, model, system, stream, **kwargs):
         messages = []
@@ -135,9 +135,8 @@ class Client:
                 yield delta
 
     def _ask_anthropic(self, prompt, model, system, max_tokens, stream, **kwargs):
-        anthropic_model = model if model != "auto" else "claude-sonnet-4-6"
         params = dict(
-            model=anthropic_model,
+            model=model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
             **kwargs,

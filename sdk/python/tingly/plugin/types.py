@@ -58,6 +58,33 @@ class ChatRequest:
             extra=extra,
         )
 
+    @classmethod
+    def from_anthropic_body(cls, body: Dict[str, Any]) -> "ChatRequest":
+        """Normalize an Anthropic Messages API body (POST /v1/messages).
+
+        Anthropic keeps the system prompt in a top-level ``system`` field
+        rather than a message with ``role: "system"``; it is folded into the
+        message list as a leading system message so handlers can use
+        :meth:`system_text` / :meth:`last_user_text` the same way regardless
+        of which wire protocol the caller used.
+        """
+        raw_messages = body.get("messages") or []
+        messages = [
+            Message(role=m.get("role", "user"), content=_content_to_text(m.get("content")))
+            for m in raw_messages
+        ]
+        system_text = _content_to_text(body.get("system"))
+        if system_text:
+            messages.insert(0, Message(role="system", content=system_text))
+        known = {"model", "messages", "system", "stream"}
+        extra = {k: v for k, v in body.items() if k not in known}
+        return cls(
+            model=body.get("model", ""),
+            messages=messages,
+            stream=bool(body.get("stream", False)),
+            extra=extra,
+        )
+
 
 def _content_to_text(content: Any) -> str:
     """Flatten OpenAI content (str or list of parts) to plain text."""
