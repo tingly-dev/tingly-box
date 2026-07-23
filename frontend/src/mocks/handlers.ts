@@ -108,6 +108,16 @@ interface MockProviderCatalogEntry {
         proxy_url: string
         api_base_openai: string | null
         api_base_anthropic: string | null
+        oauth_detail?: {
+            access_token: string
+            refresh_token: string
+            expires_at: string
+            issuer: string
+            provider_type: string
+            user_id: string
+            device_id?: string
+            extra_fields?: Record<string, string>
+        }
     }
     models: string[]
 }
@@ -194,6 +204,132 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
     },
 ]
 
+const mockOAuthExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
+const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
+    {
+        provider: {
+            uuid: 'mock-oauth-claude-code', name: 'Claude Code OAuth',
+            api_base: 'https://api.anthropic.com', api_style: 'anthropic', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-claude-code-access-token',
+                refresh_token: 'mock-claude-code-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'claude_code',
+                provider_type: 'claude_code',
+                user_id: 'mock-claude-user',
+            },
+        },
+        models: ['claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    },
+    {
+        provider: {
+            uuid: 'mock-oauth-gemini', name: 'Gemini CLI OAuth',
+            api_base: 'https://cloudcode-pa.googleapis.com', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-gemini-access-token',
+                refresh_token: 'mock-gemini-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'gemini',
+                provider_type: 'gemini',
+                user_id: 'gemini.mock@example.com',
+            },
+        },
+        models: ['gemini-3.1-pro-preview', 'gemini-3.5-flash', 'gemini-2.5-flash-lite'],
+    },
+    {
+        provider: {
+            uuid: 'mock-oauth-antigravity', name: 'Antigravity OAuth',
+            api_base: 'https://cloudcode-pa.googleapis.com', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-antigravity-access-token',
+                refresh_token: 'mock-antigravity-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'antigravity',
+                provider_type: 'antigravity',
+                user_id: 'antigravity.mock@example.com',
+            },
+        },
+        models: ['gemini-3.1-pro-preview', 'gemini-3.5-flash'],
+    },
+    {
+        provider: {
+            uuid: 'mock-oauth-qwen-code', name: 'Qwen Code OAuth',
+            api_base: 'https://portal.qwen.ai/v1', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-qwen-code-access-token',
+                refresh_token: 'mock-qwen-code-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'qwen_code',
+                provider_type: 'qwen_code',
+                user_id: 'mock-qwen-user',
+            },
+        },
+        models: ['qwen3-coder-next', 'qwen3-coder-plus'],
+    },
+    {
+        provider: {
+            uuid: 'mock-oauth-codex', name: 'Codex OAuth',
+            api_base: 'https://chatgpt.com/backend-api', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-codex-access-token',
+                refresh_token: 'mock-codex-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'codex',
+                provider_type: 'codex',
+                user_id: 'mock-codex-user',
+                extra_fields: { account_id: 'acct_mock_codex' },
+            },
+        },
+        models: ['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4-mini'],
+    },
+    {
+        provider: {
+            uuid: 'mock-oauth-kimi-code', name: 'Kimi Code OAuth',
+            api_base: 'https://api.kimi.com/coding/v1', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-kimi-code-access-token',
+                refresh_token: 'mock-kimi-code-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'kimi_code',
+                provider_type: 'kimi_code',
+                user_id: 'com8n51luj0',
+                device_id: 'mock-kimi-device',
+            },
+        },
+        models: ['kimi-for-coding', 'kimi-k2.5'],
+    },
+    {
+        provider: {
+            uuid: 'mock-oauth-testing', name: 'Mock OAuth',
+            api_base: 'https://oauth-mock.mock.beeceptor.com', api_style: 'openai', auth_type: 'oauth',
+            token: '', enabled: true, proxy_url: '',
+            api_base_openai: null, api_base_anthropic: null,
+            oauth_detail: {
+                access_token: 'mock-oauth-access-token',
+                refresh_token: 'mock-oauth-refresh-token',
+                expires_at: mockOAuthExpiresAt,
+                issuer: 'mock',
+                provider_type: 'mock',
+                user_id: 'mock-oauth-user',
+            },
+        },
+        models: ['mock-chat-model', 'mock-reasoning-model'],
+    },
+]
+
 const mockVirtualProviders = [
     {
         uuid: 'mock-vmodel-tingly',
@@ -259,12 +395,16 @@ const mockVirtualProviders = [
 
 const getMockProviders = () => [
     ...mockStandardProviderCatalog.map(({ provider }) => provider),
+    ...mockOAuthProviderCatalog.map(({ provider }) => provider),
     ...mockVirtualProviders,
 ]
 
 const getMockProviderModels = (uuid: string): string[] => {
     const standardProvider = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
     if (standardProvider) return standardProvider.models
+
+    const oauthProvider = mockOAuthProviderCatalog.find(({ provider }) => provider.uuid === uuid)
+    if (oauthProvider) return oauthProvider.models
 
     return mockVirtualProviders.find((provider) => provider.uuid === uuid)?.vmodel_detail.models ?? []
 }
@@ -779,19 +919,14 @@ const mockQuotas: Record<string, any> = {
             tier: 'pro',
         },
         raw_response: {
-            usage: {
-                limit: '100',
-                used: '6',
-                remaining: '94',
-                resetTime: inSixDays,
+            five_hour: { utilization: 52.9, resets_at: inOneHour },
+            seven_day: { utilization: 41, resets_at: inSixDays },
+            extra_usage: {
+                is_enabled: true,
+                utilization: 25,
+                used_credits: 1250,
+                monthly_limit: 5000,
             },
-            limits: [
-                {
-                    window: { duration: 300, timeUnit: 'TIME_UNIT_MINUTE' },
-                    detail: { limit: '100', remaining: '100', resetTime: inOneHour },
-                },
-            ],
-            parallel: { limit: '30' },
         },
     },
     'mock-provider-openai': {
@@ -843,6 +978,265 @@ const mockQuotas: Record<string, any> = {
             unit: 'currency',
             label: 'Balance',
             description: 'Remaining credit balance',
+        },
+    },
+    'mock-oauth-claude-code': {
+        provider_uuid: 'mock-oauth-claude-code',
+        provider_name: 'Claude Code OAuth',
+        provider_type: 'anthropic',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        windows: [
+            {
+                key: 'five_hour',
+                tier: 0,
+                type: 'session',
+                used: 37,
+                limit: 100,
+                used_percent: 37,
+                resets_at: inOneHour,
+                window_minutes: 300,
+                unit: 'percent',
+                label: '5-Hour Window',
+                description: '37% utilization',
+            },
+            {
+                key: 'seven_day',
+                tier: 1,
+                type: 'weekly',
+                used: 62,
+                limit: 100,
+                used_percent: 62,
+                resets_at: inSixDays,
+                unit: 'percent',
+                label: '7-Day Window',
+                description: '62% utilization',
+            },
+        ],
+        cost: {
+            used: 12.5,
+            limit: 50,
+            currency_code: 'USD',
+            label: 'Extra Usage',
+        },
+        raw_response: {
+            five_hour: { utilization: 37, resets_at: inOneHour },
+            seven_day: { utilization: 62, resets_at: inSixDays },
+            extra_usage: {
+                is_enabled: true,
+                utilization: 25,
+                used_credits: 1250,
+                monthly_limit: 5000,
+            },
+        },
+    },
+    'mock-oauth-gemini': {
+        provider_uuid: 'mock-oauth-gemini',
+        provider_name: 'Gemini CLI OAuth',
+        provider_type: 'gemini',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        windows: [
+            {
+                key: 'average',
+                tier: 0,
+                type: 'daily',
+                used: 32.5,
+                limit: 100,
+                used_percent: 32.5,
+                resets_at: inOneHour,
+                unit: 'percent',
+                label: 'Average Usage',
+                description: '33% across 2 models',
+            },
+        ],
+        breakdowns: [
+            {
+                key: 'gemini-2.5-pro',
+                label: 'gemini-2.5-pro',
+                group: 'resource',
+                windows: [{
+                    type: 'daily',
+                    used: 45,
+                    limit: 100,
+                    used_percent: 45,
+                    resets_at: inOneHour,
+                    unit: 'percent',
+                    label: 'Daily',
+                    description: '45% used',
+                }],
+            },
+            {
+                key: 'gemini-2.5-flash',
+                label: 'gemini-2.5-flash',
+                group: 'resource',
+                windows: [{
+                    type: 'daily',
+                    used: 20,
+                    limit: 100,
+                    used_percent: 20,
+                    resets_at: inOneHour,
+                    unit: 'percent',
+                    label: 'Daily',
+                    description: '20% used',
+                }],
+            },
+        ],
+        raw_response: {
+            buckets: [
+                {
+                    modelId: 'gemini-2.5-pro',
+                    remainingFraction: 0.55,
+                    resetTime: inOneHour,
+                },
+                {
+                    modelId: 'gemini-2.5-flash',
+                    remainingFraction: 0.8,
+                    resetTime: inOneHour,
+                },
+            ],
+        },
+    },
+    'mock-oauth-codex': {
+        provider_uuid: 'mock-oauth-codex',
+        provider_name: 'Codex OAuth',
+        provider_type: 'codex',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        windows: [
+            {
+                key: 'current',
+                tier: 0,
+                type: 'session',
+                used: 28,
+                limit: 100,
+                used_percent: 28,
+                resets_at: inOneHour,
+                window_minutes: 300,
+                unit: 'percent',
+                label: 'Current Window',
+                description: '5h window, 28% used',
+            },
+            {
+                key: 'weekly',
+                tier: 1,
+                type: 'weekly',
+                used: 54,
+                limit: 100,
+                used_percent: 54,
+                resets_at: inSixDays,
+                window_minutes: 10080,
+                unit: 'percent',
+                label: 'Weekly',
+                description: '7d window, 54% used',
+            },
+        ],
+        account: {
+            id: 'acct_mock_codex',
+            name: 'Mock Codex Account',
+            email: 'codex.mock@example.com',
+            tier: 'plus',
+        },
+        raw_response: {
+            plan_type: 'plus',
+            rate_limit: {
+                allowed: true,
+                limit_reached: false,
+                primary_window: {
+                    used_percent: 28,
+                    reset_at: Math.floor(new Date(inOneHour).getTime() / 1000),
+                    limit_window_seconds: 18000,
+                    reset_after_seconds: 3600,
+                },
+                secondary_window: {
+                    used_percent: 54,
+                    reset_at: Math.floor(new Date(inSixDays).getTime() / 1000),
+                    limit_window_seconds: 604800,
+                    reset_after_seconds: 518400,
+                },
+            },
+            credits: {
+                has_credits: true,
+                unlimited: false,
+                balance: '42.50',
+            },
+            email: 'codex.mock@example.com',
+            user_id: 'mock-codex-user',
+            account_id: 'acct_mock_codex',
+        },
+    },
+    'mock-oauth-kimi-code': {
+        provider_uuid: 'mock-oauth-kimi-code',
+        provider_name: 'Kimi Code OAuth',
+        provider_type: 'kimi_code',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        windows: [
+            {
+                key: 'weekly',
+                tier: 0,
+                type: 'weekly',
+                used: 6,
+                limit: 100,
+                used_percent: 6,
+                resets_at: inSixDays,
+                unit: 'credits',
+                label: 'Weekly limit',
+                description: '6 of 100 used',
+            },
+            {
+                key: 'limit_1',
+                tier: 1,
+                type: 'session',
+                used: 0,
+                limit: 100,
+                used_percent: 0,
+                resets_at: inOneHour,
+                window_minutes: 300,
+                unit: 'credits',
+                label: '5h limit',
+                description: '0 of 100 used',
+            },
+        ],
+        account: {
+            id: 'com8n51luj0',
+            name: 'Kimi Code Mock',
+            tier: 'LEVEL_ADVANCED',
+        },
+        raw_response: {
+            user: {
+                userId: 'com8n51luj0',
+                region: 'REGION',
+                membership: { level: 'LEVEL_ADVANCED' },
+                businessId: '',
+            },
+            usage: {
+                limit: '100',
+                used: '6',
+                remaining: '94',
+                resetTime: inSixDays,
+            },
+            limits: [
+                {
+                    window: {
+                        duration: 300,
+                        timeUnit: 'TIME_UNIT_MINUTE',
+                    },
+                    detail: {
+                        limit: '100',
+                        remaining: '100',
+                        resetTime: inOneHour,
+                    },
+                },
+            ],
+            parallel: { limit: '30' },
+            totalQuota: {},
+            authentication: {
+                method: 'METHOD_ACCESS_TOKEN',
+                scope: 'FEATURE_CODING',
+            },
+            subType: 'TYPE_PURCHASE',
+            domain: 'DOMAIN_NEXUS',
         },
     },
 }
@@ -1309,7 +1703,8 @@ export const handlers = [
     http.put('/api/v2/providers/:uuid', async ({ params, request }) => {
         const { uuid } = params as { uuid: string }
         const body = await request.json() as any
-        const catalogEntry = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
+        const catalogEntry = [...mockStandardProviderCatalog, ...mockOAuthProviderCatalog]
+            .find(({ provider }) => provider.uuid === uuid)
         const virtualProvider = mockVirtualProviders.find((provider) => provider.uuid === uuid)
         const provider = catalogEntry?.provider ?? virtualProvider
         if (!provider) return HttpResponse.json({ success: false, error: 'Not found' }, { status: 404 })
@@ -1332,6 +1727,12 @@ export const handlers = [
         const standardIndex = mockStandardProviderCatalog.findIndex(({ provider }) => provider.uuid === uuid)
         if (standardIndex >= 0) {
             mockStandardProviderCatalog.splice(standardIndex, 1)
+            return HttpResponse.json({ success: true })
+        }
+
+        const oauthIndex = mockOAuthProviderCatalog.findIndex(({ provider }) => provider.uuid === uuid)
+        if (oauthIndex >= 0) {
+            mockOAuthProviderCatalog.splice(oauthIndex, 1)
             return HttpResponse.json({ success: true })
         }
 
