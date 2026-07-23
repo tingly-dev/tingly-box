@@ -1,6 +1,3 @@
-//go:build e2e
-// +build e2e
-
 package claude
 
 import (
@@ -32,7 +29,7 @@ func TestConfigWithModel(t *testing.T) {
 	config := DefaultConfig()
 	result := config.WithModel("claude-sonnet-4-6")
 
-	assert.Same(t, config, result)
+	assert.Same(t, &config, result)
 	assert.Equal(t, "claude-sonnet-4-6", config.Model)
 }
 
@@ -41,7 +38,7 @@ func TestConfigWithResume(t *testing.T) {
 	config := DefaultConfig()
 	result := config.WithResume("session-123")
 
-	assert.Same(t, config, result)
+	assert.Same(t, &config, result)
 	assert.Equal(t, "session-123", config.ResumeSessionID)
 }
 
@@ -50,7 +47,7 @@ func TestConfigWithContinue(t *testing.T) {
 	config := DefaultConfig()
 	result := config.WithContinue()
 
-	assert.Same(t, config, result)
+	assert.Same(t, &config, result)
 	assert.True(t, config.ContinueConversation)
 }
 
@@ -119,15 +116,9 @@ func TestControlManager(t *testing.T) {
 
 	// Test 3: Handle cancel notification
 	t.Run("HandleCancelNotification", func(t *testing.T) {
-		cancelCalled := false
 		ctx, cancel := context.WithCancel(context.Background())
 
 		manager.RegisterCancelController("cancel-123", cancel)
-
-		go func() {
-			<-ctx.Done()
-			cancelCalled = true
-		}()
 
 		data := map[string]interface{}{
 			"type":      "cancel_notification",
@@ -136,10 +127,7 @@ func TestControlManager(t *testing.T) {
 
 		err := manager.HandleControlMessage(data)
 		assert.NoError(t, err)
-
-		// Wait a bit for cancel to propagate
-		time.Sleep(10 * time.Millisecond)
-		assert.True(t, cancelCalled)
+		assert.ErrorIs(t, ctx.Err(), context.Canceled)
 
 		manager.UnregisterCancelController("cancel-123")
 	})
