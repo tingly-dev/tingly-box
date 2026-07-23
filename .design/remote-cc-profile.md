@@ -92,10 +92,45 @@ The Remote page's per-bot graph grows a node on the @cc branch:
 
 - `CCProfileNode` shows the resolved profile name ("Default" when none;
   warning styling when the selected profile no longer exists).
-- Clicking opens `CCProfileDialog`: Default + all profiles from
-  `ProfileContext` (`GET /scenario/claude_code/profiles`), one tap to switch —
-  writes `default_agent` via the existing imbot update API.
+- Clicking the Profile node opens `CCProfileDialog`: Default + all profiles
+  from `ProfileContext` (`GET /scenario/claude_code/profiles`), one tap to
+  switch — writes `default_agent` via the existing imbot update API.
 - No codegen was needed: `default_agent` was already in the OpenAPI schema.
+- The Claude Code `AgentNode` itself is **not** clickable (matches the
+  SmartGuide agent node). It used to navigate to `/agent/claude_code`, but
+  now that the adjacent Profile node is the actual next action for this
+  branch, a second competing click target on the agent node itself would
+  fight the same UX principle that motivated the Profile node in the first
+  place — so it was removed, and the node's hover tooltip points at the
+  Profile node instead of the stale "click to configure" copy.
+
+### 4.1 AgentNode hover tooltip: hysteresis over hand-rolled timers
+
+`AgentNode` (both the @tb/SmartGuide and @cc/Claude Code nodes) originally
+built its own hover popover: a manual `open` boolean, a `setTimeout`-based
+enter delay, and separate `onMouseEnter`/`onMouseLeave` handlers on both the
+anchor and the popover's `Paper` (so moving the pointer from one to the other
+didn't close it). Two problems surfaced once the content grew long enough to
+occasionally collide with the viewport edge:
+
+1. **Flicker.** MUI's `Popover` repositions itself to stay on-screen; when
+   that shift happened under the cursor, the close was instant (no leave
+   delay) while re-open waited out the enter timer again, so the popover
+   visibly opened/closed in a loop.
+2. **Washed-out text.** The popover's `Typography` used the `body2`/`caption`
+   variants, whose colors (`text.secondary` / `text.disabled`) are baked into
+   this app's theme (`theme/base.ts`) for normal page backgrounds — not for
+   sitting on the popover's own dark surface, where they read as
+   unintentionally dim.
+
+Fix: replace the hand-rolled popover with `NodeTooltip` (the shared MUI
+`Tooltip` wrapper `BotModelNode`/`CCProfileNode` already use), which has
+built-in enter/leave hysteresis and doesn't reposition under the pointer, so
+it structurally can't fall into that loop. Every line of tooltip content now
+sets `color: 'inherit'` so it takes the tooltip's own text color rather than
+a page-tuned theme variant color. The copy itself was also trimmed (5 feature
+bullets → 3, shorter description) so the tooltip rarely needs to reposition
+in the first place.
 
 ## 5. Non-goals / future
 
