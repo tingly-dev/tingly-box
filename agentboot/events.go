@@ -1,5 +1,11 @@
 package agentboot
 
+import "github.com/tingly-dev/tingly-box/agentboot/common"
+
+// Event represents a generic agent event.
+// Alias of common.Event — the two types are identical and interchangeable.
+type Event = common.Event
+
 // StreamEvent is the sum type of events flowing on [ExecutionHandle.Events].
 // Callers type-switch to specific event types.
 //
