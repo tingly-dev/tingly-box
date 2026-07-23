@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,7 +88,7 @@ func runTokenGeneration(t *testing.T, ts *TestServer) {
 	}
 }
 
-func runModelsEndpoint(t *testing.T, ts *TestServer, isRealConfig bool) {
+func runModelsEndpoint(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	userToken := globalConfig.GetUserToken()
 	// Use "glm" provider UUID to test provider models endpoint
@@ -99,12 +98,7 @@ func runModelsEndpoint(t *testing.T, ts *TestServer, isRealConfig bool) {
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 
-	if isRealConfig {
-		assert.Equal(t, 200, w.Code)
-		assert.Contains(t, w.Body.String(), "success")
-	} else {
-		assert.True(t, containsStatus(w.Code, []int{200, 500}))
-	}
+	assert.True(t, containsStatus(w.Code, []int{200, 500}))
 }
 
 func runChatCompletionsWithAuth(t *testing.T, ts *TestServer) {
@@ -157,10 +151,7 @@ func runInvalidChatRequest(t *testing.T, ts *TestServer) {
 	assert.Equal(t, 400, w.Code)
 }
 
-func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig bool) {
-	if isRealConfig {
-		t.Skip("skipping real config test - provider configuration dependent")
-	}
+func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 	reqBody := map[string]interface{}{
@@ -178,15 +169,8 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 
-	if isRealConfig {
-		assert.Equal(t, 200, w.Code)
-		assert.Contains(t, w.Body.String(), "content")
-		assert.Contains(t, w.Body.String(), "role")
-
-	} else {
-		// For mock config, accept 400 (bad request), 401 (unauthorized), 403 (forbidden), 422 (unprocessable), or 500 (server/network error)
-		assert.True(t, containsStatus(w.Code, []int{400, 401, 403, 422, 500}))
-	}
+	// Accept protocol validation and routing failures; the upstream is local.
+	assert.True(t, containsStatus(w.Code, []int{400, 401, 403, 422, 500}))
 }
 
 func runAnthropicMessagesWithoutAuth(t *testing.T, ts *TestServer) {
@@ -200,11 +184,10 @@ func runAnthropicMessagesWithoutAuth(t *testing.T, ts *TestServer) {
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 
-	// Both mock and real config should reject unauthenticated requests
 	assert.Equal(t, 401, w.Code)
 }
 
-func runProvidersEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfig bool) {
+func runProvidersEndpointWithAuth(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	userToken := globalConfig.GetUserToken()
 
@@ -213,11 +196,7 @@ func runProvidersEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 
-	if isRealConfig {
-		assert.Equal(t, 200, w.Code)
-	} else {
-		assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
-	}
+	assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
 }
 
 func runProvidersEndpointWithoutAuth(t *testing.T, ts *TestServer) {
@@ -228,7 +207,7 @@ func runProvidersEndpointWithoutAuth(t *testing.T, ts *TestServer) {
 	assert.Equal(t, 401, w.Code)
 }
 
-func runProviderModelsEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfig bool) {
+func runProviderModelsEndpointWithAuth(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	userToken := globalConfig.GetUserToken()
 
@@ -239,16 +218,7 @@ func runProviderModelsEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfi
 			w := httptest.NewRecorder()
 			ts.ginEngine.ServeHTTP(w, req)
 
-			// Check if we're using real tokens (not test tokens)
-			isUsingRealTokens := !strings.Contains(userToken, "tingly-box-user-token")
-			if isRealConfig && isUsingRealTokens {
-				// Real config with real tokens - expect success
-				assert.Equal(t, 200, w.Code)
-				assert.Contains(t, w.Body.String(), providerName)
-			} else {
-				// Test tokens or mock config - allow flexible responses
-				assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
-			}
+			assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
 		})
 	}
 }
@@ -582,42 +552,40 @@ func runErrorHandling(t *testing.T) {
 // TestSystem runs all system tests with mock configuration
 func TestSystem(t *testing.T) {
 	tests := []struct {
-		name        string
-		alsoRunReal bool                                // whether to also run with real config
-		fn          func(*testing.T, *TestServer, bool) // test function, takes isRealConfig param
-		fnNoConfig  func(*testing.T, *TestServer)       // test function without isRealConfig param
-		fnMockOnly  func(*testing.T)                    // test function without TestServer (mock provider tests)
+		name       string
+		fn         func(*testing.T, *TestServer)
+		fnMockOnly func(*testing.T)
 	}{
 		// Authentication & Basic tests
-		{"Health_Check", false, nil, func(t *testing.T, ts *TestServer) { runHealthCheck(t, ts) }, nil},
-		{"Token_Generation", false, nil, func(t *testing.T, ts *TestServer) { runTokenGeneration(t, ts) }, nil},
-		{"Models_Endpoint", true, runModelsEndpoint, nil, nil},
-		{"Chat_Completions_With_Auth", true, nil, func(t *testing.T, ts *TestServer) { runChatCompletionsWithAuth(t, ts) }, nil},
-		{"Chat_Completions_Without_Auth", false, nil, func(t *testing.T, ts *TestServer) { runChatCompletionsWithoutAuth(t, ts) }, nil},
-		{"Invalid_Chat_Request", false, nil, func(t *testing.T, ts *TestServer) { runInvalidChatRequest(t, ts) }, nil},
-		{"Anthropic_Messages_With_Auth", true, runAnthropicMessagesWithAuth, nil, nil},
-		{"Anthropic_Messages_Without_Auth", false, nil, func(t *testing.T, ts *TestServer) { runAnthropicMessagesWithoutAuth(t, ts) }, nil},
+		{"Health_Check", runHealthCheck, nil},
+		{"Token_Generation", runTokenGeneration, nil},
+		{"Models_Endpoint", runModelsEndpoint, nil},
+		{"Chat_Completions_With_Auth", runChatCompletionsWithAuth, nil},
+		{"Chat_Completions_Without_Auth", runChatCompletionsWithoutAuth, nil},
+		{"Invalid_Chat_Request", runInvalidChatRequest, nil},
+		{"Anthropic_Messages_With_Auth", runAnthropicMessagesWithAuth, nil},
+		{"Anthropic_Messages_Without_Auth", runAnthropicMessagesWithoutAuth, nil},
 
 		// Provider endpoints
-		{"Providers_Endpoint_With_Auth", true, runProvidersEndpointWithAuth, nil, nil},
-		{"Providers_Endpoint_Without_Auth", false, nil, func(t *testing.T, ts *TestServer) { runProvidersEndpointWithoutAuth(t, ts) }, nil},
-		{"Provider_Models_Endpoint_With_Auth", true, runProviderModelsEndpointWithAuth, nil, nil},
-		{"Provider_Models_Endpoint_Without_Auth", false, nil, func(t *testing.T, ts *TestServer) { runProviderModelsEndpointWithoutAuth(t, ts) }, nil},
+		{"Providers_Endpoint_With_Auth", runProvidersEndpointWithAuth, nil},
+		{"Providers_Endpoint_Without_Auth", runProvidersEndpointWithoutAuth, nil},
+		{"Provider_Models_Endpoint_With_Auth", runProviderModelsEndpointWithAuth, nil},
+		{"Provider_Models_Endpoint_Without_Auth", runProviderModelsEndpointWithoutAuth, nil},
 
 		// Rules endpoints
-		{"Rules_Endpoint_With_Auth", true, nil, func(t *testing.T, ts *TestServer) { runRulesEndpointWithAuth(t, ts) }, nil},
-		{"Get_Specific_Rule_With_Auth", true, nil, func(t *testing.T, ts *TestServer) { runGetSpecificRuleWithAuth(t, ts) }, nil},
-		{"Create_Update_Rule_With_Auth", true, nil, func(t *testing.T, ts *TestServer) { runCreateUpdateRuleWithAuth(t, ts) }, nil},
-		{"Rules_Endpoint_Without_Auth", false, nil, func(t *testing.T, ts *TestServer) { runRulesEndpointWithoutAuth(t, ts) }, nil},
+		{"Rules_Endpoint_With_Auth", runRulesEndpointWithAuth, nil},
+		{"Get_Specific_Rule_With_Auth", runGetSpecificRuleWithAuth, nil},
+		{"Create_Update_Rule_With_Auth", runCreateUpdateRuleWithAuth, nil},
+		{"Rules_Endpoint_Without_Auth", runRulesEndpointWithoutAuth, nil},
 
 		// Load Balancing
-		{"Load_Balancing_OpenAI", true, nil, func(t *testing.T, ts *TestServer) { runLoadBalancingOpenAI(t, ts) }, nil},
-		{"Load_Balancing_Anthropic", true, nil, func(t *testing.T, ts *TestServer) { runLoadBalancingAnthropic(t, ts) }, nil},
+		{"Load_Balancing_OpenAI", runLoadBalancingOpenAI, nil},
+		{"Load_Balancing_Anthropic", runLoadBalancingAnthropic, nil},
 
 		// Mock Provider Integration tests (no TestServer needed)
-		{"Direct_Mock_Server_Test", false, nil, nil, runDirectMockServerTest},
-		{"Request_Forwarding_Verification", false, nil, nil, runRequestForwardingVerification},
-		{"Error_Handling", false, nil, nil, runErrorHandling},
+		{"Direct_Mock_Server_Test", nil, runDirectMockServerTest},
+		{"Request_Forwarding_Verification", nil, runRequestForwardingVerification},
+		{"Error_Handling", nil, runErrorHandling},
 	}
 
 	for _, tt := range tests {
@@ -627,32 +595,11 @@ func TestSystem(t *testing.T) {
 				tt.fnMockOnly(t)
 			})
 		} else {
-			// Tests with TestServer
-			// Run with mock config
-			t.Run(tt.name+"_Mock", func(t *testing.T) {
+			t.Run(tt.name, func(t *testing.T) {
 				ts := NewTestServer(t)
 				ts.AddTestProviders(t)
-
-				if tt.fn != nil {
-					tt.fn(t, ts, false) // isRealConfig = false
-				} else {
-					tt.fnNoConfig(t, ts)
-				}
+				tt.fn(t, ts)
 			})
-
-			// Optionally run with real config
-			if tt.alsoRunReal {
-				t.Run(tt.name+"_Real", func(t *testing.T) {
-					testConfig := NewTestConfigDirCopy(t)
-					ts := NewTestServerWithConfigDir(t, testConfig.Path())
-
-					if tt.fn != nil {
-						tt.fn(t, ts, true) // isRealConfig = true
-					} else {
-						tt.fnNoConfig(t, ts)
-					}
-				})
-			}
 		}
 	}
 }

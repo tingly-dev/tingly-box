@@ -4,58 +4,23 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	server2 "github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-const (
-	realConfigTestEnv                       = "TINGLY_BOX_TEST_REAL_CONFIG"
-	realConfigProviderTimeoutEnv            = "TINGLY_BOX_TEST_REAL_TIMEOUT_SECONDS"
-	defaultRealConfigProviderTimeoutSeconds = int64(10)
-	defaultMockProviderTimeoutSeconds       = int64(2)
-)
+const defaultMockProviderTimeoutSeconds = int64(2)
 
 // TestServer represents a test server wrapper
 type TestServer struct {
 	appConfig *config.AppConfig
 	server    *server2.Server
 	ginEngine *gin.Engine
-}
-
-// NewTestServerWithConfigDir creates a test server with a custom config directory.
-func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
-	t.Helper()
-
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		t.Fatalf("Failed to create config directory %s: %v", configDir, err)
-	}
-
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
-	if err != nil {
-		t.Fatalf("Failed to create app config: %v", err)
-	}
-
-	// use name to set provider uuid for testing
-	for idx, p := range appConfig.GetGlobalConfig().ListProviders() {
-		p.UUID = fmt.Sprintf("%d", idx)
-	}
-
-	if err := appConfig.Save(); err != nil {
-		t.Fatalf("Failed to save app config: %v", err)
-	}
-
-	return createTestServer(t, appConfig)
 }
 
 // NewTestServer creates a new test server
@@ -135,8 +100,7 @@ func CreateJSONBody(data interface{}) *bytes.Buffer {
 // EnsureLoadBalancingRule creates a multi-service, randomly load-balanced rule
 // for the given request model + scenario if one does not already exist. The
 // mock test setup adds providers but no rule for the "tingly" model, so requests
-// would otherwise 404. The real-config variants already have the rule, so the
-// existence check leaves them untouched.
+// would otherwise 404.
 func (ts *TestServer) EnsureLoadBalancingRule(t *testing.T, requestModel, model string, scenario typ.RuleScenario, providers ...string) {
 	t.Helper()
 
@@ -179,90 +143,6 @@ func NewTestServerFromConfig(appConfig *config.AppConfig) *TestServer {
 		server:    httpServer,
 		ginEngine: httpServer.GetRouter(), // Use the server's router
 	}
-}
-
-// TestConfigDir represents a temporary config directory for testing
-type TestConfigDir struct {
-	path string
-}
-
-// NewTestConfigDirCopy creates a bounded snapshot of the real configuration.
-// Real-config tests are opt-in because they may contact external providers.
-func NewTestConfigDirCopy(t *testing.T) *TestConfigDir {
-	t.Helper()
-
-	if os.Getenv(realConfigTestEnv) != "1" {
-		t.Skipf("real-config test disabled; set %s=1 to enable", realConfigTestEnv)
-	}
-
-	realConfigDir := constant.GetTinglyConfDir()
-	if _, err := os.Stat(realConfigDir); os.IsNotExist(err) {
-		t.Skipf("Real config directory not found at %s, skipping test", realConfigDir)
-	}
-
-	timeoutSeconds, err := parseRealConfigProviderTimeout(os.Getenv(realConfigProviderTimeoutEnv))
-	if err != nil {
-		t.Fatalf("invalid %s: %v", realConfigProviderTimeoutEnv, err)
-	}
-
-	tempDir := t.TempDir()
-	if err := snapshotRealConfig(realConfigDir, tempDir, timeoutSeconds); err != nil {
-		t.Fatalf("Failed to snapshot real config: %v", err)
-	}
-
-	return &TestConfigDir{path: tempDir}
-}
-
-func parseRealConfigProviderTimeout(value string) (int64, error) {
-	if value == "" {
-		return defaultRealConfigProviderTimeoutSeconds, nil
-	}
-
-	seconds, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || seconds <= 0 {
-		return 0, fmt.Errorf("must be a positive integer number of seconds")
-	}
-	return seconds, nil
-}
-
-func snapshotRealConfig(src, dst string, providerTimeoutSeconds int64) error {
-	configData, err := os.ReadFile(filepath.Join(src, "config.json"))
-	if err != nil {
-		return fmt.Errorf("read config.json: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(dst, "config.json"), configData, 0600); err != nil {
-		return fmt.Errorf("write config.json: %w", err)
-	}
-
-	sourceProviders, err := db.NewProviderStore(src)
-	if err != nil {
-		return fmt.Errorf("open source providers: %w", err)
-	}
-	defer sourceProviders.Close()
-
-	providers, err := sourceProviders.List()
-	if err != nil {
-		return fmt.Errorf("list source providers: %w", err)
-	}
-
-	destinationProviders, err := db.NewProviderStore(dst)
-	if err != nil {
-		return fmt.Errorf("open destination providers: %w", err)
-	}
-	defer destinationProviders.Close()
-
-	for _, provider := range providers {
-		provider.Timeout = providerTimeoutSeconds
-		if err := destinationProviders.Save(provider); err != nil {
-			return fmt.Errorf("save provider %q: %w", provider.Name, err)
-		}
-	}
-	return nil
-}
-
-// Path returns the path to the temporary config directory
-func (td *TestConfigDir) Path() string {
-	return td.path
 }
 
 // containsStatus checks if status code is in expected list

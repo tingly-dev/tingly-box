@@ -10,14 +10,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// TestAdaptorFeatureWithRealConfig tests adaptor functionality against the real configuration
-func TestAdaptorFeatureWithRealConfig(t *testing.T) {
-	t.Run("Real_Config_Adaptor_Enabled_OpenAI_to_Anthropic", func(t *testing.T) {
-		// Use a temporary copy of the real config directory to avoid polluting the real config
-		testConfig := NewTestConfigDirCopy(t)
-		ts := NewTestServerWithConfigDir(t, testConfig.Path())
+// TestAdaptorFeature tests adaptor functionality with isolated local providers.
+func TestAdaptorFeature(t *testing.T) {
+	t.Run("Adaptor_Enabled_OpenAI_to_Anthropic", func(t *testing.T) {
+		ts := NewTestServer(t)
+		ts.AddTestProviders(t)
 
 		// Use the existing server with adaptor enabled
 		tsConverter := NewTestServerFromConfig(ts.appConfig)
@@ -26,7 +26,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		rule := map[string]interface{}{
 			"uuid":           "test-rule-uuid",
 			"scenario":       "anthropic",
-			"request_model":  "real-anthropic-test",
+			"request_model":  "adaptor-anthropic-test",
 			"response_model": "glm-4.5-air",
 			"services": []map[string]interface{}{
 				{
@@ -45,7 +45,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("POST", "/api/v1/rule/real-test-anthropic-rule", CreateJSONBody(rule))
+		req, _ := http.NewRequest("POST", "/api/v1/rule/adaptor-anthropic-rule", CreateJSONBody(rule))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -58,13 +58,13 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 
 		// Test OpenAI request to Anthropic provider with adaptor enabled
 		reqBody := map[string]interface{}{
-			"model": "real-anthropic-test",
+			"model": "adaptor-anthropic-test",
 			"messages": []map[string]string{
-				{"role": "user", "content": "Hello, this is a test of the adaptor with real config!"},
+				{"role": "user", "content": "Hello, this is a test of the adaptor!"},
 			},
 		}
 
-		req, _ = http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+		req, _ = http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(reqBody))
 		req.Header.Set("Authorization", "Bearer "+modelToken)
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
@@ -74,8 +74,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		t.Logf("Response code: %d", w.Code)
 		t.Logf("Response body: %s", w.Body.String())
 
-		// The request should succeed (200) or fail gracefully (400/500) depending on the actual API
-		// We're mainly testing that the adaptor doesn't crash and properly forwards the request
+		// The request should succeed or fail validation without crashing.
 		assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
 
 		if w.Code == 200 {
@@ -86,23 +85,22 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("Real_Config_Adaptor_Enabled_Anthropic_to_OpenAI", func(t *testing.T) {
-		// Use a temporary copy of the real config directory to avoid polluting the real config
-		testConfig := NewTestConfigDirCopy(t)
-		ts := NewTestServerWithConfigDir(t, testConfig.Path())
+	t.Run("Adaptor_Enabled_Anthropic_to_OpenAI", func(t *testing.T) {
+		ts := NewTestServer(t)
+		ts.AddTestProviders(t)
 
 		// Use the existing server with adaptor enabled
 		tsConverter := NewTestServerFromConfig(ts.appConfig)
 
-		// Add a rule that routes to OpenAI-style provider (qwen)
+		// Add a rule that routes to the local OpenAI-style provider.
 		rule := map[string]interface{}{
 			"uuid":           "test-rule-uuid",
 			"scenario":       "openai",
-			"request_model":  "real-openai-test",
+			"request_model":  "adaptor-openai-test",
 			"response_model": "qwen-plus",
 			"services": []map[string]interface{}{
 				{
-					"provider": "qwen",
+					"provider": "openai",
 					"model":    "qwen-plus",
 					"weight":   1,
 					"active":   true,
@@ -117,7 +115,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("POST", "/api/v1/rule/real-test-openai-rule", CreateJSONBody(rule))
+		req, _ := http.NewRequest("POST", "/api/v1/rule/adaptor-openai-rule", CreateJSONBody(rule))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -130,14 +128,14 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 
 		// Test Anthropic request to OpenAI provider with adaptor enabled
 		reqBody := map[string]interface{}{
-			"model":      "real-openai-test",
+			"model":      "adaptor-openai-test",
 			"max_tokens": 100,
 			"messages": []map[string]string{
-				{"role": "user", "content": "Hello, this is a test of the adaptor with real config!"},
+				{"role": "user", "content": "Hello, this is a test of the adaptor!"},
 			},
 		}
 
-		req, _ = http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
+		req, _ = http.NewRequest("POST", "/tingly/anthropic/v1/messages", CreateJSONBody(reqBody))
 		req.Header.Set("Authorization", "Bearer "+modelToken)
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
@@ -147,8 +145,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		t.Logf("Response code: %d", w.Code)
 		t.Logf("Response body: %s", w.Body.String())
 
-		// The request should succeed (200) or fail gracefully (400/500) depending on the actual API
-		// We're mainly testing that the adaptor doesn't crash and properly forwards the request
+		// The request should succeed or fail validation without crashing.
 		assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
 
 		if w.Code == 200 {
@@ -159,10 +156,9 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("Real_Config_Adaptor_With_Functions_OpenAI_to_Anthropic", func(t *testing.T) {
-		// Use a temporary copy of the real config directory to avoid polluting the real config
-		testConfig := NewTestConfigDirCopy(t)
-		ts := NewTestServerWithConfigDir(t, testConfig.Path())
+	t.Run("Adaptor_With_Functions_OpenAI_to_Anthropic", func(t *testing.T) {
+		ts := NewTestServer(t)
+		ts.AddTestProviders(t)
 
 		// Use the existing server with adaptor enabled
 		tsConverter := NewTestServerFromConfig(ts.appConfig)
@@ -171,7 +167,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		rule := map[string]interface{}{
 			"uuid":           "test-rule-uuid",
 			"scenario":       "anthropic",
-			"request_model":  "real-func-test",
+			"request_model":  "adaptor-func-test",
 			"response_model": "glm-4.5-air",
 			"services": []map[string]interface{}{
 				{
@@ -190,7 +186,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("POST", "/api/v1/rule/real-test-func-rule", CreateJSONBody(rule))
+		req, _ := http.NewRequest("POST", "/api/v1/rule/adaptor-func-rule", CreateJSONBody(rule))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -203,7 +199,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 
 		// Test OpenAI request with functions to Anthropic provider
 		reqBody := map[string]interface{}{
-			"model": "real-func-test",
+			"model": "adaptor-func-test",
 			"messages": []map[string]string{
 				{"role": "user", "content": "What's the weather in Beijing?"},
 			},
@@ -229,7 +225,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 			"tool_choice": "auto",
 		}
 
-		req, _ = http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+		req, _ = http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(reqBody))
 		req.Header.Set("Authorization", "Bearer "+modelToken)
 		req.Header.Set("Content-Type", "application/json")
 		w = httptest.NewRecorder()
@@ -242,7 +238,6 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		}
 
 		// The request should be handled - we're testing that function calls are properly converted
-		// Success depends on whether the actual provider supports the function
 		assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
 
 		if w.Code == 200 {
@@ -264,16 +259,13 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("Real_Config_Adaptor_Streaming", func(t *testing.T) {
-		// Use a temporary copy of the real config directory to avoid polluting the real config
-		testConfig := NewTestConfigDirCopy(t)
-		ts := NewTestServerWithConfigDir(t, testConfig.Path())
+	t.Run("Adaptor_Streaming", func(t *testing.T) {
+		ts := NewTestServer(t)
+		ts.AddTestProviders(t)
+		ts.EnsureLoadBalancingRule(t, "qwen-plus", "qwen-plus", typ.ScenarioAnthropic, "openai")
 
 		// Use the existing server with adaptor enabled
 		tsConverter := NewTestServerFromConfig(ts.appConfig)
-
-		// Use existing rule for qwen-plus (which routes to qwen - OpenAI style)
-		// We'll send an Anthropic request to test the adaptor
 
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		modelToken := globalConfig.GetModelToken()
@@ -288,7 +280,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 			"stream": true,
 		}
 
-		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
+		req, _ := http.NewRequest("POST", "/tingly/anthropic/v1/messages", CreateJSONBody(reqBody))
 		req.Header.Set("Authorization", "Bearer "+modelToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()

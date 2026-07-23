@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -207,11 +205,7 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 
 // TestLoadBalancerAPI_RuleManagement tests rule management endpoints
 func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
-	// Create test server with config directory
-	configDir := filepath.Join("tests", ".tingly-box-loadbalancer")
-	defer os.RemoveAll(configDir)
-
-	ts := NewTestServerWithConfigDir(t, configDir)
+	ts := NewTestServer(t)
 	defer func() {
 		if ts.server != nil {
 			ts.server.Stop(nil)
@@ -377,10 +371,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 
 // TestLoadBalancerAPI_CurrentService tests current service endpoint
 func TestLoadBalancerAPI_CurrentService(t *testing.T) {
-	configDir := filepath.Join("tests", ".tingly-box-current")
-	defer os.RemoveAll(configDir)
-
-	ts := NewTestServerWithConfigDir(t, configDir)
+	ts := NewTestServer(t)
 	defer func() {
 		if ts.server != nil {
 			ts.server.Stop(nil)
@@ -468,10 +459,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 
 // TestLoadBalancerAPIAuthentication tests authentication requirements
 func TestLoadBalancerAPI_Authentication(t *testing.T) {
-	configDir := filepath.Join("tests", ".tingly-box-auth")
-	defer os.RemoveAll(configDir)
-
-	ts := NewTestServerWithConfigDir(t, configDir)
+	ts := NewTestServer(t)
 	defer func() {
 		if ts.server != nil {
 			ts.server.Stop(nil)
