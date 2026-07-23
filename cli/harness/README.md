@@ -361,9 +361,17 @@ affinity_secs: 1800          # 0 = off
 services:
   - { provider: openai, model: gpt-5.4, tier: 0 }
   - { provider: openai, model: gpt-5.5, tier: 1 }
-faults:                      # serviceID -> per-call status sequence (last entry repeats)
-  openai/gpt-5.4: [500, 500, 500, 200]
+faults:                      # serviceID -> per-call status program
+  # Shorthand: a bare status list. The last entry repeats once exhausted.
   openai/gpt-5.5: [200]
+  # Structured form (same engine, vmodel.Sequence): `repeat` compacts runs and
+  # `on_exhaust` picks loop | clamp (default, = last entry repeats) | fail.
+  # The block below is equivalent to [500, 500, 500, 200].
+  openai/gpt-5.4:
+    steps:
+      - { status: 500, repeat: 3 }
+      - { status: 200 }
+    on_exhaust: clamp
 seed_pin: { session: s1, provider: anthropic, model: claude-sonnet }   # optional: pre-lock a stale pin
 expect:                      # optional: self-check assertions (all fields optional)
   final_status: 200
