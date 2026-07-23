@@ -120,7 +120,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 		ProviderType: quota.ProviderTypeAnthropic,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  rawResponse, // Preserve the raw response.
+		RawResponse:  json.RawMessage(rawResponse), // Preserve the raw response.
 	}
 
 	// 5-hour session quota (API returns utilization percentage only)

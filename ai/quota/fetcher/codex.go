@@ -199,7 +199,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		ProviderType: quota.ProviderTypeCodex,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  rawResponse,
+		RawResponse:  json.RawMessage(rawResponse),
 		Account: &quota.UsageAccount{
 			Tier: apiResp.PlanType,
 		},

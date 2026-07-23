@@ -140,7 +140,7 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 		ProviderType: providerType,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  rawResponse,
+		RawResponse:  json.RawMessage(rawResponse),
 		Account: &quota.UsageAccount{
 			Tier: apiResp.accountTier(),
 		},

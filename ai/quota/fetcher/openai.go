@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -102,9 +103,13 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Decode the response.
+	// Read and retain the successful response before decoding it.
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
 	var apiResp openaiUsageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -123,6 +128,7 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		ProviderType: quota.ProviderTypeOpenAI,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(10 * time.Minute), // Cache for 10 minutes.
+		RawResponse:  json.RawMessage(bodyBytes),
 
 		// Cost represents the prepaid balance.
 		Cost: &quota.UsageCost{

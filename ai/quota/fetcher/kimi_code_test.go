@@ -74,7 +74,7 @@ func TestKimiCodeFetcherFetch(t *testing.T) {
 	if usage.ProviderType != quota.ProviderTypeKimiCode {
 		t.Errorf("ProviderType = %q, want %q", usage.ProviderType, quota.ProviderTypeKimiCode)
 	}
-	if usage.RawResponse == "" {
+	if len(usage.RawResponse) == 0 {
 		t.Error("RawResponse is empty")
 	}
 	if len(usage.Windows) != 3 {
@@ -205,7 +205,7 @@ func TestKimiCodeFetcherParsesRealUsagePayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch() error: %v", err)
 	}
-	if usage.RawResponse != response {
+	if string(usage.RawResponse) != response {
 		t.Errorf("RawResponse was not preserved exactly")
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -51,8 +52,12 @@ func fetchMiniMaxQuota(ctx context.Context, provider *ai.Provider, endpoint stri
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
 	var apiResp minimaxRemainsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	if apiResp.BaseResp.StatusCode != 0 {
@@ -61,7 +66,9 @@ func fetchMiniMaxQuota(ctx context.Context, provider *ai.Provider, endpoint stri
 	if len(apiResp.ModelRemains) == 0 {
 		return nil, fmt.Errorf("no model quota data available")
 	}
-	return buildMiniMaxUsage(provider, providerType, apiResp, time.Now()), nil
+	usage := buildMiniMaxUsage(provider, providerType, apiResp, time.Now())
+	usage.RawResponse = json.RawMessage(bodyBytes)
+	return usage, nil
 }
 
 func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, apiResp minimaxRemainsResponse, now time.Time) *quota.ProviderUsage {

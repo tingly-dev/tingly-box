@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -13,7 +15,9 @@ import (
 
 // KimiK2Fetcher retrieves Kimi K2 (Moonshot) quota data.
 // Uses: GET https://kimi-k2.ai/api/user/credits
-type KimiK2Fetcher struct{}
+type KimiK2Fetcher struct {
+	baseURL string
+}
 
 func NewKimiK2Fetcher() *KimiK2Fetcher {
 	return &KimiK2Fetcher{}
@@ -46,7 +50,11 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://kimi-k2.ai/api/user/credits", nil)
+	url := "https://kimi-k2.ai/api/user/credits"
+	if f.baseURL != "" {
+		url = strings.TrimRight(f.baseURL, "/") + "/api/user/credits"
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -63,17 +71,35 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
-	// Try JSON body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	rawResponse := json.RawMessage(bodyBytes)
 	var body kimiCreditsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if decodeErr := json.Unmarshal(bodyBytes, &body); decodeErr != nil {
 		// Fallback: check X-Credits-Remaining header
 		if hdr := resp.Header.Get("X-Credits-Remaining"); hdr != "" {
 			var remaining float64
 			fmt.Sscanf(hdr, "%f", &remaining)
 			body.Remaining = remaining
+
+			// The fallback's quota value lives in the response header and the body
+			// is not valid JSON. Preserve both in a JSON-safe diagnostic envelope.
+			fallbackResponse, marshalErr := json.Marshal(map[string]any{
+				"body": string(bodyBytes),
+				"headers": map[string]string{
+					"X-Credits-Remaining": hdr,
+				},
+			})
+			if marshalErr != nil {
+				return nil, fmt.Errorf("encode fallback response: %w", marshalErr)
+			}
+			rawResponse = fallbackResponse
 		}
 		if body.Remaining == 0 {
-			return nil, fmt.Errorf("decode response: %w", err)
+			return nil, fmt.Errorf("decode response: %w", decodeErr)
 		}
 	}
 
@@ -89,6 +115,7 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		ProviderType: quota.ProviderTypeKimiK2,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  rawResponse,
 	}
 	usage.AddWindow("credits", 0, &quota.UsageWindow{
 		Type:        quota.WindowTypeBalance,

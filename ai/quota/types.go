@@ -80,7 +80,7 @@ type ProviderUsage struct {
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 
 	// Raw response data (for debugging and review)
-	RawResponse string `json:"raw_response,omitempty"`
+	RawResponse json.RawMessage `json:"raw_response,omitempty"`
 }
 
 // UsageBreakdown represents grouped quota breakdowns (e.g., by model, by region)
