@@ -35,7 +35,7 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
                     'Run tests, builds, and debug',
                     'Git operations: commit, push, rebase',
                 ],
-                config: 'Click to open Claude Code and configure profiles.',
+                config: 'Click the Profile node to the right to route @cc through a Claude Code profile.',
             },
             zh: {
                 description: '由 Claude Code CLI 驱动的全栈开发代理——功能实现、重构、测试、构建和 Git 操作。',
@@ -44,7 +44,7 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
                     '运行测试、构建与调试',
                     'Git 操作：提交、推送、变基',
                 ],
-                config: '点击跳转到 Claude Code 场景页配置 Profile。',
+                config: '点击右侧 Profile 节点，为 @cc 选择 Claude Code Profile。',
             },
         },
     },
@@ -159,20 +159,25 @@ const AgentNode: React.FC<AgentNodeProps> = ({
     // itself under the cursor, so it can't fall into the open/close flicker
     // loop a manually-timed Popover does when its content is tall enough to
     // collide with the viewport edge.
+    // Typography variants in this app's theme carry a fixed color (body2 →
+    // text.secondary, caption → text.disabled) meant for normal page
+    // backgrounds. Left alone inside the Tooltip's own dark bubble, that
+    // reads as an unintentionally washed-out grey, so every line here
+    // explicitly inherits the Tooltip's own text color instead.
     const tooltipContent = (
         <Box sx={{ maxWidth: 260 }}>
-            <Typography variant="body2" sx={{ mb: 1, lineHeight: 1.5 }}>
+            <Typography variant="body2" sx={{ mb: 1, lineHeight: 1.5, color: 'inherit' }}>
                 {info.description}
             </Typography>
             <Box component="ul" sx={{ m: 0, pl: 2.25, mb: 1 }}>
                 {info.features.map((f) => (
                     <Box component="li" key={f} sx={{ '&:not(:last-of-type)': { mb: 0.25 } }}>
-                        <Typography variant="caption">{f}</Typography>
+                        <Typography variant="caption" sx={{ color: 'inherit' }}>{f}</Typography>
                     </Box>
                 ))}
             </Box>
-            <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.2)' }} />
-            <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', opacity: 0.85 }}>
+            <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.24)' }} />
+            <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: 'inherit' }}>
                 {info.config}
             </Typography>
         </Box>

@@ -9,8 +9,6 @@ import BotModelNode from '../nodes/BotModelNode.tsx';
 import AgentNode from '../nodes/AgentNode.tsx';
 import AtNode from '../nodes/AtNode.tsx';
 import CCProfileNode from '../nodes/CCProfileNode.tsx';
-import { useNavigate } from 'react-router-dom';
-import { useCallback } from 'react';
 
 const graphRowStyles = (theme: any) => ({
     display: 'flex',
@@ -68,17 +66,12 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
     ccProfiles = [],
     onCCProfileClick,
 }) => {
-    const navigate = useNavigate();
     const providerName = getProviderName(imbot.smartguide_provider, providers);
 
     // Which Claude Code configuration serves @cc: '' = main claude_code
     // scenario, otherwise a profile ID from default_agent ("claude_code:<id>").
     const ccProfileId = ccProfileIdFromDefaultAgent(imbot.default_agent);
     const ccProfileName = ccProfiles.find(p => p.id === ccProfileId)?.name;
-
-    const handleAgentClick = useCallback(() => {
-        navigate('/agent/claude_code');
-    }, [navigate]);
 
     return (
         <Box sx={graphRowStyles}>
@@ -140,7 +133,6 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
                         <AgentNode
                             agentType="claude-code"
                             active={isBotEnabled}
-                            onClick={readOnly ? undefined : handleAgentClick}
                         />
                     </NodeContainer>
 
