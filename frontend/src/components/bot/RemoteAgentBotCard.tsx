@@ -27,6 +27,7 @@ import {styled} from '@mui/material/styles';
 import type {BotSettings} from '@/types/bot';
 import {isRemoteAgentMounted} from '@/types/bot';
 import type {Provider} from '@/types/provider';
+import type {ProfileInfo} from '@/contexts/ProfileContext';
 import PairingCodePanel from './PairingCodePanel';
 import RemoteControlGraph from './RemoteControlGraph';
 import {useEffect, useState} from 'react';
@@ -72,6 +73,10 @@ interface RemoteAgentBotCardProps {
     providers: Provider[];
     onMountToggle: (mounted: boolean) => void;
     onModelClick: () => void;
+    /** Configured Claude Code profiles (resolves the @cc profile node label). */
+    ccProfiles?: ProfileInfo[];
+    /** Opens the Claude Code profile picker for this bot. */
+    onCCProfileClick?: () => void;
     onAgentSettingsSave: (settings: { chat_id: string; bash_allowlist: string[] }) => Promise<void>;
     /** Opens the shared BotConfigDialog in edit mode (bot resource fields). */
     onEdit: () => void;
@@ -96,6 +101,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     providers,
     onMountToggle,
     onModelClick,
+    ccProfiles,
+    onCCProfileClick,
     onAgentSettingsSave,
     onEdit,
     onRestart,
@@ -208,6 +215,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                         isBotEnabled={isEnabled}
                         readOnly={isToggling}
                         onModelClick={onModelClick}
+                        ccProfiles={ccProfiles}
+                        onCCProfileClick={onCCProfileClick}
                     />
                 </GraphContainer>
                 <Stack spacing={1.5} sx={{px: 2, py: 1.5}}>

@@ -162,6 +162,7 @@ func NewBotHandler(
 					ChatIDLock:         record.ChatIDLock,
 					BashAllowlist:      record.BashAllowlist,
 					DefaultCwd:         record.DefaultCwd,
+					DefaultAgent:       record.DefaultAgent,
 					Enabled:            record.Enabled,
 					Scenarios:          record.Scenarios,
 					SmartGuideProvider: record.SmartGuideProvider,

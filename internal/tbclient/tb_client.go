@@ -44,6 +44,14 @@ type TBClient interface {
 	// (including third-party model services) instead of the Anthropic API.
 	GetClaudeCodeEnv(ctx context.Context) ([]string, error)
 
+	// GetClaudeCodeEnvForProfile is the profile-aware variant of
+	// GetClaudeCodeEnv. An empty profileID behaves exactly like
+	// GetClaudeCodeEnv (main claude_code scenario); a non-empty profileID
+	// routes through the profiled scenario ("claude_code:<id>") and applies
+	// the profile's unified/separate mode and persisted env overrides — the
+	// same resolution the local `tingly-box cc --profile` launch uses.
+	GetClaudeCodeEnvForProfile(ctx context.Context, profileID string) ([]string, error)
+
 	// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario
 	GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error)
 
@@ -167,6 +175,42 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 
 	env := make([]string, 0, len(envMap))
 	for k, v := range envMap {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+	return env, nil
+}
+
+// GetClaudeCodeEnvForProfile builds the gateway env for a specific Claude Code
+// profile. It resolves the profiled scenario ("claude_code:<id>") through the
+// same ResolveCCProfileSettings path the local `tingly-box cc --profile` launch
+// uses, so remote @cc sessions get identical routing, tier models, and profile
+// env overrides. An empty profileID falls back to the main-scenario env.
+func (c *TBClientImpl) GetClaudeCodeEnvForProfile(ctx context.Context, profileID string) ([]string, error) {
+	if profileID == "" {
+		return c.GetClaudeCodeEnv(ctx)
+	}
+
+	meta, found := c.config.GetProfile(typ.ScenarioClaudeCode, profileID)
+	if !found {
+		return nil, fmt.Errorf("claude code profile %q not found", profileID)
+	}
+
+	port := c.config.GetServerPort()
+	if port == 0 {
+		port = 12580
+	}
+	host := c.config.GetServerHost()
+	baseURL := fmt.Sprintf("http://%s:%d", host, port)
+	apiKey := c.config.GetModelToken()
+	scenarioPath := string(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, meta.ID))
+
+	resolved, err := tbagent.ResolveCCProfileSettings(c.config, baseURL, apiKey, scenarioPath, meta)
+	if err != nil {
+		return nil, fmt.Errorf("resolve claude code profile %q env: %w", profileID, err)
+	}
+
+	env := make([]string, 0, len(resolved.Env))
+	for k, v := range resolved.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 	return env, nil

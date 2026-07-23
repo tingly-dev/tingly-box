@@ -75,9 +75,18 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		Timestamp: time.Now(),
 	})
 
+	// The bot's default_agent setting decides which Claude Code configuration
+	// serves @cc: the main claude_code scenario or a profile
+	// ("claude_code:<id>"). Read dynamically so a profile switch in the web UI
+	// applies from the next message without a bot restart.
+	profileID := e.deps.GetBotSettingOrCache().CCProfileID()
+
 	statusMsg := "⏳ CC: Processing new session..."
 	if !req.IsNewSession {
 		statusMsg = "⏳ CC: Resuming session..."
+	}
+	if profileID != "" {
+		statusMsg += fmt.Sprintf(" (profile: %s)", profileID)
 	}
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
 
@@ -94,6 +103,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		"projectPath":    projectPath,
 		"shouldResume":   shouldResume,
 		"permissionMode": permissionMode,
+		"ccProfile":      profileID,
 	}).Info("Starting Claude Code execution")
 
 	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
@@ -101,10 +111,19 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	// Route the Claude Code CLI through the tingly-box gateway so it uses the
 	// configured provider (including third-party model services) instead of
 	// talking to the Anthropic API directly. Without this, @cc fails whenever
-	// no direct Anthropic credentials are present on the host.
+	// no direct Anthropic credentials are present on the host. With a profile
+	// selected, the env routes through the profiled scenario instead; if the
+	// profile can no longer be resolved (e.g. deleted in the UI), fall back to
+	// the main scenario and tell the user rather than silently running with
+	// different routing than they selected.
 	var execEnv []string
 	if e.deps.TBClient != nil {
-		ccEnv, eerr := e.deps.TBClient.GetClaudeCodeEnv(ctx)
+		ccEnv, eerr := e.deps.TBClient.GetClaudeCodeEnvForProfile(ctx, profileID)
+		if eerr != nil && profileID != "" {
+			logrus.WithError(eerr).WithField("ccProfile", profileID).Warn("ClaudeCodeExecutor: failed to resolve profile env; falling back to main claude_code scenario")
+			e.deps.SendText(req.HCtx, fmt.Sprintf("⚠️ Claude Code profile '%s' could not be resolved (%v).\nRunning with the default claude_code scenario instead. Pick another profile in the tingly-box web UI (Remote → this bot).", profileID, eerr))
+			ccEnv, eerr = e.deps.TBClient.GetClaudeCodeEnv(ctx)
+		}
 		if eerr != nil {
 			logrus.WithError(eerr).Warn("ClaudeCodeExecutor: failed to resolve gateway env; @cc may not reach the configured provider")
 		} else {

@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 )
@@ -145,6 +146,11 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 	}
 	if req.Token != "" && authType == "token" {
 		authMap["token"] = strings.TrimSpace(req.Token)
+	}
+
+	if err := h.validateDefaultAgent(strings.TrimSpace(req.DefaultAgent)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid default_agent", "details": err.Error()})
+		return
 	}
 
 	settings := db.Settings{
@@ -314,7 +320,12 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 
 	// Handle default_agent config (partial update)
 	if req.DefaultAgent != nil {
-		settings.DefaultAgent = strings.TrimSpace(*req.DefaultAgent)
+		trimmed := strings.TrimSpace(*req.DefaultAgent)
+		if err := h.validateDefaultAgent(trimmed); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid default_agent", "details": err.Error()})
+			return
+		}
+		settings.DefaultAgent = trimmed
 	} else {
 		settings.DefaultAgent = currentSettings.DefaultAgent
 	}
@@ -553,6 +564,30 @@ func (h *Handler) GetPlatformConfig(c *gin.Context) {
 }
 
 // Helper function to normalize allowlist
+// validateDefaultAgent checks a default_agent value: "" and "claude_code"
+// select the main scenario; "claude_code:<profileID>" must reference an
+// existing Claude Code profile. Anything else is rejected so a typo can't
+// silently fall back to the default at execution time.
+func (h *Handler) validateDefaultAgent(value string) error {
+	if value == "" {
+		return nil
+	}
+	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(value))
+	if base != typ.ScenarioClaudeCode {
+		return fmt.Errorf("unsupported default_agent %q: only claude_code (optionally with a profile, e.g. claude_code:p1) is supported", value)
+	}
+	if profileID == "" {
+		return nil
+	}
+	if h.config == nil {
+		return nil
+	}
+	if _, found := h.config.GetProfile(typ.ScenarioClaudeCode, profileID); !found {
+		return fmt.Errorf("claude code profile %q not found", profileID)
+	}
+	return nil
+}
+
 func normalizeAllowlist(values []string) []string {
 	seen := make(map[string]struct{})
 	var out []string

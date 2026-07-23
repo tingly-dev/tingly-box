@@ -58,6 +58,15 @@ func (m *MockTBClient) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	return args.Get(0).([]string), args.Error(1)
 }
 
+// GetClaudeCodeEnvForProfile mocks the GetClaudeCodeEnvForProfile method
+func (m *MockTBClient) GetClaudeCodeEnvForProfile(ctx context.Context, profileID string) ([]string, error) {
+	args := m.Called(ctx, profileID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
 // GetDefaultRuleForScenario mocks the GetDefaultRuleForScenario method
 func (m *MockTBClient) GetDefaultRuleForScenario(ctx context.Context, scenario typ.RuleScenario) (*typ.Rule, error) {
 	args := m.Called(ctx, scenario)

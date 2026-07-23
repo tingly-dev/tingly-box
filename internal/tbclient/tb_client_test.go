@@ -316,6 +316,66 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 	assert.True(t, hasToken)
 }
 
+func TestGetClaudeCodeEnvForProfile_EmptyIDFallsBackToMain(t *testing.T) {
+	cfg := &serverconfig.Config{
+		ServerPort: 9000,
+		Rules:      []typ.Rule{ccRule("built-in-cc", "tingly/cc")},
+	}
+	client := NewTBClient(cfg, nil)
+
+	env, err := client.GetClaudeCodeEnvForProfile(context.Background(), "")
+	require.NoError(t, err)
+
+	kv := envToMap(env)
+	assert.Equal(t, "http://localhost:9000/tingly/claude_code", kv["ANTHROPIC_BASE_URL"])
+}
+
+func TestGetClaudeCodeEnvForProfile_UnknownProfile(t *testing.T) {
+	cfg := &serverconfig.Config{ServerPort: 9000}
+	client := NewTBClient(cfg, nil)
+
+	_, err := client.GetClaudeCodeEnvForProfile(context.Background(), "ghost")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ghost")
+}
+
+func TestGetClaudeCodeEnvForProfile_RoutesThroughProfiledScenario(t *testing.T) {
+	profiledRule := ccRule(serverconfig.BuiltinRuleUUID(typ.RuleScenario("claude_code:p1"), "cc"), "team/coder")
+	profiledRule.Scenario = "claude_code:p1"
+	cfg := &serverconfig.Config{
+		ServerPort: 9000,
+		Profiles: map[string][]typ.ProfileMeta{
+			string(typ.ScenarioClaudeCode): {{ID: "p1", Name: "work", Unified: true}},
+		},
+		Rules: []typ.Rule{profiledRule},
+	}
+	client := NewTBClient(cfg, nil)
+
+	env, err := client.GetClaudeCodeEnvForProfile(context.Background(), "p1")
+	require.NoError(t, err)
+
+	kv := envToMap(env)
+	// The base URL must point at the PROFILED scenario endpoint so requests
+	// route through the profile's rules, and the unified model comes from the
+	// profile's builtin rule.
+	assert.Equal(t, "http://localhost:9000/tingly/claude_code:p1", kv["ANTHROPIC_BASE_URL"])
+	assert.Equal(t, "team/coder", kv["ANTHROPIC_MODEL"])
+	assert.Equal(t, "team/coder", kv["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+}
+
+func envToMap(env []string) map[string]string {
+	kv := map[string]string{}
+	for _, e := range env {
+		for i := 0; i < len(e); i++ {
+			if e[i] == '=' {
+				kv[e[:i]] = e[i+1:]
+				break
+			}
+		}
+	}
+	return kv
+}
+
 func TestGetScenarioEndpointPath(t *testing.T) {
 	client := NewTBClient(&serverconfig.Config{}, nil)
 	tests := []struct {
