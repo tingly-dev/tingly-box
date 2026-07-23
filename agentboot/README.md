@@ -84,12 +84,10 @@ config := agentboot.Config{
     DefaultFormat:    agentboot.OutputFormatStreamJSON,
     EnableStreamJSON: true,
 }
-service, err := agentboot.NewAgentService(config)
+service, err := claude.NewService(config)
 if err != nil {
     log.Fatal(err)
 }
-
-service.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgent(config))
 
 handle, err := service.Execute(
     ctx,
@@ -104,7 +102,7 @@ handle, err := service.Execute(
 ### Resuming a Claude session
 
 ```go
-service, _ := agentboot.NewAgentService(agentboot.Config{
+service, _ := claude.NewService(agentboot.Config{
     DefaultAgent:      agentboot.AgentTypeClaude,
     ClaudeProjectsDir: "", // empty = ~/.claude/projects
 })
@@ -188,9 +186,19 @@ Root configuration is plain Go and its defaults are provided by
 | `EnableStreamJSON`          | `true`                           |
 | `StreamBufferSize`          | `100`                            |
 | `DefaultExecutionTimeout`   | `0` (no timeout)                 |
-| `ClaudeProjectsDir`         | `""` (`~/.claude/projects`)      |
+| `ClaudeProjectsDir`         | `""` (`~/.claude/projects` when using `claude.NewService`) |
 
-`ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink. A zero timeout uses the configured default; a negative timeout explicitly disables it.
+`ExecutionOptions` carries per-call overrides: project path, output format,
+timeout, env, session ID + resume flag, model and fallback model, max turns,
+allowed/disallowed tools, MCP servers, custom/append system prompts, permission
+mode, settings path, permission prompt tool, and a lifecycle store. A zero
+timeout uses the configured default; a negative timeout explicitly disables it.
+
+The root `agentboot.NewAgentService` constructor is provider-neutral. It does
+not import Claude or assume a session format. `claude.NewService` is the
+composition helper for the production Claude Code path: it registers the Claude
+agent and injects the read-only Claude session history reader. Other providers
+can inject their own reader with `agentboot.WithSessionReader`.
 
 Claude Code CLI discovery also recognizes `CLAUDE_CLI_PATH`,
 `CLAUDE_USE_BUNDLED`, and `CLAUDE_USE_GLOBAL`. Every selected executable is
@@ -209,7 +217,7 @@ agentboot/
 ├── errors.go             # Structured result/process/protocol errors
 ├── handle.go             # ExecutionHandle + ControlResponse types
 ├── events.go             # Raw Event alias + typed StreamEvent sum
-├── driver.go             # AgentDriver interface + LaunchSpec
+├── driver.go             # AgentDriver + process.LaunchSpec compatibility alias
 ├── transport.go          # AgentTransport + per-execution factory
 ├── runner.go             # Runner configuration and construction
 ├── runner_execute.go     # Generic per-execution lifecycle
@@ -217,23 +225,21 @@ agentboot/
 ├── run.go                # High-level Prompter/MessageSink consumer
 ├── service.go            # Public AgentService façade
 ├── ask/                  # Ask/permission prompter implementations
-├── common/               # Raw event and historical session types
-├── process/              # Process abstraction (osexec + fake for tests)
+├── common/               # Raw event, SessionReader, historical session types
+├── process/              # LaunchSpec + process abstraction (OS/fake)
 ├── protocol/             # Stream-JSON encoder / decoder
-├── session/              # Runtime lifecycle store interface
+├── session/              # Runtime LifecycleStore interface
 └── claude/               # Claude Code agent implementation
     ├── agent.go          # claude.Agent (wraps Runner)
+    ├── service.go        # Agent + Claude session-reader composition
     ├── driver.go         # Launch preparation and CLI selection
     ├── transport.go      # Stream-JSON parsing
-    ├── launcher.go       # Legacy compatibility wrapper
     ├── cli_builder.go    # Argv construction
     ├── discovery.go      # Verified Claude Code CLI discovery
     ├── environment.go    # Clean/merged CLI environment
-    ├── jsonl.go          # Compatibility JSONL helpers
     ├── accumulator.go    # Per-message accumulation
     ├── message.go        # Claude wire message types
     ├── content.go        # Content block decoding
-    ├── control.go        # Legacy control manager/builders
     ├── tool_renderer.go  # Tool-use rendering
     ├── formatter.go      # Output formatting helpers
     ├── prompt_builder.go # Prompt assembly
@@ -271,6 +277,11 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
 3. Add the constant to `agent.go` and register the agent on an `AgentService`
    with `RegisterAgent`.
 
+If the provider exposes historical sessions, implement `common.SessionReader`
+and inject it with `agentboot.WithSessionReader`. Runtime lifecycle reporting
+is a separate concern implemented through `session.LifecycleStore` in
+`ExecutionOptions.Store`.
+
 For agents that don't fit the process+protocol pipeline (in-process mocks, remote services), use `agentboot.NewControlledHandle` to drive an `ExecutionHandle` directly.
 
 ## Testing
@@ -295,8 +306,9 @@ go test -tags e2e -run TestE2E_ClaudeRun .
 The test skips when Claude Code CLI is unavailable.
 
 See `agentboot/claude/fixture/fixture_test.go`,
-`agentboot/claude/agent_concurrency_test.go`, and
-`agentboot/handle_test.go` for the patterns.
+`agentboot/claude/agent_concurrency_test.go`,
+`agentboot/claude/accumulator_test.go`, and `agentboot/handle_test.go` for the
+patterns.
 
 ## License
 
