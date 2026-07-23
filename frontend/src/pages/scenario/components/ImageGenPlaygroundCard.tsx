@@ -42,6 +42,7 @@ interface GenerationRun {
     size: string;
     quality: Quality;
     images: ImageResult[];
+    status?: 'pending' | 'completed';
 }
 
 interface SelectedImage {
@@ -83,9 +84,15 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [quality, setQuality] = useState<Quality>('auto');
     const [count, setCount] = useState(1);
     const [runs, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
-    const [sending, setSending] = useState(false);
     const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
     const historyTrackRef = useRef<HTMLDivElement>(null);
+    const pendingCount = runs.filter((run) => run.status === 'pending').length;
+
+    const updateRuns = useCallback((updater: (currentRuns: GenerationRun[]) => GenerationRun[]) => {
+        const nextRuns = updater(imageGenSessionRuns);
+        imageGenSessionRuns = nextRuns;
+        setRuns(nextRuns);
+    }, []);
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
@@ -93,15 +100,24 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             if (track) track.scrollTo({ left: track.scrollWidth, behavior: 'smooth' });
         });
         return () => cancelAnimationFrame(frame);
-    }, [runs.length, sending]);
+    }, [pendingCount, runs.length]);
 
     const handleGenerate = useCallback(async () => {
         if (!prompt.trim() || !model) return;
+        const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const generationPrompt = prompt.trim();
         const generationModel = model;
         const generationSize = size;
         const generationQuality = quality;
-        setSending(true);
+        updateRuns((currentRuns) => [...currentRuns, {
+            id: runId,
+            prompt: generationPrompt,
+            model: generationModel,
+            size: generationSize,
+            quality: generationQuality,
+            images: [],
+            status: 'pending',
+        }]);
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
             const response = await client.images.generate({
@@ -112,26 +128,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 quality: generationQuality,
             });
             const images = response.data ?? [];
-            setRuns((currentRuns) => {
-                const nextRuns = [...currentRuns, {
-                    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                    prompt: generationPrompt,
-                    model: generationModel,
-                    size: generationSize,
-                    quality: generationQuality,
-                    images,
-                }];
-                imageGenSessionRuns = nextRuns;
-                return nextRuns;
-            });
+            updateRuns((currentRuns) => currentRuns.map((run) => (
+                run.id === runId ? { ...run, images, status: 'completed' } : run
+            )));
         } catch (error: any) {
+            updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== runId));
             const status = error?.status ? `${error.status}: ` : '';
             const message = error?.error?.message || error?.message || 'Request failed';
             showNotification(`${status}${message}`, 'error');
-        } finally {
-            setSending(false);
         }
-    }, [count, model, prompt, quality, showNotification, size]);
+    }, [count, model, prompt, quality, showNotification, size, updateRuns]);
 
     const noModels = models.length === 0;
     const desktopPanelHeight = noModels && !loadingRules ? 'auto' : PLAYGROUND_PANEL_HEIGHT;
@@ -278,11 +284,16 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             size="large"
                             fullWidth
                             onClick={handleGenerate}
-                            disabled={sending || noModels || !prompt.trim() || !model}
-                            startIcon={sending ? <CircularProgress size={18} /> : <AutoAwesome />}
+                            disabled={noModels || !prompt.trim() || !model}
+                            startIcon={pendingCount > 0
+                                ? <CircularProgress size={18} color="inherit" />
+                                : <AutoAwesome />}
                         >
-                            {sending
-                                ? t('playground.generating', { defaultValue: 'Generating…' })
+                            {pendingCount > 0
+                                ? t('playground.generateAnother', {
+                                    defaultValue: 'Generate another · {{count}} running',
+                                    count: pendingCount,
+                                })
                                 : t('playground.generate', { defaultValue: 'Generate' })}
                         </Button>
                     </Stack>
@@ -299,12 +310,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             bgcolor: 'action.hover',
                             p: 2,
                             display: 'flex',
-                            alignItems: runs.length === 0 && !sending ? 'center' : 'stretch',
-                            justifyContent: runs.length === 0 && !sending ? 'center' : 'flex-start',
+                            alignItems: runs.length === 0 ? 'center' : 'stretch',
+                            justifyContent: runs.length === 0 ? 'center' : 'flex-start',
                             overflow: 'hidden',
                         }}
                     >
-                        {runs.length === 0 && !sending ? (
+                        {runs.length === 0 ? (
                             <Stack
                                 spacing={1}
                                 sx={{
@@ -363,49 +374,64 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                         '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
                                     }}
                                 >
-                                    {sending && (
-                                        <Card
-                                            variant="outlined"
-                                            sx={{
-                                                flex: '0 0 280px',
-                                                height: '100%',
-                                                borderStyle: 'dashed',
-                                                bgcolor: 'background.paper',
-                                                scrollSnapAlign: 'end',
-                                                order: 2,
-                                            }}
-                                        >
-                                            <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
-                                                <Stack
-                                                    spacing={1.5}
-                                                    sx={{
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        height: '100%'
-                                                    }}>
-                                                    <CircularProgress size={24} />
-                                                    <Typography variant="body2" sx={{
-                                                        color: "text.secondary"
-                                                    }}>
-                                                        {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
-                                                    </Typography>
-                                                </Stack>
-                                            </CardContent>
-                                        </Card>
-                                    )}
-
                                     {runs.map((run) => (
                                         <Card
                                             key={run.id}
+                                            data-testid="imagegen-generation-run"
+                                            data-generation-status={run.status ?? 'completed'}
                                             variant="outlined"
                                             sx={{
                                                 flex: { xs: '0 0 min(82vw, 320px)', md: '0 0 clamp(280px, 46%, 360px)' },
                                                 height: '100%',
                                                 bgcolor: 'background.paper',
+                                                borderStyle: run.status === 'pending' ? 'dashed' : 'solid',
                                                 scrollSnapAlign: 'start',
                                             }}
                                         >
                                         <CardContent sx={{ p: 1.5, height: '100%', '&:last-child': { pb: 1.5 } }}>
+                                            {run.status === 'pending' ? (
+                                                <Stack
+                                                    spacing={1.25}
+                                                    aria-live="polite"
+                                                    sx={{
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        height: '100%',
+                                                        minWidth: 0,
+                                                        textAlign: 'center',
+                                                    }}
+                                                >
+                                                    <CircularProgress size={24} />
+                                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                        {t('playground.generatingNew', { defaultValue: 'Generating new images…' })}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            width: '100%',
+                                                            color: 'text.secondary',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                        }}
+                                                    >
+                                                        {run.prompt}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            width: '100%',
+                                                            color: 'text.disabled',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
+                                                        {run.model} · {run.size} · {run.quality}
+                                                    </Typography>
+                                                </Stack>
+                                            ) : (
                                             <Stack spacing={1.25} sx={{ height: '100%' }}>
                                                 <Box sx={{ minWidth: 0 }}>
                                                     <Typography
@@ -535,6 +561,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                                     })}
                                                 </Box>
                                             </Stack>
+                                            )}
                                         </CardContent>
                                         </Card>
                                     ))}
