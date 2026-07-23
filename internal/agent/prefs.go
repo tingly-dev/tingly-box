@@ -13,6 +13,7 @@ var validClaudeCodeDefaultModes = map[string]struct{}{
 	"default":           {},
 	"delegate":          {},
 	"dontAsk":           {},
+	"manual":            {},
 	"plan":              {},
 	"auto":              {},
 }

@@ -54,7 +54,7 @@ export interface ClaudeCodePrefs {
 }
 
 export type PrefsKey = keyof ClaudeCodePrefs;
-export type ClaudeCodeDefaultMode = 'acceptEdits' | 'bypassPermissions' | 'default' | 'delegate' | 'dontAsk' | 'plan' | 'auto';
+export type ClaudeCodeDefaultMode = 'acceptEdits' | 'bypassPermissions' | 'default' | 'delegate' | 'dontAsk' | 'manual' | 'plan' | 'auto';
 export type Group = 'behavior' | 'model' | 'limits' | 'switches' | 'network';
 export type Kind = 'model' | 'int' | 'text' | 'bool';
 export type Lang = 'zh' | 'en';
@@ -420,13 +420,14 @@ interface DefaultModeOptionText {
     description: string;
 }
 
-export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
+export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'manual', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
 
 const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
     acceptEdits: { label: '接受编辑（推荐）', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
     default: { label: '默认', description: '使用 Claude Code 官方默认权限行为。' },
+    manual: { label: '手动确认', description: '工具权限请求需要交互确认。' },
     plan: { label: '计划模式', description: '默认进入 plan mode，先规划再执行。' },
-    auto: { label: '自动', description: '由 Claude Code 自动选择权限行为。' },
+    auto: { label: '自动规则', description: '由 Claude Code 的规则分类器允许、软拒绝或硬拒绝工具调用。' },
     delegate: { label: '委托', description: '把权限决策委托给 Claude Code 支持的外部流程。' },
     dontAsk: { label: '不询问', description: '避免交互式询问；适合无人值守场景。' },
     bypassPermissions: { label: '绕过权限', description: '跳过权限检查；仅在完全可信环境中使用。' },
@@ -435,8 +436,9 @@ const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText>
 const DEFAULT_MODE_TEXT_EN: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
     acceptEdits: { label: 'Accept edits (recommended)', description: 'Automatically accepts file edits while leaving riskier actions to Claude Code rules.' },
     default: { label: 'Default', description: 'Use Claude Code\'s built-in default permission behavior.' },
+    manual: { label: 'Manual approval', description: 'Require interactive approval for tool permission requests.' },
     plan: { label: 'Plan mode', description: 'Start in plan mode by default before implementation.' },
-    auto: { label: 'Auto', description: 'Let Claude Code choose the permission behavior automatically.' },
+    auto: { label: 'Auto rules', description: 'Use Claude Code\'s rule classifier to allow, soft-deny, or hard-deny tool calls.' },
     delegate: { label: 'Delegate', description: 'Delegate permission decisions to Claude Code\'s supported external flow.' },
     dontAsk: { label: 'Don\'t ask', description: 'Avoid interactive prompts; useful for unattended setups.' },
     bypassPermissions: { label: 'Bypass permissions', description: 'Skip permission checks; use only in fully trusted environments.' },

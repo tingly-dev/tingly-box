@@ -33,18 +33,16 @@ func (e *ClaudeCodeExecutor) GetAgentType() agentboot.AgentType {
 	return agentClaudeCode
 }
 
-// noApprovalModes are permission modes that auto-approve every tool request
-// without going through IMPrompter.
+// noApprovalModes contains only modes whose contract is unconditional
+// approval. Other modes must preserve Claude Code's own deny/plan/classifier
+// semantics if a permission callback reaches the host.
 var noApprovalModes = map[string]bool{
-	string(claude.PermissionModeAuto):              true,
 	string(claude.PermissionModeBypassPermissions): true,
-	string(claude.PermissionModeDontAsk):           true,
-	string(claude.PermissionModePlan):              true,
 }
 
 // autoApprovePrompter wraps a Prompter to auto-approve every tool permission
-// request (for permission modes like plan/bypass) while still deferring
-// AskUserQuestion prompts to the underlying prompter.
+// request in bypass mode while still deferring AskUserQuestion prompts to the
+// underlying prompter.
 type autoApprovePrompter struct{ inner agentboot.Prompter }
 
 func (p autoApprovePrompter) OnApproval(context.Context, agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
