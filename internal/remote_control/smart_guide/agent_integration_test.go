@@ -83,7 +83,7 @@ func (m *scriptedModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesReque
 	}, nil
 }
 
-func (m *scriptedModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+func (m *scriptedModel) HandleAnthropicStream(_ context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
 	resp, err := m.HandleAnthropic(req)
 	if err != nil {
 		return err
@@ -425,7 +425,7 @@ func (m *multiTurnModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequ
 	return anthropicvm.VModelResponse{Content: content, StopReason: stop}, nil
 }
 
-func (m *multiTurnModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+func (m *multiTurnModel) HandleAnthropicStream(_ context.Context, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
 	resp, err := m.HandleAnthropic(req)
 	if err != nil {
 		return err
