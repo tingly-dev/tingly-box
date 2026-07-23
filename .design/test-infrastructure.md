@@ -17,8 +17,8 @@ internal/protocoltest/      ← Protocol transform validation; VirtualServer wra
     ↑ imported by
 cli/harness/                ← CLI entry points for matrix, agent, replay harnesses
 
-internal/servertest/        ← Gateway integration tests; standalone dumb-echo mock (by design,
-                              not migrated onto benchmark — see vmodel-benchmark.md Phase 3)
+internal/servertest/        ← Gateway integration tests; endpoint-keyed dumb-echo responder
+                              wrapped by benchmark.Server transport + capture
 ```
 
 ## Packages
@@ -75,11 +75,27 @@ Built-in scenarios: `text`, `tool_use`, `tool_result`, `thinking`, `multi_turn`,
 
 Gateway-level integration tests. Tests server features (auth, routing, load balancing) using a deliberately simple mock approach.
 
-- **`MockProviderServer`** — an endpoint-keyed *dumb echo*: set an exact response/error per endpoint, track call counts, capture the last request. By design it wants byte-exact upstream control, **not** protocol-correct responses — so it is intentionally **not** migrated onto `vmodel/benchmark` (see [`vmodel-benchmark.md`](./vmodel-benchmark.md) Phase 3). It stays standalone and untouched by this work; an independent cleanup of its dead scaffolding is noted there as possible future work.
+- **`MockProviderServer`** — a thin adapter over `benchmark.NewServer`: its local
+  endpoint-keyed responder keeps byte-exact `Body` / `Error` / `Delay` / SSE
+  control, while benchmark owns HTTP transport, request capture, endpoint hit
+  counts, and reset behavior.
 - **`TestServer`** — wraps a real gateway server + config. Helpers: `AddTestProviders`, `AddTestRule`, `EnsureLoadBalancingRule`.
-- **Request/response helpers** — `CreateTestChatRequest`, `CreateJSONBody`, `AssertJSONResponse`.
+- **Request helpers** — `CreateTestChatRequest`, `CreateJSONBody`.
 
 Uses `//go:build e2e` tag for some tests. Not imported by any other package.
+
+Real-config variants are intentionally opt-in:
+
+```bash
+TINGLY_BOX_TEST_REAL_CONFIG=1 \
+TINGLY_BOX_TEST_REAL_TIMEOUT_SECONDS=10 \
+go test -tags=e2e ./internal/servertest -timeout=60s
+```
+
+The real-config helper snapshots only `config.json` and provider records. It
+does not copy runtime data such as `record/`, `log/`, `image/`, or usage
+databases. Local mock providers use a two-second timeout; real providers use ten
+seconds by default, configurable through the environment variable above.
 
 ## When to Use What
 
@@ -101,11 +117,9 @@ response generation). Status:
 - **Phase 1 (done)** — foundation built: `check/`, `scenario/`, observable `Server`.
 - **Phase 2 (done)** — `protocoltest.VirtualServer` delegates to
   `benchmark.NewScenarioServer`; `check`/`scenario` re-exported via aliases.
-- **Phase 3 (decided: no migration)** — `servertest.MockProviderServer` stays a
-  standalone dumb-echo by design (it wants byte-exact control, not protocol
-  correctness) and is **left unchanged in this work** (out of scope for the
-  foundation). Two follow-ups stay possible but separate: an independent
-  dead-code/`fmt.Printf` cleanup of `mock_provider.go`, and a demand-driven
-  reusable echo handler it could adopt. Neither is built here.
+- **Phase 3 (done)** — `servertest.MockProviderServer` delegates transport and
+  observability to `benchmark.NewServer(inner)`. Its endpoint responder remains
+  local because byte-exact gateway fixtures and protocol-correct vmodel scenarios
+  are separate response strategies.
 
 See [`vmodel-benchmark.md`](./vmodel-benchmark.md) for the full design and rationale.
