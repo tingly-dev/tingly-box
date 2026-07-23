@@ -89,7 +89,7 @@ type ExecutionOptions struct {
 	//   SetRunning  — after the process starts successfully
 	//   SetFailed   — if the process fails to start or Wait returns an error
 	//   SetCompleted — if Wait returns without error
-	Store agentsession.Store
+	Store agentsession.LifecycleStore
 }
 
 // PermissionConfig holds permission handler configuration.

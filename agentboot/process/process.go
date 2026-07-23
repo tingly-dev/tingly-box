@@ -10,17 +10,38 @@ package process
 import (
 	"context"
 	"io"
+	"os/exec"
 )
 
 // LaunchSpec describes how to start an agent process.
 //
-// It intentionally mirrors the subset of os/exec.Cmd that an agent driver
-// needs to populate, so that drivers can be unit-tested against any Factory.
+// It is pure launch data shared directly by agent drivers and process
+// factories, so the Runner does not need an intermediate conversion.
 type LaunchSpec struct {
-	Path    string
-	Args    []string
-	Env     []string
+	// Command is the binary followed by arguments.
+	Command []string
+
+	// Env is the process environment. nil inherits the current environment.
+	Env []string
+
+	// WorkDir is the child working directory. Empty means the current directory.
 	WorkDir string
+
+	// InitialInput optionally feeds bootstrap messages to stdin after start.
+	// It is consumed by the Runner, not the process Factory.
+	InitialInput <-chan any
+}
+
+// BuildCmd converts the specification into an exec.Cmd.
+func (s *LaunchSpec) BuildCmd(ctx context.Context) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, s.Command[0], s.Command[1:]...)
+	if s.WorkDir != "" {
+		cmd.Dir = s.WorkDir
+	}
+	if s.Env != nil {
+		cmd.Env = s.Env
+	}
+	return cmd
 }
 
 // Handle is a running process with attached stdin/stdout pipes.

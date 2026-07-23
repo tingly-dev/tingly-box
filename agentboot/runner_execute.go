@@ -9,7 +9,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot/common"
-	"github.com/tingly-dev/tingly-box/agentboot/process"
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
@@ -62,15 +61,8 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		runCtx, cancel = context.WithTimeout(runCtx, opts.Timeout)
 	}
 
-	procSpec := process.LaunchSpec{
-		Path:    spec.Command[0],
-		Args:    spec.Command[1:],
-		Env:     spec.Env,
-		WorkDir: spec.WorkDir,
-	}
-
 	logrus.Infof("runner.Execute: starting %s", r.driver.Type())
-	proc, err := r.procFactory.Start(runCtx, procSpec)
+	proc, err := r.procFactory.Start(runCtx, *spec)
 	if err != nil {
 		cancel()
 		if opts.Store != nil && opts.SessionID != "" {
