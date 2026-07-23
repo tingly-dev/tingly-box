@@ -76,6 +76,8 @@ type driverResponse struct {
 	ToolCalls        []driverToolCall     `json:"tool_calls"`
 	Usage            *driverUsage         `json:"usage"`
 	StreamEventCount int                  `json:"stream_event_count"`
+	StreamCompleted  bool                 `json:"stream_completed"`
+	StreamError      *driverStreamError   `json:"stream_error"`
 	RawBody          string               `json:"raw_body"`
 	Error            *driverErrorEnvelope `json:"error"`
 }
@@ -89,6 +91,11 @@ type driverToolCall struct {
 type driverUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
+}
+
+type driverStreamError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
 
 // driverErrorEnvelope carries an in-band gateway/API error.
@@ -152,6 +159,10 @@ func (c *subprocessClient) Send(env *TestEnv, spec SendSpec) (*RoundTripResult, 
 	result.FinishReason = resp.FinishReason
 	result.ThinkingContent = resp.Thinking
 	result.RawBody = []byte(resp.RawBody)
+	result.StreamCompleted = resp.StreamCompleted
+	if resp.StreamError != nil {
+		result.StreamError = resp.StreamError.Message
+	}
 	for _, tc := range resp.ToolCalls {
 		result.ToolCalls = append(result.ToolCalls, ToolCallResult{ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments})
 	}
@@ -166,6 +177,9 @@ func (c *subprocessClient) Send(env *TestEnv, spec SendSpec) (*RoundTripResult, 
 	if resp.Error != nil {
 		if resp.Error.Status != 0 {
 			result.HTTPStatus = resp.Error.Status
+		}
+		if spec.Streaming && result.HTTPStatus == 200 && result.StreamError == "" {
+			result.StreamError = resp.Error.Message
 		}
 		if len(result.RawBody) == 0 {
 			result.RawBody = []byte(resp.Error.Message)

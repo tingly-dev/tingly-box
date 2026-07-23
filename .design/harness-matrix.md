@@ -201,9 +201,16 @@ stdout; non-zero exit = broken driver, API errors go in-band:
 {"http_status":200,"role":"assistant","content":"...","model":"...",
  "finish_reason":"end_turn","thinking":"","tool_calls":[...],
  "usage":{"input_tokens":10,"output_tokens":8},
- "stream_event_count":7,"raw_body":"...",
+ "stream_event_count":7,"stream_completed":true,
+ "stream_error":null,"raw_body":"...",
  "error":{"status":429,"type":"...","message":"..."}}
 ```
+
+`stream_error` is distinct from `error`: the latter is an HTTP/API failure,
+while `stream_error` means headers were already committed (typically HTTP 200)
+but the turn did not reach a normal terminal event. Drivers must set
+`stream_completed` only after observing a real protocol completion marker; they
+must never synthesize completion for a truncated stream.
 
 The contract itself is covered on every PR by a stub shell driver
 (`client_subprocess_test.go` + `tests/clients/testdata/stub_driver.sh`), so

@@ -151,6 +151,9 @@ async function runStream(req, model) {
       case "finish":
         finishReason = part.finishReason ?? "";
         usage = mapUsage(part.totalUsage);
+        if ((finishReason === "error" || finishReason === "unknown") && streamError === null) {
+          streamError = new Error(`AI SDK reported ${finishReason} instead of a normal finish reason`);
+        }
         break;
       case "error":
         streamError = part.error;
@@ -180,6 +183,13 @@ async function runStream(req, model) {
     tool_calls: toolCalls,
     usage,
     stream_event_count: count,
+    stream_completed: streamError === null && finishReason !== "",
+    stream_error: streamError
+      ? {
+          type: unwrapError(streamError)?.name ?? "StreamError",
+          message: String(unwrapError(streamError)?.message ?? streamError),
+        }
+      : undefined,
     raw_body: content,
   };
 }

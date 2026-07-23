@@ -32,6 +32,21 @@ def tool_call(id_, name, arguments):
     return {"id": id_, "name": name, "arguments": arguments}
 
 
+def stream_error_response(count, content, error):
+    """Report an error after a stream started without breaking the driver."""
+    return {
+        "http_status": 200,
+        "content": content,
+        "stream_event_count": count,
+        "stream_completed": False,
+        "raw_body": str(error),
+        "stream_error": {
+            "type": type(error).__name__,
+            "message": str(error),
+        },
+    }
+
+
 # ── Anthropic (v1 + beta) ────────────────────────────────────────────────────
 
 
@@ -100,15 +115,14 @@ def run_anthropic(req, beta):
                 msg = stream.get_final_message()
             resp = normalize_anthropic_message(msg)
             resp["stream_event_count"] = count
+            resp["stream_completed"] = True
             return resp
         except anthropic.APIStatusError:
             raise
         except Exception as e:
             # Mid-stream error event (truncated upstream): the SDK raised; the
             # turn was not completed. Report it in-band rather than crashing.
-            return {"http_status": 200, "stream_event_count": count,
-                    "raw_body": str(e),
-                    "error": {"status": 0, "type": type(e).__name__, "message": str(e)}}
+            return stream_error_response(count, "", e)
     except anthropic.APIStatusError as e:
         return api_error_response(e)
 
@@ -159,25 +173,32 @@ def run_openai_chat(req, client):
         model = ""
         # tool calls accumulate by index, like the Go ChatCompletionAccumulator
         tools = {}
-        for chunk in client.chat.completions.create(stream=True, **kwargs):
-            count += 1
-            model = chunk.model or model
-            if not chunk.choices:
-                continue
-            choice = chunk.choices[0]
-            delta = choice.delta
-            if delta is not None:
-                role = delta.role or role
-                content += delta.content or ""
-                for tc in delta.tool_calls or []:
-                    slot = tools.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
-                    if tc.id:
-                        slot["id"] = tc.id
-                    if tc.function is not None:
-                        if tc.function.name:
-                            slot["name"] = tc.function.name
-                        slot["arguments"] += tc.function.arguments or ""
-            finish = choice.finish_reason or finish
+        try:
+            for chunk in client.chat.completions.create(stream=True, **kwargs):
+                count += 1
+                model = chunk.model or model
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                if delta is not None:
+                    role = delta.role or role
+                    content += delta.content or ""
+                    for tc in delta.tool_calls or []:
+                        slot = tools.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                        if tc.id:
+                            slot["id"] = tc.id
+                        if tc.function is not None:
+                            if tc.function.name:
+                                slot["name"] = tc.function.name
+                            slot["arguments"] += tc.function.arguments or ""
+                finish = choice.finish_reason or finish
+        except openai.APIStatusError:
+            raise
+        except Exception as e:
+            if count == 0:
+                raise
+            return stream_error_response(count, content, e)
         tool_calls = [
             tool_call(t["id"], t["name"], t["arguments"])
             for _, t in sorted(tools.items())
@@ -192,6 +213,7 @@ def run_openai_chat(req, client):
             "tool_calls": tool_calls,
             "usage": None,
             "stream_event_count": count,
+            "stream_completed": True,
             "raw_body": content,
         }
     except openai.APIStatusError as e:
@@ -244,30 +266,30 @@ def run_openai_responses(req, client):
         count = 0
         final = None
         delta_text = ""
-        for event in client.responses.create(stream=True, **kwargs):
-            count += 1
-            etype = getattr(event, "type", "")
-            if etype in ("response.completed", "response.incomplete"):
-                final = event.response
-            elif etype == "response.output_text.delta":
-                delta_text += event.delta or ""
+        try:
+            for event in client.responses.create(stream=True, **kwargs):
+                count += 1
+                etype = getattr(event, "type", "")
+                if etype in ("response.completed", "response.incomplete"):
+                    final = event.response
+                elif etype == "response.output_text.delta":
+                    delta_text += event.delta or ""
+        except openai.APIStatusError:
+            raise
+        except Exception as e:
+            if count == 0:
+                raise
+            return stream_error_response(count, delta_text, e)
         if final is not None:
             resp = normalize_response(final)
         else:
-            # Stream was cut before a terminal event (midstream-close):
-            # report what was accumulated from deltas.
-            resp = {
-                "http_status": 200,
-                "role": "assistant",
-                "content": delta_text,
-                "model": "",
-                "finish_reason": "",
-                "thinking": "",
-                "tool_calls": [],
-                "usage": None,
-                "raw_body": delta_text,
-            }
+            return stream_error_response(
+                count,
+                delta_text,
+                RuntimeError("responses stream ended without a terminal event"),
+            )
         resp["stream_event_count"] = count
+        resp["stream_completed"] = True
         return resp
     except openai.APIStatusError as e:
         return api_error_response(e)
