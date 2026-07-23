@@ -10084,7 +10084,6 @@
             "description": "Field provider_uuid"
           },
           "raw_response": {
-            "type": "string",
             "description": "Field raw_response"
           },
           "windows": {

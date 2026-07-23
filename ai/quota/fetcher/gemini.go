@@ -80,7 +80,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		ProviderType: quota.ProviderTypeGemini,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  rawResponse,
+		RawResponse:  json.RawMessage(rawResponse),
 	}
 
 	if len(quotaResp.Buckets) == 0 {

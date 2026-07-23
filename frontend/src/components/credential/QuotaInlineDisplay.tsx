@@ -1,10 +1,12 @@
-import React from 'react';
-import { Box, Stack, IconButton, Typography, CircularProgress, Tooltip } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Button, Stack, IconButton, Typography, CircularProgress, Tooltip } from '@mui/material';
 import { AccessTime as AccessTimeIcon } from '@/components/icons';
+import { Code as CodeIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
 import { QuotaBarRow, useQuotaBars } from './QuotaBarRow';
+import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
 import type { ProviderQuota } from '@/types/quota';
 import { formatQuotaUsage } from '@/types/quota';
 
@@ -31,14 +33,16 @@ export function QuotaInlineDisplay({
   onRefresh,
   maxInlineItems = 3,
 }: QuotaInlineDisplayProps) {
+  const [rawResponseOpen, setRawResponseOpen] = useState(false);
   const { windows, resourceItems, hasAny } = useQuotaBars(quota);
+  const hasRawResponse = quota?.raw_response !== undefined && quota.raw_response !== null;
 
   const hasHiddenItems = windows.length > maxInlineItems;
   const visibleWindows = windows.slice(0, maxInlineItems);
   const hiddenWindows = windows.slice(maxInlineItems);
 
   // Show nothing if there's no data at all
-  if (!hasAny) {
+  if (!hasAny && !hasRawResponse) {
     return null;
   }
 
@@ -128,6 +132,18 @@ export function QuotaInlineDisplay({
           </Tooltip>
         )}
 
+        {hasRawResponse && (
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<CodeIcon fontSize="small" />}
+            onClick={() => setRawResponseOpen(true)}
+            sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}
+          >
+            Raw response
+          </Button>
+        )}
+
         {/* Refresh button */}
         <Tooltip title="Refresh quota" arrow>
           <IconButton
@@ -193,6 +209,15 @@ export function QuotaInlineDisplay({
           <QuotaBarItem key={item.key} window={item.window} percentLabel={item.countLabel} barColor="#22c55e" tooltipContent={item.tooltipContent} />
         ))}
       </Stack>
+
+      {hasRawResponse && (
+        <QuotaRawResponseDialog
+          open={rawResponseOpen}
+          onClose={() => setRawResponseOpen(false)}
+          providerName={quota?.provider_name}
+          response={quota?.raw_response}
+        />
+      )}
     </Box>
   );
 }

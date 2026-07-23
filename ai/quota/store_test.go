@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestGormStorePreservesSuccessfulRawResponse(t *testing.T) {
 		ProviderType: ProviderTypeKimiCode,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  rawResponse,
+		RawResponse:  json.RawMessage(rawResponse),
 	}
 
 	if err := store.Save(context.Background(), want); err != nil {
@@ -42,7 +43,28 @@ func TestGormStorePreservesSuccessfulRawResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error: %v", err)
 	}
-	if got.RawResponse != rawResponse {
+	if string(got.RawResponse) != rawResponse {
 		t.Errorf("RawResponse changed during database round trip:\ngot:  %q\nwant: %q", got.RawResponse, rawResponse)
+	}
+}
+
+func TestProviderUsageMarshalsRawResponseAsJSON(t *testing.T) {
+	t.Parallel()
+
+	usage := ProviderUsage{
+		ProviderUUID: "kimi-code-uuid",
+		RawResponse:  json.RawMessage(`{"usage":{"limit":"100"},"limits":[]}`),
+	}
+	data, err := json.Marshal(usage)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+
+	var response map[string]json.RawMessage
+	if err := json.Unmarshal(data, &response); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v", err)
+	}
+	if len(response["raw_response"]) == 0 || response["raw_response"][0] != '{' {
+		t.Fatalf("raw_response = %s, want a JSON object", response["raw_response"])
 	}
 }

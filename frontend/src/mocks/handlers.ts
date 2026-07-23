@@ -778,6 +778,21 @@ const mockQuotas: Record<string, any> = {
             email: 'mock@example.com',
             tier: 'pro',
         },
+        raw_response: {
+            usage: {
+                limit: '100',
+                used: '6',
+                remaining: '94',
+                resetTime: inSixDays,
+            },
+            limits: [
+                {
+                    window: { duration: 300, timeUnit: 'TIME_UNIT_MINUTE' },
+                    detail: { limit: '100', remaining: '100', resetTime: inOneHour },
+                },
+            ],
+            parallel: { limit: '30' },
+        },
     },
     'mock-provider-openai': {
         provider_uuid: 'mock-provider-openai',

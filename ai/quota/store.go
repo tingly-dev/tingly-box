@@ -96,7 +96,7 @@ func (r *ProviderUsageRecord) toProviderUsage() *ProviderUsage {
 		ProviderType: ProviderType(r.ProviderType),
 		FetchedAt:    r.FetchedAt,
 		ExpiresAt:    r.ExpiresAt,
-		RawResponse:  getString(r.RawResponse),
+		RawResponse:  rawMessageFromString(r.RawResponse),
 	}
 
 	if r.LastError != nil {
@@ -152,8 +152,9 @@ func toRecord(usage *ProviderUsage) *ProviderUsageRecord {
 	if usage.LastErrorAt != nil {
 		record.LastErrorAt = usage.LastErrorAt
 	}
-	if usage.RawResponse != "" {
-		record.RawResponse = &usage.RawResponse
+	if len(usage.RawResponse) > 0 {
+		rawResponse := string(usage.RawResponse)
+		record.RawResponse = &rawResponse
 	}
 
 	// Cost
@@ -207,6 +208,13 @@ func encodeJSONField[T any](value T) *string {
 	}
 	encoded := string(data)
 	return &encoded
+}
+
+func rawMessageFromString(value *string) json.RawMessage {
+	if value == nil || *value == "" {
+		return nil
+	}
+	return json.RawMessage(*value)
 }
 
 func getFloat64(f *float64) float64 {

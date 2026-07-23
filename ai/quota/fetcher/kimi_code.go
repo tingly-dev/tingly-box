@@ -248,7 +248,7 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 		ProviderType: quota.ProviderTypeKimiCode,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  string(body),
+		RawResponse:  json.RawMessage(body),
 	}
 	if apiResp.User.UserID != "" || apiResp.User.Membership.Level != "" {
 		usage.Account = &quota.UsageAccount{
