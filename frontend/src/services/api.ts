@@ -826,6 +826,8 @@ export const api = {
         scenario?: string;
         user_id?: string;
         limit?: number;
+        sort_by?: 'total_tokens' | 'request_count' | 'avg_latency';
+        sort_order?: 'asc' | 'desc';
     } = {}): Promise<any> => {
         try {
             const client = await getClient();
@@ -842,6 +844,8 @@ export const api = {
                         scenario: params.scenario,
                         user_id: params.user_id,
                         limit: params.limit,
+                        sort_by: params.sort_by,
+                        sort_order: params.sort_order,
                     }
                 }
             });
