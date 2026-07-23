@@ -3,6 +3,11 @@
 > Audience: tingly-box contributors touching the SDK seam (`sdk/python/`), the
 > `/api/v1/sdk/session` endpoint, or the `experiment` scenario.
 
+Diagram: `.design/python-sdk.pencil.md` — the full request-flow / architecture
+pencil graphs (provisioning vs. inference, a plugin's request lifecycle, the
+two connection modes, `router_plugin.py`'s decide-then-pin flow, and a
+hop-count comparison across all four example plugins).
+
 ## Why
 
 tb is a capable personal-intelligence gateway, but extending or experimenting
