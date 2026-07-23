@@ -3,6 +3,8 @@ package agentboot
 import (
 	"strings"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
 // Result represents the result of an agent execution.
@@ -12,7 +14,7 @@ type Result struct {
 	Error    string // Error message if failed
 	Duration time.Duration
 	Format   OutputFormat           // Output format used
-	Events   []Event                // Stream events (stream-json mode)
+	Events   []common.Event         // Raw events (stream-json mode)
 	Metadata map[string]interface{} // Additional metadata
 }
 
@@ -72,12 +74,12 @@ func (r *Result) IsSuccess() bool {
 }
 
 // GetMessagesByType returns all events of a specific type.
-func (r *Result) GetMessagesByType(messageType string) []Event {
+func (r *Result) GetMessagesByType(messageType string) []common.Event {
 	if r == nil {
 		return nil
 	}
 
-	var result []Event
+	var result []common.Event
 	for _, event := range r.Events {
 		if event.Type == messageType {
 			result = append(result, event)
@@ -87,12 +89,12 @@ func (r *Result) GetMessagesByType(messageType string) []Event {
 }
 
 // GetMessageChain returns all events in order, excluding result/system events.
-func (r *Result) GetMessageChain() []Event {
+func (r *Result) GetMessageChain() []common.Event {
 	if r == nil {
 		return nil
 	}
 
-	var result []Event
+	var result []common.Event
 	for _, event := range r.Events {
 		// Skip system and result types for message chain
 		if event.Type != "system" && event.Type != "result" && !strings.HasPrefix(event.Type, "control_") {
@@ -103,12 +105,12 @@ func (r *Result) GetMessageChain() []Event {
 }
 
 // GetAssistantMessages returns all assistant message events.
-func (r *Result) GetAssistantMessages() []Event {
+func (r *Result) GetAssistantMessages() []common.Event {
 	return r.GetMessagesByType("assistant")
 }
 
 // GetUserMessages returns all user message events.
-func (r *Result) GetUserMessages() []Event {
+func (r *Result) GetUserMessages() []common.Event {
 	return r.GetMessagesByType("user")
 }
 

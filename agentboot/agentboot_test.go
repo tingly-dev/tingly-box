@@ -3,7 +3,6 @@ package agentboot
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,28 +93,4 @@ func TestResumeSession_ReturnsOptionsWithSessionID(t *testing.T) {
 	opts := ab.ResumeSession("my-session-123")
 	assert.Equal(t, "my-session-123", opts.SessionID)
 	assert.True(t, opts.Resume)
-}
-
-// --- Event type unification ---
-
-// agentboot.Event must be assignable to/from common.Event without conversion.
-// This test fails to compile if the types are not unified (alias).
-func TestEvent_IsCommonEvent(t *testing.T) {
-	now := time.Now()
-	ce := common.Event{
-		Type:      "assistant",
-		Data:      map[string]interface{}{"key": "val"},
-		Timestamp: now,
-		Raw:       `{"type":"assistant"}`,
-	}
-
-	// Direct assignment: only works if Event = common.Event (alias, not copy)
-	var ae Event = ce
-	assert.Equal(t, ce.Type, ae.Type)
-	assert.Equal(t, ce.Raw, ae.Raw)
-
-	// Slice assignability
-	events := []common.Event{ce}
-	var resultEvents []Event = events
-	assert.Len(t, resultEvents, 1)
 }

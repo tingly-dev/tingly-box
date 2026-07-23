@@ -1,11 +1,5 @@
 package agentboot
 
-import "github.com/tingly-dev/tingly-box/agentboot/common"
-
-// Event represents a generic agent event.
-// Alias of common.Event — the two types are identical and interchangeable.
-type Event = common.Event
-
 // StreamEvent is the sum type of events flowing on [ExecutionHandle.Events].
 // Callers type-switch to specific event types.
 //
@@ -16,7 +10,7 @@ type StreamEvent interface {
 }
 
 // MessageEvent wraps a streamable agent message after the per-agent
-// accumulator has consumed the raw common.Event. The concrete type of Raw
+// accumulator has consumed the raw event. The concrete type of Raw
 // is agent-specific (e.g. *claude.AssistantMessage, *claude.ToolUseMessage);
 // consumers type-switch.
 //
