@@ -1,6 +1,9 @@
 package fetcher
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -72,6 +75,40 @@ func TestMiniMaxFetchersKeepDistinctIdentity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.fetcher.ProviderType(); got != tt.providerType {
 				t.Fatalf("ProviderType() = %q, want %q", got, tt.providerType)
+			}
+		})
+	}
+}
+
+func TestMiniMaxFetchersPreserveRawResponse(t *testing.T) {
+	const response = `{"model_remains":[{"model_name":"MiniMax-M2.5","current_interval_total_count":100,"current_interval_usage_count":75}],"base_resp":{"status_code":0,"status_msg":"success"}}`
+
+	tests := []struct {
+		name         string
+		providerType quota.ProviderType
+	}{
+		{name: "global", providerType: quota.ProviderTypeMiniMax},
+		{name: "cn", providerType: quota.ProviderTypeMiniMaxCN},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(response))
+			}))
+			defer server.Close()
+
+			usage, err := fetchMiniMaxQuota(context.Background(), &ai.Provider{
+				UUID:  "minimax-test",
+				Name:  "MiniMax",
+				Token: "test-token",
+			}, server.URL, tt.providerType)
+			if err != nil {
+				t.Fatalf("fetchMiniMaxQuota() error: %v", err)
+			}
+			if string(usage.RawResponse) != response {
+				t.Errorf("RawResponse = %q, want %q", usage.RawResponse, response)
 			}
 		})
 	}

@@ -12,8 +12,7 @@ import (
 )
 
 func TestOpenRouterFetcher_Fetch(t *testing.T) {
-
-	limit := 100.0
+	const response = `{"data":{"label":"sk-or-v1-test","is_free_tier":false,"limit":100,"usage":35.5,"usage_daily":1.2,"usage_weekly":12.3,"usage_monthly":30,"byok_usage":0,"byok_usage_daily":0,"creator_user_id":"user_test123"}}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/key" {
 			t.Errorf("expected path /api/v1/key, got %s", r.URL.Path)
@@ -22,22 +21,8 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 			t.Errorf("expected Bearer test-key, got %s", r.Header.Get("Authorization"))
 		}
 
-		resp := map[string]interface{}{
-			"data": map[string]interface{}{
-				"label":            "sk-or-v1-test",
-				"is_free_tier":     false,
-				"limit":            limit,
-				"usage":            35.50,
-				"usage_daily":      1.20,
-				"usage_weekly":     12.30,
-				"usage_monthly":    30.00,
-				"byok_usage":       0,
-				"byok_usage_daily": 0,
-				"creator_user_id":  "user_test123",
-			},
-		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_, _ = w.Write([]byte(response))
 	}))
 	defer server.Close()
 
@@ -59,6 +44,9 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 	}
 	if usage.ProviderType != quota.ProviderTypeOpenRouter {
 		t.Errorf("ProviderType = %q, want openrouter", usage.ProviderType)
+	}
+	if string(usage.RawResponse) != response {
+		t.Errorf("RawResponse = %q, want %q", usage.RawResponse, response)
 	}
 
 	// Key limit window

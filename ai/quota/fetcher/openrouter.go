@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -81,8 +82,12 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
 	var keyResp openrouterKeyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&keyResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &keyResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -95,6 +100,7 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		ProviderType: quota.ProviderTypeOpenRouter,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
+		RawResponse:  json.RawMessage(bodyBytes),
 	}
 
 	// Account info
