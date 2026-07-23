@@ -24,14 +24,14 @@ import (
 // It encapsulates the internal bot.Manager and provides a clean interface
 // for the imbotsettings module to control bot lifecycle.
 type BotManager struct {
-	mu         sync.RWMutex
-	manager    *bot.Manager // Internal bot manager from remote_control/bot
+	mu           sync.RWMutex
+	manager      *bot.Manager // Internal bot manager from remote_control/bot
 	store        *db.ImBotSettingsStore
 	sessionMgr   *session.Manager
 	agentService *agentboot.AgentService
 	tbClient     tbclient.TBClient
-	dataPath   string
-	config     *config.Config
+	dataPath     string
+	config       *config.Config
 }
 
 // BotStatus represents the runtime status of a bot.
@@ -78,17 +78,13 @@ func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error)
 		MessageRetention: 7 * 24 * time.Hour,
 	}, sessionStore)
 
-	// Create the agent service (registry + session store façade)
+	// Compose the Claude Code agent with its historical session reader.
 	agentBootConfig := agentboot.DefaultConfig()
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
-	agentService, err := agentboot.NewAgentService(agentBootConfig)
+	agentService, err := claude.NewService(agentBootConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create agent service: %w", err)
 	}
-
-	// Register Claude agent
-	claudeAgent := claude.NewAgent(agentBootConfig)
-	agentService.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Create TBClient (SmartGuide model configuration)
 	tbClient := tbclient.NewTBClient(cfg, sm.Provider())

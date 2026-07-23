@@ -33,15 +33,15 @@ import (
 //
 // Tests then drive the bot through the testenv chat helpers.
 type TestHarness struct {
-	Setting    BotSetting
-	Handler    *BotHandler
+	Setting      BotSetting
+	Handler      *BotHandler
 	ChatStore    ChatStoreInterface
 	SessionMgr   *session.Manager
 	AgentService *agentboot.AgentService
 	Pairing      *PairingManager
-	Audit      *audit.Logger
-	DataDir    string
-	Manager    *imbot.Manager
+	Audit        *audit.Logger
+	DataDir      string
+	Manager      *imbot.Manager
 
 	cleanup func()
 }
@@ -94,10 +94,10 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	agentCfg := agentboot.Config{
 		ClaudeProjectsDir: filepath.Join(opt.DataDir, "claude-projects"),
 	}
-	agentService, err := agentboot.NewAgentService(agentCfg)
+	agentService, err := claude.NewService(agentCfg)
 	if err != nil {
 		// ClaudeProjectsDir failed; fall back to a config without it.
-		agentService, err = agentboot.NewAgentService(agentboot.Config{})
+		agentService, err = claude.NewService(agentboot.Config{})
 		if err != nil {
 			t.Fatalf("BootForTest: agent service: %v", err)
 		}
@@ -131,15 +131,15 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	manager.OnMessage(handler.HandleMessage)
 
 	h := &TestHarness{
-		Setting:    setting,
-		Handler:    handler,
+		Setting:      setting,
+		Handler:      handler,
 		ChatStore:    chatStore,
 		SessionMgr:   sessionMgr,
 		AgentService: agentService,
 		Pairing:      pairing,
 		Audit:        auditLog,
-		DataDir:    opt.DataDir,
-		Manager:    manager,
+		DataDir:      opt.DataDir,
+		Manager:      manager,
 		cleanup: func() {
 			_ = chatStore.Close()
 		},

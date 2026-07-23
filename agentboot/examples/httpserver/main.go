@@ -48,11 +48,10 @@ type executeResponse struct {
 }
 
 func main() {
-	svc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	svc, err := claude.NewService(agentboot.DefaultConfig())
 	if err != nil {
 		log.Fatalf("init AgentService: %v", err)
 	}
-	svc.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgent(agentboot.DefaultConfig()))
 
 	r := gin.Default()
 	h := &handler{svc: svc}

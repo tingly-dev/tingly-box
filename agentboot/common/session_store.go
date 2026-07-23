@@ -2,8 +2,12 @@ package common
 
 import "context"
 
-// SessionStore defines the session storage interface
-type SessionStore interface {
+// SessionReader provides read-only access to historical agent sessions.
+//
+// The interface intentionally models history queries rather than runtime
+// lifecycle persistence. See agentboot/session.LifecycleStore for lifecycle
+// transitions emitted by the Runner.
+type SessionReader interface {
 	// ListProjects returns all project paths that have at least one session
 	ListProjects(ctx context.Context) ([]string, error)
 
@@ -24,6 +28,10 @@ type SessionStore interface {
 	// GetSessionSummary returns a summary (first N and last M events)
 	GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*SessionSummary, error)
 }
+
+// SessionStore is retained for source compatibility.
+// Deprecated: use SessionReader.
+type SessionStore = SessionReader
 
 // SessionSummary contains head and tail events
 type SessionSummary struct {

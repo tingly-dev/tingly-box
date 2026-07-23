@@ -357,17 +357,13 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 		MessageRetention: 7 * 24 * time.Hour,
 	}, msgStore)
 
-	// Create the agent service (registry + session store façade)
+	// Compose the Claude Code agent with its historical session reader.
 	agentBootConfig := agentboot.DefaultConfig()
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
-	agentService, err := agentboot.NewAgentService(agentBootConfig)
+	agentService, err := claude.NewService(agentBootConfig)
 	if err != nil {
 		return fmt.Errorf("create agent service: %w", err)
 	}
-
-	// Register Claude agent
-	claudeAgent := claude.NewAgent(agentBootConfig)
-	agentService.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Create chat store path
 	chatStorePath := filepath.Join(dataPath, "bot_chats.json")

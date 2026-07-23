@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	ccsession "github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
@@ -17,23 +16,25 @@ type Config struct {
 	StreamBufferSize        int           `json:"stream_buffer_size"`
 	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout"`
 
-	// Session configuration
-	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"` // Path to Claude projects directory
+	// ClaudeProjectsDir is consumed by claude.NewService when composing the
+	// Claude Code adapter and its historical session reader.
+	//
+	// The provider-neutral agentboot core does not interpret this field.
+	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"`
 }
 
 // AgentBoot manages agent instances
 type AgentBoot struct {
-	mu     sync.RWMutex
-	config Config
-	agents map[AgentType]Agent
-	store  common.SessionStore // nil if ClaudeProjectsDir not configured
+	mu            sync.RWMutex
+	config        Config
+	agents        map[AgentType]Agent
+	sessionReader common.SessionReader
 }
 
-// New creates a new AgentBoot instance.
-// The Claude session store is always initialized: when ClaudeProjectsDir is
-// empty the underlying store falls back to ~/.claude/projects, which is the
-// canonical location Claude Code writes its session JSONL files to. Returns
-// an error only if the store fails to initialize.
+// New creates a low-level provider-neutral AgentBoot registry.
+//
+// Prefer [NewAgentService] for application code. Provider-specific integrations
+// such as Claude session history are composed outside the root package.
 func New(config Config) (*AgentBoot, error) {
 	if config.DefaultAgent == "" {
 		config.DefaultAgent = AgentTypeClaude
@@ -45,18 +46,10 @@ func New(config Config) (*AgentBoot, error) {
 		config.StreamBufferSize = 100
 	}
 
-	ab := &AgentBoot{
+	return &AgentBoot{
 		config: config,
 		agents: make(map[AgentType]Agent),
-	}
-
-	store, err := ccsession.NewStore(config.ClaudeProjectsDir)
-	if err != nil {
-		return nil, fmt.Errorf("initialize session store: %w", err)
-	}
-	ab.store = store
-
-	return ab, nil
+	}, nil
 }
 
 // RegisterAgent registers a new agent type
