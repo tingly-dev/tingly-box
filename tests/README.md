@@ -7,6 +7,7 @@ This directory contains the Python-based test infrastructure for tingly-box.
 ### Automated Test (Recommended)
 
 ```bash
+export TINGLY_BOX_TEST_CONFIG=/path/to/isolated-test-fixture.json
 task tests:interface
 ```
 
@@ -22,24 +23,24 @@ This will:
 
 ```bash
 # Terminal 1: Start server
-tingly-box start --port 12581 --config-dir ~/.tingly-box --browser=false
+test_dir="$(mktemp -d)"
+tingly-box start --port 12581 --config-dir "$test_dir" --browser=false
 
 # Terminal 2: Run tests
-python3 -m tests.runner --verbose
+TINGLY_BOX_API_KEY=test-token python3 -m tests.runner --verbose
 ```
 
 ## Test Configuration
 
-### Production Server (Port 12580)
-
-- **Config**: `~/.tingly-box/config.json`
-- **Usage**: `python3 -m tests.runner --verbose`
-
 ### Test Server (Port 12581)
 
-- **Config**: `tests/test_config_port12581.json`
+- **Config**: generated under a temporary directory from the explicitly supplied test fixture
 - **Usage**: Automated via `task tests:interface`
-- **Scenarios**: openai, anthropic (generated from real config)
+- **Scenarios**: openai, anthropic (generated from fixture providers)
+
+Tests never auto-discover, copy, or modify the developer configuration. Provide
+an isolated fixture through `TINGLY_BOX_TEST_CONFIG`; web-search mutation tests
+instead require an isolated directory through `TINGLY_BOX_TEST_CONFIG_DIR`.
 
 ## Test Suites
 

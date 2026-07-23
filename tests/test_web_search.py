@@ -20,7 +20,8 @@ CURRENT_DATE = datetime.now().strftime("%Y-%m-%d")
 BASE_URL = "http://127.0.0.1:12580"
 OPENAI_ENDPOINT = f"{BASE_URL}/tingly/openai/v1"
 ANTHROPIC_ENDPOINT = f"{BASE_URL}/tingly/anthropic/v1"
-CONFIG_PATH = os.path.expanduser("~/.tingly-box/config.json")
+CONFIG_DIR = os.environ.get("TINGLY_BOX_TEST_CONFIG_DIR", "")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json") if CONFIG_DIR else ""
 DEFAULT_SERVER_BIN = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "build", "tingly-box")
 )
@@ -35,7 +36,19 @@ def load_model_token(path: str) -> str:
     return token
 
 
-API_KEY = os.environ.get("TINGLY_BOX_API_KEY") or load_model_token(CONFIG_PATH)
+def resolve_api_key() -> str:
+    token = os.environ.get("TINGLY_BOX_API_KEY")
+    if token:
+        return token
+    if not CONFIG_PATH:
+        raise RuntimeError(
+            "Set TINGLY_BOX_API_KEY or point TINGLY_BOX_TEST_CONFIG_DIR at an "
+            "isolated test configuration directory"
+        )
+    return load_model_token(CONFIG_PATH)
+
+
+API_KEY = os.environ.get("TINGLY_BOX_API_KEY", "")
 
 
 def test_openai_explicit_tool_call(label=""):
@@ -316,6 +329,16 @@ def _restart_server(bin_path: str, config_dir: str) -> bool:
 
 
 def run_with_prefer_local_search(enabled: bool, server_bin: str) -> bool:
+    if not CONFIG_PATH:
+        raise RuntimeError(
+            "TINGLY_BOX_TEST_CONFIG_DIR is required for configuration mutation tests"
+        )
+    developer_config_dir = os.path.realpath(
+        os.path.join(os.path.expanduser("~"), ".tingly-box")
+    )
+    if os.path.realpath(CONFIG_DIR) == developer_config_dir:
+        raise RuntimeError("Refusing to modify the developer configuration directory")
+
     config_dir = os.path.dirname(CONFIG_PATH)
     cfg = _read_config(CONFIG_PATH)
     tool_cfg = cfg.get("tool_interceptor")
@@ -349,6 +372,9 @@ def run_with_prefer_local_search(enabled: bool, server_bin: str) -> bool:
 
 def main():
     """Run all tests."""
+    global API_KEY
+    API_KEY = resolve_api_key()
+
     print("\n" + "="*70)
     print("Web Search Functionality Test Suite (Explicit Tool Calls)")
     print("="*70)

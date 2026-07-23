@@ -74,12 +74,16 @@ type recorder struct {
 	callCount    int
 	endpointHits map[EndpointKind]int
 	captured     map[EndpointKind]*CapturedRequest
+	pathHits     map[string]int
+	pathCaptured map[string]*CapturedRequest
 }
 
 func newRecorder() *recorder {
 	return &recorder{
 		endpointHits: make(map[EndpointKind]int),
 		captured:     make(map[EndpointKind]*CapturedRequest),
+		pathHits:     make(map[string]int),
+		pathCaptured: make(map[string]*CapturedRequest),
 	}
 }
 
@@ -91,12 +95,15 @@ func (rec *recorder) record(kind EndpointKind, r *http.Request, body []byte) {
 	defer rec.mu.Unlock()
 	rec.callCount++
 	rec.endpointHits[kind]++
-	rec.captured[kind] = &CapturedRequest{
+	rec.pathHits[r.URL.Path]++
+	captured := &CapturedRequest{
 		Method:  r.Method,
 		Path:    r.URL.Path,
 		Headers: r.Header.Clone(),
 		Body:    append([]byte(nil), body...),
 	}
+	rec.captured[kind] = captured
+	rec.pathCaptured[r.URL.Path] = captured
 }
 
 func (rec *recorder) totalCalls() int {
@@ -117,10 +124,24 @@ func (rec *recorder) lastRequest(kind EndpointKind) *CapturedRequest {
 	return rec.captured[kind]
 }
 
+func (rec *recorder) hitsForPath(path string) int {
+	rec.mu.RLock()
+	defer rec.mu.RUnlock()
+	return rec.pathHits[path]
+}
+
+func (rec *recorder) lastRequestForPath(path string) *CapturedRequest {
+	rec.mu.RLock()
+	defer rec.mu.RUnlock()
+	return rec.pathCaptured[path]
+}
+
 func (rec *recorder) reset() {
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	rec.callCount = 0
 	rec.endpointHits = make(map[EndpointKind]int)
 	rec.captured = make(map[EndpointKind]*CapturedRequest)
+	rec.pathHits = make(map[string]int)
+	rec.pathCaptured = make(map[string]*CapturedRequest)
 }

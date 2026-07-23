@@ -117,7 +117,7 @@ tasks:
     summary: Run Python interface tests (test_automation)
     cmds:
       - |
-        python -m tests.test_automation
+        python -m tests.test_automation --config-path "${TINGLY_BOX_TEST_CONFIG:?set TINGLY_BOX_TEST_CONFIG to an isolated test fixture}"
 
   mcp:web-tools:
     summary: Run local MCP stdio server exposing mcp_web_search/mcp_web_fetch tools

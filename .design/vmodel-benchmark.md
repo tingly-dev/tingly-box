@@ -166,17 +166,22 @@ seam — so no dedicated `Service()` accessor is shipped until a caller needs on
    `LastRequest`, …) is unchanged, so the matrix/flags/agent suites and
    `cli/harness` keep working. Validated by the full harness matrix
    (`--mode=all` + gosdk/python/node/aisdk drivers), 0 failures.
-3. **Phase 3 — servertest (✅ decided: do NOT migrate; left unchanged).**
-   `servertest.MockProviderServer` is an endpoint-keyed *dumb echo* that
-   intentionally wants byte-exact upstream control, **not** protocol-correct
-   responses — so the foundation's main value does not apply to it, and a
-   migration would be net-new code (an echo `http.Handler`) for a single consumer
-   at gateway-test risk. Decision: leave it standalone and **untouched in this PR**
-   (it's out of scope for the benchmark foundation; even tangential cleanup is
-   kept separate to honor that boundary). Two follow-ups remain *possible but not
-   done here* — see "Phase 3 — servertest: decision & possible future".
+3. **Phase 3 — servertest (✅ landed).** `servertest.MockProviderServer` keeps
+   its endpoint-keyed, byte-exact responder but wraps it with
+   `benchmark.NewServer(inner)`. Benchmark owns transport, request capture,
+   endpoint hit counts, and reset; the adapter owns arbitrary response, error,
+   delay, and SSE configuration.
 
-## Phase 3 — servertest: decision & possible future
+## Phase 3 — servertest: shared foundation, local responder
+
+**Current state (2026-07-23):** Phase 3 now uses the generic
+`NewServer(inner)` seam. `benchmark.Server.ServeHTTP` exposes the same observable
+handler path used by managed transports, so direct tests, request capture, hit
+counts, and reset all share the benchmark implementation. The byte-exact echo
+responder remains local to `servertest`; using `NewModelServer` or
+`NewScenarioServer` would change its response semantics.
+
+### Historical decision context
 
 **Decision: do not migrate `servertest` onto the foundation, and leave it
 untouched in this PR.** The analysis that led here (grounded in actual usage,
@@ -208,9 +213,9 @@ not assumed):
   gold-plating (violates "done ≠ locked", "reduce noise", avoid speculative
   abstraction).
 
-**Current state in this PR:** `servertest` is **unchanged** — no files touched.
+**State at the time of that decision:** `servertest` was unchanged.
 
-**Possible future work (both out of scope here; separate PRs if/when wanted):**
+**Follow-up outcomes:**
 
 1. **Cleanup (independent, low-risk).** `mock_provider.go` carries ~250 lines of
    dead scaffolding (`MockProviderTestSuite` + `RunMockProviderTests`, never
@@ -218,20 +223,16 @@ not assumed):
    dead suite and stripping the spam (607 → ~322 lines) is a clear quality win,
    but it is unrelated to the benchmark foundation and belongs in its own small,
    obvious-to-review PR — not bundled here. It needs no benchmark coupling.
-2. **Adoption (demand-driven).** If an external project ever needs a reusable
-   dumb-echo provider, build it as described below; `servertest` could then adopt
-   it as a bonus. Until such a consumer exists, this stays unbuilt.
+2. **Adoption (now landed).** `servertest` now adopts the generic
+   `benchmark.NewServer(inner)` seam while keeping the echo responder local.
 
 ---
 
-The rest of this section is the **demand-driven** design for follow-up 2: build it
-only when an external project actually needs a reusable dumb-echo provider; at
-that point servertest can adopt it as a bonus. It is exactly the design's thesis
-a third time — **observability + transport are shared; response generation is
-pluggable** — so it leans on the existing `NewServer(inner)` seam rather than
-bending servertest onto the scenario one.
+The implementation follows the same thesis — **observability + transport are
+shared; response generation is pluggable** — and leans on the existing
+`NewServer(inner)` seam rather than bending servertest onto the scenario one.
 
-### Step 1 — ship an echo *handler* (no new constructor)
+### Step 1 — keep the echo *handler* local (no new constructor)
 
 The generic `NewServer(inner http.Handler)` already wraps any handler with the
 capture + transport layer, so a dumb-echo needs **no bespoke constructor** — only
@@ -241,45 +242,32 @@ registry wired into the Server for `RegisterScenario`. An echo bundles nothing
 of the sort.)
 
 ```go
-type MockResponse struct { StatusCode int; Body []byte; Delay time.Duration; Error string }
-type EndpointMock struct { /* mu; per-endpoint MockResponse + stream events; implements http.Handler */ }
-func (m *EndpointMock) SetResponse(endpoint string, r MockResponse)
-func (m *EndpointMock) SetStreamingResponse(endpoint string, events []string)
-
-// usage — one line, via the existing seam:
-mock := benchmark.NewEndpointMock()
-srv := benchmark.NewServer(mock)   // capture + transports for free
+srv := benchmark.NewServer(endpointHandler) // capture + transports for free
 ```
 
-- `EndpointMock` serves `/v1/chat/completions` (+ `/chat/completions`),
+- The local responder serves `/v1/chat/completions` (+ `/chat/completions`),
   `/v1/messages` (+ `/messages`); honors `Delay` (sleep), `Error` (envelope),
-  `stream` flag → `sse.WriteSSEResponse(events)`. Reuses the **same**
-  `internal/protocol/sse` writer as the scenario responder.
-- Default bodies (the current `CreateMockChatCompletionResponse` / Anthropic
-  default) move here as exported helpers so the "when unset" behavior is
-  preserved. (The `fmt.Printf` debug spam was already removed from the live
-  servertest mock in the Phase 3 cleanup.)
-- Per-endpoint counts/last-request come from the shared `recorder` via
-  `classify(path)`; `GetCallCount(endpoint)`/`GetLastRequest(endpoint)` map the
-  endpoint string through `classify` to an `EndpointKind`.
+  and the `stream` flag by emitting the exact configured SSE events.
+- Default bodies (`CreateMockChatCompletionResponse` plus the Anthropic default)
+  stay local, preserving the "when unset" behavior without expanding the public
+  benchmark API.
+- Per-endpoint counts/last-request come from the shared recorder's exact-path
+  indexes; kind-level observation remains available independently.
 
 ### Step 2 — make `servertest.MockProviderServer` a thin adapter
 
 Keep its exact public signatures (`NewMockProviderServer`, `SetResponse`,
 `SetStreamingResponse`, `GetURL`, `GetCallCount`, `GetLastRequest`, `Reset`,
-`Close`) but back them with `benchmark.NewServer(NewEndpointMock())`.
-`MockResponse` / `MockStreamingResponse` become aliases of the benchmark types
-(like Phase 2's `EndpointKind`/`CapturedRequest`). No `servertest` test changes.
+`Close`) but back them with `benchmark.NewServer(inner)`. `MockResponse` and
+`MockStreamingResponse` stay local because they describe the local responder.
 
 ### Risks / decisions
 
 - **`Delay` lives on the echo `MockResponse`, not on `scenario.MockResponseBuilder`** —
   the two response strategies stay separate; no change to the scenario path.
-- **Counter keying**: `servertest` counts per endpoint *string*; the benchmark
-  `recorder` counts per `EndpointKind`. The `classify` mapping is 1:1 for these
-  routes, but if a test ever distinguished `/v1/chat/completions` from
-  `/chat/completions` by count, that nuance is lost — current tests do not (a
-  quick grep confirms before implementing).
+- **Counter keying**: benchmark records both `EndpointKind` aggregates and exact
+  URL paths. The servertest compatibility methods use exact paths, preserving
+  the distinction between `/v1/chat/completions` and `/chat/completions`.
 - **`GetLastRequest` returns `map[string]interface{}`** today; the benchmark
   `CapturedRequest.JSON()` returns the same shape — adapter calls `.JSON()`.
 - Validation: `go test ./internal/servertest/...` (unchanged); no matrix
@@ -292,18 +280,18 @@ Verified against current usage, not assumed:
 - **protocoltest — parity by construction.** The scenario responder + `capture.go`
   + `check/` *are* today's `VirtualServer` and `assertions.go` elevated verbatim;
   Phase 2 is a thin re-export wrapper, so nothing can drift.
-- **servertest — parity achievable on demand, but not pursued.** Its mock
-  surface is small and reproducible via a future `EndpointMock` responder
+- **servertest — shared foundation with a local responder.** Its mock surface
+  delegates transport and observability to `benchmark.Server`
   (`SetResponse`/`SetStreamingResponse`/`GetCallCount`/`GetLastRequest`/`GetURL`/
   `Reset`/`Close` over the shared `capture.go`). But servertest *intentionally*
   wants a **dumb echo** (arbitrary bytes to exercise gateway forwarding), **not**
   generated protocol-correct responses — so the foundation's headline value does
-  not apply, and the migration is **deferred / demand-driven** (see Phase 3
-  decision). It stays a standalone gateway-level mock for now.
+  not apply. The response generator stays local while capture and transport are
+  shared.
 
 This is the payoff of the pluggable split: the model responder serves
 protocol-correct paths, the scenario responder serves the transform matrix, and
-a (future) endpoint responder could serve servertest's byte-exact needs — one
+the local endpoint responder serves servertest's byte-exact needs — one
 shared observability + transport layer underneath, response generation pluggable
 on top. No single responder is forced on a consumer it doesn't fit.
 
@@ -315,8 +303,8 @@ on top. No single responder is forced on a consumer it doesn't fit.
   coexist behind the same observability layer by design.
 - **Load-generator API untouched.** `BenchmarkClient`/`BenchmarkResult` stay
   as-is; only additive growth of the package.
-- **Migrations are gated.** Phases 2–3 are deliberately deferred so the
-  foundation can be validated before consumers move.
+- **Migrations were gated.** The foundation was validated before the Phase 2 and
+  Phase 3 consumers moved.
 
 ## See also
 

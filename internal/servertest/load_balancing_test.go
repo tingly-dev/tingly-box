@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -19,7 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -208,11 +205,7 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 
 // TestLoadBalancerAPI_RuleManagement tests rule management endpoints
 func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
-	// Create test server with config directory
-	configDir := filepath.Join("tests", ".tingly-box-loadbalancer")
-	defer os.RemoveAll(configDir)
-
-	ts := NewTestServerWithConfigDir(t, configDir)
+	ts := NewTestServer(t)
 	defer func() {
 		if ts.server != nil {
 			ts.server.Stop(nil)
@@ -378,10 +371,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 
 // TestLoadBalancerAPI_CurrentService tests current service endpoint
 func TestLoadBalancerAPI_CurrentService(t *testing.T) {
-	configDir := filepath.Join("tests", ".tingly-box-current")
-	defer os.RemoveAll(configDir)
-
-	ts := NewTestServerWithConfigDir(t, configDir)
+	ts := NewTestServer(t)
 	defer func() {
 		if ts.server != nil {
 			ts.server.Stop(nil)
@@ -469,10 +459,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 
 // TestLoadBalancerAPIAuthentication tests authentication requirements
 func TestLoadBalancerAPI_Authentication(t *testing.T) {
-	configDir := filepath.Join("tests", ".tingly-box-auth")
-	defer os.RemoveAll(configDir)
-
-	ts := NewTestServerWithConfigDir(t, configDir)
+	ts := NewTestServer(t)
 	defer func() {
 		if ts.server != nil {
 			ts.server.Stop(nil)
@@ -731,7 +718,6 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 
 	// Create test server with test utilities
 	ts := NewTestServer(t)
-	defer Cleanup()
 
 	// Add mock provider to test server config
 	provider := &typ.Provider{
@@ -739,7 +725,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		APIBase: mockServer.GetURL(),
 		Token:   "mock-token",
 		Enabled: true,
-		Timeout: int64(constant.DefaultRequestTimeout),
+		Timeout: defaultMockProviderTimeoutSeconds,
 	}
 	err := ts.appConfig.AddProvider(provider)
 	if err != nil {

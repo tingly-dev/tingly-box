@@ -86,14 +86,26 @@ class TestAutomation:
             test_port: Port to run test server on
             project_dir: Path to tingly-box project (auto-detected if None)
             verbose: Enable verbose logging
-            config_path: Path to tingly-box config (default: ~/.tingly-box/config.json)
+            config_path: Path to an explicit test fixture. The developer's
+                default configuration is never used.
         """
+        selected_config = config_path or os.environ.get("TINGLY_BOX_TEST_CONFIG")
+        if not selected_config:
+            raise RuntimeError(
+                "An isolated test fixture is required. Pass --config-path or "
+                "set TINGLY_BOX_TEST_CONFIG."
+            )
+        self.config_path = Path(selected_config).expanduser().resolve()
+        developer_config_dir = (Path.home() / ".tingly-box").resolve()
+        if self.config_path == developer_config_dir or developer_config_dir in self.config_path.parents:
+            raise RuntimeError(
+                "Refusing to use the developer configuration directory as a test fixture"
+            )
         self.test_port = self._select_test_port(test_port)
         self.project_dir = project_dir or self._find_project_dir()
         self.verbose = verbose
         self.temp_dir: Optional[Path] = None
         self.server_process: Optional[subprocess.Popen] = None
-        self.config_path = Path(config_path or Path.home() / ".tingly-box" / "config.json")
 
         # Paths
         self.server_binary = self.project_dir / "build" / "tingly-box"
@@ -138,7 +150,8 @@ class TestAutomation:
         if not self.config_path.exists():
             raise RuntimeError(
                 f"Config file not found at {self.config_path}\n"
-                f"Please run tingly-box first to create config, or specify --config-path"
+                "Provide an isolated fixture with --config-path or "
+                "TINGLY_BOX_TEST_CONFIG"
             )
 
         logger.info(f"Loading config from: {self.config_path}")
@@ -165,7 +178,7 @@ class TestAutomation:
             Path to created config file
         """
         config_path = temp_dir / "config.json"
-        logger.info("Creating config from real config")
+        logger.info("Building temporary test config from explicit fixture")
         config_data = self._generate_config_data()
         with open(config_path, 'w') as f:
             json.dump(config_data, f, indent=2)
@@ -185,8 +198,8 @@ class TestAutomation:
         rules, provider_uuids = self._build_rules_from_config(config, providers)
         if not rules:
             raise RuntimeError(
-                "No test rules could be generated from the real config. "
-                "Ensure providers have models or existing rules with services."
+                "No test rules could be generated from the test fixture. "
+                "Ensure fixture providers have models or rules with services."
             )
         scenarios = self._build_scenarios_from_rules(rules)
 
@@ -217,7 +230,7 @@ class TestAutomation:
         return test_config
 
     def _extract_providers(self, config: Dict) -> list:
-        """Extract enabled providers from real config."""
+        """Extract enabled providers from the explicit test fixture."""
         providers = []
         if config.get("providers_v2"):
             providers = list(config.get("providers_v2", []))
@@ -232,7 +245,7 @@ class TestAutomation:
         return enabled
 
     def _build_rules_from_config(self, config: Dict, providers: list) -> tuple[list, set]:
-        """Build rules for test config based on real providers."""
+        """Build rules for test config based on fixture providers."""
         rules = []
         provider_uuids = set()
         config_rules = config.get("rules", []) or []
@@ -649,7 +662,7 @@ def main() -> int:
         "--config-path",
         type=str,
         default=None,
-        help="Path to tingly-box config (default: ~/.tingly-box/config.json)"
+        help="Path to an isolated test fixture (or set TINGLY_BOX_TEST_CONFIG)"
     )
     parser.add_argument(
         "--verbose", "-v",
