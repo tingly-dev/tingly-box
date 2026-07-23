@@ -75,9 +75,18 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		Timestamp: time.Now(),
 	})
 
+	// The bot's default_agent setting decides which Claude Code configuration
+	// serves @cc: the main claude_code scenario or a profile
+	// ("claude_code:<id>"). Read dynamically so a profile switch in the web UI
+	// applies from the next message without a bot restart.
+	profileID := e.deps.GetBotSettingOrCache().CCProfileID()
+
 	statusMsg := "⏳ CC: Processing new session..."
 	if !req.IsNewSession {
 		statusMsg = "⏳ CC: Resuming session..."
+	}
+	if profileID != "" {
+		statusMsg += fmt.Sprintf(" (profile: %s)", profileID)
 	}
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
 
@@ -94,21 +103,48 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		"projectPath":    projectPath,
 		"shouldResume":   shouldResume,
 		"permissionMode": permissionMode,
+		"ccProfile":      profileID,
 	}).Info("Starting Claude Code execution")
 
 	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// Route the Claude Code CLI through the tingly-box gateway so it uses the
-	// configured provider (including third-party model services) instead of
-	// talking to the Anthropic API directly. Without this, @cc fails whenever
-	// no direct Anthropic credentials are present on the host.
+	// Route the Claude Code CLI through the tingly-box gateway. Two distinct
+	// mechanisms, matching what a local launch does for each case:
+	//
+	//   - Main scenario (no profile): process env vars (ANTHROPIC_BASE_URL,
+	//     etc.). Without this, @cc fails whenever no direct Anthropic
+	//     credentials are present on the host.
+	//   - A selected profile: the CLI's --settings flag REPLACES
+	//     ~/.claude/settings.json rather than merging with it, so a profile's
+	//     routing/models/overrides only take effect when its materialized
+	//     settings.json is referenced via --settings — exactly what
+	//     `tingly-box cc --profile <id>` does locally. Injecting the
+	//     profile's values as process env instead is not enough: with no
+	//     --settings flag the CLI still reads ~/.claude/settings.json, whose
+	//     main-scenario values would silently win.
+	//
+	// If the profile can no longer be resolved (e.g. deleted in the UI), fall
+	// back to the main scenario and tell the user rather than silently
+	// running with different routing than they selected.
 	var execEnv []string
+	var settingsPath string
 	if e.deps.TBClient != nil {
-		ccEnv, eerr := e.deps.TBClient.GetClaudeCodeEnv(ctx)
-		if eerr != nil {
-			logrus.WithError(eerr).Warn("ClaudeCodeExecutor: failed to resolve gateway env; @cc may not reach the configured provider")
-		} else {
-			execEnv = ccEnv
+		if profileID != "" {
+			path, perr := e.deps.TBClient.GetClaudeCodeSettingsPathForProfile(ctx, profileID)
+			if perr != nil {
+				logrus.WithError(perr).WithField("ccProfile", profileID).Warn("ClaudeCodeExecutor: failed to materialize profile settings; falling back to main claude_code scenario")
+				e.deps.SendText(req.HCtx, fmt.Sprintf("⚠️ Claude Code profile '%s' could not be resolved (%v).\nRunning with the default claude_code scenario instead. Pick another profile in the tingly-box web UI (Remote → this bot).", profileID, perr))
+			} else {
+				settingsPath = path
+			}
+		}
+		if settingsPath == "" {
+			ccEnv, eerr := e.deps.TBClient.GetClaudeCodeEnv(ctx)
+			if eerr != nil {
+				logrus.WithError(eerr).Warn("ClaudeCodeExecutor: failed to resolve gateway env; @cc may not reach the configured provider")
+			} else {
+				execEnv = ccEnv
+			}
 		}
 	}
 
@@ -146,6 +182,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 			PermissionPromptTool: "stdio",
 			PermissionMode:       permissionMode,
 			Env:                  execEnv,
+			SettingsPath:         settingsPath,
 			Store:                e.deps.SessionMgr,
 		},
 	}, prompter, sink)

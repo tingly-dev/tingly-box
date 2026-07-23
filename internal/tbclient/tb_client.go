@@ -44,6 +44,18 @@ type TBClient interface {
 	// (including third-party model services) instead of the Anthropic API.
 	GetClaudeCodeEnv(ctx context.Context) ([]string, error)
 
+	// GetClaudeCodeSettingsPathForProfile materializes the Claude Code
+	// profile's derived settings.json — the same on-disk artifact and
+	// resolution `tingly-box cc --profile <id>` uses — and returns its path.
+	// Claude Code's --settings flag REPLACES ~/.claude/settings.json rather
+	// than merging with it, so a profile selection only takes effect when its
+	// full settings file is referenced this way; env vars alone are not
+	// enough (they lose to whatever ~/.claude/settings.json already sets,
+	// since no --settings flag means the CLI falls back to that file).
+	// Returns ("", nil) for an empty profileID — the main scenario needs no
+	// settings file, only GetClaudeCodeEnv.
+	GetClaudeCodeSettingsPathForProfile(ctx context.Context, profileID string) (string, error)
+
 	// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario
 	GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error)
 
@@ -170,6 +182,40 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 	return env, nil
+}
+
+// GetClaudeCodeSettingsPathForProfile materializes the profiled scenario
+// ("claude_code:<id>") settings file via the same MaterializeCCProfileSettings
+// path the local `tingly-box cc --profile` launch uses, and returns its path
+// for the caller to pass to the claude CLI via --settings. Writing to disk
+// (rather than just resolving env in memory) matters: --settings is how the
+// CLI is told to use this profile's routing/models/overrides AT ALL — without
+// it the CLI reads ~/.claude/settings.json as usual, and the main scenario's
+// values there would silently win over anything we injected as process env.
+func (c *TBClientImpl) GetClaudeCodeSettingsPathForProfile(ctx context.Context, profileID string) (string, error) {
+	if profileID == "" {
+		return "", nil
+	}
+
+	meta, found := c.config.GetProfile(typ.ScenarioClaudeCode, profileID)
+	if !found {
+		return "", fmt.Errorf("claude code profile %q not found", profileID)
+	}
+
+	port := c.config.GetServerPort()
+	if port == 0 {
+		port = 12580
+	}
+	host := c.config.GetServerHost()
+	baseURL := fmt.Sprintf("http://%s:%d", host, port)
+	apiKey := c.config.GetModelToken()
+	scenarioPath := string(typ.ProfiledScenarioName(typ.ScenarioClaudeCode, meta.ID))
+
+	settingsPath, err := tbagent.MaterializeCCProfileSettings(c.config, baseURL, apiKey, scenarioPath, meta)
+	if err != nil {
+		return "", fmt.Errorf("materialize claude code profile %q settings: %w", profileID, err)
+	}
+	return settingsPath, nil
 }
 
 // claudeCodeModels holds the request-model name for each Claude Code model tier.

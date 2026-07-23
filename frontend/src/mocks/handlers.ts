@@ -2438,7 +2438,8 @@ export const handlers = [
                     enabled: true,
                     auth_type: 'token',
                     default_cwd: '/home/user/projects',
-                    default_agent: 'claude_code',
+                    // @cc routes through the "ds" Claude Code profile (claude_code:p1)
+                    default_agent: 'claude_code:p1',
                     smartguide_provider: 'mock-provider-anthropic',
                     smartguide_model: 'claude-sonnet-5',
                     chat_id: '123456789',

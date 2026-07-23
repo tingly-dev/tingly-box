@@ -80,6 +80,27 @@ export function getAuthDisplayValue(settings: BotSettings, config: BotPlatformCo
     return 'Configured';
 }
 
+// CLAUDE_CODE_AGENT is the base agent identifier stored in default_agent when
+// @cc uses the main claude_code scenario. A profiled selection is stored as
+// "claude_code:<profileId>" — mirrors the backend scenario naming.
+export const CLAUDE_CODE_AGENT = 'claude_code';
+
+// ccProfileIdFromDefaultAgent extracts the Claude Code profile ID from a bot's
+// default_agent value. Returns '' for unset / "claude_code" / non-claude_code.
+export function ccProfileIdFromDefaultAgent(defaultAgent?: string): string {
+    const v = (defaultAgent || '').trim();
+    if (!v.startsWith(CLAUDE_CODE_AGENT + ':')) return '';
+    return v.slice(CLAUDE_CODE_AGENT.length + 1);
+}
+
+// defaultAgentForCCProfile builds the default_agent value for a profile
+// selection ('' → the explicit base "claude_code", not an empty string — a
+// concrete value reads clearly in raw settings/logs, per the "show the
+// concrete value, not the alias" principle in .design/ux-principles.md).
+export function defaultAgentForCCProfile(profileId: string): string {
+    return profileId ? `${CLAUDE_CODE_AGENT}:${profileId}` : CLAUDE_CODE_AGENT;
+}
+
 // REMOTE_AGENT_SCENARIO is the mount name for the remote-agent purpose
 // (control Claude Code / SmartGuide from chat). Mirrors the backend constant.
 export const REMOTE_AGENT_SCENARIO = 'remote_agent';

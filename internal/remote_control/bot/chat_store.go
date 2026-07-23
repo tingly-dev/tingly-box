@@ -3,9 +3,11 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/jsonstore"
 )
 
@@ -30,6 +32,13 @@ type BotSetting struct {
 	Enabled       bool              `json:"enabled"`                  // Whether this bot is enabled
 	Scenarios     string            `json:"scenarios,omitempty"`      // Raw scenario/mount list (JSON, see remote/binding)
 
+	// DefaultAgent selects which agent configuration serves @cc for this bot:
+	// ""/"claude_code" = the main claude_code scenario, "claude_code:<id>" = a
+	// Claude Code profile — @cc then routes through the profiled scenario with
+	// the profile's unified/separate mode and env overrides, exactly like a
+	// local `tingly-box cc --profile <id>` launch.
+	DefaultAgent string `json:"default_agent,omitempty"`
+
 	// Output behavior settings
 	Verbose *bool `json:"verbose,omitempty"` // Send intermediate messages (nil = true default)
 
@@ -46,6 +55,21 @@ type BotSetting struct {
 
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+// CCProfileID extracts the Claude Code profile ID from DefaultAgent.
+// Returns "" for the main claude_code scenario (unset, "claude_code", or a
+// value whose base scenario isn't claude_code).
+func (b BotSetting) CCProfileID() string {
+	raw := strings.TrimSpace(b.DefaultAgent)
+	if raw == "" {
+		return ""
+	}
+	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(raw))
+	if base != typ.ScenarioClaudeCode {
+		return ""
+	}
+	return profileID
 }
 
 // IsRequirePairing reports whether this bot requires per-chat pairing.

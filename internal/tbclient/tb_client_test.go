@@ -2,6 +2,8 @@ package tbclient
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -314,6 +316,61 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 	assert.Equal(t, "tingly/cc", kv["ANTHROPIC_DEFAULT_OPUS_MODEL"])
 	_, hasToken := kv["ANTHROPIC_AUTH_TOKEN"]
 	assert.True(t, hasToken)
+}
+
+func TestGetClaudeCodeSettingsPathForProfile_EmptyIDReturnsNoPath(t *testing.T) {
+	// The main scenario needs no materialized settings file — the caller
+	// falls back to GetClaudeCodeEnv (process env) in that case.
+	cfg := &serverconfig.Config{ServerPort: 9000}
+	client := NewTBClient(cfg, nil)
+
+	path, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "")
+	require.NoError(t, err)
+	assert.Empty(t, path)
+}
+
+func TestGetClaudeCodeSettingsPathForProfile_UnknownProfile(t *testing.T) {
+	cfg := &serverconfig.Config{ServerPort: 9000}
+	client := NewTBClient(cfg, nil)
+
+	_, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "ghost")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ghost")
+}
+
+func TestGetClaudeCodeSettingsPathForProfile_MaterializesProfileSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	profiledRule := ccRule(serverconfig.BuiltinRuleUUID(typ.RuleScenario("claude_code:p1"), "cc"), "team/coder")
+	profiledRule.Scenario = "claude_code:p1"
+	cfg := &serverconfig.Config{
+		ServerPort: 9000,
+		Profiles: map[string][]typ.ProfileMeta{
+			string(typ.ScenarioClaudeCode): {{ID: "p1", Name: "work", Unified: true}},
+		},
+		Rules: []typ.Rule{profiledRule},
+	}
+	client := NewTBClient(cfg, nil)
+
+	path, err := client.GetClaudeCodeSettingsPathForProfile(context.Background(), "p1")
+	require.NoError(t, err)
+	require.NotEmpty(t, path)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var written struct {
+		Env map[string]string `json:"env"`
+	}
+	require.NoError(t, json.Unmarshal(data, &written))
+
+	// The materialized file — the one --settings will point the CLI at —
+	// must carry the PROFILED scenario endpoint and the profile's resolved
+	// model, not the main scenario's.
+	assert.Equal(t, "http://localhost:9000/tingly/claude_code:p1", written.Env["ANTHROPIC_BASE_URL"])
+	assert.Equal(t, "team/coder", written.Env["ANTHROPIC_MODEL"])
 }
 
 func TestGetScenarioEndpointPath(t *testing.T) {

@@ -1,13 +1,14 @@
 import { Box } from '@mui/material';
 import type { BotSettings } from '@/types/bot.ts';
+import { ccProfileIdFromDefaultAgent } from '@/types/bot.ts';
 import type { Provider } from '@/types/provider.ts';
+import type { ProfileInfo } from '@/contexts/ProfileContext';
 import { ArrowNode, NodeContainer } from '../nodes';
 import ImBotNode from '../nodes/ImBotNode.tsx';
 import BotModelNode from '../nodes/BotModelNode.tsx';
 import AgentNode from '../nodes/AgentNode.tsx';
 import AtNode from '../nodes/AtNode.tsx';
-import { useNavigate } from 'react-router-dom';
-import { useCallback } from 'react';
+import CCProfileNode from '../nodes/CCProfileNode.tsx';
 
 const graphRowStyles = (theme: any) => ({
     display: 'flex',
@@ -43,6 +44,10 @@ export interface RemoteControlGraphProps {
     readOnly?: boolean;
     onModelClick?: () => void;
     onBotClick?: () => void;
+    /** Configured Claude Code profiles (to resolve the selected profile name). */
+    ccProfiles?: ProfileInfo[];
+    /** Opens the Claude Code profile picker for this bot's @cc branch. */
+    onCCProfileClick?: () => void;
 }
 
 const getProviderName = (providerUuid: string | undefined, providersData: Provider[]): string => {
@@ -58,13 +63,15 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
     readOnly = false,
     onModelClick,
     onBotClick,
+    ccProfiles = [],
+    onCCProfileClick,
 }) => {
-    const navigate = useNavigate();
     const providerName = getProviderName(imbot.smartguide_provider, providers);
 
-    const handleAgentClick = useCallback(() => {
-        navigate('/agent/claude_code');
-    }, [navigate]);
+    // Which Claude Code configuration serves @cc: '' = main claude_code
+    // scenario, otherwise a profile ID from default_agent ("claude_code:<id>").
+    const ccProfileId = ccProfileIdFromDefaultAgent(imbot.default_agent);
+    const ccProfileName = ccProfiles.find(p => p.id === ccProfileId)?.name;
 
     return (
         <Box sx={graphRowStyles}>
@@ -114,7 +121,7 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
                     </NodeContainer>
                 </Box>
 
-                {/* @cc: Claude Code agent only */}
+                {/* @cc: Claude Code agent → profile (default or a claude_code profile) */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <NodeContainer>
                         <AtNode type="cc" />
@@ -126,7 +133,17 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
                         <AgentNode
                             agentType="claude-code"
                             active={isBotEnabled}
-                            onClick={readOnly ? undefined : handleAgentClick}
+                        />
+                    </NodeContainer>
+
+                    <ArrowNode direction="forward" />
+
+                    <NodeContainer>
+                        <CCProfileNode
+                            profileId={ccProfileId}
+                            profileName={ccProfileName}
+                            active={isBotEnabled}
+                            onClick={readOnly ? undefined : onCCProfileClick}
                         />
                     </NodeContainer>
                 </Box>

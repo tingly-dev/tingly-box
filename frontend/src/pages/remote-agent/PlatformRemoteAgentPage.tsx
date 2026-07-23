@@ -1,11 +1,14 @@
 import { BotConfigDialog, RemoteAgentBotCard, useBotModelDialog } from '@/components/bot';
+import CCProfileDialog from '@/components/bot/CCProfileDialog';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { PageLayout } from '@/components/PageLayout';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { usePlatformGuide } from '@/constants/platformGuides';
+import { useProfileContext } from '@/contexts/ProfileContext';
 import type { BotSettings } from '@/types/bot';
+import { defaultAgentForCCProfile } from '@/types/bot';
 import type { Provider } from '@/types/provider';
 import { Add } from '@/components/icons';
 import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
@@ -193,6 +196,26 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
         openBotModelDialog();
     }, [openBotModelDialog]);
 
+    // Claude Code profiles for the @cc branch — the selected profile decides
+    // which claude_code scenario remote @cc executions route through.
+    const { getProfiles: getScenarioProfiles } = useProfileContext();
+    const ccProfiles = getScenarioProfiles('claude_code');
+    const [profileDialogBot, setProfileDialogBot] = useState<BotSettings | null>(null);
+
+    const handleCCProfileSelect = useCallback(async (uuid: string, profileId: string) => {
+        const response = await api.updateImBotSetting(uuid, {
+            default_agent: defaultAgentForCCProfile(profileId),
+        });
+        if (response?.success) {
+            showNotification(t('remoteAgent.notify.ccProfileUpdated', { defaultValue: 'Claude Code profile updated' }), 'success');
+            await loadBots();
+        } else {
+            const message = response?.error || t('remoteAgent.notify.ccProfileUpdateFailed', { defaultValue: 'Failed to update Claude Code profile' });
+            showNotification(message, 'error');
+            throw new Error(message);
+        }
+    }, [loadBots, showNotification, t]);
+
     return (
         <PageLayout loading={false}>
             {/* Same platform setup guide as the Bots page — mirrored sections
@@ -242,6 +265,8 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
                                 providers={providers}
                                 onMountToggle={(mounted) => handleMountToggle(bot.uuid!, mounted)}
                                 onModelClick={() => handleModelClick(bot)}
+                                ccProfiles={ccProfiles}
+                                onCCProfileClick={() => setProfileDialogBot(bot)}
                                 onAgentSettingsSave={(settings) => handleAgentSettingsSave(bot.uuid!, settings)}
                                 onEdit={() => openEditDialog(bot.uuid!)}
                                 onRestart={() => handleBotRestart(bot.uuid!)}
@@ -265,6 +290,13 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
                 notify={showNotification}
             />
             <BotModelDialog open={botModelDialogOpen} />
+            <CCProfileDialog
+                open={Boolean(profileDialogBot)}
+                bot={profileDialogBot}
+                profiles={ccProfiles}
+                onSelect={handleCCProfileSelect}
+                onClose={() => setProfileDialogBot(null)}
+            />
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={snackbar.severity === 'error' ? null : 4000}
