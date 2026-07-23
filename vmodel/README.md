@@ -10,6 +10,9 @@ The same primitives are reused as an in-process LLM substitute by test
 packages that need wire-format-correct fixtures (see
 `internal/protocoltest`).
 
+> **Design docs.** This README is the usage guide. Architecture rationale and
+> per-topic design notes are indexed in [`.design/vmodel.md`](../.design/vmodel.md).
+
 ## Layout
 
 ```
@@ -213,6 +216,7 @@ extension UI and registry consumers can group by behavior:
 | `static` | Returns a fixed text response                                                                        | `virtual-claude-3`, `virtual-gpt-4`, `echo-model` |
 | `tool`   | Returns a `tool_use` / `tool_calls` block                                                           | `ask-user-question`, `ask-confirmation`, `web-search-example` |
 | `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-round-only`, `claude-code-compact`   |
+| `sequence` | Walks a configured program of per-request outcomes (status + content) to simulate a flaky upstream | `virtual-sequence-429`                       |
 
 ## Error models
 
@@ -453,6 +457,84 @@ Failover e2e tests (`internal/protocoltest`) use these directly via
 `SetupFailoverRoute(... primaryFailModel: pt.FailMockPreContent429)` instead
 of standing up ad-hoc `httptest.Server` instances.
 
+## Sequence models
+
+A **sequence model** simulates a real provider that varies its response from
+one request to the next — e.g. `200, 200, 429, 200, …` — so failover, retry,
+and backoff logic can be exercised deterministically without a real or ad-hoc
+upstream. It is the natural complement to the always-fail error models: those
+fail every time, a sequence model fails *on schedule*.
+
+### Configuration
+
+A `vmodel.SequenceConfig` is an ordered program of `SequenceStep`s, each of
+which is either a success (status `0`/`200` → returns content) or a pre-content
+failure (any other status → the matching HTTP error envelope). What happens
+once the program is consumed is set by `OnExhaust`:
+
+| `OnExhaust` | Behaviour after the last step |
+| ----------- | ----------------------------- |
+| `ExhaustLoop` (default) | Wraps back to the first step, repeats forever |
+| `ExhaustClamp` | Keeps serving the last step (`200, 503 → 200, 503, 503, …`) |
+| `ExhaustFail` | Serves a terminal `410` / `sequence_exhausted` error for every later request |
+
+**Status is the only required field.** Everything else falls back to a default
+provided by the module, so you rarely write a struct literal:
+
+- success content ← step `Content` → `SequenceConfig.DefaultContent` → `vmodel.FallbackSequenceContent`
+- error `ErrorType`/`ErrorMessage` ← derived from the status code (`429 → rate_limit_error`, …)
+
+Use the factories — `Steps(...)` for the common status-only case, `Step(status, opts...)` for the rest:
+
+```go
+// Anthropic; identical API in the openai sub-package.
+
+// Quickest path: a status-only model in one call.
+m := anthropic.NewStatusSequence("flaky-provider", "Flaky Provider", 200, 200, 429)
+
+// Equivalent, when you also want delay / description / OnExhaust:
+m = anthropic.NewSequenceModel(&vmodel.SequenceConfig{
+    ID:    "flaky-provider",
+    Name:  "Flaky Provider",
+    Steps: vmodel.Steps(200, 200, 429), // 200, 200, 429, looping
+})
+
+// Per-step overrides via options when you need them.
+m2 := anthropic.NewSequenceModel(&vmodel.SequenceConfig{
+    ID:   "burst-then-fail",
+    Name: "Burst Then Fail",
+    Steps: []vmodel.SequenceStep{
+        vmodel.Step(200, vmodel.WithRepeat(5)),                  // succeed 5×
+        vmodel.Step(503, vmodel.WithErrorMessage("scheduled outage")), // then fail once
+    },
+})
+_ = reg.Register(m)
+```
+
+The factory ladder, simplest → most explicit:
+
+| Factory | Use when |
+| ------- | -------- |
+| `anthropic.NewStatusSequence(id, name, statuses...)` | Status-only program, one call |
+| `vmodel.Steps(statuses...)` inside a `SequenceConfig` | You also need delay / description / `OnExhaust` |
+| `vmodel.Step(status, opts...)` per step | Per-step content, repeat, or custom error text |
+
+### How it works (per-request resolution)
+
+The registry holds **one** shared instance, but a sequence inherently has a
+cursor. Rather than thread per-request state through the handler, a
+`SequenceModel` implements `Snapshotter`: the virtualserver handler calls
+`Snapshot()` **exactly once per request**, which atomically advances the
+cursor and returns a plain stateless `MockModel` snapshot for that step. From
+that point on every existing dispatch path — `ExtractErrorInjection`, the
+`Handle*` methods, the mid-stream gate — works unchanged. The atomic cursor is
+the only shared mutable state, so concurrent requests are safe and each grabs a
+distinct, monotonically advancing step.
+
+`virtual-sequence-429` (`200, 200, 429`) ships in **both** default registries
+as a user-facing demo for failover dry-runs. Construct your own
+`SequenceModel` for bespoke programs. See `.design/vmodel-sequence.md`.
+
 ## Benchmarking (`benchmark/`)
 
 `benchmark.NewLocalServer()` boots a `virtualserver.Service` with the
@@ -471,7 +553,9 @@ result, _ := client.RunChatBenchmark(ctx, benchmark.BenchmarkConfig{
 fmt.Printf("TPS: %.1f  p99: %v\n", result.TPS, result.P99Latency)
 ```
 
-See `benchmark/examples/` for runnable server and client programs.
+See `benchmark/examples/` for runnable server and client programs, and
+[`.design/vmodel-benchmark.md`](../.design/vmodel-benchmark.md) for the
+shared test-bench design.
 
 ## Related packages
 

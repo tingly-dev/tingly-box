@@ -9,8 +9,8 @@ services:
   - { provider: deepseek, model: deepseek-pro, tier: 0 }
   - { provider: deepseek, model: deepseek-flash, tier: 1 }
 faults:
-  deepseek/deepseek-pro: [401, 200]
-  deepseek/deepseek-flash: [200]
+  deepseek/deepseek-pro: { steps: [{ status: 401 }, { status: 200 }] }
+  deepseek/deepseek-flash: { steps: [{ status: 200 }] }
 expect:
   final_status: 200
   attempts: [deepseek/deepseek-flash]

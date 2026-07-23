@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
 // LBSimulator drives the real load-balancing path — routing.ServiceSelector.Select
@@ -34,7 +35,7 @@ type LBSimulator struct {
 	affinity *affinity2.AffinityStore
 	health   *loadbalance.HealthMonitor
 	rule     *typ.Rule
-	scripts  map[string]*lbUpstreamScript
+	scripts  map[string]*vmodel.Sequence
 	clock    *lbFakeClock
 }
 
@@ -50,24 +51,15 @@ type LBTrace struct {
 	HealthAfter  map[string]string `json:"health_after"`  // healthy/unhealthy
 }
 
-// lbUpstreamScript yields a status per call. When calls outrun the script the
-// last entry repeats, so {200} means "always 200" and {500,500,500,200} means
-// "fail three times then recover".
-type lbUpstreamScript struct {
-	statuses []int
-	calls    int
-}
-
-func (u *lbUpstreamScript) next() int {
-	var s int
-	if u.calls < len(u.statuses) {
-		s = u.statuses[u.calls]
-	} else {
-		s = u.statuses[len(u.statuses)-1]
-	}
-	u.calls++
-	return s
-}
+// Fault programs are backed by vmodel.Sequence — the same status-sequence
+// engine that powers the production /virtual/v1/* SequenceModel — so the
+// "status program, last repeats" semantics live in exactly one place. A plain
+// status list [500,500,200] compiles to a Sequence with ExhaustClamp, which
+// reproduces the historical "last entry repeats" behaviour; scenarios may also
+// specify repeats / on-exhaust (loop|clamp|fail) via the structured faults form
+// (see cli/harness lbScenario). Only each step's HTTP status affects LB and
+// failover decisions here; content/error metadata carried by vmodel steps is
+// irrelevant to the simulator.
 
 type lbFakeClock struct {
 	mu sync.Mutex
@@ -92,9 +84,30 @@ func (f *lbFakeClock) advance(d time.Duration) {
 // "provider/model"); each value is a per-call status sequence (last repeats).
 // Services without a fault entry always return 200.
 //
+// This is the status-list shorthand over NewLBSimulatorWithSequences: each
+// []int becomes a vmodel.Sequence with ExhaustClamp, preserving the historical
+// "last entry repeats" semantics. Callers that need repeats or a loop/fail
+// exhaustion policy build the SequenceConfig form and call
+// NewLBSimulatorWithSequences directly.
+func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, cleanup func(), err error) {
+	cfgs := make(map[string]vmodel.SequenceConfig, len(faults))
+	for id, statuses := range faults {
+		cfgs[id] = vmodel.SequenceConfig{
+			Steps:     vmodel.Steps(statuses...),
+			OnExhaust: vmodel.ExhaustClamp,
+		}
+	}
+	return NewLBSimulatorWithSequences(rule, cfgs)
+}
+
+// NewLBSimulatorWithSequences is NewLBSimulator's richer form: each fault is a
+// full vmodel.SequenceConfig, so scenarios can express repeats and a
+// loop/clamp/fail exhaustion policy rather than only a clamped status list.
+// Only each step's HTTP status affects LB/failover decisions.
+//
 // It installs a deterministic breaker clock; the returned cleanup restores the
 // real clock and removes the temp config dir, and must be called.
-func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, cleanup func(), err error) {
+func NewLBSimulatorWithSequences(rule *typ.Rule, faults map[string]vmodel.SequenceConfig) (sim *LBSimulator, cleanup func(), err error) {
 	gin.SetMode(gin.TestMode)
 
 	// Start from a clean breaker store. DefaultBreakerStore() is process-global,
@@ -149,13 +162,9 @@ func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, 
 	lb := NewLoadBalancer(cfg, hf)
 	affinity := affinity2.NewAffinityStore(0)
 
-	scripts := make(map[string]*lbUpstreamScript, len(faults))
-	for id, seq := range faults {
-		s := seq
-		if len(s) == 0 {
-			s = []int{http.StatusOK}
-		}
-		scripts[id] = &lbUpstreamScript{statuses: s}
+	scripts := make(map[string]*vmodel.Sequence, len(faults))
+	for id, cfg := range faults {
+		scripts[id] = vmodel.NewSequence(cfg)
 	}
 
 	// One fake clock drives all three time-based subsystems on the same
@@ -187,11 +196,11 @@ func NewLBSimulator(rule *typ.Rule, faults map[string][]int) (sim *LBSimulator, 
 	return sim, runCleanup, nil
 }
 
-func (s *LBSimulator) scriptFor(serviceID string) *lbUpstreamScript {
+func (s *LBSimulator) scriptFor(serviceID string) *vmodel.Sequence {
 	if sc, ok := s.scripts[serviceID]; ok {
 		return sc
 	}
-	sc := &lbUpstreamScript{statuses: []int{http.StatusOK}}
+	sc := vmodel.NewSequence(vmodel.SequenceConfig{OnExhaust: vmodel.ExhaustClamp})
 	s.scripts[serviceID] = sc
 	return sc
 }
@@ -219,7 +228,7 @@ func (s *LBSimulator) Request(session string) (LBTrace, error) {
 	attempt := func(provider *typ.Provider, model string) {
 		sid := loadbalance.FormatServiceID(provider.UUID, model)
 		tr.Attempts = append(tr.Attempts, sid)
-		status := s.scriptFor(sid).next()
+		status := s.scriptFor(sid).Next().HTTPStatus()
 		tr.Statuses = append(tr.Statuses, status)
 		tr.FinalStatus = status
 

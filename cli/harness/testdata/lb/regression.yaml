@@ -9,8 +9,8 @@ services:
   - { provider: anthropic, model: claude-opus, tier: 0 }
   - { provider: anthropic, model: claude-sonnet, tier: 1 }
 faults:
-  anthropic/claude-opus: [200]
-  anthropic/claude-sonnet: [200]
+  anthropic/claude-opus: { steps: [{ status: 200 }] }
+  anthropic/claude-sonnet: { steps: [{ status: 200 }] }
 seed_pin: { session: session1, provider: anthropic, model: claude-sonnet }   # stale pin to the fallback tier
 expect:
   final_status: 200

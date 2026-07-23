@@ -11,10 +11,10 @@ services:
   - { provider: openai, model: gpt-4.1, tier: 1 }
   - { provider: anthropic, model: claude-haiku, tier: 1 }
 faults:
-  openai/gpt-5.4: [500]
-  openai/gpt-5.5: [500]
-  openai/gpt-4.1: [200]
-  anthropic/claude-haiku: [200]
+  openai/gpt-5.4: { steps: [{ status: 500 }] }
+  openai/gpt-5.5: { steps: [{ status: 500 }] }
+  openai/gpt-4.1: { steps: [{ status: 200 }] }
+  anthropic/claude-haiku: { steps: [{ status: 200 }] }
 expect:
   final_status: 200
   breaker:

@@ -1,0 +1,176 @@
+# Virtual sequence models
+
+## Problem
+
+The `vmodel` package already ships always-fail error models
+(`virtual-fail-429`, `virtual-fail-500`, …) that reproduce a single failure
+shape on every request. That is enough to assert "the gateway surfaces a 429",
+but it cannot reproduce the *temporal* behaviour of a real upstream — a
+provider that succeeds a few times, rate-limits, then recovers. Failover,
+retry, and backoff logic only becomes observable when a model returns
+`200, 200, 429, 200, …` across successive requests.
+
+Standing up an ad-hoc `httptest.Server` per scenario reintroduces exactly the
+duplication the `vmodel` error models were meant to remove. We want the same
+deterministic, in-process, wire-correct substrate, but driven by a configurable
+*program* of outcomes.
+
+## Design
+
+### A step is success-or-failure, keyed on status
+
+`vmodel.SequenceStep`:
+
+| Field     | Meaning                                                                 |
+| --------- | ---------------------------------------------------------------------- |
+| `Status`  | `0`/`200` → success (return content); anything else → pre-content error |
+| `Content` | success body; falls back to `SequenceConfig.DefaultContent`             |
+| `ErrorMessage` / `ErrorType` | error envelope overrides; derived from `Status` when empty. Prefixed with `Error` (unlike bare `Content`) because they only apply to the failure branch — the asymmetry marks the exceptional case, not the default one. |
+| `Repeat`  | serve this step N consecutive times (default 1)                        |
+
+**Status is the only required field.** Every other field has a module-provided
+default, resolved at `NewSequence` time:
+
+- success content: step `Content` → `SequenceConfig.DefaultContent` → `vmodel.FallbackSequenceContent`
+- error `ErrorType`/`ErrorMessage`: derived from `Status` via `defaultErrorMeta`
+
+So the ergonomic surface is the factory, not struct literals:
+
+- `Steps(200, 200, 429)` — the common status-only program.
+- `Step(status, opts...)` with `WithContent` / `WithErrorMessage` / `WithErrorType` /
+  `WithRepeat` for the uncommon per-step overrides.
+
+`SequenceConfig` is the ordered program plus identity/metadata and an
+`OnExhaust ExhaustPolicy` enum governing behaviour once the program is consumed:
+`ExhaustLoop` (default — wrap to the first step and repeat indefinitely),
+`ExhaustClamp` (repeat the last step), or `ExhaustFail` (serve a terminal
+`410` / `sequence_exhausted` error). The enum's zero value is `ExhaustLoop`, so
+omitting it preserves the looping default while leaving room for the terminal
+case without a negative-sense boolean.
+
+Error steps map onto the **existing** `ErrorInjection` pre-content path — the
+status's conventional `Type`/`Message` mirror the always-fail mocks
+(`429 → rate_limit_error`, `503 → overloaded_error`, …). Mid-stream failures
+are intentionally **out of scope** for v1: the "200, 200, 429" use case is
+pre-content, and folding mid-stream into the sequence step would complicate the
+config for a case the dedicated `virtual-fail-midstream-*` mocks already cover.
+A future `SequenceStep` could grow `Stage`/`MidStream*` fields without breaking
+the wire shape.
+
+### Naming: two deliberate choices under review
+
+- **`vmodel.FallbackSequenceContent` vs. `SequenceConfig.DefaultContent`.**
+  Originally the module constant was also called `DefaultSequenceContent`,
+  which read as a near-duplicate of the config field it backs (same word,
+  different scope/priority). Renamed to `FallbackSequenceContent` so the two
+  levels of the resolution chain (per-model default vs. module-wide last
+  resort) are lexically distinct, not just "the same name in two places."
+
+- **`ResolvedStep` has no `Status` field — it has `HTTPStatus()`.** The initial
+  version stored `Status int` alongside `Error *ErrorInjection`, but for every
+  error step `Status` was set to the same value as `Error.Status` — two
+  fields, one fact, kept in sync by hand at three call sites
+  (`resolve`'s success/error branches and `exhaustedStep`). Auditing actual
+  callers showed the field was read only by tests; the production dispatch
+  path (`SequenceModel.Snapshot`) never touched it, only `Content` and
+  `Error`. Replaced the stored field with a method,
+  `func (r ResolvedStep) HTTPStatus() int`, that derives 200-or-`Error.Status`
+  on read — one source of truth, no construction site can let the two drift.
+
+`SequenceConfig` and `OnExhaust` also carry `json`/`yaml` tags now, matching
+`SequenceStep`, even though nothing in the codebase (de)serializes any of
+these types yet. This is a deliberate, acknowledged inconsistency with the
+rest of `vmodel`'s config structs (e.g. `MockModelConfig` has no tags) — it
+keeps the door open for a future config-file- or API-driven sequence without
+committing to that surface now. If that surface never materializes, the tags
+should be removed rather than left as unexercised scaffolding.
+
+- **`RequestResolver`/`ResolveRequest` → `Snapshotter`/`Snapshot`.** The
+  original name read, at the call site (`vm = ResolveRequest(vm)`), as if it
+  parsed or validated the incoming HTTP request — the actual subject is `vm`,
+  not the request: "give me the model instance that serves this one request."
+  Renamed to the noun the method actually returns — a stateless, one-shot
+  model snapshot — following the Go "verb+er" interface convention
+  (`io.Closer`, `fmt.Stringer`).
+
+### Per-request resolution — the key decision
+
+The registry holds **one** shared model instance, but a sequence inherently
+carries a cursor. The handler touches `vm` at several points in a single
+request (`ExtractErrorInjection` for the pre-content check, then
+`HandleAnthropic`/`midStreamInjection` on the body path), so advancing a cursor
+inside any one of those would desync the others.
+
+Instead, `SequenceModel` implements a new per-protocol optional interface:
+
+```go
+type Snapshotter interface { Snapshot() VirtualModel }
+```
+
+The handler calls `vm = Snapshot(vm)` **once**, immediately after registry
+lookup. For a sequence model this atomically advances the cursor
+(`atomic.Uint64`) and returns a plain, stateless `MockModel` snapshot carrying
+that step's content or `ErrorInjection`. For every other model `Snapshot`
+is the identity. After this single line, **all existing dispatch machinery
+works unchanged** — there is no sequence-specific code anywhere in the handler.
+
+Consequences:
+
+- **Concurrency-safe by construction.** The atomic cursor is the only shared
+  mutable state; each request operates on its own snapshot local.
+- **Global sequence semantics.** The cursor is shared across all callers, which
+  is exactly right for "simulate a provider returning 200, 200, 429" — the
+  schedule is a property of the upstream, not of any one client.
+- **Zero blast radius.** Pre-content errors, streaming, the mid-stream gate, the
+  models list, and the builtin-provider seed are all reused as-is.
+
+`SequenceModel` still implements the protocol `Handle*` methods (delegating to a
+freshly resolved snapshot) so direct, non-handler consumers — `protocoltest`,
+benchmarks — get one step per call without going through `Snapshot`. The
+two paths are mutually exclusive, so the cursor advances exactly once per
+request either way.
+
+### Engine lives in the root package
+
+`vmodel.Sequence` (flattening + atomic cursor + status→error mapping) is
+protocol-neutral and lives in `vmodel/sequence.go`. The thin `SequenceModel`
+wrappers in `anthropic/` and `openai/` only adapt a resolved step into their
+protocol's `MockModel`, mirroring how the always-fail specs are shared via
+`defaults_shared.go`.
+
+### Second consumer: the LB simulator's `faults`
+
+The harness `lb` scenario schema has always had a `faults` map — a per-service
+status program with "last entry repeats" semantics — that drove the
+`internal/server.LBSimulator` fake upstreams. That was an independent
+reimplementation of exactly this engine (`lbUpstreamScript.next()`), so it now
+delegates to `vmodel.Sequence` instead: a plain status list `[500,500,200]`
+compiles to a `SequenceConfig` with `ExhaustClamp` (preserving the historical
+behaviour), and the scenario YAML additionally accepts the structured form
+(`steps` with `repeat`, plus `on_exhaust: loop|clamp|fail`). This makes the
+sequence program **config-driven** through the existing, familiar lb YAML
+rather than requiring Go code, and collapses two "status sequence, last
+repeats" implementations into one. The simulator only reads each step's
+`HTTPStatus()`; the content/error metadata a `vmodel` step can carry is
+irrelevant there. See `internal/server.NewLBSimulatorWithSequences` and
+`cli/harness` `lbFaultSpec`.
+
+## Registration
+
+`virtual-sequence-429` (`200, 200, 429`, looping) ships in **both** default
+registries via `DefaultSequenceConfigs()`, registered from each protocol's
+`RegisterDefaults`. It is a genuine user-facing demo: it lets onboarding/dry-run
+users watch the gateway react to an intermittently rate-limited upstream
+without configuring a real provider — consistent with the registration
+discipline in `vmodel/README.md` (protocol-compliant, clearly named, useful for
+demos). Bespoke programs are constructed directly via `NewSequenceModel`.
+
+## Files
+
+- `vmodel/sequence.go` — `SequenceStep`, `SequenceConfig`, `Sequence`,
+  `ResolvedStep`, `defaultErrorMeta`, `DefaultSequenceConfigs`.
+- `vmodel/types.go` — `VirtualModelTypeSequence`.
+- `vmodel/{anthropic,openai}/sequence_model.go` — `SequenceModel`,
+  `Snapshotter`, `Snapshot`.
+- `vmodel/virtualserver/handler.go` — one `Snapshot` call per entrypoint.
+- `vmodel/{anthropic,openai}/defaults.go` — demo registration.
