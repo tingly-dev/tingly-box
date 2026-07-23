@@ -6,6 +6,7 @@ AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It 
 
 - **Unified Agent interface** — one `Execute` entry point for every agent type.
 - **Streaming execution handle** — consume a totally-ordered event channel and respond to permission / ask requests inline.
+- **Per-execution protocol isolation** — every run owns its transport, accumulator, routing context, process, and control state.
 - **Driver + Transport + Runner split** — process setup, protocol parsing, and execution are independent and individually testable.
 - **Pluggable process factory** — swap real `os/exec` for a scripted fake in tests without touching the driver or transport.
 - **Session store integration** — list and resume Claude Code sessions read from `~/.claude/projects`.
@@ -118,11 +119,14 @@ handle, err := agent.Execute(ctx, "Continue", opts)
 
 1. Iterate `handle.Events()` from a single goroutine. Events are delivered in totally-ordered form.
 2. For `ApprovalRequestEvent` and `AskRequestEvent`, call `handle.Respond(req.ID, response)` with the matching `ControlResponse` — `ApprovalResponse` or `AskResponse`. The response is forwarded to the agent process's stdin.
-3. The events channel closes after the process has exited *and* every decoded event has been delivered.
-4. After the channel closes, `handle.Wait()` returns the aggregated `*Result`.
-5. `handle.Cancel()` requests cooperative shutdown; the underlying context can be cancelled to the same effect.
+3. On a terminal result, the runner closes stdin so the CLI can flush session state; it escalates to `Kill` only after a bounded grace period.
+4. The events channel closes after the process has exited *and* every decoded event has been delivered.
+5. After the channel closes, `handle.Wait()` returns the aggregated `*Result` and the authoritative terminal error.
+6. `handle.Cancel()` requests cooperative shutdown; the underlying context can be cancelled to the same effect.
 
 `Respond`, `Cancel`, and `Wait` are safe to call from any goroutine.
+Different handles from the same Agent may run concurrently; their mutable
+protocol state is isolated.
 
 ## Stream Events
 
@@ -165,7 +169,7 @@ Set per-execution via `ExecutionOptions.PermissionMode`, or globally on the Clau
 | `DefaultExecutionTimeout`   | `0` (no timeout)                 |
 | `ClaudeProjectsDir`         | `""` (session store disabled)    |
 
-`ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink.
+`ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink. A zero timeout uses the configured default; a negative timeout explicitly disables it.
 
 ## Package Structure
 
@@ -218,8 +222,10 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
    ```go
    func NewAgent(cfg agentboot.Config) *Agent {
        d := NewDriver(cfg)
-       t := NewTransport()
-       return &Agent{runner: agentboot.NewRunner(d, t), driver: d}
+       newTransport := func() agentboot.AgentTransport {
+           return NewTransport()
+       }
+       return &Agent{runner: agentboot.NewRunner(d, newTransport), driver: d}
    }
 
    func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
@@ -240,7 +246,9 @@ For agents that don't fit the process+protocol pipeline (in-process mocks, remot
 - `claude.NewAgentWithFactory` wires a fake factory into the real Claude driver/transport so end-to-end stream-JSON parsing is exercised without spawning `claude`.
 - `NewControlledHandle` lets tests build an `ExecutionHandle` from closures.
 
-See `agentboot/claude/*_e2e_test.go` and `agentboot/handle_test.go` for the patterns.
+See `agentboot/claude/fixture/fixture_test.go`,
+`agentboot/claude/agent_concurrency_test.go`, and
+`agentboot/handle_test.go` for the patterns.
 
 ## License
 

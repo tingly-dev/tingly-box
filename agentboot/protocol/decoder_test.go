@@ -145,3 +145,33 @@ func TestEncoder_WritesNewlineDelimited(t *testing.T) {
 		t.Fatalf("encoder output = %q, want %q", got, want)
 	}
 }
+
+func TestEncoder_CloseIsIdempotentAndRejectsFurtherWrites(t *testing.T) {
+	dst := &closeBuffer{}
+	encoder := NewEncoder(dst)
+	if err := encoder.Encode(map[string]any{"a": 1}); err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if err := encoder.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := encoder.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if dst.closeCalls != 1 {
+		t.Fatalf("close calls = %d, want 1", dst.closeCalls)
+	}
+	if err := encoder.Encode(map[string]any{"b": 2}); !errors.Is(err, ErrEncoderClosed) {
+		t.Fatalf("Encode after Close error = %v, want ErrEncoderClosed", err)
+	}
+}
+
+type closeBuffer struct {
+	bytes.Buffer
+	closeCalls int
+}
+
+func (b *closeBuffer) Close() error {
+	b.closeCalls++
+	return nil
+}

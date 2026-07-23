@@ -57,8 +57,10 @@ func (m PermissionMode) String() string {
 type ExecutionOptions struct {
 	ProjectPath  string
 	OutputFormat OutputFormat
-	Timeout      time.Duration
-	Env          []string
+	// Timeout overrides the Runner default. Zero uses the configured default;
+	// a negative value explicitly disables the default timeout.
+	Timeout time.Duration
+	Env     []string
 	// SessionID is the session ID to use or resume
 	// If Resume is true, --resume <session_id> is used to continue an existing session
 	// If Resume is false, --session-id <session_id> is used to create a new session with specific ID
