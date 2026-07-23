@@ -42,12 +42,6 @@ func (a *MessageAccumulator) AddEvent(event common.Event) ([]Message, bool, bool
 	var resultSuccess bool
 
 	switch event.Type {
-	case SDKControlRequestMessage:
-		var msg ControlRequest
-		if err := unmarshalEvent(event, &msg); err == nil {
-			a.messages = append(a.messages, &msg)
-			newMessages = append(newMessages, &msg)
-		}
 	case SDKTextMessage:
 		var msg ResultMessage
 		if err := unmarshalEvent(event, &msg); err == nil {

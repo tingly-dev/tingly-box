@@ -27,7 +27,7 @@ type CommonOptions struct {
 	PermissionPromptTool string
 }
 
-// BuildCommonArgs builds CLI arguments shared between Launcher and QueryLauncher
+// BuildCommonArgs builds Claude Code CLI arguments from shared configuration.
 // This follows the original query_launcher.go behavior where config and opts
 // arguments are added independently (both can be present).
 func BuildCommonArgs(config Config, opts CommonOptions) []string {
