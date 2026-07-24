@@ -60,8 +60,12 @@ const BotCard: React.FC<BotCardProps> = ({
             {/* Header */}
             <Box sx={{display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 56, px: 2, py: 1.5}}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0}}>
+                    {/* Fixed-width name column so the chip cluster starts at
+                        the same x on every row regardless of name length —
+                        longer names truncate with an ellipsis (full name in
+                        the tooltip) rather than pushing the chips out of line. */}
                     <Tooltip title={bot.name || bot.platform}>
-                        <Typography noWrap variant="body2" sx={{fontWeight: 600, minWidth: 0}}>
+                        <Typography noWrap variant="body2" sx={{fontWeight: 600, flexShrink: 0, width: {xs: 96, sm: 150}}}>
                             {bot.name || bot.platform}
                         </Typography>
                     </Tooltip>

@@ -128,7 +128,9 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 px: 2, py: 1.5,
             }}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0}}>
-                    <Typography noWrap variant="body2" sx={{fontWeight: 600, minWidth: 0}}>
+                    {/* Fixed-width name column — same rationale as BotCard:
+                        keeps the platform chip aligned across rows. */}
+                    <Typography noWrap variant="body2" sx={{fontWeight: 600, flexShrink: 0, width: {xs: 96, sm: 150}}}>
                         {bot.name || bot.platform}
                     </Typography>
                     <Chip label={bot.platform} size="small"/>
