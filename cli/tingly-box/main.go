@@ -44,6 +44,9 @@ type CLI struct {
 	// Agent commands
 	Agent command.AgentCmdKong `kong:"cmd,help='Agent configuration'"`
 
+	// Headless one-shot setup for CI / fully-managed environments
+	CI command.CICmdKong `kong:"cmd,name='ci',help='Headless one-shot agent setup (provider + model + agent)'"`
+
 	// OAuth
 	OAuth command.OAuthCmdKong `kong:"cmd,name='oauth',help='OAuth authentication'"`
 
