@@ -3,9 +3,8 @@
 > Audience: tingly-box contributors touching the SDK seam (`sdk/python/`), the
 > `/api/v1/sdk/session` endpoint, or the `experiment` scenario.
 
-Diagram: `.design/python-sdk.pencil.md` — four simple pencil graphs: the one
-idea, a request start to finish, the two ways to pick a provider, and
-`router_plugin.py`'s decision flow.
+Diagram: `.design/python-sdk.pencil.md` — two simple pencil graphs: the one
+idea, and a request start to finish.
 
 ## Why
 
@@ -194,7 +193,7 @@ sdk/python/
     config.py        # (base_url, admin_token) resolution precedence
     scenarios.py     # scenario + transport constants
     transports/      # build openai.OpenAI / anthropic.Anthropic bound to tb
-    helpers/         # usage + guardrails + quota + rules views
+    helpers/         # usage + guardrails views
     plugin/          # Layer 2: be an AI server tb routes to
       core.py        #   Plugin class (@plugin.chat, .llm, .serve, api_style)
       server.py      #   stdlib HTTP server: /v1/messages (primary) + /v1/chat/completions (secondary), + SSE
@@ -219,8 +218,6 @@ connect(scenario="experiment")
           .ask()       → Anthropic first when the scenario supports both, else OpenAI
           .usage       → GET /api/v1/requests        (admin token)
           .guardrails  → GET /api/v1/guardrails/config (admin token)
-          .quota       → GET/POST /api/v1/provider-quota[...] (admin token)
-          .rules       → GET /api/v1/rules?scenario=       (admin token)
 ```
 
 ## How it works (pencil)
@@ -530,131 +527,9 @@ their manifest (reuse `agentboot/process`), a `/plugins/<name>/*` reverse-proxy
 mount, and the install/enable/logs/disable lifecycle UI. The Python side and the
 provider wiring are complete; those are the remaining backend pieces.
 
-### `Client.quota` — provider usage/limit windows, and a live refresh
-
-Added for `router_plugin.py` below, but attached to `Client` like `.usage` /
-`.guardrails` so any caller can use it. Wraps
-`GET /api/v1/provider-quota[...]` (`internal/server/module/providerquota/`,
-admin token, same `apiV1` auth-middleware group as usage/guardrails):
-
-| SDK call | endpoint | shape |
-|---|---|---|
-| `quota.list()` | `GET /provider-quota` | `{meta, data:[ProviderUsage]}` |
-| `quota.get(uuid)` | `GET /provider-quota/:uuid` | bare `ProviderUsage` (no envelope) |
-| `quota.batch(uuids)` | `POST /provider-quota/batch` | `{data: {uuid: ProviderUsage}}` |
-| `quota.refresh(uuid?)` | `POST /provider-quota/:uuid?/refresh` | live re-fetch from the upstream account, bypassing tb's cache |
-
-These three response shapes are genuinely different (envelope vs. bare vs.
-uuid-keyed map) — not a Python-side inconsistency, that's what the Go handler
-(`internal/server/module/providerquota/handler.go:66-177`) actually returns
-for each; `QuotaView._from_json`-style parsing per method is intentional, not
-an oversight. `provider-quota` isn't in `openapi.json` (no swagger tags on
-that module yet), so these shapes were pinned by reading the handler
-directly, not generated — worth re-checking if that module ever gets
-swagger-annotated.
-
-A provider's quota is **not one number** — `ProviderUsage.windows` is a list
-(session/daily/weekly/monthly/balance/model/...), each with its own
-`used`/`limit`/`used_percent` (`ai/quota/types.go`). `ProviderQuota.headroom_percent`
-collapses that to the single most-constrained window's remaining percent —
-a deliberately naive heuristic for "which candidate is worse off right now"
-in a routing pick, not a replacement for reading `.windows` when the
-distinction between e.g. a session limit and a monthly cost budget matters.
-tb itself has **no built-in quota-aware routing** (`internal/smart_routing`
-and `internal/loadbalance` have zero references to `ai/quota` as of this
-writing) — a plugin picking by remaining quota is genuinely new behavior,
-not a Python reimplementation of something the gateway already does.
-
-### Two connection modes: scenario+rule, and scenario+rule+pin
-
-Every call this SDK makes goes through `(scenario, model)` → tb resolves a
-**rule** → the rule's `Services[]` (possibly several, tiered) → tb's own
-affinity/smart-routing/load-balancer picks **which** service actually runs.
-That's mode 1 — "let tb decide" — and it's what `.ask()` has always done.
-
-Building `router_plugin.py` (below) surfaced a real gap: a plugin that picks
-a provider by quota and then calls `.ask(model=X)` has no guarantee that's
-the provider tb's load balancer actually uses when the rule has more than
-one active service — the "decision" and the execution are two unrelated
-code paths that happen to usually agree. Mode 2 closes that:
-
-- **`X-Tingly-Pin-Provider: <provider_uuid>`** (`internal/server/routing/simple.go`,
-  `SimpleSelector.SelectService`) — forces the resolved rule to use that
-  exact service, skipping affinity/smart-routing/load-balancing. The check
-  that makes this safe to expose to ordinary clients: the provider **must**
-  already be one of the resolved rule's own active `Services[]`, or tb
-  rejects the request (400) — this cannot be used to reach an unrelated
-  provider elsewhere on the box. It also runs on the *same* authenticated
-  data-plane path as every other call (the model token already required to
-  reach `/tingly/:scenario/...`), unlike the older `X-Tingly-Probe-Service`
-  (`internal/server/routing/simple.go`, `.design/probe.md`), which bypasses
-  auth entirely by convention (*"any caller that can reach the TB HTTP port
-  can send it"*) and pins to **any** provider — that header is only ever
-  injected internally by tb's own probe/diagnostics tooling, deliberately
-  never exposed to SDK users. `X-Tingly-Pin-Provider` is the scoped,
-  authenticated version of the same underlying mechanic
-  (`SourceProviderPin` vs. `SourceProbePin` in `internal/server/routing/result.go`).
-- SDK surface: `Client.ask(..., pin_provider=<uuid>)` sets the header
-  (merges with any caller-supplied `extra_headers`); `tb.openai` /
-  `tb.anthropic` accept it directly too, since both vendor SDKs already
-  support `extra_headers=` on `.create()` — no SDK change was even required
-  for that path, `ask()`'s kwarg is purely for convenience.
-- **`Client.rules`** (`tingly/helpers/rules.py`, wraps `GET /api/v1/rules?scenario=`,
-  admin token) is how a caller finds out what's *pinnable*:
-  `rules.for_model(scenario, model)` returns the resolved `Rule`, whose
-  `.active_services` are the only valid `pin_provider` values for that model.
-  A rule with more than one active service has more than one valid pin — use
-  quota (or whatever signal) to choose among them; a candidate whose rule
-  doesn't resolve to exactly one service isn't safely routable by an
-  external quota check at all (`router_plugin.py` skips those, rather than
-  guessing).
-
-**Deliberately still two modes, not three.** The obvious next question: what
-if there's no rule at all yet for the model you want — do you need a *third*,
-rule-free "just connect me straight to provider+model" mode? tb already has
-the mechanics for exactly that: `X-Tingly-Probe-Service` builds a synthetic
-rule on the fly and skips persisted-rule resolution entirely
-(`internal/server/protocol_handler.go`, `determineRuleWithScenario`). We
-considered exposing an authenticated version of that to the SDK and rejected
-it: it would mean requests that don't show up as a rule in the tb UI, with
-nowhere to hang guard rails/quota config, re-litigating the exact reasoning
-`python-sdk.md` already gives for why `X-Tingly-Probe-Service` stays
-internal-only. "No rule yet" isn't a routing problem, it's a one-time setup
-step — `POST /api/v1/rule` with a single service, same as `router_plugin.py`'s
-own `sonnet1`/`sonnet2` candidates already do. Cheap, idempotent, and it keeps
-every reachable provider visible as a rule, which is the whole point of tb
-being "a hub of rules" rather than a raw provider proxy.
-
-Verified live against the real `tb` binary (not just mocked) — a fixed,
-repeatable regression script, `sdk/python/examples/e2e_run_pin.sh` (three
-vmodel providers, no network/keys, `set -uo pipefail` + explicit pass/fail
-assertions, non-zero exit on any failure): a rule with provider A at tier 0
-and B at tier 1 — an unpinned call selects A (normal tier order, confirmed
-via `X-Tingly-Debug-Routing`); the same call with `X-Tingly-Pin-Provider: <B>`
-selects B despite the tier order; a pin to a provider not on that rule is
-rejected with 400; the same round-trip through `Client.ask(pin_provider=)`;
-and `router_plugin.py` run for real end-to-end, resolving `sonnet1`/`sonnet2`
-via `Client.rules`, and forwarding with a confirmed `provider_pin`-sourced
-selection in tb's own routing log.
-
-**A real bug this surfaced**, fixed alongside it: `Manager.GetQuota` /
-`GetQuotaNoCache` (`ai/quota/manager.go`) re-wrapped a not-found store lookup
-into a *new* `fmt.Errorf(...)` instead of returning `quota.ErrUsageNotFound`
-itself — silently breaking the `err == quota.ErrUsageNotFound` identity
-check every caller (`internal/server/module/providerquota/handler.go`, both
-`GetQuota` and `BatchGetQuota`) relies on to treat "no data yet" as a skip.
-The practical effect: `POST /provider-quota/batch` 500'd the *entire* batch
-the moment it included any provider with no quota fetcher (a vmodel/local
-provider, exactly what a no-network test setup uses) instead of just
-omitting that one provider from the result — `router_plugin.py`'s very first
-live run hit this immediately. Fixed by returning the sentinel unwrapped;
-covered by `ai/quota/manager_test.go::TestGetQuota_NotFoundIsUnwrapped` and
-`internal/server/module/providerquota/handler_test.go` (new — this module
-had no tests before).
-
 ### Example plugins (`sdk/python/examples/`)
 
-Four, each a different real-world shape of "plugin composes the box by
+Three, each a different real-world shape of "plugin composes the box by
 calling back into other rules" — not toys picked at random, each maps onto a
 pattern already in wide use:
 
@@ -685,29 +560,20 @@ pattern already in wide use:
   illustration of the architecture line at the top of this document — a
   plugin can freely originate calls against *any* number of other rules, not
   just one.
-- **`router_plugin.py`** (`model="plugin/router"`) — quota-aware dispatch: a
-  different shape from the three above, which all *generate* an answer
-  themselves. A router generates nothing — for each candidate model it
-  resolves the rule via `Client.rules` (skipping any candidate whose rule
-  isn't pinned to exactly one active service — see "Two connection modes"
-  above), checks quota for that one provider, picks the candidate with the
-  most headroom, and forwards with `pin_provider=` so the provider that was
-  quota-checked is *guaranteed* to be the one that serves the request — one
-  hop total, by design, not N. Same idea as LiteLLM Router's
-  `usage-based-routing` strategy (route to whichever deployment has the most
-  remaining rate-limit capacity), implemented as a plugin instead of gateway
-  config — deliberately reads cached quota by default and only calls
-  `.quota.refresh()` when a caller opts in, since LiteLLM's own docs warn
-  that a live usage check on every request adds real per-request latency.
 
-Every example plugin has unit tests (`tests/test_example_plugins.py`,
-`tests/test_router_plugin.py`, `tests/test_quota.py`, `tests/test_rules.py`)
-that monkeypatch `plugin.use`/`Client.quota`/`Client.rules` to fakes and pin
-the decision logic — JSON-verdict formatting and graceful degradation on
-non-JSON (critic); judge-skipped-on-agreement vs. judge-called-on-disagreement
-(fusion); multi-service rules skipped as non-routable, highest-headroom
-candidate selection, and `pin_provider=` forwarding (router) — without needing a
-live tb.
+Every example plugin has unit tests (`tests/test_example_plugins.py`) that
+monkeypatch `plugin.use` to a fake client and pin the decision logic —
+JSON-verdict formatting and graceful degradation on non-JSON (critic);
+judge-skipped-on-agreement vs. judge-called-on-disagreement (fusion) —
+without needing a live tb.
+
+Deliberately not built (yet): quota-aware / deterministic-dispatch routing
+(picking a candidate rule by remaining quota, forcing a specific service
+within a rule). It's a real, well-scoped follow-up — not out of scope
+forever, just not needed for the current milestone above, and speculative
+infrastructure built ahead of a real consumer tends to become exactly the
+kind of thing that needs redesigning once an actual use shows up. Revisit
+if/when a concrete need for it appears.
 
 ## Layer 3: can tb *use* a plugin as a model? (yes — as an upstream)
 
