@@ -181,8 +181,8 @@ export function QuotaInlineDisplay({
         <Stack
           direction="row"
           spacing={2}
-          alignItems="center"
           sx={{
+            alignItems: 'center',
             flex: 1,
             minWidth: 0,
             overflowX: 'auto',

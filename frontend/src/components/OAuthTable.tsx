@@ -389,6 +389,7 @@ const OAuthTable = ({
                                             {onEdit && (
                                                 <Tooltip title="View Details">
                                                     <IconButton
+                                                        aria-label={`View details for ${provider.name}`}
                                                         size="small"
                                                         color="primary"
                                                         onClick={() => onEdit(provider.uuid)}
@@ -436,6 +437,7 @@ const OAuthTable = ({
                                             <Divider orientation="vertical" flexItem/>
                                             {/* Overflow menu */}
                                             <IconButton
+                                                aria-label={`More actions for ${provider.name}`}
                                                 size="small"
                                                 onClick={(e) => handleMoreOpen(e, provider.uuid)}
                                             >

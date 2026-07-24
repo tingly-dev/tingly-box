@@ -343,6 +343,7 @@ const ApiKeyTable = ({
                                         {provider.token && (
                                             <Tooltip title="View Token">
                                                 <IconButton
+                                                    aria-label={`View API key for ${provider.name}`}
                                                     size="small"
                                                     onClick={() => handleViewToken(provider.uuid)}
                                                     sx={{p: 0.25}}
@@ -399,6 +400,7 @@ const ApiKeyTable = ({
                                         {onEdit && (
                                             <Tooltip title="Edit">
                                                 <IconButton
+                                                    aria-label={`Edit ${provider.name}`}
                                                     size="small"
                                                     color="primary"
                                                     onClick={() => onEdit(provider.uuid)}
@@ -446,6 +448,7 @@ const ApiKeyTable = ({
                                         <Divider orientation="vertical" flexItem/>
                                         {/* Overflow menu for less common actions */}
                                         <IconButton
+                                            aria-label={`More actions for ${provider.name}`}
                                             size="small"
                                             onClick={(e) => handleMoreOpen(e, provider.uuid)}
                                         >
@@ -578,6 +581,7 @@ const ApiKeyTable = ({
                         justifyContent: "flex-end"
                     }}>
                         <IconButton
+                            aria-label={`Copy API key for ${tokenModal.providerName || "provider"}`}
                             color="primary"
                             disabled={tokenModal.loading || !tokenModal.token}
                             onClick={async () => {
@@ -594,7 +598,7 @@ const ApiKeyTable = ({
                             <ContentCopy/>
                         </IconButton>
                         <Tooltip title="Close">
-                            <IconButton onClick={handleCloseTokenModal}>
+                            <IconButton aria-label="Close API key dialog" onClick={handleCloseTokenModal}>
                                 <Cancel/>
                             </IconButton>
                         </Tooltip>
