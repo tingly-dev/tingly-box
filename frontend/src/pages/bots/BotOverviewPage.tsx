@@ -1,5 +1,5 @@
 import { BotCard, BotConfigDialog } from '@/components/bot';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
@@ -151,6 +151,7 @@ const BotOverviewPage = () => {
                 })}
                 size="full"
                 sx={{ mb: 2 }}
+                titleHeadingLevel={1}
                 rightAction={
                     <Button
                         variant="contained"
@@ -167,12 +168,13 @@ const BotOverviewPage = () => {
                         <CircularProgress />
                     </Box>
                 ) : bots.length === 0 ? (
-                    <EmptyStateGuide
+                    <EmptyState
                         title={t('bots.overview.emptyTitle', { defaultValue: 'No bots connected yet' })}
                         description={t('bots.overview.emptyDescription', { defaultValue: 'Connect a bot to drive Claude Code from chat (Remote) or deliver notifications (Notify).' })}
-                        showHeroIcon={false}
-                        primaryButtonLabel={t('bots.overview.connectBot', { defaultValue: 'Connect a bot' })}
-                        onAddApiKeyClick={openAddDialog}
+                        primaryAction={{
+                            label: t('bots.overview.connectBot', { defaultValue: 'Connect a bot' }),
+                            onClick: openAddDialog,
+                        }}
                     />
                 ) : (
                     bots.map((bot) => (

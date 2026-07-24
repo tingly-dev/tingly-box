@@ -1,4 +1,4 @@
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
@@ -47,16 +47,16 @@ const NotifyPage = () => {
                 })}
                 size="full"
                 sx={{ mb: 2 }}
+                titleHeadingLevel={1}
             >
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                         <CircularProgress />
                     </Box>
                 ) : bots.length === 0 ? (
-                    <EmptyStateGuide
+                    <EmptyState
                         title={t('notify.emptyTitle', { defaultValue: 'No bots connected yet' })}
                         description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Overview page first, then come back here to see what it notifies.' })}
-                        showHeroIcon={false}
                     />
                 ) : (
                     <Stack spacing={1}>
