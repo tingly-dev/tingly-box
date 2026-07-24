@@ -15,6 +15,7 @@ type StatusInput struct {
 	// Additional fields
 	Exceeds200kTokens bool        `json:"exceeds_200k_tokens"`
 	SessionID         string      `json:"session_id"`
+	SessionName       string      `json:"session_name"` // human-readable session title; resumeable via `claude --resume <title>`
 	TranscriptPath    string      `json:"transcript_path"`
 	Version           string      `json:"version"`
 	OutputStyle       OutputStyle `json:"output_style"`

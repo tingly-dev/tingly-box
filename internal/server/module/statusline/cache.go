@@ -87,5 +87,8 @@ func mergeStatusInput(input, cached *StatusInput) *StatusInput {
 	merged.Cost.TotalLinesAdded = cmp.Or(merged.Cost.TotalLinesAdded, cached.Cost.TotalLinesAdded)
 	merged.Cost.TotalLinesRemoved = cmp.Or(merged.Cost.TotalLinesRemoved, cached.Cost.TotalLinesRemoved)
 
+	merged.CWD = cmp.Or(merged.CWD, cached.CWD)
+	merged.SessionName = cmp.Or(merged.SessionName, cached.SessionName)
+
 	return &merged
 }

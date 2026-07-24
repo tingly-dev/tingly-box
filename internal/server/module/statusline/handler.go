@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -117,8 +118,9 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	// Update cache with new input (even if partial)
 	h.cache.Update(&input)
 
-	// Build status line
-	// Format: [CC Model] → TB Model@Provider | ▓▓▓░░░░░ 7% | $0.05
+	// Build status line as two rows, split by semantic dimension:
+	//   row 1 (session + requested routing): ruleModel @ profile  📁 <cwd>  <session>
+	//   row 2 (real model + consumption):     realModel @ provider | ▓▓░░░░░░ 7% | $0.05 | Cache: 87% | Usage: 40K/100K
 	ccModel := cmp.Or(merged.Model.DisplayName, "unknown")
 
 	usedPct := int(merged.ContextWindow.UsedPercentage)
@@ -129,8 +131,8 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 	filled := min(max(usedPct*barWidth/100, 0), barWidth)
 	bar := strings.Repeat("▓", filled) + strings.Repeat("░", barWidth-filled)
 
-	// Build profile label: "p1:name" or empty
-	profileLabel := ""
+	// Build profile label: "p1:name" or "default" when none configured.
+	profileLabel := "default"
 	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(scenario))
 	if profileID != "" {
 		profileName := profileID
@@ -142,28 +144,27 @@ func (h *Handler) GetClaudeCodeStatusLine(c *gin.Context) {
 
 	// Query Tingly Box model mapping
 	mapping := h.getTBModelMapping(merged.Model.ID, typ.RuleScenario(scenario))
-
-	// Build output: [ruleModel @ p1:name] -> realModel @ providerName | bar pct | cost
 	ruleModel := cmp.Or(merged.Model.ID, ccModel)
 
-	output := fmt.Sprintf("[%s", ruleModel)
-	if profileLabel != "" {
-		output += fmt.Sprintf(" @ %s", profileLabel)
-	}
-	output += "]"
-	if mapping != nil && mapping.model != "" {
-		output += fmt.Sprintf(" → %s @ %s", mapping.model, mapping.providerName)
-	}
-	output += fmt.Sprintf(" | %s %d%% | $%.2f", bar, usedPct, cost)
-	output += buildCacheInline(merged.ContextWindow.CurrentUsage)
+	// Row 1: requested routing first, then session identity.
+	// @ reads as "belongs to / via" (profile, provider).
+	row1 := fmt.Sprintf("%s @ %s  📁 %s%s", ruleModel, profileLabel, shortenPath(merged.CWD), sessionLabel(merged.SessionName, merged.SessionID))
 
-	// Add quota info to the same line if available
+	// Row 2: real model + consumption.
+	row2 := ""
+	if mapping != nil && mapping.model != "" {
+		row2 = fmt.Sprintf("%s @ %s | ", mapping.model, mapping.providerName)
+	}
+	row2 += fmt.Sprintf("%s %d%% | $%.2f", bar, usedPct, cost)
+	row2 += buildCacheInline(merged.ContextWindow.CurrentUsage)
+
+	// Add usage info to the same line if available
 	quotaInfo := h.buildQuotaInline(mapping)
 	if quotaInfo != "" {
-		output += quotaInfo
+		row2 += quotaInfo
 	}
 
-	c.String(http.StatusOK, output)
+	c.String(http.StatusOK, row1+"\n"+row2)
 }
 
 func cacheHitPct(usage CurrentUsage) int {
@@ -186,6 +187,82 @@ func buildCacheInline(usage CurrentUsage) string {
 	}
 
 	return fmt.Sprintf(" | Cache: %d%%", pct)
+}
+
+// shortenPath collapses a long absolute path for compact statusline display.
+// The home directory prefix becomes ~; long middles collapse to ... while the
+// first segment and the last two segments (parent/basename) are kept.
+// Examples:
+//
+//	/Users/yz/Project/101-project/tingly-box → ~/.../101-project/tingly-box
+//	/Users/xyz/tmp            → ~/tmp
+//	""                        → ~
+func shortenPath(path string) string {
+	if path == "" {
+		return "~"
+	}
+
+	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(path, home) {
+		path = "~" + strings.TrimPrefix(path, home)
+	}
+
+	// Clean slashes so splitting is predictable, but keep the leading ~.
+	segments := strings.Split(strings.TrimPrefix(path, "~"), "/")
+	// Drop empty segments (leading slash, doubled slashes).
+	cleaned := segments[:0]
+	for _, s := range segments {
+		if s != "" {
+			cleaned = append(cleaned, s)
+		}
+	}
+
+	const maxLen = 40
+	if path == "~" || len(cleaned) == 0 {
+		return "~"
+	}
+
+	short := "~/" + strings.Join(cleaned, "/")
+
+	// Collapse the middle when there are more than 2 path segments (keeps
+	// home ~ prefix + last two), or when even a short segment count blows past
+	// the width budget. So /h/Project/101-project/tingly-box (3 segments) →
+	// ~/.../101-project/tingly-box, while /h/repo stays ~/repo.
+	if len(cleaned) > 2 || len(short) > maxLen {
+		if len(cleaned) <= 2 {
+			return short
+		}
+		tail := cleaned[len(cleaned)-2:]
+		return "~/.../" + strings.Join(tail, "/")
+	}
+
+	return short
+}
+
+// firstN returns the first n bytes of s (or all of it if shorter), safe for
+// short/empty input.
+func firstN(s string, n int) string {
+	if n < 0 {
+		n = 0
+	}
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+// sessionLabel renders a compact, resumeable session identifier for row 1.
+// Prefers the human-readable title (quoted — literally copy-resumeable via
+// `claude --resume <title>`); falls back to #<first8> of the id when no title
+// exists (early / `claude -p` sessions). Returns "" when neither is available.
+// The result always carries a leading space when non-empty.
+func sessionLabel(name, id string) string {
+	if name != "" {
+		return fmt.Sprintf(" %q", name)
+	}
+	if id != "" {
+		return " #" + firstN(id, 8)
+	}
+	return ""
 }
 
 // tbModelMappingResult contains the result of model mapping lookup
@@ -278,8 +355,8 @@ func (h *Handler) selectBestQuotaWindow(usage *quota.ProviderUsage) *quota.Usage
 	return nil
 }
 
-// buildQuotaInline builds quota information for inline display in statusline
-// Format: " | Quota: 40/100 tokens" or " | Quota: 40K/100K tokens | 100/500 req"
+// buildQuotaInline builds quota (used/limit) information for inline display in statusline
+// Format: " | Usage: 40/100 tokens" or " | Usage: 40K/100K tokens | 100/500 req"
 func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 	if h.quotaMgr == nil || mapping == nil {
 		return ""
@@ -320,8 +397,9 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 		return ""
 	}
 
-	// Join all quota parts
-	return " | Quota: " + strings.Join(parts, " ")
+	// Join all quota parts. Label is "Usage" (not "Quota"): the values are
+	// used/limit (consumption), and "Usage" is unambiguous next to the usage %.
+	return " | Usage: " + strings.Join(parts, " ")
 }
 
 // formatQuotaWindow formats a single quota window
