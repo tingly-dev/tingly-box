@@ -94,6 +94,13 @@ type enterpriseKeyPair struct {
 // Deliberately process-cached and shared: the key never leaves the process's
 // own temp dirs, and no harness assertion depends on envs having distinct
 // keys.
+//
+// sync.OnceValues caches a generation failure permanently, not just the
+// success value — a transient rand.Reader/OS failure on the first call would
+// poison every env for the rest of the process, where previously each env
+// generated (and could fail) independently. Accepted: the only realistic
+// failure mode is entropy-source exhaustion, which isn't something a retry
+// would recover from either.
 var preseedKeys = sync.OnceValues(func() (enterpriseKeyPair, error) {
 	private, public, err := serverconfig.GenerateEnterpriseContextPEMs()
 	return enterpriseKeyPair{private, public}, err
