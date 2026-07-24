@@ -328,22 +328,7 @@ func promptForModelInput(reader *bufio.Reader, prompt string) (string, error) {
 
 // runStandaloneBot runs a single bot in standalone mode
 func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string, provider string, model string) error {
-	botSetting := bot.BotSetting{
-		UUID:               setting.UUID,
-		Name:               setting.Name,
-		Token:              setting.Auth["token"],
-		Platform:           setting.Platform,
-		AuthType:           setting.AuthType,
-		Auth:               setting.Auth,
-		ProxyURL:           setting.ProxyURL,
-		ChatIDLock:         setting.ChatIDLock,
-		BashAllowlist:      setting.BashAllowlist,
-		DefaultCwd:         setting.DefaultCwd,
-		Enabled:            setting.Enabled,
-		SmartGuideProvider: provider,
-		SmartGuideModel:    model,
-		RequirePairing:     setting.RequirePairing,
-	}
+	botSetting := standaloneBotSetting(setting, provider, model)
 
 	// Create session store (minimal for standalone bot)
 	sessionStorePath := filepath.Join(dataPath, "bot_sessions.json")
@@ -370,6 +355,27 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 
 	// Run the bot
 	return runBotWithSettingsInternal(ctx, appManager, botSetting, chatStorePath, sessionMgr, agentService)
+}
+
+func standaloneBotSetting(setting db.Settings, provider, model string) bot.BotSetting {
+	return bot.BotSetting{
+		UUID:               setting.UUID,
+		Name:               setting.Name,
+		Token:              setting.Auth["token"],
+		Platform:           setting.Platform,
+		AuthType:           setting.AuthType,
+		Auth:               setting.Auth,
+		ProxyURL:           setting.ProxyURL,
+		ChatIDLock:         setting.ChatIDLock,
+		BashAllowlist:      setting.BashAllowlist,
+		DefaultCwd:         setting.DefaultCwd,
+		DefaultAgent:       setting.DefaultAgent,
+		Enabled:            setting.Enabled,
+		Scenarios:          setting.Scenarios,
+		SmartGuideProvider: provider,
+		SmartGuideModel:    model,
+		RequirePairing:     setting.RequirePairing,
+	}
 }
 
 // runBotWithSettingsInternal is an internal wrapper that calls the bot runner

@@ -89,11 +89,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
 
 	shouldResume := !req.IsNewSession
-	permissionMode := req.PermissionMode
-	if permissionMode == "" {
-		permissionMode = string(claude.PermissionModeDefault)
-	}
-	autoApprove := noApprovalModes[permissionMode]
+	permissionMode, autoApprove := claudePermissionPolicy(req.PermissionMode)
 
 	logrus.WithFields(logrus.Fields{
 		"chatID":         req.HCtx.ChatID,
@@ -235,6 +231,14 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		IsNewSession: req.IsNewSession,
 		Duration:     duration,
 	}, nil
+}
+
+// claudePermissionPolicy keeps an empty session mode empty so Claude Code can
+// inherit defaultMode from the selected settings/profile. A non-empty session
+// value is an explicit per-session override (for example /yolo).
+func claudePermissionPolicy(sessionMode string) (string, bool) {
+	mode := strings.TrimSpace(sessionMode)
+	return mode, noApprovalModes[mode]
 }
 
 // sendTaskDoneCard emits the "Task done" action keyboard at the end of a

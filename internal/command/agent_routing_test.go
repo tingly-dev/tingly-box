@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -43,5 +44,21 @@ func TestAgentRoutingKeyUnknown(t *testing.T) {
 	_, _, err := agentRoutingKey(agent.AgentType("not-a-real-agent"))
 	if err == nil {
 		t.Fatal("expected error for unknown agent type, got nil")
+	}
+}
+
+func TestStandaloneBotSettingPreservesClaudeProfileSelection(t *testing.T) {
+	got := standaloneBotSetting(db.Settings{
+		UUID:         "bot-1",
+		Auth:         map[string]string{"token": "secret"},
+		DefaultAgent: "claude_code:p1",
+		Scenarios:    `[{"scenario":"claude_code:p1"}]`,
+	}, "provider-1", "model-1")
+
+	if got.DefaultAgent != "claude_code:p1" {
+		t.Fatalf("DefaultAgent = %q, want claude_code:p1", got.DefaultAgent)
+	}
+	if got.Scenarios != `[{"scenario":"claude_code:p1"}]` {
+		t.Fatalf("Scenarios = %q", got.Scenarios)
 	}
 }

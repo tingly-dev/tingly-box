@@ -38,9 +38,13 @@ one profile.
    the chat's next message, no bot restart needed.
 2. If a profile is selected, calls
    `TBClient.GetClaudeCodeSettingsPathForProfile(ctx, profileID)`, which
-   materializes the profile's settings.json via
+   ensures the profile's settings.json via
    `agent.MaterializeCCProfileSettings(...)` — the same on-disk artifact and
    resolution `tingly-box cc --profile <id>` produces — and returns its path.
+   The builder renders the complete document in memory, serializes publishers
+   per target path, and atomically replaces the artifact only when its content
+   changed. Concurrent launches therefore see either the previous complete
+   snapshot or the next one, never the main-settings intermediate state.
    That path becomes `ExecutionOptions.SettingsPath`, which
    `agentboot/claude`'s CLI builder turns into a `--settings <path>` flag —
    the same mechanism the local launch uses.
@@ -55,6 +59,12 @@ one profile.
 sets only `SettingsPath` (mirroring the local CLI's plain `os.Environ()`
 passthrough + `--settings`, no extra env injected); the main-scenario path
 sets only `Env`.
+
+`PermissionMode` is also intentionally empty unless the chat session has an
+explicit override such as `/yolo`. Empty means Claude Code owns resolution:
+the selected profile's `defaultMode` (or the normal Claude Code settings
+default) remains effective. Disabling `/yolo` clears the session override
+instead of forcing `--permission-mode default`.
 
 **Why a profile needs `--settings` rather than env vars.** Claude Code's
 `--settings <path>` flag *replaces* `~/.claude/settings.json` rather than

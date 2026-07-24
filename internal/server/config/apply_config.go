@@ -322,6 +322,55 @@ func WithExtra(key string, value any) ApplyOption {
 	}
 }
 
+func resolveApplyOptions(opts ...ApplyOption) *applyOptions {
+	applyOpts := &applyOptions{
+		backup: true, // default: enable backup
+	}
+	for _, opt := range opts {
+		opt(applyOpts)
+	}
+	return applyOpts
+}
+
+// BuildClaudeSettings renders a complete Claude settings document from the
+// supplied base without touching disk. Generated runtime artifacts use this
+// to publish one complete snapshot instead of exposing intermediate writes.
+func BuildClaudeSettings(base []byte, env map[string]string, opts ...ApplyOption) ([]byte, error) {
+	return buildClaudeSettings(base, env, resolveApplyOptions(opts...))
+}
+
+func buildClaudeSettings(base []byte, env map[string]string, applyOpts *applyOptions) ([]byte, error) {
+	existingConfig := make(map[string]interface{})
+	if len(bytes.TrimSpace(base)) > 0 {
+		if err := json.Unmarshal(base, &existingConfig); err != nil {
+			return nil, fmt.Errorf("failed to parse existing JSON: %w", err)
+		}
+	}
+	if existingConfig == nil {
+		existingConfig = make(map[string]interface{})
+	}
+
+	// Replace the entire env key with the generated environment.
+	envInterface := make(map[string]interface{}, len(env))
+	for k, v := range env {
+		envInterface[k] = v
+	}
+	existingConfig["env"] = envInterface
+
+	if applyOpts.defaultMode != "" {
+		existingConfig["defaultMode"] = applyOpts.defaultMode
+	}
+	for k, v := range applyOpts.extras {
+		existingConfig[k] = v
+	}
+
+	output, err := json.MarshalIndent(existingConfig, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	return output, nil
+}
+
 // ApplyClaudeSettingsToPath applies Claude settings env vars to a specific target file.
 // If the file exists, it merges the env section into the existing config (with backup).
 // If not, it creates a new file with only the env section.
@@ -331,13 +380,7 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, opts ..
 		Message: "",
 	}
 
-	// Parse options
-	applyOpts := &applyOptions{
-		backup: true, // default: enable backup
-	}
-	for _, opt := range opts {
-		opt(applyOpts)
-	}
+	applyOpts := resolveApplyOptions(opts...)
 
 	// Ensure directory exists
 	if err := ensureDir(targetPath); err != nil {
@@ -349,19 +392,23 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, opts ..
 	_, err := os.Stat(targetPath)
 	fileExists := err == nil
 
-	var existingConfig map[string]interface{}
+	base := []byte("{}")
 	if fileExists {
 		data, err := os.ReadFile(targetPath)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to read existing file: %v", err)
 			return result, nil
 		}
+		base = data
+	}
 
-		if err := json.Unmarshal(data, &existingConfig); err != nil {
-			result.Message = fmt.Sprintf("Failed to parse existing JSON: %v", err)
-			return result, nil
-		}
+	output, err := buildClaudeSettings(base, env, applyOpts)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to build settings JSON: %v", err)
+		return result, nil
+	}
 
+	if fileExists {
 		// Only create backup if enabled
 		if applyOpts.backup {
 			backupPath, err := backupFileWithRetention(targetPath, applyOpts.retention)
@@ -373,30 +420,7 @@ func ApplyClaudeSettingsToPath(targetPath string, env map[string]string, opts ..
 		}
 		result.Updated = true
 	} else {
-		existingConfig = make(map[string]interface{})
 		result.Created = true
-	}
-
-	// Merge env section - replace the entire env key with new env
-	envInterface := make(map[string]interface{})
-	for k, v := range env {
-		envInterface[k] = v
-	}
-
-	existingConfig["env"] = envInterface
-	if applyOpts.defaultMode != "" {
-		existingConfig["defaultMode"] = applyOpts.defaultMode
-	}
-	// Apply extras from options
-	for k, v := range applyOpts.extras {
-		existingConfig[k] = v
-	}
-
-	// Write the merged config
-	output, err := json.MarshalIndent(existingConfig, "", "  ")
-	if err != nil {
-		result.Message = fmt.Sprintf("Failed to marshal JSON: %v", err)
-		return result, nil
 	}
 
 	if err := os.WriteFile(targetPath, output, 0644); err != nil {
@@ -449,16 +473,11 @@ func InstallStatusLineScript() (scriptPath string, created bool, err error) {
 		return "", false, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Check if file exists
-	_, err = os.Stat(scriptPath)
-	fileExists := err == nil
-
-	// Write the script
-	if err := os.WriteFile(scriptPath, content, 0755); err != nil {
+	created, err = writeManagedFileIfChanged(scriptPath, content, 0755)
+	if err != nil {
 		return "", false, fmt.Errorf("failed to write script: %w", err)
 	}
-
-	return scriptPath, !fileExists, nil
+	return scriptPath, created, nil
 }
 
 // InstallNotifyScript installs the tingly-notify.sh script (push-only) to ~/.claude/
@@ -493,16 +512,62 @@ func installScript(targetName, assetPath string) (scriptPath string, created boo
 		return "", false, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Check if file exists
-	_, err = os.Stat(scriptPath)
-	fileExists := err == nil
-
-	// Write the script
-	if err := os.WriteFile(scriptPath, content, 0755); err != nil {
+	created, err = writeManagedFileIfChanged(scriptPath, content, 0755)
+	if err != nil {
 		return "", false, fmt.Errorf("failed to write script: %w", err)
 	}
+	return scriptPath, created, nil
+}
 
-	return scriptPath, !fileExists, nil
+func writeManagedFileIfChanged(path string, content []byte, perm os.FileMode) (bool, error) {
+	info, err := os.Lstat(path)
+	created := os.IsNotExist(err)
+	switch {
+	case err == nil && info.Mode().IsRegular():
+		current, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return false, readErr
+		}
+		if bytes.Equal(current, content) {
+			if info.Mode().Perm() != perm.Perm() {
+				if chmodErr := os.Chmod(path, perm); chmodErr != nil {
+					return false, chmodErr
+				}
+			}
+			return false, nil
+		}
+	case err == nil && info.IsDir():
+		return false, fmt.Errorf("managed file path is a directory: %s", path)
+	case err != nil && !os.IsNotExist(err):
+		return false, err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return false, err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return false, err
+	}
+	return created, nil
 }
 
 // NotifyHookEntries defines the Claude Code hooks to install for PUSH-ONLY notifications.

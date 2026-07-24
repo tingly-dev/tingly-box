@@ -1,18 +1,56 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+type ccProfileBuildLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+var ccProfileBuildLocks = struct {
+	sync.Mutex
+	byPath map[string]*ccProfileBuildLock
+}{
+	byPath: make(map[string]*ccProfileBuildLock),
+}
+
+func acquireCCProfileBuildLock(path string) func() {
+	ccProfileBuildLocks.Lock()
+	entry := ccProfileBuildLocks.byPath[path]
+	if entry == nil {
+		entry = &ccProfileBuildLock{}
+		ccProfileBuildLocks.byPath[path] = entry
+	}
+	entry.refs++
+	ccProfileBuildLocks.Unlock()
+
+	entry.mu.Lock()
+	return func() {
+		entry.mu.Unlock()
+
+		ccProfileBuildLocks.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(ccProfileBuildLocks.byPath, path)
+		}
+		ccProfileBuildLocks.Unlock()
+	}
+}
 
 // GenerateCCEnv builds the env map for Claude Code settings.json.
 //
@@ -289,6 +327,9 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 	if err != nil {
 		return "", err
 	}
+	release := acquireCCProfileBuildLock(destPath)
+	defer release()
+
 	artifactDir := filepath.Dir(destPath)
 	rootDir := filepath.Dir(artifactDir)
 
@@ -308,13 +349,6 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 	} else if !os.IsNotExist(readErr) {
 		return "", fmt.Errorf("failed to read user settings: %w", readErr)
 	}
-	// Always reset the derived file to the current local source (or an empty
-	// object when that source no longer exists) before applying profile values.
-	// This prevents generated artifacts from becoming a second source of truth.
-	if err := os.WriteFile(destPath, baseSettings, 0644); err != nil {
-		return "", fmt.Errorf("failed to copy user settings: %w", err)
-	}
-
 	// Install the base status line script (shared across profiles).
 	if _, _, err := serverconfig.InstallStatusLineScript(); err != nil {
 		return "", fmt.Errorf("failed to install status line script: %w", err)
@@ -332,12 +366,12 @@ func BuildCCProfileSettings(profileID, scenarioPath, profileName string, env map
 	}
 	applyOpts := []serverconfig.ApplyOption{serverconfig.WithBackup(false), serverconfig.WithExtra("statusLine", statusLine)}
 	applyOpts = append(applyOpts, opts...)
-	result, err := serverconfig.ApplyClaudeSettingsToPath(destPath, env, applyOpts...)
+	output, err := serverconfig.BuildClaudeSettings(baseSettings, env, applyOpts...)
 	if err != nil {
-		return "", fmt.Errorf("failed to apply settings: %w", err)
+		return "", fmt.Errorf("failed to build settings: %w", err)
 	}
-	if !result.Success {
-		return "", fmt.Errorf("failed to apply settings: %s", result.Message)
+	if _, err := writeGeneratedFileIfChanged(destPath, output, 0644); err != nil {
+		return "", fmt.Errorf("failed to publish settings: %w", err)
 	}
 
 	removeLegacyCCProfileArtifacts(rootDir, profileID, profileName)
@@ -484,9 +518,60 @@ func buildCCProfileStatusLineScript(profileDir, profileID, scenarioPath string) 
 		"exec ~/.claude/tingly-statusline.sh \"$@\"\n",
 		profileID, scenarioPath, scenarioPath)
 
-	if err := os.WriteFile(wrapperPath, []byte(content), 0755); err != nil {
+	if _, err := writeGeneratedFileIfChanged(wrapperPath, []byte(content), 0755); err != nil {
 		return "", fmt.Errorf("failed to write wrapper script: %w", err)
 	}
 
 	return wrapperPath, nil
+}
+
+func writeGeneratedFileIfChanged(path string, content []byte, perm fs.FileMode) (bool, error) {
+	info, err := os.Lstat(path)
+	switch {
+	case err == nil && info.Mode().IsRegular():
+		current, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return false, readErr
+		}
+		if bytes.Equal(current, content) {
+			if info.Mode().Perm() != perm.Perm() {
+				if chmodErr := os.Chmod(path, perm); chmodErr != nil {
+					return false, chmodErr
+				}
+				return true, nil
+			}
+			return false, nil
+		}
+	case err == nil && info.IsDir():
+		return false, fmt.Errorf("generated file path is a directory: %s", path)
+	case err != nil && !os.IsNotExist(err):
+		return false, err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return false, err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return false, err
+	}
+	return true, nil
 }

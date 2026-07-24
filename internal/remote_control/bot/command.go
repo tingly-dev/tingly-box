@@ -598,11 +598,7 @@ func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 				return sendCommandTextf(adapter, ctx, "Failed to get session: %v", err)
 			}
 
-			// Toggle permission mode between bypassPermissions (yolo ON) and default (yolo OFF)
-			newMode := string(claude.PermissionModeBypassPermissions)
-			if sess.PermissionMode == string(claude.PermissionModeBypassPermissions) {
-				newMode = string(claude.PermissionModeDefault)
-			}
+			newMode := toggledYoloPermissionMode(sess.PermissionMode)
 
 			if err := adapter.UpdatePermissionMode(sess.ID, newMode); err != nil {
 				return sendCommandTextf(adapter, ctx, "Failed to update permission mode: %v", err)
@@ -611,11 +607,20 @@ func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 			if newMode == string(claude.PermissionModeBypassPermissions) {
 				return sendCommandTextf(adapter, ctx, "🚀 **YOLO MODE ENABLED**\n\nAll permissions will be auto-approved for this session.\n⚠️ Use with caution!\n\nSession: %s\nProject: %s", sess.ID, projectPath)
 			}
-			return sendCommandTextf(adapter, ctx, "🔒 **YOLO MODE DISABLED**\n\nBack to normal approval mode.\nAll permission requests will require confirmation.\n\nSession: %s\nProject: %s", sess.ID, projectPath)
+			return sendCommandTextf(adapter, ctx, "🔒 **YOLO MODE DISABLED**\n\nBack to the selected Claude Code profile/settings permission mode.\n\nSession: %s\nProject: %s", sess.ID, projectPath)
 		}).
 		WithCategory("advanced").
 		WithPriority(10).
 		MustBuild()
+}
+
+// toggledYoloPermissionMode treats /yolo as a per-session override. Empty
+// means "inherit the selected profile/settings defaultMode".
+func toggledYoloPermissionMode(current string) string {
+	if current == string(claude.PermissionModeBypassPermissions) {
+		return ""
+	}
+	return string(claude.PermissionModeBypassPermissions)
 }
 
 func newVerboseCommand(adapter BotHandlerAdapter) imbot.Command {

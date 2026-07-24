@@ -23,3 +23,27 @@ func TestNoApprovalModesPreserveClaudeAutoSemantics(t *testing.T) {
 		t.Fatal("bypassPermissions should remain non-interactive")
 	}
 }
+
+func TestClaudePermissionPolicyInheritsProfileWhenSessionUnset(t *testing.T) {
+	mode, autoApprove := claudePermissionPolicy("")
+	if mode != "" {
+		t.Fatalf("empty session mode became %q; profile defaultMode must remain authoritative", mode)
+	}
+	if autoApprove {
+		t.Fatal("inherited permission mode must not enable host-side auto approval")
+	}
+
+	mode, autoApprove = claudePermissionPolicy(string(claude.PermissionModeBypassPermissions))
+	if mode != string(claude.PermissionModeBypassPermissions) || !autoApprove {
+		t.Fatalf("explicit bypass override = (%q, %v)", mode, autoApprove)
+	}
+}
+
+func TestToggledYoloPermissionModeClearsSessionOverride(t *testing.T) {
+	if got := toggledYoloPermissionMode(string(claude.PermissionModeBypassPermissions)); got != "" {
+		t.Fatalf("disabling /yolo returned %q; want inherited mode", got)
+	}
+	if got := toggledYoloPermissionMode(""); got != string(claude.PermissionModeBypassPermissions) {
+		t.Fatalf("enabling /yolo returned %q", got)
+	}
+}

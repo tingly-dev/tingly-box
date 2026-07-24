@@ -48,6 +48,15 @@ func TestConfigWithContinue(t *testing.T) {
 	assert.True(t, config.ContinueConversation)
 }
 
+func TestBuildCommonArgsLetsSettingsOwnPermissionMode(t *testing.T) {
+	args := BuildCommonArgs(Config{}, CommonOptions{
+		SettingsPath: "/tmp/profile/settings.json",
+	})
+
+	assert.Contains(t, args, "--settings")
+	assert.NotContains(t, args, "--permission-mode")
+}
+
 // TestCompareVersions tests version comparison
 func TestCompareVersions(t *testing.T) {
 	tests := []struct {
