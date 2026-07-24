@@ -3,14 +3,6 @@ export const sidebarWidth = 200;
 export const headerHeight = 60;
 export const footerHeight = 60;
 
-// The main content area's own padding (Layout.tsx's mobileContentSx) —
-// exported so a page-level secondary nav (SecondaryNavLayout) can cancel it
-// with matching negative margins and sit flush against the real Sidebar,
-// instead of guessing/duplicating these numbers.
-export const contentPaddingX = { xs: 2, md: 3 } as const;
-export const contentPaddingTop = { xs: 9, md: 3 } as const;
-export const contentPaddingBottom = 3;
-
 // --- Activity Bar Item Styles ---
 export const activityItemMinHeight = 64;
 export const activityItemGap = 0.5;

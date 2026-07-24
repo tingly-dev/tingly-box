@@ -53,8 +53,8 @@ export function useActivityItems(): ActivityItem[] {
             window.removeEventListener('storage', sync);
         };
     }, []);
-    // Aggregate across every platform for the Overview row's subtitle — the
-    // per-platform breakdown lives on the Overview page itself now, not in
+    // Aggregate across every platform for the Bots row's subtitle — the
+    // per-platform breakdown lives on the Bots page itself now, not in
     // the nav (see .design/bot-arch.md §10).
     const botOverviewSubtitle = useMemo(() => {
         const totals = Object.values(botSummary).reduce(
@@ -186,7 +186,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
                     { type: 'divider' },
                     { path: '/remote-agent/weixin', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
-                    { path: '/notify', label: t('layout.notify', { defaultValue: 'Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
+                    { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{

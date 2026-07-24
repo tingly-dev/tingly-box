@@ -104,6 +104,21 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // they don't show up as pickable platforms.
 export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom'] as const;
 
+// Brand icon per platform, keyed the same as BOT_PLATFORM_IDS — locale-
+// independent (unlike the guide config below, which needs `t`), so this is
+// a plain static map rather than something built per-render. Single source
+// for any call site that needs an icon per platform id inside a loop
+// (BotOverviewPage / RemoteAgentPage's picker items), instead of each page
+// hand-copying the same id → component table.
+export const PLATFORM_BRAND_ICONS: Record<string, ComponentType<{ size?: number; grayscale?: boolean }>> = {
+    telegram: Telegram,
+    feishu: Feishu,
+    lark: Lark,
+    dingtalk: DingTalk,
+    weixin: Weixin,
+    wecom: WeCom,
+};
+
 const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> => ({
     telegram: {
         id: 'telegram',

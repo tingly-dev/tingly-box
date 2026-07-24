@@ -56,7 +56,7 @@ const NotifyPage = () => {
                 ) : bots.length === 0 ? (
                     <EmptyState
                         title={t('notify.emptyTitle', { defaultValue: 'No bots connected yet' })}
-                        description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Overview page first, then come back here to see what it notifies.' })}
+                        description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Bots page first, then come back here to see what it notifies.' })}
                     />
                 ) : (
                     <Stack spacing={1}>

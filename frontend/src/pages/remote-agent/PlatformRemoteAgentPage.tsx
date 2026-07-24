@@ -231,7 +231,7 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
             <UnifiedCard
                 title={t('remoteAgent.title', { defaultValue: '{{platform}} Remote Control', platform: platformName })}
                 titleHeadingLevel={1}
-                subtitle={t('remoteAgent.subtitle', { defaultValue: 'Mount {{platform}} bots to drive Claude Code / SmartGuide from chat, and configure how the agent behaves. Bot connections are managed on the Bots pages.', platform: platformName })}
+                subtitle={t('remoteAgent.subtitle', { defaultValue: 'Mount {{platform}} bots to drive Claude Code / SmartGuide from chat, and configure how the agent behaves. Bot connections are managed on the Bots page.', platform: platformName })}
                 size="full"
                 sx={{ mb: 2 }}
                 rightAction={

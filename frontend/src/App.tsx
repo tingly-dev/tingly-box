@@ -261,10 +261,10 @@ function AppContent() {
                     <Route path="/bots/qq" element={<QQPage />} />
                     <Route path="/bots/discord" element={<DiscordPage />} />
                     <Route path="/bots/slack" element={<SlackPage />} />
-                    {/* Notify — the other purpose mounted on a bot's channel. */}
+                    {/* IM Notify — the other purpose mounted on a bot's channel. */}
                     <Route path="/notify" element={<NotifyPage />} />
-                    {/* Remote — the purpose pages. One nav row (see useActivityItems);
-                        platform selection is an in-page tab bar (RemoteAgentPage) instead
+                    {/* Remote Control — the purpose pages. One nav row (see useActivityItems);
+                        platform selection is an in-page picker (RemoteAgentPage) instead
                         of a route per platform in the sidebar. The routes themselves are
                         unchanged, so deep links and the BotCard purpose chip still work. */}
                     <Route path="/remote-agent" element={<Navigate to="/remote-agent/weixin" replace />} />

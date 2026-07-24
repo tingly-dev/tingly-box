@@ -152,3 +152,19 @@ export function notifyRoutes(scenarios?: string): NotifyRoute[] {
 export function isNotifyMounted(scenarios?: string): boolean {
     return notifyRoutes(scenarios).some((r) => r.enabled !== false);
 }
+
+// countBotsByPlatform tallies active/total bots per platform — feeds the
+// "active X / Y" subtitle on both the Bots page's picker (all platforms at
+// once, from a list it already has loaded) and the Remote Control page's
+// picker (fetched separately, since that page doesn't otherwise need the
+// full bot list).
+export function countBotsByPlatform(bots: BotSettings[]): Record<string, { active: number; total: number }> {
+    const counts: Record<string, { active: number; total: number }> = {};
+    for (const bot of bots) {
+        if (!bot.platform) continue;
+        const slot = counts[bot.platform] ?? (counts[bot.platform] = { active: 0, total: 0 });
+        slot.total++;
+        if (bot.enabled) slot.active++;
+    }
+    return counts;
+}

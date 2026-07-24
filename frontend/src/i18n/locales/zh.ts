@@ -1214,7 +1214,7 @@ export default {
     "title": "IM 通知",
     "subtitle": "哪些机器人负责把场景通知和交互式提示投递到聊天。",
     "emptyTitle": "尚未连接机器人",
-    "emptyDescription": "请先在概览页连接一个机器人，再回到这里查看它的通知情况。",
+    "emptyDescription": "请先在机器人页面连接一个机器人，再回到这里查看它的通知情况。",
     "mounted": "通知中",
     "notMounted": "无路由",
     "attachComingSoon": "+ 添加路由（即将支持）",

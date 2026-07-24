@@ -3,9 +3,9 @@ import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
-import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom } from '@/components/BrandIcons';
-import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
+import { BOT_PLATFORM_IDS, PLATFORM_BRAND_ICONS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { api } from '@/services/api';
+import { countBotsByPlatform } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
 import { Add, ListAlt } from '@/components/icons';
 import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
@@ -13,24 +13,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-// Plain lookup (not the usePlatformGuide hook) so it's safe to call from
-// inside a .map() when building the picker's item list.
-const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number; grayscale?: boolean }>> = {
-    telegram: Telegram,
-    feishu: Feishu,
-    lark: Lark,
-    dingtalk: DingTalk,
-    weixin: Weixin,
-    wecom: WeCom,
-};
-
 // BotOverviewPage is the front door for the Bots section: every connected
 // bot, across every platform, in one list. It's the only place a bot's
 // credential (token / OAuth / QR session) gets typed, rotated, or deleted —
-// Remote and Notify only mount purposes onto bots that already exist here.
-// "All" is the default view; picking a platform (left nav, ?platform=) both
-// filters the list AND brings back that platform's setup guide, since a
-// guide only makes sense once you've committed to one platform.
+// Remote Control and IM Notify only mount purposes onto bots that already
+// exist here. "All" is the default view; picking a platform (picker tile,
+// ?platform=) both filters the list AND brings back that platform's setup
+// guide, since a guide only makes sense once you've committed to one
+// platform.
 const BotOverviewPage = () => {
     const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -80,17 +70,8 @@ const BotOverviewPage = () => {
     }, [loadBotSettings]);
 
     // Per-platform active/total, plus the 'all' aggregate — drives both the
-    // side nav subtitles and the card header count.
-    const platformCounts = useMemo(() => {
-        const counts: Record<string, { active: number; total: number }> = {};
-        for (const bot of bots) {
-            if (!bot.platform) continue;
-            const slot = counts[bot.platform] ?? (counts[bot.platform] = { active: 0, total: 0 });
-            slot.total++;
-            if (bot.enabled) slot.active++;
-        }
-        return counts;
-    }, [bots]);
+    // picker tile subtitles and the card header count.
+    const platformCounts = useMemo(() => countBotsByPlatform(bots), [bots]);
 
     const countLabel = (active: number, total: number): string | undefined =>
         total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active, total }) : undefined;

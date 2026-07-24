@@ -89,7 +89,7 @@ const BotCard: React.FC<BotCardProps> = ({
                                 onClick={() => navigate(`/remote-agent/${bot.platform}`)}
                             />
                         </Tooltip>
-                        <Tooltip title={t('bots.card.notifyChipHint', { defaultValue: 'Configure on the Notify page' })}>
+                        <Tooltip title={t('bots.card.notifyChipHint', { defaultValue: 'Configure on the IM Notify page' })}>
                             <Chip
                                 label={t('bots.card.notifyChip', { defaultValue: 'IM Notify' })}
                                 size="small"
