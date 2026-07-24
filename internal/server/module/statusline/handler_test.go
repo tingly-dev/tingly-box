@@ -3,6 +3,7 @@ package statusline
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -535,4 +536,146 @@ func TestAgentStructure(t *testing.T) {
 	if agent.Name != "claude-opus-4-6" {
 		t.Errorf("expected Name 'claude-opus-4-6', got %q", agent.Name)
 	}
+}
+
+// --- new two-row statusline tests ---
+
+func TestGetClaudeCodeStatusLine_TwoRowsWithTitle(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	body := `{
+		"model": {"id": "cc[1m]", "display_name": "cc[1m]"},
+		"cwd": "/Users/yz/Project/101-project/tingly-box",
+		"session_id": "a3f9b2c1-1234-5678",
+		"session_name": "fix-login-bug",
+		"context_window": {"used_percentage": 7},
+		"cost": {"total_cost_usd": 0.05}
+	}`
+
+	req, _ := http.NewRequest("POST", "/statusline/claude_code", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	out := w.Body.String()
+	lines := strings.Split(out, "\n")
+	assert.Len(t, lines, 2, "statusline should be exactly two rows; got: %q", out)
+
+	// Row 1: requested routing FIRST (ruleModel @ default), then cwd + title.
+	assert.True(t, strings.HasPrefix(lines[0], "cc[1m] @ default"),
+		"row 1 should start with the routing block; got: %q", lines[0])
+	assert.Contains(t, lines[0], "tingly-box")
+	assert.Contains(t, lines[0], `"fix-login-bug"`)
+	// No wrapping [...] around the routing block, no consumption % on row 1.
+	assert.NotContains(t, lines[0], "7%", "consumption % belongs on row 2")
+
+	// Row 2: consumption only (no routing block on this row when no mapping
+	// resolves in the test config — just bar, %, cost).
+	assert.Contains(t, lines[1], "7%")
+	assert.Contains(t, lines[1], "$0.05")
+}
+
+func TestGetClaudeCodeStatusLine_FallbackToShortID(t *testing.T) {
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	// No session_name → must fall back to #<first8> of session_id.
+	body := `{
+		"model": {"id": "cc[1m]", "display_name": "cc[1m]"},
+		"cwd": "/tmp/repo",
+		"session_id": "a3f9b2c1-1234-5678"
+	}`
+
+	req, _ := http.NewRequest("POST", "/statusline/claude_code", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	out := w.Body.String()
+	row1 := strings.Split(out, "\n")[0]
+	assert.Contains(t, row1, "#a3f9b2c1")
+	assert.NotContains(t, row1, "#a3f9b2c1-") // only first 8 chars
+	assert.NotContains(t, row1, `"`, "no quoted title when session_name absent")
+}
+
+func TestGetClaudeCodeStatusLine_UsageLabelNotQuota(t *testing.T) {
+	// Sanity: the inline quota label is "Usage:", never "Quota:". This test
+	// passes even without a quota manager (no segment rendered), but guards
+	// against accidental regression of the label string.
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	router := setupTestRouter(cfg)
+
+	body := `{"model":{"id":"cc[1m]"},"session_id":"s1"}`
+	req, _ := http.NewRequest("POST", "/statusline/claude_code", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	out := w.Body.String()
+	assert.NotContains(t, out, "Quota:")
+}
+
+// --- pure helper tests ---
+
+func TestShortenPath(t *testing.T) {
+	// Non-home paths: ~ substitution is a no-op, so the leading segment becomes
+	// the first kept segment. Collapse kicks in at >2 segments (tail = last 2).
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", "~"},
+		{"two segments absolute", "/tmp/repo", "~/tmp/repo"},
+		{"three segments collapse", "/a/b/repo", "~/.../b/repo"},
+		{"six segments collapse middle", "/a/b/c/d/e/repo", "~/.../e/repo"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, shortenPath(tc.in))
+		})
+	}
+}
+
+func TestShortenPath_HomePrefix(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home dir available")
+	}
+	// Three segments under home → middle collapses, parent+basename kept.
+	got := shortenPath(home + "/Project/101-project/tingly-box")
+	assert.Equal(t, "~/.../101-project/tingly-box", got)
+
+	// One segment under home → shown whole.
+	gotShort := shortenPath(home + "/repo")
+	assert.Equal(t, "~/repo", gotShort)
+}
+
+func TestSessionLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		n, i string
+		want string
+	}{
+		{"title wins", "fix-login-bug", "a3f9b2c1-dead", ` "fix-login-bug"`},
+		{"id fallback", "", "a3f9b2c1-dead", " #a3f9b2c1"},
+		{"both empty", "", "", ""},
+		{"id truncated to 8", "", "1234567890abcdef", " #12345678"},
+		{"short id kept whole", "", "abc", " #abc"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, sessionLabel(tc.n, tc.i))
+		})
+	}
+}
+
+func TestFirstN(t *testing.T) {
+	assert.Equal(t, "abc", firstN("abcdef", 3))
+	assert.Equal(t, "abcdef", firstN("abcdef", 10))
+	assert.Equal(t, "", firstN("abcdef", 0))
+	assert.Equal(t, "", firstN("", 5))
 }
