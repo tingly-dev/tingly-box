@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
@@ -32,6 +33,27 @@ type MatrixCmd struct {
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
 	BatchCount int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
 	MCPEnabled bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
+}
+
+// matrixSection describes one runnable section of the validation matrix and
+// which --mode values include it. Adding a section means adding one entry
+// here (plus its ExecuteAll* executor in internal/protocoltest) and extending
+// the --mode enum on MatrixCmd.
+type matrixSection struct {
+	name     string
+	modes    []string // --mode values that include this section
+	httpOnly bool     // drives raw requests directly; requires --client=http
+	exec     func(*protocoltest.Matrix) []protocoltest.TestResult
+}
+
+// matrixSections is the section registry: the single source of truth for what
+// each --mode runs. Section order here is output order.
+var matrixSections = []matrixSection{
+	{name: "single", modes: []string{"default", "all", "single"}, exec: (*protocoltest.Matrix).ExecuteAll},
+	{name: "transitive", modes: []string{"all", "transitive"}, exec: (*protocoltest.Matrix).ExecuteAllTransitive},
+	{name: "idempotent", modes: []string{"default", "all", "idempotent"}, exec: (*protocoltest.Matrix).ExecuteAllIdempotent},
+	{name: "flags", modes: []string{"all", "flags"}, httpOnly: true, exec: (*protocoltest.Matrix).ExecuteAllFlags},
+	{name: "content_shapes", modes: []string{"all", "content_shapes"}, httpOnly: true, exec: (*protocoltest.Matrix).ExecuteAllContentShapes},
 }
 
 // Help returns extended help text shown by `harness matrix --help`.
@@ -102,8 +124,12 @@ func (m *MatrixCmd) Run() error {
 	if m.Streaming && m.NonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
 	}
-	if m.Client != "http" && (m.Mode == "flags" || m.Mode == "content_shapes") {
-		return fmt.Errorf("--mode=%s only supports --client=http (this suite drives raw requests directly)", m.Mode)
+	if m.Client != "http" {
+		for _, sec := range matrixSections {
+			if sec.httpOnly && m.Mode == sec.name {
+				return fmt.Errorf("--mode=%s only supports --client=http (this suite drives raw requests directly)", m.Mode)
+			}
+		}
 	}
 
 	client, err := resolveClient(m.Client)
@@ -142,32 +168,20 @@ func (m *MatrixCmd) Run() error {
 		matrix = matrix.WithMCPEnabled()
 	}
 
-	// Collect results for the selected sections (--mode controls which).
-	//
-	//   single-hop (A→B)         runs unless mode is transitive/idempotent/flags/content_shapes
-	//   transitive (A→B→C)       runs only for all/transitive (OFF by default)
-	//   idempotent (g(f(A))==A)  runs for default/all/idempotent
-	//   flags (per-rule flags)   runs for all/flags
-	//   content_shapes (request content-shape regression) runs for all/content_shapes
+	// Collect results for the sections the selected --mode includes (see
+	// matrixSections for the mode → section mapping).
 	var combined []protocoltest.TestResult
-	if m.Mode != "transitive" && m.Mode != "idempotent" && m.Mode != "flags" && m.Mode != "content_shapes" {
-		combined = append(combined, matrix.ExecuteAll()...)
-	}
-	if m.Mode == "all" || m.Mode == "transitive" {
-		combined = append(combined, matrix.ExecuteAllTransitive()...)
-	}
-	if m.Mode == "default" || m.Mode == "all" || m.Mode == "idempotent" {
-		combined = append(combined, matrix.ExecuteAllIdempotent()...)
-	}
-	if (m.Mode == "all" || m.Mode == "flags") && m.Client == "http" {
-		combined = append(combined, matrix.ExecuteAllFlags()...)
-	} else if m.Mode == "all" {
-		logrus.Warnf("skipping flags section: only supported with --client=http")
-	}
-	if (m.Mode == "all" || m.Mode == "content_shapes") && m.Client == "http" {
-		combined = append(combined, matrix.ExecuteAllContentShapes()...)
-	} else if m.Mode == "all" {
-		logrus.Warnf("skipping content_shapes section: only supported with --client=http")
+	for _, sec := range matrixSections {
+		if !slices.Contains(sec.modes, m.Mode) {
+			continue
+		}
+		if sec.httpOnly && m.Client != "http" {
+			// Only reachable with --mode=all: selecting an http-only section
+			// directly with another client is rejected up front.
+			logrus.Warnf("skipping %s section: only supported with --client=http", sec.name)
+			continue
+		}
+		combined = append(combined, sec.exec(matrix)...)
 	}
 	results := filterResults(combined, m)
 
@@ -260,15 +274,18 @@ func driverDir() (string, error) {
 	return dir, nil
 }
 
-// filterResults filters test results based on command options.
+// filterResults applies the command's source/target/streaming filters to the
+// combined results. The matrix filters its own pairs, but sections whose cases
+// are not pair-derived (idempotent, flags, content_shapes) only honor these
+// flags through this post-filter.
 func filterResults(results []protocoltest.TestResult, m *MatrixCmd) []protocoltest.TestResult {
 	var filtered []protocoltest.TestResult
 
 	for _, r := range results {
-		if len(m.Sources) > 0 && !contains(m.Sources, string(r.Source)) {
+		if len(m.Sources) > 0 && !slices.Contains(m.Sources, string(r.Source)) {
 			continue
 		}
-		if len(m.Targets) > 0 && !contains(m.Targets, string(r.Target)) {
+		if len(m.Targets) > 0 && !slices.Contains(m.Targets, string(r.Target)) {
 			continue
 		}
 		if m.Streaming && !r.Streaming {
@@ -281,14 +298,4 @@ func filterResults(results []protocoltest.TestResult, m *MatrixCmd) []protocolte
 	}
 
 	return filtered
-}
-
-// contains checks if a string slice contains a specific value.
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

@@ -12,7 +12,7 @@
 > It is wired into the harness as the **`flags`** section: run it via
 > `harness matrix --mode=flags` (also included in `--mode=all`), or as
 > `go test -run TestRuleFlags`. See the mode table in
-> [`harness-matrix.md`](./harness-matrix.md#3-how-to-run).
+> [`harness-matrix.md`](./harness-matrix.md#4-how-to-run).
 
 ---
 

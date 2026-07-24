@@ -289,7 +289,8 @@ func (m *Matrix) Run(t *testing.T) {
 								}
 								defer env.Close()
 
-								reportTestResult(t, m.executeTest(env, scenario, pair.Source, pair.Target, streaming))
+								result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming)
+								reportTestResult(t, &result)
 							})
 						}
 					})
@@ -372,125 +373,80 @@ func truncate(s string, max int) string {
 // It does not use testing.T, making it suitable for standalone execution.
 //
 // One TestEnv is created per scenario and reused for all of its combinations
-// — routes are keyed by (source, target, scenario), so combinations within a
-// scenario cannot interfere, and env boots stay off the hot path.
+// (see executePerScenario).
 func (m *Matrix) ExecuteAll() []TestResult {
-	var results []TestResult
-
-	// For each scenario, create one TestEnv and reuse it for all combinations
-	for _, scenario := range m.Scenarios {
-		scenario := scenario
-
-		// Create TestEnv for this scenario
-		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-		if err != nil {
-			// All tests for this scenario fail with setup error
-			for _, pair := range m.Pairs {
-				for _, streaming := range m.Streaming {
-					results = append(results, TestResult{
-						Name:      m.buildTestName(scenario.Name, pair.Source, pair.Target, streaming),
-						Scenario:  scenario.Name,
-						Source:    pair.Source,
-						Target:    pair.Target,
-						Streaming: streaming,
-						Passed:    false,
-						Errors: []AssertionError{{
-							Assertion: "setup",
-							Error:     fmt.Sprintf("failed to create test env: %v", err),
-						}},
-					})
-				}
-			}
-			continue
-		}
-		defer env.Close()
-
-		// Run all combinations for this scenario
+	return m.executePerScenario(nil, func(s Scenario) []scenarioCombo {
+		var combos []scenarioCombo
 		for _, pair := range m.Pairs {
 			for _, streaming := range m.Streaming {
-				if result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming); result != nil {
-					results = append(results, *result)
-				}
+				combos = append(combos, scenarioCombo{
+					meta: m.newBaseResult(s.Name, pair.Source, pair.Target, streaming),
+					run: func(env *TestEnv) TestResult {
+						return m.executeTest(env, s, pair.Source, pair.Target, streaming)
+					},
+				})
 			}
 		}
-
-		// Close env explicitly after processing all combinations for this scenario
-		env.Close()
-	}
-
-	return results
+		return combos
+	})
 }
 
-// executeTest executes a single test with the given environment.
-// Returns nil if the test should be skipped.
-func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) *TestResult {
-	srcScenarioKey := fmt.Sprintf("%s|%s", source, scenario.Name)
-	if reason, skip := skipSourceScenarios[srcScenarioKey]; skip {
-		return &TestResult{
-			Name:       m.buildTestName(scenario.Name, source, target, streaming),
-			Scenario:   scenario.Name,
-			Source:     source,
-			Target:     target,
-			Streaming:  streaming,
-			Skipped:    true,
-			SkipReason: reason,
-		}
+// newBaseResult returns a TestResult pre-filled with the fields that identify
+// a single-hop combination.
+func (m *Matrix) newBaseResult(scenarioName string, source, target protocol.APIType, streaming bool) TestResult {
+	return TestResult{
+		Name:      m.buildTestName(scenarioName, source, target, streaming),
+		Scenario:  scenarioName,
+		Source:    source,
+		Target:    target,
+		Streaming: streaming,
 	}
+}
 
+// skipReason chains every skip check that applies to a single-hop
+// combination: known gateway defects, client-driver incompatibilities, and
+// streaming-mode mismatches.
+func (m *Matrix) skipReason(scenario Scenario, source protocol.APIType, streaming bool) (string, bool) {
+	if reason, skip := KnownDefectReason(source, scenario.Name); skip {
+		return reason, true
+	}
 	if reason, skip := m.clientSkipReason(source, scenario.Name); skip {
-		return &TestResult{
-			Name:       m.buildTestName(scenario.Name, source, target, streaming),
-			Scenario:   scenario.Name,
-			Source:     source,
-			Target:     target,
-			Streaming:  streaming,
-			Skipped:    true,
-			SkipReason: reason,
-		}
+		return reason, true
+	}
+	return streamingSkipReason(scenario, streaming)
+}
+
+// executeTest executes a single test combination with the given environment,
+// resolving skips first and batching when requested.
+func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) TestResult {
+	if reason, skip := m.skipReason(scenario, source, streaming); skip {
+		r := m.newBaseResult(scenario.Name, source, target, streaming)
+		r.Skipped = true
+		r.SkipReason = reason
+		return r
 	}
 
-	if reason, skip := streamingSkipReason(scenario, streaming); skip {
-		return &TestResult{
-			Name:       m.buildTestName(scenario.Name, source, target, streaming),
-			Scenario:   scenario.Name,
-			Source:     source,
-			Target:     target,
-			Streaming:  streaming,
-			Skipped:    true,
-			SkipReason: reason,
-		}
-	}
-
-	// Execute test (with batch if requested)
 	if m.BatchCount > 1 {
 		return m.executeBatch(env, scenario, source, target, streaming)
 	}
-
-	result := m.executeOneWithEnv(env, scenario, source, target, streaming)
-	return &result
+	return m.executeOneWithEnv(env, scenario, source, target, streaming)
 }
 
 // executeOneWithEnv runs a single test combination using the provided TestEnv.
 // Used by ExecuteAll for optimized batch testing.
 func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target protocol.APIType, streaming bool) TestResult {
 	start := time.Now()
+	base := m.newBaseResult(s.Name, source, target, streaming)
 
 	env.SetupRoute(source, target, s)
 	result, err := env.SendAsCLI(source, target, s, streaming)
 	if err != nil {
-		return TestResult{
-			Name:      m.buildTestName(s.Name, source, target, streaming),
-			Scenario:  s.Name,
-			Source:    source,
-			Target:    target,
-			Streaming: streaming,
-			Passed:    false,
-			Errors: []AssertionError{{
-				Assertion: "send",
-				Error:     fmt.Sprintf("failed to send request: %v", err),
-			}},
-			Duration: time.Since(start),
-		}
+		base.Errors = []AssertionError{{
+			Assertion: "send",
+			Error:     fmt.Sprintf("failed to send request: %v", err),
+		}}
+		base.Duration = time.Since(start)
+		return base
 	}
 
 	// Check assertions
@@ -507,18 +463,12 @@ func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target prot
 		}
 	}
 
-	return TestResult{
-		Name:       m.buildTestName(s.Name, source, target, streaming),
-		Scenario:   s.Name,
-		Source:     source,
-		Target:     target,
-		Streaming:  streaming,
-		Passed:     passed,
-		Errors:     errors,
-		Duration:   time.Since(start),
-		HTTPStatus: result.HTTPStatus,
-		Response:   result,
-	}
+	base.Passed = passed
+	base.Errors = errors
+	base.Duration = time.Since(start)
+	base.HTTPStatus = result.HTTPStatus
+	base.Response = result
+	return base
 }
 
 // buildTestName constructs a test name from its components.
@@ -527,7 +477,7 @@ func (m *Matrix) buildTestName(scenario string, source, target protocol.APIType,
 }
 
 // executeBatch runs a test multiple times and aggregates the results.
-func (m *Matrix) executeBatch(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) *TestResult {
+func (m *Matrix) executeBatch(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) TestResult {
 	name := m.buildTestName(scenario.Name, source, target, streaming)
 
 	var results []TestResult
@@ -573,7 +523,7 @@ func (m *Matrix) executeBatch(env *TestEnv, scenario Scenario, source, target pr
 		response = results[len(results)-1].Response
 	}
 
-	return &TestResult{
+	return TestResult{
 		Name:        name,
 		Scenario:    scenario.Name,
 		Source:      source,

@@ -1,9 +1,7 @@
 package protocoltest
 
 import (
-	"fmt"
 	"slices"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
@@ -287,40 +285,9 @@ func contentShapeCases() []contentShapeCase {
 // TestContentShapes, returning []TestResult. Name format:
 // "content_shapes/<case name>".
 func (m *Matrix) ExecuteAllContentShapes() []TestResult {
-	results := make([]TestResult, 0, len(contentShapeCases()))
+	var cases []recorderCase
 	for _, c := range contentShapeCases() {
-		results = append(results, runContentShapeCaseCLI(c))
+		cases = append(cases, recorderCase{name: "content_shapes/" + c.name, scenario: c.name, run: c.run})
 	}
-	return results
-}
-
-func runContentShapeCaseCLI(c contentShapeCase) TestResult {
-	res := TestResult{Name: "content_shapes/" + c.name, Scenario: c.name}
-	start := time.Now()
-
-	env, err := NewTestEnvForCLI()
-	if err != nil {
-		res.Errors = []AssertionError{{Assertion: "setup", Error: fmt.Sprintf("create test env: %v", err)}}
-		res.Duration = time.Since(start)
-		return res
-	}
-	defer env.Close()
-
-	// Reuses flagRecorder/flagAbort from flags.go: same flagTB contract, same
-	// "run under a testing.T-free recorder" trick, no need to duplicate it.
-	rec := &flagRecorder{}
-	func() {
-		defer func() {
-			rec.runCleanups()
-			if r := recover(); r != nil && r != flagAbort {
-				panic(r)
-			}
-		}()
-		c.run(rec, env)
-	}()
-
-	res.Errors = rec.errs
-	res.Passed = len(rec.errs) == 0
-	res.Duration = time.Since(start)
-	return res
+	return m.runRecorderCases(cases)
 }

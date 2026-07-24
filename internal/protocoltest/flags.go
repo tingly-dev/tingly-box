@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -578,40 +577,9 @@ func (r *flagRecorder) runCleanups() {
 // It is the CLI-compatible counterpart of TestRuleFlags, returning []TestResult.
 // Name format: "flags/<flag key>".
 func (m *Matrix) ExecuteAllFlags() []TestResult {
-	results := make([]TestResult, 0, len(ruleFlagCases()))
+	var cases []recorderCase
 	for _, fc := range ruleFlagCases() {
-		results = append(results, runFlagCaseCLI(fc))
+		cases = append(cases, recorderCase{name: "flags/" + fc.key, scenario: fc.key, run: fc.run})
 	}
-	return results
-}
-
-func runFlagCaseCLI(fc flagCase) TestResult {
-	// Scenario carries the flag key so the CLI table (which shows the Scenario
-	// column, not Name) distinguishes the 13 rows; Name keeps the flags/ prefix.
-	res := TestResult{Name: "flags/" + fc.key, Scenario: fc.key}
-	start := time.Now()
-
-	env, err := NewTestEnvForCLI()
-	if err != nil {
-		res.Errors = []AssertionError{{Assertion: "setup", Error: fmt.Sprintf("create test env: %v", err)}}
-		res.Duration = time.Since(start)
-		return res
-	}
-	defer env.Close()
-
-	rec := &flagRecorder{}
-	func() {
-		defer func() {
-			rec.runCleanups()
-			if r := recover(); r != nil && r != flagAbort {
-				panic(r)
-			}
-		}()
-		fc.run(rec, env)
-	}()
-
-	res.Errors = rec.errs
-	res.Passed = len(rec.errs) == 0
-	res.Duration = time.Since(start)
-	return res
+	return m.runRecorderCases(cases)
 }

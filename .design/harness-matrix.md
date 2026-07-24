@@ -10,7 +10,7 @@
 > Related: request **content-shape** regressions (a client sending array-of-
 > text-blocks content instead of a plain string on tool/system/assistant
 > messages) are covered by a separate suite in `content_shapes.go` — see
-> §9.1. The matrix itself always sends the same fixed single-turn prompt and
+> §10.1. The matrix itself always sends the same fixed single-turn prompt and
 > only varies the mocked *response* shape, so it cannot catch bugs in how
 > unusual *request* shapes are forwarded upstream.
 
@@ -38,6 +38,11 @@ original (A→B→A with `g(f(A)) == A` assertions). The transitive run does emi
 some chains where C happens to equal A, but those only run the scenario's
 normal assertions after two hops — they do **not** assert idempotence. True
 idempotence lives in its own path (`idempotent.go`).
+
+Two further suites round out coverage on orthogonal axes and are documented
+in their own sections below: per-rule **flag** behavior (§10, detailed in
+[`rule-flag-testing.md`](./rule-flag-testing.md)) and request **content-shape**
+regressions (§10.1).
 
 ---
 
@@ -69,10 +74,18 @@ Assertions + SemanticEquivalence checks
   `First.Target == Second.Source`. Built automatically from `DefaultPairs()`.
 
 - **`Matrix`** — the orchestrator. Holds `Pairs`, `Scenarios`, `Streaming`
-  modes, and filter/config methods (`OnlyScenarios`, `OnlySources`, etc.).
+  modes, and filter/config methods (`OnlyScenarios`, `OnlySources`, etc.),
+  plus CLI-only knobs (`BatchCount`, `RecordDir`, `Client`) set via `With*`
+  methods.
 
 - **`RoundTripResult`** — normalized output: `Content`, `Role`,
   `FinishReason`, `ToolCalls`, `Usage`, `StreamEvents`, etc.
+
+- **`TestResult`** — the outcome of one combination (`Passed`, `Skipped`,
+  `Errors`, `Duration`, plus `Batch*` fields when `BatchCount > 1`). Every
+  `Execute*` entry point returns `[]TestResult` uniformly, so the CLI's
+  table/JSON printer and the `testing.T` bridge (`reportTestResult`) share
+  one shape instead of each section inventing its own.
 
 ### Shared helpers
 
@@ -83,9 +96,89 @@ Assertions + SemanticEquivalence checks
 | `semanticEquivalenceErrors(label, r1, r2)` | Compares two results field-by-field, returns `[]AssertionError` |
 | `assertSemanticEquivalence(t, label, r1, r2)` | Delegates to above, calls `t.Errorf` per error |
 
+### Section drivers (`section.go`)
+
+Every section (single-hop, transitive, idempotent, flags, content_shapes)
+contributes only its combos and per-combo execution; the env-per-scenario
+lifecycle, setup-failure fan-out, and `testing.T` scaffolding live once in
+`internal/protocoltest/section.go`:
+
+| Driver | Used by | Purpose |
+|--------|---------|---------|
+| `Matrix.executePerScenario(skip, combosFor)` | `ExecuteAll` / `ExecuteAllTransitive` / `ExecuteAllIdempotent` | CLI-side: one env per scenario, scenarios run concurrently (§3.1), combos within a scenario run sequentially against the shared env |
+| `Matrix.runPerScenario(t, skip, run)` | `RunTransitive` / `RunIdempotent` | `testing.T` counterpart: one env per scenario subtest, `t.Parallel()` scenarios, combos sequential |
+| `Matrix.runRecorderCases(cases)` | `ExecuteAllFlags` / `ExecuteAllContentShapes` | CLI-side: one env per case, cases run concurrently (§3.1) |
+| `runRecorderCase(name, scenario, run)` | `runRecorderCases` | Runs one `flagTB`-style case body under the recording shim (`flagRecorder`), returns its `TestResult` |
+| `setupFailureResult(base, err)` | `executeScenarioCombos` / `runRecorderCase` | Shared "env failed to boot" `TestResult` construction |
+
+A `scenarioCombo` is `{meta TestResult, run func(*TestEnv) TestResult}` — the
+`meta` doubles as the setup-failure result when the scenario's env cannot be
+created. A `recorderCase` is the equivalent for the flags/content_shapes
+suites: `{name, scenario string, run func(flagTB, *TestEnv)}`. (Single-hop
+`Matrix.Run(t)` keeps its own deeper subtest nesting —
+`scenario/source/target/mode` with one env per leaf — because its test-name
+contract and per-leaf parallelism differ from the per-scenario sections.)
+
 ---
 
-## 3. How to run
+## 3. CLI execution model
+
+Two runtime properties of `cli/harness matrix` sit outside the test
+*definitions* above but matter for anyone running or profiling it.
+
+### 3.1 Parallelism
+
+Independent env-backed units — scenarios in `executePerScenario`, cases in
+`runRecorderCases` — run concurrently via `runIndexed` (an
+`golang.org/x/sync/errgroup.Group` with `SetLimit`), mirroring the
+`t.Parallel()` the go-test entry points always had. Combos *within* a
+scenario still run sequentially against the shared env — routes are keyed by
+`(source, target, scenario)`, so this is purely about overlapping I/O wait,
+not a correctness requirement. Results land in index-addressed slots, so
+output order — and therefore `--json` output — is identical to a sequential
+run regardless of goroutine completion order.
+
+The concurrency cap (`Matrix.sectionParallelism()`) is
+`min(GOMAXPROCS, maxSectionParallelism)` — currently 8 — not raw core count
+(see §8 for why). It drops to 1 (fully sequential) whenever `--batch` or
+`--record-dir` is set: `--batch` measures per-request timing that parallel
+load would skew, and `--record-dir` captures request/response traffic for
+replay that concurrent runs would interleave.
+
+### 3.2 Env-boot cost
+
+Each env boots a full `httptest.Server` + SQLite-backed `AppConfig` in a
+fresh temp dir. The single most expensive step of that boot is
+`internal/server/config`'s enterprise-context RSA-2048 key generation
+(~100-600ms of prime search) — a one-time cost for a real install, but every
+harness env is a fresh install by construction, and one CLI run boots dozens
+of them.
+
+`internal/protocoltest/testenv.go`'s `preseedEnterpriseContextKeys` amortizes
+this: one key pair is generated per process (`sync.OnceValues`) and written
+into every env's key slots before `config.NewAppConfig` runs, so
+`ensureEnterpriseContextRS256KeyPair` finds the files already present and
+skips generating its own. `internal/server/config/enterprise.go` only
+exports the generic primitives this uses — `GenerateEnterpriseContextPEMs`,
+`WriteEnterpriseContextKeys`, `EnterpriseContextKeyPaths` — the same ones
+`ensureEnterpriseContextRS256KeyPair` already used internally; see §8 for why
+the caching *policy* itself lives in the harness, not the production config
+package.
+
+Together, §3.1 and §3.2 took (4-core machine):
+
+| | before | after |
+|---|---|---|
+| `matrix` (default) | ~15s | ~3s |
+| `matrix --mode=all` | ~41s | ~8s |
+| e2e go test (`TestHarness` + idempotent/flags/content_shapes) | ~60s | ~17s |
+
+The e2e path was already parallel via `t.Parallel()`, so keygen CPU was its
+only bottleneck — it benefits from §3.2 alone.
+
+---
+
+## 4. How to run
 
 ### go test (requires `-tags e2e`)
 
@@ -105,7 +198,7 @@ go test -tags e2e ./internal/protocoltest/... -run TestHarness_Streaming
 # Idempotent round-trips
 go test -tags e2e ./internal/protocoltest/... -run TestIdempotent
 
-# Request content-shape regression suite (see §9.1)
+# Request content-shape regression suite (see §10.1)
 go test -tags e2e ./internal/protocoltest/... -run TestContentShapes
 ```
 
@@ -115,7 +208,7 @@ go test -tags e2e ./internal/protocoltest/... -run TestContentShapes
 executor (`ExecuteAll*`) so the CLI can run it directly — including idempotence
 and the rule-flag suite, which would otherwise be go-test-only.
 
-| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§9.1) |
+| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§10.1) |
 |----------|:---:|:---:|:---:|:---:|:---:|
 | `default` *(no flag)* | ✅ | — | ✅ | — | — |
 | `all` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -124,6 +217,13 @@ and the rule-flag suite, which would otherwise be go-test-only.
 | `idempotent` | — | — | ✅ | — | — |
 | `flags` | — | — | — | ✅ | — |
 | `content_shapes` | — | — | — | — | ✅ |
+
+This mode → section mapping is declared in one place: the `matrixSections`
+registry in `cli/harness/matrix.go`. Each entry names the section, lists the
+`--mode` values that include it, marks whether it is http-only (`flags` /
+`content_shapes` drive raw requests directly), and points at its
+`ExecuteAll*` executor. Adding a section = one registry entry + extending the
+`--mode` enum (see §8 for why this replaced a hand-maintained if-chain).
 
 ```bash
 # Default: single-hop + idempotent round-trips. Two-hop and flags are OFF by
@@ -152,8 +252,13 @@ The `flags` section is documented in detail in
 [`rule-flag-testing.md`](./rule-flag-testing.md); `ExecuteAllFlags` reports one
 `TestResult` per flag (`Name: "flags/<key>"`, `Scenario: <key>`).
 
-The `content_shapes` section is documented in §9.1 below; `ExecuteAllContentShapes`
+The `content_shapes` section is documented in §10.1 below; `ExecuteAllContentShapes`
 reports one `TestResult` per case (`Name: "content_shapes/<case name>"`).
+
+Other CLI flags (`--batch`, `--record-dir`, `--mcp`, `-v`) are documented in
+[`cli/harness/README.md`](../cli/harness/README.md); `--batch` and
+`--record-dir` additionally force the sections above to run sequentially
+(§3.1).
 
 ### Client drivers (`--client`)
 
@@ -241,7 +346,7 @@ and Responses string-`input` dropped in responses→chat conversion).
 
 ---
 
-## 4. Adding a new scenario
+## 5. Adding a new scenario
 
 1. Define a `FooScenario() Scenario` function in
    `vmodel/benchmark/scenario/builtins.go` with `MockResponses` for all 4
@@ -285,7 +390,7 @@ func IncompleteScenario() Scenario {
 
 ---
 
-## 5. Adding a new protocol pair
+## 6. Adding a new protocol pair
 
 1. Add the pair to `DefaultPairs()` in `matrix.go`.
 
@@ -299,7 +404,7 @@ func IncompleteScenario() Scenario {
 
 ---
 
-## 6. Test naming conventions
+## 7. Test naming conventions
 
 Tests are structured as nested subtests for `-run` filtering:
 
@@ -321,7 +426,7 @@ CLI `TestResult.Name` follows the same `scenario/path/mode` pattern.
 
 ---
 
-## 7. Design decisions
+## 8. Design decisions
 
 **Why explicit pairs, not Cartesian product?**
 Many cells of the full product map to the same dispatch handler (e.g.
@@ -345,9 +450,34 @@ This is the shared core used by both the `testing.T` path
 (`executeTransitiveChain`). The `testing.T` version just loops and
 calls `t.Errorf` per entry — no duplicated field checks.
 
+**Why a `matrixSections` registry instead of an if-chain on `--mode`?**
+Before, CLI dispatch was five near-identical `if m.Mode == ...` blocks
+plus a hand-maintained comment describing the same mapping — the two
+routinely drifted. A data table is the mapping: adding a section is one
+entry, and this doc's mode table (§4) can point straight at the source
+of truth instead of re-deriving it.
+
+**Why does the harness cap concurrency at `min(GOMAXPROCS, 8)` instead of raw `GOMAXPROCS`?**
+Each concurrent unit boots a full `httptest.Server` + SQLite-backed
+config — an I/O/fd/memory cost, not a CPU one. Core count doesn't bound
+that cost, so scaling purely with `GOMAXPROCS` would over-commit fd and
+memory limits on high-core CI runners for no throughput benefit; a small
+fixed ceiling caps it regardless of machine size.
+
+**Why does the RSA key pre-seed (§3.2) live in `internal/protocoltest`, not `internal/server/config`?**
+`internal/server/config` ships in the production server binary; the
+process-cache-and-reuse *policy* has zero production callers and exists
+purely to amortize a cost the harness's "fresh config dir per env"
+pattern creates. `enterprise.go` only exports the generic
+generate/write/path primitives `ensureEnterpriseContextRS256KeyPair`
+already used internally — the caching decision is harness-only
+knowledge and belongs in the package that's structurally a test
+harness. Production configs are unaffected: they still generate once
+per install and reuse the key from disk.
+
 ---
 
-## 8. Error scenarios (pre-content vs mid-stream)
+## 9. Error scenarios (pre-content vs mid-stream)
 
 Error scenarios are modeled by `ErrorInjection.Stage`, and the two stages have
 very different observable shapes — conflating them hides real gateway bugs.
@@ -378,7 +508,7 @@ worth comparing across hops (and idempotence skips `error` for the same reason).
 
 ---
 
-## 9. Inspecting the forwarded request (capture & flags)
+## 10. Inspecting the forwarded request (capture & flags)
 
 The matrix asserts on the parsed *response*, but some checks need the *request
 the gateway actually forwarded upstream*. The `VirtualServer` mock records it:
@@ -393,7 +523,7 @@ These power the per-rule **flag** behavior suite, which is documented
 separately: [`rule-flag-testing.md`](./rule-flag-testing.md). Keep the matrix
 itself flag-free — flags are an orthogonal axis and live in their own suite.
 
-### 9.1 Request content-shape regression suite (`content_shapes.go`)
+### 10.1 Request content-shape regression suite (`content_shapes.go`)
 
 **Why this exists.** Every matrix request is built by `buildRequest`
 (`testenv.go`) from the fixed `harnessPrompt` — a single-turn plain-string user

@@ -42,19 +42,13 @@ func (m *Matrix) DefaultChains() []TransitiveChain {
 	return chains
 }
 
-// skipTransitiveScenarios lists source+scenario combinations where the second
-// hop is known to fail (inherits from single-hop skip list).
+// skipTransitiveKey reports whether either hop of a chain is in the
+// single-hop known-defect list for the scenario.
 func skipTransitiveKey(chain TransitiveChain, scenarioName string) (string, bool) {
-	// Check both hops against the single-hop skip list
-	firstKey := fmt.Sprintf("%s|%s", chain.First.Source, scenarioName)
-	if reason, skip := skipSourceScenarios[firstKey]; skip {
+	if reason, skip := KnownDefectReason(chain.First.Source, scenarioName); skip {
 		return reason, true
 	}
-	secondKey := fmt.Sprintf("%s|%s", chain.Second.Source, scenarioName)
-	if reason, skip := skipSourceScenarios[secondKey]; skip {
-		return reason, true
-	}
-	return "", false
+	return KnownDefectReason(chain.Second.Source, scenarioName)
 }
 
 // RunTransitive executes two-hop transitive tests for all chains × scenarios
@@ -67,9 +61,8 @@ func skipTransitiveKey(chain TransitiveChain, scenarioName string) (string, bool
 // field that B→C needs, the results will diverge.
 //
 // Each chain runs the same executeTransitiveChain implementation the CLI
-// path uses; the testing.T layer only provisions one env per scenario (to
-// limit file descriptor usage — chains run sequentially within a scenario)
-// and reports the TestResult.
+// path uses; the testing.T layer (runPerScenario) only provisions one env per
+// scenario and reports the TestResult.
 func (m *Matrix) RunTransitive(t *testing.T) {
 	t.Helper()
 
@@ -78,30 +71,23 @@ func (m *Matrix) RunTransitive(t *testing.T) {
 		t.Skip("no transitive chains to test")
 	}
 
-	for _, scenario := range m.Scenarios {
-		if scenario.SkipTransitive {
-			continue
+	m.runPerScenario(t, skipTransitiveScenario, func(t *testing.T, env *TestEnv, scenario Scenario) {
+		for _, chain := range chains {
+			for _, streaming := range m.Streaming {
+				t.Run(fmt.Sprintf("%s/%s", chain, streamMode(streaming)), func(t *testing.T) {
+					result := m.executeTransitiveChain(env, scenario, chain, streaming)
+					reportTestResult(t, &result)
+				})
+			}
 		}
+	})
+}
 
-		t.Run(scenario.Name, func(t *testing.T) {
-			t.Parallel()
-
-			env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-			if err != nil {
-				t.Fatalf("create test env: %v", err)
-			}
-			defer env.Close()
-
-			for _, chain := range chains {
-				for _, streaming := range m.Streaming {
-					t.Run(fmt.Sprintf("%s/%s", chain, streamMode(streaming)), func(t *testing.T) {
-						result := m.executeTransitiveChain(env, scenario, chain, streaming)
-						reportTestResult(t, &result)
-					})
-				}
-			}
-		})
-	}
+// skipTransitiveScenario is the scenario-level opt-out shared by the
+// transitive and idempotent sections: error / truncation scenarios produce no
+// comparable output across hops.
+func skipTransitiveScenario(s Scenario) bool {
+	return s.SkipTransitive
 }
 
 // normalizeJSON strips whitespace from a JSON string for comparison.
@@ -114,53 +100,38 @@ func normalizeJSON(s string) string {
 // It is the CLI-compatible counterpart of RunTransitive, returning []TestResult.
 // Name format: "scenario/A→B→C/mode".
 func (m *Matrix) ExecuteAllTransitive() []TestResult {
-	var results []TestResult
 	chains := m.DefaultChains()
-
-	for _, scenario := range m.Scenarios {
-		if scenario.SkipTransitive {
-			continue
-		}
-
-		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-		if err != nil {
-			for _, chain := range chains {
-				for _, streaming := range m.Streaming {
-					results = append(results, TestResult{
-						Name:      chain.TestName(scenario.Name, streaming),
-						Scenario:  scenario.Name,
-						Source:    chain.First.Source,
-						Target:    chain.Second.Target,
-						Streaming: streaming,
-						Passed:    false,
-						Errors:    []AssertionError{{Assertion: "setup", Error: fmt.Sprintf("failed to create test env: %v", err)}},
-					})
-				}
-			}
-			continue
-		}
-
+	return m.executePerScenario(skipTransitiveScenario, func(s Scenario) []scenarioCombo {
+		var combos []scenarioCombo
 		for _, chain := range chains {
 			for _, streaming := range m.Streaming {
-				result := m.executeTransitiveChain(env, scenario, chain, streaming)
-				results = append(results, result)
+				combos = append(combos, scenarioCombo{
+					meta: chain.baseResult(s.Name, streaming),
+					run: func(env *TestEnv) TestResult {
+						return m.executeTransitiveChain(env, s, chain, streaming)
+					},
+				})
 			}
 		}
-		env.Close()
+		return combos
+	})
+}
+
+// baseResult returns a TestResult pre-filled with the fields that identify
+// this chain in a given scenario/mode.
+func (c TransitiveChain) baseResult(scenarioName string, streaming bool) TestResult {
+	return TestResult{
+		Name:      c.TestName(scenarioName, streaming),
+		Scenario:  scenarioName,
+		Source:    c.First.Source,
+		Target:    c.Second.Target,
+		Streaming: streaming,
 	}
-	return results
 }
 
 // executeTransitiveChain runs a single two-hop chain for a given scenario/mode.
 func (m *Matrix) executeTransitiveChain(env *TestEnv, scenario Scenario, chain TransitiveChain, streaming bool) TestResult {
-	name := chain.TestName(scenario.Name, streaming)
-	base := TestResult{
-		Name:      name,
-		Scenario:  scenario.Name,
-		Source:    chain.First.Source,
-		Target:    chain.Second.Target,
-		Streaming: streaming,
-	}
+	base := chain.baseResult(scenario.Name, streaming)
 
 	if reason, skip := skipTransitiveKey(chain, scenario.Name); skip {
 		base.Skipped = true
