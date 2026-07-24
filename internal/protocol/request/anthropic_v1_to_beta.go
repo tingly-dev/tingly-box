@@ -1,6 +1,8 @@
 package request
 
 import (
+	"strings"
+
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
@@ -75,10 +77,23 @@ func convertAnthropicV1ContentToBeta(blocks []anthropic.ContentBlockParamUnion) 
 		case b.OfToolResult != nil:
 			out = append(out, anthropic.NewBetaToolResultBlock(
 				b.OfToolResult.ToolUseID,
-				"",
+				joinV1ToolResultText(b.OfToolResult.Content),
 				false,
 			))
 		}
 	}
 	return out
+}
+
+// joinV1ToolResultText concatenates the text blocks of a v1 tool_result's
+// content into a single string, mirroring convertToolResultContent in
+// anthropic_v1_to_openai.go.
+func joinV1ToolResultText(content []anthropic.ToolResultBlockParamContentUnion) string {
+	var texts []string
+	for _, c := range content {
+		if c.OfText != nil && c.OfText.Text != "" {
+			texts = append(texts, c.OfText.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
 }

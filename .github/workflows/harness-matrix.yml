@@ -31,6 +31,7 @@ on:
           - transitive
           - idempotent
           - flags
+          - content_shapes
           - gosdk
           - python
           - node
@@ -75,6 +76,10 @@ jobs:
             tier: matrix
             focus: flags
             cmd: matrix --mode=flags --json
+          - name: matrix-content-shapes
+            tier: matrix
+            focus: content_shapes
+            cmd: matrix --mode=content_shapes --json
           # One matrix leg per client driver: the same matrix driven through
           # real client stacks instead of raw HTTP. gosdk uses the official Go
           # SDKs in-process; python/node/aisdk run the real foreign SDKs via
