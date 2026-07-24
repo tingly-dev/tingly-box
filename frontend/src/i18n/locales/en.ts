@@ -92,7 +92,7 @@ export default {
     "days": "Days",
     "remote": "Remote",
     "remoteControl": "Remote Control",
-    "notify": "Notify",
+    "notify": "IM Notify",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {

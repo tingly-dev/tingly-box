@@ -13,7 +13,7 @@ import {
 import ConfirmDialog from '@/components/ConfirmDialog';
 import type {BotSettings} from '@/types/bot';
 import {isRemoteAgentMounted, isNotifyMounted} from '@/types/bot';
-import {BOT_CARD_SX, statusChipSx} from './botCardStyles';
+import {botCardSx, statusChipSx} from './botCardStyles';
 import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
@@ -56,7 +56,7 @@ const BotCard: React.FC<BotCardProps> = ({
     }, [onDelete]);
 
     return (
-        <Box sx={BOT_CARD_SX}>
+        <Box sx={botCardSx(isActive)}>
             {/* Header */}
             <Box sx={{display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 56, px: 2, py: 1.5}}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0}}>
@@ -87,7 +87,7 @@ const BotCard: React.FC<BotCardProps> = ({
                         </Tooltip>
                         <Tooltip title={t('bots.card.notifyChipHint', { defaultValue: 'Configure on the Notify page' })}>
                             <Chip
-                                label={t('bots.card.notifyChip', { defaultValue: 'Notify' })}
+                                label={t('bots.card.notifyChip', { defaultValue: 'IM Notify' })}
                                 size="small"
                                 variant={isNotified ? 'filled' : 'outlined'}
                                 color={isNotified ? 'primary' : 'default'}

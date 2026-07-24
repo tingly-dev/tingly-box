@@ -1,17 +1,32 @@
 // Shared shell + status-chip styling for BotCard and RemoteAgentBotCard —
-// the two "twin" per-bot cards (see RemoteAgentBotCard's own comment). Both
-// used to hand-roll an identical `styled(Card)` with a dashed border,
-// grayscale filter, and a diagonal-stripe overlay for the disabled state —
-// a bespoke treatment found nowhere else in the app. The established
-// pattern for a resource row (ApiKeyTable, RulesPage, ToolCard) is a plain
-// bordered container plus an explicit On/Off chip; extracted here once so
-// both cards render identically and can't drift apart again.
-export const BOT_CARD_SX = {
+// the two "twin" per-bot cards (see RemoteAgentBotCard's own comment). The
+// established resource-row look is a plain bordered container plus an
+// explicit On/Off chip (ApiKeyTable, RulesPage, ToolCard) — no dashed
+// border, no grayscale filter, no monospace names, which is what this
+// replaced. What it keeps from the original is the "disabled" affordance:
+// when a bot is off (or a purpose is unmounted), a faint diagonal hatch is
+// laid over the card so an inactive row is unmistakable at a glance. The
+// overlay is pointer-transparent, so the card stays fully interactive (you
+// can still toggle it back on / edit through the hatch).
+export const botCardSx = (active: boolean) => ({
+    position: 'relative' as const,
     bgcolor: 'background.paper',
     border: '1px solid',
     borderColor: 'divider',
     borderRadius: 2,
     boxShadow: 'none',
-} as const;
+    ...(active ? {} : {
+        '&::before': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            borderRadius: 'inherit',
+            zIndex: 2,
+            pointerEvents: 'none',
+            backgroundImage:
+                'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.035) 10px, rgba(0,0,0,0.035) 20px)',
+        },
+    }),
+});
 
 export const statusChipSx = { height: 22, minWidth: 40 } as const;

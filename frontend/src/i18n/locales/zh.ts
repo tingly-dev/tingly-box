@@ -94,7 +94,7 @@ export default {
     "days": "天",
     "remote": "远程",
     "remoteControl": "远程控制",
-    "notify": "通知",
+    "notify": "IM 通知",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {
@@ -1197,8 +1197,8 @@ export default {
     "card": {
       "remoteAgentChip": "远程控制",
       "remoteAgentChipHint": "前往远程控制页面配置",
-      "notifyChip": "通知",
-      "notifyChipHint": "前往通知页面配置"
+      "notifyChip": "IM 通知",
+      "notifyChipHint": "前往 IM 通知页面配置"
     },
     "overview": {
       "allPlatforms": "全部",
@@ -1211,7 +1211,7 @@ export default {
     }
   },
   "notify": {
-    "title": "通知",
+    "title": "IM 通知",
     "subtitle": "哪些机器人负责把场景通知和交互式提示投递到聊天。",
     "emptyTitle": "尚未连接机器人",
     "emptyDescription": "请先在概览页连接一个机器人，再回到这里查看它的通知情况。",

@@ -41,7 +41,7 @@ const NotifyPage = () => {
     return (
         <PageLayout loading={false}>
             <UnifiedCard
-                title={t('notify.title', { defaultValue: 'Notify' })}
+                title={t('notify.title', { defaultValue: 'IM Notify' })}
                 subtitle={t('notify.subtitle', {
                     defaultValue: 'Which of your bots deliver scenario notifications and interactive prompts to chat.',
                 })}

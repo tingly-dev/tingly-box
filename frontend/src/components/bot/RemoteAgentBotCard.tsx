@@ -27,7 +27,7 @@ import type {BotSettings} from '@/types/bot';
 import {isRemoteAgentMounted} from '@/types/bot';
 import type {Provider} from '@/types/provider';
 import type {ProfileInfo} from '@/contexts/ProfileContext';
-import {BOT_CARD_SX, statusChipSx} from './botCardStyles';
+import {botCardSx, statusChipSx} from './botCardStyles';
 import PairingCodePanel from './PairingCodePanel';
 import RemoteControlGraph from './RemoteControlGraph';
 import {useEffect, useState} from 'react';
@@ -115,8 +115,13 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
         }
     };
 
+    // Off (hatched) when this purpose isn't live: unmounted, or the bot
+    // itself is disabled. The config below stays fully editable through the
+    // overlay — the hatch is purely a "this isn't running" affordance.
+    const isActive = isMounted && isEnabled;
+
     return (
-        <Box sx={BOT_CARD_SX}>
+        <Box sx={botCardSx(isActive)}>
             {/* Header: bot identity (read-only here) + mount switch */}
             <Box sx={{
                 display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1,
