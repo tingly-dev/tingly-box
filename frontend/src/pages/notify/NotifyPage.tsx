@@ -78,9 +78,13 @@ const NotifyPage = () => {
                                         borderRadius: 1.5,
                                     }}
                                 >
-                                    <Typography sx={{ fontFamily: 'monospace', fontSize: '0.875rem', fontWeight: 600 }}>
-                                        {bot.name || bot.platform}
-                                    </Typography>
+                                    {/* Fixed-width name column so the chips
+                                        align across rows — same as BotCard. */}
+                                    <Tooltip title={bot.name || bot.platform}>
+                                        <Typography noWrap variant="body2" sx={{ fontWeight: 600, flexShrink: 0, width: { xs: 96, sm: 150 } }}>
+                                            {bot.name || bot.platform}
+                                        </Typography>
+                                    </Tooltip>
                                     <Chip label={bot.platform} size="small" />
                                     <Chip
                                         label={mounted
