@@ -53,16 +53,21 @@ const PlatformPicker: React.FC<PlatformPickerProps> = ({ items, value, onChange 
                     >
                         <Box
                             sx={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: 1.5,
+                                width: 28,
+                                height: 28,
                                 flexShrink: 0,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                bgcolor: active ? 'primary.main' : 'action.hover',
-                                color: active ? 'primary.contrastText' : 'text.secondary',
-                                '& svg': { fontSize: 18 },
+                                // Brand logos carry their own colors: full color
+                                // when selected, desaturated when not — no tinted
+                                // box behind them. The monochrome "All" icon
+                                // follows the text color (grayscale is a no-op on
+                                // it), so this reads consistently for both.
+                                color: active ? 'primary.main' : 'text.disabled',
+                                filter: active ? 'none' : 'grayscale(1)',
+                                opacity: active ? 1 : 0.6,
+                                transition: 'filter 0.18s ease-out, opacity 0.18s ease-out',
                             }}
                         >
                             {item.icon}

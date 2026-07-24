@@ -13,7 +13,7 @@ import {
     Psychology as IconBrain,
     SettingsRemote as IconDeviceRemote,
     Robot as IconRobot,
-    ListAlt as IconListAlt,
+    Terminal as IconTerminal,
     Bell as IconBell,
     Bolt as IconBolt,
     Settings as IconSettings,
@@ -170,20 +170,22 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: promptMenuItems.find((item): item is NavItemBase => !('type' in item))?.path,
                 children: promptMenuItems,
             }] as ActivityItem[] : []),
-            // Bots — one rail icon for the whole domain. Overview is the
-            // front door (every connected bot, every platform, credentials
-            // live there); Remote and Notify are purposes mounted onto those
-            // bots. New purposes append here as new rows — the rail icon
-            // never grows. See .design/bot-arch.md §10.
+            // Remote — one rail icon for the whole domain, named after the
+            // product pillar (remote control) rather than the implementation
+            // ("Bots"). Bot is the front door (every connected bot, every
+            // platform, credentials live there); Remote Control and Notify are
+            // the purposes mounted onto those bots. New purposes append here
+            // as new rows — the rail icon never grows. See bot-arch.md §10.
+            // (key stays 'bots' — internal id, not user-visible.)
             ...(isFullEdition ? [{
                 key: 'bots' as const,
-                icon: <IconRobot sx={{ fontSize: 22 }} />,
-                label: t('layout.bots', { defaultValue: 'Bots' }),
+                icon: <IconDeviceRemote sx={{ fontSize: 22 }} />,
+                label: t('layout.remote'),
                 defaultPath: '/bots/overview',
                 children: [
-                    { path: '/bots/overview', label: t('layout.overview'), icon: <IconListAlt sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
+                    { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
                     { type: 'divider' },
-                    { path: '/remote-agent/weixin', label: t('layout.remote'), icon: <IconDeviceRemote sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
+                    { path: '/remote-agent/weixin', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),

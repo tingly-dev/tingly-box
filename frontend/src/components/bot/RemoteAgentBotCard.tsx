@@ -141,8 +141,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5}}>
                     <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
                         <Tooltip title={isMounted
-                            ? t('remoteControl.card.remoteAgentUnmount', { defaultValue: 'Unmount Remote Agent (bot stays configured but stops)' })
-                            : t('remoteControl.card.remoteAgentMountOn', { defaultValue: 'Mount Remote Agent (also enables the bot)' })}>
+                            ? t('remoteControl.card.remoteAgentUnmount', { defaultValue: 'Unmount Remote Control (bot stays configured but stops)' })
+                            : t('remoteControl.card.remoteAgentMountOn', { defaultValue: 'Mount Remote Control (also enables the bot)' })}>
                             <Switch checked={isMounted} onChange={() => onMountToggle(!isMounted)} size="small" color="primary" disabled={isToggling}/>
                         </Tooltip>
                         <Chip

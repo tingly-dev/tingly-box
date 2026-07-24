@@ -76,9 +76,9 @@ const BotCard: React.FC<BotCardProps> = ({
                     <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, flexWrap: 'wrap'}}>
                         <Chip label={bot.platform} size="small"/>
                         {/* Purpose status: where this bot is used. Click-through to configure. */}
-                        <Tooltip title={t('bots.card.remoteAgentChipHint', { defaultValue: 'Configure on the Remote Agent page' })}>
+                        <Tooltip title={t('bots.card.remoteAgentChipHint', { defaultValue: 'Configure on the Remote Control page' })}>
                             <Chip
-                                label={t('bots.card.remoteAgentChip', { defaultValue: 'Remote Agent' })}
+                                label={t('bots.card.remoteAgentChip', { defaultValue: 'Remote Control' })}
                                 size="small"
                                 variant={isMounted ? 'filled' : 'outlined'}
                                 color={isMounted ? 'primary' : 'default'}

@@ -93,6 +93,7 @@ export default {
     "yesterday": "昨天",
     "days": "天",
     "remote": "远程",
+    "remoteControl": "远程控制",
     "notify": "通知",
     "bots": "机器人",
     "overview": "概览",
@@ -1178,10 +1179,10 @@ export default {
     "descriptions": {}
   },
   "remoteAgent": {
-    "title": "{{platform}} 远程 Agent",
-    "subtitle": "把 {{platform}} Bot 挂载给远程 Agent，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在 Bots 页面管理。",
+    "title": "{{platform}} 远程控制",
+    "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",
     "emptyTitle": "还没有 {{platform}} Bot",
-    "emptyDescription": "远程 Agent 运行在 Bot 之上。请先创建一个 {{platform}} Bot 连接，再回到这里挂载。",
+    "emptyDescription": "远程控制运行在 Bot 之上。请先创建一个 {{platform}} Bot 连接，再回到这里挂载。",
     "card": {
       "botDisabled": "Bot 已停用",
       "botDisabledHint": "Bot 本身处于停用状态——挂载时会自动重新启用",
@@ -1194,8 +1195,8 @@ export default {
   "bots": {
     "activeCount": "启用 {{active}} / {{total}}",
     "card": {
-      "remoteAgentChip": "远程 Agent",
-      "remoteAgentChipHint": "前往远程 Agent 页面配置",
+      "remoteAgentChip": "远程控制",
+      "remoteAgentChipHint": "前往远程控制页面配置",
       "notifyChip": "通知",
       "notifyChipHint": "前往通知页面配置"
     },

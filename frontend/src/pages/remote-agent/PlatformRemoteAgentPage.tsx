@@ -107,8 +107,8 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
             if (result?.success) {
                 showNotification(
                     mounted
-                        ? t('remoteControl.notify.remoteAgentOn', { defaultValue: 'Remote Agent mounted' })
-                        : t('remoteControl.notify.remoteAgentOff', { defaultValue: 'Remote Agent unmounted' }),
+                        ? t('remoteControl.notify.remoteAgentOn', { defaultValue: 'Remote Control mounted' })
+                        : t('remoteControl.notify.remoteAgentOff', { defaultValue: 'Remote Control unmounted' }),
                     'success'
                 );
                 await loadBots();
@@ -229,7 +229,7 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
                 />
             )}
             <UnifiedCard
-                title={t('remoteAgent.title', { defaultValue: '{{platform}} Remote Agent', platform: platformName })}
+                title={t('remoteAgent.title', { defaultValue: '{{platform}} Remote Control', platform: platformName })}
                 titleHeadingLevel={1}
                 subtitle={t('remoteAgent.subtitle', { defaultValue: 'Mount {{platform}} bots to drive Claude Code / SmartGuide from chat, and configure how the agent behaves. Bot connections are managed on the Bots pages.', platform: platformName })}
                 size="full"
@@ -252,7 +252,7 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
                 ) : filteredBots.length === 0 ? (
                     <EmptyState
                         title={t('remoteAgent.emptyTitle', { defaultValue: 'No {{platform}} Bots Yet', platform: platformName })}
-                        description={t('remoteAgent.emptyDescription', { defaultValue: 'Remote Agent runs on top of a bot. Create a {{platform}} bot connection first, then mount it here.', platform: platformName })}
+                        description={t('remoteAgent.emptyDescription', { defaultValue: 'Remote Control runs on top of a bot. Create a {{platform}} bot connection first, then mount it here.', platform: platformName })}
                         primaryAction={{
                             label: t('remoteControl.bots.addPlatformBot', { defaultValue: 'Add {{platform}} Bot', platform: platformName }),
                             onClick: openAddDialog,

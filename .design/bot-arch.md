@@ -337,18 +337,20 @@ and every purpose as flat sidebar siblings**, platform pushed down into
 each page as a filter/tab instead of a nav level:
 
 ```
- Bots (rail icon, ONE slot — never grows as purposes are added)
-   ├─ Overview  /bots/overview        resource: every bot, every platform,
+ Remote (rail icon, ONE slot — never grows as purposes are added)
+   │  named for the product pillar ("remote control"), not the impl ("Bots").
+   │  The nav key stays 'bots' internally; only the label is "Remote".
+   ├─ Bots      /bots/overview        resource: every bot, every platform,
    │  "what's connected? add one"     one list by default. The ONLY place a
    │                                  credential (token/OAuth/QR) is typed,
    │                                  rotated, or deleted. Purpose badges per
-   │                                  row link out ("Remote Agent" / "Notify"
-   │                                  chips). Picking a platform in the side
-   │                                  nav (below) filters the list AND brings
-   │                                  back that platform's setup guide.
-   ├─ Remote    /remote-agent/:platform   purpose: mount switch, SmartGuide
-   │  "which bot drives Claude Code?"     model graph, chat ID lock, bash
-   │                                      allowlist, platform setup guide,
+   │                                  row link out ("Remote Control" / "Notify"
+   │                                  chips). Picking a platform tile filters
+   │                                  the list AND brings back that platform's
+   │                                  setup guide.
+   ├─ Remote Control  /remote-agent/:platform   purpose: mount switch,
+   │  "which bot drives Claude Code?"     SmartGuide model graph, chat ID lock,
+   │                                      bash allowlist, platform setup guide,
    │                                      Add Bot (shared dialog, in place).
    │                                      ONE sidebar row; platform is
    │                                      selected in-page instead.
@@ -359,8 +361,15 @@ each page as a filter/tab instead of a nav level:
                                            frontend surface yet (see below).
 ```
 
-Neither "Bots" (nav label) nor any purpose page ever says "channel" —
-that word stays reserved for the backend architecture vocabulary in §2/§9.
+The user-facing name for the remote_agent purpose is **"Remote Control"**
+everywhere in the UI (nav row, the BotCard purpose chip, the page title),
+aligning with the product description's "remote control" pillar; the
+backend keeps the `remote_agent` mount name and the `remoteAgent.*` /
+`bots.card.remoteAgentChip` i18n **keys** (values changed, keys stable).
+The routes are still `/remote-agent/:platform` — unchanged, so deep links
+and the purpose chip keep working. No nav label or purpose page ever says
+"channel" — that word stays reserved for the backend architecture
+vocabulary in §2/§9.
 A bot connection is just "a bot"; users pick a platform, not a channel.
 
 **Platform selection lives in the page, as a grid of equal-size tiles.**
