@@ -520,7 +520,13 @@ export default function UserUsagePage() {
                                                         </Avatar>
                                                         <Box sx={{ minWidth: 0 }}>
                                                             <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                                                                <Typography variant="body1" color="text.primary" fontWeight={600} noWrap>{row.display_name}</Typography>
+                                                                <Typography
+                                                                    variant="body1"
+                                                                    noWrap
+                                                                    sx={{ color: 'text.primary', fontWeight: 600 }}
+                                                                >
+                                                                    {row.display_name}
+                                                                </Typography>
                                                                 {row.account_type === 'primary' && (
                                                                     <Chip
                                                                         size="small"
@@ -552,12 +558,14 @@ export default function UserUsagePage() {
                                                     </Stack>
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                                                    <Typography variant="body1" color="text.primary" fontWeight={550}>
+                                                    <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 550 }}>
                                                         {formatNumber(row.request_count)}
                                                     </Typography>
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ minWidth: { xs: 88, sm: 140 } }}>
-                                                    <Typography variant="body1" color="text.primary" fontWeight={600}>{formatNumber(row.total_tokens)}</Typography>
+                                                    <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                                                        {formatNumber(row.total_tokens)}
+                                                    </Typography>
                                                     <LinearProgress
                                                         variant="determinate"
                                                         value={(row.total_tokens / maxTokens) * 100}
@@ -567,8 +575,10 @@ export default function UserUsagePage() {
                                                 <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                                                     <Typography
                                                         variant="body1"
-                                                        color={row.error_rate >= 0.05 ? 'error.main' : 'text.primary'}
-                                                        fontWeight={550}
+                                                        sx={{
+                                                            color: row.error_rate >= 0.05 ? 'error.main' : 'text.primary',
+                                                            fontWeight: 550,
+                                                        }}
                                                     >
                                                         {(row.error_rate * 100).toFixed(1)}%
                                                     </Typography>
@@ -609,9 +619,11 @@ export default function UserUsagePage() {
                         {selectedUser ? (
                             <Stack spacing={2.5} sx={{ height: '100%', minHeight: 0 }}>
                                 <Box>
-                                    <Stack direction="row" gap={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <Box sx={{ minWidth: 0 }}>
-                                            <Typography variant="h6" fontWeight={650} noWrap>{selectedUser.display_name}</Typography>
+                                            <Typography variant="h6" noWrap sx={{ fontWeight: 650 }}>
+                                                {selectedUser.display_name}
+                                            </Typography>
                                             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                                                 {selectedUser.user_id}
                                             </Typography>
@@ -696,7 +708,7 @@ export default function UserUsagePage() {
                                 <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                                     <Stack direction="row" sx={{ mb: 1.25, justifyContent: 'space-between', alignItems: 'baseline' }}>
                                         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                                            <Typography variant="subtitle2" fontWeight={650}>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 650 }}>
                                                 {t('dashboard.userUsage.allModels', { defaultValue: 'All models' })}
                                             </Typography>
                                             <Chip size="small" label={modelStats.length} sx={{ height: 22 }} />
@@ -728,13 +740,21 @@ export default function UserUsagePage() {
                                                 const share = selectedUser.total_tokens ? (value / selectedUser.total_tokens) * 100 : 0;
                                                 return (
                                                     <Box key={`${model.provider_uuid}-${model.model || model.key}`}>
-                                                        <Stack direction="row" gap={2} sx={{ justifyContent: 'space-between' }}>
+                                                        <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between' }}>
                                                             <Box sx={{ minWidth: 0 }}>
-                                                                <Typography variant="body1" color="text.primary" fontWeight={650} noWrap>{model.model || model.key}</Typography>
+                                                                <Typography
+                                                                    variant="body1"
+                                                                    noWrap
+                                                                    sx={{ color: 'text.primary', fontWeight: 650 }}
+                                                                >
+                                                                    {model.model || model.key}
+                                                                </Typography>
                                                                 <Typography variant="body2">{model.provider_name || '—'}</Typography>
                                                             </Box>
                                                             <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                                                                <Typography variant="body1" color="text.primary" fontWeight={650}>{formatNumber(value)}</Typography>
+                                                                <Typography variant="body1" sx={{ color: 'text.primary', fontWeight: 650 }}>
+                                                                    {formatNumber(value)}
+                                                                </Typography>
                                                                 <Typography variant="body2">{share.toFixed(1)}%</Typography>
                                                             </Box>
                                                         </Stack>

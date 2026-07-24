@@ -1,11 +1,12 @@
 import { Alert, Box, Card, CardContent, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import type { ReactNode } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import { EMPTY_SX } from '@/constants/defaults';
 
 interface UnifiedCardProps {
   title?: string | ReactNode;
+  titleHeadingLevel?: 1 | 2 | 3 | 4 | 5 | 6;
   subtitle?: string;
   children: ReactNode;
   size?: 'small' | 'medium' | 'large' | 'full' | 'header' | 'footer';
@@ -102,6 +103,7 @@ const cardVariants = {
 
 export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
   title,
+  titleHeadingLevel = 2,
   subtitle,
   children,
   size = 'medium',
@@ -148,9 +150,27 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
           <Box sx={{ mb: 2, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                <Typography variant="h4" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                  {title}
-                </Typography>
+                {typeof title === 'string' || typeof title === 'number' ? (
+                  <Typography
+                    component={`h${titleHeadingLevel}` as ElementType}
+                    variant="h4"
+                    sx={{ fontWeight: 600, color: 'text.primary' }}
+                  >
+                    {title}
+                  </Typography>
+                ) : (
+                  <Box
+                    role="heading"
+                    aria-level={titleHeadingLevel}
+                    sx={{
+                      typography: 'h4',
+                      fontWeight: 600,
+                      color: 'text.primary',
+                    }}
+                  >
+                    {title}
+                  </Box>
+                )}
                 {leftAction}
               </Box>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>

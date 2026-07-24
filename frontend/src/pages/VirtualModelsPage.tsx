@@ -1,7 +1,7 @@
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import VirtualModelsTable from '@/components/VirtualModelsTable';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import { Alert, Snackbar, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,6 +56,7 @@ const VirtualModelsPage = () => {
         <PageLayout loading={loading}>
             <UnifiedCard
                 title={t('layout.virtualModels', { defaultValue: 'Virtual Models' })}
+                titleHeadingLevel={1}
                 subtitle={t('layout.virtualModelsTooltip', {
                     defaultValue:
                         'Built-in synthetic model providers for onboarding, demos, and dry-runs.',
@@ -68,10 +69,9 @@ const VirtualModelsPage = () => {
                         onToggle={handleToggleProvider}
                     />
                 ) : (
-                    <EmptyStateGuide
+                    <EmptyState
                         title="No Virtual Models Available"
                         description="Virtual models are seeded at server startup. Restart the server if this page is empty."
-                        showHeroIcon={false}
                     />
                 )}
                 <Typography

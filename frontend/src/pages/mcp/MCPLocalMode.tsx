@@ -61,7 +61,7 @@ const MCPLocalMode = () => {
     return (
         <PageLayout loading={false}>
             <Stack spacing={3}>
-                <UnifiedCard title="MCP Local Mode" size="full">
+                <UnifiedCard title="MCP Local Mode" titleHeadingLevel={1} size="full">
                     <Stack spacing={2}>
                         <Stack direction="row" spacing={1} sx={{
                             alignItems: "center"
@@ -156,6 +156,7 @@ const MCPLocalMode = () => {
                                 </Typography>
                                 <IconButton
                                     size="small"
+                                    aria-label="Copy Claude Code command"
                                     onClick={() => handleCopy(getClaudeCodeCommand(), 'command')}
                                     sx={{
                                         position: 'absolute',
@@ -209,6 +210,7 @@ const MCPLocalMode = () => {
                                 </Typography>
                                 <IconButton
                                     size="small"
+                                    aria-label="Copy Claude Desktop configuration"
                                     onClick={() => handleCopy(getClaudeDesktopConfig(), 'config')}
                                     sx={{
                                         position: 'absolute',

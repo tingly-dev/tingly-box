@@ -5,11 +5,12 @@ import type { ReactNode } from 'react';
 interface PageHeaderProps {
   title: ReactNode;
   subtitle?: ReactNode;
+  icon?: ReactNode;
   actions?: ReactNode;
   sx?: SxProps<Theme>;
 }
 
-export default function PageHeader({ title, subtitle, actions, sx }: PageHeaderProps) {
+export default function PageHeader({ title, subtitle, icon, actions, sx }: PageHeaderProps) {
   return (
     <Box
       sx={{
@@ -25,9 +26,24 @@ export default function PageHeader({ title, subtitle, actions, sx }: PageHeaderP
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h3" sx={{ color: 'text.primary' }}>
-          {title}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+          {icon && (
+            <Box
+              aria-hidden="true"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                color: 'text.primary',
+                flexShrink: 0,
+              }}
+            >
+              {icon}
+            </Box>
+          )}
+          <Typography component="h1" variant="h3" sx={{ color: 'text.primary' }}>
+            {title}
+          </Typography>
+        </Box>
         {subtitle && (
           <Typography
             variant="body2"

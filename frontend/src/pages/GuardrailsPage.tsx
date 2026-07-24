@@ -24,6 +24,7 @@ import {
     HelpOutline,
 } from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
+import PageHeader from '@/components/PageHeader';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 
@@ -257,33 +258,33 @@ const GuardrailsPage = () => {
     return (
         <PageLayout loading={loading}>
             <Stack spacing={3}>
-                <UnifiedCard
+                <PageHeader
                     title="Guardrails"
                     subtitle="Manage rule-based safety checks for tool calls and tool results."
-                    size="full"
-                    rightAction={
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                            <Button variant="outlined" startIcon={<FileUpload />} onClick={handleImportClick}>
+                    actions={
+                        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                            <Button size="small" variant="outlined" startIcon={<FileUpload />} onClick={handleImportClick}>
                                 Import Policies
                             </Button>
-                            <Button variant="outlined" startIcon={<FileDownload />} onClick={handleExportClick}>
+                            <Button size="small" variant="outlined" startIcon={<FileDownload />} onClick={handleExportClick}>
                                 Export Imports
                             </Button>
                         </Stack>
                     }
-                >
+                />
+                {(loadError || actionAlert) && (
                     <Stack spacing={2}>
                         {loadError && <Alert severity="error">{loadError}</Alert>}
                         {actionAlert}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".yaml,.yml,.json"
-                            style={{ display: 'none' }}
-                            onChange={handleImportFile}
-                        />
                     </Stack>
-                </UnifiedCard>
+                )}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".yaml,.yml,.json"
+                    style={{ display: 'none' }}
+                    onChange={handleImportFile}
+                />
 
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, lg: 6 }}>
@@ -292,7 +293,7 @@ const GuardrailsPage = () => {
                             size="full"
                             leftAction={
                                 <Tooltip title="Shows total policies, how many are enabled or disabled, and the count in each policy category.">
-                                    <IconButton size="small">
+                                    <IconButton aria-label="About policy breakdown" size="small">
                                         <HelpOutline fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
@@ -355,7 +356,7 @@ const GuardrailsPage = () => {
                             size="full"
                             leftAction={
                                 <Tooltip title="Summarizes recorded Guardrails events by final verdict. Masked events are rewrites, blocked events are stops, and review events are non-blocking interventions.">
-                                    <IconButton size="small">
+                                    <IconButton aria-label="About event summary" size="small">
                                         <HelpOutline fontSize="small" />
                                     </IconButton>
                                 </Tooltip>

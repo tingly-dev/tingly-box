@@ -6,6 +6,9 @@
   "compilerOptions": {
     "baseUrl": "./",
     "paths": {
+      "@/bindings": [
+        "./src/bindings-web/index.ts"
+      ],
       "@/*": [
         "./src/*"
       ]
@@ -37,5 +40,8 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/client/**"
   ]
 }

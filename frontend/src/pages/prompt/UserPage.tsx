@@ -117,7 +117,7 @@ const UserPage = () => {
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box>
-            <Typography variant="h3" sx={{ fontWeight: 600, mb: 1 }}>
+            <Typography component="h1" variant="h3" sx={{ fontWeight: 600, mb: 1 }}>
               User Recordings
             </Typography>
             <Typography variant="body1" sx={{

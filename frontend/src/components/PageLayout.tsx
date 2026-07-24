@@ -1,5 +1,6 @@
 import { CircularProgress, Box, Alert, IconButton } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
+import PageHeader from './PageHeader';
 
 type TimerId = ReturnType<typeof setTimeout>;
 
@@ -17,13 +18,15 @@ interface PageLoadingProps {
 export const PageLoading: React.FC<PageLoadingProps> = ({ minHeight = 400 }) => {
   return (
     <Box
+      role="status"
+      aria-label="Loading page"
       sx={{
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
         minHeight: minHeight
       }}>
-      <CircularProgress />
+      <CircularProgress aria-hidden="true" />
     </Box>
   );
 };
@@ -129,26 +132,31 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
         flexDirection: 'column'
       }}>
       {(title || subtitle || rightAction) && (
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 2,
-            mb: 2,
-          }}>
-          <Box sx={{ minWidth: 0 }}>
-            {title && (
-              <Box sx={{ typography: 'h6', fontWeight: 600 }}>{title}</Box>
-            )}
+        title ? (
+          <PageHeader
+            title={title}
+            subtitle={subtitle}
+            actions={rightAction}
+            sx={{ mb: 2 }}
+          />
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: subtitle ? 'space-between' : 'flex-end',
+              gap: 2,
+              mb: 2,
+            }}
+          >
             {subtitle && (
-              <Box sx={{ typography: 'body2', color: 'text.secondary', mt: title ? 0.5 : 0 }}>
+              <Box sx={{ typography: 'body2', color: 'text.secondary' }}>
                 {subtitle}
               </Box>
             )}
+            {rightAction && <Box sx={{ flexShrink: 0 }}>{rightAction}</Box>}
           </Box>
-          {rightAction && <Box sx={{ flexShrink: 0 }}>{rightAction}</Box>}
-        </Box>
+        )
       )}
       <Box sx={{ flex: 1 }}>{children}</Box>
       {/* Unified Notification System */}

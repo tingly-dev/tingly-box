@@ -213,6 +213,7 @@ const UseClaudeCodePageContent: React.FC = () => {
         <PageLayout loading={loadingRule} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
+                    titleHeadingLevel={1}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                             <span>Claude Code</span>

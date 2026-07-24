@@ -1,6 +1,5 @@
 import {
     CheckCircle,
-    Close,
     Download,
     Search,
     WarningAmber,
@@ -17,8 +16,6 @@ import {
     Dialog,
     DialogActions,
     DialogContent,
-    DialogTitle,
-    IconButton,
     LinearProgress,
     Stack,
     TextField,
@@ -28,6 +25,7 @@ import { useState, useEffect } from 'react';
 import { type SkillLocation, type DiscoveryResult } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
+import DialogHeader from '@/components/DialogHeader';
 
 interface AutoDiscoveryDialogProps {
     open: boolean;
@@ -147,26 +145,20 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
     const selectedCount = discoveredLocations.filter((loc) => loc.selected).length;
 
     return (
-        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-            <DialogTitle>
-                <Box
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                    }}
-                >
-                    <Typography variant="h6">Auto Discover Skills</Typography>
-                    <IconButton
-                        aria-label="close"
-                        onClick={handleClose}
-                        size="small"
-                        disabled={discovering || importing}
-                    >
-                        <Close />
-                    </IconButton>
-                </Box>
-            </DialogTitle>
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            aria-labelledby="auto-discovery-dialog-title"
+            maxWidth="md"
+            fullWidth
+        >
+            <DialogHeader
+                title="Auto Discover Skills"
+                titleId="auto-discovery-dialog-title"
+                closeLabel="Close auto discovery"
+                onClose={handleClose}
+                closeDisabled={discovering || importing}
+            />
             <DialogContent sx={{ pb: 1 }}>
                 <Stack spacing={2}>
                     {/* Discovery Summary */}
@@ -290,6 +282,11 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                                             <Checkbox
                                                 checked={location.selected}
                                                 onChange={() => handleToggleSelect(location.id)}
+                                                slotProps={{
+                                                    input: {
+                                                        'aria-label': `Select ${location.name}`,
+                                                    },
+                                                }}
                                             />
                                             <Box
                                                 sx={{

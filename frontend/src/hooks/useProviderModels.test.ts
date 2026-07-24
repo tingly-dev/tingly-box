@@ -1,11 +1,12 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { useProviderModels } from './useProviderModels';
 import api from '../services/api';
 
 // Mock the API
 vi.mock('../services/api');
-const mockApi = api as vi.Mocked<typeof api>;
+const mockApi = api as Mocked<typeof api>;
 
 // Mock event system to avoid cross-tab pollution.
 // IMPORTANT: useProviderModels calls createEventSystem() at module top level
@@ -31,7 +32,7 @@ vi.mock('../utils/eventSystem', () => ({
 }));
 
 import { createEventSystem } from '../utils/eventSystem';
-const mockCreateEventSystem = createEventSystem as vi.Mock;
+const mockCreateEventSystem = createEventSystem as Mock;
 
 describe('useProviderModels - Cache Convergence', () => {
   beforeEach(() => {

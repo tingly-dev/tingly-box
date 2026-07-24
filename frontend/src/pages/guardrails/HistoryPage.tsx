@@ -186,6 +186,7 @@ const GuardrailsHistoryPage = () => {
             <Stack spacing={3}>
                 <UnifiedCard
                     title="Event History"
+                    titleHeadingLevel={1}
                     subtitle="Recent Guardrails activity. Expand a row only when you need the full context."
                     size="full"
                     rightAction={
@@ -320,7 +321,10 @@ const GuardrailsHistoryPage = () => {
                                                 <Fragment key={`${entry.time}-${index}`}>
                                                     <TableRow hover sx={{ cursor: 'pointer' }} onClick={() => toggleRow(index)}>
                                                         <TableCell padding="checkbox">
-                                                            <IconButton size="small">
+                                                            <IconButton
+                                                                size="small"
+                                                                aria-label={expandedRows.has(index) ? 'Collapse event details' : 'Expand event details'}
+                                                            >
                                                                 {expandedRows.has(index) ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
                                                             </IconButton>
                                                         </TableCell>

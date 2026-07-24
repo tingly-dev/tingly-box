@@ -100,6 +100,7 @@ const SharingKeysPage = () => {
                     on the Sharing sidebar item (see useActivityItems.tsx). */}
                 <UnifiedCard
                     title="Tingly Box Share Model Tokens"
+                    titleHeadingLevel={1}
                     subtitle="Manage API tokens for sharing model access with clients and environments."
                     size="full"
                     rightAction={

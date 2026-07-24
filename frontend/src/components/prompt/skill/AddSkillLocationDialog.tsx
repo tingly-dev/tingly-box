@@ -1,24 +1,20 @@
-import { Close } from '@/components/icons';
 import {
-    Box,
     Button,
     CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
-    DialogTitle,
     FormControl,
-    IconButton,
     InputLabel,
     MenuItem,
     Select,
     Stack,
     TextField,
-    Typography,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { type IDESource } from '@/types/prompt';
 import { IDE_SOURCES } from '@/constants/ideSources';
+import DialogHeader from '@/components/DialogHeader';
 
 interface AddSkillLocationData {
     name: string;
@@ -88,19 +84,23 @@ const AddSkillLocationDialog = ({
     };
 
     const isValid = formData.name.trim() && formData.path.trim() && formData.ide_source;
+    const dialogTitle = mode === 'add' ? 'Add Skill Location' : 'Edit Skill Location';
 
     return (
-        <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-            <DialogTitle>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="h6">
-                        {mode === 'add' ? 'Add Skill Location' : 'Edit Skill Location'}
-                    </Typography>
-                    <IconButton aria-label="close" onClick={handleClose} size="small">
-                        <Close />
-                    </IconButton>
-                </Box>
-            </DialogTitle>
+        <Dialog
+            open={open}
+            onClose={submitting ? undefined : handleClose}
+            aria-labelledby="skill-location-dialog-title"
+            maxWidth="sm"
+            fullWidth
+        >
+            <DialogHeader
+                title={dialogTitle}
+                titleId="skill-location-dialog-title"
+                closeLabel={`Close ${dialogTitle.toLowerCase()}`}
+                onClose={handleClose}
+                closeDisabled={submitting}
+            />
             <form onSubmit={handleSubmit}>
                 <DialogContent sx={{ pb: 1 }}>
                     <Stack spacing={2.5}>
@@ -126,8 +126,11 @@ const AddSkillLocationDialog = ({
                         />
 
                         <FormControl size="small" fullWidth required>
-                            <InputLabel>IDE Source</InputLabel>
+                            <InputLabel id="skill-location-ide-source-label">
+                                IDE Source
+                            </InputLabel>
                             <Select
+                                labelId="skill-location-ide-source-label"
                                 value={formData.ide_source}
                                 label="IDE Source"
                                 onChange={(e) =>
@@ -149,7 +152,7 @@ const AddSkillLocationDialog = ({
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={handleClose} size="small">
+                    <Button onClick={handleClose} size="small" disabled={submitting}>
                         Cancel
                     </Button>
                     <Button

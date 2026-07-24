@@ -28,6 +28,7 @@ import { useModelSelectContext } from '@/contexts/ModelSelectContext';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { useNewModels } from '@/hooks/useNewModels';
 import { useModelDescriptions } from '@/hooks/useModelDescriptions';
+import { notify } from '@/utils/notify';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
@@ -184,7 +185,7 @@ export function ModelsPanel({
     const handleDevTestRemoveModels = useCallback(async () => {
         const currentModels = providerModels[provider.uuid]?.models || [];
         if (currentModels.length < 2) {
-            alert('Not enough models to test with');
+            notify.warning('Not enough models to test with');
             return;
         }
 

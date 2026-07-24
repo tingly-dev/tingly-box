@@ -39,7 +39,14 @@ export function QuotaRawResponseDialog({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle component="div">
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+          }}
+        >
           <Stack spacing={0.25}>
             <Typography variant="h6">Raw quota response</Typography>
             <Typography variant="body2" color="text.secondary">

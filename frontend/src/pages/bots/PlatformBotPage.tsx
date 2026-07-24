@@ -1,5 +1,5 @@
 import { BotCard, BotConfigDialog } from '@/components/bot';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -174,6 +174,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
             )}
             <UnifiedCard
                 title={t('remoteControl.bots.title', { defaultValue: '{{platform}} Bots', platform: platformName })}
+                titleHeadingLevel={1}
                 subtitle={t('remoteControl.bots.configuredCount', {
                     defaultValue: `${filteredBots.length} bot${filteredBots.length !== 1 ? 's' : ''} configured`,
                     count: filteredBots.length,
@@ -196,12 +197,13 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                         <CircularProgress />
                     </Box>
                 ) : filteredBots.length === 0 ? (
-                    <EmptyStateGuide
+                    <EmptyState
                         title={t('remoteControl.bots.emptyTitle', { defaultValue: 'No {{platform}} Bots Configured', platform: platformName })}
                         description={t('remoteControl.bots.emptyDescription', { defaultValue: 'Configure {{platform}} bots to enable remote-control chat integration.', platform: platformName })}
-                        showHeroIcon={false}
-                        primaryButtonLabel={t('remoteControl.bots.addPlatformBot', { defaultValue: 'Add {{platform}} Bot', platform: platformName })}
-                        onAddApiKeyClick={openAddDialog}
+                        primaryAction={{
+                            label: t('remoteControl.bots.addPlatformBot', { defaultValue: 'Add {{platform}} Bot', platform: platformName }),
+                            onClick: openAddDialog,
+                        }}
                     />
                 ) : (
                     filteredBots.map((bot) => (
