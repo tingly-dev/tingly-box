@@ -268,12 +268,12 @@ We welcome contributions! Check the steps below to build from source code.
 
 ### Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Go | 1.26+ | https://go.dev/doc/install |
-| Node.js | 20+ | https://nodejs.org/ |
-| pnpm | latest | `npm install -g pnpm` |
-| task | latest | `go install github.com/go-task/task/v3/cmd/task@latest` or https://taskfile.dev/installation/ |
+| Tool    | Version | Install                                                                                       |
+| ------- | ------- | --------------------------------------------------------------------------------------------- |
+| Go      | 1.26+   | https://go.dev/doc/install                                                                    |
+| Node.js | 20+     | https://nodejs.org/                                                                           |
+| pnpm    | latest  | `npm install -g pnpm`                                                                         |
+| task    | latest  | `go install github.com/go-task/task/v3/cmd/task@latest` or https://taskfile.dev/installation/ |
 
 > Tip: you can also copy individual shell commands out of `Taskfile.yml` and run them directly if you prefer not to install `task`.
 
@@ -354,10 +354,10 @@ task go:test        # Run Go unit tests
 
 ## Support
 
-| Telegram    | Wechat |
-| :--------: | :-------: |
+|                                                              Telegram                                                              |                                                               Wechat                                                               |
+| :--------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------: |
 | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
-| https://t.me/+V1sqeajw1pYwMzU1 | tingly-box |
+|                                                   https://t.me/+V1sqeajw1pYwMzU1                                                   |                                                             tingly-box                                                             |
 
 ## Early Contributors
 
@@ -396,3 +396,19 @@ This project is available under:
 - **Commercial License · © Tingly Dev** – See [LICENSE-COMMERCIAL.txt](./LICENSE-COMMERCIAL.txt)
 
 For commercial licensing inquiries, contact [biz@tingly.dev](mailto:biz@tingly.dev).
+
+---
+
+## ❤️ Support Tingly Box
+
+If Tingly Box has been useful to you, consider supporting its development.
+
+**Donations are optional.** A ⭐ on GitHub or a contribution is just as appreciated.
+
+<div align="center">
+
+|                            WeChat Pay                             |                            Alipay                             |
+| :---------------------------------------------------------------: | :-----------------------------------------------------------: |
+| <img src="docs/donation/wechat.jpg" width="220" alt="WeChat Pay"> | <img src="docs/donation/alipay.jpg" width="220" alt="Alipay"> |
+
+</div>
