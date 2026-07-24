@@ -224,3 +224,22 @@ func TestValidateProfileName(t *testing.T) {
 		}
 	}
 }
+
+func TestExperimentScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioExperiment)
+	if !ok {
+		t.Fatalf("expected %q descriptor to be registered", ScenarioExperiment)
+	}
+	if !d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatalf("expected experiment descriptor to allow rule binding and path use, got %+v", d)
+	}
+	if !d.SupportsProfiles {
+		t.Fatalf("expected experiment scenario to support profiles")
+	}
+	if !ScenarioSupportsTransport(ScenarioExperiment, TransportOpenAI) {
+		t.Fatalf("experiment scenario should support TransportOpenAI")
+	}
+	if !ScenarioSupportsTransport(ScenarioExperiment, TransportAnthropic) {
+		t.Fatalf("experiment scenario should support TransportAnthropic")
+	}
+}

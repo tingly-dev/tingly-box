@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/info"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
+	pluginmodule "github.com/tingly-dev/tingly-box/internal/server/module/plugin"
 	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
 	providermodule "github.com/tingly-dev/tingly-box/internal/server/module/provider"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
@@ -86,6 +87,15 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithDescription("Reset model token to a new secure random value"),
 		swagger.WithTags("auth"),
 		swagger.WithResponseModel(gin.H{}),
+	)
+
+	// SDK session endpoint — mints a scenario-bound session (base URL, token,
+	// transports) for the `tingly` Python SDK / plugin experiments.
+	apiV1.POST("/sdk/session", s.CreateSDKSession,
+		swagger.WithTags("sdk"),
+		swagger.WithDescription("Mint a scoped SDK session for a scenario"),
+		swagger.WithRequestModel(SDKSessionRequest{}),
+		swagger.WithResponseModel(SDKSessionResponse{}),
 	)
 
 	apiV2 := manager.NewGroup("api", "v2", "")
@@ -390,6 +400,15 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Provider CRUD + model management + provider export / import
 	providerHandler := providermodule.NewHandler(s.config, s.quotaManager)
 	providermodule.RegisterRoutes(apiV2, providerHandler)
+
+	// Plugin registration: a plugin is a provider tagged "plugin" (external
+	// OpenAI upstream). Independent module — its only dependency is config, so
+	// it owns its own handler rather than living on *Server. POST is an
+	// idempotent upsert-by-name that wires it in (provider + optional rule) in
+	// one step; liveness is handled by the same circuit breaker that covers
+	// every other provider — no separate lifecycle.
+	pluginHandler := pluginmodule.NewHandler(s.config)
+	pluginmodule.RegisterRoutes(apiV2, pluginHandler)
 
 	// Provider template endpoints
 	providerTemplateHandler := providertemplate.NewHandler(s.templateManager)

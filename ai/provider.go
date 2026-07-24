@@ -53,6 +53,14 @@ type VModelDetail struct {
 	LatencyProfile string   `json:"latency_profile,omitempty"`
 }
 
+// PluginTag is the Provider.Tags value that marks a provider as backed by
+// external plugin code. A plugin provider is otherwise an ordinary OpenAI HTTP
+// upstream (APIStyle=openai, api_key / no_key) — there is NO routing change;
+// reusing the existing generic Tags field means plugin identity needs no new
+// persisted column. Distinct from AuthTypeVirtual (the in-process vmodel
+// path): a plugin runs out-of-process and is reached over HTTP.
+const PluginTag = "plugin"
+
 // CredentialBundle holds the credential fields for multi-field auth types
 // (AWS SigV4, Azure, GCP Vertex). Fields is a generic, schema-validated
 // key/value map so new credential shapes can be added as data rather than new
@@ -253,6 +261,21 @@ func (p *Provider) IsVirtual() bool {
 	return p != nil && p.AuthType == AuthTypeVirtual
 }
 
+// IsPlugin reports whether this provider is backed by external plugin code
+// (carries the PluginTag). Plugin providers route as ordinary OpenAI HTTP
+// upstreams; this is metadata for UI grouping only.
+func (p *Provider) IsPlugin() bool {
+	if p == nil {
+		return false
+	}
+	for _, tag := range p.Tags {
+		if tag == PluginTag {
+			return true
+		}
+	}
+	return false
+}
+
 // IsBuiltin reports whether this provider was seeded by the system and is
 // therefore protected from deletion/mutation.
 func (p *Provider) IsBuiltin() bool {
@@ -337,6 +360,16 @@ func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {
 // value is never transmitted.
 const VModelSentinelToken = "EMPTY"
 
+// NoKeySentinelToken satisfies the same non-empty-APIKey check for real
+// outbound HTTP providers that genuinely take no key (NoKeyRequired=true;
+// e.g. a local plugin process). Unlike VModelSentinelToken this value IS
+// transmitted, as an Authorization/x-api-key header the receiving side is
+// expected to ignore. It exists because some client SDKs (anthropic-sdk-go)
+// treat an empty API key as "look for ambient credentials" and fail loudly
+// when none are found, instead of just sending an empty/absent header the
+// way the OpenAI client does.
+const NoKeySentinelToken = "tingly-no-key"
+
 // GetAccessToken returns the access token based on auth type
 func (p *Provider) GetAccessToken() string {
 	switch p.AuthType {
@@ -348,6 +381,9 @@ func (p *Provider) GetAccessToken() string {
 		return VModelSentinelToken
 	case AuthTypeAPIKey, "":
 		// Default to api_key for backward compatibility
+		if p.Token == "" && p.NoKeyRequired {
+			return NoKeySentinelToken
+		}
 		return p.Token
 	}
 	return ""

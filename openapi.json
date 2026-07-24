@@ -3833,6 +3833,39 @@
         }
       }
     },
+    "/api/v1/sdk/session": {
+      "post": {
+        "tags": [
+          "sdk"
+        ],
+        "summary": "Mint a scoped SDK session for a scenario",
+        "description": "Mint a scoped SDK session for a scenario",
+        "operationId": "apiV1SdkSessionPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SDKSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SDKSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/server/restart": {
       "post": {
         "tags": [
@@ -4782,6 +4815,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AvailableModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/plugins": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "List registered plugin providers",
+        "description": "List registered plugin providers",
+        "operationId": "apiV2PluginsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Register (or update) external plugin code as an upstream, optionally binding a rule",
+        "description": "Register (or update) external plugin code as an upstream, optionally binding a rule",
+        "operationId": "apiV2PluginsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPluginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterPluginResponse"
                 }
               }
             }
@@ -9317,6 +9403,52 @@
           "categories"
         ]
       },
+      "PluginInfo": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "Field endpoint"
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Field model_id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "uuid": {
+            "type": "string",
+            "description": "Field uuid"
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "endpoint"
+        ]
+      },
+      "PluginsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/PluginInfo"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
       "Policy": {
         "type": "object",
         "properties": {
@@ -10251,6 +10383,83 @@
           "message"
         ]
       },
+      "RegisterPluginRequest": {
+        "type": "object",
+        "properties": {
+          "api_style": {
+            "type": "string",
+            "description": "Wire protocol the plugin's endpoint speaks: \"openai\" or \"anthropic\"; empty defaults to \"openai\"",
+            "example": "anthropic"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Plugin base URL",
+            "example": "http://127.0.0.1:8765/v1"
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Model id the plugin advertises",
+            "example": "plugin/my-rag"
+          },
+          "name": {
+            "type": "string",
+            "description": "Plugin / provider name",
+            "example": "my-rag"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Scenario to bind a rule under; omit to create only the provider",
+            "example": "experiment"
+          },
+          "tier": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tier for the bound service (0 = highest priority)"
+          },
+          "token": {
+            "type": "string",
+            "description": "Token tingly-box should send to the plugin (empty = no key)"
+          }
+        },
+        "required": [
+          "name",
+          "endpoint"
+        ]
+      },
+      "RegisterPluginResponse": {
+        "type": "object",
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "description": "Field model_id"
+          },
+          "note": {
+            "type": "string",
+            "description": "Field note"
+          },
+          "provider_uuid": {
+            "type": "string",
+            "description": "Field provider_uuid"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
+          },
+          "rule_uuid": {
+            "type": "string",
+            "description": "Field rule_uuid"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          }
+        },
+        "required": [
+          "provider_uuid",
+          "model_id",
+          "ready"
+        ]
+      },
       "RemoveSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -10492,6 +10701,65 @@
         "required": [
           "success",
           "data"
+        ]
+      },
+      "SDKSessionRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          }
+        },
+        "required": [
+          "scenario",
+          "name"
+        ]
+      },
+      "SDKSessionResponse": {
+        "type": "object",
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "description": "Field base_url"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Field expires_at"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "services": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field services"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          },
+          "transport": {
+            "type": "string",
+            "description": "Field transport"
+          }
+        },
+        "required": [
+          "base_url",
+          "token",
+          "scenario",
+          "transport",
+          "ready",
+          "services"
         ]
       },
       "ScanIdesResponse": {
@@ -13453,6 +13721,10 @@
       "description": "Operations related to onboarding"
     },
     {
+      "name": "plugins",
+      "description": "Operations related to plugins"
+    },
+    {
       "name": "providers",
       "description": "Operations related to providers"
     },
@@ -13467,6 +13739,10 @@
     {
       "name": "scenarios",
       "description": "Operations related to scenarios"
+    },
+    {
+      "name": "sdk",
+      "description": "Operations related to sdk"
     },
     {
       "name": "server",

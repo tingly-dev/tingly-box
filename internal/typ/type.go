@@ -63,8 +63,9 @@ const (
 	ScenarioClaudeDesktop RuleScenario = "claude_desktop"
 	ScenarioSmartGuide    RuleScenario = "_smart_guide"
 	ScenarioGlobal        RuleScenario = "_global"  // Global flags that apply to all scenarios
-	ScenarioEmbed         RuleScenario = "embed"    // Embedding application scenario; only serves /embeddings
-	ScenarioImageGen      RuleScenario = "imagegen" // Image generation scenario; only serves /images/generations
+	ScenarioEmbed         RuleScenario = "embed"      // Embedding application scenario; only serves /embeddings
+	ScenarioImageGen      RuleScenario = "imagegen"   // Image generation scenario; only serves /images/generations
+	ScenarioExperiment    RuleScenario = "experiment" // Python SDK / plugin experiment scenario; accepts OpenAI + Anthropic transports
 )
 
 func BuiltinScenarios() []RuleScenario {
@@ -83,6 +84,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioGlobal,
 		ScenarioEmbed,
 		ScenarioImageGen,
+		ScenarioExperiment,
 	}
 }
 
@@ -342,6 +344,9 @@ type OAuthDetail = ai.OAuthDetail
 // VModelDetail contains virtual-model provider configuration
 // Type alias for backward compatibility with common/provider
 type VModelDetail = ai.VModelDetail
+
+// PluginTag marks a provider as backed by external plugin code (see Provider.IsPlugin).
+const PluginTag = ai.PluginTag
 
 // CredentialBundle holds multi-field credentials for non-bearer auth types
 // Type alias for backward compatibility with common/provider
