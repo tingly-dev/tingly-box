@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+func TestNormalizeClaudeCodeDefaultModeAcceptsManual(t *testing.T) {
+	mode, ok := NormalizeClaudeCodeDefaultMode("manual")
+	if !ok || mode != "manual" {
+		t.Fatalf("manual mode = %q, %v; want manual, true", mode, ok)
+	}
+}
+
 func TestClaudeCodePrefs_ToEnv_OmitsEmpty(t *testing.T) {
 	// Sparse prefs: only one model + one limit, everything else empty.
 	p := ClaudeCodePrefs{

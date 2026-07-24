@@ -9,8 +9,11 @@ type PermissionMode string
 const (
 	// PermissionModeDefault uses the default permission behavior (asks for permissions)
 	PermissionModeDefault PermissionMode = "default"
-	// PermissionModeAuto auto-approves permissions (equivalent to bypassPermissions)
+	// PermissionModeAuto delegates permission decisions to Claude Code's
+	// configurable rule classifier. It is not an unconditional bypass.
 	PermissionModeAuto PermissionMode = "auto"
+	// PermissionModeManual requires interactive approval for permission requests.
+	PermissionModeManual PermissionMode = "manual"
 	// PermissionModeDontAsk doesn't ask for permissions
 	PermissionModeDontAsk PermissionMode = "dontAsk"
 	// PermissionModeBypassPermissions bypasses all permission checks
@@ -110,7 +113,7 @@ func (c *Config) WithContinue() *Config {
 // IsValidPermissionMode checks if a permission mode is valid for Claude CLI
 func IsValidPermissionMode(mode string) bool {
 	switch PermissionMode(mode) {
-	case PermissionModeDefault, PermissionModeAuto, PermissionModeDontAsk,
+	case PermissionModeDefault, PermissionModeAuto, PermissionModeManual, PermissionModeDontAsk,
 		PermissionModeBypassPermissions, PermissionModeAcceptEdits, PermissionModePlan:
 		return true
 	default:

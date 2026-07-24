@@ -47,6 +47,34 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 	}
 }
 
+func TestTextFormatter_TaskSubtypePolicy(t *testing.T) {
+	formatter := NewTextFormatter()
+
+	started := formatter.Format(&SystemMessage{
+		Type:        SDKSystemMessage,
+		SubType:     SystemSubtypeTaskStarted,
+		Description: "Inspect constants",
+	})
+	if !contains(started, "Inspect constants") {
+		t.Fatalf("task_started output = %q", started)
+	}
+
+	notification := formatter.Format(&SystemMessage{
+		Type:        SDKSystemMessage,
+		SubType:     SystemSubtypeTaskNotification,
+		Description: "Inspection complete",
+	})
+	if !contains(notification, "Inspection complete") {
+		t.Fatalf("task_notification output = %q", notification)
+	}
+
+	for _, subtype := range []string{SystemSubtypeTaskProgress, SystemSubtypeTaskUpdated} {
+		if output := formatter.Format(&SystemMessage{Type: SDKSystemMessage, SubType: subtype}); output != "" {
+			t.Errorf("%s should be retained as raw data but hidden from text output, got %q", subtype, output)
+		}
+	}
+}
+
 func TestTextFormatter_FormatAPIRetry(t *testing.T) {
 	formatter := NewTextFormatter()
 
@@ -115,6 +143,52 @@ func TestTextFormatter_FormatAssistantMessage(t *testing.T) {
 
 	if !contains(output, "Hello, world!") {
 		t.Errorf("Expected text content in output: %s", output)
+	}
+}
+
+func TestTextFormatter_FormatServerToolBlocks(t *testing.T) {
+	formatter := NewTextFormatter()
+	msg := &AssistantMessage{
+		Type: SDKAssistantMessage,
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{
+					Type:  ContentBlockTypeServerToolUse,
+					ID:    "srv-1",
+					Name:  "web_search",
+					Input: json.RawMessage(`{"query":"Claude Code"}`),
+				},
+				{
+					Type:      ContentBlockTypeWebSearchToolResult,
+					ToolUseID: "srv-1",
+				},
+			},
+		},
+	}
+
+	output := formatter.Format(msg)
+	if !contains(output, "web_search") {
+		t.Fatalf("server tool invocation missing from output: %q", output)
+	}
+	if !contains(output, "result") {
+		t.Fatalf("server tool result missing from output: %q", output)
+	}
+}
+
+func TestUnmarshalCurrentContentBlockVariants(t *testing.T) {
+	for _, raw := range []string{
+		`{"type":"server_tool_use","id":"srv-1","name":"web_search","input":{"query":"test"}}`,
+		`{"type":"redacted_thinking","data":"opaque"}`,
+		`{"type":"web_search_tool_result","tool_use_id":"srv-1","content":[]}`,
+		`{"type":"container_upload","file_id":"file-1"}`,
+	} {
+		block, err := UnmarshalContentBlock([]byte(raw))
+		if err != nil {
+			t.Fatalf("UnmarshalContentBlock(%s): %v", raw, err)
+		}
+		if _, unknown := block.(*UnknownBlock); unknown {
+			t.Errorf("current content block decoded as unknown: %s", raw)
+		}
 	}
 }
 

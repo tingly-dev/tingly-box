@@ -15,21 +15,22 @@ import (
 // Prefer using NewAgentWithConfig for new code. Launcher is retained for
 // backward compatibility with existing callers (examples, integration tests).
 type Launcher struct {
-	mu      sync.RWMutex
-	driver  *Driver
-	runner  *agentboot.Runner
-	transport *Transport
+	mu     sync.RWMutex
+	driver *Driver
+	runner *agentboot.Runner
 }
 
 // NewLauncher creates a new Claude launcher.
 func NewLauncher(config Config) *Launcher {
 	driver := NewDriver(config)
-	transport := NewTransport()
-	runner := agentboot.NewRunner(driver, transport)
+	runner := agentboot.NewRunnerWithConfig(
+		driver,
+		func() agentboot.AgentTransport { return NewTransport() },
+		runnerConfig(config),
+	)
 	return &Launcher{
-		driver:    driver,
-		transport: transport,
-		runner:    runner,
+		driver: driver,
+		runner: runner,
 	}
 }
 
@@ -98,4 +99,3 @@ func (l *Launcher) Interrupt(ctx context.Context, stdin io.WriteCloser, reason s
 	builder := NewCancelRequestBuilder().WithCancel("execution").WithReason(reason)
 	return controlMgr.SendRequestAsync(builder.Build(), stdin)
 }
-

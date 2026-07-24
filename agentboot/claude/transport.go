@@ -174,7 +174,7 @@ func (t *Transport) buildAskResponse(requestID string, result agentboot.AskRespo
 	innerResponse := map[string]interface{}{"request_id": requestID}
 
 	if result.Approved {
-		innerResponse["subtype"] = ResultSubtypeSuccess
+		innerResponse["subtype"] = ControlResponseSubtypeSuccess
 		if result.UpdatedInput != nil {
 			innerResponse["response"] = map[string]interface{}{
 				"behavior":     "allow",
@@ -184,7 +184,7 @@ func (t *Transport) buildAskResponse(requestID string, result agentboot.AskRespo
 			innerResponse["response"] = map[string]interface{}{"behavior": "allow"}
 		}
 	} else {
-		innerResponse["subtype"] = ResultSubtypeError
+		innerResponse["subtype"] = ControlResponseSubtypeError
 		reason := result.Reason
 		if reason == "" {
 			reason = "User denied this request"
@@ -201,7 +201,7 @@ func (t *Transport) buildAskResponse(requestID string, result agentboot.AskRespo
 
 func (t *Transport) buildPermissionResponse(requestID string, result agentboot.ApprovalResponse, originalInput map[string]interface{}) map[string]any {
 	innerResponse := map[string]interface{}{
-		"subtype":    ResultSubtypeSuccess,
+		"subtype":    ControlResponseSubtypeSuccess,
 		"request_id": requestID,
 	}
 

@@ -19,7 +19,7 @@
         "type": { "const": "system" },
         "subtype": {
           "type": "string",
-          "enum": ["init", "shutdown", "error"]
+          "description": "Forward-compatible system subtype. Known values include init, api_retry, rate_limit, task_started, task_progress, task_notification, task_updated, and legacy task_completed."
         },
         "session_id": { "type": "string", "format": "uuid" },
         "timestamp": { "type": "string", "format": "date-time" }
@@ -61,12 +61,30 @@
       "required": ["model", "id", "type", "role", "content"]
     },
     "ContentBlock": {
-      "oneOf": [
-        { "$ref": "#/$defs/TextBlock" },
-        { "$ref": "#/$defs/ToolUseBlock" },
-        { "$ref": "#/$defs/ThinkingBlock" },
-        { "$ref": "#/$defs/ToolResultContentBlock" }
-      ]
+      "type": "object",
+      "description": "Forward-compatible Anthropic content block union.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "examples": [
+            "text",
+            "thinking",
+            "redacted_thinking",
+            "tool_use",
+            "server_tool_use",
+            "tool_result",
+            "web_search_tool_result",
+            "web_fetch_tool_result",
+            "code_execution_tool_result",
+            "bash_code_execution_tool_result",
+            "text_editor_code_execution_tool_result",
+            "tool_search_tool_result",
+            "container_upload"
+          ]
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": true
     },
     "TextBlock": {
       "type": "object",
@@ -149,7 +167,7 @@
         "type": { "const": "result" },
         "subtype": {
           "type": "string",
-          "enum": ["success", "error"]
+          "description": "Forward-compatible terminal subtype. Known values include success, error_max_turns, error_during_execution, error_max_budget_usd, and error_max_structured_output_retries."
         },
         "result": { "type": "string" },
         "total_cost_usd": { "type": "number" },

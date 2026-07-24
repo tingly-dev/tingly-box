@@ -2,6 +2,13 @@ package agentboot
 
 import "github.com/tingly-dev/tingly-box/agentboot/common"
 
+// AgentTransportFactory creates the protocol state for one execution.
+//
+// A transport may contain mutable, execution-scoped state such as message
+// accumulators and routing metadata. Runner therefore calls the factory once
+// per Execute instead of sharing a transport across concurrent executions.
+type AgentTransportFactory func() AgentTransport
+
 // EventKind is the classification result returned by [AgentTransport.Classify].
 type EventKind int
 

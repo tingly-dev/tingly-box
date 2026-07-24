@@ -6,6 +6,7 @@ AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It 
 
 - **Unified Agent interface** — one `Execute` entry point for every agent type.
 - **Streaming execution handle** — consume a totally-ordered event channel and respond to permission / ask requests inline.
+- **Per-execution protocol isolation** — every run owns its transport, accumulator, routing context, process, and control state.
 - **Driver + Transport + Runner split** — process setup, protocol parsing, and execution are independent and individually testable.
 - **Pluggable process factory** — swap real `os/exec` for a scripted fake in tests without touching the driver or transport.
 - **Session store integration** — list and resume Claude Code sessions read from `~/.claude/projects`.
@@ -56,7 +57,7 @@ func main() {
         case agentboot.AskRequestEvent:
             _ = handle.Respond(e.ID, agentboot.AskResponse{Approved: true})
         case agentboot.ErrorEvent:
-            log.Printf("non-fatal: %v", e.Err)
+            log.Printf("stream error: %v", e.Err)
         }
     }
 
@@ -68,48 +69,50 @@ func main() {
 }
 ```
 
-### Through the AgentBoot registry
+### Through AgentService
 
 ```go
-ab, err := agentboot.New(agentboot.Config{
+config := agentboot.Config{
     DefaultAgent:     agentboot.AgentTypeClaude,
     DefaultFormat:    agentboot.OutputFormatStreamJSON,
     EnableStreamJSON: true,
-})
+}
+service, err := agentboot.NewAgentService(config)
 if err != nil {
     log.Fatal(err)
 }
 
-ab.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgent(ab.GetConfig()))
+service.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgent(config))
 
-agent, err := ab.GetDefaultAgent()
-if err != nil {
-    log.Fatal(err)
-}
-
-handle, err := agent.Execute(ctx, "List files", agentboot.ExecutionOptions{
-    ProjectPath: "/tmp",
-})
+handle, err := service.Execute(
+    ctx,
+    agentboot.AgentTypeClaude,
+    "/tmp",
+    "List files",
+    agentboot.ExecutionOptions{},
+)
 // ...consume handle.Events(), then handle.Wait()
 ```
 
 ### Resuming a Claude session
 
 ```go
-ab, _ := agentboot.New(agentboot.Config{
+service, _ := agentboot.NewAgentService(agentboot.Config{
     DefaultAgent:      agentboot.AgentTypeClaude,
     ClaudeProjectsDir: "", // empty = ~/.claude/projects
 })
 
-sessions, err := ab.ListRecentSessions(ctx, "/abs/project/path", 10)
+sessions, err := service.ListSessions(ctx, "/abs/project/path", 10)
 if err != nil {
     log.Fatal(err)
 }
 
-opts := ab.ResumeSession(sessions[0].SessionID)
-opts.ProjectPath = "/abs/project/path"
-
-handle, err := agent.Execute(ctx, "Continue", opts)
+handle, err := service.ExecuteSession(
+    ctx,
+    sessions[0].SessionID,
+    "Continue",
+    agentboot.ExecutionOptions{},
+)
 ```
 
 ## Execution Lifecycle
@@ -118,11 +121,14 @@ handle, err := agent.Execute(ctx, "Continue", opts)
 
 1. Iterate `handle.Events()` from a single goroutine. Events are delivered in totally-ordered form.
 2. For `ApprovalRequestEvent` and `AskRequestEvent`, call `handle.Respond(req.ID, response)` with the matching `ControlResponse` — `ApprovalResponse` or `AskResponse`. The response is forwarded to the agent process's stdin.
-3. The events channel closes after the process has exited *and* every decoded event has been delivered.
-4. After the channel closes, `handle.Wait()` returns the aggregated `*Result`.
-5. `handle.Cancel()` requests cooperative shutdown; the underlying context can be cancelled to the same effect.
+3. On a terminal result, the runner closes stdin so the CLI can flush session state; it escalates to `Kill` only after a bounded grace period.
+4. The events channel closes after the process has exited *and* every decoded event has been delivered.
+5. After the channel closes, `handle.Wait()` returns the aggregated `*Result` and the authoritative terminal error.
+6. `handle.Cancel()` requests cooperative shutdown; the underlying context can be cancelled to the same effect.
 
 `Respond`, `Cancel`, and `Wait` are safe to call from any goroutine.
+Different handles from the same Agent may run concurrently; their mutable
+protocol state is isolated.
 
 ## Stream Events
 
@@ -131,9 +137,11 @@ handle, err := agent.Execute(ctx, "Continue", opts)
 | `MessageEvent`          | Agent message (assistant text, tool use, tool result, etc.) |
 | `ApprovalRequestEvent`  | Tool permission request — caller must `Respond`              |
 | `AskRequestEvent`       | Interactive question (e.g. AskUserQuestion)                  |
-| `ErrorEvent`            | Non-fatal error — execution continues                         |
+| `ErrorEvent`            | Stream error; may mirror the fatal error returned by `Wait`   |
 
 Fatal errors are surfaced via the error returned from `handle.Wait()`.
+Use `errors.As` with `*ResultError`, `*ProcessError`, or `*ProtocolError`
+when callers need structured handling.
 
 ## Output Formats
 
@@ -163,31 +171,28 @@ Set per-execution via `ExecutionOptions.PermissionMode`, or globally on the Clau
 | `EnableStreamJSON`          | `true`                           |
 | `StreamBufferSize`          | `100`                            |
 | `DefaultExecutionTimeout`   | `0` (no timeout)                 |
-| `ClaudeProjectsDir`         | `""` (session store disabled)    |
+| `ClaudeProjectsDir`         | `""` (`~/.claude/projects`)      |
 
-`ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink.
+`ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink. A zero timeout uses the configured default; a negative timeout explicitly disables it.
 
 ## Package Structure
 
 ```
 agentboot/
-├── agentboot.go          # AgentBoot registry + session helpers
+├── agentboot.go          # Internal agent registry
 ├── config.go             # DefaultConfig / DefaultPermissionConfig
 ├── types.go              # Agent interface, ExecutionOptions, Result, ...
+├── errors.go             # Structured result/process/protocol errors
 ├── handle.go             # ExecutionHandle + ControlResponse types
 ├── events.go             # StreamEvent sum type (Message/Approval/Ask/Error)
-├── handler.go            # CompositeHandler for streamer/approval/ask/completion
-├── builder.go            # Function-typed handler adapters
 ├── driver.go             # AgentDriver interface + LaunchSpec
-├── transport.go          # AgentTransport interface
-├── runner.go             # Generic Runner wiring driver+transport+process
-├── run.go                # Run loop / event pump
-├── message.go            # Internal message routing
-├── session_bridge.go     # Session lifecycle bridging
+├── transport.go          # AgentTransport + per-execution factory
+├── runner.go             # Generic per-execution lifecycle engine
+├── run.go                # High-level Prompter/MessageSink consumer
+├── service.go            # Public AgentService façade
 ├── ask/                  # Ask/permission prompter implementations
 ├── common/               # Shared event + session metadata types
 ├── process/              # Process abstraction (osexec + fake for tests)
-├── prompt/               # Prompt utilities
 ├── protocol/             # Stream-JSON encoder / decoder
 ├── session/              # Generic session store interface
 └── claude/               # Claude Code agent implementation
@@ -218,8 +223,10 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
    ```go
    func NewAgent(cfg agentboot.Config) *Agent {
        d := NewDriver(cfg)
-       t := NewTransport()
-       return &Agent{runner: agentboot.NewRunner(d, t), driver: d}
+       newTransport := func() agentboot.AgentTransport {
+           return NewTransport()
+       }
+       return &Agent{runner: agentboot.NewRunner(d, newTransport), driver: d}
    }
 
    func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
@@ -230,7 +237,10 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
    func (a *Agent) SetDefaultFormat(f agentboot.OutputFormat)      { a.runner.SetDefaultFormat(f) }
    func (a *Agent) GetDefaultFormat() agentboot.OutputFormat       { return a.runner.GetDefaultFormat() }
    ```
-3. Add the constant to `types.go` and register the agent on an `AgentBoot` with `RegisterAgent`.
+   The factory must return a fresh transport; transports may own mutable
+   per-run state.
+3. Add the constant to `types.go` and register the agent on an `AgentService`
+   with `RegisterAgent`.
 
 For agents that don't fit the process+protocol pipeline (in-process mocks, remote services), use `agentboot.NewControlledHandle` to drive an `ExecutionHandle` directly.
 
@@ -240,7 +250,9 @@ For agents that don't fit the process+protocol pipeline (in-process mocks, remot
 - `claude.NewAgentWithFactory` wires a fake factory into the real Claude driver/transport so end-to-end stream-JSON parsing is exercised without spawning `claude`.
 - `NewControlledHandle` lets tests build an `ExecutionHandle` from closures.
 
-See `agentboot/claude/*_e2e_test.go` and `agentboot/handle_test.go` for the patterns.
+See `agentboot/claude/fixture/fixture_test.go`,
+`agentboot/claude/agent_concurrency_test.go`, and
+`agentboot/handle_test.go` for the patterns.
 
 ## License
 

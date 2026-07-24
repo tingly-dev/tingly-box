@@ -19,13 +19,13 @@ package claude
 //	| SDKHookResponseMessage
 //	| SDKToolProgressMessage
 //	| SDKAuthStatusMessage
-//	| SDKTaskNotificationMessage
-//	| SDKTaskStartedMessage
-//	| SDKTaskProgressMessage
 //	| SDKFilesPersistedEvent
 //	| SDKToolUseSummaryMessage
 //	| SDKRateLimitEvent
 //	| SDKPromptSuggestionMessage;
+//
+// Task lifecycle wire values are system-message subtypes in current Claude
+// Code. Deprecated SDKTask* aliases are retained below for source compatibility.
 const (
 	SDKTextMessage               = "text"
 	SDKSystemMessage             = "system"
@@ -46,9 +46,6 @@ const (
 	SDKHookResponseMessage       = "hook_response"
 	SDKToolProgressMessage       = "tool_progress"
 	SDKAuthStatusMessage         = "auth_status"
-	SDKTaskNotificationMessage   = "task_notification"
-	SDKTaskStartedMessage        = "task_started"
-	SDKTaskProgressMessage       = "task_progress"
 	SDKFilesPersistedMessage     = "files_persisted"
 	SDKToolUseSummaryMessage     = "tool_use_summary"
 	// SDKRateLimitEvent is the top-level type emitted by CC v2.1+ when the
@@ -63,7 +60,12 @@ const SDKControlPrefix = "control_"
 
 // System message subtypes
 const (
-	SystemSubtypeInit          = "init"
+	SystemSubtypeInit             = "init"
+	SystemSubtypeTaskStarted      = "task_started"
+	SystemSubtypeTaskProgress     = "task_progress"
+	SystemSubtypeTaskNotification = "task_notification"
+	SystemSubtypeTaskUpdated      = "task_updated"
+	// SystemSubtypeTaskCompleted is emitted by older Claude Code versions.
 	SystemSubtypeTaskCompleted = "task_completed"
 	// SystemSubtypeAPIRetry is emitted by the Claude Code CLI when an upstream
 	// API call fails with a retryable error (overload, rate limit, transient
@@ -72,6 +74,14 @@ const (
 	SystemSubtypeAPIRetry = "api_retry"
 	// SystemSubtypeRateLimit is emitted when the CLI is rate limited upstream.
 	SystemSubtypeRateLimit = "rate_limit"
+)
+
+// Deprecated task names retained as aliases for callers that used them before
+// these wire values were correctly classified as system-message subtypes.
+const (
+	SDKTaskStartedMessage      = SystemSubtypeTaskStarted
+	SDKTaskProgressMessage     = SystemSubtypeTaskProgress
+	SDKTaskNotificationMessage = SystemSubtypeTaskNotification
 )
 
 // assistant message error
@@ -105,16 +115,39 @@ const (
 	ControlRequestTypeCancel     = "cancel"
 )
 
-// Result subtypes
+// Control-response subtypes
 const (
-	ResultSubtypeSuccess = "success"
-	ResultSubtypeError   = "error"
+	ControlResponseSubtypeSuccess = "success"
+	ControlResponseSubtypeError   = "error"
+)
+
+// Terminal result subtypes
+const (
+	ResultSubtypeSuccess                         = "success"
+	ResultSubtypeErrorMaxTurns                   = "error_max_turns"
+	ResultSubtypeErrorDuringExecution            = "error_during_execution"
+	ResultSubtypeErrorMaxBudgetUSD               = "error_max_budget_usd"
+	ResultSubtypeErrorMaxStructuredOutputRetries = "error_max_structured_output_retries"
+
+	// ResultSubtypeError was historically used for control responses. Terminal
+	// result errors use the error_* constants above.
+	// Deprecated: use ControlResponseSubtypeError.
+	ResultSubtypeError = ControlResponseSubtypeError
 )
 
 // Content block types
 const (
-	ContentBlockTypeText       = "text"
-	ContentBlockTypeToolUse    = "tool_use"
-	ContentBlockTypeThinking   = "thinking"
-	ContentBlockTypeToolResult = "tool_result"
+	ContentBlockTypeText                          = "text"
+	ContentBlockTypeToolUse                       = "tool_use"
+	ContentBlockTypeThinking                      = "thinking"
+	ContentBlockTypeRedactedThinking              = "redacted_thinking"
+	ContentBlockTypeToolResult                    = "tool_result"
+	ContentBlockTypeServerToolUse                 = "server_tool_use"
+	ContentBlockTypeWebSearchToolResult           = "web_search_tool_result"
+	ContentBlockTypeWebFetchToolResult            = "web_fetch_tool_result"
+	ContentBlockTypeCodeExecutionToolResult       = "code_execution_tool_result"
+	ContentBlockTypeBashCodeExecutionToolResult   = "bash_code_execution_tool_result"
+	ContentBlockTypeTextEditorExecutionToolResult = "text_editor_code_execution_tool_result"
+	ContentBlockTypeToolSearchToolResult          = "tool_search_tool_result"
+	ContentBlockTypeContainerUpload               = "container_upload"
 )

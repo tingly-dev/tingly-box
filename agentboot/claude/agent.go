@@ -10,9 +10,8 @@ import (
 // Agent implements the agentboot.Agent interface for Claude Code.
 // Internally it uses Driver (process setup) + Transport (protocol) + agentboot.Runner (execution).
 type Agent struct {
-	runner    *agentboot.Runner
-	driver    *Driver
-	transport *Transport
+	runner *agentboot.Runner
+	driver *Driver
 }
 
 // NewAgent creates a new Claude agent.
@@ -22,18 +21,24 @@ func NewAgent(config agentboot.Config) *Agent {
 		StreamBufferSize:        config.StreamBufferSize,
 		DefaultExecutionTimeout: config.DefaultExecutionTimeout,
 	}
-	return NewAgentWithConfig(claudeConfig)
+	agent := NewAgentWithConfig(claudeConfig)
+	if config.DefaultFormat != "" {
+		agent.SetDefaultFormat(config.DefaultFormat)
+	}
+	return agent
 }
 
 // NewAgentWithConfig creates a Claude agent with full Claude-specific config.
 func NewAgentWithConfig(config Config) *Agent {
 	driver := NewDriver(config)
-	transport := NewTransport()
-	runner := agentboot.NewRunner(driver, transport)
+	runner := agentboot.NewRunnerWithConfig(
+		driver,
+		func() agentboot.AgentTransport { return NewTransport() },
+		runnerConfig(config),
+	)
 	return &Agent{
-		runner:    runner,
-		driver:    driver,
-		transport: transport,
+		runner: runner,
+		driver: driver,
 	}
 }
 
@@ -49,12 +54,23 @@ func NewAgentWithFactory(config Config, factory process.Factory) *Agent {
 	driver := NewDriver(config)
 	driver.SetForceAvailable(true)
 	driver.SetCLIPath("claude-fixture-binary") // sentinel; resolveBinary returns it as-is
-	transport := NewTransport()
-	runner := agentboot.NewRunnerWithFactory(driver, transport, factory)
+	runner := agentboot.NewRunnerWithFactoryAndConfig(
+		driver,
+		func() agentboot.AgentTransport { return NewTransport() },
+		factory,
+		runnerConfig(config),
+	)
 	return &Agent{
-		runner:    runner,
-		driver:    driver,
-		transport: transport,
+		runner: runner,
+		driver: driver,
+	}
+}
+
+func runnerConfig(config Config) agentboot.RunnerConfig {
+	return agentboot.RunnerConfig{
+		DefaultFormat:           agentboot.OutputFormatStreamJSON,
+		EventBufferSize:         config.StreamBufferSize,
+		DefaultExecutionTimeout: config.DefaultExecutionTimeout,
 	}
 }
 

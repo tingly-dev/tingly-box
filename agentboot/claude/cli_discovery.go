@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -23,25 +24,32 @@ const (
 	EnvUseBundled  = "CLAUDE_USE_BUNDLED"
 	EnvUseGlobal   = "CLAUDE_USE_GLOBAL"
 	EnvClaudeHome  = "CLAUDE_HOME"
-	EnvBunEnv      = "BUN_INSTALL"
 	EnvNodePath    = "NODE_PATH"
 	EnvBunVersions = "BUN_VERSIONS"
 	EnvBunInstall  = "BUN_INSTALL"
 
-	// Default paths
-	DefaultBundledPathLinux   = "/opt/claude-code/dist/claude"
-	DefaultBundledPathDarwin  = "/Applications/Claude.app/Contents/MacOS/claude"
-	DefaultBundledPathWindows = `C:\Program Files\Claude\claude.exe`
+	// EnvBunEnv is retained for source compatibility.
+	// Deprecated: use EnvBunInstall.
+	EnvBunEnv = EnvBunInstall
 
-	// Claude version for bundled fallback
-	DefaultBundledVersion = "1.0.0"
+	claudeCLIProbeTimeout = 5 * time.Second
+)
+
+// Deprecated bundled fallback constants retained so existing agentboot
+// consumers continue to compile. Packaged Claude Code paths are installation
+// relative and are now discovered dynamically; no fixed path/version is safe.
+const (
+	DefaultBundledPathLinux   = ""
+	DefaultBundledPathDarwin  = ""
+	DefaultBundledPathWindows = ""
+	DefaultBundledVersion     = ""
 )
 
 // CLIVariant represents a discovered Claude CLI installation
 type CLIVariant struct {
 	Path    string
 	Version string
-	Source  string // "global", "bundled", "custom", "env"
+	Source  string // "global", "bundled", "native", "custom"
 }
 
 // CLIDiscovery handles Claude CLI path discovery and version checking
@@ -50,11 +58,26 @@ type CLIDiscovery struct {
 	cachedVariant   *CLIVariant
 	cachedEnv       []string
 	forceRediscover bool
+	forceBundled    bool
+	forceGlobal     bool
 }
 
 // NewCLIDiscovery creates a new CLI discovery instance
 func NewCLIDiscovery() *CLIDiscovery {
 	return &CLIDiscovery{}
+}
+
+// SetPreference configures a discovery source preference. A bundled CLI means
+// a Claude Code executable packaged alongside Tingly-Box; it never means the
+// Claude Desktop application.
+func (d *CLIDiscovery) SetPreference(useBundled, useGlobal bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.forceBundled = useBundled
+	d.forceGlobal = useGlobal
+	d.cachedVariant = nil
+	d.forceRediscover = true
 }
 
 // FindClaudeCLI finds the best available Claude CLI installation
@@ -110,60 +133,60 @@ func (d *CLIDiscovery) GetCleanEnv(ctx context.Context) ([]string, error) {
 func (d *CLIDiscovery) discoverCLI(ctx context.Context) (*CLIVariant, error) {
 	// 1. Check explicit override via environment variable
 	if path := os.Getenv(EnvClaudePath); path != "" {
-		if d.isExecutable(path) {
-			variant := &CLIVariant{
-				Path:   path,
-				Source: "custom",
-			}
-			// Try to get version
-			if version, err := d.getClaudeVersion(ctx, path); err == nil {
-				variant.Version = version
-			}
-			return variant, nil
+		variant, err := d.validateVariant(ctx, path, "custom")
+		if err != nil {
+			return nil, fmt.Errorf("%s does not point to a usable Claude Code CLI: %w", EnvClaudePath, err)
 		}
-		return nil, fmt.Errorf("CLAUDE_CLI_PATH set but not executable: %s", path)
+		return variant, nil
 	}
 
 	// 2. Check forced flags
-	if os.Getenv(EnvUseBundled) == "1" {
-		bundled := d.getBundledVariant()
-		if bundled != nil {
+	forceBundled := d.forceBundled || os.Getenv(EnvUseBundled) == "1"
+	forceGlobal := d.forceGlobal || os.Getenv(EnvUseGlobal) == "1"
+	if forceBundled && forceGlobal {
+		return nil, fmt.Errorf("%s and %s cannot both be enabled", EnvUseBundled, EnvUseGlobal)
+	}
+	if forceBundled {
+		bundled, err := d.findBundledVariant(ctx)
+		if err == nil {
 			return bundled, nil
 		}
-		return nil, fmt.Errorf("CLAUDE_USE_BUNDLED set but no bundled CLI found")
+		return nil, fmt.Errorf("%s set but no packaged Claude Code CLI found: %w", EnvUseBundled, err)
 	}
 
-	if os.Getenv(EnvUseGlobal) == "1" {
+	if forceGlobal {
 		global, err := d.findGlobalVariant(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("CLAUDE_USE_GLOBAL set but global CLI not found: %w", err)
+			return nil, fmt.Errorf("%s set but Claude Code CLI was not found in PATH: %w", EnvUseGlobal, err)
 		}
 		return global, nil
 	}
 
-	// 3. Find global variant
-	global, err := d.findGlobalVariant(ctx)
-	if err == nil && global != nil {
-		// Compare with bundled if available
-		bundled := d.getBundledVariant()
-		if bundled != nil && global.Version != "" && bundled.Version != "" {
-			// Use newer version
-			if compareVersions(global.Version, bundled.Version) < 0 {
-				logrus.Debugf("Using bundled CLI (newer): %s vs %s", bundled.Version, global.Version)
-				return bundled, nil
-			}
-			logrus.Debugf("Using global CLI (newer): %s vs %s", global.Version, bundled.Version)
+	// 3. Probe every supported Claude Code installation source and choose the
+	// newest verified CLI. PATH wins ties because it reflects the user's
+	// explicit shell selection.
+	var variants []*CLIVariant
+	if global, err := d.findGlobalVariant(ctx); err == nil {
+		variants = append(variants, global)
+	}
+	if bundled, err := d.findBundledVariant(ctx); err == nil {
+		variants = append(variants, bundled)
+	}
+	if native, err := d.findKnownVariant(ctx); err == nil {
+		variants = append(variants, native)
+	}
+
+	if len(variants) == 0 {
+		return nil, fmt.Errorf("no verified Claude Code CLI installation found")
+	}
+	best := variants[0]
+	for _, candidate := range variants[1:] {
+		if candidate.Path != best.Path && compareVersions(candidate.Version, best.Version) > 0 {
+			best = candidate
 		}
-		return global, nil
 	}
-
-	// 4. Fallback to bundled
-	bundled := d.getBundledVariant()
-	if bundled != nil {
-		return bundled, nil
-	}
-
-	return nil, fmt.Errorf("no Claude CLI installation found")
+	logrus.Debugf("Using Claude Code CLI %s from %s: %s", best.Version, best.Source, best.Path)
+	return best, nil
 }
 
 // findGlobalVariant searches for globally installed Claude CLI
@@ -177,53 +200,116 @@ func (d *CLIDiscovery) findGlobalVariant(ctx context.Context) (*CLIVariant, erro
 			continue
 		}
 
-		// Verify it's actually Claude CLI
-		if !d.verifyClaudeCLI(ctx, path) {
+		variant, err := d.validateVariant(ctx, path, "global")
+		if err != nil {
 			continue
 		}
-
-		variant := &CLIVariant{
-			Path:   path,
-			Source: "global",
-		}
-
-		// Get version
-		if version, err := d.getClaudeVersion(ctx, path); err == nil {
-			variant.Version = version
-		}
-
 		return variant, nil
 	}
 
-	return nil, fmt.Errorf("global Claude CLI not found in PATH")
+	return nil, fmt.Errorf("verified Claude Code CLI not found in PATH")
 }
 
-// getBundledVariant returns the bundled Claude CLI if available
-func (d *CLIDiscovery) getBundledVariant() *CLIVariant {
-	path := d.getBundledPath()
-	if path == "" || !d.isExecutable(path) {
+// findBundledVariant returns a verified Claude Code CLI packaged alongside
+// Tingly-Box. Claude Desktop is intentionally not a candidate.
+func (d *CLIDiscovery) findBundledVariant(ctx context.Context) (*CLIVariant, error) {
+	var variants []*CLIVariant
+	for _, path := range d.bundledCandidatePaths() {
+		variant, err := d.validateVariant(ctx, path, "bundled")
+		if err == nil {
+			variants = append(variants, variant)
+		}
+	}
+	if len(variants) > 0 {
+		return newestVariant(variants), nil
+	}
+	return nil, fmt.Errorf("no verified application-local Claude Code CLI")
+}
+
+func (d *CLIDiscovery) bundledCandidatePaths() []string {
+	executable, err := os.Executable()
+	if err != nil {
 		return nil
 	}
-
-	return &CLIVariant{
-		Path:    path,
-		Version: DefaultBundledVersion,
-		Source:  "bundled",
-	}
+	dir := filepath.Dir(executable)
+	name := claudeExecutableName()
+	return uniquePaths([]string{
+		filepath.Join(dir, name),
+		filepath.Clean(filepath.Join(dir, "..", "Resources", name)),
+		filepath.Join(dir, "claude-code", name),
+		filepath.Clean(filepath.Join(dir, "..", "Resources", "claude-code", name)),
+	})
 }
 
-// getBundledPath returns the bundled CLI path for the current platform
-func (d *CLIDiscovery) getBundledPath() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return DefaultBundledPathDarwin
-	case "linux":
-		return DefaultBundledPathLinux
-	case "windows":
-		return DefaultBundledPathWindows
-	default:
-		return ""
+// findKnownVariant searches the install locations used by Claude Code's
+// native/npm installers when shell PATH setup is unavailable.
+func (d *CLIDiscovery) findKnownVariant(ctx context.Context) (*CLIVariant, error) {
+	var variants []*CLIVariant
+	for _, path := range d.knownCandidatePaths() {
+		variant, err := d.validateVariant(ctx, path, "native")
+		if err == nil {
+			variants = append(variants, variant)
+		}
 	}
+	if len(variants) > 0 {
+		return newestVariant(variants), nil
+	}
+	return nil, fmt.Errorf("Claude Code CLI not found in standard install locations")
+}
+
+func (d *CLIDiscovery) knownCandidatePaths() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	name := claudeExecutableName()
+	paths := []string{
+		filepath.Join(home, ".local", "bin", name),
+		filepath.Join(home, ".npm-global", "bin", name),
+		filepath.Join(home, ".claude", "local", name),
+		filepath.Join(home, "node_modules", ".bin", name),
+		filepath.Join(home, ".yarn", "bin", name),
+	}
+	if runtime.GOOS != "windows" {
+		paths = append(paths,
+			filepath.Join("/usr", "local", "bin", name),
+			filepath.Join("/opt", "homebrew", "bin", name),
+		)
+	}
+	return uniquePaths(paths)
+}
+
+func claudeExecutableName() string {
+	if runtime.GOOS == "windows" {
+		return "claude.exe"
+	}
+	return "claude"
+}
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	unique := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		unique = append(unique, path)
+	}
+	return unique
+}
+
+func newestVariant(variants []*CLIVariant) *CLIVariant {
+	best := variants[0]
+	for _, candidate := range variants[1:] {
+		if compareVersions(candidate.Version, best.Version) > 0 {
+			best = candidate
+		}
+	}
+	return best
 }
 
 // whichCommand finds a command in PATH
@@ -254,40 +340,64 @@ func (d *CLIDiscovery) isExecutable(path string) bool {
 		return false
 	}
 
-	// Check executable bit
+	if runtime.GOOS == "windows" {
+		return true
+	}
+
+	// Check executable bit on Unix-like platforms.
 	return info.Mode().Perm()&0111 != 0
 }
 
-// verifyClaudeCLI verifies that a binary is actually Claude CLI
-func (d *CLIDiscovery) verifyClaudeCLI(ctx context.Context, path string) bool {
-	// Run with --version flag to verify
-	cleanEnv, _ := d.buildCleanEnv(ctx)
-	cmd := exec.CommandContext(ctx, path, "--version")
-	cmd.Env = cleanEnv
-
-	output, err := cmd.CombinedOutput()
+func (d *CLIDiscovery) validateVariant(ctx context.Context, path, source string) (*CLIVariant, error) {
+	version, err := d.ValidateClaudeCodeCLI(ctx, path)
 	if err != nil {
-		return false
+		return nil, err
 	}
-
-	// Check if output looks like Claude version
-	outputStr := string(output)
-	return strings.Contains(outputStr, "Claude") ||
-		strings.Contains(outputStr, "Anthropic")
+	return &CLIVariant{
+		Path:    path,
+		Version: version,
+		Source:  source,
+	}, nil
 }
 
-// getClaudeVersion gets the version string from Claude CLI
-func (d *CLIDiscovery) getClaudeVersion(ctx context.Context, path string) (string, error) {
-	cleanEnv, _ := d.buildCleanEnv(ctx)
-	cmd := exec.CommandContext(ctx, path, "--version")
-	cmd.Env = cleanEnv
-
-	output, err := cmd.Output()
+// ValidateClaudeCodeCLI verifies executable identity and returns its real
+// version. Generic Claude/Anthropic desktop binaries are rejected: the version
+// banner must identify Claude Code or the legacy Claude CLI name.
+func (d *CLIDiscovery) ValidateClaudeCodeCLI(ctx context.Context, path string) (string, error) {
+	if !d.isExecutable(path) {
+		return "", fmt.Errorf("not an executable file: %s", path)
+	}
+	output, err := d.runVersionProbe(ctx, path)
 	if err != nil {
 		return "", err
 	}
+	banner := strings.TrimSpace(output)
+	lower := strings.ToLower(banner)
+	if !strings.Contains(lower, "claude code") && !strings.Contains(lower, "claude cli") {
+		return "", fmt.Errorf("unexpected --version banner %q", banner)
+	}
+	version := parseVersion(banner)
+	if version == "" || version == "unknown" || version[0] < '0' || version[0] > '9' {
+		return "", fmt.Errorf("Claude Code version missing from banner %q", banner)
+	}
+	return version, nil
+}
 
-	return parseVersion(string(output)), nil
+func (d *CLIDiscovery) runVersionProbe(ctx context.Context, path string) (string, error) {
+	probeCtx, cancel := context.WithTimeout(ctx, claudeCLIProbeTimeout)
+	defer cancel()
+
+	cleanEnv, _ := d.buildCleanEnv(probeCtx)
+	cmd := exec.CommandContext(probeCtx, path, "--version")
+	cmd.Env = cleanEnv
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if probeCtx.Err() != nil {
+			return "", fmt.Errorf("Claude Code version probe timed out: %w", probeCtx.Err())
+		}
+		return "", fmt.Errorf("Claude Code version probe failed: %w", err)
+	}
+	return string(output), nil
 }
 
 // buildCleanEnv creates a clean environment for running Claude CLI
@@ -299,13 +409,13 @@ func (d *CLIDiscovery) buildCleanEnv(ctx context.Context) ([]string, error) {
 
 	for _, e := range env {
 		// Skip local node_modules paths
-		if strings.HasPrefix(e, "NODE_PATH=") {
+		if strings.HasPrefix(e, EnvNodePath+"=") {
 			continue
 		}
 
 		// Skip Bun-specific paths that might interfere
-		if strings.HasPrefix(e, "BUN_VERSIONS=") ||
-			strings.HasPrefix(e, "BUN_INSTALL=") {
+		if strings.HasPrefix(e, EnvBunVersions+"=") ||
+			strings.HasPrefix(e, EnvBunInstall+"=") {
 			continue
 		}
 

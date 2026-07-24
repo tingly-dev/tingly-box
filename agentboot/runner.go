@@ -21,26 +21,74 @@ import (
 // Tests inject [process.NewFakeFactory] via [NewRunnerWithFactory] to
 // substitute the binary while exercising the same driver and transport.
 type Runner struct {
-	mu            sync.RWMutex
-	driver        AgentDriver
-	transport     AgentTransport
-	procFactory   process.Factory
-	defaultFormat OutputFormat
+	mu                  sync.RWMutex
+	driver              AgentDriver
+	transportFactory    AgentTransportFactory
+	procFactory         process.Factory
+	defaultFormat       OutputFormat
+	eventBufferSize     int
+	defaultTimeout      time.Duration
+	shutdownGracePeriod time.Duration
+}
+
+const (
+	defaultEventBufferSize     = 100
+	defaultShutdownGracePeriod = 5 * time.Second
+)
+
+// RunnerConfig controls execution defaults owned by a Runner. Per-call values
+// in [ExecutionOptions] still take precedence.
+type RunnerConfig struct {
+	DefaultFormat           OutputFormat
+	EventBufferSize         int
+	DefaultExecutionTimeout time.Duration
+	ShutdownGracePeriod     time.Duration
+}
+
+func normalizeRunnerConfig(config RunnerConfig) RunnerConfig {
+	if config.DefaultFormat == "" {
+		config.DefaultFormat = OutputFormatStreamJSON
+	}
+	if config.EventBufferSize <= 0 {
+		config.EventBufferSize = defaultEventBufferSize
+	}
+	if config.ShutdownGracePeriod <= 0 {
+		config.ShutdownGracePeriod = defaultShutdownGracePeriod
+	}
+	return config
 }
 
 // NewRunner creates a Runner backed by [process.NewOSExecFactory].
-func NewRunner(driver AgentDriver, transport AgentTransport) *Runner {
-	return NewRunnerWithFactory(driver, transport, process.NewOSExecFactory())
+//
+// transportFactory is called once per Execute so mutable protocol state is
+// never shared by concurrent runs.
+func NewRunner(driver AgentDriver, transportFactory AgentTransportFactory) *Runner {
+	return NewRunnerWithConfig(driver, transportFactory, RunnerConfig{})
 }
 
-// NewRunnerWithFactory creates a Runner with a custom process factory. Use
-// [process.NewFakeFactory] in tests.
-func NewRunnerWithFactory(driver AgentDriver, transport AgentTransport, factory process.Factory) *Runner {
+// NewRunnerWithConfig creates an OS-backed Runner with explicit defaults.
+func NewRunnerWithConfig(driver AgentDriver, transportFactory AgentTransportFactory, config RunnerConfig) *Runner {
+	return NewRunnerWithFactoryAndConfig(driver, transportFactory, process.NewOSExecFactory(), config)
+}
+
+// NewRunnerWithFactory creates a Runner with a custom process factory and
+// default RunnerConfig. Use [process.NewFakeFactory] in tests.
+func NewRunnerWithFactory(driver AgentDriver, transportFactory AgentTransportFactory, factory process.Factory) *Runner {
+	return NewRunnerWithFactoryAndConfig(driver, transportFactory, factory, RunnerConfig{})
+}
+
+// NewRunnerWithFactoryAndConfig creates a Runner with both a custom process
+// factory and explicit execution defaults.
+func NewRunnerWithFactoryAndConfig(driver AgentDriver, transportFactory AgentTransportFactory, factory process.Factory, config RunnerConfig) *Runner {
+	config = normalizeRunnerConfig(config)
 	return &Runner{
-		driver:        driver,
-		transport:     transport,
-		procFactory:   factory,
-		defaultFormat: OutputFormatStreamJSON,
+		driver:              driver,
+		transportFactory:    transportFactory,
+		procFactory:         factory,
+		defaultFormat:       config.DefaultFormat,
+		eventBufferSize:     config.EventBufferSize,
+		defaultTimeout:      config.DefaultExecutionTimeout,
+		shutdownGracePeriod: config.ShutdownGracePeriod,
 	}
 }
 
@@ -71,12 +119,18 @@ func (r *Runner) GetDefaultFormat() OutputFormat {
 func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptions) (ExecutionHandle, error) {
 	r.mu.RLock()
 	defaultFormat := r.defaultFormat
+	eventBufferSize := r.eventBufferSize
+	defaultTimeout := r.defaultTimeout
+	shutdownGracePeriod := r.shutdownGracePeriod
 	r.mu.RUnlock()
 	if opts.OutputFormat == "" {
 		opts.OutputFormat = defaultFormat
 	}
 	if opts.OutputFormat == "" {
 		opts.OutputFormat = OutputFormatStreamJSON
+	}
+	if opts.Timeout == 0 {
+		opts.Timeout = defaultTimeout
 	}
 
 	if !r.driver.IsAvailable() {
@@ -91,7 +145,14 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		return nil, errors.New("empty launch command")
 	}
 
-	r.transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
+	if r.transportFactory == nil {
+		return nil, errors.New("agentboot: transport factory is nil")
+	}
+	transport := r.transportFactory()
+	if transport == nil {
+		return nil, errors.New("agentboot: transport factory returned nil")
+	}
+	transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	if opts.Timeout > 0 {
@@ -122,6 +183,43 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 	encoder := protocol.NewEncoder(proc.Stdin())
 	decoderEvents, decoderErr := decoder.Stream(runCtx)
 
+	// process.Factory implementations must observe cancellation consistently,
+	// including test/custom factories that do not use exec.CommandContext.
+	go func() {
+		select {
+		case <-runCtx.Done():
+			_ = proc.Kill()
+		case <-proc.Done():
+		}
+	}()
+
+	// A result is terminal, but Claude Code may still need to flush its session
+	// file. End stdin first, then escalate to Kill only if it does not exit
+	// within the grace period.
+	var shutdownOnce sync.Once
+	var shutdownWG sync.WaitGroup
+	shutdownGracefully := func() {
+		shutdownOnce.Do(func() {
+			// Close may briefly wait for an in-flight encoder write. Keep the
+			// pump draining stdout while shutdown proceeds.
+			shutdownWG.Add(2)
+			go func() {
+				defer shutdownWG.Done()
+				_ = encoder.Close()
+			}()
+			go func() {
+				defer shutdownWG.Done()
+				timer := time.NewTimer(shutdownGracePeriod)
+				defer timer.Stop()
+				select {
+				case <-proc.Done():
+				case <-timer.C:
+					_ = proc.Kill()
+				}
+			}()
+		})
+	}
+
 	startTime := time.Now()
 
 	state := &runState{
@@ -132,7 +230,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 
 	var handle *runnerHandle
 	handle = newRunnerHandle(
-		16,
+		eventBufferSize,
 		// responseFn: encode and write the control response.
 		func(reqID string, resp ControlResponse) error {
 			state.mu.Lock()
@@ -142,7 +240,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 			}
 			state.mu.Unlock()
 
-			wire := r.transport.EncodeControlResponse(reqID, resp, input)
+			wire := transport.EncodeControlResponse(reqID, resp, input)
 			if wire == nil {
 				return errors.New("transport produced nil control response")
 			}
@@ -192,14 +290,14 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 			state.events = append(state.events, ev)
 			state.mu.Unlock()
 
-			kind, parsed := r.transport.Classify(ev)
+			kind, parsed := transport.Classify(ev)
 
 			switch kind {
 			case EventKindIgnore:
 				// Drop.
 
 			case EventKindMessage:
-				msgs := r.transport.AccumulateMessage(ev)
+				msgs := transport.AccumulateMessage(ev)
 				for _, m := range msgs {
 					handle.emit(runCtx, MessageEvent{Raw: m})
 				}
@@ -231,28 +329,59 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 			case EventKindTerminalSuccess:
 				state.mu.Lock()
 				state.terminalSeen = true
-				state.terminalSuccess = true
 				state.mu.Unlock()
-				_ = proc.Kill()
-				// Continue draining; decoder loop ends after EOF.
+				shutdownGracefully()
 
 			case EventKindTerminalError:
 				state.mu.Lock()
 				state.terminalSeen = true
-				state.terminalSuccess = false
+				state.terminalErr = resultErrorFromEvent(r.driver.Type(), ev)
 				state.mu.Unlock()
-				_ = proc.Kill()
+				shutdownGracefully()
 			}
 		}
 
-		// Decoder closed (EOF, ctx, or error). Wait for the process to actually
-		// exit before considering execution done — this enforces the
-		// OnComplete-after-exit invariant the old runner violated.
-		_ = proc.Wait()
+		dErr := decoderErr()
+		state.mu.Lock()
+		terminalSeen := state.terminalSeen
+		state.mu.Unlock()
 
-		// Surface any decoder-level error as a tail ErrorEvent (non-fatal).
-		if dErr := decoderErr(); dErr != nil && !errors.Is(dErr, context.Canceled) {
-			handle.emit(runCtx, ErrorEvent{Err: dErr})
+		// A fatal decoder error means the read side can no longer make
+		// progress. Likewise, stream-json EOF without a result has no valid
+		// completion to wait for. Stop the process before joining it so a
+		// malformed or truncated stream cannot leave Wait blocked forever.
+		fatalDecode := dErr != nil &&
+			!errors.Is(dErr, context.Canceled) &&
+			!errors.Is(dErr, context.DeadlineExceeded)
+		if fatalDecode || (opts.OutputFormat == OutputFormatStreamJSON && !terminalSeen) {
+			_ = proc.Kill()
+		}
+
+		// Wait for the process to actually exit before considering execution
+		// done — this enforces the OnComplete-after-exit invariant.
+		processWaitErr := proc.Wait()
+		shutdownWG.Wait()
+
+		state.mu.Lock()
+		if processWaitErr != nil {
+			state.processErr = newProcessError(r.driver.Type(), processWaitErr)
+			state.exitCode = state.processErr.ExitCode
+		}
+		if dErr != nil && !errors.Is(dErr, context.Canceled) && !errors.Is(dErr, context.DeadlineExceeded) {
+			state.protocolErr = &ProtocolError{AgentType: r.driver.Type(), Err: dErr}
+		}
+		processErr := state.processErr
+		protocolErr := state.protocolErr
+		terminalErr := state.terminalErr
+		state.mu.Unlock()
+
+		// Match the SDK's error-in-stream behavior while keeping Wait as the
+		// authoritative terminal outcome.
+		switch {
+		case protocolErr != nil:
+			handle.emit(runCtx, ErrorEvent{Err: protocolErr})
+		case terminalErr == nil && processErr != nil:
+			handle.emit(runCtx, ErrorEvent{Err: processErr})
 		}
 	}()
 
@@ -264,6 +393,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		waitOnce.Do(func() {
 			pumpWG.Wait()
 			feederWG.Wait()
+			runCtxErr := runCtx.Err()
 			cancel()
 
 			// Compute result under state lock, then release before calling store
@@ -275,6 +405,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				defer state.mu.Unlock()
 
 				waitResult = &Result{
+					ExitCode: state.exitCode,
 					Format:   opts.OutputFormat,
 					Events:   append([]common.Event(nil), state.events...),
 					Duration: time.Since(state.startTime),
@@ -283,17 +414,23 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				if state.opts.SessionID != "" {
 					waitResult.Metadata["session_id"] = state.opts.SessionID
 				}
-				if state.terminalSeen && !state.terminalSuccess {
-					waitResult.Error = "agent reported error result"
-					waitErr = errors.New(waitResult.Error)
-				}
-				if rctxErr := runCtx.Err(); rctxErr != nil && !state.terminalSeen {
-					if errors.Is(rctxErr, context.DeadlineExceeded) {
-						waitResult.Error = "agent execution timed out"
-						waitErr = context.DeadlineExceeded
-					} else if errors.Is(rctxErr, context.Canceled) && ctx.Err() != nil {
-						waitErr = ctx.Err()
+				switch {
+				case state.terminalErr != nil:
+					waitErr = state.terminalErr
+				case runCtxErr != nil:
+					waitErr = runCtxErr
+				case state.protocolErr != nil:
+					waitErr = state.protocolErr
+				case state.processErr != nil:
+					waitErr = state.processErr
+				case opts.OutputFormat == OutputFormatStreamJSON && !state.terminalSeen:
+					waitErr = &ProtocolError{
+						AgentType: r.driver.Type(),
+						Err:       ErrNoTerminalResult,
 					}
+				}
+				if waitErr != nil {
+					waitResult.Error = waitErr.Error()
 				}
 				sessID = state.opts.SessionID
 			}()
@@ -318,10 +455,57 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 type runState struct {
 	mu sync.Mutex
 
-	opts            ExecutionOptions
-	startTime       time.Time
-	events          []common.Event
-	pendingInput    map[string]map[string]any
-	terminalSeen    bool
-	terminalSuccess bool
+	opts         ExecutionOptions
+	startTime    time.Time
+	events       []common.Event
+	pendingInput map[string]map[string]any
+	terminalSeen bool
+	terminalErr  *ResultError
+	processErr   *ProcessError
+	protocolErr  *ProtocolError
+	exitCode     int
+}
+
+func newProcessError(agentType AgentType, err error) *ProcessError {
+	exitCode := -1
+	type exitCoder interface {
+		ExitCode() int
+	}
+	var withExitCode exitCoder
+	if errors.As(err, &withExitCode) {
+		exitCode = withExitCode.ExitCode()
+	}
+	return &ProcessError{
+		AgentType: agentType,
+		ExitCode:  exitCode,
+		Err:       err,
+	}
+}
+
+func resultErrorFromEvent(agentType AgentType, event common.Event) *ResultError {
+	resultErr := &ResultError{
+		AgentType: agentType,
+		Subtype:   stringValue(event.Data["subtype"]),
+	}
+	if values, ok := event.Data["errors"].([]any); ok {
+		for _, value := range values {
+			if detail := stringValue(value); detail != "" {
+				resultErr.Details = append(resultErr.Details, detail)
+			}
+		}
+	}
+	if len(resultErr.Details) == 0 {
+		for _, key := range []string{"error", "result"} {
+			if detail := stringValue(event.Data[key]); detail != "" {
+				resultErr.Details = append(resultErr.Details, detail)
+				break
+			}
+		}
+	}
+	return resultErr
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }

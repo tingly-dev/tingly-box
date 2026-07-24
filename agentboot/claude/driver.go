@@ -25,10 +25,16 @@ type Driver struct {
 
 // NewDriver creates a new Claude Driver.
 func NewDriver(config Config) *Driver {
+	cliPath := strings.TrimSpace(config.CLIPath)
+	if cliPath == "" {
+		cliPath = "claude"
+	}
+	discovery := NewCLIDiscovery()
+	discovery.SetPreference(config.UseBundled, config.UseGlobal)
 	return &Driver{
 		config:    config,
-		cliPath:   "claude",
-		discovery: NewCLIDiscovery(),
+		cliPath:   cliPath,
+		discovery: discovery,
 	}
 }
 
@@ -58,7 +64,7 @@ func (d *Driver) IsAvailable() bool {
 	d.mu.RUnlock()
 
 	if cliPath != "" && cliPath != "claude" && cliPath != "anthropic" {
-		_, err := os.Stat(cliPath)
+		_, err := discovery.ValidateClaudeCodeCLI(context.Background(), cliPath)
 		return err == nil
 	}
 
@@ -171,9 +177,16 @@ func (d *Driver) resolveBinary(ctx context.Context) (string, error) {
 	d.mu.RLock()
 	cliPath := d.cliPath
 	discovery := d.discovery
+	forceAvailable := d.forceAvailable
 	d.mu.RUnlock()
 
 	if cliPath != "" && cliPath != "claude" && cliPath != "anthropic" {
+		if forceAvailable {
+			return cliPath, nil
+		}
+		if _, err := discovery.ValidateClaudeCodeCLI(ctx, cliPath); err != nil {
+			return "", fmt.Errorf("invalid Claude Code CLI path %q: %w", cliPath, err)
+		}
 		return cliPath, nil
 	}
 

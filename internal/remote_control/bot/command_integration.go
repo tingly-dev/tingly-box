@@ -95,7 +95,7 @@ func (a *botHandlerAdapter) FindOrCreateSession(chatID, agentType, projectPath s
 // UpdatePermissionMode updates the permission mode for a session.
 func (a *botHandlerAdapter) UpdatePermissionMode(sessionID, mode string) error {
 	if !claude.IsValidPermissionMode(mode) {
-		return fmt.Errorf("invalid permission mode: %q, must be one of: default, plan, auto, acceptEdits, dontAsk, bypassPermissions", mode)
+		return fmt.Errorf("invalid permission mode: %q, must be one of: default, manual, plan, auto, acceptEdits, dontAsk, bypassPermissions", mode)
 	}
 	a.handler.sessionMgr.Update(sessionID, func(s *session.Session) {
 		s.PermissionMode = mode
