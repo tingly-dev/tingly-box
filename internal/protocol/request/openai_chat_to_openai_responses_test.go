@@ -351,6 +351,125 @@ func createToolResultMessage() openai.ChatCompletionMessageParamUnion {
 	}
 }
 
+// TestConvertChatToOpenAIResponsesArrayContent covers the array-of-text-blocks
+// content form (allowed by the OpenAI spec, emitted by several agent frameworks).
+// Previously these converters only read the string variant and dropped the array,
+// forwarding an empty string upstream (issue #1427).
+func TestConvertChatToOpenAIResponsesArrayContent(t *testing.T) {
+	t.Run("tool result with array-of-text content", func(t *testing.T) {
+		toolMsg := openai.ChatCompletionMessageParamUnion{
+			OfTool: &openai.ChatCompletionToolMessageParam{
+				ToolCallID: "call_1",
+				Content: openai.ChatCompletionToolMessageParamContentUnion{
+					OfArrayOfContentParts: []openai.ChatCompletionContentPartTextParam{
+						{Text: "The secret word is ZANZIBAR"},
+					},
+				},
+			},
+		}
+		params := &openai.ChatCompletionNewParams{
+			Model:    openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi"), createAssistantWithToolCallsMessage(), toolMsg},
+		}
+
+		result := ConvertChatToOpenAIResponses(params, 4096)
+
+		require.Len(t, result.Input.OfInputItemList, 3)
+		fnOutput := result.Input.OfInputItemList[2].OfFunctionCallOutput
+		require.NotNil(t, fnOutput)
+		assert.Equal(t, "The secret word is ZANZIBAR", fnOutput.Output.OfString.Value)
+	})
+
+	t.Run("tool result joins multiple text parts", func(t *testing.T) {
+		toolMsg := openai.ChatCompletionMessageParamUnion{
+			OfTool: &openai.ChatCompletionToolMessageParam{
+				ToolCallID: "call_1",
+				Content: openai.ChatCompletionToolMessageParamContentUnion{
+					OfArrayOfContentParts: []openai.ChatCompletionContentPartTextParam{
+						{Text: "line one"},
+						{Text: "line two"},
+					},
+				},
+			},
+		}
+		params := &openai.ChatCompletionNewParams{
+			Model:    openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{createAssistantWithToolCallsMessage(), toolMsg},
+		}
+
+		result := ConvertChatToOpenAIResponses(params, 4096)
+
+		fnOutput := result.Input.OfInputItemList[len(result.Input.OfInputItemList)-1].OfFunctionCallOutput
+		require.NotNil(t, fnOutput)
+		assert.Equal(t, "line one\nline two", fnOutput.Output.OfString.Value)
+	})
+
+	t.Run("system message with array-of-text content", func(t *testing.T) {
+		sysMsg := openai.ChatCompletionMessageParamUnion{
+			OfSystem: &openai.ChatCompletionSystemMessageParam{
+				Content: openai.ChatCompletionSystemMessageParamContentUnion{
+					OfArrayOfContentParts: []openai.ChatCompletionContentPartTextParam{
+						{Text: "You are a helpful assistant."},
+					},
+				},
+			},
+		}
+		params := &openai.ChatCompletionNewParams{
+			Model:    openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{sysMsg, openai.UserMessage("hi")},
+		}
+
+		result := ConvertChatToOpenAIResponses(params, 4096)
+
+		assert.Equal(t, "You are a helpful assistant.", result.Instructions.Value)
+	})
+
+	t.Run("assistant message with array-of-text content", func(t *testing.T) {
+		asstMsg := openai.ChatCompletionMessageParamUnion{
+			OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfArrayOfContentParts: []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{
+						{OfText: &openai.ChatCompletionContentPartTextParam{Text: "The capital of France is Paris."}},
+					},
+				},
+			},
+		}
+		params := &openai.ChatCompletionNewParams{
+			Model:    openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{asstMsg},
+		}
+
+		result := ConvertChatToOpenAIResponses(params, 4096)
+
+		require.Len(t, result.Input.OfInputItemList, 1)
+		assert.Equal(t, "assistant", string(result.Input.OfInputItemList[0].OfMessage.Role))
+		assert.Equal(t, "The capital of France is Paris.", result.Input.OfInputItemList[0].OfMessage.Content.OfString.Value)
+	})
+
+	t.Run("reasoning_effort forwarded", func(t *testing.T) {
+		params := &openai.ChatCompletionNewParams{
+			Model:           openai.ChatModel("gpt-4"),
+			Messages:        []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")},
+			ReasoningEffort: shared.ReasoningEffortHigh,
+		}
+
+		result := ConvertChatToOpenAIResponses(params, 4096)
+
+		assert.Equal(t, shared.ReasoningEffortHigh, result.Reasoning.Effort)
+	})
+
+	t.Run("no reasoning_effort leaves reasoning unset", func(t *testing.T) {
+		params := &openai.ChatCompletionNewParams{
+			Model:    openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")},
+		}
+
+		result := ConvertChatToOpenAIResponses(params, 4096)
+
+		assert.Equal(t, shared.ReasoningEffort(""), result.Reasoning.Effort)
+	})
+}
+
 // createGetWeatherFunction creates a weather tool definition
 func createGetWeatherFunction() shared.FunctionDefinitionParam {
 	return shared.FunctionDefinitionParam{

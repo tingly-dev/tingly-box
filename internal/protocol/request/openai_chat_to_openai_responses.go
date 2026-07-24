@@ -7,7 +7,37 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 )
+
+// joinTextContentParts concatenates the text fields of text-only content parts
+// (used by tool and system messages) into a single newline-separated string,
+// letting converters handle the array-of-text-blocks content form allowed by
+// the OpenAI spec.
+func joinTextContentParts(parts []openai.ChatCompletionContentPartTextParam) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	texts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Text != "" {
+			texts = append(texts, part.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
+}
+
+// joinAssistantTextContentParts concatenates the text fields of assistant array
+// content parts into a single newline-separated string, ignoring refusal parts.
+func joinAssistantTextContentParts(parts []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion) string {
+	textParts := make([]openai.ChatCompletionContentPartTextParam, 0, len(parts))
+	for _, part := range parts {
+		if part.OfText != nil {
+			textParts = append(textParts, *part.OfText)
+		}
+	}
+	return joinTextContentParts(textParts)
+}
 
 // ConvertChatToOpenAIResponses converts OpenAI Chat Completions params to Responses API format.
 // This enables using Chat Completions format with Responses API providers.
@@ -23,9 +53,12 @@ func ConvertChatToOpenAIResponses(params *openai.ChatCompletionNewParams, defaul
 	for _, msg := range params.Messages {
 		switch {
 		case !param.IsOmitted(msg.OfSystem):
-			// Extract system message content
-			if sysMsg := msg.OfSystem; !param.IsOmitted(sysMsg.Content.OfString) && sysMsg.Content.OfString.Value != "" {
+			// Extract system message content (string or array-of-text form)
+			sysMsg := msg.OfSystem
+			if !param.IsOmitted(sysMsg.Content.OfString) && sysMsg.Content.OfString.Value != "" {
 				systemParts = append(systemParts, sysMsg.Content.OfString.Value)
+			} else if text := joinTextContentParts(sysMsg.Content.OfArrayOfContentParts); text != "" {
+				systemParts = append(systemParts, text)
 			}
 
 		default:
@@ -70,6 +103,13 @@ func ConvertChatToOpenAIResponses(params *openai.ChatCompletionNewParams, defaul
 
 	// Convert tool choice if present
 	result.ToolChoice = ConvertChatToolChoiceToResponsesToolChoice(&params.ToolChoice)
+
+	// Forward reasoning effort if the client supplied one
+	if params.ReasoningEffort != "" {
+		result.Reasoning = shared.ReasoningParam{
+			Effort: params.ReasoningEffort,
+		}
+	}
 
 	return result
 }
@@ -168,7 +208,11 @@ func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessage
 // convertChatAssistantMessageToResponses converts a Chat assistant message to Responses format.
 // Returns nil if the message has no usable text content.
 func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionAssistantMessageParam) []responses.ResponseInputItemUnionParam {
-	if param.IsOmitted(assistantMsg.Content.OfString) || assistantMsg.Content.OfString.Value == "" {
+	content := assistantMsg.Content.OfString.Value
+	if content == "" {
+		content = joinAssistantTextContentParts(assistantMsg.Content.OfArrayOfContentParts)
+	}
+	if content == "" {
 		return nil
 	}
 
@@ -177,7 +221,7 @@ func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionA
 			Type: responses.EasyInputMessageTypeMessage,
 			Role: responses.EasyInputMessageRole("assistant"),
 			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: param.NewOpt(assistantMsg.Content.OfString.Value),
+				OfString: param.NewOpt(content),
 			},
 		},
 	}}
@@ -185,9 +229,9 @@ func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionA
 
 // convertChatToolMessageToResponses converts a Chat tool message to Responses function_call_output format.
 func convertChatToolMessageToResponses(toolMsg *openai.ChatCompletionToolMessageParam) responses.ResponseInputItemUnionParam {
-	content := ""
-	if !param.IsOmitted(toolMsg.Content.OfString) && toolMsg.Content.OfString.Value != "" {
-		content = toolMsg.Content.OfString.Value
+	content := toolMsg.Content.OfString.Value
+	if content == "" {
+		content = joinTextContentParts(toolMsg.Content.OfArrayOfContentParts)
 	}
 
 	return responses.ResponseInputItemUnionParam{

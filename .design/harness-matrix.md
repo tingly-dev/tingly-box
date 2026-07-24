@@ -6,6 +6,13 @@
 > Related: per-rule **flag** behavior is tested by a separate, registry-driven
 > suite — see [`rule-flag-testing.md`](./rule-flag-testing.md). The matrix
 > itself stays flag-free (it exercises protocol conversion, not rule flags).
+>
+> Related: request **content-shape** regressions (a client sending array-of-
+> text-blocks content instead of a plain string on tool/system/assistant
+> messages) are covered by a separate suite in `content_shapes.go` — see
+> §9.1. The matrix itself always sends the same fixed single-turn prompt and
+> only varies the mocked *response* shape, so it cannot catch bugs in how
+> unusual *request* shapes are forwarded upstream.
 
 ---
 
@@ -97,6 +104,9 @@ go test -tags e2e ./internal/protocoltest/... -run TestHarness_Streaming
 
 # Idempotent round-trips
 go test -tags e2e ./internal/protocoltest/... -run TestIdempotent
+
+# Request content-shape regression suite (see §9.1)
+go test -tags e2e ./internal/protocoltest/... -run TestContentShapes
 ```
 
 ### CLI (`cli/harness`)
@@ -105,14 +115,15 @@ go test -tags e2e ./internal/protocoltest/... -run TestIdempotent
 executor (`ExecuteAll*`) so the CLI can run it directly — including idempotence
 and the rule-flag suite, which would otherwise be go-test-only.
 
-| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) |
-|----------|:---:|:---:|:---:|:---:|
-| `default` *(no flag)* | ✅ | — | ✅ | — |
-| `all` | ✅ | ✅ | ✅ | ✅ |
-| `single` | ✅ | — | — | — |
-| `transitive` | — | ✅ | — | — |
-| `idempotent` | — | — | ✅ | — |
-| `flags` | — | — | — | ✅ |
+| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§9.1) |
+|----------|:---:|:---:|:---:|:---:|:---:|
+| `default` *(no flag)* | ✅ | — | ✅ | — | — |
+| `all` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `single` | ✅ | — | — | — | — |
+| `transitive` | — | ✅ | — | — | — |
+| `idempotent` | — | — | ✅ | — | — |
+| `flags` | — | — | — | ✅ | — |
+| `content_shapes` | — | — | — | — | ✅ |
 
 ```bash
 # Default: single-hop + idempotent round-trips. Two-hop and flags are OFF by
@@ -128,6 +139,7 @@ go run ./cli/harness matrix --mode=single
 go run ./cli/harness matrix --mode=transitive
 go run ./cli/harness matrix --mode=idempotent
 go run ./cli/harness matrix --mode=flags     # per-rule flag behavior
+go run ./cli/harness matrix --mode=content_shapes  # request content-shape regression
 
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
@@ -139,6 +151,9 @@ go run ./cli/harness matrix --json
 The `flags` section is documented in detail in
 [`rule-flag-testing.md`](./rule-flag-testing.md); `ExecuteAllFlags` reports one
 `TestResult` per flag (`Name: "flags/<key>"`, `Scenario: <key>`).
+
+The `content_shapes` section is documented in §9.1 below; `ExecuteAllContentShapes`
+reports one `TestResult` per case (`Name: "content_shapes/<case name>"`).
 
 ### Client drivers (`--client`)
 
@@ -377,3 +392,40 @@ the gateway actually forwarded upstream*. The `VirtualServer` mock records it:
 These power the per-rule **flag** behavior suite, which is documented
 separately: [`rule-flag-testing.md`](./rule-flag-testing.md). Keep the matrix
 itself flag-free — flags are an orthogonal axis and live in their own suite.
+
+### 9.1 Request content-shape regression suite (`content_shapes.go`)
+
+**Why this exists.** Every matrix request is built by `buildRequest`
+(`testenv.go`) from the fixed `harnessPrompt` — a single-turn plain-string user
+message, identical across every scenario and every client driver
+(`client.go`: "the request itself varies only by (Source, RequestModel,
+Streaming)"). `Scenario.MockResponses` only controls the mocked upstream
+*response* shape. That split means the matrix, by construction, cannot catch
+a bug in how the gateway forwards an unusual *request* content shape upstream
+— which is exactly how issue #1427 shipped: a `role: "tool"` message whose
+`content` was an array of text blocks (`[{"type":"text","text":"..."}]`,
+valid per the OpenAI spec and emitted by several agent frameworks instead of
+a plain string) was silently forwarded upstream as an empty string, and no
+scenario or assertion in the matrix could have caught it — the matrix never
+sends a tool/assistant/system message in that shape in the first place.
+
+Reworking `buildRequest` to vary per scenario would mean threading bespoke
+request bodies through every client driver, including the Python/Node/AI SDK
+subprocess drivers that wrap real vendor SDKs — those SDKs may not expose an
+array-of-text-blocks tool result through their high-level API at all, and the
+matrix's client-driver architecture deliberately assumes a shape-invariant
+request so results stay comparable across drivers. That redesign is out of
+proportion to the bug class.
+
+Instead, `content_shapes.go` follows the same "separate, registry-driven
+suite" pattern as `flags.go`: a `contentShapeCase{name, run}` list, driven
+through the real gateway with a bespoke JSON body per case (built directly,
+bypassing `buildRequest`), asserting on the request the gateway actually
+forwarded upstream via `VirtualServer.LastRequest` — not the parsed response.
+Cases reuse `flagTB`/`flagRecorder`/`flagAbort` from `flags.go` so they run
+under both `*testing.T` (`TestContentShapes`) and the CLI
+(`--mode=content_shapes`) without duplicating that plumbing.
+
+See `contentShapeCases()` in `content_shapes.go` for current coverage. Extend
+that list, not the matrix's `Scenario`/`buildRequest`, when a future bug is
+"the gateway dropped an unusual request shape while forwarding it."
