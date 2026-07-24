@@ -64,7 +64,9 @@ import WeComPage from './pages/bots/WeComPage';
 import QQPage from './pages/bots/QQPage';
 import DiscordPage from './pages/bots/DiscordPage';
 import SlackPage from './pages/bots/SlackPage';
-import PlatformRemoteAgentPage from './pages/remote-agent/PlatformRemoteAgentPage';
+import BotOverviewPage from './pages/bots/BotOverviewPage';
+import RemoteAgentPage from './pages/remote-agent/RemoteAgentPage';
+import NotifyPage from './pages/notify/NotifyPage';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
 import ServerToolPage from './pages/servertool/ServerToolPage';
@@ -244,8 +246,12 @@ function AppContent() {
                     <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace />} />
                     <Route path="/remote-coder/chat" element={<RemoteCoderPage />} />
                     <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage />} />
-                    {/* Bots — the resource pages: manage bot connections per platform */}
-                    <Route path="/bots" element={<Navigate to="/bots/weixin" replace />} />
+                    {/* Bots — Overview is the front door: every connected bot, across every
+                        platform, one list. The old per-platform pages stay live (not
+                        removed) as deep-link targets — /bots/:platform?add=1 links and any
+                        bookmarks into them keep working — but Overview is what's in the nav. */}
+                    <Route path="/bots" element={<Navigate to="/bots/overview" replace />} />
+                    <Route path="/bots/overview" element={<BotOverviewPage />} />
                     <Route path="/bots/telegram" element={<TelegramPage />} />
                     <Route path="/bots/feishu" element={<FeishuPage />} />
                     <Route path="/bots/lark" element={<LarkPage />} />
@@ -255,19 +261,14 @@ function AppContent() {
                     <Route path="/bots/qq" element={<QQPage />} />
                     <Route path="/bots/discord" element={<DiscordPage />} />
                     <Route path="/bots/slack" element={<SlackPage />} />
-                    {/* Remote Agent — the purpose pages, mirroring the Bots pagination:
-                        same per-platform structure, but the content is the bots'
-                        Remote Agent configuration instead of the bot resource. */}
+                    {/* Notify — the other purpose mounted on a bot's channel. */}
+                    <Route path="/notify" element={<NotifyPage />} />
+                    {/* Remote — the purpose pages. One nav row (see useActivityItems);
+                        platform selection is an in-page tab bar (RemoteAgentPage) instead
+                        of a route per platform in the sidebar. The routes themselves are
+                        unchanged, so deep links and the BotCard purpose chip still work. */}
                     <Route path="/remote-agent" element={<Navigate to="/remote-agent/weixin" replace />} />
-                    <Route path="/remote-agent/telegram" element={<PlatformRemoteAgentPage platformId="telegram" platformName="Telegram" />} />
-                    <Route path="/remote-agent/feishu" element={<PlatformRemoteAgentPage platformId="feishu" platformName="Feishu" />} />
-                    <Route path="/remote-agent/lark" element={<PlatformRemoteAgentPage platformId="lark" platformName="Lark" />} />
-                    <Route path="/remote-agent/dingtalk" element={<PlatformRemoteAgentPage platformId="dingtalk" platformName="DingTalk" />} />
-                    <Route path="/remote-agent/weixin" element={<PlatformRemoteAgentPage platformId="weixin" platformName="Weixin" />} />
-                    <Route path="/remote-agent/wecom" element={<PlatformRemoteAgentPage platformId="wecom" platformName="WeCom" />} />
-                    <Route path="/remote-agent/qq" element={<PlatformRemoteAgentPage platformId="qq" platformName="QQ" />} />
-                    <Route path="/remote-agent/discord" element={<PlatformRemoteAgentPage platformId="discord" platformName="Discord" />} />
-                    <Route path="/remote-agent/slack" element={<PlatformRemoteAgentPage platformId="slack" platformName="Slack" />} />
+                    <Route path="/remote-agent/:platform" element={<RemoteAgentPage />} />
                     {/* Back-compat: old /remote-control/* (the pre-split combined pages) → /remote-agent/* */}
                     <Route path="/remote-control" element={<Navigate to="/remote-agent/weixin" replace />} />
                     <Route path="/remote-control/*" element={<LegacyBotSectionRedirect />} />

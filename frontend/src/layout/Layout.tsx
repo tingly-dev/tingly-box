@@ -72,7 +72,7 @@ const Layout = ({ children }: LayoutProps) => {
 
     const isActive = (path: string) => location.pathname === path;
     const isChildActive = (children?: ActivityItem['children']) =>
-        children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
+        children?.some(item => item.type !== 'divider' && (item.match ? item.match(location.pathname) : isActive(item.path))) ?? false;
 
     // Determine active activity from current path, falling back to localStorage
     const activeActivity = useMemo(() => {

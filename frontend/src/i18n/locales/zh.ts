@@ -93,6 +93,7 @@ export default {
     "yesterday": "昨天",
     "days": "天",
     "remote": "远程",
+    "notify": "通知",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {

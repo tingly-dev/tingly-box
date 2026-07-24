@@ -20,6 +20,13 @@ interface BotConfigDialogProps {
     platformId: string;
     /** Current bot list — used for edit prefill and QR orphan reuse. */
     bots: BotSettings[];
+    /**
+     * Whether the platform selector stays locked to `platformId` in add mode.
+     * Defaults to true (existing per-platform host pages already know which
+     * platform they're adding). Pages with no fixed platform (Overview) pass
+     * false so the user picks one in the dialog itself.
+     */
+    lockPlatform?: boolean;
     onClose: () => void;
     /** Called after a successful save (and after QR binding) so the host page reloads. */
     onSaved: () => void | Promise<void>;
@@ -37,6 +44,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
     editUuid = null,
     platformId,
     bots,
+    lockPlatform = true,
     onClose,
     onSaved,
     notify,
@@ -222,7 +230,7 @@ const BotConfigDialog: React.FC<BotConfigDialogProps> = ({
                                 }}
                                 platforms={botPlatforms}
                                 loading={platformsLoading}
-                                disabled={saving || dialogMode === 'add'}
+                                disabled={saving || (dialogMode === 'add' && lockPlatform)}
                             />
                         </Stack>
 

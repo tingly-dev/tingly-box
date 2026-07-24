@@ -129,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     }
 
                     const isAddProfile = item.path === '#add-profile';
-                    const active = !isAddProfile && isActive(item.path);
+                    const active = !isAddProfile && (item.match ? item.match(location.pathname) : isActive(item.path));
 
                     const button = (
                         <ListItem disablePadding>

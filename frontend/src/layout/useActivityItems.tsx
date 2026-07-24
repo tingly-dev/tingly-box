@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getHiddenScenarios } from '@/pages/scenario/AgentOverviewPage';
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
 import {
     SettingsApplications,
     BarChart as IconChartBar,
@@ -13,6 +13,8 @@ import {
     Psychology as IconBrain,
     SettingsRemote as IconDeviceRemote,
     Robot as IconRobot,
+    ListAlt as IconListAlt,
+    Bell as IconBell,
     Bolt as IconBolt,
     Settings as IconSettings,
     Send as IconSend,
@@ -35,10 +37,6 @@ import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 
-// showBotsSection gates the Bots nav section. Currently hidden (see the
-// comment at the section below); set to true to surface it again.
-const showBotsSection = false;
-
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
     const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
@@ -55,10 +53,16 @@ export function useActivityItems(): ActivityItem[] {
             window.removeEventListener('storage', sync);
         };
     }, []);
-    const platformSubtitle = (id: string): string | undefined => {
-        const s = botSummary[id];
-        return s && s.total > 0 ? `active ${s.active} / ${s.total}` : undefined;
-    };
+    // Aggregate across every platform for the Overview row's subtitle — the
+    // per-platform breakdown lives on the Overview page itself now, not in
+    // the nav (see .design/bot-arch.md §10).
+    const botOverviewSubtitle = useMemo(() => {
+        const totals = Object.values(botSummary).reduce(
+            (acc, s) => ({ active: acc.active + s.active, total: acc.total + s.total }),
+            { active: 0, total: 0 }
+        );
+        return totals.total > 0 ? `active ${totals.active} / ${totals.total}` : undefined;
+    }, [botSummary]);
 
     const promptMenuItems = useMemo(() => {
         const items: NavItem[] = [];
@@ -166,41 +170,20 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: promptMenuItems.find((item): item is NavItemBase => !('type' in item))?.path,
                 children: promptMenuItems,
             }] as ActivityItem[] : []),
-            // Bots — the resource section: bot connections per platform.
-            // HIDDEN from the nav for now (not removed): bot capabilities
-            // beyond Remote haven't shipped yet, so a standalone resource
-            // section is premature. The /bots/:platform routes stay live —
-            // the Remote pages' shared Add dialog and the BotCard purpose
-            // chip still reach them. Flip showBotsSection to bring it back.
-            ...(isFullEdition && showBotsSection ? [{
+            // Bots — one rail icon for the whole domain. Overview is the
+            // front door (every connected bot, every platform, credentials
+            // live there); Remote and Notify are purposes mounted onto those
+            // bots. New purposes append here as new rows — the rail icon
+            // never grows. See .design/bot-arch.md §10.
+            ...(isFullEdition ? [{
                 key: 'bots' as const,
                 icon: <IconRobot sx={{ fontSize: 22 }} />,
                 label: t('layout.bots', { defaultValue: 'Bots' }),
-                defaultPath: '/bots/weixin',
+                defaultPath: '/bots/overview',
                 children: [
-                    { path: '/bots/weixin', label: t('layout.platforms.weixin'), icon: <Weixin size={20} />, subtitle: platformSubtitle('weixin') },
-                    { path: '/bots/wecom', label: t('layout.platforms.wecom'), icon: <WeCom size={20} />, subtitle: platformSubtitle('wecom') },
-                    { path: '/bots/telegram', label: t('layout.platforms.telegram'), icon: <Telegram size={20} />, subtitle: platformSubtitle('telegram') },
-                    { path: '/bots/feishu', label: t('layout.platforms.feishu'), icon: <Feishu size={20} />, subtitle: platformSubtitle('feishu') },
-                    { path: '/bots/lark', label: t('layout.platforms.lark'), icon: <Lark size={20} />, subtitle: platformSubtitle('lark') },
-                    { path: '/bots/dingtalk', label: t('layout.platforms.dingtalk'), icon: <DingTalk size={20} />, subtitle: platformSubtitle('dingtalk') },
-                ] as NavItem[],
-            }] as ActivityItem[] : []),
-            ...(isFullEdition ? [{
-                // Remote Agent — the purpose section. Mirrors the Bots section's
-                // per-platform pagination; the content is each bot's Remote
-                // Agent configuration instead of the bot resource.
-                key: 'remote-agent' as const,
-                icon: <IconDeviceRemote sx={{ fontSize: 22 }} />,
-                label: t('layout.remote'),
-                defaultPath: '/remote-agent/weixin',
-                children: [
-                    { path: '/remote-agent/weixin', label: t('layout.platforms.weixin'), icon: <Weixin size={20} />, subtitle: platformSubtitle('weixin') },
-                    { path: '/remote-agent/wecom', label: t('layout.platforms.wecom'), icon: <WeCom size={20} />, subtitle: platformSubtitle('wecom') },
-                    { path: '/remote-agent/telegram', label: t('layout.platforms.telegram'), icon: <Telegram size={20} />, subtitle: platformSubtitle('telegram') },
-                    { path: '/remote-agent/feishu', label: t('layout.platforms.feishu'), icon: <Feishu size={20} />, subtitle: platformSubtitle('feishu') },
-                    { path: '/remote-agent/lark', label: t('layout.platforms.lark'), icon: <Lark size={20} />, subtitle: platformSubtitle('lark') },
-                    { path: '/remote-agent/dingtalk', label: t('layout.platforms.dingtalk'), icon: <DingTalk size={20} />, subtitle: platformSubtitle('dingtalk') },
+                    { path: '/bots/overview', label: t('layout.overview'), icon: <IconListAlt sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
+                    { path: '/remote-agent/weixin', label: t('layout.remote'), icon: <IconDeviceRemote sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
+                    { path: '/notify', label: t('layout.notify', { defaultValue: 'Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{

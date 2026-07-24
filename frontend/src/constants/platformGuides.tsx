@@ -94,6 +94,13 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // has to locate verbatim in a third-party console (App ID/App Secret/App
 // Key/Client ID/Client Secret/Bot ID/Bot Token) are intentionally left in
 // English in both locales.
+
+// The full set of bot platform ids, in display order. Single source of
+// truth for anything that needs to list "every platform" (e.g. the Remote
+// page's in-page platform tabs) — keeps that list from drifting out of sync
+// with the guides below or with the routes in App.tsx.
+export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom', 'qq', 'discord', 'slack'] as const;
+
 const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> => ({
     telegram: {
         id: 'telegram',
@@ -392,4 +399,14 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
 export function usePlatformGuide(platformId: string): PlatformGuideConfig | undefined {
     const { t, i18n } = useTranslation();
     return useMemo(() => buildPlatformGuides(t)[platformId], [t, i18n.language, platformId]);
+}
+
+/**
+ * Plain-function platform display name lookup — for call sites that need a
+ * name per id inside a loop (e.g. building tabs), where calling the
+ * `usePlatformGuide` hook per-iteration would break the rules of hooks.
+ * Callers get `t` from their own single `useTranslation()` call.
+ */
+export function platformDisplayName(platformId: string, t: TFunction): string {
+    return buildPlatformGuides(t)[platformId]?.name || platformId;
 }

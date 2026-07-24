@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import {styled} from '@mui/material/styles';
 import type {BotSettings} from '@/types/bot';
-import {isRemoteAgentMounted} from '@/types/bot';
+import {isRemoteAgentMounted, isNotifyMounted} from '@/types/bot';
 import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
@@ -86,6 +86,7 @@ const BotCard: React.FC<BotCardProps> = ({
     const navigate = useNavigate();
     const isActive = bot.enabled ?? true;
     const isMounted = isRemoteAgentMounted(bot.scenarios);
+    const isNotified = isNotifyMounted(bot.scenarios);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     const handleDeleteClick = useCallback(() => setDeleteModalOpen(true), []);
@@ -117,6 +118,16 @@ const BotCard: React.FC<BotCardProps> = ({
                             variant={isMounted ? 'filled' : 'outlined'}
                             color={isMounted ? 'primary' : 'default'}
                             onClick={() => navigate(`/remote-agent/${bot.platform}`)}
+                            sx={{opacity: isActive ? 1 : 0.5}}
+                        />
+                    </Tooltip>
+                    <Tooltip title={t('bots.card.notifyChipHint', { defaultValue: 'Configure on the Notify page' })}>
+                        <Chip
+                            label={t('bots.card.notifyChip', { defaultValue: 'Notify' })}
+                            size="small"
+                            variant={isNotified ? 'filled' : 'outlined'}
+                            color={isNotified ? 'primary' : 'default'}
+                            onClick={() => navigate('/notify')}
                             sx={{opacity: isActive ? 1 : 0.5}}
                         />
                     </Tooltip>

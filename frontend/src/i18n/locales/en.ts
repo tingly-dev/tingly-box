@@ -91,6 +91,7 @@ export default {
     "yesterday": "Yesterday",
     "days": "Days",
     "remote": "Remote",
+    "notify": "Notify",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {
