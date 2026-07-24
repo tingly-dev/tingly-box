@@ -3,6 +3,7 @@ package agentboot_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,9 @@ func (s *stubAgent) Execute(_ context.Context, _ string, _ agentboot.ExecutionOp
 func (s *stubAgent) IsAvailable() bool                         { return true }
 func (s *stubAgent) Type() agentboot.AgentType                 { return s.t }
 func (s *stubAgent) SetDefaultFormat(_ agentboot.OutputFormat) {}
-func (s *stubAgent) GetDefaultFormat() agentboot.OutputFormat  { return agentboot.OutputFormatStreamJSON }
+func (s *stubAgent) GetDefaultFormat() agentboot.OutputFormat {
+	return agentboot.OutputFormatStreamJSON
+}
 
 const stubAgentType agentboot.AgentType = "stub"
 
@@ -79,4 +82,51 @@ func TestAgentBoot_SetDefaultAgent_Unregistered(t *testing.T) {
 
 	err = ab.SetDefaultAgent("ghost")
 	assert.Error(t, err)
+}
+
+func TestAgentBoot_GetDefaultAgent_ConcurrentWithSetter(t *testing.T) {
+	ab, err := agentboot.New(agentboot.Config{})
+	require.NoError(t, err)
+
+	const alternateType agentboot.AgentType = "alternate"
+	ab.RegisterAgent(stubAgentType, newStubAgent())
+	ab.RegisterAgent(alternateType, &stubAgent{t: alternateType})
+	require.NoError(t, ab.SetDefaultAgent(stubAgentType))
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			next := stubAgentType
+			if i%2 == 0 {
+				next = alternateType
+			}
+			if setErr := ab.SetDefaultAgent(next); setErr != nil {
+				errs <- setErr
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			got, getErr := ab.GetDefaultAgent()
+			if getErr != nil {
+				errs <- getErr
+				return
+			}
+			if got.Type() != stubAgentType && got.Type() != alternateType {
+				errs <- errors.New("unexpected default agent")
+				return
+			}
+		}
+	}()
+	wg.Wait()
+	close(errs)
+
+	for concurrentErr := range errs {
+		require.NoError(t, concurrentErr)
+	}
 }

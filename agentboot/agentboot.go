@@ -81,7 +81,15 @@ func (ab *AgentBoot) MustGetAgent(agentType AgentType) Agent {
 
 // GetDefaultAgent returns the default agent
 func (ab *AgentBoot) GetDefaultAgent() (Agent, error) {
-	return ab.GetAgent(ab.config.DefaultAgent)
+	ab.mu.RLock()
+	defer ab.mu.RUnlock()
+
+	agentType := ab.config.DefaultAgent
+	agent, exists := ab.agents[agentType]
+	if !exists {
+		return nil, fmt.Errorf("agent type not supported: %s", agentType)
+	}
+	return agent, nil
 }
 
 // SetDefaultAgent sets the default agent type
