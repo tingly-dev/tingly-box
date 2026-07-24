@@ -196,6 +196,81 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 	}
 }
 
+// TestConvertOpenAIToAnthropicRequestArrayContent verifies that array-of-text
+// content forms (system, assistant, and tool messages) are forwarded rather than
+// dropped as empty strings (issue #1427).
+func TestConvertOpenAIToAnthropicRequestArrayContent(t *testing.T) {
+	t.Run("tool result with array-of-text content", func(t *testing.T) {
+		req := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("hi"),
+				{OfTool: &openai.ChatCompletionToolMessageParam{
+					ToolCallID: "call_1",
+					Content: openai.ChatCompletionToolMessageParamContentUnion{
+						OfArrayOfContentParts: []openai.ChatCompletionContentPartTextParam{
+							{Text: "The secret word is ZANZIBAR"},
+						},
+					},
+				}},
+			},
+			MaxTokens: openai.Opt(int64(100)),
+		}
+
+		result := ConvertOpenAIToAnthropicRequest(req, 8192)
+
+		require.Len(t, result.Messages, 2)
+		toolResult := result.Messages[1].Content[0].OfToolResult
+		require.NotNil(t, toolResult)
+		require.Len(t, toolResult.Content, 1)
+		assert.Equal(t, "The secret word is ZANZIBAR", toolResult.Content[0].OfText.Text)
+	})
+
+	t.Run("system message with array-of-text content", func(t *testing.T) {
+		req := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				{OfSystem: &openai.ChatCompletionSystemMessageParam{
+					Content: openai.ChatCompletionSystemMessageParamContentUnion{
+						OfArrayOfContentParts: []openai.ChatCompletionContentPartTextParam{
+							{Text: "You are a helpful assistant."},
+						},
+					},
+				}},
+				openai.UserMessage("hi"),
+			},
+			MaxTokens: openai.Opt(int64(100)),
+		}
+
+		result := ConvertOpenAIToAnthropicRequest(req, 8192)
+
+		require.Len(t, result.System, 1)
+		assert.Equal(t, "You are a helpful assistant.", result.System[0].Text)
+	})
+
+	t.Run("assistant message with array-of-text content", func(t *testing.T) {
+		req := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel("gpt-4"),
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				{OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+					Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+						OfArrayOfContentParts: []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{
+							{OfText: &openai.ChatCompletionContentPartTextParam{Text: "The capital of France is Paris."}},
+						},
+					},
+				}},
+			},
+			MaxTokens: openai.Opt(int64(100)),
+		}
+
+		result := ConvertOpenAIToAnthropicRequest(req, 8192)
+
+		require.Len(t, result.Messages, 1)
+		require.Len(t, result.Messages[0].Content, 1)
+		assert.Equal(t, "The capital of France is Paris.", result.Messages[0].Content[0].OfText.Text)
+	})
+}
+
 func TestConvertOpenAIToAnthropicTools(t *testing.T) {
 	tests := []struct {
 		name     string

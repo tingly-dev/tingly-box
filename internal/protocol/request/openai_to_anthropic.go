@@ -16,9 +16,11 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		// Read the typed union fields directly — no JSON round-trip needed.
 		switch {
 		case msg.OfSystem != nil:
-			// System message → params.System
+			// System message → params.System (string or array-of-text form)
 			if content := msg.OfSystem.Content.OfString.Value; content != "" {
 				systemParts = append(systemParts, content)
+			} else if text := joinTextContentParts(msg.OfSystem.Content.OfArrayOfContentParts); text != "" {
+				systemParts = append(systemParts, text)
 			}
 
 		case msg.OfUser != nil:
@@ -52,9 +54,11 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 			// Assistant message
 			var blocks []anthropic.BetaContentBlockParamUnion
 
-			// Add text content if present
+			// Add text content if present (string or array-of-text form)
 			if content := msg.OfAssistant.Content.OfString.Value; content != "" {
 				blocks = append(blocks, anthropic.NewBetaTextBlock(content))
+			} else if text := joinAssistantTextContentParts(msg.OfAssistant.Content.OfArrayOfContentParts); text != "" {
+				blocks = append(blocks, anthropic.NewBetaTextBlock(text))
 			}
 
 			// Convert tool calls to tool_use blocks
@@ -80,9 +84,14 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 			}
 
 		case msg.OfTool != nil:
-			// Tool result message → tool_result block (must be USER role)
+			// Tool result message → tool_result block (must be USER role).
+			// Content may be a plain string or an array of text blocks.
+			content := msg.OfTool.Content.OfString.Value
+			if content == "" {
+				content = joinTextContentParts(msg.OfTool.Content.OfArrayOfContentParts)
+			}
 			blocks := []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaToolResultBlock(msg.OfTool.ToolCallID, msg.OfTool.Content.OfString.Value, false),
+				anthropic.NewBetaToolResultBlock(msg.OfTool.ToolCallID, content, false),
 			}
 			messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
 		}
