@@ -363,28 +363,34 @@ Neither "Bots" (nav label) nor any purpose page ever says "channel" —
 that word stays reserved for the backend architecture vocabulary in §2/§9.
 A bot connection is just "a bot"; users pick a platform, not a channel.
 
-**Platform selection moved into the page, not onto a horizontal tab bar.**
-Overview and Remote both need a platform picker (Notify doesn't — it has no
-per-platform-specific content), and the first cut used MUI `Tabs` for Remote.
-That dropped two things the old per-platform sidebar rows had: the
-`active X / Y` count next to each platform, and — for Overview specifically —
-the platform setup guide, since a single cross-platform "All" view can't
-show one platform's guide. Both pages now use `components/bot/PlatformSideNav`
-instead: a vertical list (icon, name, `active X / Y` subtitle) on the left of
-the page content, visually and behaviorally the same as what the global
-Sidebar used to show for each platform — just scoped to the page instead of
-the app-wide nav, so the rail icon count still stays at one. Overview's list
-gets an extra leading "All" item (no per-platform guide makes sense there);
-Remote's doesn't, since Remote has no cross-platform view. Selecting a
-platform on Overview also locks `BotConfigDialog`'s platform selector
-(`lockPlatform={true}`) for that add flow, same as Remote already did — "All"
-leaves it unlocked.
+**Platform selection lives in the page, as a horizontal chip row.** Overview
+and Remote both need a platform picker (Notify doesn't — it has no
+per-platform-specific content). Two earlier approaches didn't survive
+contact with real content and narrow viewports:
 
-Every row in `PlatformSideNav` is a fixed `minHeight` regardless of whether
-it has a subtitle (not every platform has bots yet) — rows of different
-heights in the same list read as broken alignment, not "no data here." The
-same fix landed on the global `Sidebar.tsx` for the same reason: Overview's
-row carries an aggregate subtitle, Remote's and Notify's don't.
+- MUI `Tabs`: dropped the `active X / Y` count next to each platform, and —
+  for Overview specifically — the platform setup guide, since a single
+  cross-platform "All" view can't show one platform's guide.
+- A vertical `PlatformSideNav` column styled to extend the global Sidebar
+  (white background, matching border, `position: sticky`, a header spacer
+  for row alignment): fixed the two problems above, but needed three nav
+  columns side by side (rail + Sidebar + this), which had no room below
+  desktop widths and broke down to visibly misaligned, overlapping content.
+  It also took real effort to get right — a border-shorthand bug that
+  rendered as a stray black edge, row heights that drifted out of sync with
+  the Sidebar until their styling was unified into `layout/navRowStyles.ts`.
+
+The shipped version, `components/bot/PlatformTabBar`, keeps what the vertical
+version got right (per-platform counts, the guide comes back with a specific
+platform, a divider separating "All" from the itemized list) but as a
+horizontal `Chip` row sitting inside the page's normal content flow — no
+breakout margins, no sticky positioning, no background/border matching to
+maintain, and it degrades to wrapping chips rather than breaking on narrow
+screens. Overview's row gets a leading "All" chip (no per-platform guide
+makes sense there) followed by a divider; Remote's doesn't, since Remote has
+no cross-platform view. Selecting a platform on Overview also locks
+`BotConfigDialog`'s platform selector (`lockPlatform={true}`) for that add
+flow, same as Remote already did — "All" leaves it unlocked.
 
 **Shared add/edit interaction, unchanged.** The bot-resource form is still
 one component (`components/bot/BotConfigDialog`). Overview has no fixed
