@@ -1,6 +1,6 @@
 import { BotConfigDialog, RemoteAgentBotCard, useBotModelDialog } from '@/components/bot';
 import CCProfileDialog from '@/components/bot/CCProfileDialog';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -230,6 +230,7 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
             )}
             <UnifiedCard
                 title={t('remoteAgent.title', { defaultValue: '{{platform}} Remote Agent', platform: platformName })}
+                titleHeadingLevel={1}
                 subtitle={t('remoteAgent.subtitle', { defaultValue: 'Mount {{platform}} bots to drive Claude Code / SmartGuide from chat, and configure how the agent behaves. Bot connections are managed on the Bots pages.', platform: platformName })}
                 size="full"
                 sx={{ mb: 2 }}
@@ -249,12 +250,13 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
                         <CircularProgress />
                     </Box>
                 ) : filteredBots.length === 0 ? (
-                    <EmptyStateGuide
+                    <EmptyState
                         title={t('remoteAgent.emptyTitle', { defaultValue: 'No {{platform}} Bots Yet', platform: platformName })}
                         description={t('remoteAgent.emptyDescription', { defaultValue: 'Remote Agent runs on top of a bot. Create a {{platform}} bot connection first, then mount it here.', platform: platformName })}
-                        showHeroIcon={false}
-                        primaryButtonLabel={t('remoteControl.bots.addPlatformBot', { defaultValue: 'Add {{platform}} Bot', platform: platformName })}
-                        onAddApiKeyClick={openAddDialog}
+                        primaryAction={{
+                            label: t('remoteControl.bots.addPlatformBot', { defaultValue: 'Add {{platform}} Bot', platform: platformName }),
+                            onClick: openAddDialog,
+                        }}
                     />
                 ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>

@@ -4,7 +4,7 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Alert, Box, Fab, Snackbar} from '@mui/material';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
 import ImportModal from '@/components/ImportModal';
 import ProviderFormDialog from '@/components/ProviderFormDialog';
@@ -370,11 +370,13 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         // config snippet for auto-detection.
         return (
             <UnifiedCard size="full" title={title}>
-                <EmptyStateGuide
+                <EmptyState
                     title={"No Providers Configured"}
                     description={"Add an API key provider to start routing requests"}
-                    primaryButtonLabel={"Get started"}
-                    onAddApiKeyClick={onAddApiKeyClick || (() => navigate('/onboarding'))}
+                    primaryAction={{
+                        label: 'Get started',
+                        onClick: onAddApiKeyClick || (() => navigate('/onboarding')),
+                    }}
                 />
             </UnifiedCard>
         );

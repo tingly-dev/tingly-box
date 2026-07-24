@@ -1,6 +1,6 @@
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
 import ConnectProviderDialog from '@/components/ConnectProviderDialog';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import ImportModal from '@/components/ImportModal';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
@@ -11,7 +11,7 @@ import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { useProviderDialog } from '@/hooks/useProviderDialog';
-import { Add, ListAlt, Upload, VpnKey } from '@/components/icons';
+import { Add, ListAlt, VpnKey } from '@/components/icons';
 import {
     Alert,
     Button,
@@ -162,8 +162,6 @@ const CredentialPage = () => {
         }
     };
 
-    const handleImportClick = () => { setShowImportModal(true); };
-
     const handleImportData = async (data: string) => {
         setImporting(true);
         try {
@@ -204,8 +202,7 @@ const CredentialPage = () => {
                                 flexWrap: "wrap",
                                 justifyContent: { xs: 'flex-start', sm: 'flex-end' }
                             }}>
-                            <Button component={Link} to="/onboarding" variant="outlined" startIcon={<ListAlt />} size="small" sx={{ minWidth: 130 }}>Providers</Button>
-                            <Button variant="outlined" startIcon={<Upload />} onClick={handleImportClick} size="small" sx={{ minWidth: 110 }}>Import</Button>
+                            <Button component={Link} to="/credentials/providers" variant="outlined" startIcon={<ListAlt />} size="small" sx={{ minWidth: 130 }}>Providers</Button>
                             <Button variant="contained" startIcon={<Add />} onClick={handleConnectAIClick} size="small" sx={{ minWidth: 150 }}>Connect AI</Button>
                         </Stack>
                     }
@@ -228,7 +225,11 @@ const CredentialPage = () => {
                     {credentialCounts.oauth > 0 ? (
                         <OAuthTable providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
                     ) : (
-                        <EmptyStateGuide title="No OAuth Providers Configured" description="Connect AI providers like Claude Code, Gemini CLI, Qwen, etc. via OAuth sign-in." showHeroIcon={false} primaryButtonLabel="Connect AI" onAddApiKeyClick={handleConnectAIClick}/>
+                        <EmptyState
+                            title="No OAuth Providers Configured"
+                            description="Connect AI providers like Claude Code, Gemini CLI, Qwen, etc. via OAuth sign-in."
+                            primaryAction={{ label: 'Connect AI', onClick: handleConnectAIClick }}
+                        />
                     )}
                 </Surface>
 
@@ -249,7 +250,11 @@ const CredentialPage = () => {
                     {credentialCounts.apiKeys > 0 ? (
                         <ApiKeyTable providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota}/>
                     ) : (
-                        <EmptyStateGuide title="No API Keys Configured" description="Connect AI providers like OpenAI, Anthropic, etc. via API key." showHeroIcon={false} primaryButtonLabel="Connect AI" onAddApiKeyClick={handleConnectAIClick}/>
+                        <EmptyState
+                            title="No API Keys Configured"
+                            description="Connect AI providers like OpenAI, Anthropic, etc. via API key."
+                            primaryAction={{ label: 'Connect AI', onClick: handleConnectAIClick }}
+                        />
                     )}
                 </Surface>
             </Stack>

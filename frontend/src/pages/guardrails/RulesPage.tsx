@@ -53,7 +53,7 @@ import {
     Terminal,
 } from '@/components/icons';
 import { Anthropic, Claude, OpenAI } from '@/components/BrandIcons';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
+import EmptyState from '@/components/EmptyState';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
@@ -1330,7 +1330,7 @@ const GuardrailsRulesPage = () => {
             </Typography>
             {items.length === 0 ? (
                 <Box sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
-                    <EmptyStateGuide
+                    <EmptyState
                         title={
                             kind === 'resource_access'
                                 ? 'No resource access policies yet'
@@ -1345,9 +1345,11 @@ const GuardrailsRulesPage = () => {
                                   ? 'Start with a guided command execution policy to control dangerous or disallowed commands.'
                                   : 'Start with a guided privacy policy to filter model output or tool results.'
                         }
-                        showHeroIcon={false}
-                        primaryButtonLabel="New Policy"
-                        onAddApiKeyClick={() => handleNewPolicy(kind)}
+                        compact
+                        primaryAction={{
+                            label: 'New Policy',
+                            onClick: () => handleNewPolicy(kind),
+                        }}
                     />
                 </Box>
             ) : (
@@ -1790,6 +1792,7 @@ const GuardrailsRulesPage = () => {
             <Stack spacing={3}>
                 <UnifiedCard
                     title="Policies"
+                    titleHeadingLevel={1}
                     subtitle="Policies define concrete rules. Groups are managed separately and control which policy sets are active. Built-in policies are marked directly in the list."
                     size="full"
                     rightAction={
