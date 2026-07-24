@@ -505,6 +505,13 @@ The refactor continued through the remaining structural boundaries:
    adapter, and transport routing uses provider-neutral `ControlMetadata`.
 9. `common.Event` is the single raw event contract; root and protocol aliases
    were removed.
+10. Persistent Claude profile policy and runtime permission control remain
+    separate. `ExecutionOptions.PermissionMode` is an optional per-run override:
+    empty emits no CLI flag and inherits the selected settings file's
+    `defaultMode`; a non-empty session control such as `/yolo` becomes Claude
+    Code's `--permission-mode` argument and therefore has higher precedence.
+    Turning `/yolo` off clears the override rather than sending `default`.
+    See `.design/remote-cc-profile.md` §2.1 for the scope and precedence rules.
 
 Validation includes the agentboot module suite, core race tests, production
 composition consumers, and a real Claude Code CLI E2E.

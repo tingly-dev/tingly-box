@@ -60,11 +60,43 @@ sets only `SettingsPath` (mirroring the local CLI's plain `os.Environ()`
 passthrough + `--settings`, no extra env injected); the main-scenario path
 sets only `Env`.
 
-`PermissionMode` is also intentionally empty unless the chat session has an
-explicit override such as `/yolo`. Empty means Claude Code owns resolution:
-the selected profile's `defaultMode` (or the normal Claude Code settings
-default) remains effective. Disabling `/yolo` clears the session override
-instead of forcing `--permission-mode default`.
+### 2.1 Configuration and runtime control are separate
+
+The selected profile is persistent configuration; chat commands are
+session-scoped runtime control. They meet only at the Claude Code CLI launch:
+
+| layer | source / scope | CLI representation | owns |
+|-------|----------------|--------------------|------|
+| Profile configuration | bot `default_agent`; persisted per bot | `--settings <profile/settings.json>` | routing env, models, `defaultMode`, status line |
+| Session control | `session.PermissionMode`; per chat + agent + project | `--permission-mode <mode>` when non-empty | temporary permission override |
+
+Claude Code's explicit command-line option takes precedence over
+`defaultMode` in the selected settings file:
+
+```text
+non-empty session PermissionMode > profile defaultMode > Claude Code default
+```
+
+This is an override relationship, not a synchronization relationship:
+
+- `/yolo` on stores `bypassPermissions` on the current session. The executor
+  passes `--permission-mode bypassPermissions` and uses its host-side
+  auto-approve prompter for permission requests. `AskUserQuestion` still goes
+  through the normal prompter.
+- `/yolo` off stores the empty string. The CLI builder then emits no
+  `--permission-mode` flag, so the currently selected profile's `defaultMode`
+  becomes authoritative again. It must **not** store or pass `default`, because
+  that would still be an explicit CLI override.
+- A new, expired, or closed session starts with an empty permission override.
+- Switching profiles does not silently mutate session control. If `/yolo` is
+  active it remains the higher-priority override; disabling it immediately
+  reveals the newly selected profile's policy.
+- Runtime commands never rewrite the generated profile settings file.
+
+In code, `AgentRouter` resolves `session.PermissionMode`,
+`ClaudeCodeExecutor` places it in `ExecutionOptions.PermissionMode`, and the
+Claude adapter is the sole owner of translating a non-empty value into a CLI
+flag. The backend remains the Claude Code CLI; no SDK runtime is introduced.
 
 **Why a profile needs `--settings` rather than env vars.** Claude Code's
 `--settings <path>` flag *replaces* `~/.claude/settings.json` rather than
@@ -126,9 +158,11 @@ config hint) so it fits without needing to reposition.
 
 ## 4. Non-goals / future
 
-- Per-chat override (e.g. a `/profile` bot command) is deliberately out of
-  scope; the bot-level selection covers the "one bot = one working set" model.
-  If needed later, a chat-level field can shadow the bot default.
+- Per-chat **profile selection** (e.g. a `/profile` bot command) is deliberately
+  out of scope; the bot-level selection covers the "one bot = one working set"
+  model. Session-scoped permission controls such as `/yolo` are orthogonal and
+  do not change which profile is selected. If needed later, a chat-level profile
+  field can shadow the bot default.
 - Other agents in `default_agent` (codex etc.) — `validateDefaultAgent`
   currently whitelists only `claude_code[.:<profile>]`; extend it and the
   executor routing when a second remote agent lands.
