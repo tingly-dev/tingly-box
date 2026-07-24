@@ -57,6 +57,11 @@ const SummarySection = styled(Box)({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: `${header.paddingY}px ${header.paddingX}px`,
+    // The name truncates instead of pushing width (see the Typography's
+    // noWrap below), so this wrap is a rare fallback, not the common case —
+    // cards no longer end up at visibly different heights depending on how
+    // long a bot's name happens to be.
+    minHeight: 56,
 });
 
 interface BotCardProps {
@@ -101,36 +106,42 @@ const BotCard: React.FC<BotCardProps> = ({
             <SummarySection>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0}}>
                     <Tooltip title={bot.name || bot.platform}>
-                        <Typography sx={{
+                        <Typography noWrap sx={{
                             fontFamily: 'monospace', fontSize: '0.875rem', fontWeight: 600,
                             color: isActive ? 'text.primary' : 'text.disabled',
                             opacity: isActive ? 1 : 0.5, cursor: 'default',
+                            minWidth: 0,
                         }}>
                             {bot.name || bot.platform}
                         </Typography>
                     </Tooltip>
-                    {bot.name && <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>}
-                    {/* Purpose status: where this bot is used. Click-through to configure. */}
-                    <Tooltip title={t('bots.card.remoteAgentChipHint', { defaultValue: 'Configure on the Remote Agent page' })}>
-                        <Chip
-                            label={t('bots.card.remoteAgentChip', { defaultValue: 'Remote Agent' })}
-                            size="small"
-                            variant={isMounted ? 'filled' : 'outlined'}
-                            color={isMounted ? 'primary' : 'default'}
-                            onClick={() => navigate(`/remote-agent/${bot.platform}`)}
-                            sx={{opacity: isActive ? 1 : 0.5}}
-                        />
-                    </Tooltip>
-                    <Tooltip title={t('bots.card.notifyChipHint', { defaultValue: 'Configure on the Notify page' })}>
-                        <Chip
-                            label={t('bots.card.notifyChip', { defaultValue: 'Notify' })}
-                            size="small"
-                            variant={isNotified ? 'filled' : 'outlined'}
-                            color={isNotified ? 'primary' : 'default'}
-                            onClick={() => navigate('/notify')}
-                            sx={{opacity: isActive ? 1 : 0.5}}
-                        />
-                    </Tooltip>
+                    {/* Chips never shrink or truncate — the name above gives
+                        up its width first, so this group stays predictable
+                        (same size, same relative position) across cards. */}
+                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, flexWrap: 'wrap'}}>
+                        {bot.name && <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>}
+                        {/* Purpose status: where this bot is used. Click-through to configure. */}
+                        <Tooltip title={t('bots.card.remoteAgentChipHint', { defaultValue: 'Configure on the Remote Agent page' })}>
+                            <Chip
+                                label={t('bots.card.remoteAgentChip', { defaultValue: 'Remote Agent' })}
+                                size="small"
+                                variant={isMounted ? 'filled' : 'outlined'}
+                                color={isMounted ? 'primary' : 'default'}
+                                onClick={() => navigate(`/remote-agent/${bot.platform}`)}
+                                sx={{opacity: isActive ? 1 : 0.5}}
+                            />
+                        </Tooltip>
+                        <Tooltip title={t('bots.card.notifyChipHint', { defaultValue: 'Configure on the Notify page' })}>
+                            <Chip
+                                label={t('bots.card.notifyChip', { defaultValue: 'Notify' })}
+                                size="small"
+                                variant={isNotified ? 'filled' : 'outlined'}
+                                color={isNotified ? 'primary' : 'default'}
+                                onClick={() => navigate('/notify')}
+                                sx={{opacity: isActive ? 1 : 0.5}}
+                            />
+                        </Tooltip>
+                    </Box>
                 </Box>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
                     <Tooltip title={isActive ? t('remoteControl.card.disableBot', { defaultValue: 'Disable Bot' }) : t('remoteControl.card.enableBot', { defaultValue: 'Enable Bot' })}>

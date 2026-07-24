@@ -1,5 +1,6 @@
 import { List, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import type { ReactNode } from 'react';
+import { NAV_ROW_SX, navRowTextSlotProps } from '@/layout/navRowStyles';
 
 export interface PlatformSideNavItem {
     id: string;
@@ -39,13 +40,12 @@ const PlatformSideNav: React.FC<PlatformSideNavProps> = ({ items, value, onChang
                     aria-current={active ? 'true' : undefined}
                     onClick={() => onChange(item.id)}
                     sx={{
-                        borderRadius: 1.25,
                         flexShrink: 0,
                         minWidth: { xs: 168, md: 'auto' },
-                        // Fixed height regardless of whether this row has a
-                        // subtitle (not every platform has bots yet) — keeps
-                        // the list from looking ragged.
-                        minHeight: 52,
+                        // Same row metrics as the global Sidebar (see
+                        // navRowStyles) — this list reads as a continuation
+                        // of it, not a visually different component.
+                        ...NAV_ROW_SX,
                         // Driven entirely by sx (not MUI's `selected` prop,
                         // whose own default .Mui-selected styling would win
                         // over a plain bgcolor here) — same approach as the
@@ -63,13 +63,8 @@ const PlatformSideNav: React.FC<PlatformSideNavProps> = ({ items, value, onChang
                     <ListItemText
                         primary={item.label}
                         secondary={item.subtitle}
-                        slotProps={{
-                            primary: { variant: 'body2' as const, noWrap: true, sx: { fontWeight: 500 } },
-                            secondary: {
-                                variant: 'caption' as const,
-                                sx: { color: active ? 'rgba(255,255,255,0.75)' : 'text.secondary' },
-                            },
-                        }}
+                        slotProps={navRowTextSlotProps(active)}
+                        sx={{ minWidth: 0 }}
                     />
                 </ListItemButton>
             );

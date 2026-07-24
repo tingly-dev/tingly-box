@@ -22,6 +22,7 @@ import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { footerHeight, headerHeight, sidebarWidth } from './constants';
+import { NAV_ROW_SX, navRowTextSlotProps } from './navRowStyles';
 import type { NavItem } from './types';
 import { VersionDisplay } from '@/components/VersionDisplay';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
@@ -140,13 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 )}
                                 sx={{
                                     mx: 1.5,
-                                    borderRadius: 1.25,
-                                    // Fixed regardless of whether this row has a subtitle —
-                                    // rows with and without one used to sit at different
-                                    // heights in the same list, which read as misaligned.
-                                    minHeight: 52,
-                                    py: 1.25,
-                                    px: 2,
+                                    ...NAV_ROW_SX,
                                     color: 'text.secondary',
                                     position: 'relative',
                                     ...(active && {
@@ -176,19 +171,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 <ListItemText
                                     primary={item.label}
                                     secondary={item.subtitle}
-                                    slotProps={{
-                                        primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3 } },
-                                        secondary: { variant: 'caption' as const, sx: { fontSize: '0.6875rem', lineHeight: 1.2 } },
-                                    }}
-                                    sx={{
-                                        minWidth: 0,
-                                        '& .MuiListItemText-primary': {
-                                            fontSize: '0.875rem',
-                                        },
-                                        '& .MuiListItemText-secondary': {
-                                            color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                                        },
-                                    }}
+                                    slotProps={navRowTextSlotProps(active)}
+                                    sx={{ minWidth: 0 }}
                                 />
                                 {item.tooltip && (
                                     <IconInfoCircle
