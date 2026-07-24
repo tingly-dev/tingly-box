@@ -165,7 +165,9 @@ const ProviderFormDialog = ({
             anthropic: provider.baseUrlAnthropic,
         });
         onChangeRef.current('selectedProviderId', provider.id);
-        if (nameIsAutoFilled || !data.name) {
+        // In edit mode the provider name already belongs to the user — selecting a
+        // preset must never overwrite it. Auto-fill only applies in add mode.
+        if (mode === 'add' && (nameIsAutoFilled || !data.name)) {
             onChangeRef.current('name', provider.alias || provider.name);
             setNameIsAutoFilled(true);
         }
