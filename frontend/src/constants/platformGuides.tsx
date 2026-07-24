@@ -102,12 +102,12 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // aren't supported yet — their guide entries and routes stay (so nothing
 // 404s if something still links to them), just left out of this list so
 // they don't show up as pickable platforms.
-export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom', 'qq'] as const;
+export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom'] as const;
 
 const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> => ({
     telegram: {
         id: 'telegram',
-        name: 'Telegram',
+        name: t('layout.platforms.telegram', { defaultValue: 'Telegram' }),
         description: t('remoteControl.guides.telegram.description', { defaultValue: 'Popular cloud-based instant messaging service' }),
         icon: '📱',
         BrandIcon: Telegram,
@@ -159,7 +159,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     feishu: {
         id: 'feishu',
-        name: 'Feishu (飞书)',
+        name: t('layout.platforms.feishu', { defaultValue: 'Feishu' }),
         description: t('remoteControl.guides.feishu.description', { defaultValue: 'Enterprise collaboration platform' }),
         icon: '🚀',
         BrandIcon: Feishu,
@@ -175,7 +175,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     lark: {
         id: 'lark',
-        name: 'Lark',
+        name: t('layout.platforms.lark', { defaultValue: 'Lark' }),
         description: t('remoteControl.guides.lark.description', { defaultValue: 'Global version of Feishu' }),
         icon: '🐦',
         BrandIcon: Lark,
@@ -191,7 +191,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     dingtalk: {
         id: 'dingtalk',
-        name: 'DingTalk (钉钉)',
+        name: t('layout.platforms.dingtalk', { defaultValue: 'DingTalk' }),
         description: t('remoteControl.guides.dingtalk.description', { defaultValue: 'Enterprise communication and collaboration' }),
         icon: '💬',
         BrandIcon: DingTalk,
@@ -247,7 +247,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     weixin: {
         id: 'weixin',
-        name: 'Weixin (微信)',
+        name: t('layout.platforms.weixin', { defaultValue: 'Weixin' }),
         description: t('remoteControl.guides.weixin.description', { defaultValue: 'China\'s most popular messaging platform' }),
         icon: '💚',
         BrandIcon: Weixin,
@@ -292,7 +292,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     wecom: {
         id: 'wecom',
-        name: 'WeCom (企业微信)',
+        name: t('layout.platforms.wecom', { defaultValue: 'WeCom' }),
         description: t('remoteControl.guides.wecom.description', { defaultValue: 'Enterprise Weixin communication platform' }),
         icon: '💼',
         BrandIcon: WeCom,

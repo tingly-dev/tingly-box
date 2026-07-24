@@ -61,8 +61,8 @@ export function useActivityItems(): ActivityItem[] {
             (acc, s) => ({ active: acc.active + s.active, total: acc.total + s.total }),
             { active: 0, total: 0 }
         );
-        return totals.total > 0 ? `active ${totals.active} / ${totals.total}` : undefined;
-    }, [botSummary]);
+        return totals.total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: totals.active, total: totals.total }) : undefined;
+    }, [botSummary, t]);
 
     const promptMenuItems = useMemo(() => {
         const items: NavItem[] = [];

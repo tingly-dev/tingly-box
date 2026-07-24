@@ -1,9 +1,9 @@
-import { BotCard, BotConfigDialog, PlatformTabBar } from '@/components/bot';
+import { BotCard, BotConfigDialog, PlatformPicker } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
-import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
+import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom } from '@/components/BrandIcons';
 import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { api } from '@/services/api';
 import type { BotSettings } from '@/types/bot';
@@ -14,7 +14,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 // Plain lookup (not the usePlatformGuide hook) so it's safe to call from
-// inside a .map() when building the side nav's item list.
+// inside a .map() when building the picker's item list.
 const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
     telegram: Telegram,
     feishu: Feishu,
@@ -22,9 +22,6 @@ const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }
     dingtalk: DingTalk,
     weixin: Weixin,
     wecom: WeCom,
-    qq: QQ,
-    discord: Discord,
-    slack: Slack,
 };
 
 // BotOverviewPage is the front door for the Bots section: every connected
@@ -96,9 +93,9 @@ const BotOverviewPage = () => {
     }, [bots]);
 
     const countLabel = (active: number, total: number): string | undefined =>
-        total > 0 ? `active ${active} / ${total}` : undefined;
+        total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active, total }) : undefined;
 
-    const tabBarItems = useMemo(() => [
+    const pickerItems = useMemo(() => [
         {
             id: 'all',
             label: t('bots.overview.allPlatforms', { defaultValue: 'All' }),
@@ -213,7 +210,7 @@ const BotOverviewPage = () => {
 
     return (
         <PageLayout loading={false}>
-            <PlatformTabBar items={tabBarItems} value={selectedPlatform} onChange={selectPlatform} dividerAfter={1} />
+            <PlatformPicker items={pickerItems} value={selectedPlatform} onChange={selectPlatform} />
             {!botLoading && selectedPlatform !== 'all' && guideConfig?.guide && (
                 <CollapsibleGuide
                     platformName={platformName}

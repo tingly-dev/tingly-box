@@ -363,9 +363,9 @@ Neither "Bots" (nav label) nor any purpose page ever says "channel" —
 that word stays reserved for the backend architecture vocabulary in §2/§9.
 A bot connection is just "a bot"; users pick a platform, not a channel.
 
-**Platform selection lives in the page, as a horizontal chip row.** Overview
-and Remote both need a platform picker (Notify doesn't — it has no
-per-platform-specific content). Two earlier approaches didn't survive
+**Platform selection lives in the page, as a grid of equal-size tiles.**
+Overview and Remote both need a platform picker (Notify doesn't — it has no
+per-platform-specific content). Several earlier approaches didn't survive
 contact with real content and narrow viewports:
 
 - MUI `Tabs`: dropped the `active X / Y` count next to each platform, and —
@@ -376,21 +376,23 @@ contact with real content and narrow viewports:
   for row alignment): fixed the two problems above, but needed three nav
   columns side by side (rail + Sidebar + this), which had no room below
   desktop widths and broke down to visibly misaligned, overlapping content.
-  It also took real effort to get right — a border-shorthand bug that
-  rendered as a stray black edge, row heights that drifted out of sync with
-  the Sidebar until their styling was unified into `layout/navRowStyles.ts`.
+- A horizontal `Chip` row: lived in the normal content flow (no breakout
+  margins, no sticky positioning), but chips are width-of-their-content, so
+  "Lark" ended up tiny next to "WeCom (企业微信)" — a ragged row that read
+  as inconsistent with the rest of the app.
 
-The shipped version, `components/bot/PlatformTabBar`, keeps what the vertical
-version got right (per-platform counts, the guide comes back with a specific
-platform, a divider separating "All" from the itemized list) but as a
-horizontal `Chip` row sitting inside the page's normal content flow — no
-breakout margins, no sticky positioning, no background/border matching to
-maintain, and it degrades to wrapping chips rather than breaking on narrow
-screens. Overview's row gets a leading "All" chip (no per-platform guide
-makes sense there) followed by a divider; Remote's doesn't, since Remote has
-no cross-platform view. Selecting a platform on Overview also locks
-`BotConfigDialog`'s platform selector (`lockPlatform={true}`) for that add
-flow, same as Remote already did — "All" leaves it unlocked.
+The shipped version, `components/bot/PlatformPicker`, keeps what the earlier
+cuts got right (per-platform counts, the guide comes back when a specific
+platform is picked on Overview) as a responsive `Grid` of equal-size tiles,
+one per platform — the same pattern as the dashboard's `StatCard` grid
+(`Grid` with `size`, uniform `height: 100%`, tinted-border selected state).
+Fixed tiles keep every option the same shape regardless of label length, and
+the grid reflows cleanly from 6-up on wide screens to 2-up on narrow ones.
+Overview's grid gets a leading "All" tile (no per-platform guide makes sense
+there); Remote's doesn't, since Remote has no cross-platform view. Selecting
+a platform on Overview also locks `BotConfigDialog`'s platform selector
+(`lockPlatform={true}`) for that add flow, same as Remote already did —
+"All" leaves it unlocked.
 
 **Shared add/edit interaction, unchanged.** The bot-resource form is still
 one component (`components/bot/BotConfigDialog`). Overview has no fixed

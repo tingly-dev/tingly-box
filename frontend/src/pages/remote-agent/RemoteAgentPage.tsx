@@ -1,8 +1,8 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
-import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
-import { PlatformTabBar } from '@/components/bot';
+import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom } from '@/components/BrandIcons';
+import { PlatformPicker } from '@/components/bot';
 import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { api } from '@/services/api';
 import PlatformRemoteAgentPage from './PlatformRemoteAgentPage';
@@ -14,9 +14,6 @@ const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }
     dingtalk: DingTalk,
     weixin: Weixin,
     wecom: WeCom,
-    qq: QQ,
-    discord: Discord,
-    slack: Slack,
 };
 
 // RemoteAgentPage is the nav-facing entry for the Remote purpose: ONE sidebar
@@ -51,21 +48,21 @@ const RemoteAgentPage = () => {
         return () => { cancelled = true; };
     }, [platform]);
 
-    const tabBarItems = useMemo(() => BOT_PLATFORM_IDS.map((id) => {
+    const pickerItems = useMemo(() => BOT_PLATFORM_IDS.map((id) => {
         const BrandIcon = PLATFORM_BRAND_ICONS[id];
         const c = counts[id];
         return {
             id,
             label: platformDisplayName(id, t),
             icon: <BrandIcon size={20} />,
-            subtitle: c && c.total > 0 ? `active ${c.active} / ${c.total}` : undefined,
+            subtitle: c && c.total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: c.active, total: c.total }) : undefined,
         };
     }), [t, counts]);
 
     return (
         <>
-            <PlatformTabBar
-                items={tabBarItems}
+            <PlatformPicker
+                items={pickerItems}
                 value={BOT_PLATFORM_IDS.includes(platform as typeof BOT_PLATFORM_IDS[number]) ? platform : ''}
                 onChange={(next) => navigate(`/remote-agent/${next}`)}
             />

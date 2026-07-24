@@ -1192,10 +1192,32 @@ export default {
     }
   },
   "bots": {
+    "activeCount": "启用 {{active}} / {{total}}",
     "card": {
       "remoteAgentChip": "远程 Agent",
-      "remoteAgentChipHint": "前往远程 Agent 页面配置"
+      "remoteAgentChipHint": "前往远程 Agent 页面配置",
+      "notifyChip": "通知",
+      "notifyChipHint": "前往通知页面配置"
+    },
+    "overview": {
+      "allPlatforms": "全部",
+      "title": "机器人",
+      "platformTitle": "{{platform}} 机器人",
+      "subtitle": "已连接 {{count}} 个机器人",
+      "connectBot": "连接机器人",
+      "emptyTitle": "尚未连接机器人",
+      "emptyDescription": "连接一个机器人，即可从聊天中遥控 Claude Code（远程）或接收通知（通知）。"
     }
+  },
+  "notify": {
+    "title": "通知",
+    "subtitle": "哪些机器人负责把场景通知和交互式提示投递到聊天。",
+    "emptyTitle": "尚未连接机器人",
+    "emptyDescription": "请先在概览页连接一个机器人，再回到这里查看它的通知情况。",
+    "mounted": "通知中",
+    "notMounted": "无路由",
+    "attachComingSoon": "+ 添加路由（即将支持）",
+    "attachComingSoonHint": "暂不支持从这里添加路由 —— 路由目前按场景单独配置。"
   },
   "remoteControl": {
     "bots": {
