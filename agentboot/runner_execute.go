@@ -261,7 +261,11 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		shutdownWG.Wait()
 
 		state.mu.Lock()
-		if processWaitErr != nil {
+		terminalSucceeded := state.terminalSeen && state.terminalErr == nil
+		// A successful terminal result is the authoritative run outcome.
+		// Claude Code can remain alive while flushing state, in which case the
+		// grace-period Kill is cleanup rather than a process failure.
+		if processWaitErr != nil && !terminalSucceeded {
 			state.processErr = newProcessError(r.driver.Type(), processWaitErr)
 			state.exitCode = state.processErr.ExitCode
 		}
