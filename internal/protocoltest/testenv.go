@@ -426,6 +426,7 @@ func (env *TestEnv) dispatch(source, target protocol.APIType, scenarioName, path
 		parsed = parseFromJSON(raw, sourceToStyle(source))
 	}
 	fillFromParsedResult(result, parsed)
+	classifyStreamEvents(result)
 
 	return result, nil
 }

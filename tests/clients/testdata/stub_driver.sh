@@ -14,5 +14,7 @@ printf '%s\n' '{
   "tool_calls": [{"id": "call_1", "name": "get_weather", "arguments": "{\"location\":\"Paris\"}"}],
   "usage": {"input_tokens": 10, "output_tokens": 8},
   "stream_event_count": 4,
+  "stream_completed": false,
+  "stream_error": {"type": "StreamError", "message": "upstream truncated"},
   "raw_body": "stub raw body"
 }'

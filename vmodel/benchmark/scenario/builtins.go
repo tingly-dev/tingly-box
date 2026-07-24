@@ -690,11 +690,12 @@ func ErrorMidStreamCloseScenario() Scenario {
 		Assertions: []check.Assertion{
 			// A mid-stream cut must be handled gracefully: the response stays
 			// 200 (headers were already sent) and the stream terminates in a
-			// client-consumable way. Anthropic-target paths surface it as an
-			// in-band error event (real SDK clients raise — the turn was
-			// truncated, not completed); OpenAI-target paths end with the
-			// partial content. The gateway must not 5xx or hang either way.
+			// client-consumable way. The client must preserve the events it
+			// already received, report the stream error explicitly, and never
+			// present the truncated turn as normally completed.
 			check.AssertHTTPStatus(200),
+			check.AssertStreamError(),
+			check.AssertStreamNotCompleted(),
 		},
 		Structural: []check.Assertion{
 			check.AssertHTTPStatus(200),

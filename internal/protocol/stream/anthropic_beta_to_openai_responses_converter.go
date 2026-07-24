@@ -73,14 +73,8 @@ func (c *anthropicBetaToResponsesConverter) Next() (interface{}, bool, error) {
 			if err := c.stream.Err(); err != nil {
 				return nil, false, err
 			}
-			// Stream ended without message_stop — emit fallback completion
 			if !c.finished {
-				c.emitCompletionEvents()
-				if len(c.pending) > 0 {
-					evt := c.pending[0]
-					c.pending = c.pending[1:]
-					return evt, false, nil
-				}
+				return nil, false, fmt.Errorf("anthropic stream ended without message_stop")
 			}
 			return nil, true, nil
 		}

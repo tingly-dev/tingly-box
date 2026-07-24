@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -19,6 +20,8 @@ import (
 const (
 	defaultMaxRounds = 3
 )
+
+var errTruncatedStream = errors.New("upstream stream truncated")
 
 // GenericStreamInterceptor implements format-agnostic streaming MCP tool handling
 type GenericStreamInterceptor struct {
@@ -127,6 +130,17 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 		response, err := i.consumeRound(stream)
 		stream.Close()
 		if err != nil {
+			if errors.Is(err, errTruncatedStream) {
+				payload, _ := json.Marshal(map[string]interface{}{
+					"type": "error",
+					"error": map[string]interface{}{
+						"type":    "stream_error",
+						"message": err.Error(),
+						"code":    "upstream_truncated",
+					},
+				})
+				return i.adapter.SendEvent(i.c, "error", payload)
+			}
 			return err
 		}
 
@@ -244,6 +258,13 @@ func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error
 	if err != nil {
 		return nil, fmt.Errorf("stream error: %w", err)
 	}
+	if i.seenMessageStart && i.roundMessageStop == nil {
+		return nil, fmt.Errorf("%w: anthropic stream ended without message_stop", errTruncatedStream)
+	}
+	if i.roundOpenAI != nil && len(i.roundOpenAI.Choices) > 0 &&
+		i.roundOpenAI.Choices[0].FinishReason == "" {
+		return nil, fmt.Errorf("%w: chat stream ended without a finish reason", errTruncatedStream)
+	}
 
 	// Build complete response from accumulated state
 	return i.roundResponse(), nil
@@ -282,21 +303,33 @@ func (i *GenericStreamInterceptor) roundResponse() any {
 func (i *GenericStreamInterceptor) accumulateRoundEvent(event any) {
 	switch e := event.(type) {
 	case anthropic.MessageStreamEventUnion:
+		if e.Type == "message_start" {
+			i.seenMessageStart = true
+		}
 		if i.roundAnthropicV1 == nil {
 			i.roundAnthropicV1 = &anthropic.Message{}
 		}
 		i.roundAnthropicV1.Accumulate(e)
 	case *anthropic.MessageStreamEventUnion:
+		if e != nil && e.Type == "message_start" {
+			i.seenMessageStart = true
+		}
 		if i.roundAnthropicV1 == nil {
 			i.roundAnthropicV1 = &anthropic.Message{}
 		}
 		i.roundAnthropicV1.Accumulate(*e)
 	case anthropic.BetaRawMessageStreamEventUnion:
+		if e.Type == "message_start" {
+			i.seenMessageStart = true
+		}
 		if i.roundAnthropicBeta == nil {
 			i.roundAnthropicBeta = &anthropic.BetaMessage{}
 		}
 		i.roundAnthropicBeta.Accumulate(e)
 	case *anthropic.BetaRawMessageStreamEventUnion:
+		if e != nil && e.Type == "message_start" {
+			i.seenMessageStart = true
+		}
 		if i.roundAnthropicBeta == nil {
 			i.roundAnthropicBeta = &anthropic.BetaMessage{}
 		}

@@ -1,7 +1,11 @@
 package protocoltest
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 )
 
 // harnessPrompt is the single user prompt every matrix request carries.
@@ -55,4 +59,72 @@ func newRoundTripResult(spec SendSpec) *RoundTripResult {
 func normalizeResultJSON(result *RoundTripResult, raw []byte, source protocol.APIType, streaming bool) {
 	parsed := parseFromJSON(raw, sourceToStyle(source))
 	fillFromParsedResult(result, parsed)
+}
+
+// classifyStreamEvents extracts the two outcome states that semantic response
+// assembly intentionally does not represent: an in-band stream error and a
+// normal completion marker. It accepts both raw SSE lines and SDK event JSON.
+func classifyStreamEvents(result *RoundTripResult) {
+	if !result.IsStreaming {
+		return
+	}
+	for _, line := range result.StreamEvents {
+		payload, ok := sse.ParseSSEDataPayload(line)
+		if !ok {
+			payload = line
+		}
+		if payload == "[DONE]" {
+			if result.SourceProtocol == protocol.TypeOpenAIChat {
+				result.StreamCompleted = true
+			}
+			continue
+		}
+
+		var event map[string]interface{}
+		if json.Unmarshal([]byte(payload), &event) != nil {
+			continue
+		}
+		eventType, _ := event["type"].(string)
+		switch result.SourceProtocol {
+		case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+			result.StreamCompleted = result.StreamCompleted || eventType == "message_stop"
+		case protocol.TypeOpenAIChat:
+			if choices, ok := event["choices"].([]interface{}); ok {
+				for _, rawChoice := range choices {
+					choice, _ := rawChoice.(map[string]interface{})
+					if finish, ok := choice["finish_reason"].(string); ok && finish != "" {
+						result.StreamCompleted = true
+					}
+				}
+			}
+		case protocol.TypeOpenAIResponses:
+			result.StreamCompleted = result.StreamCompleted || eventType == "response.completed"
+		}
+
+		if eventType == "error" || event["error"] != nil {
+			result.StreamError = streamErrorMessage(event)
+		}
+	}
+}
+
+func streamErrorMessage(event map[string]interface{}) string {
+	if envelope, ok := event["error"].(map[string]interface{}); ok {
+		if message, ok := envelope["message"].(string); ok && message != "" {
+			return message
+		}
+		if nested, ok := envelope["error"].(map[string]interface{}); ok {
+			if message, ok := nested["message"].(string); ok && message != "" {
+				return message
+			}
+		}
+	}
+	if message, ok := event["message"].(string); ok && message != "" {
+		return message
+	}
+	return strings.TrimSpace(string(mustJSON(event)))
+}
+
+func mustJSON(value interface{}) []byte {
+	data, _ := json.Marshal(value)
+	return data
 }

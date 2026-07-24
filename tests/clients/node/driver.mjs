@@ -17,6 +17,20 @@ function toolCall(id, name, args) {
   return { id, name, arguments: args };
 }
 
+function streamErrorResponse(count, content, error) {
+  return {
+    http_status: 200,
+    content,
+    stream_event_count: count,
+    stream_completed: false,
+    raw_body: String(error?.message ?? error),
+    stream_error: {
+      type: error?.name ?? "StreamError",
+      message: String(error?.message ?? error),
+    },
+  };
+}
+
 // ── Anthropic (v1 + beta) ────────────────────────────────────────────────────
 
 function normalizeAnthropicMessage(msg) {
@@ -71,6 +85,7 @@ async function runAnthropic(req, beta) {
     const msg = await stream.finalMessage();
     const resp = normalizeAnthropicMessage(msg);
     resp.stream_event_count = count;
+    resp.stream_completed = true;
     return resp;
   } catch (e) {
     if (isAPIError(e)) return apiErrorResponse(e);
@@ -120,22 +135,27 @@ async function runOpenAIChat(req, client) {
   let finish = "";
   let model = "";
   const tools = new Map();
-  for await (const chunk of stream) {
-    count++;
-    model = chunk.model || model;
-    const choice = chunk.choices?.[0];
-    if (!choice) continue;
-    const delta = choice.delta ?? {};
-    role = delta.role || role;
-    content += delta.content ?? "";
-    for (const tc of delta.tool_calls ?? []) {
-      const slot = tools.get(tc.index) ?? { id: "", name: "", arguments: "" };
-      if (tc.id) slot.id = tc.id;
-      if (tc.function?.name) slot.name = tc.function.name;
-      slot.arguments += tc.function?.arguments ?? "";
-      tools.set(tc.index, slot);
+  try {
+    for await (const chunk of stream) {
+      count++;
+      model = chunk.model || model;
+      const choice = chunk.choices?.[0];
+      if (!choice) continue;
+      const delta = choice.delta ?? {};
+      role = delta.role || role;
+      content += delta.content ?? "";
+      for (const tc of delta.tool_calls ?? []) {
+        const slot = tools.get(tc.index) ?? { id: "", name: "", arguments: "" };
+        if (tc.id) slot.id = tc.id;
+        if (tc.function?.name) slot.name = tc.function.name;
+        slot.arguments += tc.function?.arguments ?? "";
+        tools.set(tc.index, slot);
+      }
+      finish = choice.finish_reason || finish;
     }
-    finish = choice.finish_reason || finish;
+  } catch (e) {
+    if (isAPIError(e) || count === 0) throw e;
+    return streamErrorResponse(count, content, e);
   }
   const toolCalls = [...tools.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -150,6 +170,7 @@ async function runOpenAIChat(req, client) {
     tool_calls: toolCalls,
     usage: null,
     stream_event_count: count,
+    stream_completed: true,
     raw_body: content,
   };
 }
@@ -193,32 +214,31 @@ async function runOpenAIResponses(req, client) {
   let count = 0;
   let final = null;
   let deltaText = "";
-  for await (const event of stream) {
-    count++;
-    if (event.type === "response.completed" || event.type === "response.incomplete") {
-      final = event.response;
-    } else if (event.type === "response.output_text.delta") {
-      deltaText += event.delta ?? "";
+  try {
+    for await (const event of stream) {
+      count++;
+      if (event.type === "response.completed" || event.type === "response.incomplete") {
+        final = event.response;
+      } else if (event.type === "response.output_text.delta") {
+        deltaText += event.delta ?? "";
+      }
     }
+  } catch (e) {
+    if (isAPIError(e) || count === 0) throw e;
+    return streamErrorResponse(count, deltaText, e);
   }
   let resp;
   if (final) {
     resp = normalizeResponse(final);
   } else {
-    // Stream cut before a terminal event (midstream-close).
-    resp = {
-      http_status: 200,
-      role: "assistant",
-      content: deltaText,
-      model: "",
-      finish_reason: "",
-      thinking: "",
-      tool_calls: [],
-      usage: null,
-      raw_body: deltaText,
-    };
+    return streamErrorResponse(
+      count,
+      deltaText,
+      new Error("responses stream ended without a terminal event"),
+    );
   }
   resp.stream_event_count = count;
+  resp.stream_completed = true;
   return resp;
 }
 

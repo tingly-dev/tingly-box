@@ -72,6 +72,9 @@ func TestSubprocessClient_Contract(t *testing.T) {
 	if len(res.StreamEvents) != 4 {
 		t.Errorf("stream_event_count: got %d, want 4", len(res.StreamEvents))
 	}
+	if res.StreamError != "upstream truncated" || res.StreamCompleted {
+		t.Errorf("stream outcome: error=%q completed=%v", res.StreamError, res.StreamCompleted)
+	}
 	if string(res.RawBody) != "stub raw body" {
 		t.Errorf("raw_body: got %q", res.RawBody)
 	}
