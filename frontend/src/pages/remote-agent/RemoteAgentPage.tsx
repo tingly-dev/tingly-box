@@ -1,36 +1,79 @@
-import { Box, Tab, Tabs } from '@mui/material';
+import { Box } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useEffect, useMemo, useState } from 'react';
+import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
+import { PlatformSideNav } from '@/components/bot';
 import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
+import { api } from '@/services/api';
 import PlatformRemoteAgentPage from './PlatformRemoteAgentPage';
+
+const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+    telegram: Telegram,
+    feishu: Feishu,
+    lark: Lark,
+    dingtalk: DingTalk,
+    weixin: Weixin,
+    wecom: WeCom,
+    qq: QQ,
+    discord: Discord,
+    slack: Slack,
+};
 
 // RemoteAgentPage is the nav-facing entry for the Remote purpose: ONE sidebar
 // row (under the "Bots" rail icon, alongside Overview and Notify), with
-// platform selection moved in-page as tabs instead of nine separate sidebar
-// rows. The routes it tabs between (/remote-agent/:platform) are unchanged —
-// deep links and the BotCard purpose chip still work exactly as before.
-// PlatformRemoteAgentPage itself is untouched: same guide, add, and pairing
-// behavior it already had.
+// platform selection moved in-page — a vertical picker on the left, the same
+// interaction and visual language as the platform rows the global Sidebar
+// used to show, just scoped to this page instead of the app-wide nav. The
+// routes it switches between (/remote-agent/:platform) are unchanged — deep
+// links and the BotCard purpose chip still work. PlatformRemoteAgentPage
+// itself is untouched: same guide, add, and pairing behavior it already had.
 const RemoteAgentPage = () => {
     const { platform = 'weixin' } = useParams<{ platform: string }>();
     const navigate = useNavigate();
     const { t } = useTranslation();
     const platformName = usePlatformGuide(platform)?.name || platform;
 
+    // Active/total per platform, for the side nav subtitles — mirrors what
+    // the old per-platform sidebar rows showed.
+    const [counts, setCounts] = useState<Record<string, { active: number; total: number }>>({});
+    useEffect(() => {
+        let cancelled = false;
+        api.getImBotSettingsList().then((data) => {
+            if (cancelled || !data?.success || !Array.isArray(data.settings)) return;
+            const map: Record<string, { active: number; total: number }> = {};
+            for (const bot of data.settings) {
+                if (!bot?.platform) continue;
+                const slot = map[bot.platform] ?? (map[bot.platform] = { active: 0, total: 0 });
+                slot.total++;
+                if (bot.enabled) slot.active++;
+            }
+            setCounts(map);
+        }).catch(() => {});
+        return () => { cancelled = true; };
+    }, [platform]);
+
+    const sideNavItems = useMemo(() => BOT_PLATFORM_IDS.map((id) => {
+        const BrandIcon = PLATFORM_BRAND_ICONS[id];
+        const c = counts[id];
+        return {
+            id,
+            label: platformDisplayName(id, t),
+            icon: <BrandIcon size={20} />,
+            subtitle: c && c.total > 0 ? `active ${c.active} / ${c.total}` : undefined,
+        };
+    }), [t, counts]);
+
     return (
-        <Box>
-            <Tabs
-                value={BOT_PLATFORM_IDS.includes(platform as typeof BOT_PLATFORM_IDS[number]) ? platform : false}
-                onChange={(_, next) => navigate(`/remote-agent/${next}`)}
-                variant="scrollable"
-                scrollButtons="auto"
-                sx={{ mb: 1, minHeight: 40, '& .MuiTab-root': { minHeight: 40, py: 0.75 } }}
-            >
-                {BOT_PLATFORM_IDS.map((id) => (
-                    <Tab key={id} value={id} label={platformDisplayName(id, t)} />
-                ))}
-            </Tabs>
-            <PlatformRemoteAgentPage platformId={platform} platformName={platformName} />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' } }}>
+            <PlatformSideNav
+                items={sideNavItems}
+                value={BOT_PLATFORM_IDS.includes(platform as typeof BOT_PLATFORM_IDS[number]) ? platform : ''}
+                onChange={(next) => navigate(`/remote-agent/${next}`)}
+            />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+                <PlatformRemoteAgentPage platformId={platform} platformName={platformName} />
+            </Box>
         </Box>
     );
 };

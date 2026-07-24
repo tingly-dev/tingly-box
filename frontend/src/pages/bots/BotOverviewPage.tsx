@@ -1,24 +1,44 @@
-import { BotCard, BotConfigDialog } from '@/components/bot';
+import { BotCard, BotConfigDialog, PlatformSideNav } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
+import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
+import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
+import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { api } from '@/services/api';
 import type { BotSettings } from '@/types/bot';
-import { Add } from '@/components/icons';
+import { Add, ListAlt } from '@/components/icons';
 import { Alert, Box, Button, CircularProgress, Snackbar } from '@mui/material';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+
+// Plain lookup (not the usePlatformGuide hook) so it's safe to call from
+// inside a .map() when building the side nav's item list.
+const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+    telegram: Telegram,
+    feishu: Feishu,
+    lark: Lark,
+    dingtalk: DingTalk,
+    weixin: Weixin,
+    wecom: WeCom,
+    qq: QQ,
+    discord: Discord,
+    slack: Slack,
+};
 
 // BotOverviewPage is the front door for the Bots section: every connected
 // bot, across every platform, in one list. It's the only place a bot's
 // credential (token / OAuth / QR session) gets typed, rotated, or deleted —
 // Remote and Notify only mount purposes onto bots that already exist here.
-// Platform is just a column, not a nav split: unlike the per-platform pages
-// it supersedes in the nav, this page has no platform filter.
+// "All" is the default view; picking a platform (left nav, ?platform=) both
+// filters the list AND brings back that platform's setup guide, since a
+// guide only makes sense once you've committed to one platform.
 const BotOverviewPage = () => {
     const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
+    const selectedPlatform = searchParams.get('platform') || 'all';
+    const guideConfig = usePlatformGuide(selectedPlatform === 'all' ? '' : selectedPlatform);
 
     const [bots, setBots] = useState<BotSettings[]>([]);
 
@@ -62,11 +82,59 @@ const BotOverviewPage = () => {
         loadBotSettings();
     }, [loadBotSettings]);
 
+    // Per-platform active/total, plus the 'all' aggregate — drives both the
+    // side nav subtitles and the card header count.
+    const platformCounts = useMemo(() => {
+        const counts: Record<string, { active: number; total: number }> = {};
+        for (const bot of bots) {
+            if (!bot.platform) continue;
+            const slot = counts[bot.platform] ?? (counts[bot.platform] = { active: 0, total: 0 });
+            slot.total++;
+            if (bot.enabled) slot.active++;
+        }
+        return counts;
+    }, [bots]);
+
+    const countLabel = (active: number, total: number): string | undefined =>
+        total > 0 ? `active ${active} / ${total}` : undefined;
+
+    const sideNavItems = useMemo(() => [
+        {
+            id: 'all',
+            label: t('bots.overview.allPlatforms', { defaultValue: 'All' }),
+            icon: <ListAlt sx={{ fontSize: 20 }} />,
+            subtitle: countLabel(bots.filter(b => b.enabled).length, bots.length),
+        },
+        ...BOT_PLATFORM_IDS.map((id) => {
+            const BrandIcon = PLATFORM_BRAND_ICONS[id];
+            const c = platformCounts[id];
+            return {
+                id,
+                label: platformDisplayName(id, t),
+                icon: <BrandIcon size={20} />,
+                subtitle: c ? countLabel(c.active, c.total) : undefined,
+            };
+        }),
+    ], [t, bots, platformCounts]);
+
+    const selectPlatform = useCallback((id: string) => {
+        const next = new URLSearchParams(searchParams);
+        if (id === 'all') next.delete('platform');
+        else next.set('platform', id);
+        setSearchParams(next);
+    }, [searchParams, setSearchParams]);
+
+    const filteredBots = useMemo(
+        () => selectedPlatform === 'all' ? bots : bots.filter(b => b.platform === selectedPlatform),
+        [bots, selectedPlatform]
+    );
+
     const openAddDialog = useCallback(() => {
         setDialogMode('add');
         setDialogEditUuid(null);
+        if (selectedPlatform !== 'all') setDialogPlatformId(selectedPlatform);
         setDialogOpen(true);
-    }, []);
+    }, [selectedPlatform]);
 
     const openEditDialog = useCallback((uuid: string, platformId: string) => {
         setDialogMode('edit');
@@ -141,65 +209,82 @@ const BotOverviewPage = () => {
         }
     }, [loadBotSettings, showNotification, t]);
 
+    const platformName = selectedPlatform === 'all' ? '' : platformDisplayName(selectedPlatform, t);
+
     return (
         <PageLayout loading={false}>
-            <UnifiedCard
-                title={t('bots.overview.title', { defaultValue: 'Bots' })}
-                subtitle={t('bots.overview.subtitle', {
-                    defaultValue: `${bots.length} bot${bots.length !== 1 ? 's' : ''} connected, across every platform`,
-                    count: bots.length,
-                })}
-                size="full"
-                sx={{ mb: 2 }}
-                titleHeadingLevel={1}
-                rightAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={openAddDialog}
-                        size="small"
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' } }}>
+                <PlatformSideNav items={sideNavItems} value={selectedPlatform} onChange={selectPlatform} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {!botLoading && selectedPlatform !== 'all' && guideConfig?.guide && (
+                        <CollapsibleGuide
+                            platformName={platformName}
+                            platformGuide={guideConfig.guide}
+                            defaultExpanded={filteredBots.length === 0}
+                        />
+                    )}
+                    <UnifiedCard
+                        title={selectedPlatform === 'all'
+                            ? t('bots.overview.title', { defaultValue: 'Bots' })
+                            : t('bots.overview.platformTitle', { defaultValue: '{{platform}} Bots', platform: platformName })}
+                        subtitle={t('bots.overview.subtitle', {
+                            defaultValue: `${filteredBots.length} bot${filteredBots.length !== 1 ? 's' : ''} connected`,
+                            count: filteredBots.length,
+                        })}
+                        size="full"
+                        sx={{ mb: 2 }}
+                        titleHeadingLevel={1}
+                        rightAction={
+                            <Button
+                                variant="contained"
+                                startIcon={<Add />}
+                                onClick={openAddDialog}
+                                size="small"
+                            >
+                                {t('bots.overview.connectBot', { defaultValue: 'Connect a bot' })}
+                            </Button>
+                        }
                     >
-                        {t('bots.overview.connectBot', { defaultValue: 'Connect a bot' })}
-                    </Button>
-                }
-            >
-                {botLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : bots.length === 0 ? (
-                    <EmptyState
-                        title={t('bots.overview.emptyTitle', { defaultValue: 'No bots connected yet' })}
-                        description={t('bots.overview.emptyDescription', { defaultValue: 'Connect a bot to drive Claude Code from chat (Remote) or deliver notifications (Notify).' })}
-                        primaryAction={{
-                            label: t('bots.overview.connectBot', { defaultValue: 'Connect a bot' }),
-                            onClick: openAddDialog,
-                        }}
-                    />
-                ) : (
-                    bots.map((bot) => (
-                        <div key={bot.uuid}>
-                            <BotCard
-                                bot={bot}
-                                onEdit={() => openEditDialog(bot.uuid!, bot.platform!)}
-                                onDelete={() => handleDeleteBot(bot.uuid!)}
-                                onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
-                                onRestart={() => handleBotRestart(bot.uuid!)}
-                                isToggling={togglingBotUuid === bot.uuid}
-                                isRestarting={restartingBotUuid === bot.uuid}
+                        {botLoading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : filteredBots.length === 0 ? (
+                            <EmptyState
+                                title={t('bots.overview.emptyTitle', { defaultValue: 'No bots connected yet' })}
+                                description={t('bots.overview.emptyDescription', { defaultValue: 'Connect a bot to drive Claude Code from chat (Remote) or deliver notifications (Notify).' })}
+                                primaryAction={{
+                                    label: t('bots.overview.connectBot', { defaultValue: 'Connect a bot' }),
+                                    onClick: openAddDialog,
+                                }}
                             />
-                        </div>
-                    ))
-                )}
-            </UnifiedCard>
-            {/* Shared add/edit dialog for the bot resource. lockPlatform=false:
-                this page has no fixed platform, so the user picks one here. */}
+                        ) : (
+                            filteredBots.map((bot) => (
+                                <div key={bot.uuid}>
+                                    <BotCard
+                                        bot={bot}
+                                        onEdit={() => openEditDialog(bot.uuid!, bot.platform!)}
+                                        onDelete={() => handleDeleteBot(bot.uuid!)}
+                                        onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
+                                        onRestart={() => handleBotRestart(bot.uuid!)}
+                                        isToggling={togglingBotUuid === bot.uuid}
+                                        isRestarting={restartingBotUuid === bot.uuid}
+                                    />
+                                </div>
+                            ))
+                        )}
+                    </UnifiedCard>
+                </Box>
+            </Box>
+            {/* Shared add/edit dialog for the bot resource. Locked to the
+                selected platform when browsing one; unlocked under "All" so
+                the user picks a platform in the dialog itself. */}
             <BotConfigDialog
                 open={dialogOpen}
                 mode={dialogMode}
                 editUuid={dialogEditUuid}
                 platformId={dialogPlatformId}
-                lockPlatform={false}
+                lockPlatform={selectedPlatform !== 'all'}
                 bots={bots}
                 onClose={() => setDialogOpen(false)}
                 onSaved={loadBotSettings}

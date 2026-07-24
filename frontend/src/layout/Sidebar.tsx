@@ -141,6 +141,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 sx={{
                                     mx: 1.5,
                                     borderRadius: 1.25,
+                                    // Fixed regardless of whether this row has a subtitle —
+                                    // rows with and without one used to sit at different
+                                    // heights in the same list, which read as misaligned.
+                                    minHeight: 52,
                                     py: 1.25,
                                     px: 2,
                                     color: 'text.secondary',

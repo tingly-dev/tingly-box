@@ -339,18 +339,19 @@ each page as a filter/tab instead of a nav level:
 ```
  Bots (rail icon, ONE slot — never grows as purposes are added)
    ├─ Overview  /bots/overview        resource: every bot, every platform,
-   │  "what's connected? add one"     one list. The ONLY place a credential
-   │                                  (token/OAuth/QR) is typed, rotated, or
-   │                                  deleted. Purpose badges per row link
-   │                                  out ("Remote Agent" / "Notify" chips).
+   │  "what's connected? add one"     one list by default. The ONLY place a
+   │                                  credential (token/OAuth/QR) is typed,
+   │                                  rotated, or deleted. Purpose badges per
+   │                                  row link out ("Remote Agent" / "Notify"
+   │                                  chips). Picking a platform in the side
+   │                                  nav (below) filters the list AND brings
+   │                                  back that platform's setup guide.
    ├─ Remote    /remote-agent/:platform   purpose: mount switch, SmartGuide
    │  "which bot drives Claude Code?"     model graph, chat ID lock, bash
    │                                      allowlist, platform setup guide,
    │                                      Add Bot (shared dialog, in place).
-   │                                      ONE sidebar row; platform is an
-   │                                      in-page tab bar (RemoteAgentPage)
-   │                                      over the unchanged per-platform
-   │                                      routes/pages.
+   │                                      ONE sidebar row; platform is
+   │                                      selected in-page instead.
    └─ Notify    /notify                   purpose: read-only for now — shows
       "which bot notifies me?"            mount status + route names derived
                                            from each bot's scenarios JSON.
@@ -361,6 +362,29 @@ each page as a filter/tab instead of a nav level:
 Neither "Bots" (nav label) nor any purpose page ever says "channel" —
 that word stays reserved for the backend architecture vocabulary in §2/§9.
 A bot connection is just "a bot"; users pick a platform, not a channel.
+
+**Platform selection moved into the page, not onto a horizontal tab bar.**
+Overview and Remote both need a platform picker (Notify doesn't — it has no
+per-platform-specific content), and the first cut used MUI `Tabs` for Remote.
+That dropped two things the old per-platform sidebar rows had: the
+`active X / Y` count next to each platform, and — for Overview specifically —
+the platform setup guide, since a single cross-platform "All" view can't
+show one platform's guide. Both pages now use `components/bot/PlatformSideNav`
+instead: a vertical list (icon, name, `active X / Y` subtitle) on the left of
+the page content, visually and behaviorally the same as what the global
+Sidebar used to show for each platform — just scoped to the page instead of
+the app-wide nav, so the rail icon count still stays at one. Overview's list
+gets an extra leading "All" item (no per-platform guide makes sense there);
+Remote's doesn't, since Remote has no cross-platform view. Selecting a
+platform on Overview also locks `BotConfigDialog`'s platform selector
+(`lockPlatform={true}`) for that add flow, same as Remote already did — "All"
+leaves it unlocked.
+
+Every row in `PlatformSideNav` is a fixed `minHeight` regardless of whether
+it has a subtitle (not every platform has bots yet) — rows of different
+heights in the same list read as broken alignment, not "no data here." The
+same fix landed on the global `Sidebar.tsx` for the same reason: Overview's
+row carries an aggregate subtitle, Remote's and Notify's don't.
 
 **Shared add/edit interaction, unchanged.** The bot-resource form is still
 one component (`components/bot/BotConfigDialog`). Overview has no fixed
