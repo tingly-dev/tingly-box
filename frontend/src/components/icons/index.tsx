@@ -140,6 +140,7 @@ import {
     IconFileText,
     IconDeviceRemote,
     IconRobot,
+    IconBell,
     IconZoomIn,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
@@ -333,6 +334,7 @@ export const TextSnippet = tablerMui(IconFileText);
 // --- Devices -----------------------------------------------------------------
 export const SettingsRemote = tablerMui(IconDeviceRemote);
 export const Robot = tablerMui(IconRobot);
+export const Bell = tablerMui(IconBell);
 
 // --- Layout ------------------------------------------------------------------
 export const GridView = tablerMui(IconGridDots);

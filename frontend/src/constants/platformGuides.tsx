@@ -94,10 +94,35 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // has to locate verbatim in a third-party console (App ID/App Secret/App
 // Key/Client ID/Client Secret/Bot ID/Bot Token) are intentionally left in
 // English in both locales.
+
+// The full set of bot platform ids, in display order. Single source of
+// truth for anything that needs to list "every platform" (e.g. the Remote
+// page's in-page platform tabs) — keeps that list from drifting out of sync
+// with the guides below or with the routes in App.tsx. Discord and Slack
+// aren't supported yet — their guide entries and routes stay (so nothing
+// 404s if something still links to them), just left out of this list so
+// they don't show up as pickable platforms.
+export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom'] as const;
+
+// Brand icon per platform, keyed the same as BOT_PLATFORM_IDS — locale-
+// independent (unlike the guide config below, which needs `t`), so this is
+// a plain static map rather than something built per-render. Single source
+// for any call site that needs an icon per platform id inside a loop
+// (BotOverviewPage / RemoteAgentPage's picker items), instead of each page
+// hand-copying the same id → component table.
+export const PLATFORM_BRAND_ICONS: Record<string, ComponentType<{ size?: number; grayscale?: boolean }>> = {
+    telegram: Telegram,
+    feishu: Feishu,
+    lark: Lark,
+    dingtalk: DingTalk,
+    weixin: Weixin,
+    wecom: WeCom,
+};
+
 const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> => ({
     telegram: {
         id: 'telegram',
-        name: 'Telegram',
+        name: t('layout.platforms.telegram', { defaultValue: 'Telegram' }),
         description: t('remoteControl.guides.telegram.description', { defaultValue: 'Popular cloud-based instant messaging service' }),
         icon: '📱',
         BrandIcon: Telegram,
@@ -149,7 +174,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     feishu: {
         id: 'feishu',
-        name: 'Feishu (飞书)',
+        name: t('layout.platforms.feishu', { defaultValue: 'Feishu' }),
         description: t('remoteControl.guides.feishu.description', { defaultValue: 'Enterprise collaboration platform' }),
         icon: '🚀',
         BrandIcon: Feishu,
@@ -165,7 +190,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     lark: {
         id: 'lark',
-        name: 'Lark',
+        name: t('layout.platforms.lark', { defaultValue: 'Lark' }),
         description: t('remoteControl.guides.lark.description', { defaultValue: 'Global version of Feishu' }),
         icon: '🐦',
         BrandIcon: Lark,
@@ -181,7 +206,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     dingtalk: {
         id: 'dingtalk',
-        name: 'DingTalk (钉钉)',
+        name: t('layout.platforms.dingtalk', { defaultValue: 'DingTalk' }),
         description: t('remoteControl.guides.dingtalk.description', { defaultValue: 'Enterprise communication and collaboration' }),
         icon: '💬',
         BrandIcon: DingTalk,
@@ -237,11 +262,11 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     weixin: {
         id: 'weixin',
-        name: 'Weixin (微信)',
+        name: t('layout.platforms.weixin', { defaultValue: 'Weixin' }),
         description: t('remoteControl.guides.weixin.description', { defaultValue: 'China\'s most popular messaging platform' }),
         icon: '💚',
         BrandIcon: Weixin,
-        status: 'beta',
+        status: 'available',
         path: '/bots/weixin',
         color: '#07c160',
         guide: (
@@ -282,7 +307,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
     },
     wecom: {
         id: 'wecom',
-        name: 'WeCom (企业微信)',
+        name: t('layout.platforms.wecom', { defaultValue: 'WeCom' }),
         description: t('remoteControl.guides.wecom.description', { defaultValue: 'Enterprise Weixin communication platform' }),
         icon: '💼',
         BrandIcon: WeCom,
@@ -392,4 +417,14 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
 export function usePlatformGuide(platformId: string): PlatformGuideConfig | undefined {
     const { t, i18n } = useTranslation();
     return useMemo(() => buildPlatformGuides(t)[platformId], [t, i18n.language, platformId]);
+}
+
+/**
+ * Plain-function platform display name lookup — for call sites that need a
+ * name per id inside a loop (e.g. building tabs), where calling the
+ * `usePlatformGuide` hook per-iteration would break the rules of hooks.
+ * Callers get `t` from their own single `useTranslation()` call.
+ */
+export function platformDisplayName(platformId: string, t: TFunction): string {
+    return buildPlatformGuides(t)[platformId]?.name || platformId;
 }

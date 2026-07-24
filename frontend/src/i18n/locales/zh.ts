@@ -93,6 +93,8 @@ export default {
     "yesterday": "昨天",
     "days": "天",
     "remote": "远程",
+    "remoteControl": "远程控制",
+    "notify": "IM 通知",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {
@@ -1177,10 +1179,10 @@ export default {
     "descriptions": {}
   },
   "remoteAgent": {
-    "title": "{{platform}} 远程 Agent",
-    "subtitle": "把 {{platform}} Bot 挂载给远程 Agent，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在 Bots 页面管理。",
+    "title": "{{platform}} 远程控制",
+    "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",
     "emptyTitle": "还没有 {{platform}} Bot",
-    "emptyDescription": "远程 Agent 运行在 Bot 之上。请先创建一个 {{platform}} Bot 连接，再回到这里挂载。",
+    "emptyDescription": "远程控制运行在 Bot 之上。请先创建一个 {{platform}} Bot 连接，再回到这里挂载。",
     "card": {
       "botDisabled": "Bot 已停用",
       "botDisabledHint": "Bot 本身处于停用状态——挂载时会自动重新启用",
@@ -1191,10 +1193,32 @@ export default {
     }
   },
   "bots": {
+    "activeCount": "启用 {{active}} / {{total}}",
     "card": {
-      "remoteAgentChip": "远程 Agent",
-      "remoteAgentChipHint": "前往远程 Agent 页面配置"
+      "remoteAgentChip": "远程控制",
+      "remoteAgentChipHint": "前往远程控制页面配置",
+      "notifyChip": "IM 通知",
+      "notifyChipHint": "前往 IM 通知页面配置"
+    },
+    "overview": {
+      "allPlatforms": "全部",
+      "title": "机器人",
+      "platformTitle": "{{platform}} 机器人",
+      "subtitle": "已连接 {{count}} 个机器人",
+      "connectBot": "连接机器人",
+      "emptyTitle": "尚未连接机器人",
+      "emptyDescription": "连接一个机器人，即可从聊天中遥控 Claude Code（远程）或接收通知（通知）。"
     }
+  },
+  "notify": {
+    "title": "IM 通知",
+    "subtitle": "哪些机器人负责把场景通知和交互式提示投递到聊天。",
+    "emptyTitle": "尚未连接机器人",
+    "emptyDescription": "请先在机器人页面连接一个机器人，再回到这里查看它的通知情况。",
+    "mounted": "通知中",
+    "notMounted": "无路由",
+    "attachComingSoon": "+ 添加路由（即将支持）",
+    "attachComingSoonHint": "暂不支持从这里添加路由 —— 路由目前按场景单独配置。"
   },
   "remoteControl": {
     "bots": {

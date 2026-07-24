@@ -26,6 +26,28 @@ import type { NavItem } from './types';
 import { VersionDisplay } from '@/components/VersionDisplay';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 
+// Shared sizing for the sidebar's nav-style rows, kept alongside the one
+// place that uses it — every row is the same height whether or not it
+// happens to carry a subtitle.
+const NAV_ROW_SX = {
+    minHeight: 52,
+    borderRadius: 1.25,
+    py: 1.25,
+    px: 2,
+} as const;
+
+const navRowTextSlotProps = (active: boolean) => ({
+    primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3, fontSize: '0.875rem' } },
+    secondary: {
+        variant: 'caption' as const,
+        sx: {
+            fontSize: '0.6875rem',
+            lineHeight: 1.2,
+            color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+        },
+    },
+});
+
 interface SidebarProps {
     sidebarItems: NavItem[];
     activeActivityLabel: string;
@@ -129,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     }
 
                     const isAddProfile = item.path === '#add-profile';
-                    const active = !isAddProfile && isActive(item.path);
+                    const active = !isAddProfile && (item.match ? item.match(location.pathname) : isActive(item.path));
 
                     const button = (
                         <ListItem disablePadding>
@@ -140,9 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 )}
                                 sx={{
                                     mx: 1.5,
-                                    borderRadius: 1.25,
-                                    py: 1.25,
-                                    px: 2,
+                                    ...NAV_ROW_SX,
                                     color: 'text.secondary',
                                     position: 'relative',
                                     ...(active && {
@@ -172,19 +192,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 <ListItemText
                                     primary={item.label}
                                     secondary={item.subtitle}
-                                    slotProps={{
-                                        primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3 } },
-                                        secondary: { variant: 'caption' as const, sx: { fontSize: '0.6875rem', lineHeight: 1.2 } },
-                                    }}
-                                    sx={{
-                                        minWidth: 0,
-                                        '& .MuiListItemText-primary': {
-                                            fontSize: '0.875rem',
-                                        },
-                                        '& .MuiListItemText-secondary': {
-                                            color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                                        },
-                                    }}
+                                    slotProps={navRowTextSlotProps(active)}
+                                    sx={{ minWidth: 0 }}
                                 />
                                 {item.tooltip && (
                                     <IconInfoCircle

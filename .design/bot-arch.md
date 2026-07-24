@@ -324,51 +324,121 @@ Rules of thumb going forward:
 - New direction words are role words (control / notify), never
   inbound/outbound.
 
-## 10. Frontend IA — mirror the model
+## 10. Frontend IA — one rail icon, resource and purposes as siblings
 
-The frontend follows the resource/purpose split (UX principle: separate
-orthogonal axes; organize IA around user questions) as **two twin sections
-with identical per-platform pagination** — same platform subitems, same
-filter — differing only in what they show for each bot:
+The earlier design (see git history) put the bot resource and its one
+purpose in twin sections with identical per-platform pagination, and kept
+the resource section hidden until a second purpose shipped. Once notify
+was a real second purpose, that shape stopped working: per-platform
+pagination means N sidebar rows per section, and "which section do I even
+open to connect a bot" only gets worse as purposes multiply. The frontend
+now mirrors the model differently — as **one rail icon with the resource
+and every purpose as flat sidebar siblings**, platform pushed down into
+each page as a filter/tab instead of a nav level:
 
 ```
- Bots (/bots/:platform)              resource section, per-platform pages
-   "is my telegram bot connected?"    platform · auth · alias · proxy ·
-   NAV: HIDDEN for now (see below)    enable/restart · pairing · delete
-   card shows purpose STATUS only     ("Remote Agent" chip → click-through
-                                       to /remote-agent/:platform)
-
- Remote (/remote-agent/:platform)    purpose section, SAME pagination
-   nav label: "Remote" / "远程"       mount switch (enable cascade) ·
-   "which bot drives Claude Code,     SmartGuide model graph · chat ID lock ·
-    with what model and limits?"      bash allowlist · platform setup guide ·
-                                      Add Bot (shared dialog, in place)
+ Remote (rail icon, ONE slot — never grows as purposes are added)
+   │  named for the product pillar ("remote control"), not the impl ("Bots").
+   │  The nav key stays 'bots' internally; only the label is "Remote".
+   ├─ Bots      /bots/overview        resource: every bot, every platform,
+   │  "what's connected? add one"     one list by default. The ONLY place a
+   │                                  credential (token/OAuth/QR) is typed,
+   │                                  rotated, or deleted. Purpose badges per
+   │                                  row link out ("Remote Control" / "Notify"
+   │                                  chips). Picking a platform tile filters
+   │                                  the list AND brings back that platform's
+   │                                  setup guide.
+   ├─ Remote Control  /remote-agent/:platform   purpose: mount switch,
+   │  "which bot drives Claude Code?"     SmartGuide model graph, chat ID lock,
+   │                                      bash allowlist, platform setup guide,
+   │                                      Add Bot (shared dialog, in place).
+   │                                      ONE sidebar row; platform is
+   │                                      selected in-page instead.
+   └─ Notify    /notify                   purpose: read-only for now — shows
+      "which bot notifies me?"            mount status + route names derived
+                                           from each bot's scenarios JSON.
+                                           Attaching a NEW route has no
+                                           frontend surface yet (see below).
 ```
 
-**Shared add/edit interaction.** The bot-resource form lives in one component
-(`components/bot/BotConfigDialog`: platform/auth/alias/proxy, validation, QR
-binding + orphan reuse). Both sections open it in place — adding a bot from a
-Remote page never navigates away; `?add=1` on `/bots/:platform` deep-links
-into it for external links.
+The user-facing name for the remote_agent purpose is **"Remote Control"**
+everywhere in the UI (nav row, the BotCard purpose chip, the page title),
+aligning with the product description's "remote control" pillar; the
+backend keeps the `remote_agent` mount name and the `remoteAgent.*` /
+`bots.card.remoteAgentChip` i18n **keys** (values changed, keys stable).
+The routes are still `/remote-agent/:platform` — unchanged, so deep links
+and the purpose chip keep working. No nav label or purpose page ever says
+"channel" — that word stays reserved for the backend architecture
+vocabulary in §2/§9.
+A bot connection is just "a bot"; users pick a platform, not a channel.
 
-**Bots nav is hidden, not removed** (`showBotsSection` flag in
-`useActivityItems`). Bot has a single purpose today, so a standalone resource
-section answers no independent user question. While hidden, the Remote card
-is fully self-sufficient — it additionally hosts the RESOURCE operations:
-edit (shared dialog), restart/delete (⋮ overflow + confirm), and the pairing
-code panel (the artifact the user needs next: `/bind` in chat). No bot-level
-enable switch there: with one purpose, the mount switch is the effective
-on/off ("no mount, no bot"). Ownership is unchanged — only the rendering
-surface moved.
+**Platform selection lives in the page, as a grid of equal-size tiles.**
+Overview and Remote both need a platform picker (Notify doesn't — it has no
+per-platform-specific content). Several earlier approaches didn't survive
+contact with real content and narrow viewports:
 
-**Graduation plan.** When a second purpose (notify UI) ships: flip
-`showBotsSection` back on, move the resource operations back to the Bots
-cards, and slim the Remote card to purpose-only. Notify becomes a third
-mirrored purpose section, not more toggles on the bot card.
+- MUI `Tabs`: dropped the `active X / Y` count next to each platform, and —
+  for Overview specifically — the platform setup guide, since a single
+  cross-platform "All" view can't show one platform's guide.
+- A vertical `PlatformSideNav` column styled to extend the global Sidebar
+  (white background, matching border, `position: sticky`, a header spacer
+  for row alignment): fixed the two problems above, but needed three nav
+  columns side by side (rail + Sidebar + this), which had no room below
+  desktop widths and broke down to visibly misaligned, overlapping content.
+- A horizontal `Chip` row: lived in the normal content flow (no breakout
+  margins, no sticky positioning), but chips are width-of-their-content, so
+  "Lark" ended up tiny next to "WeCom (企业微信)" — a ragged row that read
+  as inconsistent with the rest of the app.
+
+The shipped version, `components/bot/PlatformPicker`, keeps what the earlier
+cuts got right (per-platform counts, the guide comes back when a specific
+platform is picked on Overview) as a responsive `Grid` of equal-size tiles,
+one per platform — the same pattern as the dashboard's `StatCard` grid
+(`Grid` with `size`, uniform `height: 100%`, tinted-border selected state).
+Fixed tiles keep every option the same shape regardless of label length, and
+the grid reflows cleanly from 6-up on wide screens to 2-up on narrow ones.
+Overview's grid gets a leading "All" tile (no per-platform guide makes sense
+there); Remote's doesn't, since Remote has no cross-platform view. Selecting
+a platform on Overview also locks `BotConfigDialog`'s platform selector
+(`lockPlatform={true}`) for that add flow, same as Remote already did —
+"All" leaves it unlocked.
+
+**Shared add/edit interaction, unchanged.** The bot-resource form is still
+one component (`components/bot/BotConfigDialog`). Overview has no fixed
+platform, so it opens the dialog with `lockPlatform={false}` (new prop,
+defaults to `true`) so the platform selector is live; Remote keeps opening
+it locked to whichever platform tab is active, exactly as before. `?add=1`
+on `/bots/overview` still deep-links into the create flow.
+
+**Notify's write-path gap.** `notifyConsumer.Mounted` is implicit — at
+least one outbound scenario binding (`claude_code`, …) present and not
+disabled (§4) — not a stored boolean like `remote_agent`. There is no
+existing UI or API for creating/editing those route rows (they're
+currently CLI/config-only), so `NotifyPage` reads real status
+(`isNotifyMounted` / `notifyRoutes` in `types/bot.ts`, parsed client-side
+from the same `scenarios` JSON the backend already returns) but the
+"attach a route" action is a disabled placeholder. Making that real needs
+a backend endpoint + swagger definition for outbound route CRUD — not done
+in this pass; do that before promising notify configuration in-product.
+
+**Old per-platform Bots pages (`/bots/telegram`, `/bots/weixin`, …) stay
+live but out of nav** — same "hidden, not removed" precedent as before,
+kept only as deep-link targets so nothing that already links to them
+breaks. New work should go through `/bots/overview`.
+
+**Nav active-state matching.** The Sidebar previously matched a row active
+by exact pathname equality, which is correct for one-row-per-route items
+but breaks for Remote's single row covering nine platform routes. `NavItem`
+gained an optional `match?: (pathname) => boolean` (`layout/types.ts`),
+consulted by both `Sidebar.tsx` (row highlight) and `Layout.tsx`
+(`activeActivity` detection, which decides which rail icon — and thus which
+sidebar — is showing). Remote's row sets `match: p => p.startsWith('/remote-agent')`;
+every other nav item is unaffected (defaults to the old exact-match
+behavior).
 
 Route history: `/remote-control/*` (original combined) → `/remote-agent/*`
-(rename) → the split above. Legacy `/remote-control/*` redirects to
-`/remote-agent/*`.
+(rename) → twin resource/purpose sections → the Overview/Remote/Notify
+siblings above. Legacy `/remote-control/*` redirects to `/remote-agent/*`.
 
 ## 11. Notes / trade-offs
 

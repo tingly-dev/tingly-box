@@ -91,6 +91,8 @@ export default {
     "yesterday": "Yesterday",
     "days": "Days",
     "remote": "Remote",
+    "remoteControl": "Remote Control",
+    "notify": "IM Notify",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {

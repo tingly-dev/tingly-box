@@ -120,3 +120,51 @@ export function isRemoteAgentMounted(scenarios?: string): boolean {
         return true;
     }
 }
+
+// A route row in a bot's scenarios JSON: a real outbound scenario binding
+// (e.g. "claude_code") rather than the "remote_agent" mount row. Read-only
+// mirror of the Go struct in remote/binding — there is no write path for
+// these from the frontend yet (see NotifyPage).
+export interface NotifyRoute {
+    name: string;
+    chat_id?: string;
+    events?: string[];
+    enabled?: boolean;
+}
+
+// notifyRoutes extracts a bot's outbound scenario bindings (every scenarios
+// row that isn't the remote_agent mount) from its raw scenarios JSON.
+export function notifyRoutes(scenarios?: string): NotifyRoute[] {
+    if (!scenarios || !scenarios.trim()) return [];
+    try {
+        const rows = JSON.parse(scenarios) as Array<NotifyRoute & { name?: string }>;
+        if (!Array.isArray(rows)) return [];
+        return rows.filter((r): r is NotifyRoute => !!r?.name && r.name !== REMOTE_AGENT_SCENARIO);
+    } catch {
+        return [];
+    }
+}
+
+// isNotifyMounted reports whether the notify purpose is mounted on a bot.
+// Mirrors the backend binding.OutboundScenarioMounted: mounted iff at least
+// one non-remote_agent row exists and isn't explicitly disabled. Unlike
+// remote_agent, notify fails CLOSED — no bindings means not mounted.
+export function isNotifyMounted(scenarios?: string): boolean {
+    return notifyRoutes(scenarios).some((r) => r.enabled !== false);
+}
+
+// countBotsByPlatform tallies active/total bots per platform — feeds the
+// "active X / Y" subtitle on both the Bots page's picker (all platforms at
+// once, from a list it already has loaded) and the Remote Control page's
+// picker (fetched separately, since that page doesn't otherwise need the
+// full bot list).
+export function countBotsByPlatform(bots: BotSettings[]): Record<string, { active: number; total: number }> {
+    const counts: Record<string, { active: number; total: number }> = {};
+    for (const bot of bots) {
+        if (!bot.platform) continue;
+        const slot = counts[bot.platform] ?? (counts[bot.platform] = { active: 0, total: 0 });
+        slot.total++;
+        if (bot.enabled) slot.active++;
+    }
+    return counts;
+}

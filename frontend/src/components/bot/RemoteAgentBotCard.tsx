@@ -8,7 +8,6 @@ import {
 import {
     Box,
     Button,
-    Card,
     Chip,
     Collapse,
     IconButton,
@@ -16,7 +15,6 @@ import {
     ListItemText,
     Menu,
     MenuItem,
-    Modal,
     Stack,
     Switch,
     TextField,
@@ -24,42 +22,16 @@ import {
     Typography,
 } from '@mui/material';
 import {styled} from '@mui/material/styles';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import type {BotSettings} from '@/types/bot';
 import {isRemoteAgentMounted} from '@/types/bot';
 import type {Provider} from '@/types/provider';
 import type {ProfileInfo} from '@/contexts/ProfileContext';
+import {botCardSx, statusChipSx} from './botCardStyles';
 import PairingCodePanel from './PairingCodePanel';
 import RemoteControlGraph from './RemoteControlGraph';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-
-// Same inactive treatment as the original bot card (BotCard.tsx): grayscale +
-// dashed border + the 45° hatch overlay. Deliberately identical — "inactive"
-// must read the same across the twin sections.
-const StyledCard = styled(Card, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({active, theme}) => ({
-    transition: 'all 0.2s ease-in-out',
-    opacity: active ? 1 : 0.6,
-    filter: active ? 'none' : 'grayscale(0.3)',
-    border: active ? 'none' : '2px dashed',
-    borderColor: active ? 'transparent' : theme.palette.text.disabled,
-    margin: '3px',
-    position: 'relative',
-    ...(active ? {} : {
-        '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0, left: 0, right: 0, bottom: 0,
-            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
-            pointerEvents: 'none',
-            borderRadius: theme.shape.borderRadius,
-        },
-    }),
-    '&:hover': {
-        boxShadow: active ? theme.shadows[4] : theme.shadows[1],
-    },
-}));
 
 const GraphContainer = styled(Box)(({theme}) => ({
     padding: '10px 16px',
@@ -143,20 +115,22 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
         }
     };
 
-    // Active = this purpose is actually live: mounted AND the bot may run.
-    // Either switch being off puts the whole card behind the hatch overlay,
-    // but the full configuration stays visible and editable.
+    // Off (hatched) when this purpose isn't live: unmounted, or the bot
+    // itself is disabled. The config below stays fully editable through the
+    // overlay — the hatch is purely a "this isn't running" affordance.
     const isActive = isMounted && isEnabled;
 
     return (
-        <StyledCard active={isActive}>
+        <Box sx={botCardSx(isActive)}>
             {/* Header: bot identity (read-only here) + mount switch */}
             <Box sx={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                px: 2, py: 1,
+                display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1,
+                px: 2, py: 1.5,
             }}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0}}>
-                    <Typography sx={{fontFamily: 'monospace', fontSize: '0.875rem', fontWeight: 600}}>
+                    {/* Fixed-width name column — same rationale as BotCard:
+                        keeps the platform chip aligned across rows. */}
+                    <Typography noWrap variant="body2" sx={{fontWeight: 600, flexShrink: 0, width: {xs: 96, sm: 150}}}>
                         {bot.name || bot.platform}
                     </Typography>
                     <Chip label={bot.platform} size="small"/>
@@ -171,42 +145,52 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                         </Tooltip>
                     )}
                 </Box>
-                <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
-                    <Tooltip title={isMounted
-                        ? t('remoteControl.card.remoteAgentUnmount', { defaultValue: 'Unmount Remote Agent (bot stays configured but stops)' })
-                        : t('remoteControl.card.remoteAgentMountOn', { defaultValue: 'Mount Remote Agent (also enables the bot)' })}>
-                        <Switch checked={isMounted} onChange={() => onMountToggle(!isMounted)} size="small" color="primary" disabled={isToggling}/>
-                    </Tooltip>
-                    <Tooltip title={t('remoteControl.card.edit', { defaultValue: 'Edit' })}>
-                        <IconButton size="small" color="primary" onClick={onEdit} disabled={isToggling || isRestarting}>
-                            <EditIcon fontSize="small"/>
+                <Box sx={{display: 'flex', alignItems: 'center', gap: 1.5}}>
+                    <Stack direction="row" spacing={1} sx={{alignItems: 'center'}}>
+                        <Tooltip title={isMounted
+                            ? t('remoteControl.card.remoteAgentUnmount', { defaultValue: 'Unmount Remote Control (bot stays configured but stops)' })
+                            : t('remoteControl.card.remoteAgentMountOn', { defaultValue: 'Mount Remote Control (also enables the bot)' })}>
+                            <Switch checked={isMounted} onChange={() => onMountToggle(!isMounted)} size="small" color="primary" disabled={isToggling}/>
+                        </Tooltip>
+                        <Chip
+                            label={isMounted ? t('common.on', { defaultValue: 'On' }) : t('common.off', { defaultValue: 'Off' })}
+                            size="small"
+                            color={isMounted ? 'success' : 'default'}
+                            variant={isMounted ? 'filled' : 'outlined'}
+                            sx={statusChipSx}
+                        />
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
+                        <Tooltip title={t('remoteControl.card.edit', { defaultValue: 'Edit' })}>
+                            <IconButton size="small" color="primary" onClick={onEdit} disabled={isToggling || isRestarting}>
+                                <EditIcon fontSize="small"/>
+                            </IconButton>
+                        </Tooltip>
+                        <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)} disabled={isToggling || isRestarting}>
+                            <MoreVertIcon fontSize="small"/>
                         </IconButton>
-                    </Tooltip>
-                    <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)} disabled={isToggling || isRestarting}>
-                        <MoreVertIcon fontSize="small"/>
-                    </IconButton>
-                    <Menu
-                        anchorEl={menuAnchor}
-                        open={Boolean(menuAnchor)}
-                        onClose={() => setMenuAnchor(null)}
-                    >
-                        <MenuItem
-                            onClick={() => { setMenuAnchor(null); onRestart(); }}
-                            disabled={!isEnabled || isRestarting}
+                        <Menu
+                            anchorEl={menuAnchor}
+                            open={Boolean(menuAnchor)}
+                            onClose={() => setMenuAnchor(null)}
                         >
-                            <ListItemIcon><RestartIcon fontSize="small"/></ListItemIcon>
-                            <ListItemText>{t('remoteControl.card.restartBot', { defaultValue: 'Restart Bot' })}</ListItemText>
-                        </MenuItem>
-                        <MenuItem onClick={() => { setMenuAnchor(null); setDeleteModalOpen(true); }}>
-                            <ListItemIcon><DeleteIcon fontSize="small" color="error"/></ListItemIcon>
-                            <ListItemText sx={{color: 'error.main'}}>{t('remoteControl.card.delete', { defaultValue: 'Delete' })}</ListItemText>
-                        </MenuItem>
-                    </Menu>
+                            <MenuItem
+                                onClick={() => { setMenuAnchor(null); onRestart(); }}
+                                disabled={!isEnabled || isRestarting}
+                            >
+                                <ListItemIcon><RestartIcon fontSize="small"/></ListItemIcon>
+                                <ListItemText>{t('remoteControl.card.restartBot', { defaultValue: 'Restart Bot' })}</ListItemText>
+                            </MenuItem>
+                            <MenuItem onClick={() => { setMenuAnchor(null); setDeleteModalOpen(true); }}>
+                                <ListItemIcon><DeleteIcon fontSize="small" color="error"/></ListItemIcon>
+                                <ListItemText sx={{color: 'error.main'}}>{t('remoteControl.card.delete', { defaultValue: 'Delete' })}</ListItemText>
+                            </MenuItem>
+                        </Menu>
+                    </Stack>
                 </Box>
             </Box>
 
-            {/* Agent behavior — always fully shown; the hatch overlay (not
-                collapsing) communicates the unmounted/disabled state. */}
+            {/* Agent behavior — always fully shown. */}
             <Collapse in timeout="auto" unmountOnExit>
                 <GraphContainer>
                     <RemoteControlGraph
@@ -257,25 +241,16 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 </Stack>
             </Collapse>
 
-            {/* Delete Confirmation */}
-            <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
-                <Box sx={{
-                    position: 'absolute', top: '50%', left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: 400, maxWidth: '80vw',
-                    bgcolor: 'background.paper', boxShadow: 24, p: 4, borderRadius: 2,
-                }}>
-                    <Typography variant="h6" sx={{mb: 2}}>{t('remoteControl.card.deleteTitle', { defaultValue: 'Delete Bot Configuration' })}</Typography>
-                    <Typography variant="body2" sx={{mb: 3}}>
-                        {t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: bot.name || bot.platform })}
-                    </Typography>
-                    <Box sx={{display: 'flex', gap: 2, justifyContent: 'flex-end'}}>
-                        <Button onClick={() => setDeleteModalOpen(false)} color="inherit">{t('remoteControl.dialog.cancel', { defaultValue: 'Cancel' })}</Button>
-                        <Button onClick={() => { setDeleteModalOpen(false); onDelete(); }} color="error" variant="contained">{t('remoteControl.card.delete', { defaultValue: 'Delete' })}</Button>
-                    </Box>
-                </Box>
-            </Modal>
-        </StyledCard>
+            <ConfirmDialog
+                open={deleteModalOpen}
+                title={t('remoteControl.card.deleteTitle', { defaultValue: 'Delete Bot Configuration' })}
+                description={t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: bot.name || bot.platform })}
+                confirmLabel={t('remoteControl.card.delete', { defaultValue: 'Delete' })}
+                confirmColor="error"
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={() => { setDeleteModalOpen(false); onDelete(); }}
+            />
+        </Box>
     );
 };
 
