@@ -1,4 +1,4 @@
-import { List, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
+import { Divider, List, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import type { ReactNode } from 'react';
 import { NAV_ROW_SX, navRowTextSlotProps } from '@/layout/navRowStyles';
 
@@ -9,8 +9,14 @@ export interface PlatformSideNavItem {
     subtitle?: string;
 }
 
+export interface PlatformSideNavDivider {
+    type: 'divider';
+}
+
+export type PlatformSideNavEntry = PlatformSideNavItem | PlatformSideNavDivider;
+
 interface PlatformSideNavProps {
-    items: PlatformSideNavItem[];
+    items: PlatformSideNavEntry[];
     value: string;
     onChange: (id: string) => void;
 }
@@ -22,7 +28,10 @@ interface PlatformSideNavProps {
 // and width — this component is just the list itself.
 const PlatformSideNav: React.FC<PlatformSideNavProps> = ({ items, value, onChange }) => (
     <List sx={{ py: 0 }}>
-        {items.map((item) => {
+        {items.map((item, index) => {
+            if ('type' in item) {
+                return <Divider key={`divider-${index}`} sx={{ my: 1 }} />;
+            }
             const active = item.id === value;
             return (
                 <ListItemButton

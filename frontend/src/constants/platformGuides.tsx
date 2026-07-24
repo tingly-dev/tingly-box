@@ -98,8 +98,11 @@ const buildComingSoonGuide = (t: TFunction, platformName: string) => (
 // The full set of bot platform ids, in display order. Single source of
 // truth for anything that needs to list "every platform" (e.g. the Remote
 // page's in-page platform tabs) — keeps that list from drifting out of sync
-// with the guides below or with the routes in App.tsx.
-export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom', 'qq', 'discord', 'slack'] as const;
+// with the guides below or with the routes in App.tsx. Discord and Slack
+// aren't supported yet — their guide entries and routes stay (so nothing
+// 404s if something still links to them), just left out of this list so
+// they don't show up as pickable platforms.
+export const BOT_PLATFORM_IDS = ['telegram', 'feishu', 'lark', 'dingtalk', 'weixin', 'wecom', 'qq'] as const;
 
 const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> => ({
     telegram: {
@@ -248,7 +251,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         description: t('remoteControl.guides.weixin.description', { defaultValue: 'China\'s most popular messaging platform' }),
         icon: '💚',
         BrandIcon: Weixin,
-        status: 'beta',
+        status: 'available',
         path: '/bots/weixin',
         color: '#07c160',
         guide: (

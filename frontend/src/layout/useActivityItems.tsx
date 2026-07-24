@@ -182,6 +182,7 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/bots/overview',
                 children: [
                     { path: '/bots/overview', label: t('layout.overview'), icon: <IconListAlt sx={{ fontSize: 20 }} />, subtitle: botOverviewSubtitle },
+                    { type: 'divider' },
                     { path: '/remote-agent/weixin', label: t('layout.remote'), icon: <IconDeviceRemote sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
                     { path: '/notify', label: t('layout.notify', { defaultValue: 'Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],

@@ -106,6 +106,7 @@ const BotOverviewPage = () => {
             icon: <ListAlt sx={{ fontSize: 20 }} />,
             subtitle: countLabel(bots.filter(b => b.enabled).length, bots.length),
         },
+        { type: 'divider' as const },
         ...BOT_PLATFORM_IDS.map((id) => {
             const BrandIcon = PLATFORM_BRAND_ICONS[id];
             const c = platformCounts[id];
