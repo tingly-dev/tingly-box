@@ -12,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
-// Store implements session.Store for Claude Code
+// Store implements common.SessionReader for Claude Code history.
 type Store struct {
 	projectsDir string // Default: ~/.claude/projects
 }

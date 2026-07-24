@@ -7,6 +7,13 @@ exercised by a **single feature** — the remote-control bot — yet it carries 
 complete, parallel paradigms plus speculative generality. This doc records the
 current state and the target design.
 
+> **Status (2026-07-23): completed.** Sections 1–4 retain the original problem
+> analysis and phased decision record. The current code no longer has the
+> parallel callback paradigm, provider-specific root dependency, duplicate
+> launch contracts, or legacy Claude Launcher/ControlManager path. See
+> `agentboot/README.md` for the current package map and §7 for the completion
+> addendum.
+
 Reference point: the **Claude Agent SDK** (`query()` stream + `ClaudeSDKClient`,
 a single `can_use_tool` permission callback, one options struct, one typed
 message union). The goal is to converge agentboot onto that shape.
@@ -470,3 +477,41 @@ missing terminal result, structured result errors, and encoder-close behavior.
   (SetRunning/SetFailed/SetCompleted) stay in the runner — unaffected.
 - **Other importers** (`cli/harness/agent.go`, `remote/scenario/builtin/...`)
   must be re-checked against any signature change to `Prompter`/types before P1.
+
+---
+
+## 7. Completion addendum (2026-07-23)
+
+The refactor continued through the remaining structural boundaries:
+
+1. Root public models and Runner lifecycle were split into cohesive files.
+2. Claude discovery/environment, message/content, and session composition were
+   separated without changing the Claude Code CLI backend.
+3. Historical session access became `common.SessionReader` and is injected with
+   `WithSessionReader`; the root package no longer imports `claude/session`.
+   `claude.NewService` owns Claude Agent + history composition.
+4. Runtime lifecycle persistence is named `session.LifecycleStore`.
+5. `process.LaunchSpec` is the one concrete launch contract; the root name is a
+   compatibility alias.
+6. Repository consumers use `AgentService` methods instead of reaching through
+   `Boot()`. Low-level registry APIs remain deprecated for one compatibility
+   window.
+7. The unused Claude `Launcher`, stateful `ControlManager`/request builders, and
+   duplicate JSONL helpers were removed. Runtime control is exclusively
+   `ExecutionHandle → Runner → Transport`, and JSONL IO is owned by `protocol`.
+8. Provider assumptions were removed from root configuration and execution
+   options. Claude's history directory is configured with
+   `claude.WithProjectsDir`, Claude permission constants live only in the Claude
+   adapter, and transport routing uses provider-neutral `ControlMetadata`.
+9. `common.Event` is the single raw event contract; root and protocol aliases
+   were removed.
+10. Persistent Claude profile policy and runtime permission control remain
+    separate. `ExecutionOptions.PermissionMode` is an optional per-run override:
+    empty emits no CLI flag and inherits the selected settings file's
+    `defaultMode`; a non-empty session control such as `/yolo` becomes Claude
+    Code's `--permission-mode` argument and therefore has higher precedence.
+    Turning `/yolo` off clears the override rather than sending `default`.
+    See `.design/remote-cc-profile.md` §2.1 for the scope and precedence rules.
+
+Validation includes the agentboot module suite, core race tests, production
+composition consumers, and a real Claude Code CLI E2E.

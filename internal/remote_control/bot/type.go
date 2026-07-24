@@ -10,7 +10,7 @@ import (
 const (
 	agentTinglyBox  agentboot.AgentType = "tingly-box" // @tb - Smart Guide (default)
 	agentClaudeCode agentboot.AgentType = agentboot.AgentTypeClaude
-	agentMock       agentboot.AgentType = agentboot.AgentTypeMockAgent
+	agentMock       agentboot.AgentType = "mock"
 )
 
 var defaultBashAllowlist = map[string]struct{}{

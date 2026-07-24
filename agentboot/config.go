@@ -1,9 +1,5 @@
 package agentboot
 
-import (
-	"time"
-)
-
 // DefaultConfig returns the default AgentBoot configuration
 func DefaultConfig() Config {
 	return Config{
@@ -12,16 +8,5 @@ func DefaultConfig() Config {
 		EnableStreamJSON:        true,
 		StreamBufferSize:        100,
 		DefaultExecutionTimeout: 0, // no timeout
-	}
-}
-
-// DefaultPermissionConfig returns the default permission handler configuration
-func DefaultPermissionConfig() PermissionConfig {
-	return PermissionConfig{
-		DefaultMode:       PermissionModeAuto,
-		Timeout:           60 * time.Minute,
-		EnableWhitelist:   false,
-		RememberDecisions: true,
-		DecisionDuration:  24 * time.Hour,
 	}
 }

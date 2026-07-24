@@ -33,16 +33,20 @@ func TestAgent_OverlappingExecutionsIsolateTransportContext(t *testing.T) {
 
 	first, err := agent.Execute(ctx, "first", agentboot.ExecutionOptions{
 		SessionID: "session-1",
-		ChatID:    "chat-1",
-		Platform:  "telegram",
-		BotUUID:   "bot-1",
+		ControlMetadata: map[string]string{
+			claude.ContextKeyChatID:   "chat-1",
+			claude.ContextKeyPlatform: "telegram",
+			claude.ContextKeyBotUUID:  "bot-1",
+		},
 	})
 	require.NoError(t, err)
 	second, err := agent.Execute(ctx, "second", agentboot.ExecutionOptions{
 		SessionID: "session-2",
-		ChatID:    "chat-2",
-		Platform:  "discord",
-		BotUUID:   "bot-2",
+		ControlMetadata: map[string]string{
+			claude.ContextKeyChatID:   "chat-2",
+			claude.ContextKeyPlatform: "discord",
+			claude.ContextKeyBotUUID:  "bot-2",
+		},
 	})
 	require.NoError(t, err)
 

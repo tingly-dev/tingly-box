@@ -1,90 +1,53 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://tingly-box.dev/schemas/claude-stream-json.json",
-  "title": "Claude Code Stream JSON Message",
-  "description": "Schema for Claude Code streaming JSON messages used in agentboot",
+  "$id": "https://example.local/schemas/claude-code-stream-json.schema.json",
+  "title": "Claude Code / Claude Agent SDK stream-json message",
+  "description": "Schema for a single NDJSON line emitted by `claude --print --output-format stream-json --verbose`. Each line is one object matching one of the variants below, discriminated by `type`. Not an official Anthropic-published artifact — compiled from the Agent SDK TypeScript (sdk.d.ts) / Python (types.py) type definitions and the public Agent SDK docs (code.claude.com/docs/en/agent-sdk).",
   "oneOf": [
-    { "$ref": "#/$defs/SystemMessage" },
-    { "$ref": "#/$defs/AssistantMessage" },
-    { "$ref": "#/$defs/UserMessage" },
-    { "$ref": "#/$defs/ToolUseMessage" },
-    { "$ref": "#/$defs/ToolResultMessage" },
-    { "$ref": "#/$defs/ResultMessage" },
-    { "$ref": "#/$defs/StreamEventMessage" }
+    { "$ref": "#/definitions/SDKSystemMessage" },
+    { "$ref": "#/definitions/SDKAssistantMessage" },
+    { "$ref": "#/definitions/SDKUserMessage" },
+    { "$ref": "#/definitions/SDKResultMessage" },
+    { "$ref": "#/definitions/SDKPartialAssistantMessage" }
   ],
-  "$defs": {
-    "SystemMessage": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "system" },
-        "subtype": {
-          "type": "string",
-          "description": "Forward-compatible system subtype. Known values include init, api_retry, rate_limit, task_started, task_progress, task_notification, task_updated, and legacy task_completed."
-        },
-        "session_id": { "type": "string", "format": "uuid" },
-        "timestamp": { "type": "string", "format": "date-time" }
-      },
-      "required": ["type", "session_id", "timestamp"]
+  "definitions": {
+    "UUID": {
+      "type": "string",
+      "format": "uuid"
     },
-    "AssistantMessage": {
+    "MCPServerStatus": {
       "type": "object",
       "properties": {
-        "type": { "const": "assistant" },
-        "message": {
-          "$ref": "#/$defs/MessageData"
-        },
-        "parent_tool_use_id": { "type": "string" },
-        "session_id": { "type": "string", "format": "uuid" },
-        "uuid": { "type": "string", "format": "uuid" },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["connected", "failed", "needs-auth", "pending"] }
       },
-      "required": ["type", "message", "session_id", "uuid", "timestamp"]
+      "required": ["name", "status"]
     },
-    "MessageData": {
+    "Usage": {
       "type": "object",
+      "description": "Token usage, mirrors the Anthropic Messages API Usage object.",
       "properties": {
-        "model": { "type": "string" },
-        "id": { "type": "string" },
-        "type": { "const": "message" },
-        "role": { "const": "assistant" },
-        "content": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/ContentBlock" }
+        "input_tokens": { "type": "integer" },
+        "output_tokens": { "type": "integer" },
+        "cache_creation_input_tokens": { "type": ["integer", "null"] },
+        "cache_read_input_tokens": { "type": ["integer", "null"] },
+        "cache_creation": {
+          "type": ["object", "null"],
+          "properties": {
+            "ephemeral_5m_input_tokens": { "type": "integer" },
+            "ephemeral_1h_input_tokens": { "type": "integer" }
+          }
         },
-        "stop_reason": {
-          "type": "string",
-          "enum": ["end_turn", "max_tokens", "stop_sequence", "tool_use"]
+        "server_tool_use": {
+          "type": ["object", "null"],
+          "properties": {
+            "web_search_requests": { "type": "integer" },
+            "web_fetch_requests": { "type": "integer" }
+          }
         },
-        "stop_sequence": { "type": "string" },
-        "usage": { "$ref": "#/$defs/UsageInfo" }
+        "service_tier": { "type": ["string", "null"] }
       },
-      "required": ["model", "id", "type", "role", "content"]
-    },
-    "ContentBlock": {
-      "type": "object",
-      "description": "Forward-compatible Anthropic content block union.",
-      "properties": {
-        "type": {
-          "type": "string",
-          "examples": [
-            "text",
-            "thinking",
-            "redacted_thinking",
-            "tool_use",
-            "server_tool_use",
-            "tool_result",
-            "web_search_tool_result",
-            "web_fetch_tool_result",
-            "code_execution_tool_result",
-            "bash_code_execution_tool_result",
-            "text_editor_code_execution_tool_result",
-            "tool_search_tool_result",
-            "container_upload"
-          ]
-        }
-      },
-      "required": ["type"],
-      "additionalProperties": true
+      "required": ["input_tokens", "output_tokens"]
     },
     "TextBlock": {
       "type": "object",
@@ -108,151 +71,239 @@
       "type": "object",
       "properties": {
         "type": { "const": "thinking" },
-        "thinking": { "type": "string" }
+        "thinking": { "type": "string" },
+        "signature": { "type": "string" }
       },
       "required": ["type", "thinking"]
     },
-    "ToolResultContentBlock": {
+    "ToolResultBlock": {
       "type": "object",
       "properties": {
         "type": { "const": "tool_result" },
         "tool_use_id": { "type": "string" },
-        "content": { "type": "string" },
+        "content": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array" }
+          ]
+        },
         "is_error": { "type": "boolean" }
       },
-      "required": ["type", "tool_use_id"]
+      "required": ["type", "tool_use_id", "content"]
     },
-    "UserMessage": {
+
+    "SDKSystemMessage": {
       "type": "object",
+      "description": "Emitted once at session start (subtype: init). May also appear mid-stream with subtype 'compact_boundary'.",
+      "properties": {
+        "type": { "const": "system" },
+        "subtype": { "type": "string", "enum": ["init", "compact_boundary"] },
+        "uuid": { "$ref": "#/definitions/UUID" },
+        "session_id": { "type": "string" },
+        "cwd": { "type": "string" },
+        "model": { "type": "string" },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "mcp_servers": { "type": "array", "items": { "$ref": "#/definitions/MCPServerStatus" } },
+        "permissionMode": {
+          "type": "string",
+          "enum": ["default", "acceptEdits", "bypassPermissions", "plan"]
+        },
+        "apiKeySource": {
+          "type": "string",
+          "enum": ["ANTHROPIC_API_KEY", "none", "config"]
+        },
+        "slash_commands": { "type": "array", "items": { "type": "string" } },
+        "agents": { "type": "array", "items": { "type": "string" } },
+        "skills": { "type": "array", "items": {} },
+        "plugins": { "type": "array", "items": { "type": "object" } },
+        "output_style": { "type": "string" },
+        "claude_code_version": { "type": "string" }
+      },
+      "required": ["type", "subtype", "session_id"]
+    },
+
+    "SDKAssistantMessage": {
+      "type": "object",
+      "description": "A complete assistant turn (may contain text and/or tool_use blocks).",
+      "properties": {
+        "type": { "const": "assistant" },
+        "uuid": { "$ref": "#/definitions/UUID" },
+        "session_id": { "type": "string" },
+        "parent_tool_use_id": { "type": ["string", "null"] },
+        "message": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "type": { "const": "message" },
+            "role": { "const": "assistant" },
+            "model": { "type": "string" },
+            "content": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  { "$ref": "#/definitions/TextBlock" },
+                  { "$ref": "#/definitions/ToolUseBlock" },
+                  { "$ref": "#/definitions/ThinkingBlock" }
+                ]
+              }
+            },
+            "stop_reason": {
+              "type": ["string", "null"],
+              "enum": ["end_turn", "max_tokens", "stop_sequence", "tool_use", "pause_turn", "refusal", null]
+            },
+            "stop_sequence": { "type": ["string", "null"] },
+            "usage": { "$ref": "#/definitions/Usage" },
+            "context_management": {}
+          },
+          "required": ["role", "content"]
+        }
+      },
+      "required": ["type", "session_id", "message"]
+    },
+
+    "SDKUserMessage": {
+      "type": "object",
+      "description": "Tool results (and, in stdin/stream-json input mode, user turns) sent back into the conversation.",
       "properties": {
         "type": { "const": "user" },
-        "message": { "type": "string" },
-        "parent_tool_use_id": { "type": "string" },
-        "session_id": { "type": "string", "format": "uuid" },
-        "timestamp": { "type": "string", "format": "date-time" }
-      },
-      "required": ["type"]
-    },
-    "ToolUseMessage": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "tool_use" },
-        "name": { "type": "string" },
-        "input": { "type": "object" },
-        "tool_use_id": { "type": "string" },
-        "session_id": { "type": "string", "format": "uuid" },
-        "timestamp": { "type": "string", "format": "date-time" }
-      },
-      "required": ["type", "name", "input", "tool_use_id"]
-    },
-    "ToolResultMessage": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "tool_result" },
-        "output": { "type": "string" },
-        "content": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/ContentBlock" }
+        "uuid": { "$ref": "#/definitions/UUID" },
+        "session_id": { "type": "string" },
+        "parent_tool_use_id": { "type": ["string", "null"] },
+        "message": {
+          "type": "object",
+          "properties": {
+            "role": { "const": "user" },
+            "content": {
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      { "$ref": "#/definitions/ToolResultBlock" },
+                      { "$ref": "#/definitions/TextBlock" }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "required": ["role", "content"]
         },
-        "tool_use_id": { "type": "string" },
-        "is_error": { "type": "boolean" },
-        "session_id": { "type": "string", "format": "uuid" },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "tool_use_result": {
+          "description": "SDK-attached structured summary of the tool result (shape is tool-specific, e.g. Glob returns filenames/durationMs/numFiles/truncated).",
+          "type": "object"
+        }
       },
-      "required": ["type", "tool_use_id"]
+      "required": ["type", "session_id", "message"]
     },
-    "ResultMessage": {
+
+    "SDKResultMessage": {
       "type": "object",
+      "description": "Final message indicating query completion.",
       "properties": {
         "type": { "const": "result" },
         "subtype": {
           "type": "string",
-          "description": "Forward-compatible terminal subtype. Known values include success, error_max_turns, error_during_execution, error_max_budget_usd, and error_max_structured_output_retries."
+          "enum": ["success", "error_max_turns", "error_max_budget_usd", "error_during_execution"]
         },
-        "result": { "type": "string" },
-        "total_cost_usd": { "type": "number" },
+        "uuid": { "$ref": "#/definitions/UUID" },
+        "session_id": { "type": "string" },
         "is_error": { "type": "boolean" },
         "duration_ms": { "type": "integer" },
         "duration_api_ms": { "type": "integer" },
         "num_turns": { "type": "integer" },
-        "usage": { "$ref": "#/$defs/UsageInfo" },
-        "session_id": { "type": "string", "format": "uuid" },
+        "result": { "type": ["string", "null"] },
+        "total_cost_usd": { "type": "number" },
+        "usage": { "$ref": "#/definitions/Usage" },
+        "modelUsage": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "inputTokens": { "type": "integer" },
+              "outputTokens": { "type": "integer" },
+              "cacheReadInputTokens": { "type": "integer" },
+              "cacheCreationInputTokens": { "type": "integer" },
+              "webSearchRequests": { "type": "integer" },
+              "costUSD": { "type": "number" },
+              "contextWindow": { "type": "integer" },
+              "maxOutputTokens": { "type": "integer" }
+            }
+          }
+        },
         "permission_denials": {
           "type": "array",
-          "items": { "$ref": "#/$defs/PermissionDenial" }
+          "items": {
+            "type": "object",
+            "properties": {
+              "tool_name": { "type": "string" },
+              "tool_use_id": { "type": "string" },
+              "tool_input": { "type": "object" }
+            }
+          }
         },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "structured_output": {
+          "description": "Present only when --json-schema / a structured output format was requested; validated JSON matching that schema."
+        },
+        "errors": { "type": "array", "items": { "type": "string" } }
       },
-      "required": ["type"]
+      "required": ["type", "subtype", "session_id", "is_error"]
     },
-    "UsageInfo": {
+
+    "SDKPartialAssistantMessage": {
       "type": "object",
-      "properties": {
-        "input_tokens": { "type": "integer" },
-        "cache_creation_input_tokens": { "type": "integer" },
-        "cache_read_input_tokens": { "type": "integer" },
-        "output_tokens": { "type": "integer" }
-      },
-      "required": ["input_tokens", "output_tokens"]
-    },
-    "PermissionDenial": {
-      "type": "object",
-      "properties": {
-        "request_id": { "type": "string" },
-        "reason": { "type": "string" }
-      },
-      "required": ["request_id", "reason"]
-    },
-    "StreamEventMessage": {
-      "type": "object",
+      "description": "Raw Claude API streaming event, emitted only when --include-partial-messages / include_partial_messages is set.",
       "properties": {
         "type": { "const": "stream_event" },
-        "event": { "$ref": "#/$defs/StreamEvent" },
-        "session_id": { "type": "string", "format": "uuid" },
-        "timestamp": { "type": "string", "format": "date-time" }
-      },
-      "required": ["type", "event"]
-    },
-    "StreamEvent": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "content_block_start",
-            "content_block_delta",
-            "content_block_stop",
-            "message_delta",
-            "message_start",
-            "message_stop",
-            "error"
-          ]
-        },
-        "index": { "type": "integer" },
-        "delta": {
-          "oneOf": [
-            { "$ref": "#/$defs/TextDelta" },
-            { "$ref": "#/$defs/InputJSONDelta" }
-          ]
+        "uuid": { "$ref": "#/definitions/UUID" },
+        "session_id": { "type": "string" },
+        "parent_tool_use_id": { "type": "null" },
+        "ttft_ms": { "type": "integer", "description": "Time to first token in ms; present only on message_start events." },
+        "event": {
+          "type": "object",
+          "description": "Raw Anthropic Messages API stream event (message_start | content_block_start | content_block_delta | content_block_stop | message_delta | message_stop). See platform.claude.com/docs/en/build-with-claude/streaming for the full event schema.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "message_start",
+                "content_block_start",
+                "content_block_delta",
+                "content_block_stop",
+                "message_delta",
+                "message_stop"
+              ]
+            },
+            "index": { "type": "integer" },
+            "message": { "type": "object" },
+            "content_block": {
+              "oneOf": [
+                { "$ref": "#/definitions/TextBlock" },
+                { "$ref": "#/definitions/ToolUseBlock" },
+                { "$ref": "#/definitions/ThinkingBlock" }
+              ]
+            },
+            "delta": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["text_delta", "input_json_delta", "thinking_delta", "signature_delta", "citations_delta"]
+                },
+                "text": { "type": "string" },
+                "partial_json": { "type": "string" },
+                "thinking": { "type": "string" },
+                "stop_reason": { "type": ["string", "null"] },
+                "stop_sequence": { "type": ["string", "null"] }
+              }
+            },
+            "usage": { "type": "object" }
+          },
+          "required": ["type"]
         }
       },
-      "required": ["type"]
-    },
-    "TextDelta": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "text_delta" },
-        "text": { "type": "string" }
-      },
-      "required": ["type", "text"]
-    },
-    "InputJSONDelta": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "input_json_delta" },
-        "partial_json": { "type": "string" }
-      },
-      "required": ["type", "partial_json"]
+      "required": ["type", "session_id", "event"]
     }
   }
 }

@@ -22,11 +22,10 @@ func NewOSExecFactory() *OSExecFactory {
 }
 
 func (f *OSExecFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, error) {
-	cmd := exec.CommandContext(ctx, spec.Path, spec.Args...)
-	if spec.Env != nil {
-		cmd.Env = spec.Env
+	if len(spec.Command) == 0 {
+		return nil, fmt.Errorf("empty launch command")
 	}
-	cmd.Dir = spec.WorkDir
+	cmd := spec.BuildCmd(ctx)
 	cmd.Stderr = f.Stderr
 	if cmd.Stderr == nil {
 		cmd.Stderr = os.Stderr
@@ -45,7 +44,7 @@ func (f *OSExecFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, err
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
 		_ = stdout.Close()
-		return nil, fmt.Errorf("start %q: %w", spec.Path, err)
+		return nil, fmt.Errorf("start %q: %w", spec.Command[0], err)
 	}
 
 	h := &osHandle{

@@ -100,3 +100,15 @@ func TestAgentService_Run_ExecuteError_Propagates(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cli missing")
 }
+
+func TestAgentService_RegistryOperationsStayBehindFacade(t *testing.T) {
+	svc, err := agentboot.NewAgentService(agentboot.Config{})
+	require.NoError(t, err)
+
+	agent := &fakeAgent{result: &agentboot.Result{}}
+	svc.RegisterAgent(fakeAgentType, agent)
+	require.NoError(t, svc.SetDefaultAgent(fakeAgentType))
+
+	assert.Contains(t, svc.RegisteredAgents(), fakeAgentType)
+	assert.Equal(t, fakeAgentType, svc.Config().DefaultAgent)
+}

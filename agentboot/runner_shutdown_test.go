@@ -62,3 +62,53 @@ func TestRunner_ClosesInputForGracefulExitAfterResult(t *testing.T) {
 		t.Fatal("agent process did not observe stdin EOF before completion")
 	}
 }
+
+func TestRunner_TerminalSuccessSurvivesShutdownEscalation(t *testing.T) {
+	factory := process.NewFakeFactory()
+	factory.OnStart = func(_ context.Context, _ process.LaunchSpec, h *process.FakeHandle) {
+		go func() {
+			_, _ = io.Copy(io.Discard, h.StdinR)
+		}()
+		go func() {
+			result, _ := json.Marshal(map[string]any{
+				"type":     claude.SDKResultMessage,
+				"subtype":  claude.ResultSubtypeSuccess,
+				"is_error": false,
+			})
+			_, _ = h.WriteOutput(append(result, '\n'))
+			// Deliberately leave stdout and the process open. Runner must
+			// escalate after the grace period without changing the result.
+		}()
+	}
+
+	driver := claude.NewDriver(claude.Config{})
+	driver.SetForceAvailable(true)
+	driver.SetCLIPath("claude-fixture-binary")
+	runner := agentboot.NewRunnerWithFactoryAndConfig(
+		driver,
+		func() agentboot.AgentTransport { return claude.NewTransport() },
+		factory,
+		agentboot.RunnerConfig{
+			DefaultFormat:       agentboot.OutputFormatStreamJSON,
+			ShutdownGracePeriod: 10 * time.Millisecond,
+		},
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	handle, err := runner.Execute(ctx, "flush timeout", agentboot.ExecutionOptions{})
+	require.NoError(t, err)
+
+	var streamedError error
+	for event := range handle.Events() {
+		if errorEvent, ok := event.(agentboot.ErrorEvent); ok {
+			streamedError = errorEvent.Err
+		}
+	}
+	result, waitErr := handle.Wait()
+
+	require.NoError(t, waitErr)
+	assert.NoError(t, streamedError)
+	assert.Equal(t, 0, result.ExitCode)
+	assert.True(t, result.IsSuccess())
+}

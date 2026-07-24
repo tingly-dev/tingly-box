@@ -10,7 +10,7 @@ type StreamEvent interface {
 }
 
 // MessageEvent wraps a streamable agent message after the per-agent
-// accumulator has consumed the raw common.Event. The concrete type of Raw
+// accumulator has consumed the raw event. The concrete type of Raw
 // is agent-specific (e.g. *claude.AssistantMessage, *claude.ToolUseMessage);
 // consumers type-switch.
 //

@@ -34,14 +34,14 @@ func (e2eAutoApprove) OnAsk(context.Context, agentboot.AskRequestEvent) (agentbo
 // Run with: go test -tags e2e ./...   (requires the `claude` CLI on PATH and
 // valid credentials; skips otherwise).
 func TestE2E_ClaudeRun(t *testing.T) {
-	agent := claude.NewAgent(agentboot.DefaultConfig())
+	config := agentboot.DefaultConfig()
+	agent := claude.NewAgent(config)
 	if !agent.IsAvailable() {
 		t.Skip("claude CLI not available; skipping e2e")
 	}
 
-	svc, err := agentboot.NewAgentService(agentboot.DefaultConfig())
+	svc, err := claude.NewService(config)
 	require.NoError(t, err)
-	svc.RegisterAgent(agentboot.AgentTypeClaude, agent)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()

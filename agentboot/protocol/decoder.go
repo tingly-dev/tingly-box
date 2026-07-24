@@ -17,10 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
-// Event is the type emitted by Decoder. It aliases common.Event so callers
-// can pass values to the rest of agentboot without conversion.
-type Event = common.Event
-
 // Decoder reads a stream of JSON-encoded values from an io.Reader and emits
 // them as Events on the channel returned by Stream.
 type Decoder struct {
@@ -44,8 +40,8 @@ func NewDecoder(r io.Reader) *Decoder { return &Decoder{src: r} }
 //     pass a non-closer reader must close it themselves to abort decoding.
 //
 // If decoding succeeds and the source ends cleanly with EOF, Err returns nil.
-func (d *Decoder) Stream(ctx context.Context) (events <-chan Event, errFn func() error) {
-	out := make(chan Event)
+func (d *Decoder) Stream(ctx context.Context) (events <-chan common.Event, errFn func() error) {
+	out := make(chan common.Event)
 	var termErr error
 
 	go func() {

@@ -58,6 +58,13 @@ const (
 
 const SDKControlPrefix = "control_"
 
+// Execution-context metadata keys understood by the Claude transport.
+const (
+	ContextKeyChatID   = "chat_id"
+	ContextKeyPlatform = "platform"
+	ContextKeyBotUUID  = "bot_uuid"
+)
+
 // System message subtypes
 const (
 	SystemSubtypeInit             = "init"
@@ -98,21 +105,13 @@ const (
 
 // Control message types
 const (
-	ControlMsgTypeResponse           = "control_response"
-	ControlMsgTypeCancelNotification = "cancel_notification"
-	ControlMsgTypeCancelRequest      = "control_cancel_request"
+	ControlMsgTypeResponse = "control_response"
 )
 
 // Control request subtypes
 const (
 	ControlRequestSubtypeCanUseTool = "can_use_tool"
 	ControlRequestSubtypeInterrupt  = "interrupt"
-)
-
-// Control request types
-const (
-	ControlRequestTypePermission = "permission"
-	ControlRequestTypeCancel     = "cancel"
 )
 
 // Control-response subtypes

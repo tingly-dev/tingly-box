@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	ccsession "github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
@@ -16,24 +15,25 @@ type Config struct {
 	EnableStreamJSON        bool          `json:"enable_stream_json"`
 	StreamBufferSize        int           `json:"stream_buffer_size"`
 	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout"`
-
-	// Session configuration
-	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"` // Path to Claude projects directory
 }
 
-// AgentBoot manages agent instances
+// AgentBoot manages agent instances.
+//
+// Deprecated: application code should use AgentService. AgentBoot remains
+// exported for one compatibility window for low-level registry consumers.
 type AgentBoot struct {
-	mu     sync.RWMutex
-	config Config
-	agents map[AgentType]Agent
-	store  common.SessionStore // nil if ClaudeProjectsDir not configured
+	mu            sync.RWMutex
+	config        Config
+	agents        map[AgentType]Agent
+	sessionReader common.SessionReader
 }
 
-// New creates a new AgentBoot instance.
-// The Claude session store is always initialized: when ClaudeProjectsDir is
-// empty the underlying store falls back to ~/.claude/projects, which is the
-// canonical location Claude Code writes its session JSONL files to. Returns
-// an error only if the store fails to initialize.
+// New creates a low-level provider-neutral AgentBoot registry.
+//
+// Prefer [NewAgentService] for application code. Provider-specific integrations
+// such as Claude session history are composed outside the root package.
+//
+// Deprecated: use NewAgentService.
 func New(config Config) (*AgentBoot, error) {
 	if config.DefaultAgent == "" {
 		config.DefaultAgent = AgentTypeClaude
@@ -45,18 +45,10 @@ func New(config Config) (*AgentBoot, error) {
 		config.StreamBufferSize = 100
 	}
 
-	ab := &AgentBoot{
+	return &AgentBoot{
 		config: config,
 		agents: make(map[AgentType]Agent),
-	}
-
-	store, err := ccsession.NewStore(config.ClaudeProjectsDir)
-	if err != nil {
-		return nil, fmt.Errorf("initialize session store: %w", err)
-	}
-	ab.store = store
-
-	return ab, nil
+	}, nil
 }
 
 // RegisterAgent registers a new agent type
@@ -89,7 +81,15 @@ func (ab *AgentBoot) MustGetAgent(agentType AgentType) Agent {
 
 // GetDefaultAgent returns the default agent
 func (ab *AgentBoot) GetDefaultAgent() (Agent, error) {
-	return ab.GetAgent(ab.config.DefaultAgent)
+	ab.mu.RLock()
+	defer ab.mu.RUnlock()
+
+	agentType := ab.config.DefaultAgent
+	agent, exists := ab.agents[agentType]
+	if !exists {
+		return nil, fmt.Errorf("agent type not supported: %s", agentType)
+	}
+	return agent, nil
 }
 
 // SetDefaultAgent sets the default agent type

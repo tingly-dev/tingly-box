@@ -17,8 +17,7 @@ func TestOSExecFactory_EchoSucceeds(t *testing.T) {
 	}
 	f := NewOSExecFactory()
 	h, err := f.Start(context.Background(), LaunchSpec{
-		Path: "/bin/echo",
-		Args: []string{"hello"},
+		Command: []string{"/bin/echo", "hello"},
 	})
 	if err != nil {
 		t.Fatalf("start: %v", err)
@@ -46,8 +45,7 @@ func TestOSExecFactory_KillTerminates(t *testing.T) {
 	}
 	f := NewOSExecFactory()
 	h, err := f.Start(context.Background(), LaunchSpec{
-		Path: "/bin/sh",
-		Args: []string{"-c", "sleep 60"},
+		Command: []string{"/bin/sh", "-c", "sleep 60"},
 	})
 	if err != nil {
 		t.Fatalf("start: %v", err)
@@ -71,8 +69,7 @@ func TestOSExecFactory_KillIdempotent(t *testing.T) {
 	}
 	f := NewOSExecFactory()
 	h, err := f.Start(context.Background(), LaunchSpec{
-		Path: "/bin/echo",
-		Args: []string{"x"},
+		Command: []string{"/bin/echo", "x"},
 	})
 	if err != nil {
 		t.Fatalf("start: %v", err)
@@ -89,7 +86,7 @@ func TestOSExecFactory_KillIdempotent(t *testing.T) {
 func TestOSExecFactory_StartMissingBinary(t *testing.T) {
 	f := NewOSExecFactory()
 	_, err := f.Start(context.Background(), LaunchSpec{
-		Path: "/definitely/not/a/binary/here",
+		Command: []string{"/definitely/not/a/binary/here"},
 	})
 	if err == nil {
 		t.Fatalf("expected error starting missing binary")
@@ -98,7 +95,7 @@ func TestOSExecFactory_StartMissingBinary(t *testing.T) {
 
 func TestFakeFactory_RecordsSpec(t *testing.T) {
 	f := NewFakeFactory()
-	spec := LaunchSpec{Path: "claude", Args: []string{"--resume", "abc"}}
+	spec := LaunchSpec{Command: []string{"claude", "--resume", "abc"}}
 	h, err := f.Start(context.Background(), spec)
 	if err != nil {
 		t.Fatalf("start: %v", err)
@@ -106,11 +103,11 @@ func TestFakeFactory_RecordsSpec(t *testing.T) {
 	defer h.Kill()
 
 	starts := f.Starts()
-	if len(starts) != 1 || starts[0].Path != "claude" || len(starts[0].Args) != 2 {
+	if len(starts) != 1 || len(starts[0].Command) != 3 || starts[0].Command[0] != "claude" {
 		t.Fatalf("unexpected Starts: %+v", starts)
 	}
-	if got := h.(*FakeHandle).Spec().Path; got != "claude" {
-		t.Fatalf("Spec().Path = %q", got)
+	if got := h.(*FakeHandle).Spec().Command[0]; got != "claude" {
+		t.Fatalf("Spec().Command[0] = %q", got)
 	}
 }
 
@@ -125,7 +122,7 @@ func TestFakeFactory_ScriptedOutputThenExit(t *testing.T) {
 		}()
 	}
 
-	h, err := f.Start(context.Background(), LaunchSpec{Path: "x"})
+	h, err := f.Start(context.Background(), LaunchSpec{Command: []string{"x"}})
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}

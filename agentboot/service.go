@@ -7,9 +7,9 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
-// errStoreNotConfigured is returned by the query API when no session store is
-// available (ClaudeProjectsDir resolution failed at construction).
-var errStoreNotConfigured = fmt.Errorf("agentservice: session store not configured")
+// errSessionReaderNotConfigured is returned when history APIs are used without
+// an injected provider-specific reader.
+var errSessionReaderNotConfigured = fmt.Errorf("agentservice: session reader not configured")
 
 // AgentService is the primary entry point for external callers that need to:
 //   - Query projects and sessions associated with an agent
@@ -23,14 +23,39 @@ type AgentService struct {
 	boot *AgentBoot
 }
 
-// NewAgentService creates an AgentService from the given config.
-// Agent implementations must be registered via RegisterAgent before executing.
-func NewAgentService(config Config) (*AgentService, error) {
+// ServiceOption configures an [AgentService] integration.
+type ServiceOption func(*AgentService) error
+
+// WithSessionReader injects read-only historical session access.
+func WithSessionReader(reader common.SessionReader) ServiceOption {
+	return func(service *AgentService) error {
+		if reader == nil {
+			return fmt.Errorf("agentservice: session reader is nil")
+		}
+		service.boot.sessionReader = reader
+		return nil
+	}
+}
+
+// NewAgentService creates a provider-neutral AgentService from the given
+// config. Agent implementations must be registered via RegisterAgent before
+// executing. Provider history is optional and can be injected with
+// [WithSessionReader].
+func NewAgentService(config Config, options ...ServiceOption) (*AgentService, error) {
 	boot, err := New(config)
 	if err != nil {
 		return nil, err
 	}
-	return &AgentService{boot: boot}, nil
+	service := &AgentService{boot: boot}
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		if err := option(service); err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
 }
 
 // RegisterAgent registers an agent implementation for the given type.
@@ -38,8 +63,26 @@ func (s *AgentService) RegisterAgent(agentType AgentType, agent Agent) {
 	s.boot.RegisterAgent(agentType, agent)
 }
 
-// Boot returns the underlying AgentBoot registry for callers that need
-// low-level access. Prefer the AgentService methods.
+// SetDefaultAgent selects the registered agent used when execution APIs receive
+// an empty AgentType.
+func (s *AgentService) SetDefaultAgent(agentType AgentType) error {
+	return s.boot.SetDefaultAgent(agentType)
+}
+
+// RegisteredAgents returns the currently registered agent types.
+func (s *AgentService) RegisteredAgents() []AgentType {
+	return s.boot.ListAgents()
+}
+
+// Config returns a snapshot of the service configuration.
+func (s *AgentService) Config() Config {
+	return s.boot.GetConfig()
+}
+
+// Boot returns the underlying compatibility registry.
+//
+// Deprecated: use AgentService methods such as RegisterAgent,
+// SetDefaultAgent, RegisteredAgents, and Config.
 func (s *AgentService) Boot() *AgentBoot {
 	return s.boot
 }
@@ -48,38 +91,38 @@ func (s *AgentService) Boot() *AgentBoot {
 
 // ListProjects returns all project paths that have at least one recorded session.
 func (s *AgentService) ListProjects(ctx context.Context) ([]string, error) {
-	if s.boot.store == nil {
-		return nil, errStoreNotConfigured
+	if s.boot.sessionReader == nil {
+		return nil, errSessionReaderNotConfigured
 	}
-	return s.boot.store.ListProjects(ctx)
+	return s.boot.sessionReader.ListProjects(ctx)
 }
 
 // ListSessions returns up to limit sessions for the given project, newest first.
 // Pass limit <= 0 to return all sessions.
 func (s *AgentService) ListSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
-	if s.boot.store == nil {
-		return nil, errStoreNotConfigured
+	if s.boot.sessionReader == nil {
+		return nil, errSessionReaderNotConfigured
 	}
 	if limit <= 0 {
-		return s.boot.store.ListSessions(ctx, projectPath)
+		return s.boot.sessionReader.ListSessions(ctx, projectPath)
 	}
-	return s.boot.store.GetRecentSessions(ctx, projectPath, limit)
+	return s.boot.sessionReader.GetRecentSessions(ctx, projectPath, limit)
 }
 
 // GetSession returns metadata for a specific session by ID.
 func (s *AgentService) GetSession(ctx context.Context, sessionID string) (*common.SessionMetadata, error) {
-	if s.boot.store == nil {
-		return nil, errStoreNotConfigured
+	if s.boot.sessionReader == nil {
+		return nil, errSessionReaderNotConfigured
 	}
-	return s.boot.store.GetSession(ctx, sessionID)
+	return s.boot.sessionReader.GetSession(ctx, sessionID)
 }
 
 // GetSessionSummary returns head and tail events of a session.
 func (s *AgentService) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
-	if s.boot.store == nil {
-		return nil, errStoreNotConfigured
+	if s.boot.sessionReader == nil {
+		return nil, errSessionReaderNotConfigured
 	}
-	return s.boot.store.GetSessionSummary(ctx, sessionID, firstN, lastM)
+	return s.boot.sessionReader.GetSessionSummary(ctx, sessionID, firstN, lastM)
 }
 
 // --- Execution API ---

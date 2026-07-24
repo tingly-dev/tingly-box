@@ -10,27 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/tingly-dev/tingly-box/agentboot"
 )
-
-// TestLauncherSetDefaultFormat tests setting and getting default format
-func TestLauncherSetDefaultFormat(t *testing.T) {
-	launcher := NewLauncher(Config{})
-
-	// Test setting stream-json as default
-	launcher.SetDefaultFormat(agentboot.OutputFormatStreamJSON)
-	assert.Equal(t, agentboot.OutputFormatStreamJSON, launcher.GetDefaultFormat())
-
-	// Test setting text as default
-	launcher.SetDefaultFormat(agentboot.OutputFormatText)
-	assert.Equal(t, agentboot.OutputFormatText, launcher.GetDefaultFormat())
-}
-
-// TestLauncherType tests the Type method
-func TestLauncherType(t *testing.T) {
-	launcher := NewLauncher(Config{})
-	assert.Equal(t, agentboot.AgentTypeClaude, launcher.Type())
-}
 
 // TestMessageAccumulator_APIRetryPreservesRaw verifies that an api_retry system
 // message keeps its retry metadata (which the typed struct does not declare by

@@ -37,12 +37,12 @@ func NewTransport() *Transport {
 
 // SetExecutionContext injects routing metadata before an execution begins.
 // Implements [agentboot.AgentTransport].
-func (t *Transport) SetExecutionContext(sessionID, chatID, platform, botUUID string) {
+func (t *Transport) SetExecutionContext(context agentboot.ExecutionContext) {
 	t.execCtx = executionContext{
-		sessionID: sessionID,
-		chatID:    chatID,
-		platform:  platform,
-		botUUID:   botUUID,
+		sessionID: context.SessionID,
+		chatID:    context.Metadata[ContextKeyChatID],
+		platform:  context.Metadata[ContextKeyPlatform],
+		botUUID:   context.Metadata[ContextKeyBotUUID],
 	}
 }
 

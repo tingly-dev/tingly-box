@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -387,6 +389,72 @@ func TestBuildCCProfileSettings_MaterializesReadableDirectory(t *testing.T) {
 	settings = readJSONMap(t, defaultPath)
 	if _, exists := settings["theme"]; exists {
 		t.Errorf("removed local settings leaked from an older generated artifact: %#v", settings)
+	}
+}
+
+func TestBuildCCProfileSettings_ReusesUnchangedAtomicArtifacts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), `{"theme":"dark"}`)
+	env := map[string]string{"TINGLY_TEST": "yes"}
+	settingsPath, err := BuildCCProfileSettings("p1", "claude_code:p1", "work", env,
+		serverconfig.WithDefaultMode("acceptEdits"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	artifactDir := filepath.Dir(settingsPath)
+	paths := []string{
+		settingsPath,
+		filepath.Join(artifactDir, "statusline.sh"),
+		filepath.Join(home, ".claude", "tingly-statusline.sh"),
+	}
+	oldTime := time.Unix(1_700_000_000, 0)
+	for _, path := range paths {
+		if err := os.Chtimes(path, oldTime, oldTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const workers = 12
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, buildErr := BuildCCProfileSettings("p1", "claude_code:p1", "work", env,
+				serverconfig.WithDefaultMode("acceptEdits"))
+			errs <- buildErr
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for buildErr := range errs {
+		if buildErr != nil {
+			t.Fatal(buildErr)
+		}
+	}
+
+	for _, path := range paths {
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		if !info.ModTime().Equal(oldTime) {
+			t.Errorf("unchanged artifact was rewritten: %s (mtime %v)", path, info.ModTime())
+		}
+	}
+
+	settings := readJSONMap(t, settingsPath)
+	if settings["defaultMode"] != "acceptEdits" {
+		t.Errorf("defaultMode = %v, want acceptEdits", settings["defaultMode"])
+	}
+	envJSON, ok := settings["env"].(map[string]any)
+	if !ok || envJSON["TINGLY_TEST"] != "yes" {
+		t.Errorf("generated env missing after concurrent ensures: %#v", settings["env"])
 	}
 }
 

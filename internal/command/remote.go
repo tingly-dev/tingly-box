@@ -328,22 +328,7 @@ func promptForModelInput(reader *bufio.Reader, prompt string) (string, error) {
 
 // runStandaloneBot runs a single bot in standalone mode
 func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Settings, dataPath string, provider string, model string) error {
-	botSetting := bot.BotSetting{
-		UUID:               setting.UUID,
-		Name:               setting.Name,
-		Token:              setting.Auth["token"],
-		Platform:           setting.Platform,
-		AuthType:           setting.AuthType,
-		Auth:               setting.Auth,
-		ProxyURL:           setting.ProxyURL,
-		ChatIDLock:         setting.ChatIDLock,
-		BashAllowlist:      setting.BashAllowlist,
-		DefaultCwd:         setting.DefaultCwd,
-		Enabled:            setting.Enabled,
-		SmartGuideProvider: provider,
-		SmartGuideModel:    model,
-		RequirePairing:     setting.RequirePairing,
-	}
+	botSetting := standaloneBotSetting(setting, provider, model)
 
 	// Create session store (minimal for standalone bot)
 	sessionStorePath := filepath.Join(dataPath, "bot_sessions.json")
@@ -357,23 +342,40 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 		MessageRetention: 7 * 24 * time.Hour,
 	}, msgStore)
 
-	// Create the agent service (registry + session store façade)
+	// Compose the Claude Code agent with its historical session reader.
 	agentBootConfig := agentboot.DefaultConfig()
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
-	agentService, err := agentboot.NewAgentService(agentBootConfig)
+	agentService, err := claude.NewService(agentBootConfig)
 	if err != nil {
 		return fmt.Errorf("create agent service: %w", err)
 	}
-
-	// Register Claude agent
-	claudeAgent := claude.NewAgent(agentBootConfig)
-	agentService.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Create chat store path
 	chatStorePath := filepath.Join(dataPath, "bot_chats.json")
 
 	// Run the bot
 	return runBotWithSettingsInternal(ctx, appManager, botSetting, chatStorePath, sessionMgr, agentService)
+}
+
+func standaloneBotSetting(setting db.Settings, provider, model string) bot.BotSetting {
+	return bot.BotSetting{
+		UUID:               setting.UUID,
+		Name:               setting.Name,
+		Token:              setting.Auth["token"],
+		Platform:           setting.Platform,
+		AuthType:           setting.AuthType,
+		Auth:               setting.Auth,
+		ProxyURL:           setting.ProxyURL,
+		ChatIDLock:         setting.ChatIDLock,
+		BashAllowlist:      setting.BashAllowlist,
+		DefaultCwd:         setting.DefaultCwd,
+		DefaultAgent:       setting.DefaultAgent,
+		Enabled:            setting.Enabled,
+		Scenarios:          setting.Scenarios,
+		SmartGuideProvider: provider,
+		SmartGuideModel:    model,
+		RequirePairing:     setting.RequirePairing,
+	}
 }
 
 // runBotWithSettingsInternal is an internal wrapper that calls the bot runner

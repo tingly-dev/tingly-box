@@ -47,9 +47,8 @@ type AgentTransport interface {
 	// returns the parsed StreamEvent (ApprovalRequestEvent or
 	// AskRequestEvent) ready to emit on the handle.
 	//
-	// The execution-context fields (sessionID, chatID, platform, botUUID)
-	// previously set via SetExecutionContext are stamped onto the StreamEvent
-	// during Classify.
+	// Execution context metadata can be stamped onto the StreamEvent during
+	// Classify.
 	Classify(ev common.Event) (kind EventKind, parsed StreamEvent)
 
 	// AccumulateMessage feeds the event to the per-agent message accumulator
@@ -67,7 +66,6 @@ type AgentTransport interface {
 	// an UpdatedInput.
 	EncodeControlResponse(reqID string, resp ControlResponse, originalInput map[string]any) any
 
-	// SetExecutionContext injects per-execution routing metadata that is
-	// stamped onto Approval/Ask events during Classify.
-	SetExecutionContext(sessionID, chatID, platform, botUUID string)
+	// SetExecutionContext injects provider-neutral per-execution metadata.
+	SetExecutionContext(context ExecutionContext)
 }

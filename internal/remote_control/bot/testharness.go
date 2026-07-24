@@ -33,15 +33,15 @@ import (
 //
 // Tests then drive the bot through the testenv chat helpers.
 type TestHarness struct {
-	Setting    BotSetting
-	Handler    *BotHandler
+	Setting      BotSetting
+	Handler      *BotHandler
 	ChatStore    ChatStoreInterface
 	SessionMgr   *session.Manager
 	AgentService *agentboot.AgentService
 	Pairing      *PairingManager
-	Audit      *audit.Logger
-	DataDir    string
-	Manager    *imbot.Manager
+	Audit        *audit.Logger
+	DataDir      string
+	Manager      *imbot.Manager
 
 	cleanup func()
 }
@@ -91,13 +91,14 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		MessageRetention: time.Hour,
 	}, nil)
 
-	agentCfg := agentboot.Config{
-		ClaudeProjectsDir: filepath.Join(opt.DataDir, "claude-projects"),
-	}
-	agentService, err := agentboot.NewAgentService(agentCfg)
+	agentCfg := agentboot.Config{}
+	agentService, err := claude.NewService(
+		agentCfg,
+		claude.WithProjectsDir(filepath.Join(opt.DataDir, "claude-projects")),
+	)
 	if err != nil {
-		// ClaudeProjectsDir failed; fall back to a config without it.
-		agentService, err = agentboot.NewAgentService(agentboot.Config{})
+		// Custom history initialization failed; fall back to Claude's default.
+		agentService, err = claude.NewService(agentboot.Config{})
 		if err != nil {
 			t.Fatalf("BootForTest: agent service: %v", err)
 		}
@@ -105,7 +106,9 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	if opt.FixtureScript != nil {
 		fixtureAgent := claude.NewAgentWithFactory(claude.Config{}, fixture.Factory(opt.FixtureScript))
 		agentService.RegisterAgent(agentboot.AgentTypeClaude, fixtureAgent)
-		_ = agentService.Boot().SetDefaultAgent(agentboot.AgentTypeClaude)
+		if err := agentService.SetDefaultAgent(agentboot.AgentTypeClaude); err != nil {
+			t.Fatalf("BootForTest: set default agent: %v", err)
+		}
 	}
 
 	auditLog := audit.NewLogger(audit.Config{Console: false, MaxEntries: 1000})
@@ -131,15 +134,15 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	manager.OnMessage(handler.HandleMessage)
 
 	h := &TestHarness{
-		Setting:    setting,
-		Handler:    handler,
+		Setting:      setting,
+		Handler:      handler,
 		ChatStore:    chatStore,
 		SessionMgr:   sessionMgr,
 		AgentService: agentService,
 		Pairing:      pairing,
 		Audit:        auditLog,
-		DataDir:    opt.DataDir,
-		Manager:    manager,
+		DataDir:      opt.DataDir,
+		Manager:      manager,
 		cleanup: func() {
 			_ = chatStore.Close()
 		},
