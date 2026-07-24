@@ -11,9 +11,9 @@ import (
 )
 
 // joinTextContentParts concatenates the text fields of text-only content parts
-// (used by tool and system messages) into a single newline-separated string.
-// This mirrors the pattern in AlignToolMessagesForOpenAI and lets converters
-// handle the array-of-text-blocks content form allowed by the OpenAI spec.
+// (used by tool and system messages) into a single newline-separated string,
+// letting converters handle the array-of-text-blocks content form allowed by
+// the OpenAI spec.
 func joinTextContentParts(parts []openai.ChatCompletionContentPartTextParam) string {
 	if len(parts) == 0 {
 		return ""
@@ -30,16 +30,13 @@ func joinTextContentParts(parts []openai.ChatCompletionContentPartTextParam) str
 // joinAssistantTextContentParts concatenates the text fields of assistant array
 // content parts into a single newline-separated string, ignoring refusal parts.
 func joinAssistantTextContentParts(parts []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	texts := make([]string, 0, len(parts))
+	textParts := make([]openai.ChatCompletionContentPartTextParam, 0, len(parts))
 	for _, part := range parts {
-		if part.OfText != nil && part.OfText.Text != "" {
-			texts = append(texts, part.OfText.Text)
+		if part.OfText != nil {
+			textParts = append(textParts, *part.OfText)
 		}
 	}
-	return strings.Join(texts, "\n")
+	return joinTextContentParts(textParts)
 }
 
 // ConvertChatToOpenAIResponses converts OpenAI Chat Completions params to Responses API format.

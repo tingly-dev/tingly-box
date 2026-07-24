@@ -426,9 +426,6 @@ Cases reuse `flagTB`/`flagRecorder`/`flagAbort` from `flags.go` so they run
 under both `*testing.T` (`TestContentShapes`) and the CLI
 (`--mode=content_shapes`) without duplicating that plumbing.
 
-Current coverage: tool/assistant/system array-of-text content and
-`reasoning_effort` forwarding, for `openai_chat → openai_responses` and
-`openai_chat → anthropic_beta` — the two converters #1427 touched
-(`ConvertChatToOpenAIResponses`, `ConvertOpenAIToAnthropicRequest`). Extend
-this list, not the matrix's `Scenario`/`buildRequest`, when a future bug is
+See `contentShapeCases()` in `content_shapes.go` for current coverage. Extend
+that list, not the matrix's `Scenario`/`buildRequest`, when a future bug is
 "the gateway dropped an unusual request shape while forwarding it."

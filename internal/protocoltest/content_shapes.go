@@ -2,6 +2,7 @@ package protocoltest
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -66,6 +67,21 @@ func sendContentShape(t flagTB, env *TestEnv, source, target protocol.APIType, b
 	return res
 }
 
+// assertUpstreamText sends body through the gateway, extracts a field from
+// the captured upstream request via extract, and asserts it equals want.
+// CapturedRequest.JSON() is nil-safe (vmodel/benchmark/capture.go), so no
+// separate "was anything captured" check is needed — an absent request
+// simply makes every extractor return ok=false, which fails the assertion
+// with an informative message on its own.
+func assertUpstreamText(t flagTB, env *TestEnv, source, target protocol.APIType, endpoint EndpointKind, body map[string]any, extract func(map[string]any) (string, bool), want string) {
+	t.Helper()
+	sendContentShape(t, env, source, target, body)
+	out, ok := extract(env.virtual.LastRequest(endpoint).JSON())
+	if !ok || out != want {
+		t.Errorf("upstream %s text = %q (ok=%v), want %q", endpoint, out, ok, want)
+	}
+}
+
 // ─── OpenAI Responses body helpers ────────────────────────────────────────
 
 // responsesFunctionCallOutput returns the "output" string of the first
@@ -94,6 +110,14 @@ func responsesMessageContent(body map[string]any, role string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// responsesReasoningEffort returns the "reasoning.effort" string in a
+// captured OpenAI Responses request body.
+func responsesReasoningEffort(body map[string]any) (string, bool) {
+	reasoning, _ := body["reasoning"].(map[string]any)
+	effort, ok := reasoning["effort"].(string)
+	return effort, ok
 }
 
 // ─── Anthropic Beta body helpers ──────────────────────────────────────────
@@ -164,6 +188,8 @@ func anthropicSystemText(body map[string]any) (string, bool) {
 
 func contentShapeCases() []contentShapeCase {
 	const secretWord = "The secret word is ZANZIBAR"
+	const parisAnswer = "The capital of France is Paris."
+	const systemPrompt = "You are a helpful assistant."
 
 	toolCallTurns := []map[string]any{
 		{"role": "user", "content": "What's the secret word?"},
@@ -171,65 +197,60 @@ func contentShapeCases() []contentShapeCase {
 			{"id": "call_1", "type": "function", "function": map[string]any{"name": "get_secret", "arguments": "{}"}},
 		}},
 	}
+	// slices.Concat copies rather than mutating toolCallTurns' backing array,
+	// which matters because both cases below share it under t.Parallel().
+	toolResultBody := func() map[string]any {
+		return map[string]any{
+			"messages": slices.Concat(toolCallTurns, []map[string]any{
+				{"role": "tool", "tool_call_id": "call_1",
+					"content": []map[string]any{{"type": "text", "text": secretWord}}},
+			}),
+		}
+	}
+	// assistantArrayBody/systemArrayBody are funcs, not shared maps: each of
+	// the two cases below runs under t.Parallel() and sendContentShape
+	// mutates its body (stamps "model" on it), so a shared map instance would
+	// race between the Chat→Responses and Chat→Anthropic cases that both use
+	// this fixture.
+	assistantArrayBody := func() map[string]any {
+		return map[string]any{
+			"messages": []map[string]any{
+				{"role": "user", "content": "What is the capital of France?"},
+				{"role": "assistant", "content": []map[string]any{{"type": "text", "text": parisAnswer}}},
+			},
+		}
+	}
+	systemArrayBody := func() map[string]any {
+		return map[string]any{
+			"messages": []map[string]any{
+				{"role": "system", "content": []map[string]any{{"type": "text", "text": systemPrompt}}},
+				{"role": "user", "content": "Hello"},
+			},
+		}
+	}
+
+	assistantContent := func(body map[string]any) (string, bool) { return responsesMessageContent(body, "assistant") }
+	instructions := func(body map[string]any) (string, bool) {
+		v, ok := body["instructions"].(string)
+		return v, ok
+	}
+	anthropicAssistantText := func(body map[string]any) (string, bool) { return anthropicMessageText(body, "assistant") }
 
 	return []contentShapeCase{
 		// ── Chat → Responses ────────────────────────────────────────────
 		{name: "chat_to_responses/tool_array_content", run: func(t flagTB, env *TestEnv) {
-			body := map[string]any{
-				"messages": append(append([]map[string]any{}, toolCallTurns...), map[string]any{
-					"role": "tool", "tool_call_id": "call_1",
-					"content": []map[string]any{{"type": "text", "text": secretWord}},
-				}),
-			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, body)
-			up := env.virtual.LastRequest(EndpointResponses)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			out, ok := responsesFunctionCallOutput(up.JSON())
-			if !ok || out != secretWord {
-				t.Errorf("function_call_output.output = %q (ok=%v), want %q", out, ok, secretWord)
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, EndpointResponses,
+				toolResultBody(), responsesFunctionCallOutput, secretWord)
 		}},
 
 		{name: "chat_to_responses/assistant_array_content", run: func(t flagTB, env *TestEnv) {
-			body := map[string]any{
-				"messages": []map[string]any{
-					{"role": "user", "content": "What is the capital of France?"},
-					{"role": "assistant", "content": []map[string]any{
-						{"type": "text", "text": "The capital of France is Paris."},
-					}},
-				},
-			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, body)
-			up := env.virtual.LastRequest(EndpointResponses)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			out, ok := responsesMessageContent(up.JSON(), "assistant")
-			if !ok || out != "The capital of France is Paris." {
-				t.Errorf("assistant message content = %q (ok=%v), want %q", out, ok, "The capital of France is Paris.")
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, EndpointResponses,
+				assistantArrayBody(), assistantContent, parisAnswer)
 		}},
 
 		{name: "chat_to_responses/system_array_content", run: func(t flagTB, env *TestEnv) {
-			body := map[string]any{
-				"messages": []map[string]any{
-					{"role": "system", "content": []map[string]any{
-						{"type": "text", "text": "You are a helpful assistant."},
-					}},
-					{"role": "user", "content": "Hello"},
-				},
-			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, body)
-			up := env.virtual.LastRequest(EndpointResponses)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			instructions, _ := up.JSON()["instructions"].(string)
-			if instructions != "You are a helpful assistant." {
-				t.Errorf("instructions = %q, want %q", instructions, "You are a helpful assistant.")
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, EndpointResponses,
+				systemArrayBody(), instructions, systemPrompt)
 		}},
 
 		{name: "chat_to_responses/reasoning_effort_forwarded", run: func(t flagTB, env *TestEnv) {
@@ -237,74 +258,24 @@ func contentShapeCases() []contentShapeCase {
 				"messages":         []map[string]any{{"role": "user", "content": "Hello"}},
 				"reasoning_effort": "high",
 			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, body)
-			up := env.virtual.LastRequest(EndpointResponses)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			reasoning, _ := up.JSON()["reasoning"].(map[string]any)
-			if effort, _ := reasoning["effort"].(string); effort != "high" {
-				t.Errorf("reasoning.effort = %v, want %q; reasoning=%v", reasoning["effort"], "high", reasoning)
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, EndpointResponses,
+				body, responsesReasoningEffort, "high")
 		}},
 
 		// ── Chat → Anthropic Beta ───────────────────────────────────────
 		{name: "chat_to_anthropic/tool_array_content", run: func(t flagTB, env *TestEnv) {
-			body := map[string]any{
-				"messages": append(append([]map[string]any{}, toolCallTurns...), map[string]any{
-					"role": "tool", "tool_call_id": "call_1",
-					"content": []map[string]any{{"type": "text", "text": secretWord}},
-				}),
-			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, body)
-			up := env.virtual.LastRequest(EndpointAnthropic)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			out, ok := anthropicToolResultText(up.JSON())
-			if !ok || out != secretWord {
-				t.Errorf("tool_result content text = %q (ok=%v), want %q", out, ok, secretWord)
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				toolResultBody(), anthropicToolResultText, secretWord)
 		}},
 
 		{name: "chat_to_anthropic/assistant_array_content", run: func(t flagTB, env *TestEnv) {
-			body := map[string]any{
-				"messages": []map[string]any{
-					{"role": "user", "content": "What is the capital of France?"},
-					{"role": "assistant", "content": []map[string]any{
-						{"type": "text", "text": "The capital of France is Paris."},
-					}},
-				},
-			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, body)
-			up := env.virtual.LastRequest(EndpointAnthropic)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			out, ok := anthropicMessageText(up.JSON(), "assistant")
-			if !ok || out != "The capital of France is Paris." {
-				t.Errorf("assistant message text = %q (ok=%v), want %q", out, ok, "The capital of France is Paris.")
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				assistantArrayBody(), anthropicAssistantText, parisAnswer)
 		}},
 
 		{name: "chat_to_anthropic/system_array_content", run: func(t flagTB, env *TestEnv) {
-			body := map[string]any{
-				"messages": []map[string]any{
-					{"role": "system", "content": []map[string]any{
-						{"type": "text", "text": "You are a helpful assistant."},
-					}},
-					{"role": "user", "content": "Hello"},
-				},
-			}
-			sendContentShape(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, body)
-			up := env.virtual.LastRequest(EndpointAnthropic)
-			if up == nil {
-				t.Fatal("no upstream request captured")
-			}
-			out, ok := anthropicSystemText(up.JSON())
-			if !ok || out != "You are a helpful assistant." {
-				t.Errorf("system text = %q (ok=%v), want %q", out, ok, "You are a helpful assistant.")
-			}
+			assertUpstreamText(t, env, protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta, EndpointAnthropic,
+				systemArrayBody(), anthropicSystemText, systemPrompt)
 		}},
 	}
 }
