@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 // Plain lookup (not the usePlatformGuide hook) so it's safe to call from
 // inside a .map() when building the picker's item list.
-const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number; grayscale?: boolean }>> = {
     telegram: Telegram,
     feishu: Feishu,
     lark: Lark,
@@ -99,7 +99,7 @@ const BotOverviewPage = () => {
         {
             id: 'all',
             label: t('bots.overview.allPlatforms', { defaultValue: 'All' }),
-            icon: <ListAlt sx={{ fontSize: 20 }} />,
+            icon: (active: boolean) => <ListAlt sx={{ fontSize: 20, color: active ? 'primary.main' : 'text.disabled' }} />,
             subtitle: countLabel(bots.filter(b => b.enabled).length, bots.length),
         },
         ...BOT_PLATFORM_IDS.map((id) => {
@@ -108,7 +108,7 @@ const BotOverviewPage = () => {
             return {
                 id,
                 label: platformDisplayName(id, t),
-                icon: <BrandIcon size={20} />,
+                icon: (active: boolean) => <BrandIcon size={20} grayscale={!active} />,
                 subtitle: c ? countLabel(c.active, c.total) : undefined,
             };
         }),

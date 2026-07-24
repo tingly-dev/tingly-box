@@ -4,7 +4,14 @@ import type { ReactNode } from 'react';
 export interface PlatformPickerItem {
     id: string;
     label: string;
-    icon: ReactNode;
+    /**
+     * Rendered with the tile's selected state. The brand logos default to
+     * grayscale (createBrandIcon(..., true)) and carry that filter on the
+     * <img> itself — a parent filter can't undo it — so the icon has to be
+     * (re)rendered with `grayscale={!active}` to come back to full color
+     * when its tile is selected. Hence a render fn, not a static node.
+     */
+    icon: (active: boolean) => ReactNode;
     subtitle?: string;
 }
 
@@ -59,18 +66,9 @@ const PlatformPicker: React.FC<PlatformPickerProps> = ({ items, value, onChange 
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                // Brand logos carry their own colors: full color
-                                // when selected, desaturated when not — no tinted
-                                // box behind them. The monochrome "All" icon
-                                // follows the text color (grayscale is a no-op on
-                                // it), so this reads consistently for both.
-                                color: active ? 'primary.main' : 'text.disabled',
-                                filter: active ? 'none' : 'grayscale(1)',
-                                opacity: active ? 1 : 0.6,
-                                transition: 'filter 0.18s ease-out, opacity 0.18s ease-out',
                             }}
                         >
-                            {item.icon}
+                            {item.icon(active)}
                         </Box>
                         <Box sx={{ minWidth: 0, textAlign: 'left' }}>
                             <Typography

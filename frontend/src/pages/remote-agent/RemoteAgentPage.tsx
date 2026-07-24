@@ -7,7 +7,7 @@ import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/const
 import { api } from '@/services/api';
 import PlatformRemoteAgentPage from './PlatformRemoteAgentPage';
 
-const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+const PLATFORM_BRAND_ICONS: Record<string, React.ComponentType<{ size?: number; grayscale?: boolean }>> = {
     telegram: Telegram,
     feishu: Feishu,
     lark: Lark,
@@ -54,7 +54,7 @@ const RemoteAgentPage = () => {
         return {
             id,
             label: platformDisplayName(id, t),
-            icon: <BrandIcon size={20} />,
+            icon: (active: boolean) => <BrandIcon size={20} grayscale={!active} />,
             subtitle: c && c.total > 0 ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: c.active, total: c.total }) : undefined,
         };
     }), [t, counts]);
