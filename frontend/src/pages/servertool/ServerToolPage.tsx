@@ -212,7 +212,7 @@ const ServerToolPage = () => {
                         01
                     </Typography>
                     <Box>
-                        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                        <Typography component="h1" variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
                             Config your server tools
                         </Typography>
                         <Typography variant="body2" sx={{

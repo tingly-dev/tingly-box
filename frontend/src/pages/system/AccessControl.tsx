@@ -152,7 +152,7 @@ const AccessControl = () => {
                             alignItems: "center"
                         }}>
                             <Box sx={{ flex: 1 }}>
-                                <Typography variant="h5" sx={{
+                                <Typography component="h1" variant="h5" sx={{
                                     fontWeight: 600
                                 }}>
                                     {t('accessControl.pageTitle')}

@@ -123,6 +123,7 @@ const System = () => {
                 {/* Server Status - Simplified one-line-per-status design */}
                 <UnifiedCard
                     title={t('system.serverStatus.title')}
+                    titleHeadingLevel={1}
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={0.5}>

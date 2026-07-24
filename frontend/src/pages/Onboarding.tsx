@@ -152,6 +152,7 @@ const Onboarding: React.FC = () => {
                 <UnifiedCard
                     size="full"
                     title={t('onboarding.title', {defaultValue: 'Welcome to Tingly Box'})}
+                    titleHeadingLevel={1}
                     subtitle={t('onboarding.subtitle', {
                         defaultValue: 'Add your first AI provider to get started. Browse the catalog or paste a config snippet — we\'ll figure out the rest.',
                     })}

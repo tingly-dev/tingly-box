@@ -22,6 +22,7 @@ const UseEmbedPageContent: React.FC = () => {
         <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <CardGrid>
                 <UnifiedCard
+                    titleHeadingLevel={1}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Embed API</span>

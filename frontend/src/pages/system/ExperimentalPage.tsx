@@ -13,6 +13,7 @@ const ExperimentalPage = () => {
             <CardGrid>
                 <UnifiedCard
                     title={t('system.experimentalFeatures.title')}
+                    titleHeadingLevel={1}
                     size="full"
                 >
                     <Stack spacing={1}>

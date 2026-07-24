@@ -349,6 +349,7 @@ const GuardrailsGroupsPage = () => {
             <Stack spacing={3}>
                 <UnifiedCard
                     title="Policy Groups"
+                    titleHeadingLevel={1}
                     subtitle="Groups organize policies and control whether those policy sets participate in evaluation. Built-in is a policy label, not a group type."
                     size="full"
                     rightAction={

@@ -2,6 +2,7 @@ import {Add, Close, Computer, Key, Login, Search, Language, Description, Upload}
 import RegionBadge from './RegionBadge';
 import {
     Box,
+    ButtonBase,
     Card,
     Chip,
     Dialog,
@@ -94,7 +95,10 @@ const ProviderCard: React.FC<{
     icon: React.ReactNode;
     name: string;
     meta: string;
-    badge: {label: string; color: string; bg: string};
+    badge: {
+        label: string;
+        tone: 'primary' | 'success' | 'warning' | 'error';
+    };
     onClick: () => void;
     website?: string;
     apiDoc?: string;
@@ -106,8 +110,7 @@ const ProviderCard: React.FC<{
             sx={{
                 position: 'relative',
                 border: 1, borderColor: 'divider', borderRadius: 1,
-                p: 1.25, display: 'flex', alignItems: 'center', gap: 1.25,
-                cursor: 'pointer',
+                display: 'flex', alignItems: 'stretch',
                 boxShadow: 0,
                 transition: 'border-color 0.15s ease, background-color 0.15s ease',
                 '&:hover': {
@@ -115,41 +118,76 @@ const ProviderCard: React.FC<{
                     bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
                 },
             }}
-            onClick={onClick}
         >
-            <Box sx={{width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                {icon}
-            </Box>
-            <Box sx={{minWidth: 0, flex: 1}}>
-                <Typography
-                    variant="body2"
-                    title={name}
-                    sx={{
-                        fontWeight: 600,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: 1.3
-                    }}>
-                    {name}
-                </Typography>
-                <Typography
-                    variant="caption"
-                    noWrap
-                    sx={{
-                        color: "text.disabled",
-                        display: 'block',
-                        mt: 0.25,
-                        fontSize: '0.68rem',
-                        letterSpacing: '0.01em'
-                    }}>
-                    {meta}
-                </Typography>
-            </Box>
+            <ButtonBase
+                onClick={onClick}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onClick();
+                    }
+                }}
+                aria-label={`${name}: ${meta}`}
+                sx={{
+                    width: '100%',
+                    minWidth: 0,
+                    p: 1.25,
+                    pr: showDetails ? 9 : 1.25,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    gap: 1.25,
+                    borderRadius: 'inherit',
+                    textAlign: 'left',
+                    '&.Mui-focusVisible': {
+                        outline: '2px solid',
+                        outlineColor: 'primary.main',
+                        outlineOffset: -2,
+                    },
+                }}
+            >
+                <Box sx={{width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                    {icon}
+                </Box>
+                <Box sx={{minWidth: 0, flex: 1}}>
+                    <Typography
+                        variant="body2"
+                        title={name}
+                        sx={{
+                            fontWeight: 600,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            lineHeight: 1.3
+                        }}>
+                        {name}
+                    </Typography>
+                    <Typography
+                        variant="caption"
+                        noWrap
+                        sx={{
+                            color: "text.disabled",
+                            display: 'block',
+                            mt: 0.25,
+                            fontSize: '0.68rem',
+                            letterSpacing: '0.01em'
+                        }}>
+                        {meta}
+                    </Typography>
+                </Box>
+            </ButtonBase>
             {showDetails && (
-                <Stack direction="row" spacing={0.3} sx={{pr: 10}}>
+                <Stack
+                    direction="row"
+                    spacing={0.3}
+                    sx={{
+                        position: 'absolute',
+                        right: 6,
+                        bottom: 4,
+                    }}
+                >
                     {website && (
                         <IconButton
                             size="small"
@@ -157,7 +195,7 @@ const ProviderCard: React.FC<{
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Official Website"
-                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Open ${name} official website`}
                         >
                             <Language fontSize="small"/>
                         </IconButton>
@@ -169,7 +207,7 @@ const ProviderCard: React.FC<{
                             target="_blank"
                             rel="noopener noreferrer"
                             title="API Documentation"
-                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Open ${name} API documentation`}
                         >
                             <Description fontSize="small"/>
                         </IconButton>
@@ -178,14 +216,15 @@ const ProviderCard: React.FC<{
             )}
             <Typography
                 component="span"
-                sx={{
+                sx={(theme) => ({
                     position: 'absolute', top: 6, right: 6,
                     fontSize: '0.6rem', fontWeight: 600, lineHeight: 1,
-                    color: badge.color, opacity: 0.7,
+                    color: theme.palette[badge.tone].main,
                     px: 0.5, py: 0.25,
                     borderRadius: 0.5,
-                    bgcolor: badge.bg,
-                }}
+                    bgcolor: alpha(theme.palette[badge.tone].main, 0.1),
+                    pointerEvents: 'none',
+                })}
             >
                 {badge.label}
             </Typography>
@@ -273,11 +312,11 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
         return {cnKeyProviders: cn, globalKeyProviders: global, selfHostedProviders: selfHosted};
     }, [filteredKey]);
 
-    const keyBadge = {label: 'Key', color: '#1967d2', bg: '#e8f0fe'};
-    const oauthBadge = {label: 'OAuth', color: '#1e8e3e', bg: '#e6f4ea'};
-    const selfHostedBadge = {label: 'Self-hosted', color: '#e37400', bg: '#fef3e0'};
-    const cnBadge = {label: 'CN', color: '#d93025', bg: '#fce8e6'};
-    const globalBadge = {label: 'Global', color: '#1967d2', bg: '#e8f0fe'};
+    const keyBadge = {label: 'Key', tone: 'primary'} as const;
+    const oauthBadge = {label: 'OAuth', tone: 'success'} as const;
+    const selfHostedBadge = {label: 'Self-hosted', tone: 'warning'} as const;
+    const cnBadge = {label: 'CN', tone: 'error'} as const;
+    const globalBadge = {label: 'Global', tone: 'primary'} as const;
 
     const protocolMeta = (p: UniqueProvider) =>
         [p.supportsOpenAI && 'OpenAI', p.supportsAnthropic && 'Anthropic'].filter(Boolean).join(' · ') || 'Custom API';
@@ -293,7 +332,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                         color: "text.secondary",
                         mb: 1.5
                     }}>
-                    Search for your provider below — most are preseted. Not listed? Pick <Box component="span" sx={{fontWeight: 600, color: 'text.primary'}}>Custom endpoint</Box> to enter any base URL yourself.
+                    Search for your provider below — most are pre-configured. Not listed? Pick <Box component="span" sx={{fontWeight: 600, color: 'text.primary'}}>Custom endpoint</Box> to enter any base URL yourself.
                 </Typography>
             )}
             <TextField
@@ -303,6 +342,9 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
                 slotProps={{
+                    htmlInput: {
+                        'aria-label': 'Search providers',
+                    },
                     input: {
                         startAdornment: (
                             <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
@@ -489,6 +531,7 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
         <Dialog
             open={open}
             onClose={onClose}
+            aria-labelledby="connect-ai-dialog-title"
             maxWidth="sm"
             fullWidth
             scroll="paper"
@@ -497,15 +540,15 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
             }}
         >
             {/* Locked header: title and close button never scroll. */}
-            <DialogTitle sx={{pb: 1, flexShrink: 0}}>
+            <DialogTitle id="connect-ai-dialog-title" sx={{pb: 1, flexShrink: 0}}>
                 <Stack
                     direction="row"
                     sx={{
                         alignItems: "center",
                         justifyContent: "space-between"
                     }}>
-                    <Typography variant="h6">Connect AI</Typography>
-                    <IconButton onClick={onClose} size="small"><Close/></IconButton>
+                    <Typography component="span" variant="h6">Connect AI</Typography>
+                    <IconButton aria-label="Close Connect AI" onClick={onClose} size="small"><Close/></IconButton>
                 </Stack>
             </DialogTitle>
             <DialogContent

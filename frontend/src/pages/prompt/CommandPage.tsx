@@ -8,7 +8,7 @@ const CommandPage = () => {
   return (
     <PageLayout loading={false}>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="h4" sx={{ fontWeight: 600, mb: 2, color: 'text.primary' }}>
+        <Typography component="h1" variant="h4" sx={{ fontWeight: 600, mb: 2, color: 'text.primary' }}>
           Commands
         </Typography>
         <Typography variant="body1" sx={{

@@ -35,6 +35,7 @@ import {
     Xcode,
 } from '@/components/BrandIcons';
 import PageLayout from '@/components/PageLayout';
+import PageHeader from '@/components/PageHeader';
 
 export interface ScenarioDescriptor {
     id: string;
@@ -259,26 +260,12 @@ const AgentOverviewPage: React.FC = () => {
     return (
         <PageLayout loading={false}>
             <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-                <Stack
-                    direction="row"
-                    spacing={1.5}
-                    sx={{
-                        alignItems: "center",
-                        mb: 1
-                    }}>
-                    <IconAiAgents sx={{ fontSize: 28 }} />
-                    <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                        {t('scenarioOverview.title')}
-                    </Typography>
-                </Stack>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        color: "text.secondary",
-                        mb: 3
-                    }}>
-                    {t('scenarioOverview.subtitle')}
-                </Typography>
+                <PageHeader
+                    title={t('scenarioOverview.title')}
+                    subtitle={t('scenarioOverview.subtitle')}
+                    icon={<IconAiAgents sx={{ fontSize: 28 }} />}
+                    sx={{ mb: 3 }}
+                />
 
                 <Grid container spacing={2}>
                     {scenarios.map((s) => {

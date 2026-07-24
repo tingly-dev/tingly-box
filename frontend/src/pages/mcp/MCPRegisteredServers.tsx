@@ -101,7 +101,12 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, plac
                 input: {
                     endAdornment: (
                         <InputAdornment position="end">
-                            <IconButton size="small" onClick={() => setVisible((v) => !v)} edge="end">
+                            <IconButton
+                                size="small"
+                                aria-label={visible ? 'Hide secret' : 'Show secret'}
+                                onClick={() => setVisible((v) => !v)}
+                                edge="end"
+                            >
                                 {visible ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                             </IconButton>
                         </InputAdornment>
@@ -393,7 +398,7 @@ const MCPRegisteredServers = () => {
                             02
                         </Typography>
                         <Box>
-                            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                            <Typography component="h1" variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
                                 Config your tools
                             </Typography>
                             <Typography variant="body2" sx={{
