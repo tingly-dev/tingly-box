@@ -103,25 +103,40 @@ contract and per-leaf parallelism differ from the per-scenario sections.)
 ### CLI parallelism & env-boot cost
 
 The CLI drivers run their independent units — scenarios in
-`executePerScenario`, cases in `runRecorderCases` — concurrently up to
-`GOMAXPROCS`, mirroring the `t.Parallel()` the go-test entry points always
-had. Combos *within* a scenario still run sequentially against the shared
-env. Results are written into index-addressed slots, so output order (and
-therefore `--json` output) is identical to a sequential run. Two run modes
-force sequential execution (`sectionParallelism()`): `--batch` measures
-per-request timing that parallel load would skew, and `--record-dir`
-captures traffic for replay that concurrent runs would interleave.
+`executePerScenario`, cases in `runRecorderCases` — concurrently via
+`runIndexed` (an `errgroup.Group` with `SetLimit`), mirroring the
+`t.Parallel()` the go-test entry points always had. The cap
+(`sectionParallelism()`) is `min(GOMAXPROCS, maxSectionParallelism)`, not raw
+core count: each unit boots a full `httptest.Server` + SQLite-backed
+`AppConfig`, an I/O/fd/memory cost that core count doesn't bound, so an
+unlimited-up-to-GOMAXPROCS cap would over-commit fd/memory on high-core CI
+runners for no throughput benefit. Combos *within* a scenario still run
+sequentially against the shared env. Results are written into
+index-addressed slots, so output order (and therefore `--json` output) is
+identical to a sequential run. Two run modes force sequential execution
+(`sectionParallelism()` returns 1): `--batch` measures per-request timing
+that parallel load would skew, and `--record-dir` captures traffic for
+replay that concurrent runs would interleave.
 
 Env boots themselves are also cheap now: the single most expensive step of a
 config boot was generating the enterprise-context RSA-2048 key pair
 (~100-600ms of prime search) into every fresh temp config dir. The harness
-pre-seeds each env's key slots from a process-level cached pair
-(`serverconfig.PreseedEnterpriseContextKeys`), generated once per process —
-sharing one throwaway key across harness envs is deliberate, and production
-configs are untouched (they generate once and reuse from disk). Together
-these took the default CLI run from ~15s to ~4s and `--mode=all` from ~41s
-to ~10s on a 4-core machine; the e2e go-test path (already parallel, so
-keygen CPU was its bottleneck) dropped from ~60s to ~17s.
+pre-seeds each env's key slots from a process-cached pair
+(`internal/protocoltest`'s `preseedEnterpriseContextKeys`, generated once per
+process via `sync.OnceValues`) — sharing one throwaway key across harness
+envs is deliberate. This lives in the harness, not
+`internal/server/config`: `internal/server/config/enterprise.go` only
+exports the generic primitives (`GenerateEnterpriseContextPEMs`,
+`WriteEnterpriseContextKeys`, `EnterpriseContextKeyPaths`) that
+`ensureEnterpriseContextRS256KeyPair` already used internally; the
+process-cache-and-reuse *policy* is harness-only knowledge with zero
+production callers, so it belongs in `internal/protocoltest` (structurally a
+test/harness package) rather than in a package that ships in the real server
+binary. Production configs are untouched — they still generate once per
+config dir and reuse the key from disk. Together these took the default CLI
+run from ~15s to ~3s and `--mode=all` from ~41s to ~8s on a 4-core machine;
+the e2e go-test path (already parallel, so keygen CPU was its bottleneck)
+dropped from ~60s to ~17s.
 
 ---
 

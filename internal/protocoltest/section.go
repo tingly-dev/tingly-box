@@ -3,9 +3,10 @@ package protocoltest
 import (
 	"fmt"
 	"runtime"
-	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // This file holds the shared drivers behind the matrix's sections
@@ -23,6 +24,15 @@ type scenarioCombo struct {
 	run  func(env *TestEnv) TestResult
 }
 
+// maxSectionParallelism bounds how many env-backed units (scenarios, recorder
+// cases) run concurrently, regardless of core count. Each unit boots a full
+// httptest.Server plus a SQLite-backed AppConfig (temp dir, listening socket,
+// several sqlite/WAL file descriptors) — that cost is I/O/fd/memory-bound,
+// not CPU-bound, so letting core count alone dictate how many run at once
+// would over-commit fd and memory limits on high-core machines (common on CI
+// runners) for no throughput benefit.
+const maxSectionParallelism = 8
+
 // sectionParallelism returns how many independent env-backed units (scenarios,
 // recorder cases) a CLI section may run concurrently. Two run modes force
 // sequential execution: --batch measures per-request timing (parallel load
@@ -32,32 +42,25 @@ func (m *Matrix) sectionParallelism() int {
 	if m.BatchCount > 1 || m.RecordDir != "" {
 		return 1
 	}
-	return runtime.GOMAXPROCS(0)
+	if procs := runtime.GOMAXPROCS(0); procs < maxSectionParallelism {
+		return procs
+	}
+	return maxSectionParallelism
 }
 
-// runIndexed runs fn(0..n-1) with at most parallelism concurrent calls,
-// sequentially when parallelism <= 1. Callers write results into
-// index-addressed slots, so output order stays deterministic regardless of
-// completion order.
+// runIndexed runs fn(0..n-1) with at most parallelism concurrent calls.
+// Callers write results into index-addressed slots, so output order stays
+// deterministic regardless of completion order or scheduling.
 func runIndexed(n, parallelism int, fn func(i int)) {
-	if parallelism <= 1 {
-		for i := 0; i < n; i++ {
-			fn(i)
-		}
-		return
-	}
-	sem := make(chan struct{}, parallelism)
-	var wg sync.WaitGroup
+	var g errgroup.Group
+	g.SetLimit(parallelism)
 	for i := 0; i < n; i++ {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
+		g.Go(func() error {
 			fn(i)
-		}()
+			return nil
+		})
 	}
-	wg.Wait()
+	_ = g.Wait()
 }
 
 // executePerScenario is the shared CLI-side driver for sections that provision
@@ -99,12 +102,7 @@ func (m *Matrix) executeScenarioCombos(scenario Scenario, combosFor func(Scenari
 	env, err := NewTestEnvForCLI(m.testEnvOpts()...)
 	if err != nil {
 		for _, c := range combos {
-			r := c.meta
-			r.Errors = []AssertionError{{
-				Assertion: "setup",
-				Error:     fmt.Sprintf("failed to create test env: %v", err),
-			}}
-			results = append(results, r)
+			results = append(results, setupFailureResult(c.meta, err))
 		}
 		return results
 	}
@@ -114,6 +112,17 @@ func (m *Matrix) executeScenarioCombos(scenario Scenario, combosFor func(Scenari
 		results = append(results, c.run(env))
 	}
 	return results
+}
+
+// setupFailureResult returns base with its Errors set to a single "setup"
+// AssertionError wrapping err — the result reported when the env itself
+// fails to boot, shared by the scenario-combo and recorder-case drivers.
+func setupFailureResult(base TestResult, err error) TestResult {
+	base.Errors = []AssertionError{{
+		Assertion: "setup",
+		Error:     fmt.Sprintf("failed to create test env: %v", err),
+	}}
+	return base
 }
 
 // runPerScenario is the testing.T counterpart of executePerScenario: one env
@@ -168,7 +177,7 @@ func runRecorderCase(name, scenario string, run func(flagTB, *TestEnv)) TestResu
 
 	env, err := NewTestEnvForCLI()
 	if err != nil {
-		res.Errors = []AssertionError{{Assertion: "setup", Error: fmt.Sprintf("create test env: %v", err)}}
+		res = setupFailureResult(res, err)
 		res.Duration = time.Since(start)
 		return res
 	}

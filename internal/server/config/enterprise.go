@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 type EnterpriseContextPublicKey struct {
@@ -29,14 +28,19 @@ type EnterpriseContextJWTConfig struct {
 	RequireJTI        bool                         `json:"require_jti" yaml:"require_jti"`
 }
 
-func enterpriseContextKeyPaths(configDir string) (string, string) {
+// EnterpriseContextKeyPaths returns the on-disk paths for a config dir's
+// enterprise-context RS256 key pair. Exported so callers that need to
+// provision or inspect the key slots directly (e.g. a harness pre-seeding
+// key material — see internal/protocoltest) don't have to reimplement the
+// layout.
+func EnterpriseContextKeyPaths(configDir string) (string, string) {
 	keyDir := filepath.Join(configDir, "keys")
 	return filepath.Join(keyDir, "enterprise_context_rs256_private.pem"),
 		filepath.Join(keyDir, "enterprise_context_rs256_public.pem")
 }
 
 func ensureEnterpriseContextRS256KeyPair(configDir string) (string, string, error) {
-	privatePath, publicPath := enterpriseContextKeyPaths(configDir)
+	privatePath, publicPath := EnterpriseContextKeyPaths(configDir)
 	privateOK := false
 	publicOK := false
 	if st, err := os.Stat(privatePath); err == nil && !st.IsDir() {
@@ -49,19 +53,23 @@ func ensureEnterpriseContextRS256KeyPair(configDir string) (string, string, erro
 		return "file:" + privatePath, "file:" + publicPath, nil
 	}
 
-	privatePEM, publicPEM, err := generateEnterpriseContextPEMs()
+	privatePEM, publicPEM, err := GenerateEnterpriseContextPEMs()
 	if err != nil {
 		return "", "", err
 	}
-	if err := writeEnterpriseContextKeys(privatePath, publicPath, privatePEM, publicPEM); err != nil {
+	if err := WriteEnterpriseContextKeys(privatePath, publicPath, privatePEM, publicPEM); err != nil {
 		return "", "", err
 	}
 	return "file:" + privatePath, "file:" + publicPath, nil
 }
 
-// generateEnterpriseContextPEMs generates a fresh RSA-2048 key pair and
-// returns it PEM-encoded (private PKCS1, public PKIX).
-func generateEnterpriseContextPEMs() (privatePEM, publicPEM []byte, err error) {
+// GenerateEnterpriseContextPEMs generates a fresh RSA-2048 key pair and
+// returns it PEM-encoded (private PKCS1, public PKIX). Exported alongside
+// WriteEnterpriseContextKeys so a caller that needs to provision key material
+// ahead of config creation (e.g. a harness pre-seeding many config dirs from
+// one generated pair — see internal/protocoltest) can reuse the exact same
+// generation/encoding logic ensureEnterpriseContextRS256KeyPair uses.
+func GenerateEnterpriseContextPEMs() (privatePEM, publicPEM []byte, err error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate rsa key failed: %w", err)
@@ -81,8 +89,9 @@ func generateEnterpriseContextPEMs() (privatePEM, publicPEM []byte, err error) {
 	return privatePEM, publicPEM, nil
 }
 
-// writeEnterpriseContextKeys writes a PEM key pair into configDir's key slots.
-func writeEnterpriseContextKeys(privatePath, publicPath string, privatePEM, publicPEM []byte) error {
+// WriteEnterpriseContextKeys writes a PEM key pair into configDir's key slots
+// (see EnterpriseContextKeyPaths).
+func WriteEnterpriseContextKeys(privatePath, publicPath string, privatePEM, publicPEM []byte) error {
 	if err := os.MkdirAll(filepath.Dir(privatePath), 0700); err != nil {
 		return fmt.Errorf("create enterprise key dir failed: %w", err)
 	}
@@ -93,34 +102,4 @@ func writeEnterpriseContextKeys(privatePath, publicPath string, privatePEM, publ
 		return fmt.Errorf("write enterprise public key failed: %w", err)
 	}
 	return nil
-}
-
-var (
-	preseedKeyOnce sync.Once
-	preseedPrivate []byte
-	preseedPublic  []byte
-	preseedErr     error
-)
-
-// PreseedEnterpriseContextKeys writes a process-cached RSA-2048 key pair into
-// configDir's enterprise-context key slots, so that config creation skips the
-// expensive per-directory key generation (~100-600ms of prime search).
-//
-// Intended for test harnesses that boot many fresh config dirs in one process
-// — the generated key never leaves the process's temp dirs and every harness
-// env sharing one throwaway key is deliberate. A no-op if the slots already
-// hold keys. Production configs never call this: they generate once and reuse
-// the key from disk.
-func PreseedEnterpriseContextKeys(configDir string) error {
-	privatePath, publicPath := enterpriseContextKeyPaths(configDir)
-	if _, err := os.Stat(privatePath); err == nil {
-		return nil
-	}
-	preseedKeyOnce.Do(func() {
-		preseedPrivate, preseedPublic, preseedErr = generateEnterpriseContextPEMs()
-	})
-	if preseedErr != nil {
-		return preseedErr
-	}
-	return writeEnterpriseContextKeys(privatePath, publicPath, preseedPrivate, preseedPublic)
 }

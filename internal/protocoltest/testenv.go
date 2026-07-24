@@ -80,6 +80,46 @@ func NewTestEnvOptionWithClient(c Client) TestEnvOption {
 	}
 }
 
+// enterpriseKeyPair holds a generated key pair's PEM encoding.
+// sync.OnceValues only returns two values, so the pair rides in one struct
+// alongside the error.
+type enterpriseKeyPair struct {
+	private, public []byte
+}
+
+// preseedKeys generates one RSA-2048 enterprise-context key pair per process
+// and reuses it for every harness env. Generation is the expensive part
+// (~100-600ms of prime search); the harness boots one env per scenario per
+// section, so paying that cost once instead of per-env is the whole point.
+// Deliberately process-cached and shared: the key never leaves the process's
+// own temp dirs, and no harness assertion depends on envs having distinct
+// keys.
+var preseedKeys = sync.OnceValues(func() (enterpriseKeyPair, error) {
+	private, public, err := serverconfig.GenerateEnterpriseContextPEMs()
+	return enterpriseKeyPair{private, public}, err
+})
+
+// preseedEnterpriseContextKeys writes the process-cached key pair into
+// configDir's enterprise-context key slots, so config creation
+// (ensureEnterpriseContextRS256KeyPair) finds them already on disk and skips
+// generating its own. configDir is always a just-created os.MkdirTemp result
+// here, so the slots are never already populated — no existence check needed.
+//
+// This lives in the harness, not internal/server/config: it exists purely to
+// amortize a cost the harness's "one fresh config dir per env" pattern
+// creates, and production configs never call it (they generate once and
+// reuse the key from disk). internal/server/config only exports the generic
+// generate/write/path primitives; the caching policy is harness-only
+// knowledge.
+func preseedEnterpriseContextKeys(configDir string) error {
+	keys, err := preseedKeys()
+	if err != nil {
+		return err
+	}
+	privatePath, publicPath := serverconfig.EnterpriseContextKeyPaths(configDir)
+	return serverconfig.WriteEnterpriseContextKeys(privatePath, publicPath, keys.private, keys.public)
+}
+
 // gatewayCore is the shared skeleton every single-process harness env builds
 // on: a temp config dir, an app config, a real gateway httptest.Server, and a
 // VirtualServer mock provider. TestEnv (matrix/flags) and AgentTestEnv
@@ -105,7 +145,7 @@ func newGatewayCore(dirPattern string, configure func(*config.AppConfig), server
 	// key generation is the single most expensive step of a config boot
 	// (~100-600ms of prime search), and the harness boots one env per scenario
 	// per section. Sharing one throwaway key across harness envs is deliberate.
-	if err := serverconfig.PreseedEnterpriseContextKeys(configDir); err != nil {
+	if err := preseedEnterpriseContextKeys(configDir); err != nil {
 		os.RemoveAll(configDir)
 		return nil, fmt.Errorf("preseed enterprise keys: %w", err)
 	}
