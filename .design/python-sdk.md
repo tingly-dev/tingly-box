@@ -609,6 +609,22 @@ code paths that happen to usually agree. Mode 2 closes that:
   external quota check at all (`router_plugin.py` skips those, rather than
   guessing).
 
+**Deliberately still two modes, not three.** The obvious next question: what
+if there's no rule at all yet for the model you want — do you need a *third*,
+rule-free "just connect me straight to provider+model" mode? tb already has
+the mechanics for exactly that: `X-Tingly-Probe-Service` builds a synthetic
+rule on the fly and skips persisted-rule resolution entirely
+(`internal/server/protocol_handler.go`, `determineRuleWithScenario`). We
+considered exposing an authenticated version of that to the SDK and rejected
+it: it would mean requests that don't show up as a rule in the tb UI, with
+nowhere to hang guard rails/quota config, re-litigating the exact reasoning
+`python-sdk.md` already gives for why `X-Tingly-Probe-Service` stays
+internal-only. "No rule yet" isn't a routing problem, it's a one-time setup
+step — `POST /api/v1/rule` with a single service, same as `router_plugin.py`'s
+own `sonnet1`/`sonnet2` candidates already do. Cheap, idempotent, and it keeps
+every reachable provider visible as a rule, which is the whole point of tb
+being "a hub of rules" rather than a raw provider proxy.
+
 Verified live against the real `tb` binary (not just mocked) — a fixed,
 repeatable regression script, `sdk/python/examples/e2e_run_pin.sh` (three
 vmodel providers, no network/keys, `set -uo pipefail` + explicit pass/fail

@@ -72,6 +72,11 @@ Why this exists: a plugin that checks quota for provider A and then calls
 `.ask(model="x")` is only *guessing* A will be used — tb might pick B
 instead. `pin_provider=` turns the guess into a guarantee.
 
+Only two modes — no "skip the rule entirely" third one. No rule for a
+provider yet? Create a one-service rule for it (cheap, one-time), don't
+bypass rule resolution to reach it — same reason `X-Tingly-Probe-Service`
+(tb's internal, unauthenticated bypass) never got exposed to the SDK.
+
 ## `router_plugin.py` in one picture
 
 ```
