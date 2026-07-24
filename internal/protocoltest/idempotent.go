@@ -133,40 +133,27 @@ func (env *TestEnv) setupChainHopRoute(source, target protocol.APIType, s Scenar
 // RunIdempotent executes round-trip idempotency tests for all cases ×
 // scenarios as subtests under t. Each case runs the same
 // executeIdempotentCase implementation the CLI path uses; the testing.T
-// layer only provisions one env per scenario and reports the TestResult.
+// layer (runPerScenario) only provisions one env per scenario and reports
+// the TestResult.
+//
+// Error / truncation scenarios are not round-trippable: the inner gateway
+// wraps upstream errors and a mid-stream cut surfaces as an error on one hop
+// but partial content on another, so the two paths legitimately diverge.
+// SkipTransitive marks exactly these.
 func (m *Matrix) RunIdempotent(t *testing.T) {
 	t.Helper()
 
 	cases := DefaultIdempotentCases()
-
-	for _, scenario := range m.Scenarios {
-		// Error / truncation scenarios are not round-trippable: the inner
-		// gateway wraps upstream errors and a mid-stream cut surfaces as an
-		// error on one hop but partial content on another, so the two paths
-		// legitimately diverge. SkipTransitive marks exactly these.
-		if scenario.SkipTransitive {
-			continue
+	m.runPerScenario(t, skipTransitiveScenario, func(t *testing.T, env *TestEnv, scenario Scenario) {
+		for _, ic := range cases {
+			for _, streaming := range m.Streaming {
+				t.Run(fmt.Sprintf("%s/%s", ic.Name, streamMode(streaming)), func(t *testing.T) {
+					result := m.executeIdempotentCase(env, scenario, ic, streaming)
+					reportTestResult(t, &result)
+				})
+			}
 		}
-
-		t.Run(scenario.Name, func(t *testing.T) {
-			t.Parallel()
-
-			env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-			if err != nil {
-				t.Fatalf("create test env: %v", err)
-			}
-			defer env.Close()
-
-			for _, ic := range cases {
-				for _, streaming := range m.Streaming {
-					t.Run(fmt.Sprintf("%s/%s", ic.Name, streamMode(streaming)), func(t *testing.T) {
-						result := m.executeIdempotentCase(env, scenario, ic, streaming)
-						reportTestResult(t, &result)
-					})
-				}
-			}
-		})
-	}
+	})
 }
 
 // ExecuteAllIdempotent runs round-trip idempotency tests without requiring
@@ -177,57 +164,39 @@ func (m *Matrix) RunIdempotent(t *testing.T) {
 //
 // Name format: "scenario/<case>/mode" (e.g. "text/openai_chat_via_anthropic/stream").
 func (m *Matrix) ExecuteAllIdempotent() []TestResult {
-	var results []TestResult
 	cases := DefaultIdempotentCases()
-
-	for _, scenario := range m.Scenarios {
-		// Error / truncation scenarios are not round-trippable (see RunIdempotent).
-		if scenario.SkipTransitive {
-			continue
-		}
-
-		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-		if err != nil {
-			for _, ic := range cases {
-				for _, streaming := range m.Streaming {
-					results = append(results, TestResult{
-						Name:      idempotentTestName(scenario.Name, ic, streaming),
-						Scenario:  scenario.Name,
-						Source:    ic.Source,
-						Target:    ic.Mid,
-						Streaming: streaming,
-						Passed:    false,
-						Errors:    []AssertionError{{Assertion: "setup", Error: fmt.Sprintf("failed to create test env: %v", err)}},
-					})
-				}
-			}
-			continue
-		}
-
+	return m.executePerScenario(skipTransitiveScenario, func(s Scenario) []scenarioCombo {
+		var combos []scenarioCombo
 		for _, ic := range cases {
 			for _, streaming := range m.Streaming {
-				results = append(results, m.executeIdempotentCase(env, scenario, ic, streaming))
+				combos = append(combos, scenarioCombo{
+					meta: ic.baseResult(s.Name, streaming),
+					run: func(env *TestEnv) TestResult {
+						return m.executeIdempotentCase(env, s, ic, streaming)
+					},
+				})
 			}
 		}
-		env.Close()
-	}
-	return results
+		return combos
+	})
 }
 
-func idempotentTestName(scenarioName string, ic IdempotentCase, streaming bool) string {
-	return fmt.Sprintf("%s/%s/%s", scenarioName, ic.Name, streamMode(streaming))
+// baseResult returns a TestResult pre-filled with the fields that identify
+// this case in a given scenario/mode.
+func (ic IdempotentCase) baseResult(scenarioName string, streaming bool) TestResult {
+	return TestResult{
+		Name:      fmt.Sprintf("%s/%s/%s", scenarioName, ic.Name, streamMode(streaming)),
+		Scenario:  scenarioName,
+		Source:    ic.Source,
+		Target:    ic.Mid,
+		Streaming: streaming,
+	}
 }
 
 // executeIdempotentCase runs a single baseline-vs-round-trip comparison and
 // returns its TestResult.
 func (m *Matrix) executeIdempotentCase(env *TestEnv, scenario Scenario, ic IdempotentCase, streaming bool) TestResult {
-	base := TestResult{
-		Name:      idempotentTestName(scenario.Name, ic, streaming),
-		Scenario:  scenario.Name,
-		Source:    ic.Source,
-		Target:    ic.Mid,
-		Streaming: streaming,
-	}
+	base := ic.baseResult(scenario.Name, streaming)
 
 	if reason, skip := skipIdempotentScenario(ic, scenario.Name); skip {
 		base.Skipped = true
@@ -298,13 +267,10 @@ func (m *Matrix) executeIdempotentCase(env *TestEnv, scenario Scenario, ic Idemp
 }
 
 // skipIdempotentScenario reports whether a case+scenario should be skipped
-// because one of its hops is in the single-hop skip list.
+// because one of its hops is in the single-hop known-defect list.
 func skipIdempotentScenario(ic IdempotentCase, scenarioName string) (string, bool) {
-	for _, src := range []protocol.APIType{ic.Source, ic.Mid} {
-		key := fmt.Sprintf("%s|%s", src, scenarioName)
-		if reason, skip := skipSourceScenarios[key]; skip {
-			return reason, true
-		}
+	if reason, skip := KnownDefectReason(ic.Source, scenarioName); skip {
+		return reason, true
 	}
-	return "", false
+	return KnownDefectReason(ic.Mid, scenarioName)
 }

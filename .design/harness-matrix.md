@@ -83,6 +83,23 @@ Assertions + SemanticEquivalence checks
 | `semanticEquivalenceErrors(label, r1, r2)` | Compares two results field-by-field, returns `[]AssertionError` |
 | `assertSemanticEquivalence(t, label, r1, r2)` | Delegates to above, calls `t.Errorf` per error |
 
+### Section drivers (`section.go`)
+
+Every section contributes only its combos and per-combo execution; the shared
+lifecycle lives once in `internal/protocoltest/section.go`:
+
+| Driver | Used by | Purpose |
+|--------|---------|---------|
+| `Matrix.executePerScenario(skip, combosFor)` | `ExecuteAll` / `ExecuteAllTransitive` / `ExecuteAllIdempotent` | CLI-side: one env per scenario, setup-failure fan-out (env boot failure is reported per-combination), sequential combo execution, env close |
+| `Matrix.runPerScenario(t, skip, run)` | `RunTransitive` / `RunIdempotent` | testing.T-side: one env per scenario subtest, scenarios in parallel, combos sequential |
+| `runRecorderCase(name, scenario, run)` | `ExecuteAllFlags` / `ExecuteAllContentShapes` | Runs one `flagTB`-style case body under the recording shim, returns a `TestResult` |
+
+A `scenarioCombo` is `{meta TestResult, run func(*TestEnv) TestResult}` — the
+`meta` doubles as the setup-failure result when the scenario's env cannot be
+created. (Single-hop `Matrix.Run(t)` keeps its own deeper subtest nesting —
+`scenario/source/target/mode` with one env per leaf — because its test-name
+contract and per-leaf parallelism differ from the per-scenario sections.)
+
 ---
 
 ## 3. How to run
@@ -124,6 +141,13 @@ and the rule-flag suite, which would otherwise be go-test-only.
 | `idempotent` | — | — | ✅ | — | — |
 | `flags` | — | — | — | ✅ | — |
 | `content_shapes` | — | — | — | — | ✅ |
+
+This mode → section mapping is declared in one place: the `matrixSections`
+registry in `cli/harness/matrix.go`. Each entry names the section, lists the
+`--mode` values that include it, marks whether it is http-only (`flags` /
+`content_shapes` drive raw requests directly), and points at its
+`ExecuteAll*` executor. Adding a section = one registry entry + extending the
+`--mode` enum.
 
 ```bash
 # Default: single-hop + idempotent round-trips. Two-hop and flags are OFF by
