@@ -101,6 +101,15 @@ func newGatewayCore(dirPattern string, configure func(*config.AppConfig), server
 		return nil, fmt.Errorf("create temp config dir: %w", err)
 	}
 
+	// Pre-seed the enterprise-context RSA key pair from a process-level cache:
+	// key generation is the single most expensive step of a config boot
+	// (~100-600ms of prime search), and the harness boots one env per scenario
+	// per section. Sharing one throwaway key across harness envs is deliberate.
+	if err := serverconfig.PreseedEnterpriseContextKeys(configDir); err != nil {
+		os.RemoveAll(configDir)
+		return nil, fmt.Errorf("preseed enterprise keys: %w", err)
+	}
+
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		os.RemoveAll(configDir)

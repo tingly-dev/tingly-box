@@ -577,10 +577,9 @@ func (r *flagRecorder) runCleanups() {
 // It is the CLI-compatible counterpart of TestRuleFlags, returning []TestResult.
 // Name format: "flags/<flag key>".
 func (m *Matrix) ExecuteAllFlags() []TestResult {
-	cases := ruleFlagCases()
-	results := make([]TestResult, 0, len(cases))
-	for _, fc := range cases {
-		results = append(results, runRecorderCase("flags/"+fc.key, fc.key, fc.run))
+	var cases []recorderCase
+	for _, fc := range ruleFlagCases() {
+		cases = append(cases, recorderCase{name: "flags/" + fc.key, scenario: fc.key, run: fc.run})
 	}
-	return results
+	return m.runRecorderCases(cases)
 }

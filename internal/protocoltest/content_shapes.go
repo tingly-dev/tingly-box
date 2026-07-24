@@ -285,10 +285,9 @@ func contentShapeCases() []contentShapeCase {
 // TestContentShapes, returning []TestResult. Name format:
 // "content_shapes/<case name>".
 func (m *Matrix) ExecuteAllContentShapes() []TestResult {
-	cases := contentShapeCases()
-	results := make([]TestResult, 0, len(cases))
-	for _, c := range cases {
-		results = append(results, runRecorderCase("content_shapes/"+c.name, c.name, c.run))
+	var cases []recorderCase
+	for _, c := range contentShapeCases() {
+		cases = append(cases, recorderCase{name: "content_shapes/" + c.name, scenario: c.name, run: c.run})
 	}
-	return results
+	return m.runRecorderCases(cases)
 }

@@ -2,6 +2,8 @@ package protocoltest
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -9,7 +11,8 @@ import (
 // This file holds the shared drivers behind the matrix's sections
 // (single-hop, transitive, idempotent, flags, content_shapes). Each section
 // contributes only its combos and per-combo execution; the env-per-scenario
-// lifecycle, setup-failure fan-out, and testing.T scaffolding live here once.
+// lifecycle, setup-failure fan-out, parallelism, and testing.T scaffolding
+// live here once.
 
 // scenarioCombo is one runnable cell within a per-scenario section: the
 // TestResult metadata that identifies it plus the function that executes it
@@ -20,37 +23,95 @@ type scenarioCombo struct {
 	run  func(env *TestEnv) TestResult
 }
 
+// sectionParallelism returns how many independent env-backed units (scenarios,
+// recorder cases) a CLI section may run concurrently. Two run modes force
+// sequential execution: --batch measures per-request timing (parallel load
+// would skew min/avg/max), and --record-dir captures request/response traffic
+// for replay (concurrent runs would interleave recordings).
+func (m *Matrix) sectionParallelism() int {
+	if m.BatchCount > 1 || m.RecordDir != "" {
+		return 1
+	}
+	return runtime.GOMAXPROCS(0)
+}
+
+// runIndexed runs fn(0..n-1) with at most parallelism concurrent calls,
+// sequentially when parallelism <= 1. Callers write results into
+// index-addressed slots, so output order stays deterministic regardless of
+// completion order.
+func runIndexed(n, parallelism int, fn func(i int)) {
+	if parallelism <= 1 {
+		for i := 0; i < n; i++ {
+			fn(i)
+		}
+		return
+	}
+	sem := make(chan struct{}, parallelism)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fn(i)
+		}()
+	}
+	wg.Wait()
+}
+
 // executePerScenario is the shared CLI-side driver for sections that provision
-// one TestEnv per scenario (single-hop, transitive, idempotent). Routes are
-// keyed by (source, target, scenario), so combos within a scenario cannot
-// interfere and env boots stay off the hot path. When env creation fails,
-// every combo is reported as a setup failure so a broken environment surfaces
-// per-combination in the results table.
+// one TestEnv per scenario (single-hop, transitive, idempotent). Scenarios are
+// fully independent (each gets its own env), so they run concurrently up to
+// sectionParallelism; combos within a scenario share the env and run
+// sequentially. Results are assembled in scenario order, so the output is
+// identical to a sequential run (modulo durations).
 func (m *Matrix) executePerScenario(skipScenario func(Scenario) bool, combosFor func(Scenario) []scenarioCombo) []TestResult {
+	var scenarios []Scenario
+	for _, s := range m.Scenarios {
+		if skipScenario != nil && skipScenario(s) {
+			continue
+		}
+		scenarios = append(scenarios, s)
+	}
+
+	perScenario := make([][]TestResult, len(scenarios))
+	runIndexed(len(scenarios), m.sectionParallelism(), func(i int) {
+		perScenario[i] = m.executeScenarioCombos(scenarios[i], combosFor)
+	})
+
 	var results []TestResult
-	for _, scenario := range m.Scenarios {
-		if skipScenario != nil && skipScenario(scenario) {
-			continue
-		}
-		combos := combosFor(scenario)
+	for _, rs := range perScenario {
+		results = append(results, rs...)
+	}
+	return results
+}
 
-		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-		if err != nil {
-			for _, c := range combos {
-				r := c.meta
-				r.Errors = []AssertionError{{
-					Assertion: "setup",
-					Error:     fmt.Sprintf("failed to create test env: %v", err),
-				}}
-				results = append(results, r)
-			}
-			continue
-		}
+// executeScenarioCombos runs one scenario's combos against a fresh env.
+// Routes are keyed by (source, target, scenario), so combos within a scenario
+// cannot interfere and env boots stay off the hot path. When env creation
+// fails, every combo is reported as a setup failure so a broken environment
+// surfaces per-combination in the results table.
+func (m *Matrix) executeScenarioCombos(scenario Scenario, combosFor func(Scenario) []scenarioCombo) []TestResult {
+	combos := combosFor(scenario)
+	results := make([]TestResult, 0, len(combos))
 
+	env, err := NewTestEnvForCLI(m.testEnvOpts()...)
+	if err != nil {
 		for _, c := range combos {
-			results = append(results, c.run(env))
+			r := c.meta
+			r.Errors = []AssertionError{{
+				Assertion: "setup",
+				Error:     fmt.Sprintf("failed to create test env: %v", err),
+			}}
+			results = append(results, r)
 		}
-		env.Close()
+		return results
+	}
+	defer env.Close()
+
+	for _, c := range combos {
+		results = append(results, c.run(env))
 	}
 	return results
 }
@@ -79,11 +140,28 @@ func (m *Matrix) runPerScenario(t *testing.T, skipScenario func(Scenario) bool, 
 	}
 }
 
-// runRecorderCase executes one flagTB-style case body (flags, content_shapes)
-// against a fresh env, converting recorded failures into a CLI TestResult.
-// Scenario carries the case's short name so the CLI table (which shows the
-// Scenario column, not Name) distinguishes the rows; Name keeps the section
-// prefix.
+// recorderCase is one flagTB-style case body (flags, content_shapes): a
+// section-prefixed result name, the short case name shown in the CLI table's
+// Scenario column, and the case body itself.
+type recorderCase struct {
+	name     string
+	scenario string
+	run      func(flagTB, *TestEnv)
+}
+
+// runRecorderCases executes recorder cases with bounded parallelism — each
+// case boots its own env, so cases are fully independent — assembling results
+// in case order.
+func (m *Matrix) runRecorderCases(cases []recorderCase) []TestResult {
+	results := make([]TestResult, len(cases))
+	runIndexed(len(cases), m.sectionParallelism(), func(i int) {
+		results[i] = runRecorderCase(cases[i].name, cases[i].scenario, cases[i].run)
+	})
+	return results
+}
+
+// runRecorderCase executes one flagTB-style case body against a fresh env,
+// converting recorded failures into a CLI TestResult.
 func runRecorderCase(name, scenario string, run func(flagTB, *TestEnv)) TestResult {
 	res := TestResult{Name: name, Scenario: scenario}
 	start := time.Now()
