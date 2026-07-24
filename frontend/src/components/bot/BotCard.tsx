@@ -117,9 +117,14 @@ const BotCard: React.FC<BotCardProps> = ({
                     </Tooltip>
                     {/* Chips never shrink or truncate — the name above gives
                         up its width first, so this group stays predictable
-                        (same size, same relative position) across cards. */}
+                        (same size, same relative position) across cards.
+                        The platform chip is unconditional: when it was only
+                        shown alongside a custom alias, an unnamed bot (whose
+                        main text falls back to the platform id) skipped it
+                        entirely, shifting every chip after it out of line
+                        with named bots' rows. */}
                     <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, flexWrap: 'wrap'}}>
-                        {bot.name && <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>}
+                        <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>
                         {/* Purpose status: where this bot is used. Click-through to configure. */}
                         <Tooltip title={t('bots.card.remoteAgentChipHint', { defaultValue: 'Configure on the Remote Agent page' })}>
                             <Chip

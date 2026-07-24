@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { Z_INDEX } from '../constants/zIndex';
-import { activityBarWidth, sidebarWidth } from './constants';
+import { activityBarWidth, sidebarWidth, contentPaddingX, contentPaddingTop, contentPaddingBottom } from './constants';
 import { ActivityBar } from './ActivityBar.tsx';
 import { Sidebar } from './Sidebar';
 import { useActivityItems } from './useActivityItems.tsx';
@@ -14,9 +14,9 @@ import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators
 
 const mobileContentSx = {
     flex: 1,
-    px: { xs: 2, md: 3 },
-    pt: { xs: 9, md: 3 },
-    pb: 3,
+    px: contentPaddingX,
+    pt: contentPaddingTop,
+    pb: contentPaddingBottom,
     overflowY: 'auto',
     scrollBehavior: 'smooth',
     '&::-webkit-scrollbar': { width: 8 },

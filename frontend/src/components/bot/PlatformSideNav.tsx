@@ -17,21 +17,11 @@ interface PlatformSideNavProps {
 
 // PlatformSideNav is the platform picker shared by Overview and Remote — a
 // vertical list of platform rows (icon, name, active/total subtitle), same
-// visual language as the old per-platform sidebar rows it replaces now that
-// platform selection lives inside the page instead of the global Sidebar.
-// Horizontal on narrow screens (a scrollable strip), vertical from md up.
+// visual language and row metrics as the global Sidebar. Meant to be used
+// inside SecondaryNavLayout, which supplies the white background, border,
+// and width — this component is just the list itself.
 const PlatformSideNav: React.FC<PlatformSideNavProps> = ({ items, value, onChange }) => (
-    <List
-        sx={{
-            display: 'flex',
-            flexDirection: { xs: 'row', md: 'column' },
-            width: { xs: '100%', md: 220 },
-            flexShrink: 0,
-            overflowX: { xs: 'auto', md: 'visible' },
-            gap: 0.5,
-            py: 0,
-        }}
-    >
+    <List sx={{ py: 0 }}>
         {items.map((item) => {
             const active = item.id === value;
             return (
@@ -40,8 +30,7 @@ const PlatformSideNav: React.FC<PlatformSideNavProps> = ({ items, value, onChang
                     aria-current={active ? 'true' : undefined}
                     onClick={() => onChange(item.id)}
                     sx={{
-                        flexShrink: 0,
-                        minWidth: { xs: 168, md: 'auto' },
+                        mb: 0.5,
                         // Same row metrics as the global Sidebar (see
                         // navRowStyles) — this list reads as a continuation
                         // of it, not a visually different component.

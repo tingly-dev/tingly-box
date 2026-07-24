@@ -1,6 +1,7 @@
 import { BotCard, BotConfigDialog, PlatformSideNav } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
+import SecondaryNavLayout from '@/components/SecondaryNavLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
@@ -213,9 +214,8 @@ const BotOverviewPage = () => {
 
     return (
         <PageLayout loading={false}>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' } }}>
-                <PlatformSideNav items={sideNavItems} value={selectedPlatform} onChange={selectPlatform} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
+            <SecondaryNavLayout nav={<PlatformSideNav items={sideNavItems} value={selectedPlatform} onChange={selectPlatform} />}>
+                <>
                     {!botLoading && selectedPlatform !== 'all' && guideConfig?.guide && (
                         <CollapsibleGuide
                             platformName={platformName}
@@ -274,8 +274,8 @@ const BotOverviewPage = () => {
                             ))
                         )}
                     </UnifiedCard>
-                </Box>
-            </Box>
+                </>
+            </SecondaryNavLayout>
             {/* Shared add/edit dialog for the bot resource. Locked to the
                 selected platform when browsing one; unlocked under "All" so
                 the user picks a platform in the dialog itself. */}

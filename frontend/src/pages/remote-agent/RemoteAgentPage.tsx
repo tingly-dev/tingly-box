@@ -1,9 +1,9 @@
-import { Box } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
 import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
 import { PlatformSideNav } from '@/components/bot';
+import SecondaryNavLayout from '@/components/SecondaryNavLayout';
 import { BOT_PLATFORM_IDS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { api } from '@/services/api';
 import PlatformRemoteAgentPage from './PlatformRemoteAgentPage';
@@ -65,16 +65,17 @@ const RemoteAgentPage = () => {
     }), [t, counts]);
 
     return (
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' } }}>
-            <PlatformSideNav
-                items={sideNavItems}
-                value={BOT_PLATFORM_IDS.includes(platform as typeof BOT_PLATFORM_IDS[number]) ? platform : ''}
-                onChange={(next) => navigate(`/remote-agent/${next}`)}
-            />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-                <PlatformRemoteAgentPage platformId={platform} platformName={platformName} />
-            </Box>
-        </Box>
+        <SecondaryNavLayout
+            nav={
+                <PlatformSideNav
+                    items={sideNavItems}
+                    value={BOT_PLATFORM_IDS.includes(platform as typeof BOT_PLATFORM_IDS[number]) ? platform : ''}
+                    onChange={(next) => navigate(`/remote-agent/${next}`)}
+                />
+            }
+        >
+            <PlatformRemoteAgentPage platformId={platform} platformName={platformName} />
+        </SecondaryNavLayout>
     );
 };
 
