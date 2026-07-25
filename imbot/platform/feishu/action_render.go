@@ -166,3 +166,57 @@ func actionSetFromMap(m map[string]interface{}) *core.ActionSet {
 	}
 	return set
 }
+
+// Restate implements core.MessageRestater.
+//
+// Feishu patches the card in place (PATCH /im/v1/messages/:id), which updates
+// what the user already sees without pushing a new notification — the property
+// that makes "take the used menu down" safe to do here rather than by posting a
+// replacement message.
+//
+// Patching only applies to interactive (card) messages. Every message this
+// package sends with actions is a card, and markdown text is also sent as a
+// card, so the common cases are covered; a plain-text message cannot be
+// patched and the API reports that as an error, which callers treat as
+// best-effort.
+//
+// One case Feishu cannot serve: a patch replaces the whole card content, so
+// there is no way to drop the buttons while leaving the body alone. Callers
+// asking for that (RestateOptions with no Text) get an error rather than a
+// card whose body has been blanked — losing the user's message would be worse
+// than leaving a stale menu up.
+func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.RestateOptions) error {
+	if ref.IsZero() {
+		return core.NewInvalidTargetError(core.Platform(b.domain), ref.MessageID, "empty message reference")
+	}
+	if opts.Text == "" {
+		return core.NewBotError(core.ErrNotSupported,
+			"feishu cannot change a card's controls without also rewriting its body; supply RestateOptions.Text",
+			false)
+	}
+	if b.client == nil || b.client.Im == nil {
+		return fmt.Errorf("bot client is nil")
+	}
+
+	card := buildActionCard(opts.Text, opts.Actions)
+	cardJSON, err := card.String()
+	if err != nil {
+		return fmt.Errorf("failed to serialize card: %w", err)
+	}
+
+	resp, err := b.client.Im.Message.Patch(ctx, larkim.NewPatchMessageReqBuilder().
+		MessageId(ref.MessageID).
+		Body(larkim.NewPatchMessageReqBodyBuilder().
+			Content(cardJSON).
+			Build()).
+		Build())
+	if err != nil {
+		return core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
+	}
+	if resp.Code != 0 {
+		return core.NewBotError(core.ErrPlatformError, fmt.Sprintf("patch card failed: %s", resp.Msg), false)
+	}
+
+	b.UpdateLastActivity()
+	return nil
+}

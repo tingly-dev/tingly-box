@@ -51,9 +51,12 @@ const (
 	ErrMessageTooLong    ErrorCode = "MESSAGE_TOO_LONG"
 	ErrInvalidTarget     ErrorCode = "INVALID_TARGET"
 	ErrMediaNotSupported ErrorCode = "MEDIA_NOT_SUPPORTED"
-	ErrPlatformError     ErrorCode = "PLATFORM_ERROR"
-	ErrTimeout           ErrorCode = "TIMEOUT"
-	ErrUnknown           ErrorCode = "UNKNOWN"
+	// ErrNotSupported marks an operation this platform cannot perform at all,
+	// as opposed to one that failed. Callers treat it as "capability absent".
+	ErrNotSupported  ErrorCode = "NOT_SUPPORTED"
+	ErrPlatformError ErrorCode = "PLATFORM_ERROR"
+	ErrTimeout       ErrorCode = "TIMEOUT"
+	ErrUnknown       ErrorCode = "UNKNOWN"
 )
 
 // Sender represents the message sender

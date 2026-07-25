@@ -24,6 +24,41 @@ type PlatformDescriptor struct {
 	// Reactions maps semantic reaction tokens to platform-specific emoji/keys.
 	// nil means ResolveReaction falls back to the token string itself.
 	Reactions map[ReactionToken]string
+	// Behavior holds the product-level defaults a platform implies. These used
+	// to be switch statements scattered across the consuming packages, which
+	// meant adding a platform required finding every one of them.
+	Behavior PlatformBehavior
+}
+
+// PlatformBehavior captures the product-level defaults that follow from a
+// platform's nature rather than from operator configuration.
+//
+// Everything here has a safe zero value, so a platform with no entry behaves
+// like the conservative default rather than silently misbehaving.
+type PlatformBehavior struct {
+	// RequiresPairingByDefault marks platforms where possession of the bot
+	// token alone grants full DM command access, so a TOFU pairing handshake
+	// is enforced unless the operator explicitly opts out.
+	RequiresPairingByDefault bool
+
+	// SuppressVerbose marks platforms that cannot carry a running commentary
+	// of intermediate progress messages — typically because each outbound
+	// message is tied to a single inbound reply context, so follow-ups either
+	// fail or arrive detached.
+	//
+	// Phrased as "suppress" rather than "supports" so the zero value means
+	// "verbose is fine", which is true of every platform but the exceptions.
+	SuppressVerbose bool
+}
+
+// GetPlatformBehavior returns the product-level defaults for a platform. An
+// unknown platform gets the zero value, which is the conservative choice for
+// every field.
+func GetPlatformBehavior(platform Platform) PlatformBehavior {
+	if d, ok := platformByID[platform]; ok {
+		return d.Behavior
+	}
+	return PlatformBehavior{}
 }
 
 // platformDescriptors is the canonical, ordered list of known platforms.
@@ -42,6 +77,7 @@ var platformDescriptors = []PlatformDescriptor{
 	},
 	{
 		ID:          PlatformTelegram,
+		Behavior:    PlatformBehavior{RequiresPairingByDefault: true},
 		DisplayName: "Telegram",
 		Capabilities: &PlatformCapabilities{
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
@@ -54,6 +90,7 @@ var platformDescriptors = []PlatformDescriptor{
 	},
 	{
 		ID:          PlatformDiscord,
+		Behavior:    PlatformBehavior{RequiresPairingByDefault: true},
 		DisplayName: "Discord",
 		Capabilities: &PlatformCapabilities{
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
@@ -66,6 +103,7 @@ var platformDescriptors = []PlatformDescriptor{
 	},
 	{
 		ID:          PlatformSlack,
+		Behavior:    PlatformBehavior{RequiresPairingByDefault: true},
 		DisplayName: "Slack",
 		Capabilities: &PlatformCapabilities{
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
@@ -156,6 +194,7 @@ var platformDescriptors = []PlatformDescriptor{
 		// Weixin has no explicit capabilities entry and intentionally falls
 		// back to the conservative default (see GetPlatformCapabilities).
 		ID:          PlatformWeixin,
+		Behavior:    PlatformBehavior{SuppressVerbose: true},
 		DisplayName: "Weixin",
 	},
 	{

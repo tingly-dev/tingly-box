@@ -123,3 +123,19 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfoFor(core.PlatformTingly)
 }
+
+// Restate implements core.MessageRestater.
+//
+// tingly is the in-process E2E harness, so it implements the capability purely
+// to make restate paths observable in tests — without it, every assertion
+// about "the used menu is taken down" would only ever exercise Telegram.
+func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.RestateOptions) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+	if ref.IsZero() {
+		return core.NewInvalidTargetError(core.PlatformTingly, ref.MessageID, "empty message reference")
+	}
+	b.UpdateLastActivity()
+	return b.transport.Restate(ctx, ref, opts)
+}

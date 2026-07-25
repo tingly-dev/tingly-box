@@ -1,6 +1,8 @@
 package telegram
 
 import (
+	"context"
+
 	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
@@ -127,4 +129,31 @@ func buildButton(action core.Action) (models.InlineKeyboardButton, bool) {
 		return models.InlineKeyboardButton{}, false
 	}
 	return btn, true
+}
+
+// Restate implements core.MessageRestater.
+//
+// Telegram edits in place: the body via editMessageText when new text is
+// given, and the controls via editMessageReplyMarkup — an empty keyboard being
+// how Telegram expresses "no controls".
+func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.RestateOptions) error {
+	if ref.IsZero() {
+		return core.NewInvalidTargetError(core.PlatformTelegram, ref.MessageID, "empty message reference")
+	}
+
+	var markup *models.InlineKeyboardMarkup
+	if !opts.Actions.IsEmpty() {
+		kb := BuildInlineKeyboard(opts.Actions)
+		markup = &kb
+	}
+
+	if opts.Text == "" {
+		// Controls-only change. An empty inline keyboard clears the buttons.
+		if markup == nil {
+			markup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{}}
+		}
+		return b.editReplyMarkup(ctx, ref.ChatID, ref.MessageID, markup)
+	}
+
+	return b.editMessageText(ctx, ref.ChatID, ref.MessageID, opts.Text, markup)
 }

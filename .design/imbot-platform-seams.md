@@ -249,9 +249,6 @@ Telegram 在**每一列**都是最紧的。它的约束已经泄漏成全平台�
 
 ## 6. 阶段与落地状态
 
-阶段 1 / 2a / 3 以**三个 stacked PR** 交付（依赖关系是真实的：2a 依赖 1 的归属搬迁，
-3 依赖 2a 的 `ActionSet`），而不是一个大 PR——每个阶段本来就是独立的评审单元。
-
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **1** | 归属搬迁：Feishu 渲染器进 `platform/feishu`；Weixin QR 客户端去重；`telegram_keyboard.go` → `action_menu.go` | ✅ 已落地 |

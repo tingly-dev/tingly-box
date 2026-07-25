@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -114,5 +115,35 @@ func TestActionSetFromLegacyMarkup(t *testing.T) {
 	// rather than silently shipping a button-less card.
 	if !actionSetFromLegacyMarkup(struct{ Nope bool }{}).IsEmpty() {
 		t.Error("expected an unknown markup shape to decode to nothing")
+	}
+}
+
+// TestRestateRefusesBodylessRequest pins a contract Feishu cannot satisfy.
+//
+// core.RestateOptions documents empty Text as "leave the body alone", which is
+// what the three "take the used menu down" call sites ask for. A Feishu card
+// patch replaces the whole content, so honouring that request literally would
+// blank out the user's message — strictly worse than leaving a stale menu up.
+// The platform reports the capability as absent instead, and RestateOrIgnore
+// turns that into a no-op.
+func TestRestateRefusesBodylessRequest(t *testing.T) {
+	bot := &Bot{domain: DomainFeishu}
+	err := bot.Restate(context.Background(),
+		core.MessageRef{ChatID: "oc_x", MessageID: "om_x"},
+		core.RestateOptions{})
+
+	if err == nil {
+		t.Fatal("expected a bodyless restate to be refused, not to blank the card")
+	}
+	if code := core.GetErrorCode(err); code != core.ErrNotSupported {
+		t.Errorf("error code = %q, want %q so callers can tell absence from failure",
+			code, core.ErrNotSupported)
+	}
+}
+
+func TestRestateRejectsZeroRef(t *testing.T) {
+	bot := &Bot{domain: DomainFeishu}
+	if err := bot.Restate(context.Background(), core.MessageRef{}, core.RestateOptions{Text: "x"}); err == nil {
+		t.Error("expected an empty message reference to be rejected")
 	}
 }

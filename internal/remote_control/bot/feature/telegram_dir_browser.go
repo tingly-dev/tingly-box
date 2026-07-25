@@ -13,7 +13,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 const (
@@ -380,22 +379,19 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 		return "", err
 	}
 
-	// Try to cast bot to TelegramBot for editing.
-	//
-	// TODO(phase-3): this is the last place that still needs a Telegram
-	// payload, because in-place message editing has not been lifted to a
-	// capability interface yet. Seam 4 (MessageRestater) replaces it, at which
-	// point Feishu and tingly get editing too.
-	tgBot, ok := imbot.AsTelegramBot(bot)
-	if ok && editMessageID != "" && state.MessageID != "" {
-		// Edit existing message
-		tgKeyboard := imbottelegram.BuildInlineKeyboard(kb.BuildActions())
-		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, &tgKeyboard); err != nil {
-			logrus.WithError(err).Warn("Failed to edit message, sending new one")
-			// Fall through to send new message
-		} else {
+	// Restate the existing browser message in place when the platform can do
+	// it, so paging does not spam the chat with a new message per step.
+	if editMessageID != "" && state.MessageID != "" {
+		ref := imbot.MessageRef{ChatID: chatID, MessageID: editMessageID}
+		opts := imbot.RestateOptions{
+			Text:      text,
+			Actions:   kb.BuildActions(),
+			ParseMode: imbot.ParseModeMarkdown,
+		}
+		if imbot.RestateOrIgnore(ctx, bot, ref, opts) {
 			return editMessageID, nil
 		}
+		logrus.Debug("Could not restate directory browser message, sending a new one")
 	}
 
 	// Send new message with the action set; each platform renders it itself.

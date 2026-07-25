@@ -1,12 +1,20 @@
 package bot
 
-import "github.com/sirupsen/logrus"
+import (
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot"
+)
 
 func (h *BotHandler) GetVerbose(chatID string) bool {
-	// Check if platform supports verbose mode
-	//if !SupportsVerboseMode(h.botSetting.Platform) {
-	//	return false
-	//}
+	// Some platforms cannot carry a running commentary of intermediate
+	// messages — Weixin ties each outbound message to one inbound reply
+	// context, so follow-ups either fail or arrive detached. The check used to
+	// be commented out here with no table to consult; it now reads imbot's
+	// platform descriptor and applies regardless of the operator's setting,
+	// because it is a platform limit rather than a preference.
+	if imbot.GetPlatformBehavior(imbot.Platform(h.botSetting.Platform)).SuppressVerbose {
+		return false
+	}
 
 	// Try to get verbose from chat store
 	if h.chatStore != nil {

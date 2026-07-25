@@ -2,10 +2,13 @@
 package imbot
 
 import (
+	"context"
+
 	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/command"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
+	platformreg "github.com/tingly-dev/tingly-box/imbot/platform"
 	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
@@ -475,4 +478,49 @@ const (
 // NewActionSet creates an empty action set.
 func NewActionSet() *core.ActionSet {
 	return core.NewActionSet()
+}
+
+// Message restating — replacing an already-sent message's presentation.
+//
+// This replaces the AsTelegramBot + RemoveMessageKeyboard / EditMessageWithKeyboard
+// pattern, which gated the capability on a *concrete* type assertion and so
+// could never be satisfied by Feishu or tingly however capable they were —
+// leaving their users with stale, re-clickable keyboards.
+type (
+	// MessageRef identifies a previously sent message.
+	MessageRef = core.MessageRef
+	// RestateOptions describes a message's new presentation.
+	RestateOptions = core.RestateOptions
+	// MessageRestater is implemented by platforms that can restate messages.
+	MessageRestater = core.MessageRestater
+)
+
+// AsRestater reports whether a bot can restate messages. Unlike AsTelegramBot
+// this is an interface assertion, so any capable platform satisfies it.
+func AsRestater(bot Bot) (core.MessageRestater, bool) {
+	return core.AsRestater(bot)
+}
+
+// RestateOrIgnore restates a message where supported and does nothing
+// otherwise, reporting whether it succeeded. Taking a used menu down is
+// best-effort: it must never break the flow that followed the button press.
+func RestateOrIgnore(ctx context.Context, bot Bot, ref core.MessageRef, opts core.RestateOptions) bool {
+	return core.RestateOrIgnore(ctx, bot, ref, opts)
+}
+
+// GetPlatformBehavior returns the product-level defaults a platform implies
+// (pairing enforcement, verbose suppression). Consumers query this instead of
+// switching on platform names, so adding a platform is a table edit.
+func GetPlatformBehavior(platform Platform) core.PlatformBehavior {
+	return core.GetPlatformBehavior(platform)
+}
+
+// PlatformBehavior re-exports the platform behavior record.
+type PlatformBehavior = core.PlatformBehavior
+
+// SetupCommandMenu installs a command registry into the platform's native
+// command menu (Telegram's menu button, Feishu/Lark quick actions). Platforms
+// without one are a no-op, so callers do not branch on platform.
+func SetupCommandMenu(bot Bot, platform Platform, reg *CommandRegistry) error {
+	return platformreg.SetupCommandMenu(bot, platform, reg)
 }

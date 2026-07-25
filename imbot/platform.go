@@ -9,6 +9,41 @@ type PlatformAuthConfig struct {
 	DisplayName string      `json:"display_name"` // Human-readable platform name
 	Category    string      `json:"category"`     // "im", "enterprise", "business"
 	Fields      []FieldSpec `json:"fields"`       // Required/optional auth fields
+
+	// Auth describes how the stored auth map becomes a core.AuthConfig.
+	//
+	// Deliberately separate from Fields: Fields is the settings-UI form, this
+	// is the wire mapping. They usually overlap, but not always — Weixin's
+	// credentials arrive from the QR flow and have no form fields at all, so
+	// deriving the wire mapping from Fields would leave Weixin bots unable to
+	// authenticate.
+	Auth AuthMapping `json:"-"`
+}
+
+// AuthMapping says which auth-map keys feed which core.AuthConfig fields, and
+// which of them a bot cannot start without.
+//
+// This exists so that adding a platform is a table edit rather than a hunt for
+// every switch statement over platform names. Lark is the cautionary tale: it
+// was present in this table but missing from two hand-written switches in the
+// bot manager, so Lark bots were rejected as having no valid credentials and,
+// had they got past that, would have been handed a token-type auth config that
+// the Feishu client rejects.
+type AuthMapping struct {
+	// Type is the core.AuthConfig type: token, oauth, qr, none.
+	Type string
+	// TokenKey and friends name the auth-map key feeding each AuthConfig field.
+	// An empty name means the field is not used by this platform.
+	TokenKey        string
+	ClientIDKey     string
+	ClientSecretKey string
+	AccountIDKey    string
+	AuthDirKey      string
+	// OptionKeys are auth-map entries forwarded verbatim into Config.Options
+	// rather than into AuthConfig.
+	OptionKeys []string
+	// RequiredKeys must all be present and non-empty before a bot may start.
+	RequiredKeys []string
 }
 
 // FieldSpec defines a single auth field
@@ -25,6 +60,7 @@ type FieldSpec struct {
 var PlatformConfigs = map[string]PlatformAuthConfig{
 	"telegram": {
 		Platform: "telegram",
+		Auth:     AuthMapping{Type: "token", TokenKey: "token", RequiredKeys: []string{"token"}},
 		AuthType: "token",
 		Category: "im",
 		Fields: []FieldSpec{
@@ -40,6 +76,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"slack": {
 		Platform: "slack",
+		Auth:     AuthMapping{Type: "token", TokenKey: "token", RequiredKeys: []string{"token"}},
 		AuthType: "token",
 		Category: "im",
 		Fields: []FieldSpec{
@@ -55,6 +92,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"discord": {
 		Platform: "discord",
+		Auth:     AuthMapping{Type: "token", TokenKey: "token", RequiredKeys: []string{"token"}},
 		AuthType: "token",
 		Category: "im",
 		Fields: []FieldSpec{
@@ -70,6 +108,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"dingtalk": {
 		Platform: "dingtalk",
+		Auth:     AuthMapping{Type: "oauth", ClientIDKey: "clientId", ClientSecretKey: "clientSecret", RequiredKeys: []string{"clientId", "clientSecret"}},
 		AuthType: "oauth",
 		Category: "enterprise",
 		Fields: []FieldSpec{
@@ -93,6 +132,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"feishu": {
 		Platform: "feishu",
+		Auth:     AuthMapping{Type: "oauth", ClientIDKey: "clientId", ClientSecretKey: "clientSecret", RequiredKeys: []string{"clientId", "clientSecret"}},
 		AuthType: "oauth",
 		Category: "enterprise",
 		Fields: []FieldSpec{
@@ -116,6 +156,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"lark": {
 		Platform: "lark",
+		Auth:     AuthMapping{Type: "oauth", ClientIDKey: "clientId", ClientSecretKey: "clientSecret", RequiredKeys: []string{"clientId", "clientSecret"}},
 		AuthType: "oauth",
 		Category: "enterprise",
 		Fields: []FieldSpec{
@@ -139,6 +180,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"whatsapp": {
 		Platform: "whatsapp",
+		Auth:     AuthMapping{Type: "token", TokenKey: "token", AccountIDKey: "phoneNumberId", RequiredKeys: []string{"token"}},
 		AuthType: "token",
 		Category: "business",
 		Fields: []FieldSpec{
@@ -162,12 +204,14 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"weixin": {
 		Platform: "weixin",
+		Auth:     AuthMapping{Type: "qr", TokenKey: "token", AccountIDKey: "bot_id", AuthDirKey: "user_id", OptionKeys: []string{"user_id", "base_url"}, RequiredKeys: []string{"token", "bot_id"}},
 		AuthType: "qr",
 		Category: "enterprise",
 		Fields:   []FieldSpec{}, // No fields - credentials set via QR flow
 	},
 	"wecom": {
 		Platform: "wecom",
+		Auth:     AuthMapping{Type: "oauth", ClientIDKey: "clientId", ClientSecretKey: "clientSecret", RequiredKeys: []string{"clientId", "clientSecret"}},
 		AuthType: "oauth",
 		Category: "enterprise",
 		Fields: []FieldSpec{
@@ -191,6 +235,7 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 	},
 	"tingly": {
 		Platform: "tingly",
+		Auth:     AuthMapping{Type: "none", TokenKey: "token"},
 		AuthType: "none",
 		Category: "im",
 		Fields:   []FieldSpec{}, // No required credentials
@@ -254,4 +299,68 @@ var AuthTypeLabels = map[string]string{
 	"oauth": "OAuth",
 	"qr":    "QR Code",
 	"basic": "Basic Auth",
+}
+
+// defaultAuthMapping is used for platforms with no entry in PlatformConfigs.
+// Historically that meant "assume a bot token", which is the least surprising
+// guess for a new IM platform.
+var defaultAuthMapping = AuthMapping{Type: "token", TokenKey: "token", RequiredKeys: []string{"token"}}
+
+// AuthMappingFor returns a platform's auth mapping, falling back to the
+// token-based default for unknown platforms.
+func AuthMappingFor(platform string) AuthMapping {
+	if cfg, ok := PlatformConfigs[platform]; ok && cfg.Auth.Type != "" {
+		return cfg.Auth
+	}
+	return defaultAuthMapping
+}
+
+// BuildAuthConfig converts a bot's stored auth map into a core.AuthConfig.
+func BuildAuthConfig(platform string, auth map[string]string) AuthConfig {
+	m := AuthMappingFor(platform)
+	pick := func(key string) string {
+		if key == "" {
+			return ""
+		}
+		return auth[key]
+	}
+	return AuthConfig{
+		Type:         m.Type,
+		Token:        pick(m.TokenKey),
+		ClientID:     pick(m.ClientIDKey),
+		ClientSecret: pick(m.ClientSecretKey),
+		AccountID:    pick(m.AccountIDKey),
+		AuthDir:      pick(m.AuthDirKey),
+	}
+}
+
+// MissingAuthKeys lists the required auth keys a bot has not been given. An
+// empty result means the bot has everything it needs to attempt a connection.
+func MissingAuthKeys(platform string, auth map[string]string) []string {
+	var missing []string
+	for _, key := range AuthMappingFor(platform).RequiredKeys {
+		if auth[key] == "" {
+			missing = append(missing, key)
+		}
+	}
+	return missing
+}
+
+// AuthOptions returns the auth-map entries a platform expects in Config.Options
+// rather than in AuthConfig (Weixin's user_id / base_url).
+func AuthOptions(platform string, auth map[string]string) map[string]interface{} {
+	keys := AuthMappingFor(platform).OptionKeys
+	if len(keys) == 0 {
+		return nil
+	}
+	out := make(map[string]interface{}, len(keys))
+	for _, key := range keys {
+		if v, ok := auth[key]; ok && v != "" {
+			out[key] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

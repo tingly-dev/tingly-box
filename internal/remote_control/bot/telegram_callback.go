@@ -284,30 +284,24 @@ func (h *BotHandler) removeActionKeyboard(bot imbot.Bot, chatID string) {
 		return
 	}
 
-	// Try to cast to TelegramBot and remove the keyboard
-	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		if err := tgBot.RemoveMessageKeyboard(context.Background(), chatID, msgID); err != nil {
-			logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to remove action keyboard")
-		} else {
-			// Successfully removed, clear the tracking
-			h.actionMenuMessageIDMu.Lock()
-			delete(h.actionMenuMessageID, chatID)
-			h.actionMenuMessageIDMu.Unlock()
-		}
+	// Take the menu down wherever the platform supports it. Nil actions mean
+	// "no controls"; empty text leaves the message body alone.
+	ref := imbot.MessageRef{ChatID: chatID, MessageID: msgID}
+	if imbot.RestateOrIgnore(context.Background(), bot, ref, imbot.RestateOptions{}) {
+		h.actionMenuMessageIDMu.Lock()
+		delete(h.actionMenuMessageID, chatID)
+		h.actionMenuMessageIDMu.Unlock()
+	} else {
+		logrus.WithField("chatID", chatID).WithField("messageID", msgID).Debug("Could not remove action keyboard")
 	}
 }
 
-// editDirectoryBrowserMessage edits the directory browser message to show status and remove keyboard
+// editDirectoryBrowserMessage restates the directory browser message: new
+// status text, no controls.
 func editDirectoryBrowserMessage(ctx context.Context, bot imbot.Bot, chatID string, msgID string, text string) {
-	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		// Remove the keyboard first
-		if err := tgBot.RemoveMessageKeyboard(ctx, chatID, msgID); err != nil {
-			logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to remove directory browser keyboard")
-		} else {
-			// Successfully removed keyboard, now edit the text
-			if err := tgBot.EditMessageWithKeyboard(ctx, chatID, msgID, text, nil); err != nil {
-				logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to edit directory browser text")
-			}
-		}
+	ref := imbot.MessageRef{ChatID: chatID, MessageID: msgID}
+	if !imbot.RestateOrIgnore(ctx, bot, ref, imbot.RestateOptions{Text: text}) {
+		logrus.WithField("chatID", chatID).WithField("messageID", msgID).
+			Debug("Could not restate directory browser message")
 	}
 }

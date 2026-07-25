@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/jsonstore"
 )
@@ -83,15 +84,14 @@ func (b BotSetting) IsRequirePairing() bool {
 }
 
 // PlatformDefaultsRequirePairing reports whether a bot on the given platform
-// has TOFU pairing enforced when RequirePairing is unset (nil). Telegram,
-// Discord and Slack expose full DM command access to anyone who knows the
-// bot token, so they default to enforced.
+// has TOFU pairing enforced when RequirePairing is unset (nil).
+//
+// The answer comes from imbot's platform descriptor table rather than a switch
+// here: which platforms hand out full DM command access to anyone holding the
+// bot token is a fact about the platform, and it belongs next to the rest of
+// each platform's intrinsic metadata.
 func PlatformDefaultsRequirePairing(platform string) bool {
-	switch platform {
-	case "telegram", "discord", "slack":
-		return true
-	}
-	return false
+	return imbot.GetPlatformBehavior(imbot.Platform(platform)).RequiresPairingByDefault
 }
 
 // Chat represents all state associated with a chat (direct or group)

@@ -25,6 +25,8 @@ const (
 	EventDelete EventKind = "delete"
 	EventReact  EventKind = "react"
 	EventMedia  EventKind = "media"
+	// EventRestate is a message-presentation replacement (see core.MessageRestater).
+	EventRestate EventKind = "restate"
 )
 
 // Event records a single outbound action issued by the bot.
@@ -50,9 +52,8 @@ type Event struct {
 	Raw *core.SendMessageOptions
 }
 
-// Keyboard is a decoded inline keyboard. It accepts both
-// imbot.InlineKeyboardMarkup and the Telegram models.InlineKeyboardMarkup —
-// see DecodeReplyMarkup in adapter.go.
+// Keyboard is a decoded inline keyboard, built from the neutral
+// core.ActionSet an outbound message carries — see decodeActions in adapter.go.
 type Keyboard struct {
 	Rows [][]Button
 }
@@ -82,6 +83,9 @@ type Transport interface {
 
 	// Edit records a message edit.
 	Edit(ctx context.Context, messageID, text string) error
+
+	// Restate records a message-presentation replacement.
+	Restate(ctx context.Context, ref core.MessageRef, opts core.RestateOptions) error
 
 	// Delete records a message delete.
 	Delete(ctx context.Context, messageID string) error
@@ -230,6 +234,22 @@ func (t *InProcessTransport) Edit(ctx context.Context, messageID, text string) e
 		ChatID:    chatID,
 		MessageID: messageID,
 		Text:      text,
+	})
+	return nil
+}
+
+// Restate records a restate (message-presentation replacement) event so tests
+// can assert that a used menu was taken down on a non-Telegram platform.
+func (t *InProcessTransport) Restate(ctx context.Context, ref core.MessageRef, opts core.RestateOptions) error {
+	if t.closed.Load() {
+		return core.NewBotError(core.ErrConnectionFailed, "tingly transport closed", false)
+	}
+	t.record(Event{
+		Kind:      EventRestate,
+		ChatID:    ref.ChatID,
+		MessageID: ref.MessageID,
+		Text:      opts.Text,
+		Keyboard:  convertActionSet(opts.Actions),
 	})
 	return nil
 }

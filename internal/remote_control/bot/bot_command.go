@@ -276,10 +276,9 @@ func (h *BotHandler) handleResumePick(hCtx HandlerContext, sessionID string, msg
 	// Strip the keyboard from the original listing message so the user can't
 	// double-tap into a stale state. Best-effort; ignore failures.
 	if msgID, _ := msg.Metadata["message_id"].(string); msgID != "" {
-		if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
-			if err := tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID); err != nil {
-				logrus.WithError(err).Debug("Failed to remove resume keyboard")
-			}
+		ref := imbot.MessageRef{ChatID: hCtx.ChatID, MessageID: msgID}
+		if !imbot.RestateOrIgnore(context.Background(), hCtx.Bot, ref, imbot.RestateOptions{}) {
+			logrus.WithField("messageID", msgID).Debug("Could not remove resume keyboard")
 		}
 	}
 
@@ -292,9 +291,8 @@ func (h *BotHandler) handleResumePick(hCtx HandlerContext, sessionID string, msg
 // No state to clean up — armed state only flips on `pick`.
 func (h *BotHandler) handleResumeCancel(hCtx HandlerContext, msg imbot.Message) {
 	if msgID, _ := msg.Metadata["message_id"].(string); msgID != "" {
-		if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
-			_ = tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID)
-		}
+		ref := imbot.MessageRef{ChatID: hCtx.ChatID, MessageID: msgID}
+		_ = imbot.RestateOrIgnore(context.Background(), hCtx.Bot, ref, imbot.RestateOptions{})
 	}
 	h.SendText(hCtx, "Resume cancelled.")
 }

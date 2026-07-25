@@ -533,11 +533,12 @@ func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string,
 		resultText += "\n\n❌ *Denied*"
 	}
 
-	// Edit message to remove keyboard and show result
-	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		_ = tgBot.EditMessageWithKeyboard(context.Background(), chatID, messageID, resultText, nil)
-	} else {
-		// Fallback: send a new message with the result
+	// Restate the prompt to its outcome: new text, controls gone. Platforms
+	// that cannot restate get a fresh message instead, so the user always sees
+	// the result either way.
+	ref := imbot.MessageRef{ChatID: chatID, MessageID: messageID}
+	opts := imbot.RestateOptions{Text: resultText, ParseMode: imbot.ParseModeMarkdown}
+	if !imbot.RestateOrIgnore(context.Background(), bot, ref, opts) {
 		_, _ = bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
 			Text:      resultText,
 			ParseMode: imbot.ParseModeMarkdown,
@@ -550,9 +551,9 @@ func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, chatID, messageID string
 	resultText := p.buildPromptText(req, true) // supportsKeyboard doesn't matter for timeout
 	resultText += "\n\n⏰ *Timed Out*"
 
-	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		_ = tgBot.EditMessageWithKeyboard(context.Background(), chatID, messageID, resultText, nil)
-	}
+	ref := imbot.MessageRef{ChatID: chatID, MessageID: messageID}
+	_ = imbot.RestateOrIgnore(context.Background(), bot, ref,
+		imbot.RestateOptions{Text: resultText, ParseMode: imbot.ParseModeMarkdown})
 }
 
 // cleanup removes a pending request and its response channel

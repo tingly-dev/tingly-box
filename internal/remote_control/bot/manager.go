@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
-	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
@@ -57,14 +56,11 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		options["proxy"] = setting.ProxyURL
 	}
 
-	// Add Weixin-specific options
-	if setting.Platform == "weixin" {
-		if userID, ok := setting.Auth["user_id"]; ok {
-			options["user_id"] = userID
-		}
-		if baseURL, ok := setting.Auth["base_url"]; ok {
-			options["base_url"] = baseURL
-		}
+	// Some platforms carry extra credentials as connection options rather than
+	// as auth fields (Weixin's user_id / base_url). Which ones is a fact in
+	// imbot's platform table.
+	for k, v := range imbot.AuthOptions(setting.Platform, setting.Auth) {
+		options[k] = v
 	}
 	err = manager.AddBot(&imbot.Config{
 		UUID:     setting.UUID,
@@ -165,17 +161,9 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		}
 
 		if commandRegistry != nil {
-			var err error
-			switch platform {
-			case imbot.PlatformTelegram:
-				err = imbottelegram.SetupMenuButton(bot, commandRegistry)
-			case imbot.PlatformFeishu, imbot.PlatformLark:
-				err = imbotfeishu.SetupQuickActions(bot, commandRegistry)
-			default:
-				// Other platforms don't support menu configuration
-				err = nil
-			}
-
+			// Platforms without a native command menu are a no-op inside
+			// SetupCommandMenu, so there is nothing to branch on here.
+			err := imbot.SetupCommandMenu(bot, platform, commandRegistry)
 			if err != nil {
 				// Log warning but don't fail startup
 				logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
@@ -192,48 +180,15 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	return nil
 }
 
-// buildAuthConfig creates auth config based on platform
+// buildAuthConfig creates the platform auth config from a bot's stored auth
+// map, driven by imbot's platform table rather than a switch here.
+//
+// The switch this replaces omitted "lark" in both this function and the
+// credential check below, so Lark bots were rejected for having no valid
+// credentials — and would have been handed a token-type config the Feishu
+// client rejects even if they had got that far.
 func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
-	platform := setting.Platform
-	auth := setting.Auth
-
-	switch platform {
-	case "telegram", "discord", "slack":
-		return imbot.AuthConfig{
-			Type:  "token",
-			Token: auth["token"],
-		}
-	case "dingtalk", "feishu", "wecom":
-		return imbot.AuthConfig{
-			Type:         "oauth",
-			ClientID:     auth["clientId"],
-			ClientSecret: auth["clientSecret"],
-		}
-	case "whatsapp":
-		return imbot.AuthConfig{
-			Type:      "token",
-			Token:     auth["token"],
-			AccountID: auth["phoneNumberId"],
-		}
-	case "weixin":
-		return imbot.AuthConfig{
-			Type:      "qr",
-			Token:     auth["token"],
-			AccountID: auth["bot_id"],
-			AuthDir:   auth["user_id"], // Store user_id in AuthDir for Weixin
-		}
-	case "tingly":
-		// Tingly is tokenless.
-		return imbot.AuthConfig{
-			Type:  "none",
-			Token: auth["token"], // optional shared secret, may be empty
-		}
-	default:
-		return imbot.AuthConfig{
-			Type:  "token",
-			Token: auth["token"],
-		}
-	}
+	return imbot.BuildAuthConfig(setting.Platform, setting.Auth)
 }
 
 // getProjectPathForGroup retrieves the project path bound to a group chat.
@@ -357,7 +312,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Handle both bot.Settings and db.Settings types
 	// Determine the type and extract common fields
-	var platform, token string
+	var platform string
 	var auth map[string]string
 	var name string
 	var record db.Settings
@@ -395,31 +350,17 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		return fmt.Errorf("unknown platform: %s", platform)
 	}
 
-	token = auth["token"]
-
-	// Validate auth credentials based on platform
-	hasValidAuth := false
-	switch platform {
-	case "dingtalk", "feishu", "wecom":
-		// OAuth platforms require clientId and clientSecret
-		hasValidAuth = auth["clientId"] != "" && auth["clientSecret"] != ""
-	case "weixin":
-		// Weixin QR requires token, bot_id, user_id, base_url
-		hasValidAuth = auth["token"] != "" && auth["bot_id"] != ""
-	case "whatsapp":
-		// WhatsApp requires token, phoneNumberId is optional
-		hasValidAuth = token != ""
-	case "tingly":
-		// Tingly does not require credentials.
-		hasValidAuth = true
-	default:
-		// Token-based platforms (telegram, discord, slack, etc.)
-		hasValidAuth = token != ""
-	}
-
-	if !hasValidAuth {
-		logrus.WithField("uuid", uuid).WithField("platform", platform).Warn("Bot has no valid auth credentials, not starting")
-		return fmt.Errorf("bot has no valid auth credentials for platform: %s", platform)
+	// Which credentials a platform needs is a fact in imbot's platform table,
+	// not a switch here. Naming the missing keys also turns an opaque "no valid
+	// credentials" into something an operator can act on.
+	if missing := imbot.MissingAuthKeys(platform, auth); len(missing) > 0 {
+		logrus.WithFields(logrus.Fields{
+			"uuid":     uuid,
+			"platform": platform,
+			"missing":  strings.Join(missing, ", "),
+		}).Warn("Bot is missing required credentials, not starting")
+		return fmt.Errorf("bot for platform %s is missing required credentials: %s",
+			platform, strings.Join(missing, ", "))
 	}
 
 	// Mount gate: a bot is a resource that only runs when it has an active

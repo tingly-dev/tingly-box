@@ -177,7 +177,3 @@ func NewBotHandler(
 
 	return handler
 }
-
-// GetVerbose returns the current verbose mode setting for a chat
-// Checks chat store first, then bot setting default
-// Returns false for platforms that don't support verbose mode (e.g., Weixin)
