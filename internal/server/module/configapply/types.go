@@ -39,6 +39,18 @@ type ClaudeConfigResponse struct {
 	InstallStatusLine bool                  `json:"installStatusLine"`
 }
 
+// CodexConfigResponse returns the typed values currently persisted in the
+// user's ~/.codex/config.toml so the frontend can restore Apply state on reopen.
+// Routing/auth-owned fields (model, model_provider, the gateway token) are NOT
+// returned — same safety stance as ClaudeConfigResponse. writeCatalog is inferred
+// from the presence of model_catalog_json in config.toml.
+type CodexConfigResponse struct {
+	Success      bool               `json:"success"`
+	Exists       bool               `json:"exists"`
+	Preferences  config.CodexPrefs  `json:"preferences"`
+	WriteCatalog bool               `json:"writeCatalog"`
+}
+
 // ApplyOpenCodeConfigResponse is the response for ApplyOpenCodeConfigFromState
 type ApplyOpenCodeConfigResponse struct {
 	config.ApplyResult

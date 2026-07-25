@@ -1040,6 +1040,125 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 	return out
 }
 
+// CodexPrefsFromConfig is the inverse of (*CodexPrefs).toConfig: it extracts
+// the typed, whitelisted CodexPrefs keys from a parsed config.toml top-level
+// map. Only the four managed keys are read; enum values are validated (invalid
+// values dropped) and the bool field is normalized back to "true"/"" so it
+// round-trips through the same JSON shape the frontend edits. Keys outside the
+// whitelist are ignored — a hand-edited config.toml can never smuggle extra
+// fields into the prefs surface.
+func CodexPrefsFromConfig(cfg map[string]interface{}) *CodexPrefs {
+	prefs := &CodexPrefs{}
+	strVal := func(key string) (string, bool) {
+		v, ok := cfg[key]
+		if !ok {
+			return "", false
+		}
+		switch t := v.(type) {
+		case string:
+			return t, true
+		case bool:
+			if t {
+				return "true", true
+			}
+			return "", true
+		default:
+			// go-toml unmarshals integers/floats as int64/float64; reasoning
+			// keys are all string-valued, so non-string scalars are dropped.
+			return "", true
+		}
+	}
+	// Reuse codexEnumValues to validate the three enum-typed keys. A value
+	// outside the allowed set is dropped so a stale/mistyped config.toml
+	// cannot surface an invalid option in the form.
+	for _, key := range []string{
+		"model_reasoning_effort",
+		"model_reasoning_summary",
+		"model_verbosity",
+	} {
+		if val, ok := strVal(key); ok && val != "" {
+			for _, allowed := range codexEnumValues[key] {
+				if strings.TrimSpace(val) == allowed {
+					setCodexPrefField(prefs, key, allowed)
+					break
+				}
+			}
+		}
+	}
+	// model_supports_reasoning_summaries maps true -> "true"; anything else
+	// (false, missing, non-bool) leaves it unset, matching toConfig's stance
+	// that only an explicit "true" opts in.
+	if v, ok := cfg["model_supports_reasoning_summaries"]; ok {
+		if b, ok := v.(bool); ok && b {
+			prefs.ModelSupportsReasoningSummaries = "true"
+		} else if s, ok := v.(string); ok && strings.TrimSpace(s) == "true" {
+			prefs.ModelSupportsReasoningSummaries = "true"
+		}
+	}
+	return prefs
+}
+
+// setCodexPrefField assigns a validated enum value to the matching CodexPrefs
+// field by config.toml key name. It mirrors the key→field mapping in toConfig.
+func setCodexPrefField(p *CodexPrefs, key, val string) {
+	switch key {
+	case "model_reasoning_effort":
+		p.ModelReasoningEffort = val
+	case "model_reasoning_summary":
+		p.ModelReasoningSummary = val
+	case "model_verbosity":
+		p.ModelVerbosity = val
+	}
+}
+
+// ReadCodexConfig reads ~/.codex/config.toml and returns the typed prefs, the
+// inferred writeCatalog state (true when model_catalog_json is set), and
+// whether a tingly-managed config exists. A missing or unparseable file yields
+// empty prefs, writeCatalog=false, exists=false. exists is true only when the
+// file carries the tingly provider name or any managed top-level key — the same
+// detection ClearCodexGatewayConfig uses — so a never-configured machine reads
+// as "not applied" and the form falls back to defaults.
+func ReadCodexConfig() (prefs *CodexPrefs, writeCatalog bool, exists bool, err error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	targetPath := filepath.Join(homeDir, ".codex", "config.toml")
+
+	data, readErr := os.ReadFile(targetPath)
+	if readErr != nil {
+		// Missing file is not an error — first-time setup, no applied state.
+		return DefaultCodexPrefs(), false, false, nil
+	}
+
+	cfg := map[string]interface{}{}
+	if err := tomlpkg.Unmarshal(data, &cfg); err != nil {
+		// Unparseable file: surface the error but still report non-existence so
+		// the form falls back to defaults rather than showing a blank state.
+		return DefaultCodexPrefs(), false, false, nil
+	}
+
+	// Detect tingly ownership. The reliable signals are an explicit
+	// `model_provider = "tingly-box"` or a `[model_providers.tingly-box]` stanza;
+	// either proves tingly-box wrote this config. The other managed top-level
+	// keys (model, model_catalog_json) are NOT tingly-specific on their own — a
+	// stock codex config always has `model`, so flagging on it would mark every
+	// codex install as tingly-managed and restore stale prefs into it.
+	owned := false
+	if provider, ok := cfg["model_provider"].(string); ok && provider == codexGatewayProviderName {
+		owned = true
+	}
+	if !owned {
+		if providers, ok := cfg["model_providers"].(map[string]interface{}); ok {
+			if _, ok := providers[codexGatewayProviderName]; ok {
+				owned = true
+			}
+		}
+	}
+	_, hasCatalog := cfg["model_catalog_json"]
+	return CodexPrefsFromConfig(cfg), hasCatalog, owned, nil
+}
+
 // ApplyCodexConfig merges tingly-box Codex settings into ~/.codex/config.toml
 // and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
 // model so Codex's `/model` picker can see them.

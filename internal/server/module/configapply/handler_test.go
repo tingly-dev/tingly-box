@@ -68,6 +68,72 @@ func TestGetClaudeConfig_RestoresAppliedPreferences(t *testing.T) {
 	assert.Equal(t, "64000", response.Preferences.ClaudeCodeMaxOutputTokens)
 }
 
+func TestGetCodexConfig_RestoresAppliedPreferences(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	codexDir := filepath.Join(home, ".codex")
+	require.NoError(t, os.MkdirAll(codexDir, 0755))
+	// A tingly-managed config.toml carrying the four prefs keys plus the
+	// catalog reference and the tingly provider stanza.
+	require.NoError(t, os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte(`
+model = "tingly/codex"
+model_provider = "tingly-box"
+model_catalog_json = "/home/user/.codex/tingly-model-catalog.json"
+model_reasoning_effort = "high"
+model_reasoning_summary = "detailed"
+model_verbosity = "low"
+model_supports_reasoning_summaries = true
+
+[model_providers.tingly-box]
+name = "Tingly Box"
+base_url = "http://localhost:12580/tingly/codex"
+wire_api = "responses"
+`), 0644))
+
+	handler := NewHandler(nil, "localhost")
+	router := gin.New()
+	router.GET("/config/codex", handler.GetCodexConfig)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/config/codex", nil)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var response CodexConfigResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.True(t, response.Success)
+	assert.True(t, response.Exists, "tingly-managed config should report exists=true")
+	assert.True(t, response.WriteCatalog, "model_catalog_json present → writeCatalog=true")
+	assert.Equal(t, "high", response.Preferences.ModelReasoningEffort)
+	assert.Equal(t, "detailed", response.Preferences.ModelReasoningSummary)
+	assert.Equal(t, "low", response.Preferences.ModelVerbosity)
+	assert.Equal(t, "true", response.Preferences.ModelSupportsReasoningSummaries)
+}
+
+// A config.toml with no tingly footprint reads as not-applied: the form falls
+// back to defaults rather than restoring stale values.
+func TestGetCodexConfig_NotAppliedFallsBackToDefaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	// No ~/.codex/config.toml at all.
+	handler := NewHandler(nil, "localhost")
+	router := gin.New()
+	router.GET("/config/codex", handler.GetCodexConfig)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/config/codex", nil)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var response CodexConfigResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.True(t, response.Success)
+	assert.False(t, response.Exists)
+	assert.False(t, response.WriteCatalog)
+	// Defaults are still returned so the form has sensible starting values.
+	assert.Equal(t, "medium", response.Preferences.ModelReasoningEffort)
+}
+
 func TestApplyClaudeConfig_NilConfig(t *testing.T) {
 	handler := NewHandler(nil, "localhost")
 

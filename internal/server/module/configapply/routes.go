@@ -23,6 +23,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(ClaudeConfigResponse{}),
 	)
 
+	router.GET("/config/codex", handler.GetCodexConfig,
+		swagger.WithDescription("Get the currently applied Codex preferences"),
+		swagger.WithTags("config"),
+		swagger.WithResponseModel(CodexConfigResponse{}),
+	)
+
 	// Config apply endpoints - requires authentication (applied by caller)
 	router.POST("/config/apply/claude", handler.ApplyClaudeConfig,
 		swagger.WithDescription("Generate and apply Claude Code configuration from system state"),

@@ -63,6 +63,26 @@ func (h *Handler) GetClaudeConfig(c *gin.Context) {
 	})
 }
 
+// GetCodexConfig reads the values previously applied to the user's
+// ~/.codex/config.toml so reopening the editor restores durable state.
+// Routing/auth fields are not returned (see CodexConfigResponse).
+func (h *Handler) GetCodexConfig(c *gin.Context) {
+	prefs, writeCatalog, exists, err := config.ReadCodexConfig()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if prefs == nil {
+		prefs = config.DefaultCodexPrefs()
+	}
+	c.JSON(http.StatusOK, CodexConfigResponse{
+		Success:      true,
+		Exists:       exists,
+		Preferences:  *prefs,
+		WriteCatalog: writeCatalog,
+	})
+}
+
 // HTTPTransportConfigUpdate represents the update request for HTTP transport settings
 type HTTPTransportConfigUpdate struct {
 	RespectEnvProxy *bool   `json:"respect_env_proxy"` // nil = no change
