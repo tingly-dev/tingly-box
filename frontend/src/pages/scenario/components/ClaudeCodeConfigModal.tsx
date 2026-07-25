@@ -138,33 +138,32 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
             return;
         }
 
-        // A pending routing 1M change must preview the rule's new generated
-        // values. It intentionally takes precedence over the persisted model
-        // slots for this apply operation.
-        if (pendingContext1MChange != null) {
-            const tempRules = rules.map(rule => {
-                if (pendingContext1MChange.ruleUuid && rule.uuid !== pendingContext1MChange.ruleUuid) {
-                    return rule;
-                }
-                return {
-                    ...rule,
-                    flags: {
-                        ...rule.flags,
-                        context1m: pendingContext1MChange.enabled,
-                    },
-                };
-            });
-            setPrefs(derivePrefsFromRules({ rules: tempRules, mode: configMode }));
-            setIsConfigLoading(false);
-            return;
-        }
+        // A pending routing 1M change previews the rule's new model slots
+        // (with the [1m] suffix applied). It must NOT discard the user's other
+        // applied prefs (max tokens, timeout, privacy switches): those are
+        // restored exactly as on a normal open, then the model slots + the
+        // 1M-driven auto-compact window are overlaid from the rule-derived
+        // generated prefs. So we still fetch the applied config here and merge
+        // via restoreAppliedClaudeCodePrefs — only the `generated` input differs.
+        const tempRules = pendingContext1MChange == null ? rules : rules.map(rule => {
+            if (pendingContext1MChange.ruleUuid && rule.uuid !== pendingContext1MChange.ruleUuid) {
+                return rule;
+            }
+            return {
+                ...rule,
+                flags: {
+                    ...rule.flags,
+                    context1m: pendingContext1MChange.enabled,
+                },
+            };
+        });
+        const generated = derivePrefsFromRules({ rules: tempRules, mode: configMode });
 
         let active = true;
         setIsConfigLoading(true);
         void api.getAppliedClaudeConfig().then(result => {
             if (!active) return;
             if (result?.success && result.exists) {
-                const generated = derivePrefsFromRules({ rules, mode: configMode });
                 setPrefs(restoreAppliedClaudeCodePrefs({
                     generated,
                     applied: result.preferences || {},
@@ -172,7 +171,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 setDefaultMode((result.defaultMode || 'acceptEdits') as ClaudeCodeDefaultMode);
                 setInstallStatusLine(!!result.installStatusLine);
             } else {
-                setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
+                setPrefs(generated);
                 setDefaultMode('acceptEdits');
                 setInstallStatusLine(true);
                 if (result?.success === false) {

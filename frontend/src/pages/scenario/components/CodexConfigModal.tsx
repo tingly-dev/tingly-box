@@ -87,6 +87,12 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     // ~/.codex/config.toml; first-time users (nothing applied yet) fall back to
     // defaults. Mirrors ClaudeCodeConfigModal's open-effect hydration so the
     // form no longer resets the user's last applied values on every open.
+    //
+    // pendingContext1MChange is in the deps so reopening after a 1M toggle
+    // re-hydrates fresh state, but it does NOT branch the body: Codex's 1M
+    // setting only affects the catalog's context window (generated at preview
+    // time), never the reasoning prefs edited here — so a 1M toggle must not
+    // skip the applied-config readback the way it used to.
     React.useEffect(() => {
         if (!open) {
             setPrefs(defaultCodexPrefs());
@@ -114,7 +120,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
         return () => {
             active = false;
         };
-    }, [open]);
+    }, [open, pendingContext1MChange]);
 
     // Fetch Codex OAuth providers only when the picker is actually shown (direct
     // or hybrid) — no network cost for the default gateway path. Direct mode
