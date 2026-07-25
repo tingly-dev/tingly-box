@@ -29,22 +29,32 @@ export function defaultCodexPrefs(): CodexPrefs {
     return { model_reasoning_effort: 'medium' };
 }
 
+// CODEX_PREF_KEYS is the single source of truth for the durable Codex pref
+// keys on the frontend (mirrors MODEL_SLOT_KEYS in claudeCodePrefsState.ts and
+// the backend CodexPrefs struct). Adding a key is one entry here, typed against
+// keyof CodexPrefs so an omission or typo is a compile error.
+const CODEX_PREF_KEYS = [
+    'model_reasoning_effort',
+    'model_reasoning_summary',
+    'model_verbosity',
+    'model_supports_reasoning_summaries',
+] as const satisfies readonly (keyof CodexPrefs)[];
+
 // Merge a previously-applied prefs object over the current defaults so
 // reopening the Codex config modal restores durable user choices rather than
-// resetting to defaults every time. Only the four whitelisted keys are
-// considered; anything else on `applied` is ignored. Undefined fields on
-// `applied` defer to `defaults`, matching the backend's "empty = omit" stance.
+// resetting to defaults every time. Empty values on `applied` defer to the
+// default (Codex treats "" as "omit, use built-in default").
 //
 // Unlike Claude Code (where model slots must always come from routing rules),
 // Codex has no routing-derived prefs, so a plain shallow merge is correct.
 export function mergeSavedCodexPrefs(applied: CodexPrefs = {}): CodexPrefs {
     const merged: CodexPrefs = { ...defaultCodexPrefs() };
-    (['model_reasoning_effort', 'model_reasoning_summary', 'model_verbosity', 'model_supports_reasoning_summaries'] as const).forEach((key) => {
+    for (const key of CODEX_PREF_KEYS) {
         const v = applied[key];
         if (v !== undefined && v !== '') {
             merged[key] = v;
         }
-    });
+    }
     return merged;
 }
 

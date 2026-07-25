@@ -1019,25 +1019,36 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 	if p == nil {
 		return out
 	}
-	addEnum := func(key, val string) {
-		val = strings.TrimSpace(val)
-		if val == "" {
-			return
-		}
-		for _, allowed := range codexEnumValues[key] {
-			if val == allowed {
-				out[key] = val
-				return
-			}
+	setEnum := func(key, val string) {
+		if v, ok := codexEnumValue(key, val); ok {
+			out[key] = v
 		}
 	}
-	addEnum("model_reasoning_effort", p.ModelReasoningEffort)
-	addEnum("model_reasoning_summary", p.ModelReasoningSummary)
-	addEnum("model_verbosity", p.ModelVerbosity)
+	setEnum("model_reasoning_effort", p.ModelReasoningEffort)
+	setEnum("model_reasoning_summary", p.ModelReasoningSummary)
+	setEnum("model_verbosity", p.ModelVerbosity)
 	if strings.TrimSpace(p.ModelSupportsReasoningSummaries) == "true" {
 		out["model_supports_reasoning_summaries"] = true
 	}
 	return out
+}
+
+// codexEnumValue validates a value against the allowed set for an enum-typed
+// CodexPrefs key (see codexEnumValues). It returns the trimmed value and true
+// when it is a member, or ""/false otherwise (empty input also yields false).
+// Shared by toConfig (write) and CodexPrefsFromConfig (read) so the two stay
+// in lockstep — there is one definition of "what is a valid enum value".
+func codexEnumValue(key, val string) (string, bool) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return "", false
+	}
+	for _, allowed := range codexEnumValues[key] {
+		if val == allowed {
+			return val, true
+		}
+	}
+	return "", false
 }
 
 // CodexPrefsFromConfig is the inverse of (*CodexPrefs).toConfig: it extracts
@@ -1049,45 +1060,27 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 // fields into the prefs surface.
 func CodexPrefsFromConfig(cfg map[string]interface{}) *CodexPrefs {
 	prefs := &CodexPrefs{}
-	strVal := func(key string) (string, bool) {
-		v, ok := cfg[key]
-		if !ok {
-			return "", false
-		}
-		switch t := v.(type) {
-		case string:
-			return t, true
-		case bool:
-			if t {
-				return "true", true
-			}
-			return "", true
-		default:
-			// go-toml unmarshals integers/floats as int64/float64; reasoning
-			// keys are all string-valued, so non-string scalars are dropped.
-			return "", true
+	// Enum-typed keys: validate against codexEnumValues (shared with toConfig)
+	// so an out-of-set value is dropped rather than surfaced in the form.
+	if v, ok := cfg["model_reasoning_effort"].(string); ok {
+		if val, ok := codexEnumValue("model_reasoning_effort", v); ok {
+			prefs.ModelReasoningEffort = val
 		}
 	}
-	// Reuse codexEnumValues to validate the three enum-typed keys. A value
-	// outside the allowed set is dropped so a stale/mistyped config.toml
-	// cannot surface an invalid option in the form.
-	for _, key := range []string{
-		"model_reasoning_effort",
-		"model_reasoning_summary",
-		"model_verbosity",
-	} {
-		if val, ok := strVal(key); ok && val != "" {
-			for _, allowed := range codexEnumValues[key] {
-				if strings.TrimSpace(val) == allowed {
-					setCodexPrefField(prefs, key, allowed)
-					break
-				}
-			}
+	if v, ok := cfg["model_reasoning_summary"].(string); ok {
+		if val, ok := codexEnumValue("model_reasoning_summary", v); ok {
+			prefs.ModelReasoningSummary = val
+		}
+	}
+	if v, ok := cfg["model_verbosity"].(string); ok {
+		if val, ok := codexEnumValue("model_verbosity", v); ok {
+			prefs.ModelVerbosity = val
 		}
 	}
 	// model_supports_reasoning_summaries maps true -> "true"; anything else
 	// (false, missing, non-bool) leaves it unset, matching toConfig's stance
-	// that only an explicit "true" opts in.
+	// that only an explicit "true" opts in. Accept both a native TOML bool and
+	// the string form (older files / hand-edits).
 	if v, ok := cfg["model_supports_reasoning_summaries"]; ok {
 		if b, ok := v.(bool); ok && b {
 			prefs.ModelSupportsReasoningSummaries = "true"
@@ -1098,26 +1091,33 @@ func CodexPrefsFromConfig(cfg map[string]interface{}) *CodexPrefs {
 	return prefs
 }
 
-// setCodexPrefField assigns a validated enum value to the matching CodexPrefs
-// field by config.toml key name. It mirrors the key→field mapping in toConfig.
-func setCodexPrefField(p *CodexPrefs, key, val string) {
-	switch key {
-	case "model_reasoning_effort":
-		p.ModelReasoningEffort = val
-	case "model_reasoning_summary":
-		p.ModelReasoningSummary = val
-	case "model_verbosity":
-		p.ModelVerbosity = val
+// isTinglyManagedCodexConfig reports whether a parsed config.toml was written
+// by tingly-box. The reliable signals are an explicit
+// `model_provider = "tingly-box"` or a `[model_providers.tingly-box]` stanza.
+// The generic `model`/`model_catalog_json` keys are deliberately NOT signals —
+// a stock codex install always has `model`, so flagging on it would mark every
+// codex config as tingly-owned. Both ReadCodexConfig (read) and
+// ClearCodexGatewayConfig (mutate) route through this so the read/clear pair
+// cannot drift on what "tingly owns" means.
+func isTinglyManagedCodexConfig(cfg map[string]interface{}) bool {
+	if provider, ok := cfg["model_provider"].(string); ok && provider == codexGatewayProviderName {
+		return true
 	}
+	if providers, ok := cfg["model_providers"].(map[string]interface{}); ok {
+		if _, ok := providers[codexGatewayProviderName]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadCodexConfig reads ~/.codex/config.toml and returns the typed prefs, the
 // inferred writeCatalog state (true when model_catalog_json is set), and
 // whether a tingly-managed config exists. A missing or unparseable file yields
 // empty prefs, writeCatalog=false, exists=false. exists is true only when the
-// file carries the tingly provider name or any managed top-level key — the same
-// detection ClearCodexGatewayConfig uses — so a never-configured machine reads
-// as "not applied" and the form falls back to defaults.
+// file is tingly-managed (see isTinglyManagedCodexConfig) so a
+// never-configured machine reads as "not applied" and the form falls back to
+// defaults.
 func ReadCodexConfig() (prefs *CodexPrefs, writeCatalog bool, exists bool, err error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -1138,25 +1138,8 @@ func ReadCodexConfig() (prefs *CodexPrefs, writeCatalog bool, exists bool, err e
 		return DefaultCodexPrefs(), false, false, nil
 	}
 
-	// Detect tingly ownership. The reliable signals are an explicit
-	// `model_provider = "tingly-box"` or a `[model_providers.tingly-box]` stanza;
-	// either proves tingly-box wrote this config. The other managed top-level
-	// keys (model, model_catalog_json) are NOT tingly-specific on their own — a
-	// stock codex config always has `model`, so flagging on it would mark every
-	// codex install as tingly-managed and restore stale prefs into it.
-	owned := false
-	if provider, ok := cfg["model_provider"].(string); ok && provider == codexGatewayProviderName {
-		owned = true
-	}
-	if !owned {
-		if providers, ok := cfg["model_providers"].(map[string]interface{}); ok {
-			if _, ok := providers[codexGatewayProviderName]; ok {
-				owned = true
-			}
-		}
-	}
 	_, hasCatalog := cfg["model_catalog_json"]
-	return CodexPrefsFromConfig(cfg), hasCatalog, owned, nil
+	return CodexPrefsFromConfig(cfg), hasCatalog, isTinglyManagedCodexConfig(cfg), nil
 }
 
 // ApplyCodexConfig merges tingly-box Codex settings into ~/.codex/config.toml
@@ -1546,10 +1529,11 @@ func ClearCodexGatewayConfig() (*ApplyResult, error) {
 		return result, nil
 	}
 
-	// Fast path: if the file mentions neither the tingly provider name nor any
-	// managed top-level key, skip the unmarshal/marshal round-trip entirely.
-	// Re-marshaling user TOML loses comments and reorders keys, so avoiding it
-	// in the common no-op case is also a correctness win.
+	// Fast path: if the file does not even mention the tingly provider name,
+	// skip the unmarshal/marshal round-trip entirely. Re-marshaling user TOML
+	// loses comments and reorders keys, so avoiding it in the common no-op case
+	// is also a correctness win. isTinglyManagedCodexConfig below is the real
+	// authority on whether to act; this is just a cheap bytes-level pre-filter.
 	if !bytes.Contains(data, []byte(codexGatewayProviderName)) {
 		result.Success = true
 		result.Message = "config.toml has no tingly gateway keys, nothing to clear"
@@ -1559,6 +1543,15 @@ func ClearCodexGatewayConfig() (*ApplyResult, error) {
 	cfg := map[string]interface{}{}
 	if err := tomlpkg.Unmarshal(data, &cfg); err != nil {
 		result.Message = fmt.Sprintf("Failed to parse config.toml: %v", err)
+		return result, nil
+	}
+
+	// Only a tingly-managed config has anything to clear. This shares the exact
+	// ownership definition with ReadCodexConfig so the read/clear pair cannot
+	// disagree on what "tingly owns".
+	if !isTinglyManagedCodexConfig(cfg) {
+		result.Success = true
+		result.Message = "config.toml has no tingly gateway keys, nothing to clear"
 		return result, nil
 	}
 
