@@ -352,10 +352,10 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 
 			if interactive && len(projectPaths) > 0 {
 				keyboard := buildProjectKeyboard(currentPath, projectPaths)
-				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
 					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					Metadata: buildTrackedReplyMetadata(tgKeyboard),
+					Actions:  keyboard.ToActionSet(),
+					Metadata: trackActionMenuMetadata(),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send project list")
@@ -774,10 +774,10 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 			caps := imbot.GetPlatformCapabilities(string(ctx.Platform))
 			if ctx.IsDirectMessage && caps != nil && caps.SupportsInteraction() {
 				keyboard := buildResumeKeyboard(sessions)
-				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
 					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					Metadata: buildTrackedReplyMetadata(tgKeyboard),
+					Actions:  keyboard.ToActionSet(),
+					Metadata: trackActionMenuMetadata(),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send resume list with keyboard")

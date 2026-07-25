@@ -13,7 +13,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
-	"github.com/tingly-dev/tingly-box/imbot/interaction"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
@@ -380,9 +379,19 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		return nil, err
 	}
 
-	// Check for interactive card (keyboard)
+	// Interactive controls: prefer the neutral action set, fall back to the
+	// deprecated pre-rendered payload in Metadata["replyMarkup"].
+	if !opts.Actions.IsEmpty() {
+		return b.sendActionCard(ctx, target, opts, opts.Actions)
+	}
 	if replyMarkup, hasKeyboard := opts.Metadata["replyMarkup"]; hasKeyboard {
-		return b.sendInteractiveCard(ctx, target, opts, replyMarkup)
+		if set := actionSetFromLegacyMarkup(replyMarkup); !set.IsEmpty() {
+			b.Logger().Debug("sendText: metadata[\"replyMarkup\"] is deprecated, use SendMessageOptions.Actions")
+			return b.sendActionCard(ctx, target, opts, set)
+		}
+		// Unrecognised shape. Historically this produced a card with no
+		// buttons at all; say so rather than shipping a mutilated card.
+		b.Logger().Warn("sendText: metadata[\"replyMarkup\"] has an unsupported shape %T, actions dropped", replyMarkup)
 	}
 
 	// Regular text message using SDK builder
@@ -446,122 +455,6 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		MessageID: messageID,
 		Timestamp: 0,
 	}, nil
-}
-
-// sendInteractiveCard sends an interactive card with buttons
-func (b *Bot) sendInteractiveCard(ctx context.Context, target string, opts *core.SendMessageOptions, replyMarkup interface{}) (*core.SendResult, error) {
-	b.Logger().Debug("sendInteractiveCard called: target=%s", target)
-
-	// Safety checks
-	if b.client == nil {
-		return nil, fmt.Errorf("bot client is nil")
-	}
-	if b.client.Im == nil {
-		return nil, fmt.Errorf("client.Im is nil")
-	}
-
-	card := b.buildInteractiveCard(opts.Text, replyMarkup)
-	cardJson, err := card.String()
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize card: %w", err)
-	}
-
-	msgType := "interactive"
-	b.Logger().Debug("Sending card: type=%s", msgType)
-
-	// Use SDK builder pattern
-	req := larkim.NewCreateMessageReqBuilder().
-		ReceiveIdType(getReceiveIdType(target)).
-		Body(larkim.NewCreateMessageReqBodyBuilder().
-			ReceiveId(target).
-			MsgType(msgType).
-			Content(cardJson).
-			Build()).
-		Build()
-
-	b.Logger().Debug("Sending card request: target=%s, receiveIdType=%s", target, getReceiveIdType(target))
-	resp, err := b.client.Im.Message.Create(ctx, req)
-	if err != nil {
-		b.Logger().Error("Failed to send card: %v", err)
-		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
-	}
-
-	// Check if the API call was successful (code 0)
-	if resp.Code != 0 {
-		b.Logger().Error("API returned error code: %d, msg: %s", resp.Code, resp.Msg)
-		return nil, core.NewBotError(core.ErrPlatformError, fmt.Sprintf("API error: %s", resp.Msg), false)
-	}
-
-	b.UpdateLastActivity()
-	messageID := b.extractMessageIDFromResponse(resp)
-	b.Logger().Info("Card sent successfully: ID=%s", messageID)
-	return &core.SendResult{
-		MessageID: messageID,
-		Timestamp: 0,
-	}, nil
-}
-
-// buildInteractiveCard builds a Lark interactive card from text and keyboard markup
-func (b *Bot) buildInteractiveCard(text string, replyMarkup interface{}) *larkcard.MessageCard {
-	elements := []larkcard.MessageCardElement{
-		larkcard.NewMessageCardDiv().
-			Text(larkcard.NewMessageCardLarkMd().Content(text)),
-	}
-
-	// Convert keyboard markup to action buttons
-	// Try to convert from InlineKeyboardMarkup or map format
-	var buttons []larkcard.MessageCardActionElement
-
-	// Handle InlineKeyboardMarkup type
-	if kb, ok := replyMarkup.(interaction.InlineKeyboardMarkup); ok {
-		for _, row := range kb.InlineKeyboard {
-			for _, btn := range row {
-				button := larkcard.NewMessageCardEmbedButton().
-					Text(larkcard.NewMessageCardPlainText().Content(btn.Text)).
-					Type(larkcard.MessageCardButtonTypeDefault).
-					Value(map[string]interface{}{
-						"callback": btn.CallbackData,
-					})
-				buttons = append(buttons, button)
-			}
-		}
-	} else if kbMap, ok := replyMarkup.(map[string]interface{}); ok {
-		// Handle map format (from JSON unmarshaling)
-		if inlineKeyboard, ok := kbMap["inline_keyboard"].([]interface{}); ok {
-			for _, row := range inlineKeyboard {
-				if rowArray, ok := row.([]interface{}); ok {
-					for _, btn := range rowArray {
-						if btnMap, ok := btn.(map[string]interface{}); ok {
-							buttonText, _ := btnMap["text"].(string)
-							callbackData, _ := btnMap["callback_data"].(string)
-
-							button := larkcard.NewMessageCardEmbedButton().
-								Text(larkcard.NewMessageCardPlainText().Content(buttonText)).
-								Type(larkcard.MessageCardButtonTypeDefault).
-								Value(map[string]interface{}{
-									"callback": callbackData,
-								})
-							buttons = append(buttons, button)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if len(buttons) > 0 {
-		layout := larkcard.MessageCardActionLayoutFlow
-		action := larkcard.NewMessageCardAction().
-			Layout(&layout).
-			Actions(buttons)
-		elements = append(elements, action)
-	}
-
-	wideScreen := true
-	return larkcard.NewMessageCard().
-		Config(larkcard.NewMessageCardConfig().WideScreenMode(wideScreen)).
-		Elements(elements).
-		Build()
 }
 
 // sendMedia sends media

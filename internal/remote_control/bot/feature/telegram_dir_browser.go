@@ -13,6 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
+	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 const (
@@ -379,11 +380,16 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 		return "", err
 	}
 
-	// Try to cast bot to TelegramBot for editing
+	// Try to cast bot to TelegramBot for editing.
+	//
+	// TODO(phase-3): this is the last place that still needs a Telegram
+	// payload, because in-place message editing has not been lifted to a
+	// capability interface yet. Seam 4 (MessageRestater) replaces it, at which
+	// point Feishu and tingly get editing too.
 	tgBot, ok := imbot.AsTelegramBot(bot)
 	if ok && editMessageID != "" && state.MessageID != "" {
 		// Edit existing message
-		tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+		tgKeyboard := imbottelegram.BuildInlineKeyboard(kb.BuildActions())
 		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, &tgKeyboard); err != nil {
 			logrus.WithError(err).Warn("Failed to edit message, sending new one")
 			// Fall through to send new message
@@ -392,16 +398,11 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 		}
 	}
 
-	// Convert keyboard for Telegram
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-
-	// Send new message with keyboard
+	// Send new message with the action set; each platform renders it itself.
 	result, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
-		},
+		Actions:   kb.BuildActions(),
 	})
 	if err != nil {
 		return "", err

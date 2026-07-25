@@ -458,11 +458,9 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 		}
 
 		// Set reply markup (inline keyboard) only on last chunk
-		if opts.Metadata != nil && i == len(chunks)-1 {
-			if markup, ok := opts.Metadata["replyMarkup"]; ok {
-				if replyMarkup, ok := markup.(models.InlineKeyboardMarkup); ok {
-					params.ReplyMarkup = &replyMarkup
-				}
+		if i == len(chunks)-1 {
+			if markup := b.resolveReplyMarkup(opts); markup != nil {
+				params.ReplyMarkup = markup
 			}
 		}
 

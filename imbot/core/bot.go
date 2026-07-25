@@ -51,14 +51,27 @@ type Bot interface {
 
 // SendMessageOptions represents options for sending a message
 type SendMessageOptions struct {
-	Text      string                 `json:"text,omitempty"`
-	Media     []MediaAttachment      `json:"media,omitempty"`
-	ReplyTo   string                 `json:"replyTo,omitempty"`
-	ThreadID  string                 `json:"threadId,omitempty"`
-	ParseMode ParseMode              `json:"parseMode,omitempty"`
-	Entities  []Entity               `json:"entities,omitempty"` // Telegram message entities (alternative to ParseMode)
-	Silent    bool                   `json:"silent,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Text      string            `json:"text,omitempty"`
+	Media     []MediaAttachment `json:"media,omitempty"`
+	ReplyTo   string            `json:"replyTo,omitempty"`
+	ThreadID  string            `json:"threadId,omitempty"`
+	ParseMode ParseMode         `json:"parseMode,omitempty"`
+	Entities  []Entity          `json:"entities,omitempty"` // Telegram message entities (alternative to ParseMode)
+	Silent    bool              `json:"silent,omitempty"`
+
+	// Actions attaches message-scoped interactive controls in a
+	// platform-neutral form. Each platform renders it natively (Telegram
+	// inline keyboard, Feishu card buttons, ...) or degrades per each action's
+	// FallbackPolicy. See action.go.
+	//
+	// This supersedes Metadata["replyMarkup"], which required the caller to
+	// pre-render a platform payload. That path still works for one release and
+	// logs a deprecation warning.
+	Actions *ActionSet `json:"actions,omitempty"`
+
+	// Metadata carries platform-specific escape-hatch values. It is no longer
+	// the transport for interactive payloads — use Actions.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // SendResult represents the result of sending a message

@@ -172,9 +172,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		ParseMode: imbot.ParseModeMarkdown,
 	}
 	if supportsKeyboard {
-		opts.Metadata = map[string]interface{}{
-			"replyMarkup": imbot.BuildTelegramActionKeyboard(keyboard),
-		}
+		opts.Actions = keyboard.ToActionSet()
 	}
 	msg, err := bot.SendMessage(context.Background(), chatID, opts)
 	if err != nil {

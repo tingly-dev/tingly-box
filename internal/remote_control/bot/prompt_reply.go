@@ -32,13 +32,7 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 				Text:      text,
 				ParseMode: imbot.ParseModeMarkdown,
 			}
-			// Forward context_token from the incoming message (required by
-			// Weixin), mirroring BotHandler.SendText.
-			if msg.Metadata != nil {
-				if ct, ok := msg.Metadata["context_token"].(string); ok {
-					opts.Metadata = map[string]interface{}{"context_token": ct}
-				}
-			}
+			forwardReplyContext(opts, msg)
 			_, _ = bot.SendMessage(context.Background(), chatID, opts)
 		}
 

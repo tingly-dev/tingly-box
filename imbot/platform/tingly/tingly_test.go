@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	tgmodels "github.com/go-telegram/bot/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/imbot/core"
@@ -71,15 +70,23 @@ func TestBot_SendWithGenericKeyboard(t *testing.T) {
 	assert.Equal(t, "ia:1:approve", events[0].Keyboard.Rows[0][0].CallbackData)
 }
 
-func TestBot_SendWithTelegramKeyboard(t *testing.T) {
+// TestBot_SendWithActions covers the current contract: callers hand over a
+// neutral action set and the platform renders it.
+//
+// This replaces TestBot_SendWithTelegramKeyboard, which asserted that tingly
+// could decode a go-telegram InlineKeyboardMarkup out of the metadata bag.
+// That decoding existed only because remote_control pre-rendered a Telegram
+// payload for every platform — the coupling SendMessageOptions.Actions
+// removes — so the behaviour it pinned is gone on purpose.
+func TestBot_SendWithActions(t *testing.T) {
 	bot, tr := newReadyBot(t)
 
-	tgKB := tgmodels.InlineKeyboardMarkup{InlineKeyboard: [][]tgmodels.InlineKeyboardButton{
-		{{Text: "Yes", CallbackData: "yes"}, {Text: "No", CallbackData: "no"}},
-	}}
 	_, err := bot.SendMessage(context.Background(), "chat-1", &core.SendMessageOptions{
-		Text:     "ok?",
-		Metadata: map[string]any{"replyMarkup": tgKB},
+		Text: "ok?",
+		Actions: core.NewActionSet().AddRow(
+			core.Action{Label: "Yes", CallbackData: "yes"},
+			core.Action{Label: "No", CallbackData: "no"},
+		),
 	})
 	require.NoError(t, err)
 
@@ -91,6 +98,26 @@ func TestBot_SendWithTelegramKeyboard(t *testing.T) {
 		{Label: "Yes", CallbackData: "yes"},
 		{Label: "No", CallbackData: "no"},
 	}, events[0].Keyboard.Rows[0])
+}
+
+// TestBot_SendWithLegacyKeyboardMetadata pins the deprecated compatibility
+// path, which stays for one release while call sites migrate.
+func TestBot_SendWithLegacyKeyboardMetadata(t *testing.T) {
+	bot, tr := newReadyBot(t)
+
+	kb := itx.InlineKeyboardMarkup{InlineKeyboard: [][]itx.InlineKeyboardButton{
+		{{Text: "Yes", CallbackData: "yes"}},
+	}}
+	_, err := bot.SendMessage(context.Background(), "chat-1", &core.SendMessageOptions{
+		Text:     "ok?",
+		Metadata: map[string]any{"replyMarkup": kb},
+	})
+	require.NoError(t, err)
+
+	events := tr.EventsForChat("chat-1")
+	require.Len(t, events, 1)
+	require.NotNil(t, events[0].Keyboard)
+	assert.Equal(t, []Button{{Label: "Yes", CallbackData: "yes"}}, events[0].Keyboard.Rows[0])
 }
 
 func TestBot_EditDeleteReact(t *testing.T) {

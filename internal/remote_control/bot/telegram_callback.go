@@ -231,12 +231,12 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 
 	// Send prompt with cancel keyboard
 	kb := feature.BuildCancelKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      BuildCustomPathPrompt(),
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
+		Actions:   kb.BuildActions(),
+		Metadata:  trackActionMenuMetadata(),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send custom path prompt")
@@ -262,12 +262,12 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, false, "")
 
 	kb, text := feature.BuildCreateConfirmKeyboard(path)
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
+		Actions:   kb.BuildActions(),
+		Metadata:  trackActionMenuMetadata(),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send create confirmation")

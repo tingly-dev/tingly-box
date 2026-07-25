@@ -3,6 +3,8 @@ package interaction
 import (
 	"fmt"
 	"strings"
+
+	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
 // InlineKeyboardButton represents a button in an inline keyboard
@@ -161,4 +163,31 @@ func FormatDirButton(name string, maxLen int) string {
 		return fmt.Sprintf("📁 %s", name)
 	}
 	return fmt.Sprintf("📁 %s...", name[:maxLen-3])
+}
+
+// ToActionSet converts a legacy inline-keyboard markup into the neutral
+// core.ActionSet that SendMessageOptions.Actions takes.
+//
+// This is the bridge that lets existing keyboard-building code migrate off
+// per-platform pre-rendering without being rewritten: build the keyboard as
+// before, then hand over an action set instead of a Telegram payload.
+func (m InlineKeyboardMarkup) ToActionSet() *core.ActionSet {
+	set := core.NewActionSet()
+	for _, row := range m.InlineKeyboard {
+		actions := make([]core.Action, 0, len(row))
+		for _, btn := range row {
+			actions = append(actions, core.Action{
+				Label:        btn.Text,
+				CallbackData: btn.CallbackData,
+				URL:          btn.URL,
+			})
+		}
+		set.AddRow(actions...)
+	}
+	return set
+}
+
+// BuildActions returns the built keyboard directly as a neutral action set.
+func (b *KeyboardBuilder) BuildActions() *core.ActionSet {
+	return b.Build().ToActionSet()
 }

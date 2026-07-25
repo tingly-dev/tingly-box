@@ -3,73 +3,56 @@ package tingly
 import (
 	"time"
 
-	tgmodels "github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	itx "github.com/tingly-dev/tingly-box/imbot/interaction"
 )
 
-// decodeReplyMarkup extracts an inline keyboard from outbound message
-// metadata. Production callers stuff one of two shapes into
-// metadata["replyMarkup"]:
+// decodeActions extracts the outbound keyboard for the test harness.
 //
-//   - imbot.InlineKeyboardMarkup (from the generic interaction package), or
-//   - models.InlineKeyboardMarkup (Telegram-specific, returned by
-//     imbot.BuildTelegramActionKeyboard, used widely by remote_control/bot).
-//
-// We accept both shapes so tingly faithfully captures keyboards regardless
-// of which API the caller used.
-func decodeReplyMarkup(meta map[string]interface{}) *Keyboard {
-	if meta == nil {
+// It prefers the neutral SendMessageOptions.Actions and falls back to the
+// deprecated Metadata["replyMarkup"] convention while call sites migrate.
+// The previous version of this function accepted two shapes — the generic
+// interaction markup and the Telegram-specific one — because remote_control
+// pre-rendered a Telegram payload for every platform. That is exactly the
+// coupling the Actions field removes, so only the legacy generic shape is
+// still decoded here.
+func decodeActions(opts *core.SendMessageOptions) *Keyboard {
+	if !opts.Actions.IsEmpty() {
+		return convertActionSet(opts.Actions)
+	}
+	if opts.Metadata == nil {
 		return nil
 	}
-	raw, ok := meta["replyMarkup"]
+	raw, ok := opts.Metadata["replyMarkup"]
 	if !ok {
 		return nil
 	}
 	switch m := raw.(type) {
+	case *core.ActionSet:
+		return convertActionSet(m)
 	case itx.InlineKeyboardMarkup:
-		return convertGenericKeyboard(m)
+		return convertActionSet(m.ToActionSet())
 	case *itx.InlineKeyboardMarkup:
 		if m == nil {
 			return nil
 		}
-		return convertGenericKeyboard(*m)
-	case tgmodels.InlineKeyboardMarkup:
-		return convertTelegramKeyboard(m)
-	case *tgmodels.InlineKeyboardMarkup:
-		if m == nil {
-			return nil
-		}
-		return convertTelegramKeyboard(*m)
+		return convertActionSet(m.ToActionSet())
 	}
 	return nil
 }
 
-func convertGenericKeyboard(m itx.InlineKeyboardMarkup) *Keyboard {
-	out := &Keyboard{Rows: make([][]Button, 0, len(m.InlineKeyboard))}
-	for _, row := range m.InlineKeyboard {
-		buttons := make([]Button, 0, len(row))
-		for _, b := range row {
-			buttons = append(buttons, Button{
-				Label:        b.Text,
-				CallbackData: b.CallbackData,
-				URL:          b.URL,
-			})
-		}
-		out.Rows = append(out.Rows, buttons)
+func convertActionSet(set *core.ActionSet) *Keyboard {
+	if set.IsEmpty() {
+		return nil
 	}
-	return out
-}
-
-func convertTelegramKeyboard(m tgmodels.InlineKeyboardMarkup) *Keyboard {
-	out := &Keyboard{Rows: make([][]Button, 0, len(m.InlineKeyboard))}
-	for _, row := range m.InlineKeyboard {
+	out := &Keyboard{Rows: make([][]Button, 0, len(set.Rows))}
+	for _, row := range set.Rows {
 		buttons := make([]Button, 0, len(row))
-		for _, b := range row {
+		for _, a := range row {
 			buttons = append(buttons, Button{
-				Label:        b.Text,
-				CallbackData: b.CallbackData,
-				URL:          b.URL,
+				Label:        a.Label,
+				CallbackData: a.CallbackData,
+				URL:          a.URL,
 			})
 		}
 		out.Rows = append(out.Rows, buttons)

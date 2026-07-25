@@ -53,15 +53,7 @@ func (h *BotHandler) SendFile(ctx context.Context, hCtx HandlerContext, filePath
 		Media: []imbot.MediaAttachment{attachment},
 	}
 
-	// Forward context_token from incoming message metadata (required by Weixin)
-	if hCtx.Message.Metadata != nil {
-		if ct, ok := hCtx.Message.Metadata["context_token"].(string); ok {
-			if opts.Metadata == nil {
-				opts.Metadata = make(map[string]interface{})
-			}
-			opts.Metadata["context_token"] = ct
-		}
-	}
+	forwardReplyContext(opts, hCtx.Message)
 
 	_, err = hCtx.Bot.SendMessage(ctx, hCtx.ChatID, opts)
 	if err != nil {

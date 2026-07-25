@@ -245,13 +245,12 @@ func claudePermissionPolicy(sessionMode string) (string, bool) {
 // successful execution. Replaces the legacy CompletionCallback.OnComplete.
 func (e *ClaudeCodeExecutor) sendTaskDoneCard(hCtx HandlerContext, meta *ResponseMeta) {
 	kb := feature.BuildActionKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-	actionCard := feature.BuildActionCard()
 
 	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(meta.AgentType, meta.ProjectPath)
 	if _, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:     doneText,
-		Metadata: buildTrackedActionMenuMetadata(hCtx, tgKeyboard, actionCard),
+		Actions:  kb.BuildActions(),
+		Metadata: trackActionMenuMetadata(),
 	}); err != nil {
 		logrus.WithError(err).Warn("ClaudeCodeExecutor: failed to send Task done card")
 	}

@@ -195,7 +195,7 @@ func (t *InProcessTransport) Send(ctx context.Context, target string, opts *core
 		if len(media) > 0 && text == "" {
 			kind = EventMedia
 		}
-		kb = decodeReplyMarkup(opts.Metadata)
+		kb = decodeActions(opts)
 	}
 	t.record(Event{
 		Kind:      kind,

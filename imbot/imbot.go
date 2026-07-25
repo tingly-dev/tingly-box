@@ -443,3 +443,36 @@ func NewCommandRegistry() *command.CommandRegistry {
 func NewHandlerContext(bot Bot, chatID, senderID string, platform Platform) *command.HandlerContext {
 	return command.NewHandlerContext(bot, chatID, senderID, core.Platform(platform))
 }
+
+// Message actions — the neutral outbound interactive payload.
+//
+// Callers build an ActionSet and hand it to SendMessageOptions.Actions; each
+// platform renders it natively. This replaces the old pattern of rendering a
+// Telegram payload at the call site and passing it through Metadata.
+// Platform-only capabilities do not appear here — they come from constructors
+// in the platform packages (see imbot/platform/telegram). Rationale in
+// imbot/core/action.go.
+type (
+	// Action is one message-scoped interactive control.
+	Action = core.Action
+	// ActionSet is a laid-out group of message-scoped actions.
+	ActionSet = core.ActionSet
+	// ActionKind is the neutral semantic of an action.
+	ActionKind = core.ActionKind
+	// FallbackPolicy declares what happens on platforms that cannot render an action.
+	FallbackPolicy = core.FallbackPolicy
+)
+
+const (
+	ActionCallback    = core.ActionCallback
+	ActionOpenURL     = core.ActionOpenURL
+	ActionOpenMiniApp = core.ActionOpenMiniApp
+
+	FallbackDrop  = core.FallbackDrop
+	FallbackAsURL = core.FallbackAsURL
+)
+
+// NewActionSet creates an empty action set.
+func NewActionSet() *core.ActionSet {
+	return core.NewActionSet()
+}

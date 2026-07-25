@@ -79,9 +79,7 @@ func TestE2E_TelegramBot_RealBot(t *testing.T) {
 		msg, err := bot.SendMessage(context.Background(), testChatID, &imbot.SendMessageOptions{
 			Text:      "🔐 *Tool Permission Request*\n\nTool: `Bash`\n\nArgs: \n\tcmd: `ls -la...`\n\nReason: test_permission",
 			ParseMode: imbot.ParseModeMarkdown,
-			Metadata: map[string]interface{}{
-				"replyMarkup": imbot.BuildTelegramActionKeyboard(kb.Build()),
-			},
+			Actions:   kb.BuildActions(),
 		})
 
 		if err != nil {
