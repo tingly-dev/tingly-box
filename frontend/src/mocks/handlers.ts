@@ -2668,6 +2668,15 @@ export const handlers = [
         })
     }),
 
+    http.get('/api/v1/config/codex', () => {
+        return HttpResponse.json({
+            success: true,
+            exists: true,
+            preferences: { model_reasoning_effort: 'high' },
+            writeCatalog: true,
+        })
+    }),
+
     http.get('/api/v1/scenario/:scenario/profiles', ({ params }) => {
         const { scenario } = params as { scenario: string }
         if (scenario === 'claude_code') {

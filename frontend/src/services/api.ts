@@ -502,6 +502,13 @@ export const api = {
         return controlApi((client, headers) => (client as any).GET('/api/v1/config/claude', {headers}));
     },
 
+    // Placeholder for the Codex applied-config endpoint. Uses the generated
+    // client's runtime transport; remove the casts after the next OpenAPI
+    // client regeneration includes this route.
+    getAppliedCodexConfig: async (): Promise<any> => {
+        return controlApi((client, headers) => (client as any).GET('/api/v1/config/codex', {headers}));
+    },
+
     getProfiles: async (scenario: string): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/profiles', {
             headers,

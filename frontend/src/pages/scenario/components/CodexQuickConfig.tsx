@@ -29,6 +29,25 @@ export function defaultCodexPrefs(): CodexPrefs {
     return { model_reasoning_effort: 'medium' };
 }
 
+// Merge a previously-applied prefs object over the current defaults so
+// reopening the Codex config modal restores durable user choices rather than
+// resetting to defaults every time. Only the four whitelisted keys are
+// considered; anything else on `applied` is ignored. Undefined fields on
+// `applied` defer to `defaults`, matching the backend's "empty = omit" stance.
+//
+// Unlike Claude Code (where model slots must always come from routing rules),
+// Codex has no routing-derived prefs, so a plain shallow merge is correct.
+export function mergeSavedCodexPrefs(applied: CodexPrefs = {}): CodexPrefs {
+    const merged: CodexPrefs = { ...defaultCodexPrefs() };
+    (['model_reasoning_effort', 'model_reasoning_summary', 'model_verbosity', 'model_supports_reasoning_summaries'] as const).forEach((key) => {
+        const v = applied[key];
+        if (v !== undefined && v !== '') {
+            merged[key] = v;
+        }
+    });
+    return merged;
+}
+
 type PrefsKey = keyof CodexPrefs;
 type Kind = 'enum' | 'bool';
 type Lang = 'zh' | 'en';
