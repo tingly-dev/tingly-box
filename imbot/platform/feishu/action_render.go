@@ -105,18 +105,57 @@ func buildActionButton(action core.Action) (larkcard.MessageCardActionElement, b
 			MultiUrl(larkcard.NewMessageCardURL().Url(action.URL)), true
 	}
 
-	if action.CallbackData == "" {
+	payload := action.EffectivePayload()
+	if payload.IsEmpty() {
 		// Nothing to send back and nowhere to go.
 		return nil, false
 	}
 
+	// A Feishu button value is arbitrary JSON, so the payload's segments go in
+	// as segments — no length budget, no separator to escape. The flat form is
+	// carried alongside only for consumers still reading callback_data.
 	return larkcard.NewMessageCardEmbedButton().
 		Text(larkcard.NewMessageCardPlainText().Content(action.Label)).
 		Type(larkcard.MessageCardButtonTypeDefault).
 		Value(map[string]interface{}{
-			"callback": action.CallbackData,
-			"actionId": action.ID,
+			payloadValueKey: []string(payload),
+			"callback":      payload.FlatCallbackData(),
+			"actionId":      action.ID,
 		}), true
+}
+
+// payloadValueKey is where a button's payload segments live inside the Feishu
+// button value object.
+const payloadValueKey = "payload"
+
+// payloadFromButtonValue reads the segments back out of an inbound card action
+// value, accepting the flat callback string from buttons rendered by earlier
+// releases.
+// Values that have been through the wire arrive as []interface{}; values read
+// back before serialisation are still []string. Both are accepted so a test
+// exercises the same decoder production does.
+func payloadFromButtonValue(value map[string]interface{}) core.Payload {
+	switch raw := value[payloadValueKey].(type) {
+	case []string:
+		return core.Payload(raw)
+	case []interface{}:
+		segments := make(core.Payload, 0, len(raw))
+		for _, item := range raw {
+			s, ok := item.(string)
+			if !ok {
+				return nil
+			}
+			segments = append(segments, s)
+		}
+		return segments
+	}
+	// A button rendered before payload segments existed carries only the
+	// joined string. It cannot represent a segment containing ":", but no
+	// such button was expressible then either.
+	if flat, ok := value["callback"].(string); ok {
+		return core.PayloadFromCallbackData(flat)
+	}
+	return nil
 }
 
 // actionSetFromLegacyMarkup accepts the shapes that used to be pushed through

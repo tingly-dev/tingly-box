@@ -56,7 +56,7 @@ func SwitchInlineButton(label, query string) core.Action {
 // deprecated Metadata["replyMarkup"] convention.
 func (b *Bot) resolveReplyMarkup(opts *core.SendMessageOptions) *models.InlineKeyboardMarkup {
 	if !opts.Actions.IsEmpty() {
-		markup := BuildInlineKeyboard(opts.Actions)
+		markup := b.BuildInlineKeyboard(opts.Actions)
 		return &markup
 	}
 
@@ -77,7 +77,7 @@ func (b *Bot) resolveReplyMarkup(opts *core.SendMessageOptions) *models.InlineKe
 	case *models.InlineKeyboardMarkup:
 		return m
 	case interaction.InlineKeyboardMarkup:
-		markup := BuildInlineKeyboard(m.ToActionSet())
+		markup := b.BuildInlineKeyboard(m.ToActionSet())
 		return &markup
 	}
 	return nil
@@ -86,12 +86,16 @@ func (b *Bot) resolveReplyMarkup(opts *core.SendMessageOptions) *models.InlineKe
 // BuildInlineKeyboard renders a neutral action set as a Telegram inline
 // keyboard. Actions this platform cannot express are dropped here rather than
 // at the call site — that is the whole point of the seam.
-func BuildInlineKeyboard(set *core.ActionSet) models.InlineKeyboardMarkup {
+//
+// It is a bot method because encoding a payload into callback_data may need to
+// park it in that bot's vault; the wire form of a button is bot-scoped state,
+// not a pure function of the action.
+func (b *Bot) BuildInlineKeyboard(set *core.ActionSet) models.InlineKeyboardMarkup {
 	var rows [][]models.InlineKeyboardButton
 	for _, row := range set.Rows {
 		var buttons []models.InlineKeyboardButton
 		for _, action := range row {
-			if btn, ok := buildButton(action); ok {
+			if btn, ok := b.buildButton(action); ok {
 				buttons = append(buttons, btn)
 			}
 		}
@@ -102,7 +106,7 @@ func BuildInlineKeyboard(set *core.ActionSet) models.InlineKeyboardMarkup {
 	return models.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
 
-func buildButton(action core.Action) (models.InlineKeyboardButton, bool) {
+func (b *Bot) buildButton(action core.Action) (models.InlineKeyboardButton, bool) {
 	btn := models.InlineKeyboardButton{Text: action.Label}
 
 	// Tier 3 first: a Telegram-specific shape wins over the neutral fields.
@@ -119,9 +123,9 @@ func buildButton(action core.Action) (models.InlineKeyboardButton, bool) {
 		}
 	}
 
-	switch {
-	case action.CallbackData != "":
-		btn.CallbackData = action.CallbackData
+	switch payload := action.EffectivePayload(); {
+	case !payload.IsEmpty():
+		btn.CallbackData = b.callbacks.encodeCallbackData(payload)
 	case action.URL != "":
 		btn.URL = action.URL
 	default:
@@ -143,7 +147,7 @@ func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.Restat
 
 	var markup *models.InlineKeyboardMarkup
 	if !opts.Actions.IsEmpty() {
-		kb := BuildInlineKeyboard(opts.Actions)
+		kb := b.BuildInlineKeyboard(opts.Actions)
 		markup = &kb
 	}
 

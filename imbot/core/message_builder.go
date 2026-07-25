@@ -133,6 +133,16 @@ func (b *MessageBuilder) WithMetadataMap(metadata map[string]interface{}) *Messa
 	return b
 }
 
+// WithPayload marks the message as an action firing and records the segments
+// it carries. It also sets the legacy is_callback / callback_data metadata so
+// consumers that have not migrated keep working.
+func (b *MessageBuilder) WithPayload(payload Payload) *MessageBuilder {
+	b.msg.Payload = payload
+	return b.
+		WithMetadata("is_callback", true).
+		WithMetadata("callback_data", payload.FlatCallbackData())
+}
+
 // WithRawMetadata adds raw platform data to metadata under a namespaced key
 func (b *MessageBuilder) WithRawMetadata(key string, value interface{}) *MessageBuilder {
 	return b.WithMetadata(string(b.platform)+":"+key, value)

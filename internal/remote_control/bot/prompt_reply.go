@@ -36,13 +36,11 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 			_, _ = bot.SendMessage(context.Background(), chatID, opts)
 		}
 
-		if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
-			callbackData, _ := msg.Metadata["callback_data"].(string)
-			parts := imbot.ParseCallbackData(callbackData)
-			if len(parts) == 0 || parts[0] != "perm" {
+		if msg.IsCallback() {
+			if msg.Payload.Name() != "perm" {
 				return false
 			}
-			return handlePromptCallback(prompter, send, msg.Sender.ID, parts, true)
+			return handlePromptCallback(prompter, send, msg.Sender.ID, msg.Payload, true)
 		}
 
 		if !msg.IsTextContent() {
@@ -65,22 +63,21 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 // remote-agent BotHandler keeps its own delegating paths for the standalone
 // (host-less) mode used by the CLI and the test harness.
 
-// handlePromptCallback routes one parsed "perm" callback (parts[0] == "perm")
-// to the prompter's pending request. send delivers user-facing feedback to the
-// originating chat.
+// handlePromptCallback routes one "perm" callback payload (segment 0 ==
+// "perm") to the prompter's pending request. send delivers user-facing
+// feedback to the originating chat.
 //
 // claimUnknown controls who answers for an expired/foreign request ID: the
 // terminal consumer (remote agent) passes true and tells the user the request
 // expired; a first-in-line consumer (channel) passes false so the callback
 // falls through to the next consumer, which may own the request.
-func handlePromptCallback(prompter *imchannel.IMPrompter, send func(string), senderID string, parts []string, claimUnknown bool) bool {
-	if len(parts) < 3 {
-		logrus.WithField("parts", parts).Warn("Invalid permission callback data")
+func handlePromptCallback(prompter *imchannel.IMPrompter, send func(string), senderID string, payload imbot.Payload, claimUnknown bool) bool {
+	subAction := payload.Arg(1)
+	requestID := payload.Arg(2)
+	if subAction == "" || requestID == "" {
+		logrus.WithField("payload", payload).Warn("Invalid permission callback data")
 		return claimUnknown
 	}
-
-	subAction := parts[1]
-	requestID := parts[2]
 
 	// Check if the request exists
 	pendingReq, exists := prompter.GetPendingRequest(requestID)
@@ -102,13 +99,13 @@ func handlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 
 	case "option":
 		// Handle multi-option selection (e.g., AskUserQuestion)
-		// Callback data format: perm:option:reqID:qIdx:optIdx
-		if len(parts) < 5 {
-			logrus.WithField("parts", parts).Warn("Invalid option callback data")
+		// Payload segments: perm, option, reqID, qIdx, optIdx
+		qIdxStr := payload.Arg(3)
+		optIdxStr := payload.Arg(4)
+		if qIdxStr == "" || optIdxStr == "" {
+			logrus.WithField("payload", payload).Warn("Invalid option callback data")
 			return true
 		}
-		qIdxStr := parts[3]
-		optIdxStr := parts[4]
 
 		// Resolve question text and option label from the pending request
 		var questionText, optionLabel string
@@ -129,7 +126,7 @@ func handlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 			}
 		}
 		if questionText == "" || optionLabel == "" {
-			logrus.WithField("parts", parts).Warn("Could not resolve question or option from callback data")
+			logrus.WithField("payload", payload).Warn("Could not resolve question or option from callback data")
 			send("⚠️ Failed to process selection.")
 			return true
 		}

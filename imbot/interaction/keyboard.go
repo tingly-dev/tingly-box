@@ -9,7 +9,14 @@ import (
 
 // InlineKeyboardButton represents a button in an inline keyboard
 type InlineKeyboardButton struct {
-	Text         string `json:"text"`
+	Text string `json:"text"`
+	// Payload is what the button sends back. Prefer it over CallbackData: it
+	// is not bound to any platform's wire encoding, so a segment may be as
+	// long as it needs to be and may contain any character.
+	Payload core.Payload `json:"payload,omitempty"`
+	// CallbackData is the flat colon-joined form.
+	//
+	// Deprecated: use Payload. See imbot/core/payload.go.
 	CallbackData string `json:"callback_data,omitempty"`
 	URL          string `json:"url,omitempty"`
 }
@@ -46,7 +53,20 @@ func (b *KeyboardBuilder) AddButton(button InlineKeyboardButton) *KeyboardBuilde
 	return b
 }
 
-// CallbackButton creates a callback button
+// ActionButton creates a button that sends back the given payload segments.
+// This is the form to use: the segments stay segments all the way to the
+// platform, which is what lets a button carry a full filesystem path.
+func ActionButton(text string, segments ...string) InlineKeyboardButton {
+	return InlineKeyboardButton{
+		Text:    text,
+		Payload: core.NewPayload(segments...),
+	}
+}
+
+// CallbackButton creates a callback button from a pre-joined string.
+//
+// Deprecated: use ActionButton. Joining the segments yourself reintroduces
+// the separator collision and the 64-byte budget this seam removed.
 func CallbackButton(text, callbackData string) InlineKeyboardButton {
 	return InlineKeyboardButton{
 		Text:         text,
@@ -137,17 +157,12 @@ func FormatCallbackData(action string, data ...string) string {
 	return strings.Join(parts, ":")
 }
 
-// FormatDirPath formats a directory path for callback data (handles colons in paths)
-func FormatDirPath(path string) string {
-	// Replace problematic characters for callback data
-	// Telegram callback data max length is 64 bytes
-	return strings.ReplaceAll(path, ":", "\x00")
-}
-
-// ParseDirPath parses a directory path from callback data
-func ParseDirPath(encoded string) string {
-	return strings.ReplaceAll(encoded, "\x00", ":")
-}
+// FormatDirPath and ParseDirPath used to live here: they swapped ":" for a NUL
+// byte so a path could survive the colon-joined callback encoding. Both are
+// gone. A path now travels as its own payload segment, so there is no
+// separator to collide with — and the NUL they produced was invalid inside the
+// JSON that Feishu button values are made of, which made the escape a bug on
+// every platform except the one it was written for.
 
 // TruncateText truncates text to maxLen with ellipsis
 func TruncateText(text string, maxLen int) string {
@@ -178,6 +193,7 @@ func (m InlineKeyboardMarkup) ToActionSet() *core.ActionSet {
 		for _, btn := range row {
 			actions = append(actions, core.Action{
 				Label:        btn.Text,
+				Payload:      btn.Payload,
 				CallbackData: btn.CallbackData,
 				URL:          btn.URL,
 			})

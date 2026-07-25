@@ -7,12 +7,18 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
 )
 
+// testBot is the minimum Bot needed to render a keyboard: a callback vault.
+// Rendering is bot-scoped because encoding a payload may park it.
+func testBot() *Bot {
+	return &Bot{callbacks: newCallbackVault()}
+}
+
 func TestBuildInlineKeyboardPreservesRows(t *testing.T) {
 	set := core.NewActionSet().
 		AddRow(core.Action{Label: "A", CallbackData: "a"}, core.Action{Label: "B", CallbackData: "b"}).
 		AddRow(core.Action{Label: "C", CallbackData: "c"})
 
-	kb := BuildInlineKeyboard(set)
+	kb := testBot().BuildInlineKeyboard(set)
 	if len(kb.InlineKeyboard) != 2 {
 		t.Fatalf("rows = %d, want 2", len(kb.InlineKeyboard))
 	}
@@ -25,7 +31,7 @@ func TestBuildInlineKeyboardPreservesRows(t *testing.T) {
 }
 
 func TestBuildInlineKeyboardURLAction(t *testing.T) {
-	kb := BuildInlineKeyboard(core.NewActionSet().AddRow(
+	kb := testBot().BuildInlineKeyboard(core.NewActionSet().AddRow(
 		core.Action{Label: "Docs", URL: "https://example.test", Kind: core.ActionOpenURL},
 	))
 	if got := kb.InlineKeyboard[0][0].URL; got != "https://example.test" {
@@ -37,7 +43,7 @@ func TestBuildInlineKeyboardURLAction(t *testing.T) {
 // with neither callback data nor a URL, which Telegram rejects outright — and
 // a rejected button fails the whole send, not just the button.
 func TestBuildInlineKeyboardDropsUnsendableAction(t *testing.T) {
-	kb := BuildInlineKeyboard(core.NewActionSet().AddRow(core.Action{Label: "orphan"}))
+	kb := testBot().BuildInlineKeyboard(core.NewActionSet().AddRow(core.Action{Label: "orphan"}))
 	if len(kb.InlineKeyboard) != 0 {
 		t.Errorf("expected the unsendable action to be dropped, got %v", kb.InlineKeyboard)
 	}
@@ -56,7 +62,7 @@ func TestWebAppButton(t *testing.T) {
 		t.Error("the neutral URL must be set so the fallback has something to use")
 	}
 
-	kb := BuildInlineKeyboard(core.NewActionSet().AddRow(action))
+	kb := testBot().BuildInlineKeyboard(core.NewActionSet().AddRow(action))
 	btn := kb.InlineKeyboard[0][0]
 	if btn.WebApp == nil {
 		t.Fatal("expected a web_app button on Telegram")
@@ -70,7 +76,7 @@ func TestWebAppButton(t *testing.T) {
 }
 
 func TestSwitchInlineButton(t *testing.T) {
-	kb := BuildInlineKeyboard(core.NewActionSet().AddRow(SwitchInlineButton("Share", "query")))
+	kb := testBot().BuildInlineKeyboard(core.NewActionSet().AddRow(SwitchInlineButton("Share", "query")))
 	btn := kb.InlineKeyboard[0][0]
 	if btn.SwitchInlineQuery == nil || *btn.SwitchInlineQuery != "query" {
 		t.Errorf("expected switch_inline_query to be set, got %+v", btn)
@@ -82,7 +88,7 @@ func TestKeyboardToActionSetRoundTrip(t *testing.T) {
 		AddRow(interaction.CallbackButton("Yes", "yes"), interaction.CallbackButton("No", "no")).
 		AddRow(interaction.URLButton("Docs", "https://example.test"))
 
-	out := BuildInlineKeyboard(kb.BuildActions())
+	out := testBot().BuildInlineKeyboard(kb.BuildActions())
 	if len(out.InlineKeyboard) != 2 {
 		t.Fatalf("rows = %d, want 2", len(out.InlineKeyboard))
 	}

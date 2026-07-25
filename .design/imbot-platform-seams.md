@@ -109,7 +109,12 @@ func SwitchInlineButton(label, query string) core.Action
 `ActionSet` 保留**行结构**——布局有意义（目录浏览器依赖它），没有行概念的平台可以
 自己 flatten。
 
-兼容期：`Metadata["replyMarkup"]` 保留一个版本，读到时打 deprecation 日志。
+**按钮身份是 `core.Payload`（有序 segment），不是 `callback_data`**（2b 落地）。
+编码是平台自己的事：Feishu 放进 button value 的 JSON 数组，Telegram 能塞进 64 字节
+就 join，塞不下就寄存换短 token。见 §5。
+
+兼容期：`Action.CallbackData` 与 `Metadata["replyMarkup"]` 各保留一个版本，读到时
+打 deprecation 日志。
 
 ### Seam 2 — 回复上下文由 imbot 自己记 ⏳ 计划中
 
@@ -233,10 +238,34 @@ Telegram 在**每一列**都是最紧的。它的约束已经泄漏成全平台�
   **52 字节**就会被 Telegram 拒（`BUTTON_DATA_INVALID`），整条消息发不出去。
 
 **结论：按钮身份不能是 `callback_data`** —— 那是把 Telegram 的传输编码当成了按钮
-的身份。目标形态是 `Action.Payload map[string]any`，由 imbot 负责投递：Feishu 直接
-进 button value；Telegram 先试编码进 64 字节，放不下就存短 token（随消息生命周期
-回收），`callback_data` 只带 `tok:<n>`。届时索引导航、`Dirs` 快照、NUL 编码三样
-全部可删。
+的身份。已落地形态是 `core.Payload`（**有序 segment**，`imbot/core/payload.go`），
+由平台负责投递：Feishu 直接进 button value 的 JSON 数组；Telegram 能 join 进 64
+字节就照旧 join（**线上字节不变**，老键盘继续可用），放不下、含 `:`、或撞上保留前缀
+就寄存进 per-bot vault，`callback_data` 只带 `@<n>`。索引导航、`Dirs` 快照、NUL
+编码三样已全部删除。
+
+#### 为什么是 segment 而不是 `map[string]any`
+
+原计划写的是 `map[string]any`。实现时改为有序 segment，理由：
+
+1. **全仓的 dispatch 都是位置式的**（`parts[0]` / `parts[1]`…）。segment 与之一一
+   对应，迁移是机械的、可逐行 review 的；而这是整个计划里**唯一碰回调协议**的一步，
+   改错的表现是"按钮点了没反应"——最不该在这一步引入大面积重写。
+2. **名字会是发明出来的，不是发现出来的**。今天的数据本来就是位置式的
+   （`action:sub:arg`），套一层 key 只是给它编名字。
+3. 两种形态下"编码归平台管"这条关键性质都成立——而那才是这条 seam 的目的。
+
+`Payload` 只有 `Name()` / `Arg(i)` 两个读取器，且**越界返回 `""`**：老版本渲染的
+按钮 segment 更少时，读到的是"缺数据"而不是 panic。
+
+#### token 寄存的边界
+
+vault 是**进程内、有上限（4096 条）的 FIFO**。回调载荷描述的是"某个会话里某条消息
+上的某个控件"，其寿命不该长过产生它的流程本身——而本仓每个这类流程本来就把状态放
+内存里并带超时。上限保证长跑的 bot 不会把这张表撑大。
+
+token 解析不到时（bot 重启，或被挤出），**明确告诉用户按钮已失效**，而不是把这次
+点击吞掉。旧行为下"点了没反应"和"bot 坏了"在用户端是同一件事。
 
 另外两件必须显式建模的：
 
@@ -253,7 +282,7 @@ Telegram 在**每一列**都是最紧的。它的约束已经泄漏成全平台�
 |---|---|---|
 | **1** | 归属搬迁：Feishu 渲染器进 `platform/feishu`；Weixin QR 客户端去重；`telegram_keyboard.go` → `action_menu.go` | ✅ 已落地 |
 | **2a** | Seam 1 上半：`Actions` 进类型系统、13 个调用点迁移、Tier 3 逃生舱 | ✅ 已落地 |
-| **2b** | Seam 1 下半：按钮身份换 `Payload`、Telegram token 降级、补 64 字节校验、删索引导航与 NUL 编码 | ⏳ **独立 PR** |
+| **2b** | Seam 1 下半：按钮身份换 `Payload`、Telegram token 降级、补 64 字节校验、删索引导航与 NUL 编码；顺带把 Feishu 卡片回调接上 | ✅ 已落地 |
 | **3** | Seam 3 + Seam 4：能力表、`MessageRestater` | ✅ 已落地 |
 | **4** | Seam 2（回复上下文自动化）+ `FileResolver` | ⏳ |
 | **5** | `menu` 包归位：让它建立在新 seam 之上 / 降级 / 删除，三选一 | ⏳ |
@@ -261,6 +290,11 @@ Telegram 在**每一列**都是最紧的。它的约束已经泄漏成全平台�
 
 **2a / 2b 拆分的理由**：2b 是唯一触碰**回调协议**的一步，改错就是"按钮点了没反应"。
 拆开让 2a 的用户价值（Feishu 按钮可见）不被 2b 的风险绑架。
+
+**2b 里为什么还带了 Feishu 卡片回调**：做 2b 时才发现 2a 的修复只到一半——按钮渲染
+出来了，但**点击根本没有入站路径**（§7.6）。而 2b 改的正是 button value 的形状；
+没有消费方，这个形状就无从验证。两者是同一条回路的两端，分开做等于把一端焊死在
+不可验证的状态。
 
 **Phase 5 刻意排在 seam 之后**：先让新 seam 的形状被真实使用验证过，再决定 `menu`
 该不该活，而不是反过来。
@@ -301,6 +335,9 @@ Clear / CD / Project、目录浏览、`/resume` 选择器对 Feishu 用户全部
 > 仍待真机验证：本仓无 Feishu 凭据，类型开关的推导是确定的，但"用户实际看到什么"
 > 应由真机确认背书。
 
+**这条修复只到一半，另一半见 §7.6**：按钮渲染出来了，但当时没有任何入站路径接收
+点击。写"已修"时没查回路的另一端，是这次调研里最该记下的教训。
+
 ### 7.2 非 Telegram 平台键盘撤不掉（Seam 4 已修）
 
 `AsTelegramBot` 是**具体类型断言**（`bot.(*telegram.Bot)`），Feishu/tingly 永远走
@@ -340,6 +377,52 @@ verbose mode (e.g., Weixin)"）。说的和做的不一致——这是没有能�
 事实来源的价值——`TestAuthMappingCoversEveryConfiguredPlatform` 现在会在下一次
 漏填时直接失败。
 
+### 7.6 Feishu 卡片按钮**点了没有任何入站**（2b 已修）
+
+2a 修好了"按钮渲染不出来"，但只修了一半。Feishu 的 bot 只订阅了消息事件：
+
+```go
+dispatcher.NewEventDispatcher("", "").
+    OnP2MessageReceiveV1(b.handleP2MessageReceiveV1)   // 仅此一条
+```
+
+`HandleCardAction` 是个直接返回 `not implemented` 的桩，而全应用的回调分发都挂在
+`Metadata["is_callback"]` 上——只有 Telegram 和 tingly 会设。所以 Feishu 用户点下
+按钮的结果是：转圈，然后什么都没有。
+
+**这比没有按钮更糟**。没有按钮是"功能缺失"，有按钮点了不动是"这 bot 坏了"。
+
+现已注册 `OnP2CardActionTrigger`，把卡片回调归一化成 `core.Message`（带 `Payload`）
+后走与其它平台完全相同的分发路径。
+
+> 待真机验证：本仓无 Feishu 凭据。SDK v3.9.7 的 WS 客户端把 `MessageTypeCard` 直接
+> 丢弃，但 `card.action.trigger` 是走 `MessageTypeEvent` 经 `EventDispatcher.Do`
+> 分发的（`Do` 会先查 `callbackType2CallbackHandler`）——推导如此，仍需真机背书。
+> 最坏情况是事件不到达，行为与今天一致，不构成回退。
+
+### 7.7 `getReceiveIdType` 的前缀匹配全是死分支（2b 已修）
+
+```go
+prefix := targetID[:4]        // 4 字符
+switch prefix {
+case "ou_":  ...              // 3 字符，永远不等
+case "oc_":  ...              // 永远不等
+}
+```
+
+四字符切片不可能等于三字符常量，所以 `oc_` / `ou_` 两个分支**不可达**，除了字面
+`cli_` 之外的一切目标都落到 default → `open_id`。而且映射本身也是反的：`oc_` 是
+会话（chat_id），`ou_` 是用户（open_id），原码写成了互换。
+
+之所以在 2b 里修：卡片回调的回复目标就是 `oc_` 开头的 chat_id，不修则 §7.6 接上了
+入站也回不出去。已补 `TestGetReceiveIdType`。
+
+### 7.8 `bind:create` 建完目录就沉默（2b 已修）
+
+`telegram_callback.go` 的 `case "create"` 只做了 `os.MkdirAll`，成功之后既不绑定也
+不回话，直接 fallthrough 出 switch。用户点"✅ Create"，目录在磁盘上出现了，聊天里
+一个字都没有——无从判断绑定是否发生。现已补上 `completeBind` + 清理浏览状态。
+
 ## 8. 归属与命名规则
 
 **两类平台专有代码，性质不同，去处不同：**
@@ -371,8 +454,14 @@ import cycles with imbot/platform packages"——不成立，它只需要 `inter
 4. `handler_verbose.go` 的能力判定恢复启用。（Seam 3 ✅）
 5. 在 imbot 新增一个假想平台，`remote_control` **零改动**即可跑通
    `manager_channel_test.go` 的 notify 全链路。
-6. 回调载荷的长度约束不再泄漏到调用方：`grep -rn "64" imbot/interaction/` 只在
-   Telegram 平台包内出现。（2b）
+6. 回调载荷的长度约束不再泄漏到调用方：64 字节作为**生效的约束**只存在于
+   `imbot/platform/telegram/callback_codec.go`；`interaction` 与
+   `internal/remote_control` 里仅剩解释历史的注释。（2b ✅）
+7. `internal/remote_control` 与 `remote/channel` 里不再有 `FormatCallbackData` /
+   `CallbackButton` / `FormatDirPath` 调用——按钮一律用 `ActionButton` /
+   `NewPayload` 声明 segment。（2b ✅）
+8. Feishu 卡片按钮点击有入站路径，且与其它平台走同一套 dispatch。（2b ✅，
+   待真机验证）
 
 ## 10. 测试
 
@@ -391,6 +480,18 @@ import cycles with imbot/platform packages"——不成立，它只需要 `inter
   交给任何持有泄漏 token 的人，值得显式钉住）、verbose 抑制、未知平台取零值。
 - `imbot/platform/tingly/restate_test.go` — 撤菜单、换文本+控件、
   以及不支持平台/空引用时 `RestateOrIgnore` 安静返回 false。
+- `imbot/core/payload_test.go` — 越界读取返回 `""` 而非 panic（老版本按钮 segment
+  更少）、`HasSeparator`、`EffectivePayload` 的兼容优先级、`IsLink` 必须把 payload
+  算进去（算错就把控件渲染成纯链接，回调永不触发）。
+- `imbot/platform/telegram/callback_codec_test.go` — **线上字节不变**（短载荷仍是
+  `bind:up`，老键盘不失效）、超长载荷编码后必定 ≤64（§5 那条会整条消息发不出去的
+  缺陷）、含 `:` 的路径往返且不产生 NUL、保留前缀不被误认成 token、失效 token 可被
+  区分、FIFO 逐出。
+- `imbot/platform/feishu/card_callback_test.go` — button value 携带 segment 往返、
+  含 `:` 的路径、legacy 扁平串仍可解、JSON 化后的 `[]interface{}` 形状，以及
+  `getReceiveIdType` 的前缀映射（§7.7）。
+- `internal/remote_control/bot/feature/dir_browser_test.go` — 目录按钮携带**路径**
+  而非索引、含 `:` 的目录名可导航、create 确认按钮携带原始路径。
 - `imbot/platform/tingly/tingly_test.go` — 新契约（`Actions`）与兼容期
   （legacy metadata）各一。原 `TestBot_SendWithTelegramKeyboard` 已删除：它断言的
   双形状解码正是本次消灭的耦合。

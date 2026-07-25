@@ -74,14 +74,14 @@ func Test_AskUserQuestionKeyboard_AcceptsHeterogeneousShapes(t *testing.T) {
 
 			kb := p.buildAskUserQuestionKeyboard(req)
 
-			// Walk the rendered buttons and assert two perm:option callbacks
+			// Walk the rendered buttons and assert two perm:option payloads
 			// exist, one per declared option.
 			labels := []string{}
 			callbacks := []string{}
 			for _, row := range kb.InlineKeyboard {
 				for _, b := range row {
 					labels = append(labels, b.Text)
-					callbacks = append(callbacks, b.CallbackData)
+					callbacks = append(callbacks, b.Payload.FlatCallbackData())
 				}
 			}
 

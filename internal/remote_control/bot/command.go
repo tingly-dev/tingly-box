@@ -805,8 +805,8 @@ func buildResumeKeyboard(sessions []ResumableSession) imbot.InlineKeyboardMarkup
 	for i, s := range sessions {
 		label := fmt.Sprintf("#%d · %s · %s", i+1, formatRelativeTime(latestTime(s)), formatTurns(s.NumTurns))
 		current = append(current, imbot.InlineKeyboardButton{
-			Text:         label,
-			CallbackData: imbot.FormatCallbackData("resume", "pick", s.SessionID),
+			Text:    label,
+			Payload: imbot.NewPayload("resume", "pick", s.SessionID),
 		})
 		if len(current) == cols {
 			rows = append(rows, current)
@@ -817,8 +817,8 @@ func buildResumeKeyboard(sessions []ResumableSession) imbot.InlineKeyboardMarkup
 		rows = append(rows, current)
 	}
 	rows = append(rows, []imbot.InlineKeyboardButton{{
-		Text:         "Cancel",
-		CallbackData: imbot.FormatCallbackData("resume", "cancel"),
+		Text:    "Cancel",
+		Payload: imbot.NewPayload("resume", "cancel"),
 	}})
 	return imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

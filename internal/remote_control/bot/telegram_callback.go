@@ -12,13 +12,12 @@ import (
 
 // handleCallbackQuery handles callback queries from inline keyboards
 func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot.Message) {
-	callbackData, _ := msg.Metadata["callback_data"].(string)
-	if callbackData == "" {
-		return
-	}
-
-	parts := imbot.ParseCallbackData(callbackData)
-	if len(parts) == 0 {
+	// The payload arrives as segments, already decoded by the platform. What
+	// those segments looked like on the wire — a colon-joined string, a token
+	// standing in for an oversized one, a JSON array in a card button value —
+	// is the platform's business, not this dispatcher's.
+	payload := msg.Payload
+	if payload.IsEmpty() {
 		return
 	}
 
@@ -31,18 +30,16 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		Platform:  msg.Platform,
 	}
 
-	action := parts[0]
-
-	switch action {
+	switch payload.Name() {
 	case "perm":
 		// Handle permission request response
-		h.handlePermissionCallback(hCtx, parts)
+		h.handlePermissionCallback(hCtx, payload)
 
 	case "action":
-		if len(parts) < 2 {
+		subAction := payload.Arg(1)
+		if subAction == "" {
 			return
 		}
-		subAction := parts[1]
 		switch subAction {
 		case "clear":
 			// Remove the action keyboard before handling
@@ -66,27 +63,24 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		// Remove the action keyboard before handling
 		h.removeActionKeyboard(bot, chatID)
 		// Start interactive bind
-		if len(parts) < 3 {
-			return
-		}
-		subAction := parts[1]
-		switch subAction {
-		case "switch":
-			projectID := parts[2]
-			h.handleProjectSwitch(hCtx, projectID)
+		if payload.Arg(1) == "switch" {
+			if projectID := payload.Arg(2); projectID != "" {
+				h.handleProjectSwitch(hCtx, projectID)
+			}
 		}
 
 	case "resume":
-		if len(parts) < 2 {
+		subAction := payload.Arg(1)
+		if subAction == "" {
 			return
 		}
-		subAction := parts[1]
 		switch subAction {
 		case "pick":
-			if len(parts) < 3 {
+			sessionID := payload.Arg(2)
+			if sessionID == "" {
 				return
 			}
-			h.handleResumePick(hCtx, parts[2], msg)
+			h.handleResumePick(hCtx, sessionID, msg)
 		case "cancel":
 			h.handleResumeCancel(hCtx, msg)
 		}
@@ -95,27 +89,22 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		// Remove the action keyboard before handling
 		h.removeActionKeyboard(bot, chatID)
 		// Start interactive bind
-		if len(parts) < 2 {
+		subAction := payload.Arg(1)
+		if subAction == "" {
 			return
 		}
-		subAction := parts[1]
 		switch subAction {
 		case "confirm":
 			// Confirm bind to current directory
 			h.handleBindConfirm(hCtx)
 
 		case "dir":
-			// Navigate to directory by index
-			if len(parts) < 3 {
+			// Navigate to the directory the button names.
+			target := payload.Arg(2)
+			if target == "" {
 				return
 			}
-			indexStr := parts[2]
-			var index int
-			if _, err := fmt.Sscanf(indexStr, "%d", &index); err != nil {
-				logrus.WithError(err).Warn("Failed to parse directory index")
-				return
-			}
-			if err := h.directoryBrowser.NavigateByIndex(chatID, index); err != nil {
+			if err := h.directoryBrowser.Navigate(chatID, target); err != nil {
 				logrus.WithError(err).Warn("Failed to navigate directory")
 				return
 			}
@@ -184,18 +173,22 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			h.handleCustomPathPrompt(hCtx)
 
 		case "create":
-			// Create directory and bind (path from custom input, encoded)
-			if len(parts) < 3 {
+			// Create the directory the confirmation button carries and bind it.
+			path := payload.Arg(2)
+			if path == "" {
 				return
 			}
-			encodedPath := parts[2]
-			path := imbot.ParseDirPath(encodedPath)
-			// Create the directory
 			if err := os.MkdirAll(path, 0755); err != nil {
 				logrus.WithError(err).Error("Failed to create directory")
 				h.SendText(hCtx, fmt.Sprintf("Failed to create directory: %v", err))
 				return
 			}
+			// Creating the directory was only half of what the button offered.
+			// Without this the flow ended in silence: the directory appeared
+			// on disk and the chat said nothing, so the user had no way to
+			// tell whether the bind had happened.
+			h.completeBind(hCtx, path)
+			h.directoryBrowser.Clear(chatID)
 
 		case "cancel":
 			h.directoryBrowser.Clear(chatID)
@@ -252,8 +245,8 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 // Only reachable in standalone (host-less) mode: the managed path's host
 // router claims "perm" callbacks first. Mechanics shared via prompt_reply.go;
 // as the terminal handler it claims unknown request IDs and reports expired.
-func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []string) {
-	handlePromptCallback(h.imPrompter, func(text string) { h.SendText(hCtx, text) }, hCtx.SenderID, parts, true)
+func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, payload imbot.Payload) {
+	handlePromptCallback(h.imPrompter, func(text string) { h.SendText(hCtx, text) }, hCtx.SenderID, payload, true)
 }
 
 // handleCreateConfirm sends a confirmation prompt for creating a directory

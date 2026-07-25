@@ -20,6 +20,21 @@ type Message struct {
 	ChatType      ChatType               `json:"chatType"`
 	ThreadContext *ThreadContext         `json:"threadContext,omitempty"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	// Payload carries the segments of the action the user activated, for
+	// messages that are button presses rather than typed input. Empty for
+	// ordinary messages. Platforms fill it in their inbound adapter, which is
+	// where the platform's own encoding stops being visible.
+	Payload Payload `json:"payload,omitempty"`
+}
+
+// IsCallback reports whether this message is an action firing rather than
+// user-typed content.
+func (m *Message) IsCallback() bool {
+	if !m.Payload.IsEmpty() {
+		return true
+	}
+	isCallback, _ := m.Metadata["is_callback"].(bool)
+	return isCallback
 }
 
 // TextContent represents text message content

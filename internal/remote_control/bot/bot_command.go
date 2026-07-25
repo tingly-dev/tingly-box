@@ -194,13 +194,13 @@ func buildProjectKeyboard(currentPath string, projectPaths []string) imbot.Inlin
 			marker = " ✓"
 		}
 		rows = append(rows, []imbot.InlineKeyboardButton{{
-			Text:         fmt.Sprintf("%d. 📁 %s%s", i+1, filepath.Base(path), marker),
-			CallbackData: imbot.FormatCallbackData("project", "switch", path),
+			Text:    fmt.Sprintf("%d. 📁 %s%s", i+1, filepath.Base(path), marker),
+			Payload: imbot.NewPayload("project", "switch", path),
 		}})
 	}
 	rows = append(rows, []imbot.InlineKeyboardButton{{
-		Text:         "📁 Bind New Project",
-		CallbackData: imbot.FormatCallbackData("action", "bind"),
+		Text:    "📁 Bind New Project",
+		Payload: imbot.NewPayload("action", "bind"),
 	}})
 	return imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

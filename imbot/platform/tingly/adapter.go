@@ -50,8 +50,11 @@ func convertActionSet(set *core.ActionSet) *Keyboard {
 		buttons := make([]Button, 0, len(row))
 		for _, a := range row {
 			buttons = append(buttons, Button{
-				Label:        a.Label,
-				CallbackData: a.CallbackData,
+				Label: a.Label,
+				// The harness mirrors Telegram's flat encoding so tests read
+				// the same strings production does. Unlike Telegram it has no
+				// size limit, so no token fallback is needed here.
+				CallbackData: a.EffectivePayload().FlatCallbackData(),
 				URL:          a.URL,
 			})
 		}
@@ -94,6 +97,7 @@ func NewIncomingCallback(messageID, chatID string, sender core.Sender, callbackD
 		},
 		Content:  core.NewTextContent(""),
 		ChatType: chatType,
+		Payload:  core.PayloadFromCallbackData(callbackData),
 		Metadata: map[string]interface{}{
 			"is_callback":       true,
 			"callback_data":     callbackData,

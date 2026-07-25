@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
@@ -25,33 +26,36 @@ const (
 	DomainLark   Domain = "lark"
 )
 
-// getReceiveIdType determines the receive_id_type based on the target ID format
-// - "user_id": for user's user_id (global across apps, for P2P/direct chat)
-// - "open_id": for user's open_id (app-specific, for P2P/direct chat)
-// - "chat_id": for group/chat IDs
+// getReceiveIdType picks the receive_id_type that matches a target ID.
 //
-// Feishu/Lark ID patterns:
-// - ou_xxxxxx: user's user_id (global, preferred for cross-app messaging)
-// - oc_xxxxxx: user's open_id (app-specific)
-// - cli_xxxxxx: group chat ID
+// Feishu writes the kind of an ID into its prefix:
+//   - oc_xxxxxx: a conversation (chat_id) — group or one-to-one
+//   - ou_xxxxxx: a user as this app sees them (open_id)
+//   - on_xxxxxx: a user as the app developer sees them (union_id)
+//   - anything with "@": an email address
+//   - no prefix: a tenant-assigned user_id
 //
-// The most reliable approach is to check ID prefix.
+// The previous version had the user and chat prefixes swapped, and compared
+// them against a four-character slice so neither could match in the first
+// place; every target was therefore sent as an open_id.
 func getReceiveIdType(targetID string) string {
-	if len(targetID) < 4 {
-		return "open_id"
-	}
-
-	prefix := targetID[:4]
-	switch prefix {
-	case "cli_":
-		return "chat_id"
-	case "ou_":
-		return "user_id" // Global user_id for cross-app messaging
-	case "oc_":
-		return "open_id" // App-specific open_id
+	// Feishu identifies the receiver by an ID whose kind is written into its
+	// prefix. Matching that prefix has to be a prefix test: the previous
+	// version compared targetID[:4] against three-character constants, so the
+	// "oc_" and "ou_" cases could never match and every target — including
+	// chat IDs — was sent as an open_id.
+	switch {
+	case strings.HasPrefix(targetID, "oc_"):
+		return "chat_id" // conversation, group or one-to-one
+	case strings.HasPrefix(targetID, "ou_"):
+		return "open_id" // user, scoped to this app
+	case strings.HasPrefix(targetID, "on_"):
+		return "union_id" // user, scoped to the app developer
+	case strings.Contains(targetID, "@"):
+		return "email"
 	default:
-		// Default to open_id for backward compatibility
-		return "open_id"
+		// A tenant-assigned user_id has no prefix to key off.
+		return "user_id"
 	}
 }
 
@@ -153,7 +157,8 @@ func (b *Bot) StartReceiving(ctx context.Context) error {
 	// Create event handler that converts Lark events to core.Message
 	// OnP2MessageReceiveV1 handles both v1.0 and v2.0 message receive events
 	eventHandler := dispatcher.NewEventDispatcher("", "").
-		OnP2MessageReceiveV1(b.handleP2MessageReceiveV1)
+		OnP2MessageReceiveV1(b.handleP2MessageReceiveV1).
+		OnP2CardActionTrigger(b.handleCardActionTrigger)
 
 	// Determine base URL for WebSocket
 	wsDomain := lark.FeishuBaseUrl

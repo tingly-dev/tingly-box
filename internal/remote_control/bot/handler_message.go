@@ -35,7 +35,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	}
 
 	// OLD: Check if this is a legacy callback query (for backward compatibility)
-	if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
+	if msg.IsCallback() {
 		h.handleCallbackQuery(bot, chatID, msg)
 		return
 	}

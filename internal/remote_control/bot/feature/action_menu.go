@@ -15,42 +15,46 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-// BindFlowState represents the state of an ongoing bind flow
+// BindFlowState represents the state of an ongoing bind flow.
+//
+// It used to also cache the directory listing, because a button could not
+// carry a path: Telegram's 64-byte callback_data forced the browser to send
+// array indices and resolve them here. Payload segments carry the path itself
+// now, so the snapshot — and the class of bug where a stale index resolved
+// against a re-listed directory — is gone.
 type BindFlowState struct {
 	ChatID       string
 	CurrentPath  string
 	Page         int
-	TotalDirs    int
 	PageSize     int
 	MessageID    string // Message ID to edit
 	ExpiresAt    time.Time
-	WaitingInput bool     // Waiting for custom path input
-	PromptMsgID  string   // Prompt message ID for cleanup
-	Dirs         []string // Current directory list (for navigation by index)
+	WaitingInput bool   // Waiting for custom path input
+	PromptMsgID  string // Prompt message ID for cleanup
 }
 
 // BuildActionKeyboard builds the inline keyboard for actions (Clear/Bind)
 func BuildActionKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
 		AddRow(
-			imbot.CallbackButton("🗑 Clear", imbot.FormatCallbackData("action", "clear")),
-			imbot.CallbackButton("📁 CD", imbot.FormatCallbackData("action", "bind")),
-			imbot.CallbackButton("🔧 Project", imbot.FormatCallbackData("action", "project")),
+			imbot.ActionButton("🗑 Clear", "action", "clear"),
+			imbot.ActionButton("📁 CD", "action", "bind"),
+			imbot.ActionButton("🔧 Project", "action", "project"),
 		)
 }
 
 // BuildCancelKeyboard builds a simple cancel keyboard
 func BuildCancelKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
-		AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")))
+		AddRow(imbot.ActionButton("❌ Cancel", "bind", "cancel"))
 }
 
 // BuildCreateConfirmKeyboard builds the confirmation keyboard for creating a directory
 func BuildCreateConfirmKeyboard(path string) (*imbot.KeyboardBuilder, string) {
 	kb := imbot.NewKeyboardBuilder().
 		AddRow(
-			imbot.CallbackButton("✅ Create", imbot.FormatCallbackData("bind", "create", imbot.FormatDirPath(path))),
-			imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")),
+			imbot.ActionButton("✅ Create", "bind", "create", path),
+			imbot.ActionButton("❌ Cancel", "bind", "cancel"),
 		)
 
 	text := fmt.Sprintf("📁 *The path doesn't exist. Create it?*\n\n`%s`", path)
@@ -61,10 +65,10 @@ func BuildCreateConfirmKeyboard(path string) (*imbot.KeyboardBuilder, string) {
 func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
 	return imbot.NewKeyboardBuilder().
 		AddRow(
-			imbot.CallbackButton("✓ Confirm", imbot.FormatCallbackData("bind", "confirm")),
-			imbot.CallbackButton("✏️ Change", imbot.FormatCallbackData("bind", "custom")),
+			imbot.ActionButton("✓ Confirm", "bind", "confirm"),
+			imbot.ActionButton("✏️ Change", "bind", "custom"),
 		).
 		AddRow(
-			imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")),
+			imbot.ActionButton("❌ Cancel", "bind", "cancel"),
 		)
 }

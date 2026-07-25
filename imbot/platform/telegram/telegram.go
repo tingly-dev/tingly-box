@@ -29,6 +29,9 @@ type Bot struct {
 	wg           sync.WaitGroup
 	mu           sync.RWMutex
 	messageIDMap map[string]int // chatID -> last message ID
+	// callbacks encodes outbound action payloads into callback_data and
+	// resolves them again on the way back. See callback_codec.go.
+	callbacks *callbackVault
 }
 
 type MenuButtonType string
@@ -109,6 +112,7 @@ func NewTelegramBot(config *core.Config) (*Bot, error) {
 		BaseBot:      core.NewBaseBot(config),
 		api:          api,
 		messageIDMap: make(map[string]int),
+		callbacks:    newCallbackVault(),
 	}
 
 	return bot, nil
@@ -176,17 +180,42 @@ func (b *Bot) handleCallbackQueryUpdate(ctx context.Context, api *tgbot.Bot, upd
 	query := update.CallbackQuery
 	b.Logger().Debug("Received callback query from %d: %s", query.From.ID, query.Data)
 
+	// Resolve the wire encoding back into payload segments before anyone
+	// downstream sees it. A token that no longer resolves is reported to the
+	// user rather than emitted as a message nothing will match: an inert
+	// button is indistinguishable from a broken bot.
+	payload, ok := b.callbacks.decodeCallbackData(query.Data)
+	if !ok {
+		b.Logger().Debug("Callback token %s no longer resolves", query.Data)
+		b.answerCallbackQuery(query.ID, expiredButtonNotice)
+		return
+	}
+
 	coreMessage, err := b.adapter.AdaptCallback(b.ctx, query)
 	if err != nil {
 		b.Logger().Error("Failed to adapt callback: %v", err)
 		return
 	}
+	coreMessage.Payload = payload
+	// Consumers still reading the flat form get the resolved payload, not the
+	// token that stood in for it on the wire.
+	if coreMessage.Metadata != nil {
+		coreMessage.Metadata["callback_data"] = payload.FlatCallbackData()
+	}
 
 	b.EmitMessage(*coreMessage)
 
 	// Answer the callback query to remove loading state
+	b.answerCallbackQuery(query.ID, "")
+}
+
+// answerCallbackQuery clears the button's loading spinner, optionally showing
+// the user a notice. Telegram requires this within roughly 15 seconds or the
+// button spins on the client.
+func (b *Bot) answerCallbackQuery(queryID, text string) {
 	_, _ = b.api.AnswerCallbackQuery(b.ctx, &tgbot.AnswerCallbackQueryParams{
-		CallbackQueryID: query.ID,
+		CallbackQueryID: queryID,
+		Text:            text,
 	})
 }
 

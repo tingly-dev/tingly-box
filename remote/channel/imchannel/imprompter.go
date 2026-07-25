@@ -431,8 +431,7 @@ func (p *IMPrompter) buildDefaultKeyboard(requestID string) imbot.InlineKeyboard
 
 	for _, opt := range ask.PermissionOptions {
 		buttonText := opt.Icon + " " + opt.Label
-		callbackData := imbot.FormatCallbackData("perm", opt.Action, requestID)
-		kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
+		kb.AddRow(imbot.ActionButton(buttonText, "perm", opt.Action, requestID))
 	}
 
 	return kb.Build()
@@ -457,20 +456,19 @@ func (p *IMPrompter) buildAskUserQuestionKeyboard(req ask.Request) imbot.InlineK
 		// Add a label row for the question if there are multiple questions
 		if len(questions) > 1 {
 			questionText, _ := question["question"].(string)
-			kb.AddRow(imbot.CallbackButton(fmt.Sprintf("Q%d: %s", qIdx+1, questionText), imbot.FormatCallbackData("perm", "noop", req.ID)))
+			kb.AddRow(imbot.ActionButton(fmt.Sprintf("Q%d: %s", qIdx+1, questionText), "perm", "noop", req.ID))
 		}
 		for optIdx, option := range options {
 			label, _ := option["label"].(string)
 			if label != "" {
 				buttonText := fmt.Sprintf("%d. %s", optIdx+1, label)
-				callbackData := imbot.FormatCallbackData("perm", "option", req.ID, fmt.Sprintf("%d", qIdx), fmt.Sprintf("%d", optIdx))
-				kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
+				kb.AddRow(imbot.ActionButton(buttonText, "perm", "option", req.ID, fmt.Sprintf("%d", qIdx), fmt.Sprintf("%d", optIdx)))
 			}
 		}
 	}
 
 	// Add cancel button
-	kb.AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("perm", "deny", req.ID)))
+	kb.AddRow(imbot.ActionButton("❌ Cancel", "perm", "deny", req.ID))
 
 	return kb.Build()
 }

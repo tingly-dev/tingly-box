@@ -71,12 +71,15 @@ type Action struct {
 	ID string
 	// Label is the user-visible button text.
 	Label string
-	// CallbackData is the opaque payload echoed back when the action fires.
+	// Payload is what comes back when the action fires: ordered segments, with
+	// each platform free to deliver them however it can. See payload.go.
+	Payload Payload
+	// CallbackData is the flat colon-joined form of Payload.
 	//
-	// TODO(phase-2b): this is Telegram's wire format leaking into the neutral
-	// model — it forces a 64-byte budget on every platform, including those
-	// with no such limit. It is scheduled to become an arbitrary Payload with
-	// per-platform delivery.
+	// Deprecated: this is Telegram's wire encoding, not an identity — see the
+	// Payload doc comment for what that cost. Producers inside imbot's own
+	// interaction and menu packages still build it, so renderers accept it and
+	// parse it into segments. New code sets Payload.
 	CallbackData string
 	// URL is the link opened by ActionOpenURL / ActionOpenMiniApp.
 	URL string
@@ -100,10 +103,21 @@ func (a Action) ExtFor(platform Platform) (any, bool) {
 	return v, ok
 }
 
+// EffectivePayload returns the action's payload, parsing the deprecated
+// CallbackData when that is all the producer supplied. Renderers call this
+// rather than reading either field directly, so the compatibility path lives
+// in one place and disappears in one edit.
+func (a Action) EffectivePayload() Payload {
+	if len(a.Payload) > 0 {
+		return a.Payload
+	}
+	return PayloadFromCallbackData(a.CallbackData)
+}
+
 // IsLink reports whether the action should be rendered as a link rather than
 // as a callback control.
 func (a Action) IsLink() bool {
-	return a.URL != "" && (a.Kind == ActionOpenURL || a.CallbackData == "")
+	return a.URL != "" && (a.Kind == ActionOpenURL || a.EffectivePayload().IsEmpty())
 }
 
 // ActionSet is a laid-out group of message-scoped actions. Rows are preserved

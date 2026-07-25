@@ -101,6 +101,7 @@ type (
 	ConnectionDetails = core.ConnectionDetails
 
 	// Keyboard types
+	Payload              = core.Payload
 	InlineKeyboardButton = interaction.InlineKeyboardButton
 	InlineKeyboardMarkup = interaction.InlineKeyboardMarkup
 	KeyboardBuilder      = interaction.KeyboardBuilder
@@ -289,7 +290,19 @@ func NewKeyboardBuilder() *interaction.KeyboardBuilder {
 	return interaction.NewKeyboardBuilder()
 }
 
-// CallbackButton creates a callback button
+// NewPayload builds a button payload from its segments.
+func NewPayload(segments ...string) core.Payload {
+	return core.NewPayload(segments...)
+}
+
+// ActionButton creates a button carrying the given payload segments.
+func ActionButton(text string, segments ...string) interaction.InlineKeyboardButton {
+	return interaction.ActionButton(text, segments...)
+}
+
+// CallbackButton creates a callback button from a pre-joined string.
+//
+// Deprecated: use ActionButton.
 func CallbackButton(text, callbackData string) interaction.InlineKeyboardButton {
 	return interaction.CallbackButton(text, callbackData)
 }
@@ -302,16 +315,6 @@ func FormatCallbackData(action string, data ...string) string {
 // ParseCallbackData parses a callback data string into parts
 func ParseCallbackData(data string) []string {
 	return interaction.ParseCallbackData(data)
-}
-
-// FormatDirPath formats a directory path for callback data (handles colons in paths)
-func FormatDirPath(path string) string {
-	return interaction.FormatDirPath(path)
-}
-
-// ParseDirPath parses a directory path from callback data
-func ParseDirPath(encoded string) string {
-	return interaction.ParseDirPath(encoded)
 }
 
 // FormatDirButton formats a directory name for a button

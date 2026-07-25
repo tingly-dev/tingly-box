@@ -127,23 +127,6 @@ func (b *DirectoryBrowser) Navigate(chatID string, path string) error {
 	return nil
 }
 
-// NavigateByIndex navigates to a subdirectory by index (stored in state.Dirs)
-func (b *DirectoryBrowser) NavigateByIndex(chatID string, index int) error {
-	b.mu.RLock()
-	state, ok := b.states[chatID]
-	b.mu.RUnlock()
-
-	if !ok {
-		return fmt.Errorf("no active bind flow")
-	}
-
-	if index < 0 || index >= len(state.Dirs) {
-		return fmt.Errorf("invalid directory index: %d", index)
-	}
-
-	return b.Navigate(chatID, state.Dirs[index])
-}
-
 // NavigateUp navigates to the parent directory
 func (b *DirectoryBrowser) NavigateUp(chatID string) error {
 	b.mu.RLock()
@@ -253,10 +236,6 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 		return nil, nil, "", err
 	}
 
-	// Store dirs for navigation by index
-	state.Dirs = dirs
-	state.TotalDirs = len(dirs)
-
 	// Calculate pagination
 	totalPages := (len(dirs) + state.PageSize - 1) / state.PageSize
 	if totalPages == 0 {
@@ -272,12 +251,14 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 	// Build keyboard
 	kb := imbot.NewKeyboardBuilder()
 
-	// Directory buttons (use index instead of path to avoid 64-byte limit)
+	// Directory buttons carry the path they navigate to. They used to carry
+	// the index of the path in a server-side snapshot, purely because a path
+	// does not fit in Telegram's callback_data — which meant a listing that
+	// changed under the user navigated somewhere they did not pick.
 	for i := startIdx; i < endIdx; i++ {
 		dirName := filepath.Base(dirs[i])
 		buttonText := imbot.FormatDirButton(dirName, 20)
-		callbackData := imbot.FormatCallbackData("bind", "dir", fmt.Sprintf("%d", i))
-		kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
+		kb.AddRow(imbot.ActionButton(buttonText, "bind", "dir", dirs[i]))
 	}
 
 	// Navigation row
@@ -285,15 +266,15 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 
 	// Parent directory button
 	if hasParent(state.CurrentPath) {
-		navButtons = append(navButtons, imbot.CallbackButton("📁 ..", imbot.FormatCallbackData("bind", "up")))
+		navButtons = append(navButtons, imbot.ActionButton("📁 ..", "bind", "up"))
 	}
 
 	// Pagination buttons
 	if state.Page > 0 {
-		navButtons = append(navButtons, imbot.CallbackButton("◀ Prev", imbot.FormatCallbackData("bind", "prev")))
+		navButtons = append(navButtons, imbot.ActionButton("◀ Prev", "bind", "prev"))
 	}
 	if state.Page < totalPages-1 && len(dirs) > endIdx {
-		navButtons = append(navButtons, imbot.CallbackButton("Next ▶", imbot.FormatCallbackData("bind", "next")))
+		navButtons = append(navButtons, imbot.ActionButton("Next ▶", "bind", "next"))
 	}
 
 	if len(navButtons) > 0 {
@@ -302,12 +283,12 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 
 	// Select current directory button and custom path button
 	kb.AddRow(
-		imbot.CallbackButton("✓ Select This", imbot.FormatCallbackData("bind", "select")),
-		imbot.CallbackButton("✏️ Custom", imbot.FormatCallbackData("bind", "custom")),
+		imbot.ActionButton("✓ Select This", "bind", "select"),
+		imbot.ActionButton("✏️ Custom", "bind", "custom"),
 	)
 
 	// Cancel button
-	kb.AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")))
+	kb.AddRow(imbot.ActionButton("❌ Cancel", "bind", "cancel"))
 
 	// Build message text
 	shortPath := state.CurrentPath
