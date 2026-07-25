@@ -1,3 +1,11 @@
+// Package feature holds the remote-control chat features (action menu, bind
+// flow, directory browser) that sit on top of imbot.
+//
+// This file builds the action menus and confirmation keyboards. Everything in
+// it is platform-neutral — it goes through imbot's keyboard and card builders
+// and never names a platform. It used to be called telegram_keyboard.go, which
+// misdescribed it: the Telegram coupling lives at the call sites that render
+// these into a Telegram payload, not here.
 package feature
 
 import (

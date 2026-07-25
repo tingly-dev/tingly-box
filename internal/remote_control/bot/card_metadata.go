@@ -2,7 +2,7 @@ package bot
 
 import (
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
+	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 )
 
 const trackActionMenuIDKey = "_trackActionMenuID"
@@ -29,10 +29,16 @@ func buildActionCardMetadata(tgKeyboard interface{}, card imbot.Card) map[string
 func buildActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
 	metadata := buildActionCardMetadata(tgKeyboard, card)
 
-	// For Feishu/Lark, add card_json
+	// For Feishu/Lark, add card_json.
+	//
+	// TODO(phase-2a): this whole branch goes away. The caller should not be
+	// rendering a platform's wire format at all — it should hand over a
+	// neutral Card and let the platform render it. Note that today nothing on
+	// the Feishu send path reads metadata["card_json"] (only feishu/menu.go
+	// does, and remote_control never goes through the menu adapter), so this
+	// is already inert; see .sdlc/research/arch-remote-control-platform-seams §3.1.
 	if hCtx.Platform == imbot.PlatformFeishu || hCtx.Platform == imbot.PlatformLark {
-		renderer := feature.NewFeishuCardRenderer()
-		if cardJSON, err := renderer.Render(card); err == nil {
+		if cardJSON, err := imbotfeishu.RenderCard(card); err == nil {
 			metadata["card_json"] = cardJSON
 		}
 	}

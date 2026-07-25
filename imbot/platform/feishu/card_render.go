@@ -1,23 +1,35 @@
-package feature
+package feishu
 
 import (
 	"fmt"
 
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
-	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/interaction"
 )
 
-// FeishuCardRenderer converts imbot.Card to Feishu card JSON format
-// This is defined in internal/remote_control to avoid import cycles with imbot/platform packages
-type FeishuCardRenderer struct{}
+// CardRenderer converts a platform-neutral interaction.Card into the Feishu
+// card JSON the Lark API expects.
+//
+// It lives here, next to the Feishu bot, because rendering a neutral card into
+// a platform's wire format is the platform's job. It previously lived in
+// internal/remote_control/bot/feature with a note claiming imbot/platform
+// packages could not be imported without a cycle; that was not the case — the
+// renderer only needs interaction.Card, which this package already depends on.
+type CardRenderer struct{}
 
-// NewFeishuCardRenderer creates a new Feishu card renderer
-func NewFeishuCardRenderer() *FeishuCardRenderer {
-	return &FeishuCardRenderer{}
+// NewCardRenderer creates a new Feishu card renderer.
+func NewCardRenderer() *CardRenderer {
+	return &CardRenderer{}
 }
 
-// Render converts an imbot.Card to Feishu card JSON string
-func (r *FeishuCardRenderer) Render(card imbot.Card) (string, error) {
+// RenderCard converts a neutral card to Feishu card JSON. Convenience wrapper
+// for callers that do not need to hold a renderer.
+func RenderCard(card interaction.Card) (string, error) {
+	return NewCardRenderer().Render(card)
+}
+
+// Render converts an interaction.Card to a Feishu card JSON string.
+func (r *CardRenderer) Render(card interaction.Card) (string, error) {
 	if card.ID == "" {
 		return "", fmt.Errorf("card ID cannot be empty")
 	}
@@ -40,7 +52,7 @@ func (r *FeishuCardRenderer) Render(card imbot.Card) (string, error) {
 }
 
 // buildCardElements converts card sections and actions to Feishu card elements
-func (r *FeishuCardRenderer) buildCardElements(card imbot.Card) []larkcard.MessageCardElement {
+func (r *CardRenderer) buildCardElements(card interaction.Card) []larkcard.MessageCardElement {
 	var elements []larkcard.MessageCardElement
 
 	// Add title if present
@@ -82,7 +94,7 @@ func (r *FeishuCardRenderer) buildCardElements(card imbot.Card) []larkcard.Messa
 }
 
 // buildSectionElements converts a card section to Feishu card elements
-func (r *FeishuCardRenderer) buildSectionElements(section imbot.CardSection) []larkcard.MessageCardElement {
+func (r *CardRenderer) buildSectionElements(section interaction.CardSection) []larkcard.MessageCardElement {
 	var elements []larkcard.MessageCardElement
 
 	// Section title
@@ -111,7 +123,7 @@ func (r *FeishuCardRenderer) buildSectionElements(section imbot.CardSection) []l
 }
 
 // buildActionButton converts a card action to Feishu button element
-func (r *FeishuCardRenderer) buildActionButton(action imbot.CardAction) larkcard.MessageCardActionElement {
+func (r *CardRenderer) buildActionButton(action interaction.CardAction) larkcard.MessageCardActionElement {
 	button := larkcard.NewMessageCardEmbedButton().
 		Text(larkcard.NewMessageCardPlainText().Content(action.Label))
 
@@ -133,12 +145,12 @@ func (r *FeishuCardRenderer) buildActionButton(action imbot.CardAction) larkcard
 	return button
 }
 
-// mapActionStyleToButtonType maps imbot.CardActionStyle to Feishu button type
-func (r *FeishuCardRenderer) mapActionStyleToButtonType(style imbot.CardActionStyle) larkcard.MessageCardButtonType {
+// mapActionStyleToButtonType maps interaction.CardActionStyle to Feishu button type
+func (r *CardRenderer) mapActionStyleToButtonType(style interaction.CardActionStyle) larkcard.MessageCardButtonType {
 	switch style {
-	case imbot.CardActionStylePrimary:
+	case interaction.CardActionStylePrimary:
 		return larkcard.MessageCardButtonTypePrimary
-	case imbot.CardActionStyleDanger:
+	case interaction.CardActionStyleDanger:
 		return larkcard.MessageCardButtonTypeDanger
 	default:
 		return larkcard.MessageCardButtonTypeDefault
@@ -146,7 +158,7 @@ func (r *FeishuCardRenderer) mapActionStyleToButtonType(style imbot.CardActionSt
 }
 
 // fieldsToMarkdown converts card fields to markdown table format
-func (r *FeishuCardRenderer) fieldsToMarkdown(fields []imbot.CardField) string {
+func (r *CardRenderer) fieldsToMarkdown(fields []interaction.CardField) string {
 	if len(fields) == 0 {
 		return ""
 	}

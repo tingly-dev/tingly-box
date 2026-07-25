@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -115,8 +116,15 @@ func (c *QRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRStatus, e
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		// A timed-out long-poll is expected; report it as "wait".
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		// A timed-out long-poll is expected; report it as "wait" so the caller
+		// keeps polling. This covers both the context deadline and the HTTP
+		// client's own timeout — the latter is the common case, since
+		// httpClient.Timeout (35s) usually fires before any caller deadline.
+		var netErr interface{ Timeout() bool }
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return &QRStatus{Status: "wait"}, nil
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.Canceled) {
 			return &QRStatus{Status: "wait"}, nil
 		}
 		return nil, fmt.Errorf("send request: %w", err)
@@ -136,4 +144,70 @@ func (c *QRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRStatus, e
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 	return &result, nil
+}
+
+// PollQRStatus polls a QR code's scan status until the user confirms it or the
+// code expires, returning the confirmed status (which carries the credentials).
+//
+// Transient network failures are retried a few times before giving up; a
+// long-poll that simply times out is reported by GetQRStatus as "wait" and does
+// not count as a failure.
+func PollQRStatus(ctx context.Context, client *QRClient, qrID string, pollInterval time.Duration) (*QRStatus, error) {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	const maxRetries = 3
+	retryCount := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case <-ticker.C:
+			status, err := client.GetQRStatus(ctx, qrID)
+			if err != nil {
+				if retryCount < maxRetries && isTransientError(err) {
+					retryCount++
+					continue
+				}
+				return nil, fmt.Errorf("failed to get QR status after %d retries: %w", retryCount, err)
+			}
+			retryCount = 0
+
+			switch status.Status {
+			case "wait", "scaned":
+				// Keep polling.
+
+			case "confirmed":
+				return status, nil
+
+			case "expired":
+				return nil, fmt.Errorf("QR code expired")
+
+			default:
+				return nil, fmt.Errorf("unknown QR status: %s", status.Status)
+			}
+		}
+	}
+}
+
+// isTransientError reports whether an error is worth retrying.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr interface{ Timeout() bool }
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	var temp interface{ Temporary() bool }
+	if errors.As(err, &temp) && temp.Temporary() {
+		return true
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "temporary failure") ||
+		strings.Contains(errStr, "network")
 }

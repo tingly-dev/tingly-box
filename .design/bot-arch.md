@@ -315,6 +315,11 @@ the `notify` consumer name. Remaining debts, with the agreed direction:
 | Scenarios column holds two species | one JSON list | split capabilities vs routes in schema + API | expensive, separate project |
 | package name vs UI name | `internal/remote_control` | `remote_agent` (UI already renamed) | mechanical, wide |
 
+Note: the *platform*-compatibility debts inside `remote_control` (per-platform
+keyboard pre-rendering, capability switches, ownership of platform-specific
+code) are a separate, orthogonal project — see
+`.design/imbot-platform-seams.md`. Keep the two out of the same PR.
+
 Rules of thumb going forward:
 
 - Name by **product concept**, not by code relationship (UX-first repo).

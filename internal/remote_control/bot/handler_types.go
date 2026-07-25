@@ -68,9 +68,6 @@ type BotHandler struct {
 	// commandAdapter bridges BotHandler to the command system
 	commandAdapter BotHandlerAdapter
 
-	// feishuCardRenderer converts imbot.Card to Feishu card JSON
-	feishuCardRenderer *feature.FeishuCardRenderer
-
 	// pairing handles TOFU pairing-code verification for direct messages.
 	pairing *PairingManager
 

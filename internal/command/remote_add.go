@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	imbotweixin "github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
 
 // runRemoteAddInteractive runs the interactive flow for adding a new bot
@@ -360,7 +360,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 	}
 
 	// Create QR client
-	qrClient := feature.NewWeChatQRClient("")
+	qrClient := imbotweixin.NewQRClient("")
 
 	// Fetch QR code
 	PrintInfo("Fetching QR code from Weixin...")
@@ -391,7 +391,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 	defer cancel()
 
 	// Poll status
-	statusResp, err := feature.PollQRStatus(pollCtx, qrClient, qrResp.Qrcode, 3*time.Second)
+	statusResp, err := imbotweixin.PollQRStatus(pollCtx, qrClient, qrResp.Qrcode, 3*time.Second)
 	if err != nil {
 		ClearLine()
 		if err == context.DeadlineExceeded {

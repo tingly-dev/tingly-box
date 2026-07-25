@@ -6,6 +6,9 @@ script
 # claude code - externally installed skills (via install-sdlc.sh etc.)
 .claude/skills/sdlc/
 
+# sdlc working files (research/specs/harness) - local only
+.sdlc/
+
 # codegen
 internal/web/dist
 internal/web_wails3/dist

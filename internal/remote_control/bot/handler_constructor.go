@@ -113,7 +113,6 @@ func NewBotHandler(
 		actionMenuMessageID: make(map[string]string),
 		resumeListings:      make(map[string][]string),
 		verbose:             true, // Default to verbose mode
-		feishuCardRenderer:  feature.NewFeishuCardRenderer(),
 		pairing:             pairing,
 		audit:               auditLog,
 	}
