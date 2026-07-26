@@ -43,7 +43,7 @@ import {
     Users,
 } from '@/components/icons';
 import PageHeader from '@/components/PageHeader';
-import { formatNumber, StatCard } from '@/components/dashboard';
+import { formatNumber, StatCard, TOKEN_COLORS } from '@/components/dashboard';
 import type { AggregatedStat } from '@/components/dashboard';
 import api from '@/services/api';
 
@@ -428,52 +428,41 @@ export default function UserUsagePage() {
                 ))}
             </Grid>
 
-            <Paper
-                variant="outlined"
-                sx={{
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                    height: { xs: 'auto', lg: 640 },
-                }}
-            >
-                <Grid container sx={{ alignItems: 'stretch', height: '100%' }}>
-                    <Grid
-                        size={{ xs: 12, lg: 7, xl: 5 }}
+            <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
+                <Grid size={{ xs: 12, lg: 7, xl: 5 }} sx={{ display: 'flex' }}>
+                    <Paper
+                        elevation={0}
                         sx={{
+                            width: '100%',
+                            borderRadius: 2,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            backgroundColor: 'background.paper',
+                            boxShadow: 'none',
+                            overflow: 'hidden',
                             display: 'flex',
                             flexDirection: 'column',
-                            minHeight: 0,
-                            borderRight: { lg: '1px solid' },
-                            borderBottom: { xs: '1px solid', lg: 0 },
-                            borderColor: 'divider',
+                            height: { xs: 'auto', lg: 640 },
                         }}
                     >
                         <Box
                             sx={{
-                                p: 2,
-                                display: 'grid',
-                                gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 1fr) minmax(200px, 280px)' },
-                                gap: 1.25,
+                                p: 2.5,
+                                display: 'flex',
+                                flexWrap: 'wrap',
                                 alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 1.5,
                                 borderBottom: '1px solid',
                                 borderColor: 'divider',
-                                bgcolor:
-                                    theme.palette.mode === 'dark'
-                                        ? 'rgba(255, 255, 255, 0.025)'
-                                        : alpha(theme.palette.action.hover, 0.45),
                             }}
                         >
-                            <Box sx={{ flex: '1 1 240px' }}>
-                                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                    <Typography variant="h6">
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                                     {t('dashboard.userUsage.allUsers', { defaultValue: 'All registered users' })}
-                                    </Typography>
-                                    <Chip size="small" label={visibleRows.length} sx={{ height: 22 }} />
-                                </Stack>
-                                <Typography variant="body2">
-                                    {t('dashboard.userUsage.rowHint', { defaultValue: 'Select a user to inspect their usage mix.' })}
                                 </Typography>
-                            </Box>
+                                <Chip size="small" label={visibleRows.length} sx={{ height: 22 }} />
+                            </Stack>
                             <TextField
                                 size="small"
                                 value={search}
@@ -486,7 +475,7 @@ export default function UserUsagePage() {
                                         ),
                                     },
                                 }}
-                                sx={{ width: '100%', bgcolor: 'background.paper' }}
+                                sx={{ width: { xs: '100%', sm: 220 } }}
                             />
                         </Box>
                         <TableContainer
@@ -501,11 +490,16 @@ export default function UserUsagePage() {
                                 <TableHead>
                                     <TableRow
                                         sx={{
-                                            '& th': {
-                                                typography: 'subtitle2',
+                                            backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                                            '& .MuiTableCell-root': {
+                                                fontWeight: 600,
+                                                fontSize: '0.75rem',
                                                 textTransform: 'uppercase',
-                                                letterSpacing: '0.035em',
-                                                py: 1.4,
+                                                letterSpacing: '0.05em',
+                                                color: 'text.secondary',
+                                                py: 1.25,
+                                                borderBottom: '1px solid',
+                                                borderColor: 'divider',
                                             },
                                         }}
                                     >
@@ -568,11 +562,16 @@ export default function UserUsagePage() {
                                                 sx={{
                                                     cursor: 'pointer',
                                                     position: 'relative',
-                                                    '& .MuiTableCell-root': { py: 1.3 },
+                                                    transition: 'background-color 0.15s ease',
+                                                    '& .MuiTableCell-root': {
+                                                        py: 1.25,
+                                                        borderBottom: '1px solid',
+                                                        borderColor: 'divider',
+                                                    },
                                                     '&.Mui-selected': {
-                                                        bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.13 : 0.045),
+                                                        bgcolor: alpha(theme.palette.primary.main, 0.08),
                                                         boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
-                                                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.17 : 0.07) },
+                                                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
                                                     },
                                                 }}
                                             >
@@ -689,21 +688,37 @@ export default function UserUsagePage() {
                                 sx={{ borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}
                             />
                         )}
-                    </Grid>
+                    </Paper>
+                </Grid>
 
-                    <Grid
-                        ref={detailPanelRef}
-                        size={{ xs: 12, lg: 5, xl: 7 }}
+                <Grid
+                    ref={detailPanelRef}
+                    size={{ xs: 12, lg: 5, xl: 7 }}
+                    sx={{ display: 'flex', scrollMarginTop: { xs: 72, lg: 0 } }}
+                >
+                    <Paper
+                        elevation={0}
                         sx={{
+                            width: '100%',
+                            borderRadius: 2,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            backgroundColor: 'background.paper',
+                            boxShadow: 'none',
+                            overflow: 'hidden',
                             display: 'flex',
-                            height: '100%',
-                            bgcolor: alpha(theme.palette.background.paper, 0.6),
-                            scrollMarginTop: { xs: 72, lg: 0 },
-                            minHeight: 0,
-                            overflow: { lg: 'hidden' },
+                            height: { xs: 'auto', lg: 640 },
                         }}
                     >
-                        <Box sx={{ p: { xs: 2, sm: 2.5 }, width: '100%', height: '100%', minHeight: { xs: 420, lg: 0 } }}>
+                        <Box sx={{
+                            p: { xs: 2, sm: 2.5 },
+                            width: '100%',
+                            height: '100%',
+                            minHeight: { xs: 420, lg: 0 },
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: { lg: 'hidden' },
+                        }}>
                         {selectedUser ? (
                             <Stack spacing={2.5} sx={{ height: '100%', minHeight: 0 }}>
                                 <Box>
@@ -767,25 +782,24 @@ export default function UserUsagePage() {
                                         borderColor: 'divider',
                                         borderRadius: 1.5,
                                         overflow: 'hidden',
-                                        bgcolor:
-                                            theme.palette.mode === 'dark'
-                                                ? 'rgba(255, 255, 255, 0.025)'
-                                                : alpha(theme.palette.action.hover, 0.5),
                                     }}
                                 >
                                     {[
-                                        [t('dashboard.userUsage.input', { defaultValue: 'Input' }), selectedUser.total_input_tokens],
-                                        [t('dashboard.userUsage.output', { defaultValue: 'Output' }), selectedUser.total_output_tokens],
-                                        [t('dashboard.userUsage.cache', { defaultValue: 'Cache' }), selectedUser.cache_input_tokens],
-                                    ].map(([label, value]) => (
+                                        { label: t('dashboard.userUsage.input', { defaultValue: 'Input' }), value: selectedUser.total_input_tokens, color: TOKEN_COLORS.input.main },
+                                        { label: t('dashboard.userUsage.output', { defaultValue: 'Output' }), value: selectedUser.total_output_tokens, color: TOKEN_COLORS.output.main },
+                                        { label: t('dashboard.userUsage.cache', { defaultValue: 'Cache' }), value: selectedUser.cache_input_tokens, color: TOKEN_COLORS.cache.main },
+                                    ].map(({ label, value, color }) => (
                                         <Grid
-                                            key={String(label)}
+                                            key={label}
                                             size={{ xs: 4 }}
                                             sx={{ '&:not(:last-of-type)': { borderRight: '1px solid', borderColor: 'divider' } }}
                                         >
                                             <Box sx={{ px: 1.5, py: 1.25 }}>
-                                                <Typography variant="subtitle2">{label}</Typography>
-                                                <Typography variant="h4" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                                                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>{label}</Typography>
+                                                </Stack>
+                                                <Typography variant="h4" sx={{ fontVariantNumeric: 'tabular-nums', mt: 0.5 }}>
                                                     {formatNumber(Number(value))}
                                                 </Typography>
                                             </Box>
@@ -851,12 +865,7 @@ export default function UserUsagePage() {
                                                         <LinearProgress
                                                             variant="determinate"
                                                             value={Math.min(share, 100)}
-                                                            sx={{
-                                                                mt: 0.65,
-                                                                height: 4,
-                                                                borderRadius: 2,
-                                                                bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.1),
-                                                            }}
+                                                            sx={{ mt: 0.65, height: 4, borderRadius: 2 }}
                                                         />
                                                     </Box>
                                                 );
@@ -885,9 +894,9 @@ export default function UserUsagePage() {
                             </Box>
                         )}
                         </Box>
-                    </Grid>
+                    </Paper>
                 </Grid>
-            </Paper>
+            </Grid>
         </Box>
     );
 }
