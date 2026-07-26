@@ -422,6 +422,17 @@ func (bm *BotManager) PairingManager() *bot.PairingManager {
 	return bm.manager.PairingManager()
 }
 
+// ChatStore opens a read-only view of the shared bot chat store. The caller
+// must Close it. Used by the GET /bots/:bot/chats API to list the chats a
+// bot can reach (so callers of /notify and /interact can discover the
+// channel-native chat_id those endpoints require).
+func (bm *BotManager) ChatStore() (bot.ChatStoreInterface, error) {
+	if bm == nil || bm.manager == nil {
+		return nil, fmt.Errorf("bot manager not initialized")
+	}
+	return bm.manager.ChatStore()
+}
+
 // AuditLogger returns the bot manager's audit logger so HTTP handlers can
 // record security-relevant operations (pairing reveal, rotate) under the
 // same logger used by the bot runtime.

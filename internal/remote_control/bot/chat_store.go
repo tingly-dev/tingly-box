@@ -3,6 +3,7 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -157,6 +158,16 @@ type ChatStoreInterface interface {
 	// ListChatsByOwner lists all chats owned by a user
 	ListChatsByOwner(ownerID, platform string) ([]*Chat, error)
 
+	// ListChats returns the chat records this bot can reach on the given
+	// platform — i.e. those whose Platform field is set AND equals platform.
+	// Records with an empty or mismatched Platform are dropped at the source:
+	// the store key has no platform dimension, so an unattributed record
+	// cannot be proven to belong to this bot's channel and must not leak into
+	// its /chats list. Used by the GET /bots/:bot/chats API so callers of the
+	// notify/interact endpoints can discover the channel-native chat_id they
+	// must pass in the request body.
+	ListChats(platform string) ([]*Chat, error)
+
 	// ListChatProjectPaths returns the MRU project-path history for a chat.
 	ListChatProjectPaths(chatID string) ([]string, error)
 
@@ -296,13 +307,22 @@ func (s *ChatStoreJSON) GetChat(chatID string) (*Chat, error) {
 	return s.store.Get(chatID), nil
 }
 
-// GetOrCreateChat gets a chat or creates it if not exists
+// GetOrCreateChat gets a chat or creates it if not exists.
+//
+// The store is keyed by chatID alone (no platform dimension), so when an
+// existing record's platform differs from the requested platform we refuse
+// rather than silently returning (and later overwriting) another platform's
+// chat. This is the guard against cross-platform chatID-string collisions
+// leaking platform A's chat into platform B.
 func (s *ChatStoreJSON) GetOrCreateChat(chatID, platform string) (*Chat, error) {
 	if err := s.ensureStore(); err != nil {
 		return nil, err
 	}
 
 	if chat := s.store.Get(chatID); chat != nil {
+		if platform != "" && chat.Platform != "" && chat.Platform != platform {
+			return nil, fmt.Errorf("chat %q belongs to platform %q, not %q", chatID, chat.Platform, platform)
+		}
 		return chat, nil
 	}
 
@@ -363,7 +383,11 @@ func (s *ChatStoreJSON) UpdateChat(chatID string, fn func(*Chat)) error {
 
 // ============== Project Binding ==============
 
-// BindProject binds a project to a chat (creates chat if not exists)
+// BindProject binds a project to a chat (creates chat if not exists).
+//
+// Platform is set only when the record is new or already on the same
+// platform: GetOrCreateChat refuses a cross-platform collision, so the
+// assignment here can never re-stamp another platform's chat.
 func (s *ChatStoreJSON) BindProject(chatID, platform, projectPath, ownerID string) error {
 	chat, err := s.GetOrCreateChat(chatID, platform)
 	if err != nil {
@@ -456,6 +480,32 @@ func (s *ChatStoreJSON) ListChatsByOwner(ownerID, platform string) ([]*Chat, err
 		}
 	}
 
+	return chats, nil
+}
+
+// ListChats returns the chat records this bot can reach on platform — those
+// whose Platform field is set AND matches. Empty/mismatched-platform records
+// are dropped at the source (see ChatStoreInterface.ListChats for why).
+// Ordered newest-first by UpdatedAt (then ChatID as a stable tiebreaker) so
+// the most recently active chats surface at the top.
+func (s *ChatStoreJSON) ListChats(platform string) ([]*Chat, error) {
+	if err := s.ensureStore(); err != nil {
+		return nil, err
+	}
+	items := s.store.List()
+	chats := make([]*Chat, 0, len(items))
+	for _, chat := range items {
+		if chat.Platform != platform {
+			continue
+		}
+		chats = append(chats, chat)
+	}
+	sort.Slice(chats, func(i, j int) bool {
+		if !chats[i].UpdatedAt.Equal(chats[j].UpdatedAt) {
+			return chats[i].UpdatedAt.After(chats[j].UpdatedAt)
+		}
+		return chats[i].ChatID < chats[j].ChatID
+	})
 	return chats, nil
 }
 

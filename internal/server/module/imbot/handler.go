@@ -11,6 +11,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/binding"
@@ -613,6 +614,29 @@ func (h *Handler) SetChannelRegistry(reg *channel.Registry) {
 		return
 	}
 	h.botMgr.SetChannelRegistry(reg)
+}
+
+// ChatStore opens a read-only view of the shared bot chat store (caller must
+// Close). Used by the notify module to implement GET /bots/:bot/chats.
+func (h *Handler) ChatStore() (bot.ChatStoreInterface, error) {
+	if h.botMgr == nil {
+		return nil, fmt.Errorf("bot manager not initialized")
+	}
+	return h.botMgr.ChatStore()
+}
+
+// ChatIDLock returns the chat-id lock configured for a bot (empty when none).
+// Used by the GET /bots/:bot/chats lister to scope the shared chat store to
+// the single chat a locked bot can reach.
+func (h *Handler) ChatIDLock(botUUID string) string {
+	if h.store == nil || botUUID == "" {
+		return ""
+	}
+	settings, err := h.store.GetSettingsByUUID(botUUID)
+	if err != nil {
+		return ""
+	}
+	return settings.ChatIDLock
 }
 
 // StartAllEnabled starts all enabled bots (delegates to BotManager)

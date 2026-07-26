@@ -199,6 +199,26 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		}
 	}
 
+	// Bot interaction API — the general, caller-facing surface for driving a
+	// running bot's channel: POST /api/v1/bots/:bot/{notify,interact} and
+	// GET /api/v1/bots/:bot/interact/:id. Auth is inherited from the apiV1
+	// group (getUserAuthMiddleware). Only registers when the bot middle layer
+	// is wired (channelRegistry + interactionRegistry present); without IM
+	// settings there is no channel to drive. See .design/bot-interaction-api.md.
+	if s.channelRegistry != nil && s.interactionRegistry != nil {
+		auditLog := audit.NewLogger(audit.Config{Console: true, MaxEntries: 1000})
+		// chatLister backs GET /bots/:bot/chats — it scopes the shared chat
+		// store to the bot's platform (a bot can only reach chats on its own
+		// platform) and to its chat-id lock when one is set. nil when no IM
+		// handler is wired, in which case /chats reports unavailable.
+		var chatLister notifymodule.ChatLister
+		if imbotHandler != nil {
+			chatLister = buildBotChatLister(s.channelRegistry, imbotHandler)
+		}
+		botAPI := notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, auditLog, chatLister)
+		notifymodule.RegisterBotRoutes(apiV1, botAPI)
+	}
+
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(s.config, s.host)
 	configapply.RegisterRoutes(apiV1, configapplyHandler)

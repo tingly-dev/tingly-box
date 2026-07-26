@@ -83,7 +83,14 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 			helpText += "@cc to handoff control to Claude Code\n"
 			helpText += "@tb to handoff control to Tingly Box Smart Guide\n"
 
+			// Surface the concrete chat id (principle #5/#11): it is the
+			// literal value the notify/interact API requires as chat_id, so
+			// the user must be able to copy it straight from the conversation
+			// where they take the next action.
 			helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
+			if hCtx.ChatID != "" {
+				helpText += fmt.Sprintf("\nChat ID: %s", hCtx.ChatID)
+			}
 			formattedHelp := h.formatHelpWithFooter(hCtx, helpText)
 			h.SendText(hCtx, formattedHelp)
 			return

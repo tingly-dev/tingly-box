@@ -20,6 +20,19 @@ func NewBotHandlerAdapter(handler *BotHandler) BotHandlerAdapter {
 	return &botHandlerAdapter{handler: handler}
 }
 
+// ctx builds a HandlerContext for a command-registry invocation, carrying the
+// bot's OWN platform. The registry dispatches without a message, so there is
+// no inbound HandlerContext to inherit — but the platform must still be the
+// real one: it is persisted onto the chat record (BindProject), and a wrong
+// value both mis-attributes the chat and hides it from its own bot's
+// GET /bots/:bot/chats listing.
+func (a *botHandlerAdapter) ctx(chatID string) HandlerContext {
+	return HandlerContext{
+		ChatID:   chatID,
+		Platform: imbot.Platform(a.handler.botSetting.Platform),
+	}
+}
+
 // SendText sends a text message to a chat.
 func (a *botHandlerAdapter) SendText(chatID, text string) error {
 	hCtx := HandlerContext{
@@ -37,16 +50,11 @@ func (a *botHandlerAdapter) GetProjectPath(chatID string) (string, error) {
 
 // SetProjectPath sets the project path for a chat.
 func (a *botHandlerAdapter) SetProjectPath(chatID, path string) error {
-	hCtx := HandlerContext{
-		ChatID:   chatID,
-		Platform: imbot.PlatformTelegram,
-		SenderID: "",
-	}
 	expandedPath, err := ExpandPath(path)
 	if err != nil {
 		return err
 	}
-	a.handler.completeBind(hCtx, expandedPath)
+	a.handler.completeBind(a.ctx(chatID), expandedPath)
 	return nil
 }
 
@@ -105,12 +113,7 @@ func (a *botHandlerAdapter) UpdatePermissionMode(sessionID, mode string) error {
 
 // ClearSession clears a session.
 func (a *botHandlerAdapter) ClearSession(chatID, agentType string) error {
-	hCtx := HandlerContext{
-		ChatID:   chatID,
-		Platform: imbot.PlatformTelegram,
-		SenderID: "",
-	}
-	a.handler.handleClearCommand(hCtx)
+	a.handler.handleClearCommand(a.ctx(chatID))
 	return nil
 }
 
