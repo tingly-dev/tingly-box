@@ -1539,7 +1539,7 @@ export const api = {
         auth_type: string;
         auth?: Record<string, string>;
         proxy_url?: string;
-        chat_id?: string;
+        chat_id_lock?: string;
         bash_allowlist?: string[];
         default_agent?: string;
         agent_type?: string;
@@ -1565,7 +1565,7 @@ export const api = {
         auth_type?: string;
         auth?: Record<string, string>;
         proxy_url?: string;
-        chat_id?: string;
+        chat_id_lock?: string;
         bash_allowlist?: string[];
         enabled?: boolean;
         default_agent?: string;

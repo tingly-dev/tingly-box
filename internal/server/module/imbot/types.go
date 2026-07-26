@@ -30,7 +30,7 @@ type CreateRequest struct {
 	AuthType           string            `json:"auth_type"`
 	Auth               map[string]string `json:"auth"`
 	ProxyURL           string            `json:"proxy_url,omitempty"`
-	ChatID             string            `json:"chat_id,omitempty"`
+	ChatID             string            `json:"chat_id_lock,omitempty"`
 	BashAllowlist      []string          `json:"bash_allowlist,omitempty"`
 	DefaultCwd         string            `json:"default_cwd,omitempty"`   // Default working directory
 	DefaultAgent       string            `json:"default_agent,omitempty"` // Default Agent UUID
@@ -52,7 +52,7 @@ type UpdateRequest struct {
 	AuthType           string            `json:"auth_type,omitempty"`
 	Auth               map[string]string `json:"auth,omitempty"`
 	ProxyURL           string            `json:"proxy_url,omitempty"`
-	ChatID             string            `json:"chat_id,omitempty"`
+	ChatID             string            `json:"chat_id_lock,omitempty"`
 	BashAllowlist      []string          `json:"bash_allowlist,omitempty"`
 	DefaultCwd         *string           `json:"default_cwd,omitempty"`         // Pointer for partial update
 	DefaultAgent       *string           `json:"default_agent,omitempty"`       // Pointer for partial update

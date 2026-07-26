@@ -155,7 +155,7 @@ const PlatformRemoteAgentPage = ({ platformId, platformName }: PlatformRemoteAge
         }
     }, [loadBots, showNotification, t]);
 
-    const handleAgentSettingsSave = useCallback(async (uuid: string, settings: { chat_id: string; bash_allowlist: string[] }) => {
+    const handleAgentSettingsSave = useCallback(async (uuid: string, settings: { chat_id_lock: string; bash_allowlist: string[] }) => {
         const result = await api.updateImBotSetting(uuid, settings);
         if (result?.success) {
             showNotification(t('remoteAgent.notify.agentSettingsSaved', { defaultValue: 'Agent settings saved' }), 'success');

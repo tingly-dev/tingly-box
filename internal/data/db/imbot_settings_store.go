@@ -26,7 +26,7 @@ type Settings struct {
 	AuthType      string            `json:"auth_type"`
 	Auth          map[string]string `json:"auth"`
 	ProxyURL      string            `json:"proxy_url,omitempty"`
-	ChatIDLock    string            `json:"chat_id,omitempty"`
+	ChatIDLock    string            `json:"chat_id_lock,omitempty"` // Restriction on which chat is accepted, NOT a live chat id (see bot.BotSetting)
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
 	DefaultCwd    string            `json:"default_cwd,omitempty"`   // Default working directory
 	DefaultAgent  string            `json:"default_agent,omitempty"` // Default Agent UUID

@@ -49,7 +49,7 @@ interface RemoteAgentBotCardProps {
     ccProfiles?: ProfileInfo[];
     /** Opens the Claude Code profile picker for this bot. */
     onCCProfileClick?: () => void;
-    onAgentSettingsSave: (settings: { chat_id: string; bash_allowlist: string[] }) => Promise<void>;
+    onAgentSettingsSave: (settings: { chat_id_lock: string; bash_allowlist: string[] }) => Promise<void>;
     /** Opens the shared BotConfigDialog in edit mode (bot resource fields). */
     onEdit: () => void;
     onRestart: () => void;
@@ -87,7 +87,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     const isEnabled = bot.enabled ?? true;
     const hasModel = Boolean(bot.smartguide_provider && bot.smartguide_model);
 
-    const [chatIdDraft, setChatIdDraft] = useState(bot.chat_id || '');
+    const [chatIdDraft, setChatIdDraft] = useState(bot.chat_id_lock || '');
     const [allowlistDraft, setAllowlistDraft] = useState((bot.bash_allowlist || []).join('\n'));
     const [saving, setSaving] = useState(false);
     const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -95,11 +95,11 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
 
     // Re-sync drafts when the bot record refreshes (e.g. after reload).
     useEffect(() => {
-        setChatIdDraft(bot.chat_id || '');
+        setChatIdDraft(bot.chat_id_lock || '');
         setAllowlistDraft((bot.bash_allowlist || []).join('\n'));
-    }, [bot.chat_id, bot.bash_allowlist]);
+    }, [bot.chat_id_lock, bot.bash_allowlist]);
 
-    const dirty = chatIdDraft.trim() !== (bot.chat_id || '') ||
+    const dirty = chatIdDraft.trim() !== (bot.chat_id_lock || '') ||
         allowlistDraft.split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean).join(',') !==
         (bot.bash_allowlist || []).join(',');
 
@@ -107,7 +107,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
         setSaving(true);
         try {
             await onAgentSettingsSave({
-                chat_id: chatIdDraft.trim(),
+                chat_id_lock: chatIdDraft.trim(),
                 bash_allowlist: allowlistDraft.split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean),
             });
         } finally {
