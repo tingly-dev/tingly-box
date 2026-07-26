@@ -10,9 +10,7 @@ import {
     IconButton,
     InputAdornment,
     LinearProgress,
-    MenuItem,
     Paper,
-    Select,
     Skeleton,
     Stack,
     Table,
@@ -20,7 +18,9 @@ import {
     TableCell,
     TableContainer,
     TableHead,
+    TablePagination,
     TableRow,
+    TableSortLabel,
     TextField,
     ToggleButton,
     ToggleButtonGroup,
@@ -48,7 +48,8 @@ import type { AggregatedStat } from '@/components/dashboard';
 import api from '@/services/api';
 
 type TimeRange = 'today' | '7d' | '30d' | '90d';
-type SortMode = 'tokens' | 'requests' | 'errors' | 'name';
+type SortField = 'name' | 'requests' | 'tokens' | 'errors';
+type SortDirection = 'asc' | 'desc';
 
 interface APITokenInfo {
     token_id: string;
@@ -136,7 +137,10 @@ export default function UserUsagePage() {
     const [modelStats, setModelStats] = useState<AggregatedStat[]>([]);
     const [selectedUserID, setSelectedUserID] = useState('');
     const [search, setSearch] = useState('');
-    const [sortMode, setSortMode] = useState<SortMode>('tokens');
+    const [sortField, setSortField] = useState<SortField>('tokens');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [loading, setLoading] = useState(true);
     const [detailLoading, setDetailLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -250,17 +254,37 @@ export default function UserUsagePage() {
 
     const visibleRows = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
+        const direction = sortDirection === 'asc' ? 1 : -1;
         return rows
             .filter((row) => !query
                 || row.display_name.toLocaleLowerCase().includes(query)
                 || row.user_id.toLocaleLowerCase().includes(query))
             .sort((a, b) => {
-                if (sortMode === 'name') return a.display_name.localeCompare(b.display_name);
-                if (sortMode === 'requests') return b.request_count - a.request_count;
-                if (sortMode === 'errors') return b.error_rate - a.error_rate;
-                return b.total_tokens - a.total_tokens;
+                if (sortField === 'name') return direction * a.display_name.localeCompare(b.display_name);
+                if (sortField === 'requests') return direction * (a.request_count - b.request_count);
+                if (sortField === 'errors') return direction * (a.error_rate - b.error_rate);
+                return direction * (a.total_tokens - b.total_tokens);
             });
-    }, [rows, search, sortMode]);
+    }, [rows, search, sortField, sortDirection]);
+
+    const pagedRows = useMemo(
+        () => visibleRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+        [visibleRows, page, rowsPerPage],
+    );
+
+    const handleSort = (field: SortField) => {
+        if (field === sortField) {
+            setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortField(field);
+            setSortDirection(field === 'name' ? 'asc' : 'desc');
+        }
+    };
+
+    // Filtering/sorting can shrink the result set below the current page.
+    useEffect(() => {
+        setPage(0);
+    }, [search, sortField, sortDirection, range]);
 
     useEffect(() => {
         if (visibleRows.length === 0) {
@@ -428,7 +452,7 @@ export default function UserUsagePage() {
                             sx={{
                                 p: 2,
                                 display: 'grid',
-                                gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 1fr) minmax(180px, 210px) 138px' },
+                                gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 1fr) minmax(200px, 280px)' },
                                 gap: 1.25,
                                 alignItems: 'center',
                                 borderBottom: '1px solid',
@@ -464,18 +488,6 @@ export default function UserUsagePage() {
                                 }}
                                 sx={{ width: '100%', bgcolor: 'background.paper' }}
                             />
-                            <Select
-                                size="small"
-                                value={sortMode}
-                                onChange={(event) => setSortMode(event.target.value as SortMode)}
-                                aria-label={t('dashboard.userUsage.sortBy', { defaultValue: 'Sort users' })}
-                                sx={{ minWidth: 138, bgcolor: 'background.paper' }}
-                            >
-                                <MenuItem value="tokens">{t('dashboard.userUsage.sortTokens', { defaultValue: 'Most tokens' })}</MenuItem>
-                                <MenuItem value="requests">{t('dashboard.userUsage.sortRequests', { defaultValue: 'Most requests' })}</MenuItem>
-                                <MenuItem value="errors">{t('dashboard.userUsage.sortErrors', { defaultValue: 'Highest errors' })}</MenuItem>
-                                <MenuItem value="name">{t('dashboard.userUsage.sortName', { defaultValue: 'Name' })}</MenuItem>
-                            </Select>
                         </Box>
                         <TableContainer
                             sx={{
@@ -497,19 +509,55 @@ export default function UserUsagePage() {
                                             },
                                         }}
                                     >
-                                        <TableCell>{t('dashboard.userUsage.user', { defaultValue: 'User' })}</TableCell>
-                                        <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                                            {t('dashboard.userUsage.requests', { defaultValue: 'Requests' })}
+                                        <TableCell sortDirection={sortField === 'name' ? sortDirection : false}>
+                                            <TableSortLabel
+                                                active={sortField === 'name'}
+                                                direction={sortField === 'name' ? sortDirection : 'asc'}
+                                                onClick={() => handleSort('name')}
+                                            >
+                                                {t('dashboard.userUsage.user', { defaultValue: 'User' })}
+                                            </TableSortLabel>
                                         </TableCell>
-                                        <TableCell align="right">{t('dashboard.userUsage.tokens', { defaultValue: 'Tokens' })}</TableCell>
-                                        <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                                            {t('dashboard.userUsage.errorRate', { defaultValue: 'Error rate' })}
+                                        <TableCell
+                                            align="right"
+                                            sortDirection={sortField === 'requests' ? sortDirection : false}
+                                            sx={{ display: { xs: 'none', sm: 'table-cell' } }}
+                                        >
+                                            <TableSortLabel
+                                                active={sortField === 'requests'}
+                                                direction={sortField === 'requests' ? sortDirection : 'desc'}
+                                                onClick={() => handleSort('requests')}
+                                            >
+                                                {t('dashboard.userUsage.requests', { defaultValue: 'Requests' })}
+                                            </TableSortLabel>
+                                        </TableCell>
+                                        <TableCell align="right" sortDirection={sortField === 'tokens' ? sortDirection : false}>
+                                            <TableSortLabel
+                                                active={sortField === 'tokens'}
+                                                direction={sortField === 'tokens' ? sortDirection : 'desc'}
+                                                onClick={() => handleSort('tokens')}
+                                            >
+                                                {t('dashboard.userUsage.tokens', { defaultValue: 'Tokens' })}
+                                            </TableSortLabel>
+                                        </TableCell>
+                                        <TableCell
+                                            align="right"
+                                            sortDirection={sortField === 'errors' ? sortDirection : false}
+                                            sx={{ display: { xs: 'none', md: 'table-cell' } }}
+                                        >
+                                            <TableSortLabel
+                                                active={sortField === 'errors'}
+                                                direction={sortField === 'errors' ? sortDirection : 'desc'}
+                                                onClick={() => handleSort('errors')}
+                                            >
+                                                {t('dashboard.userUsage.errorRate', { defaultValue: 'Error rate' })}
+                                            </TableSortLabel>
                                         </TableCell>
                                         <TableCell padding="checkbox" />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {visibleRows.map((row) => {
+                                    {pagedRows.map((row) => {
                                         const selected = row.user_id === selectedUserID;
                                         return (
                                             <TableRow
@@ -626,6 +674,21 @@ export default function UserUsagePage() {
                                 </TableBody>
                             </Table>
                         </TableContainer>
+                        {visibleRows.length > 0 && (
+                            <TablePagination
+                                component="div"
+                                count={visibleRows.length}
+                                page={page}
+                                onPageChange={(_, newPage) => setPage(newPage)}
+                                rowsPerPage={rowsPerPage}
+                                onRowsPerPageChange={(event) => {
+                                    setRowsPerPage(parseInt(event.target.value, 10));
+                                    setPage(0);
+                                }}
+                                rowsPerPageOptions={[5, 10, 25, 50]}
+                                sx={{ borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}
+                            />
+                        )}
                     </Grid>
 
                     <Grid
