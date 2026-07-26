@@ -1,5 +1,6 @@
 import {
     ContentCopy as CopyIcon,
+    Info as InfoIcon,
     Refresh as RotateIcon,
     Visibility as RevealIcon,
     VisibilityOff as HideIcon,
@@ -15,24 +16,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { notify } from '@/utils/notify';
+import { isPairingRequired } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
 
-// Token-DM platforms default to TOFU pairing on. Mirrors
-// bot.PlatformDefaultsRequirePairing on the backend.
-const PLATFORM_DEFAULT_REQUIRE_PAIRING: Record<string, boolean> = {
-    telegram: true,
-    discord: true,
-    slack: true,
-};
-
-const isPairingRequired = (bot: BotSettings): boolean => {
-    if (typeof bot.require_pairing === 'boolean') {
-        return bot.require_pairing;
-    }
-    return Boolean(PLATFORM_DEFAULT_REQUIRE_PAIRING[bot.platform || '']);
-};
-
-// Returns null once expired so the caller can render a localized label.
+// formatRemaining returns null once expired so the caller can render a localized label.
 const formatRemaining = (expiresAt: string): string | null => {
     const ms = new Date(expiresAt).getTime() - Date.now();
     if (Number.isNaN(ms) || ms <= 0) return null;
@@ -142,10 +129,6 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
                 pt: 0.5,
             }}
         >
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                {t('remoteControl.pairing.label', { defaultValue: 'Pairing code:' })}
-            </Typography>
-
             {loading && !code ? (
                 <CircularProgress size={14} />
             ) : active ? (
@@ -183,9 +166,11 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
                     </Tooltip>
                 </>
             ) : (
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {message || t('remoteControl.pairing.noActiveCode', { defaultValue: 'No active code — bot may be stopped, or the code was already consumed. Click Rotate to mint a new one.' })}
-                </Typography>
+                // No active code: an info icon (tooltip carries the explanation)
+                // instead of inline text, so the inactive state stays compact.
+                <Tooltip title={t('remoteControl.pairing.noActiveCode', { defaultValue: 'No active code — bot may be stopped, or the code was already consumed. Click Rotate to mint a new one.' })}>
+                    <InfoIcon fontSize="small" sx={{color: 'text.disabled'}}/>
+                </Tooltip>
             )}
 
             <Tooltip title={t('remoteControl.pairing.rotateTooltip', { defaultValue: 'Rotate (invalidates current code)' })}>

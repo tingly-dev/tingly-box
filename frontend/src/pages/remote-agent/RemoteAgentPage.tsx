@@ -12,7 +12,7 @@ import PlatformRemoteAgentPage from './PlatformRemoteAgentPage';
 // Notify), with platform selection moved in-page — a grid of picker tiles
 // above the page content, instead of nine separate sidebar rows. The routes
 // it switches between (/remote-agent/:platform) are unchanged — deep links
-// and the BotCard purpose chip still work. PlatformRemoteAgentPage itself is
+// and the bot table purpose chip still work. PlatformRemoteAgentPage itself is
 // untouched: same guide, add, and pairing behavior it already had.
 const RemoteAgentPage = () => {
     const { platform = 'weixin' } = useParams<{ platform: string }>();

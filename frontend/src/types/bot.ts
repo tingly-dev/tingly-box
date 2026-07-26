@@ -105,6 +105,25 @@ export function defaultAgentForCCProfile(profileId: string): string {
 // (control Claude Code / SmartGuide from chat). Mirrors the backend constant.
 export const REMOTE_AGENT_SCENARIO = 'remote_agent';
 
+// PLATFORM_DEFAULT_REQUIRE_PAIRING lists the token-DM platforms that default to
+// TOFU pairing on. Mirrors bot.PlatformDefaultsRequirePairing on the backend.
+// Shared by BotTable (decides whether to render the Pairing cell) and
+// PairingCodePanel (decides whether to render at all) so the two stay in sync.
+const PLATFORM_DEFAULT_REQUIRE_PAIRING: Record<string, boolean> = {
+    telegram: true,
+    discord: true,
+    slack: true,
+};
+
+// isPairingRequired reports whether a bot enforces TOFU pairing — either via an
+// explicit require_pairing flag, or the platform default.
+export function isPairingRequired(bot?: {require_pairing?: boolean; platform?: string} | null): boolean {
+    if (typeof bot?.require_pairing === 'boolean') {
+        return bot.require_pairing;
+    }
+    return Boolean(PLATFORM_DEFAULT_REQUIRE_PAIRING[bot?.platform || '']);
+}
+
 // isRemoteAgentMounted reports whether the remote_agent purpose is mounted on a
 // bot, from its raw scenarios JSON. Mirrors the backend binding.ScenarioMounted:
 // an absent binding counts as mounted (legacy default on); an explicit

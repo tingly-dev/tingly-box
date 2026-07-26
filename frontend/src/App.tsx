@@ -266,7 +266,7 @@ function AppContent() {
                     {/* Remote Control — the purpose pages. One nav row (see useActivityItems);
                         platform selection is an in-page picker (RemoteAgentPage) instead
                         of a route per platform in the sidebar. The routes themselves are
-                        unchanged, so deep links and the BotCard purpose chip still work. */}
+                        unchanged, so deep links and the bot table purpose chip still work. */}
                     <Route path="/remote-agent" element={<Navigate to="/remote-agent/weixin" replace />} />
                     <Route path="/remote-agent/:platform" element={<RemoteAgentPage />} />
                     {/* Back-compat: old /remote-control/* (the pre-split combined pages) → /remote-agent/* */}
