@@ -149,10 +149,15 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 		openaiIndex := int(toolCall.Index)
 
 		if _, exists := c.pendingToolCalls[openaiIndex]; !exists {
+			// A Responses function-call item has two distinct identifiers:
+			//   - id: the Responses output item ID (must use the fc_ prefix)
+			//   - call_id: the correlation ID used by function_call_output
+			//
+			// Chat Completions exposes only tool_call.id (normally call_...).
+			// Preserve it as call_id, but never reuse it as the Responses item ID:
+			// Codex persists output item IDs and a later native Responses request
+			// rejects an item whose id starts with call_ instead of fc_.
 			itemID := fmt.Sprintf("fc_%d_%d", time.Now().Unix(), openaiIndex)
-			if toolCall.ID != "" {
-				itemID = truncateToolCallID(toolCall.ID)
-			}
 
 			// Reserve OutputIndex 0 for the text message item; tool calls start at 1.
 			if c.outputIndex == 0 {
