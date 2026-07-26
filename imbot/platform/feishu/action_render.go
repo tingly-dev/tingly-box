@@ -143,6 +143,9 @@ func payloadFromButtonValue(value map[string]interface{}) core.Payload {
 		for _, item := range raw {
 			s, ok := item.(string)
 			if !ok {
+				// A malformed array is not something to half-decode: a payload
+				// missing a segment dispatches to the wrong handler rather
+				// than to none.
 				return nil
 			}
 			segments = append(segments, s)

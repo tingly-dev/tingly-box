@@ -42,27 +42,20 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		}
 		switch subAction {
 		case "clear":
-			// Remove the action keyboard before handling
+			// The menu is consumed by the tap; take it down before acting so a
+			// second tap cannot race the first.
 			h.removeActionKeyboard(bot, chatID)
 			h.handleClearCommand(hCtx)
 		case "bind":
-			// Remove the action keyboard before handling
 			h.removeActionKeyboard(bot, chatID)
-			// Start interactive bind
-			// Start interactive bind
 			h.handleBindInteractive(hCtx)
 		case "project":
-			// Remove the action keyboard before handling
 			h.removeActionKeyboard(bot, chatID)
-			// Start interactive bind
-			// Start interactive bind
 			h.handleBotProjectCommand(hCtx)
 		}
 
 	case "project":
-		// Remove the action keyboard before handling
 		h.removeActionKeyboard(bot, chatID)
-		// Start interactive bind
 		if payload.Arg(1) == "switch" {
 			if projectID := payload.Arg(2); projectID != "" {
 				h.handleProjectSwitch(hCtx, projectID)
@@ -98,56 +91,15 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			// Confirm bind to current directory
 			h.handleBindConfirm(hCtx)
 
-		case "dir":
-			// Navigate to the directory the button names.
-			target := payload.Arg(2)
-			if target == "" {
+		case "dir", "up", "prev", "next":
+			// Every browser move is "mutate the flow state, then redraw in
+			// place". Keeping that one shape here means a new move cannot
+			// forget the redraw.
+			if err := h.moveDirectoryBrowser(chatID, subAction, payload.Arg(2)); err != nil {
+				logrus.WithError(err).WithField("move", subAction).Warn("Directory browser move failed")
 				return
 			}
-			if err := h.directoryBrowser.Navigate(chatID, target); err != nil {
-				logrus.WithError(err).Warn("Failed to navigate directory")
-				return
-			}
-			// Get message ID from metadata for editing
-			msgID, _ := msg.Metadata["message_id"].(string)
-			if msgID == "" {
-				msgID = msg.ID
-			}
-			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
-
-		case "up":
-			// Navigate to parent directory
-			if err := h.directoryBrowser.NavigateUp(chatID); err != nil {
-				logrus.WithError(err).Warn("Failed to navigate up")
-				return
-			}
-			msgID, _ := msg.Metadata["message_id"].(string)
-			if msgID == "" {
-				msgID = msg.ID
-			}
-			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
-
-		case "prev":
-			if err := h.directoryBrowser.PrevPage(chatID); err != nil {
-				logrus.WithError(err).Warn("Failed to go to previous page")
-				return
-			}
-			msgID, _ := msg.Metadata["message_id"].(string)
-			if msgID == "" {
-				msgID = msg.ID
-			}
-			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
-
-		case "next":
-			if err := h.directoryBrowser.NextPage(chatID); err != nil {
-				logrus.WithError(err).Warn("Failed to go to next page")
-				return
-			}
-			msgID, _ := msg.Metadata["message_id"].(string)
-			if msgID == "" {
-				msgID = msg.ID
-			}
-			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
+			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, browserMessageID(msg))
 
 		case "select":
 			// Select current directory (path is in state)
@@ -189,18 +141,46 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			// tell whether the bind had happened.
 			h.completeBind(hCtx, path)
 			h.directoryBrowser.Clear(chatID)
+			// Take the confirmation down, as the select path does, so the
+			// button cannot be tapped a second time against cleared state.
+			editDirectoryBrowserMessage(h.ctx, bot, chatID, browserMessageID(msg),
+				fmt.Sprintf("✅ Created and bound: `%s`", path))
 
 		case "cancel":
 			h.directoryBrowser.Clear(chatID)
-			// Get message ID from metadata for editing
-			msgID, _ := msg.Metadata["message_id"].(string)
-			if msgID == "" {
-				msgID = msg.ID
-			}
-			// Edit message to show cancel and remove keyboard
-			editDirectoryBrowserMessage(h.ctx, bot, chatID, msgID, "❌ Bind cancelled.")
+			editDirectoryBrowserMessage(h.ctx, bot, chatID, browserMessageID(msg), "❌ Bind cancelled.")
 			h.SendText(hCtx, "Bind cancelled.")
 		}
+	}
+}
+
+// browserMessageID returns the message the browser keyboard is attached to,
+// falling back to the callback's own message when the platform did not supply
+// one separately.
+func browserMessageID(msg imbot.Message) string {
+	if id, _ := msg.Metadata["message_id"].(string); id != "" {
+		return id
+	}
+	return msg.ID
+}
+
+// moveDirectoryBrowser applies one navigation step to the bind flow. target is
+// only read by the "dir" move.
+func (h *BotHandler) moveDirectoryBrowser(chatID, move, target string) error {
+	switch move {
+	case "dir":
+		if target == "" {
+			return fmt.Errorf("no directory given")
+		}
+		return h.directoryBrowser.Navigate(chatID, target)
+	case "up":
+		return h.directoryBrowser.NavigateUp(chatID)
+	case "prev":
+		return h.directoryBrowser.PrevPage(chatID)
+	case "next":
+		return h.directoryBrowser.NextPage(chatID)
+	default:
+		return fmt.Errorf("unknown move %q", move)
 	}
 }
 

@@ -114,28 +114,9 @@ func (b *KeyboardBuilder) ButtonCount() int {
 	return count
 }
 
-// CallbackDataBuilder helps build structured callback data strings
-type CallbackDataBuilder struct {
-	parts []string
-}
-
-// NewCallbackData creates a new callback data builder
-func NewCallbackData(action string) *CallbackDataBuilder {
-	return &CallbackDataBuilder{
-		parts: []string{action},
-	}
-}
-
-// Add adds a data part to the callback
-func (b *CallbackDataBuilder) Add(data string) *CallbackDataBuilder {
-	b.parts = append(b.parts, data)
-	return b
-}
-
-// Build returns the callback data string
-func (b *CallbackDataBuilder) Build() string {
-	return strings.Join(b.parts, ":")
-}
+// CallbackDataBuilder is gone: it built the flat colon-joined string that
+// core.Payload replaces, and nothing had used it. Build segments with
+// ActionButton or core.NewPayload instead.
 
 // ParseCallbackData parses a callback data string into parts
 func ParseCallbackData(data string) []string {

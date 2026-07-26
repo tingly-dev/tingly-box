@@ -1,9 +1,11 @@
 package feishu
 
 import (
+	"context"
 	"testing"
 
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -90,5 +92,64 @@ func TestGetReceiveIdType(t *testing.T) {
 		if got := getReceiveIdType(target); got != want {
 			t.Errorf("getReceiveIdType(%q) = %q, want %q", target, got, want)
 		}
+	}
+}
+
+// TestCardActionResponseIsNeverATypedNil guards a trap in how the SDK returns
+// this handler's result. It passes the value out through an interface{} and
+// tests it against nil; a nil *CardActionTriggerResponse still reads as
+// non-nil there and gets marshalled, so Feishu would receive a literal "null"
+// body rather than no body. Every return path must carry a real value.
+func TestCardActionResponseIsNeverATypedNil(t *testing.T) {
+	b := &Bot{BaseBot: core.NewBaseBot(&core.Config{Platform: core.PlatformFeishu}), domain: DomainFeishu}
+
+	for name, event := range map[string]*callback.CardActionTriggerEvent{
+		"nil event":     nil,
+		"nil inner":     {},
+		"empty payload": {Event: &callback.CardActionTriggerRequest{Action: &callback.CallBackAction{Value: map[string]interface{}{}}}},
+		"no chat": {Event: &callback.CardActionTriggerRequest{
+			Action: &callback.CallBackAction{Value: map[string]interface{}{"callback": "bind:up"}},
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp, err := b.handleCardActionTrigger(context.Background(), event)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resp == nil {
+				t.Fatal("returned a nil pointer; the SDK marshals that as \"null\"")
+			}
+			// Mirror the SDK: the value crosses an interface{} boundary.
+			var asAny interface{} = resp
+			if asAny == nil {
+				t.Fatal("unreachable, but documents what the SDK checks")
+			}
+		})
+	}
+}
+
+// TestCardActionWithoutChatIsDropped: the message builder substitutes
+// "unknown" for a missing recipient, so emitting would address a chat that
+// does not exist rather than failing visibly.
+func TestCardActionWithoutChatIsDropped(t *testing.T) {
+	b := &Bot{BaseBot: core.NewBaseBot(&core.Config{Platform: core.PlatformFeishu}), domain: DomainFeishu}
+
+	received := make(chan core.Message, 1)
+	b.OnMessage(func(m core.Message) {
+		received <- m
+	})
+
+	_, err := b.handleCardActionTrigger(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Action: &callback.CallBackAction{Value: map[string]interface{}{"callback": "bind:up"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	select {
+	case m := <-received:
+		t.Fatalf("a chat-less card action was emitted: recipient=%q", m.Recipient.ID)
+	default:
 	}
 }

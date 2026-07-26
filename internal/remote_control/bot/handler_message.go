@@ -34,7 +34,8 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	// OLD: Check if this is a legacy callback query (for backward compatibility)
+	// An action firing (a button press) dispatches on its payload, not on
+	// message text.
 	if msg.IsCallback() {
 		h.handleCallbackQuery(bot, chatID, msg)
 		return

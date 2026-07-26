@@ -21,24 +21,40 @@ import (
 // emits it on the same channel as ordinary messages, so consumers dispatch
 // callbacks identically on every platform.
 //
-// The returned response is what Feishu shows the user immediately. Returning
-// nil leaves the card as it is, which is right here: the handler downstream
-// decides whether to restate the card, and guessing a toast would pre-empt it.
+// The returned response is what Feishu shows the user immediately. An empty
+// response means "leave the card alone", which is right here: the handler
+// downstream decides whether to restate the card, and guessing a toast would
+// pre-empt it.
+//
+// It must be an empty value rather than a nil pointer. The SDK returns this
+// through an interface{} and tests it against nil, so a typed nil pointer
+// still reads as non-nil and gets marshalled — sending Feishu a literal
+// "null" body instead of no body at all.
 func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
+	noReply := &callback.CardActionTriggerResponse{}
+
 	if event == nil || event.Event == nil || event.Event.Action == nil {
-		return nil, nil
+		return noReply, nil
 	}
 
 	payload := payloadFromButtonValue(event.Event.Action.Value)
 	if payload.IsEmpty() {
 		b.Logger().Debug("Card action carried no recognisable payload: %v", event.Event.Action.Value)
-		return nil, nil
+		return noReply, nil
 	}
 
 	var chatID, messageID string
 	if event.Event.Context != nil {
 		chatID = event.Event.Context.OpenChatID
 		messageID = event.Event.Context.OpenMessageID
+	}
+	if chatID == "" {
+		// Without a chat there is nowhere to reply. Emitting anyway would be
+		// worse than dropping: the message builder substitutes "unknown" for a
+		// missing recipient, and the handler would then address a chat that
+		// does not exist.
+		b.Logger().Warn("Card action arrived without a chat ID, dropping: %v", payload)
+		return noReply, nil
 	}
 
 	senderID := ""
@@ -67,5 +83,5 @@ func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardA
 
 	b.EmitMessage(*msg)
 	b.UpdateLastActivity()
-	return nil, nil
+	return noReply, nil
 }
