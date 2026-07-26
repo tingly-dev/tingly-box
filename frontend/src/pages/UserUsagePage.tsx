@@ -43,7 +43,15 @@ import {
     Users,
 } from '@/components/icons';
 import PageHeader from '@/components/PageHeader';
-import { formatNumber, StatCard, TOKEN_COLORS } from '@/components/dashboard';
+import {
+    formatNumber,
+    StatCard,
+    TOKEN_COLORS,
+    getTotalTokens,
+    getCacheHitRate,
+    getCacheHitRateColor,
+    getErrorRateColor,
+} from '@/components/dashboard';
 import type { AggregatedStat } from '@/components/dashboard';
 import api from '@/services/api';
 
@@ -110,6 +118,20 @@ const formatDateTime = (value?: string) => {
         minute: '2-digit',
     }).format(date);
 };
+
+// Shared base style for the master-list and detail-panel cards: separate
+// elevation-0 Paper cards (matching StatCard/ServiceStatsTable's convention)
+// rather than one Paper split by an internal divider line.
+const masterDetailCardSx = {
+    width: '100%',
+    borderRadius: 2,
+    border: '1px solid',
+    borderColor: 'divider',
+    backgroundColor: 'background.paper',
+    boxShadow: 'none',
+    overflow: 'hidden',
+    height: { xs: 'auto', lg: 640 },
+} as const;
 
 const UserUsageSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -230,22 +252,19 @@ export default function UserUsagePage() {
         );
         return tokens.map((token) => {
             const stat = statsByUser.get(token.user_id);
-            const totalInputTokens = stat?.total_input_tokens || 0;
-            const totalOutputTokens = stat?.total_output_tokens || 0;
-            const cacheInputTokens = stat?.cache_input_tokens || 0;
             return {
                 ...token,
                 display_name: token.account_type === 'primary'
                     ? t('dashboard.userUsage.primaryAccount', { defaultValue: 'Primary account' })
                     : token.display_name,
                 request_count: stat?.request_count || 0,
-                // total_tokens is derived, not read from the API's total_tokens
-                // field: that field is input+output only and excludes cache
-                // (see .design/stream-usage-tracking.md), same as DashboardPage.
-                total_tokens: totalInputTokens + totalOutputTokens + cacheInputTokens,
-                total_input_tokens: totalInputTokens,
-                total_output_tokens: totalOutputTokens,
-                cache_input_tokens: cacheInputTokens,
+                // total_tokens is derived via the shared helper, not read from
+                // the API's total_tokens field (input+output only, excludes
+                // cache — see .design/stream-usage-tracking.md).
+                total_tokens: getTotalTokens(stat ?? {}),
+                total_input_tokens: stat?.total_input_tokens || 0,
+                total_output_tokens: stat?.total_output_tokens || 0,
+                cache_input_tokens: stat?.cache_input_tokens || 0,
                 error_count: stat?.error_count || 0,
                 error_rate: stat?.error_rate || 0,
             };
@@ -300,19 +319,45 @@ export default function UserUsagePage() {
         loadUserDetail(selectedUserID, range);
     }, [loadUserDetail, range, selectedUserID]);
 
-    const selectedUser = rows.find((row) => row.user_id === selectedUserID);
-    const totalTokens = rows.reduce((sum, row) => sum + row.total_tokens, 0);
-    const totalInputTokens = rows.reduce((sum, row) => sum + row.total_input_tokens, 0);
-    const totalCacheTokens = rows.reduce((sum, row) => sum + row.cache_input_tokens, 0);
-    const totalRequests = rows.reduce((sum, row) => sum + row.request_count, 0);
-    const totalErrors = rows.reduce((sum, row) => sum + row.error_count, 0);
-    const activeUsers = rows.filter((row) => row.request_count > 0).length;
-    const maxTokens = Math.max(...visibleRows.map((row) => row.total_tokens), 1);
-    // Same formula as DashboardPage: cache / (cache + input).
-    const cacheHitRate = (totalCacheTokens + totalInputTokens) > 0
-        ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
-        : 0;
-    const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
+    const selectedUser = useMemo(
+        () => rows.find((row) => row.user_id === selectedUserID),
+        [rows, selectedUserID],
+    );
+
+    // Single pass over rows for every summary aggregate, instead of one
+    // reduce/filter per metric — recomputed only when rows actually change.
+    const summary = useMemo(() => {
+        const totals = rows.reduce(
+            (acc, row) => {
+                acc.tokens += row.total_tokens;
+                acc.inputTokens += row.total_input_tokens;
+                acc.cacheTokens += row.cache_input_tokens;
+                acc.requests += row.request_count;
+                acc.errors += row.error_count;
+                if (row.request_count > 0) acc.activeUsers += 1;
+                return acc;
+            },
+            { tokens: 0, inputTokens: 0, cacheTokens: 0, requests: 0, errors: 0, activeUsers: 0 },
+        );
+        return {
+            ...totals,
+            cacheHitRate: getCacheHitRate(totals.cacheTokens, totals.inputTokens),
+            errorRate: totals.requests > 0 ? (totals.errors / totals.requests) * 100 : 0,
+        };
+    }, [rows]);
+    const {
+        tokens: totalTokens,
+        cacheTokens: totalCacheTokens,
+        requests: totalRequests,
+        errors: totalErrors,
+        activeUsers,
+        cacheHitRate,
+        errorRate,
+    } = summary;
+    const maxTokens = useMemo(
+        () => visibleRows.reduce((max, row) => Math.max(max, row.total_tokens), 1),
+        [visibleRows],
+    );
     const summaryItems = [
         {
             label: t('dashboard.userUsage.registeredUsers', { defaultValue: 'Registered users' }),
@@ -342,8 +387,7 @@ export default function UserUsagePage() {
                 defaultValue: `${formatNumber(totalCacheTokens)} cached`,
             }),
             icon: <CachedIcon />,
-            // Same health-gauge thresholds as DashboardPage.
-            color: cacheHitRate >= 50 ? 'success' as const : cacheHitRate >= 20 ? 'warning' as const : 'error' as const,
+            color: getCacheHitRateColor(cacheHitRate),
         },
         {
             label: t('dashboard.userUsage.requests', { defaultValue: 'Requests' }),
@@ -360,8 +404,32 @@ export default function UserUsagePage() {
             value: formatNumber(totalErrors),
             hint: `${errorRate.toFixed(1)}%`,
             icon: <ErrorOutline />,
-            // Same rate-based health-gauge thresholds as DashboardPage's Error Rate card.
-            color: errorRate > 5 ? 'error' as const : errorRate > 1 ? 'warning' as const : 'success' as const,
+            color: getErrorRateColor(errorRate),
+        },
+    ];
+
+    const userColumns: Array<{
+        field: SortField;
+        label: string;
+        align?: 'right';
+        defaultDir: SortDirection;
+        sx?: object;
+    }> = [
+        { field: 'name', label: t('dashboard.userUsage.user', { defaultValue: 'User' }), defaultDir: 'asc' },
+        {
+            field: 'requests',
+            label: t('dashboard.userUsage.requests', { defaultValue: 'Requests' }),
+            align: 'right',
+            defaultDir: 'desc',
+            sx: { display: { xs: 'none', sm: 'table-cell' } },
+        },
+        { field: 'tokens', label: t('dashboard.userUsage.tokens', { defaultValue: 'Tokens' }), align: 'right', defaultDir: 'desc' },
+        {
+            field: 'errors',
+            label: t('dashboard.userUsage.errorRate', { defaultValue: 'Error rate' }),
+            align: 'right',
+            defaultDir: 'desc',
+            sx: { display: { xs: 'none', md: 'table-cell' } },
         },
     ];
 
@@ -432,18 +500,7 @@ export default function UserUsagePage() {
                 <Grid size={{ xs: 12, lg: 7, xl: 5 }} sx={{ display: 'flex' }}>
                     <Paper
                         elevation={0}
-                        sx={{
-                            width: '100%',
-                            borderRadius: 2,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            backgroundColor: 'background.paper',
-                            boxShadow: 'none',
-                            overflow: 'hidden',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            height: { xs: 'auto', lg: 640 },
-                        }}
+                        sx={{ ...masterDetailCardSx, display: 'flex', flexDirection: 'column' }}
                     >
                         <Box
                             sx={{
@@ -503,50 +560,22 @@ export default function UserUsagePage() {
                                             },
                                         }}
                                     >
-                                        <TableCell sortDirection={sortField === 'name' ? sortDirection : false}>
-                                            <TableSortLabel
-                                                active={sortField === 'name'}
-                                                direction={sortField === 'name' ? sortDirection : 'asc'}
-                                                onClick={() => handleSort('name')}
+                                        {userColumns.map((col) => (
+                                            <TableCell
+                                                key={col.field}
+                                                align={col.align}
+                                                sortDirection={sortField === col.field ? sortDirection : false}
+                                                sx={col.sx}
                                             >
-                                                {t('dashboard.userUsage.user', { defaultValue: 'User' })}
-                                            </TableSortLabel>
-                                        </TableCell>
-                                        <TableCell
-                                            align="right"
-                                            sortDirection={sortField === 'requests' ? sortDirection : false}
-                                            sx={{ display: { xs: 'none', sm: 'table-cell' } }}
-                                        >
-                                            <TableSortLabel
-                                                active={sortField === 'requests'}
-                                                direction={sortField === 'requests' ? sortDirection : 'desc'}
-                                                onClick={() => handleSort('requests')}
-                                            >
-                                                {t('dashboard.userUsage.requests', { defaultValue: 'Requests' })}
-                                            </TableSortLabel>
-                                        </TableCell>
-                                        <TableCell align="right" sortDirection={sortField === 'tokens' ? sortDirection : false}>
-                                            <TableSortLabel
-                                                active={sortField === 'tokens'}
-                                                direction={sortField === 'tokens' ? sortDirection : 'desc'}
-                                                onClick={() => handleSort('tokens')}
-                                            >
-                                                {t('dashboard.userUsage.tokens', { defaultValue: 'Tokens' })}
-                                            </TableSortLabel>
-                                        </TableCell>
-                                        <TableCell
-                                            align="right"
-                                            sortDirection={sortField === 'errors' ? sortDirection : false}
-                                            sx={{ display: { xs: 'none', md: 'table-cell' } }}
-                                        >
-                                            <TableSortLabel
-                                                active={sortField === 'errors'}
-                                                direction={sortField === 'errors' ? sortDirection : 'desc'}
-                                                onClick={() => handleSort('errors')}
-                                            >
-                                                {t('dashboard.userUsage.errorRate', { defaultValue: 'Error rate' })}
-                                            </TableSortLabel>
-                                        </TableCell>
+                                                <TableSortLabel
+                                                    active={sortField === col.field}
+                                                    direction={sortField === col.field ? sortDirection : col.defaultDir}
+                                                    onClick={() => handleSort(col.field)}
+                                                >
+                                                    {col.label}
+                                                </TableSortLabel>
+                                            </TableCell>
+                                        ))}
                                         <TableCell padding="checkbox" />
                                     </TableRow>
                                 </TableHead>
@@ -696,20 +725,7 @@ export default function UserUsagePage() {
                     size={{ xs: 12, lg: 5, xl: 7 }}
                     sx={{ display: 'flex', scrollMarginTop: { xs: 72, lg: 0 } }}
                 >
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            width: '100%',
-                            borderRadius: 2,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            backgroundColor: 'background.paper',
-                            boxShadow: 'none',
-                            overflow: 'hidden',
-                            display: 'flex',
-                            height: { xs: 'auto', lg: 640 },
-                        }}
-                    >
+                    <Paper elevation={0} sx={{ ...masterDetailCardSx, display: 'flex' }}>
                         <Box sx={{
                             p: { xs: 2, sm: 2.5 },
                             width: '100%',
@@ -838,9 +854,7 @@ export default function UserUsagePage() {
                                             }}
                                         >
                                             {modelStats.map((model) => {
-                                                const value = (model.total_input_tokens || 0)
-                                                    + (model.total_output_tokens || 0)
-                                                    + (model.cache_input_tokens || 0);
+                                                const value = getTotalTokens(model);
                                                 const share = selectedUser.total_tokens ? (value / selectedUser.total_tokens) * 100 : 0;
                                                 return (
                                                     <Box key={`${model.provider_uuid}-${model.model || model.key}`}>

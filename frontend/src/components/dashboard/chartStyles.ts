@@ -138,3 +138,25 @@ const compactNumberFormatter = new Intl.NumberFormat('en-US', {
 });
 
 export const formatNumber = (n: number): string => compactNumberFormatter.format(n);
+
+// The backend's total_tokens field is deliberately input+output only (cache
+// is billed separately — see .design/stream-usage-tracking.md), so any
+// surface displaying a true grand total must derive it from the three raw
+// fields instead of trusting total_tokens.
+export const getTotalTokens = (stat: {
+    total_input_tokens?: number;
+    total_output_tokens?: number;
+    cache_input_tokens?: number;
+}): number => (stat.total_input_tokens || 0) + (stat.total_output_tokens || 0) + (stat.cache_input_tokens || 0);
+
+// Cache / (cache + input), as a percentage.
+export const getCacheHitRate = (cacheTokens: number, inputTokens: number): number =>
+    (cacheTokens + inputTokens) > 0 ? (cacheTokens / (cacheTokens + inputTokens)) * 100 : 0;
+
+// Health-gauge color for a Cache Hit Rate stat card (higher is better).
+export const getCacheHitRateColor = (percent: number): 'success' | 'warning' | 'error' =>
+    percent >= 50 ? 'success' : percent >= 20 ? 'warning' : 'error';
+
+// Health-gauge color for an Error Rate stat card (lower is better; percent is 0-100 scale).
+export const getErrorRateColor = (percent: number): 'success' | 'warning' | 'error' =>
+    percent > 5 ? 'error' : percent > 1 ? 'warning' : 'success';

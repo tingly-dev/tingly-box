@@ -18,7 +18,7 @@ import {
     Divider,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff } from '@/components/icons';
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, DashboardHeatmapSection, formatNumber } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRate, getCacheHitRateColor, getErrorRateColor } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
@@ -384,10 +384,7 @@ export default function DashboardPage() {
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
 
-    // Calculate cache hit rate: cache / (cache + input)
-    const cacheHitRate = (totalCacheTokens + totalInputTokens) > 0
-        ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
-        : 0;
+    const cacheHitRate = getCacheHitRate(totalCacheTokens, totalInputTokens);
 
     // Group providers by auth_type for the dropdown
     const authTypeLabel = (authType: string): string => {
@@ -449,7 +446,7 @@ export default function DashboardPage() {
         const modelMap = new Map<string, { model: string; totalTokens: number }>();
         stats.forEach((stat) => {
             const model = stat.model || stat.key || 'Unknown';
-            const totalTokens = (stat.total_input_tokens || 0) + (stat.total_output_tokens || 0) + (stat.cache_input_tokens || 0);
+            const totalTokens = getTotalTokens(stat);
             const existing = modelMap.get(model);
             if (!existing || totalTokens > existing.totalTokens) {
                 modelMap.set(model, { model, totalTokens });
@@ -677,10 +674,7 @@ export default function DashboardPage() {
                             value={`${cacheHitRate.toFixed(1)}%`}
                             subtitle={`${formatNumber(totalCacheTokens)} cached`}
                             icon={<CachedIcon />}
-                            // Health gauge, inverted from Error Rate: higher is better,
-                            // so a too-low cache-hit rate is a problem.
-                            // green healthy (>=50%) -> amber low (>=20%) -> red too low.
-                            color={cacheHitRate >= 50 ? 'success' : cacheHitRate >= 20 ? 'warning' : 'error'}
+                            color={getCacheHitRateColor(cacheHitRate)}
                         />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
@@ -689,8 +683,7 @@ export default function DashboardPage() {
                             value={`${errorRate.toFixed(2)}%`}
                             subtitle={`${totalErrors} errors`}
                             icon={<ErrorOutlineIcon />}
-                            // Health gauge: green healthy → amber elevated → red high.
-                            color={errorRate > 5 ? 'error' : errorRate > 1 ? 'warning' : 'success'}
+                            color={getErrorRateColor(errorRate)}
                         />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>

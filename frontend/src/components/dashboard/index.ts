@@ -9,5 +9,12 @@ export { default as DashboardHeatmapSection } from './DashboardHeatmapSection';
 export { default as AgentQuickNav } from './AgentQuickNav';
 export { default as RequestsView } from './RequestsView';
 export type { UsageRecord } from './RequestsView';
-export { formatNumber, TOKEN_COLORS } from './chartStyles';
+export {
+    formatNumber,
+    TOKEN_COLORS,
+    getTotalTokens,
+    getCacheHitRate,
+    getCacheHitRateColor,
+    getErrorRateColor,
+} from './chartStyles';
 
