@@ -144,6 +144,17 @@ func TestChatToResponsesConverter_GoldenSequence(t *testing.T) {
 	assert.Equal(t, "get_weather", argsDone.Name)
 	assert.Equal(t, `{"city":"Paris"}`, argsDone.Arguments)
 
+	// Responses item IDs and tool-call correlation IDs are different fields.
+	// The Chat tool call ID remains call_id, while the synthesized item ID must
+	// be fc_-prefixed so Codex can replay it to a native Responses provider.
+	fnAdded := got[4].(wire.ResponsesOutputItemAddedEvent)
+	assert.True(t, strings.HasPrefix(fnAdded.Item.ID, "fc_"))
+	assert.NotEqual(t, "call_1", fnAdded.Item.ID)
+	assert.Equal(t, "call_1", fnAdded.Item.CallID)
+	assert.Equal(t, fnAdded.Item.ID, got[5].(wire.ResponsesFunctionCallArgumentsDeltaEvent).ItemID)
+	assert.Equal(t, fnAdded.Item.ID, got[6].(wire.ResponsesFunctionCallArgumentsDeltaEvent).ItemID)
+	assert.Equal(t, fnAdded.Item.ID, argsDone.ItemID)
+
 	completed := got[11].(wire.ResponsesCompletedEvent)
 	assert.Equal(t, "completed", completed.Response.Status)
 	require.Len(t, completed.Response.Output, 2, "final output carries text + tool-call items")
