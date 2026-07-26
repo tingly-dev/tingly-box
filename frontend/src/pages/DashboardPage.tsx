@@ -15,11 +15,9 @@ import {
     Select,
     MenuItem,
     ListSubheader,
-    Paper,
     Divider,
-    useTheme,
 } from '@mui/material';
-import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff, ChevronLeft, ChevronRight } from '@/components/icons';
+import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff } from '@/components/icons';
 import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, DashboardHeatmapSection, formatNumber } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
@@ -111,7 +109,6 @@ const DashboardSkeleton = () => (
 );
 
 export default function DashboardPage() {
-    const theme = useTheme();
     const { timeRange: urlTimeRange } = useParams<{ timeRange: TimeRange }>();
     const navigate = useNavigate();
 
@@ -135,8 +132,6 @@ export default function DashboardPage() {
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
     const [selectedModel, setSelectedModel] = useState<string>('all');
     const [selectedUser, setSelectedUser] = useState<string>('all');
-    const [modelsPage, setModelsPage] = useState(0);
-    const [modelsPerPage] = useState(10);
     // Bumped on manual refresh so the fixed-window activity heatmap refetches too.
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
 
@@ -341,11 +336,6 @@ export default function DashboardPage() {
         }
     }, [viewMode, recordsParams, loadRecords]);
 
-    // Reset model pagination when filters or data change
-    useEffect(() => {
-        setModelsPage(0);
-    }, [stats, selectedProvider, selectedModel, selectedUser]);
-
     // Reset a selection only when it disappears from the configured metadata
     // (a deleted provider / sharing key). Checking against the already-filtered
     // stats used to wipe BOTH provider and model back to "all" whenever a
@@ -397,44 +387,6 @@ export default function DashboardPage() {
     // Calculate cache hit rate: cache / (cache + input)
     const cacheHitRate = (totalCacheTokens + totalInputTokens) > 0
         ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
-        : 0;
-
-    // Build provider name → uuid lookup for top-model click filtering
-    const providerNameToUuid = useMemo(() => {
-        const map: Record<string, string> = {};
-        providers.forEach((p) => { map[p.name] = p.uuid; });
-        return map;
-    }, [providers]);
-
-    // Prepare chart data - include provider name to distinguish same model from different providers
-    // Sort by total tokens first
-    const sortedStats = [...stats].sort((a, b) => {
-        const totalA = (a.total_input_tokens || 0) + (a.total_output_tokens || 0) + (a.cache_input_tokens || 0);
-        const totalB = (b.total_input_tokens || 0) + (b.total_output_tokens || 0) + (b.cache_input_tokens || 0);
-        return totalB - totalA;
-    });
-
-    // Full list (not top-10): the panel paginates, and its "N total" label
-    // must reflect the real model count.
-    const tokenChartData = sortedStats.map((stat) => {
-        const provider = stat.provider_name || 'Unknown';
-        const model = stat.model || stat.key || 'Unknown';
-        const label = `${provider} - ${model}`;
-        return {
-            name: label,
-            provider: provider,
-            providerUuid: stat.provider_uuid || providerNameToUuid[provider] || '',
-            model: model,
-            inputTokens: stat.total_input_tokens || 0,
-            outputTokens: stat.total_output_tokens || 0,
-            cacheTokens: stat.cache_input_tokens || 0,
-        };
-    });
-
-    // Bars are scaled against the biggest model; sortedStats is descending by
-    // total tokens, so the first entry is the max.
-    const maxModelTokens = tokenChartData.length > 0
-        ? tokenChartData[0].inputTokens + tokenChartData[0].outputTokens + (tokenChartData[0].cacheTokens || 0)
         : 0;
 
     // Group providers by auth_type for the dropdown
@@ -695,333 +647,110 @@ export default function DashboardPage() {
                 subtitle={TIME_RANGE_CONFIG[timeRange].label}
                 actions={headerActions}
             />
-            {/* Main Content: Three Column Layout */}
-            <Box
-                sx={{
-                    display: 'flex',
-                    gap: 2,
-                    flexDirection: { xs: 'column', md: 'row' },
-                }}
-            >
-                {/* Middle Column (68%) */}
-                <Box sx={{ flex: { xs: 1, md: 7, lg: 6.8 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* Stat Cards Row - 5 cards */}
-                    <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
-                            <StatCard
-                                title="Total Requests"
-                                value={totalRequests.toLocaleString()}
-                                subtitle={TIME_RANGE_CONFIG[timeRange].label}
-                                icon={<CallMadeIcon />}
-                                // Volume metric — no health judgment, so keep it neutral.
-                                color="secondary"
-                            />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
-                            <StatCard
-                                title="Total Tokens"
-                                value={formatNumber(totalTokens)}
-                                subtitle={`Input: ${formatNumber(totalInputTokens)} + Cache: ${formatNumber(totalCacheTokens)}\nOutput: ${formatNumber(totalOutputTokens)}`}
-                                icon={<PaidIcon />}
-                                // Volume metric — no health judgment, so keep it neutral.
-                                color="secondary"
-                            />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
-                            <StatCard
-                                title="Cache Hit Rate"
-                                value={`${cacheHitRate.toFixed(1)}%`}
-                                subtitle={`${formatNumber(totalCacheTokens)} cached`}
-                                icon={<CachedIcon />}
-                                // Health gauge, inverted from Error Rate: higher is better,
-                                // so a too-low cache-hit rate is a problem.
-                                // green healthy (>=50%) -> amber low (>=20%) -> red too low.
-                                color={cacheHitRate >= 50 ? 'success' : cacheHitRate >= 20 ? 'warning' : 'error'}
-                            />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
-                            <StatCard
-                                title="Error Rate"
-                                value={`${errorRate.toFixed(2)}%`}
-                                subtitle={`${totalErrors} errors`}
-                                icon={<ErrorOutlineIcon />}
-                                // Health gauge: green healthy → amber elevated → red high.
-                                color={errorRate > 5 ? 'error' : errorRate > 1 ? 'warning' : 'success'}
-                            />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
-                            <StatCard
-                                title="Streamed Rate"
-                                value={`${streamedRate.toFixed(1)}%`}
-                                subtitle={`${totalStreamed} streamed`}
-                                icon={<StreamIcon />}
-                                color="secondary"
-                            />
-                        </Grid>
+            {/* Main Content */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Stat Cards Row - 5 cards */}
+                <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+                    <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                        <StatCard
+                            title="Total Requests"
+                            value={totalRequests.toLocaleString()}
+                            subtitle={TIME_RANGE_CONFIG[timeRange].label}
+                            icon={<CallMadeIcon />}
+                            // Volume metric — no health judgment, so keep it neutral.
+                            color="secondary"
+                        />
                     </Grid>
+                    <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                        <StatCard
+                            title="Total Tokens"
+                            value={formatNumber(totalTokens)}
+                            subtitle={`Input: ${formatNumber(totalInputTokens)} + Cache: ${formatNumber(totalCacheTokens)}\nOutput: ${formatNumber(totalOutputTokens)}`}
+                            icon={<PaidIcon />}
+                            // Volume metric — no health judgment, so keep it neutral.
+                            color="secondary"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                        <StatCard
+                            title="Cache Hit Rate"
+                            value={`${cacheHitRate.toFixed(1)}%`}
+                            subtitle={`${formatNumber(totalCacheTokens)} cached`}
+                            icon={<CachedIcon />}
+                            // Health gauge, inverted from Error Rate: higher is better,
+                            // so a too-low cache-hit rate is a problem.
+                            // green healthy (>=50%) -> amber low (>=20%) -> red too low.
+                            color={cacheHitRate >= 50 ? 'success' : cacheHitRate >= 20 ? 'warning' : 'error'}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                        <StatCard
+                            title="Error Rate"
+                            value={`${errorRate.toFixed(2)}%`}
+                            subtitle={`${totalErrors} errors`}
+                            icon={<ErrorOutlineIcon />}
+                            // Health gauge: green healthy → amber elevated → red high.
+                            color={errorRate > 5 ? 'error' : errorRate > 1 ? 'warning' : 'success'}
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
+                        <StatCard
+                            title="Streamed Rate"
+                            value={`${streamedRate.toFixed(1)}%`}
+                            subtitle={`${totalStreamed} streamed`}
+                            icon={<StreamIcon />}
+                            color="secondary"
+                        />
+                    </Grid>
+                </Grid>
 
-                    {/* Chart view toggle: Summary trend, By Request (hourly only),
-                        or the 12-month Activity heatmap. flex: 1 so the active
-                        view can use the full pane height (the Activity grid
-                        centers itself vertically in it). */}
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <ToggleButtonGroup
-                                value={effectiveViewMode}
-                                exclusive
-                                onChange={(_, v) => v && setViewMode(v)}
-                                size="small"
-                                sx={{
-                                    '& .MuiToggleButton-root': {
-                                        px: 1.75,
-                                        py: 0.375,
-                                        fontSize: '0.78rem',
-                                        textTransform: 'none',
-                                    },
-                                }}
-                            >
-                                <ToggleButton value="summary">Summary</ToggleButton>
-                                {isHourlyRange && <ToggleButton value="requests">By Request</ToggleButton>}
-                                <ToggleButton value="activity">Activity</ToggleButton>
-                            </ToggleButtonGroup>
-                        </Box>
-
-                        {effectiveViewMode === 'activity' ? (
-                            <DashboardHeatmapSection
-                                provider={selectedProvider}
-                                model={selectedModel}
-                                user={selectedUser}
-                                refreshKey={heatmapRefresh}
-                            />
-                        ) : effectiveViewMode === 'summary' ? (
-                            timeRange === 'today' || timeRange === 'yesterday' ? (
-                                <HourlyTokenHistoryChart data={timeSeries} />
-                            ) : (
-                                <DailyTokenHistoryChart data={timeSeries} />
-                            )
-                        ) : (
-                            <RequestsView
-                                records={records}
-                                loading={recordsLoading}
-                                totalCount={recordsTotal}
-                                queryParams={recordsParams}
-                            />
-                        )}
+                {/* Chart view toggle: Summary trend, By Request (hourly only),
+                    or the 12-month Activity heatmap. flex: 1 so the active
+                    view can use the full pane height (the Activity grid
+                    centers itself vertically in it). */}
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <ToggleButtonGroup
+                            value={effectiveViewMode}
+                            exclusive
+                            onChange={(_, v) => v && setViewMode(v)}
+                            size="small"
+                            sx={{
+                                '& .MuiToggleButton-root': {
+                                    px: 1.75,
+                                    py: 0.375,
+                                    fontSize: '0.78rem',
+                                    textTransform: 'none',
+                                },
+                            }}
+                        >
+                            <ToggleButton value="summary">Summary</ToggleButton>
+                            {isHourlyRange && <ToggleButton value="requests">By Request</ToggleButton>}
+                            <ToggleButton value="activity">Activity</ToggleButton>
+                        </ToggleButtonGroup>
                     </Box>
-                </Box>
 
-                {/* Right Column (20%) - Token Usage List */}
-                <Box sx={{ flex: { xs: 1, md: 3, lg: 2 } }}>
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 2.5,
-                            borderRadius: 2,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            backgroundColor: 'background.paper',
-                            boxShadow: 'none',
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                                Models by Token Usage
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {tokenChartData.length} total
-                            </Typography>
-                        </Box>
-
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1, overflow: 'hidden' }}>
-                            {tokenChartData.length === 0 ? (
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                                    <Typography variant="body2" sx={{
-                                        color: "text.secondary"
-                                    }}>No models found</Typography>
-                                </Box>
-                            ) : (
-                                <>
-                                    {tokenChartData
-                                        .slice(modelsPage * modelsPerPage, (modelsPage + 1) * modelsPerPage)
-                                        .map((item, index) => {
-                                            const globalIndex = modelsPage * modelsPerPage + index;
-                                            const totalTokens = item.inputTokens + item.outputTokens + (item.cacheTokens || 0);
-                                            const percentage = maxModelTokens > 0 ? (totalTokens / maxModelTokens) * 100 : 0;
-
-                                return (
-                                    <Tooltip
-                                        key={index}
-                                        title={
-                                            <Box>
-                                                <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', mb: 0.5 }}>{item.model}</Typography>
-                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.75rem' }}>{item.provider}</Typography>
-                                                <Typography sx={{ color: theme.palette.mode === 'dark' ? '#94a3b8' : '#a0a0a0', fontSize: '0.7rem', mt: 0.75 }}>
-                                                    Total: {formatNumber(totalTokens)} | Input: {formatNumber(item.inputTokens)} | Output: {formatNumber(item.outputTokens)}
-                                                </Typography>
-                                            </Box>
-                                        }
-                                        arrow
-                                        placement="left"
-                                        slotProps={{
-                                            tooltip: {
-                                                sx: {
-                                                    backgroundColor: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
-                                                    color: theme.palette.mode === 'dark' ? '#f1f5f9' : '#1a1a1a',
-                                                    fontSize: '0.75rem',
-                                                    p: 1.5,
-                                                    borderRadius: 1.5,
-                                                    border: '1px solid',
-                                                    borderColor: theme.palette.mode === 'dark' ? '#334155' : '#e2e8f0',
-                                                    '& .MuiTooltip-arrow': {
-                                                        color: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
-                                                    },
-                                                },
-                                            },
-                                        }}
-                                    >
-                                        <Box
-                                            onClick={() => {
-                                                // When clicking a model, filter by that model
-                                                if (item.model) {
-                                                    setSelectedModel(item.model);
-                                                }
-                                            }}
-                                            sx={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 1,
-                                                py: 1,
-                                                px: 1,
-                                                borderRadius: 1,
-                                                transition: 'background-color 0.15s ease',
-                                                cursor: item.model ? 'pointer' : 'default',
-                                                '&:hover': {
-                                                    backgroundColor: 'action.hover',
-                                                },
-                                            }}
-                                        >
-                                            {/* Rank Badge */}
-                                            <Box
-                                                sx={{
-                                                    minWidth: 18,
-                                                    height: 18,
-                                                    borderRadius: 1,
-                                                    backgroundColor: 'action.selected',
-                                                    color: 'text.secondary',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    fontSize: '0.65rem',
-                                                    fontWeight: 600,
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                {globalIndex + 1}
-                                            </Box>
-
-                                            {/* Content */}
-                                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                {/* Model Name */}
-                                                <Box
-                                                    component="span"
-                                                    sx={{
-                                                        display: 'block',
-                                                        fontWeight: 500,
-                                                        fontSize: '0.7rem',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
-                                                        mb: 0.5,
-                                                    }}
-                                                >
-                                                    {item.model}
-                                                </Box>
-
-                                                {/* Progress Bar + Value */}
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Box
-                                                        sx={{
-                                                            flex: 1,
-                                                            height: 4,
-                                                            borderRadius: 2,
-                                                            backgroundColor: 'action.hover',
-                                                            overflow: 'hidden',
-                                                        }}
-                                                    >
-                                                        <Box
-                                                            sx={{
-                                                                height: '100%',
-                                                                width: `${percentage}%`,
-                                                                borderRadius: 2,
-                                                                backgroundColor: 'primary.main',
-                                                                transition: 'width 0.3s ease',
-                                                            }}
-                                                        />
-                                                    </Box>
-                                                    <Typography
-                                                        variant="caption"
-                                                        sx={{
-                                                            fontSize: '0.65rem',
-                                                            color: 'text.secondary',
-                                                            minWidth: 40,
-                                                            flexShrink: 0,
-                                                            textAlign: 'right',
-                                                        }}
-                                                    >
-                                                        {formatNumber(totalTokens)}
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        </Box>
-                                    </Tooltip>
-                                );
-                            })}
-
-                            {/* Pagination Controls */}
-                            {tokenChartData.length > modelsPerPage && (
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                        gap: 0.5,
-                                        pt: 1.5,
-                                        borderTop: '1px solid',
-                                        borderColor: 'divider',
-                                        mt: 'auto',
-                                    }}
-                                >
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => setModelsPage(p => Math.max(0, p - 1))}
-                                        disabled={modelsPage === 0}
-                                        sx={{ borderRadius: 1 }}
-                                    >
-                                        <ChevronLeft sx={{ fontSize: '1.1rem' }} />
-                                    </IconButton>
-                                    <Typography
-                                        variant="caption"
-                                        sx={{ minWidth: 60, textAlign: 'center', color: 'text.secondary', fontSize: '0.75rem' }}
-                                    >
-                                        {modelsPage + 1} / {Math.ceil(tokenChartData.length / modelsPerPage)}
-                                    </Typography>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => setModelsPage(p => Math.min(Math.ceil(tokenChartData.length / modelsPerPage) - 1, p + 1))}
-                                        disabled={modelsPage >= Math.ceil(tokenChartData.length / modelsPerPage) - 1}
-                                        sx={{ borderRadius: 1 }}
-                                    >
-                                        <ChevronRight sx={{ fontSize: '1.1rem' }} />
-                                    </IconButton>
-                                </Box>
-                            )}
-                        </>
-                        )}
-                        </Box>
-                    </Paper>
+                    {effectiveViewMode === 'activity' ? (
+                        <DashboardHeatmapSection
+                            provider={selectedProvider}
+                            model={selectedModel}
+                            user={selectedUser}
+                            refreshKey={heatmapRefresh}
+                        />
+                    ) : effectiveViewMode === 'summary' ? (
+                        timeRange === 'today' || timeRange === 'yesterday' ? (
+                            <HourlyTokenHistoryChart data={timeSeries} />
+                        ) : (
+                            <DailyTokenHistoryChart data={timeSeries} />
+                        )
+                    ) : (
+                        <RequestsView
+                            records={records}
+                            loading={recordsLoading}
+                            totalCount={recordsTotal}
+                            queryParams={recordsParams}
+                        />
+                    )}
                 </Box>
             </Box>
             {/* Stats Table */}

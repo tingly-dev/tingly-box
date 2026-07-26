@@ -30,7 +30,7 @@ Three gzip-compressed GET endpoints under `/api/v1/usage/`
 
 | Endpoint | Used for | Notes |
 |---|---|---|
-| `/stats` | stat cards, Models by Token Usage, Usage by Model table | `group_by=model`, `limit` ≤ 1000 (dashboard requests the max: card totals are summed client-side from the groups, so a low limit would under-count) |
+| `/stats` | stat cards, Usage by Model table | `group_by=model`, `limit` ≤ 1000 (dashboard requests the max: card totals are summed client-side from the groups, so a low limit would under-count) |
 | `/timeseries` | Summary charts, Activity heatmap | `interval=minute\|day`; filters `provider` / `model` / `user_id` |
 | `/records` | By Request | `limit` ≤ 1000, `offset`, plus `status` / `provider` / `model` / `user_id` / `scenario` filters, all pushed down to SQL; response `meta: { total, limit, offset }` carries the real range total |
 
@@ -97,10 +97,10 @@ has no data.
 ### Summary
 
 `HourlyTokenHistoryChart` (minute interval) for today/yesterday,
-`DailyTokenHistoryChart` otherwise. The right-hand "Models by Token Usage"
-panel lists **all** models from stats (paginated 10/page, bars scaled to the
-largest model); its "N total" label is the real count. Clicking a row sets
-the Model filter.
+`DailyTokenHistoryChart` otherwise, full width. (A ranked "Models by Token
+Usage" side panel used to sit next to the chart; it was removed as a
+near-duplicate of the "Usage by Model" table below — both read the same
+`group_by=model` stats — so the table is now the sole per-model view.)
 
 ### By Request (`RequestsView.tsx`)
 
