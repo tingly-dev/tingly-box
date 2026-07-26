@@ -130,7 +130,9 @@ const PLATFORM_DEFAULT_REQUIRE_PAIRING: Record<string, boolean> = {
 };
 
 // isPairingRequired reports whether a bot enforces TOFU pairing — either via an
-// explicit require_pairing flag, or the platform default.
+// explicit require_pairing flag, or the platform default. Used by BotTable and
+// PairingCodePanel, and by BotChatsButton to tailor the empty-chats hint (a
+// bot that requires pairing registers a chat only after the user pairs first).
 export function isPairingRequired(bot?: {require_pairing?: boolean; platform?: string} | null): boolean {
     if (typeof bot?.require_pairing === 'boolean') {
         return bot.require_pairing;
@@ -163,6 +165,19 @@ export interface NotifyRoute {
     chat_id?: string;
     events?: string[];
     enabled?: boolean;
+}
+
+// A chat a bot can reach, as returned by GET /api/v1/bots/:bot/chats. The
+// chat_id is the channel-native conversation identifier the notify/interact
+// API requires in its request body — surfacing it here (and in BotTable) is
+// what makes those endpoints usable from the UI. Placeholder until codegen.
+export interface BotChat {
+    chat_id: string;
+    platform?: string;
+    is_paired?: boolean;
+    is_whitelisted?: boolean;
+    project_path?: string;
+    updated_at?: string;
 }
 
 // notifyRoutes extracts a bot's outbound scenario bindings (every scenarios

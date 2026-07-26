@@ -131,6 +131,7 @@ import {
     IconTools,
     IconServer,
     IconMessageReport,
+    IconMessage,
     IconWaveSine,
     IconCircleFilled,
     IconWorldDownload,
@@ -323,6 +324,7 @@ export const CloudDownload = tablerMui(IconWorldDownload);
 
 // --- Communication -----------------------------------------------------------
 export const MessageReport = tablerMui(IconMessageReport);
+export const Message = tablerMui(IconMessage);
 
 // --- Calendar / schedule -----------------------------------------------------
 export const EventNote = tablerMui(IconCalendarClock);

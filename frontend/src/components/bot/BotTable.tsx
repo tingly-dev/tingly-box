@@ -1,6 +1,7 @@
 import {ContentCopy as CopyIcon, Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import PairingCodePanel from './PairingCodePanel';
+import BotChatsButton from './BotChatsButton';
 import {isRemoteAgentMounted, isNotifyMounted, isPairingRequired} from '@/types/bot';
 import type {BotSettings} from '@/types/bot';
 import {notify} from '@/utils/notify';
@@ -166,7 +167,7 @@ const BotTable: React.FC<BotTableProps> = ({
                                         (:bot), copyable. Icon + text on one row (mirrors ApiKeyTable's
                                         API Key cell); UUID truncates with the full value in the tooltip.
                                         Labeled "Bot UUID" (not "Bot ID") to split the name collision with
-                                        a chat's own id — ux-principles #3. */}
+                                        the Chat ID surfaced by BotChatsButton — ux-principles #3. */}
                                     <TableCell>
                                         <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                                             <Tooltip title={t('bots.table.copyUuid', {defaultValue: 'Copy Bot UUID'})}>
@@ -239,6 +240,19 @@ const BotTable: React.FC<BotTableProps> = ({
                                     {/* Actions */}
                                     <TableCell align="right">
                                         <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', justifyContent: 'flex-end'}}>
+                                            {/* Reachable chats — surfaces the chat_id the notify/interact API
+                                                needs in its body, copyable. Kept in Actions (rather than its
+                                                own column) because it is reference data the operator copies
+                                                on demand, not a per-row status; the fixed column budget is
+                                                tuned for the always-visible columns. The button owns its own
+                                                tooltip so it can dismiss it when the popover opens (a
+                                                wrapping Tooltip here leaves its hover text lingering). */}
+                                            <BotChatsButton
+                                                botUUID={bot.uuid!}
+                                                platform={bot.platform}
+                                                pairingRequired={pairingNeeded}
+                                                disabled={toggling || restarting}
+                                            />
                                             <Tooltip title={isActive
                                                 ? t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})
                                                 : t('remoteControl.card.enableToRestart', {defaultValue: 'Enable bot to restart'})}>

@@ -2519,6 +2519,48 @@ export const handlers = [
         })
     }),
 
+    // Bot interaction API — GET /bots/:bot/chats and POST /bots/:bot/notify.
+    // Mirrors internal/server/module/notify/bot_api.go. Returns a couple of
+    // sample chats so the chat_id picker + copy is exercisable in mock mode.
+    http.get('/api/v1/bots/:bot/chats', () => {
+        return HttpResponse.json({
+            chats: [
+                { chat_id: 'telegram:123456789', platform: 'telegram', is_paired: true, updated_at: new Date().toISOString() },
+                { chat_id: 'telegram:987654321', platform: 'telegram', is_paired: false, updated_at: new Date().toISOString() },
+            ],
+        })
+    }),
+
+    http.post('/api/v1/bots/:bot/notify', async ({ request }) => {
+        const body = await request.json().catch(() => null) as any
+        if (!body || !body.chat_id || !body.body) {
+            return HttpResponse.json({ error: 'chat_id and body are required' }, { status: 400 })
+        }
+        return HttpResponse.json({ ok: true })
+    }),
+
+    // Bot interact API — POST /bots/:bot/interact + GET .../interact/:id.
+    // Mirrors internal/server/module/notify/bot_api.go. The wait handler
+    // answers on the first poll so the confirm probe resolves immediately in
+    // mock mode (real backend long-polls).
+    http.post('/api/v1/bots/:bot/interact', async ({ params, request }) => {
+        const body = await request.json().catch(() => null) as any
+        if (!body || !body.chat_id || !body.kind || !body.title) {
+            return HttpResponse.json({ error: 'chat_id, kind, and title are required' }, { status: 400 })
+        }
+        const request_id = 'mock-req-' + Math.random().toString(36).slice(2, 10)
+        return HttpResponse.json({
+            request_id,
+            wait_url: `/api/v1/bots/${params.bot}/interact/${request_id}`,
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        }, { status: 202 })
+    }),
+
+    http.get('/api/v1/bots/:bot/interact/:request_id', () => {
+        // Immediately answered with "allow" so the confirm probe succeeds.
+        return HttpResponse.json({ status: 'answered', decision: { selected: 'allow' } })
+    }),
+
     http.put('/api/v1/imbot-settings/:uuid', async ({ params, request }) => {
         const body = await request.json() as any
         return HttpResponse.json({ success: true, uuid: params.uuid, ...body })

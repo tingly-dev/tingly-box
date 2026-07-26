@@ -2,6 +2,7 @@
 
 import TinglyService from "@/bindings";
 import type {components} from '@/client';
+import type {BotChat} from '@/types/bot';
 import {getApiBaseUrl} from '../utils/protocol';
 import {
     controlApi,
@@ -1513,6 +1514,124 @@ export const api = {
             return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};
+        }
+    },
+
+    // List the chats a bot can reach (GET /api/v1/bots/:bot/chats).
+    // Placeholder until codegen regenerates the client SDK for the new
+    // bot-interaction endpoint — calls the raw path directly.
+    listBotChats: async (botUUID: string): Promise<{chats?: BotChat[]; running?: boolean; error?: string}> => {
+        try {
+            const base = await getApiBaseUrl();
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${base}/api/v1/bots/${encodeURIComponent(botUUID)}/chats`, {
+                headers: {...headers, 'Content-Type': 'application/json'},
+            });
+            if (!response.ok) {
+                return {error: `failed to list chats (${response.status})`};
+            }
+            return await response.json();
+        } catch (error: any) {
+            return {error: error.message};
+        }
+    },
+
+    // Send a one-way notification to a running bot's chat
+    // (POST /api/v1/bots/:bot/notify). Placeholder until codegen regenerates
+    // the client SDK — calls the raw path directly. Field names mirror the
+    // backend notifyRequest: chat_id + body required, title/level optional.
+    notifyBot: async (
+        botUUID: string,
+        body: {chat_id: string; title?: string; body: string; level?: string},
+    ): Promise<{ok?: boolean; error?: string}> => {
+        try {
+            const base = await getApiBaseUrl();
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${base}/api/v1/bots/${encodeURIComponent(botUUID)}/notify`, {
+                method: 'POST',
+                headers: {...headers, 'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => null);
+                return {error: data?.error || `notify failed (${response.status})`};
+            }
+            return await response.json();
+        } catch (error: any) {
+            return {error: error.message};
+        }
+    },
+
+    // Start an interactive prompt on a running bot's chat
+    // (POST /api/v1/bots/:bot/interact). Placeholder until codegen regenerates
+    // the client SDK. Returns request_id + wait_url + expires_at, or {error}.
+    // Field names mirror backend interactRequest: chat_id/kind/title required,
+    // options required for confirm/choose, timeout_seconds optional (≤30m).
+    interactBot: async (
+        botUUID: string,
+        body: {
+            chat_id: string;
+            kind: 'confirm' | 'choose' | 'ask';
+            title: string;
+            body?: string;
+            options?: Array<{value: string; label: string; style?: string}>;
+            timeout_seconds?: number;
+        },
+    ): Promise<{request_id?: string; wait_url?: string; expires_at?: string; error?: string}> => {
+        try {
+            const base = await getApiBaseUrl();
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${base}/api/v1/bots/${encodeURIComponent(botUUID)}/interact`, {
+                method: 'POST',
+                headers: {...headers, 'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => null);
+                return {error: data?.error || `interact failed (${response.status})`};
+            }
+            return await response.json();
+        } catch (error: any) {
+            return {error: error.message};
+        }
+    },
+
+    // Long-poll for the reply to an interactive prompt
+    // (GET /api/v1/bots/:bot/interact/:request_id?timeout=Ns). Placeholder
+    // until codegen. Returns a normalized status:
+    //   'answered' | 'cancelled' (200, carries decision)
+    //   'timeout' | 'error'     (410, carries decision/reason)
+    //   'pending'               (504 — caller retries)
+    //   'expired'               (404)
+    //   'unavailable'           (503)
+    // Transport failures fold into {error} (mirrors runProbe.ts).
+    waitBotInteract: async (
+        botUUID: string,
+        requestID: string,
+        timeoutMs = 45000,
+    ): Promise<{status?: string; decision?: Record<string, unknown>; reason?: string; error?: string}> => {
+        try {
+            const base = await getApiBaseUrl();
+            const headers = await getAuthHeaders();
+            const response = await fetch(
+                `${base}/api/v1/bots/${encodeURIComponent(botUUID)}/interact/${encodeURIComponent(requestID)}?timeout=${Math.floor(timeoutMs / 1000)}s`,
+                {headers: {...headers, 'Content-Type': 'application/json'}},
+            );
+            const data = await response.json().catch(() => null);
+            if (response.status === 504) return {status: 'pending'};
+            if (response.status === 404) return {status: 'expired'};
+            if (response.status === 503) return {status: 'unavailable'};
+            if (!response.ok) {
+                return {error: data?.error || `wait failed (${response.status})`};
+            }
+            // 200 (answered/cancelled) or 410 (timeout/error) carry a status body.
+            return {
+                status: data?.status,
+                decision: data?.decision,
+                reason: data?.reason,
+            };
+        } catch (error: any) {
+            return {error: error.message};
         }
     },
 

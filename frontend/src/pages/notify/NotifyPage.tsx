@@ -1,20 +1,27 @@
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
+import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
+import NotifyGuide from '@/components/notify/NotifyGuide';
+import BotNotifyGroup from '@/components/notify/BotNotifyGroup';
+import { useBotToggle } from '@/hooks/useBotToggle';
 import { api } from '@/services/api';
-import { isNotifyMounted, notifyRoutes } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
-import { Box, Chip, CircularProgress, Stack, Tooltip, Typography } from '@mui/material';
+import { Stack } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-// NotifyPage is the Notify purpose — the twin of Remote, but lighter: notify
-// has no bot-config knobs of its own (see consumer_notify.go), it's mounted
-// implicitly by whichever outbound scenario routes (claude_code, ...) point
-// at a bot. That routing has no frontend surface yet, so this page is
-// read-only for now: it shows the real mount status and routes derived from
-// each bot's scenarios JSON, but attaching a NEW route needs a backend API +
-// swagger definition this pass didn't add (see .design/bot-arch.md §10).
+// NotifyPage opens up the authenticated bot-interaction API: it teaches how to
+// call it (top guide) and, per bot, shows the chats that bot can reach as an
+// always-expanded table — each chat row carries the concrete chat_id that
+// POST /api/v1/bots/:bot/notify needs in its body, with copy + send-test inline
+// (no extra click to reach the work surface). The bot's enabled switch is the
+// on/off for whether it can be driven.
+//
+// This page is no longer about "which scenario routes point at this bot" (that
+// was the old read-only framing, surfaced as a misleading "No routes" chip) —
+// it answers the operator's actual question: "what can I send to, right now?"
+// See .design/bot-interaction-api.md and ux-principles #1/#5/#11.
 const NotifyPage = () => {
     const { t } = useTranslation();
     const [bots, setBots] = useState<BotSettings[]>([]);
@@ -38,80 +45,52 @@ const NotifyPage = () => {
         loadBots();
     }, [loadBots]);
 
+    // Toggle is the shared control-plane action (POST /imbot-settings/:uuid/
+    // toggle): it starts/stops the bot's channel, which governs whether notify
+    // can reach it. On success we patch only the toggled bot in state rather
+    // than re-fetching the whole list, so sibling panels aren't churned. The
+    // hook owns the toast + in-flight UUID and is shared with the Bots pages.
+    const {toggle, isToggling} = useBotToggle({
+        onDone: (uuid) => setBots((prev) => prev.map((b) => (b.uuid === uuid ? {...b, enabled: !b.enabled} : b))),
+    });
+
+    const handleToggle = useCallback((uuid: string, enabled: boolean) => {
+        void toggle(uuid, enabled);
+    }, [toggle]);
+
     return (
-        <PageLayout loading={false}>
+        <PageLayout loading={loading}>
+            {/* Usage guide — embedded education (ux-principles #8). Collapsed by
+                default so the bots + chats (the work surface) are the visual
+                anchor; the guide is one click away whenever needed. */}
+            <CollapsibleGuide
+                platformName={t('notify.title', { defaultValue: 'IM Notify' })}
+                platformGuide={<NotifyGuide />}
+            />
             <UnifiedCard
                 title={t('notify.title', { defaultValue: 'IM Notify' })}
                 subtitle={t('notify.subtitle', {
-                    defaultValue: 'Which of your bots deliver scenario notifications and interactive prompts to chat.',
+                    defaultValue: 'Send one-way notifications to any chat your bots can reach.',
                 })}
                 size="full"
                 sx={{ mb: 2 }}
                 titleHeadingLevel={1}
             >
-                {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : bots.length === 0 ? (
+                {bots.length === 0 ? (
                     <EmptyState
                         title={t('notify.emptyTitle', { defaultValue: 'No bots connected yet' })}
-                        description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Bots page first, then come back here to see what it notifies.' })}
+                        description={t('notify.emptyDescription', { defaultValue: 'Connect a bot on the Bots page first, then come back here to send it notifications.' })}
                     />
                 ) : (
-                    <Stack spacing={1}>
-                        {bots.map((bot) => {
-                            const mounted = isNotifyMounted(bot.scenarios);
-                            const routes = notifyRoutes(bot.scenarios);
-                            return (
-                                <Box
-                                    key={bot.uuid}
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
-                                        gap: 1.5,
-                                        px: 2,
-                                        py: 1.5,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        borderRadius: 1.5,
-                                    }}
-                                >
-                                    {/* Fixed-width name column so the chips
-                                        align across rows — same as BotCard. */}
-                                    <Tooltip title={bot.name || bot.platform}>
-                                        <Typography noWrap variant="body2" sx={{ fontWeight: 600, flexShrink: 0, width: { xs: 96, sm: 150 } }}>
-                                            {bot.name || bot.platform}
-                                        </Typography>
-                                    </Tooltip>
-                                    <Chip label={bot.platform} size="small" />
-                                    <Chip
-                                        label={mounted
-                                            ? t('notify.mounted', { defaultValue: 'Notifying' })
-                                            : t('notify.notMounted', { defaultValue: 'No routes' })}
-                                        size="small"
-                                        variant={mounted ? 'filled' : 'outlined'}
-                                        color={mounted ? 'primary' : 'default'}
-                                    />
-                                    {routes.length > 0 && (
-                                        <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
-                                            {routes.map((r) => r.name).join(', ')}
-                                        </Typography>
-                                    )}
-                                    <Box sx={{ flexGrow: 1 }} />
-                                    <Tooltip title={t('notify.attachComingSoonHint', { defaultValue: 'Attaching a route from here is not wired up yet — routes are currently configured per scenario.' })}>
-                                        <span>
-                                            <Chip
-                                                label={t('notify.attachComingSoon', { defaultValue: '+ Attach a route (soon)' })}
-                                                size="small"
-                                                disabled
-                                            />
-                                        </span>
-                                    </Tooltip>
-                                </Box>
-                            );
-                        })}
+                    <Stack spacing={1.5}>
+                        {bots.map((bot) => (
+                            <BotNotifyGroup
+                                key={bot.uuid}
+                                bot={bot}
+                                onToggle={(uuid) => handleToggle(uuid, !(bot.enabled ?? true))}
+                                isToggling={isToggling(bot.uuid!)}
+                            />
+                        ))}
                     </Stack>
                 )}
             </UnifiedCard>
