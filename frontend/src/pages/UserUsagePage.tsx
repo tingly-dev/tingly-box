@@ -32,6 +32,7 @@ import {
 import {
     AccessTime,
     ArrowForward,
+    Autorenew as CachedIcon,
     BarChart,
     Block,
     CheckCircle,
@@ -113,8 +114,8 @@ const UserUsageSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Skeleton variant="rounded" height={72} />
         <Grid container spacing={2}>
-            {Array.from({ length: 4 }).map((_, index) => (
-                <Grid key={index} size={{ xs: 6, lg: 3 }}>
+            {Array.from({ length: 5 }).map((_, index) => (
+                <Grid key={index} size={{ xs: 6, sm: 4, md: 2.4 }}>
                     <Skeleton variant="rounded" height={118} />
                 </Grid>
             ))}
@@ -225,16 +226,22 @@ export default function UserUsagePage() {
         );
         return tokens.map((token) => {
             const stat = statsByUser.get(token.user_id);
+            const totalInputTokens = stat?.total_input_tokens || 0;
+            const totalOutputTokens = stat?.total_output_tokens || 0;
+            const cacheInputTokens = stat?.cache_input_tokens || 0;
             return {
                 ...token,
                 display_name: token.account_type === 'primary'
                     ? t('dashboard.userUsage.primaryAccount', { defaultValue: 'Primary account' })
                     : token.display_name,
                 request_count: stat?.request_count || 0,
-                total_tokens: stat?.total_tokens || 0,
-                total_input_tokens: stat?.total_input_tokens || 0,
-                total_output_tokens: stat?.total_output_tokens || 0,
-                cache_input_tokens: stat?.cache_input_tokens || 0,
+                // total_tokens is derived, not read from the API's total_tokens
+                // field: that field is input+output only and excludes cache
+                // (see .design/stream-usage-tracking.md), same as DashboardPage.
+                total_tokens: totalInputTokens + totalOutputTokens + cacheInputTokens,
+                total_input_tokens: totalInputTokens,
+                total_output_tokens: totalOutputTokens,
+                cache_input_tokens: cacheInputTokens,
                 error_count: stat?.error_count || 0,
                 error_rate: stat?.error_rate || 0,
             };
@@ -271,10 +278,17 @@ export default function UserUsagePage() {
 
     const selectedUser = rows.find((row) => row.user_id === selectedUserID);
     const totalTokens = rows.reduce((sum, row) => sum + row.total_tokens, 0);
+    const totalInputTokens = rows.reduce((sum, row) => sum + row.total_input_tokens, 0);
+    const totalCacheTokens = rows.reduce((sum, row) => sum + row.cache_input_tokens, 0);
     const totalRequests = rows.reduce((sum, row) => sum + row.request_count, 0);
     const totalErrors = rows.reduce((sum, row) => sum + row.error_count, 0);
     const activeUsers = rows.filter((row) => row.request_count > 0).length;
     const maxTokens = Math.max(...visibleRows.map((row) => row.total_tokens), 1);
+    // Same formula as DashboardPage: cache / (cache + input).
+    const cacheHitRate = (totalCacheTokens + totalInputTokens) > 0
+        ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
+        : 0;
+    const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
     const summaryItems = [
         {
             label: t('dashboard.userUsage.registeredUsers', { defaultValue: 'Registered users' }),
@@ -297,6 +311,17 @@ export default function UserUsagePage() {
             color: 'secondary' as const,
         },
         {
+            label: t('dashboard.userUsage.cacheHitRate', { defaultValue: 'Cache hit rate' }),
+            value: `${cacheHitRate.toFixed(1)}%`,
+            hint: t('dashboard.userUsage.cached', {
+                value: formatNumber(totalCacheTokens),
+                defaultValue: `${formatNumber(totalCacheTokens)} cached`,
+            }),
+            icon: <CachedIcon />,
+            // Same health-gauge thresholds as DashboardPage.
+            color: cacheHitRate >= 50 ? 'success' as const : cacheHitRate >= 20 ? 'warning' as const : 'error' as const,
+        },
+        {
             label: t('dashboard.userUsage.requests', { defaultValue: 'Requests' }),
             value: formatNumber(totalRequests),
             hint: t('dashboard.userUsage.averagePerUser', {
@@ -309,9 +334,10 @@ export default function UserUsagePage() {
         {
             label: t('dashboard.userUsage.errors', { defaultValue: 'Errors' }),
             value: formatNumber(totalErrors),
-            hint: `${totalRequests ? ((totalErrors / totalRequests) * 100).toFixed(1) : '0.0'}%`,
+            hint: `${errorRate.toFixed(1)}%`,
             icon: <ErrorOutline />,
-            color: totalErrors > 0 ? 'warning' as const : 'success' as const,
+            // Same rate-based health-gauge thresholds as DashboardPage's Error Rate card.
+            color: errorRate > 5 ? 'error' as const : errorRate > 1 ? 'warning' as const : 'success' as const,
         },
     ];
 
@@ -333,11 +359,6 @@ export default function UserUsagePage() {
                 subtitle={t('dashboard.userUsage.subtitle', {
                     defaultValue: 'See how every registered user is consuming shared AI access.',
                 })}
-                sx={{
-                    '& .MuiTypography-body2': {
-                        typography: 'body1',
-                    },
-                }}
                 actions={
                     <>
                         <ToggleButtonGroup
@@ -371,7 +392,7 @@ export default function UserUsagePage() {
 
             <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                 {summaryItems.map((item) => (
-                    <Grid key={item.label} size={{ xs: 6, lg: 3 }}>
+                    <Grid key={item.label} size={{ xs: 6, sm: 4, md: 2.4 }}>
                         <StatCard
                             title={item.label}
                             value={item.value}
@@ -576,7 +597,8 @@ export default function UserUsagePage() {
                                                     <Typography
                                                         variant="body1"
                                                         sx={{
-                                                            color: row.error_rate >= 0.05 ? 'error.main' : 'text.primary',
+                                                            // Same threshold/color rule as ServiceStatsTable's per-model Error Rate column.
+                                                            color: row.error_rate > 0.05 ? 'error.main' : 'text.secondary',
                                                             fontWeight: 550,
                                                         }}
                                                     >
@@ -592,8 +614,11 @@ export default function UserUsagePage() {
                                     {visibleRows.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
-                                                <Typography variant="body1">
+                                                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                                                     {t('dashboard.userUsage.noUsers', { defaultValue: 'No users match your search.' })}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: 'text.disabled', mt: 0.5, display: 'block' }}>
+                                                    {t('dashboard.userUsage.noUsersHint', { defaultValue: 'Try a different search term or time range.' })}
                                                 </Typography>
                                             </TableCell>
                                         </TableRow>
@@ -736,7 +761,9 @@ export default function UserUsagePage() {
                                             }}
                                         >
                                             {modelStats.map((model) => {
-                                                const value = model.total_tokens || 0;
+                                                const value = (model.total_input_tokens || 0)
+                                                    + (model.total_output_tokens || 0)
+                                                    + (model.cache_input_tokens || 0);
                                                 const share = selectedUser.total_tokens ? (value / selectedUser.total_tokens) * 100 : 0;
                                                 return (
                                                     <Box key={`${model.provider_uuid}-${model.model || model.key}`}>
