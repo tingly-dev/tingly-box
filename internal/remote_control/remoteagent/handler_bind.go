@@ -5,62 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/remote_control/feature"
-
-	"github.com/tingly-dev/tingly-box/remote/session"
 )
-
-func (h *BotHandler) handleBindConfirm(hCtx HandlerContext) {
-	h.pendingBindsMu.RLock()
-	pending, exists := h.pendingBinds[hCtx.ChatID]
-	h.pendingBindsMu.RUnlock()
-
-	if !exists || time.Now().After(pending.ExpiresAt) {
-		h.SendText(hCtx, "Bind request expired. Please try again.")
-		delete(h.pendingBinds, hCtx.ChatID)
-		return
-
-	}
-
-	// Bind the project
-	err := h.chatStore.BindProject(hCtx.ChatID, string(hCtx.Platform), pending.ProposedPath, hCtx.SenderID)
-	if err != nil {
-		h.SendText(hCtx, fmt.Sprintf("Failed to bind project: %v", err))
-		delete(h.pendingBinds, hCtx.ChatID)
-		return
-
-	}
-
-	// Close the old session for this (chat, agent) combination if exists
-	agentType := AgentNameClaude
-	oldSess := h.sessionMgr.FindBy(hCtx.ChatID, agentType, "")
-	if oldSess != nil {
-		h.sessionMgr.Close(oldSess.ID)
-		logrus.WithFields(logrus.Fields{
-			"chatID":    hCtx.ChatID,
-			"sessionID": oldSess.ID,
-		}).Info("Closed old session after project change")
-	}
-
-	// Create a new session with the new project binding
-	sess := h.sessionMgr.CreateWith(hCtx.ChatID, agentType, pending.ProposedPath)
-	// Clear expiration for direct chat sessions
-	h.sessionMgr.Update(sess.ID, func(s *session.Session) {
-		s.ExpiresAt = time.Time{} // Zero value means no expiration
-	})
-
-	delete(h.pendingBinds, hCtx.ChatID)
-
-	h.SendText(hCtx, fmt.Sprintf("✅ Bound to: `%s`", pending.ProposedPath))
-
-	// If there was an original message, process it now
-	if pending.OriginalMessage != "" {
-		h.handleAgentMessage(hCtx, agentClaudeCode, pending.OriginalMessage, pending.ProposedPath)
-	}
-}
 
 // handleProjectSwitch handles switching to a different project
 func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string) {
@@ -223,9 +172,4 @@ func (h *BotHandler) handleCustomPathInput(hCtx HandlerContext) {
 	// Path exists and is a directory, complete the bind
 	h.completeBind(hCtx, expandedPath)
 	h.directoryBrowser.Clear(hCtx.ChatID)
-}
-
-// BuildBindConfirmPrompt returns the text for bind confirmation prompt
-func BuildBindConfirmPrompt(proposedPath string) string {
-	return fmt.Sprintf("📁 *No project bound.*\n\nBind to current directory?\n\n`%s`", proposedPath)
 }

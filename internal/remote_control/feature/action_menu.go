@@ -60,15 +60,3 @@ func BuildCreateConfirmKeyboard(path string) (*imbot.KeyboardBuilder, string) {
 	text := fmt.Sprintf("📁 *The path doesn't exist. Create it?*\n\n`%s`", path)
 	return kb, text
 }
-
-// BuildBindConfirmKeyboard builds the confirmation keyboard for binding to current directory
-func BuildBindConfirmKeyboard() *imbot.KeyboardBuilder {
-	return imbot.NewKeyboardBuilder().
-		AddRow(
-			imbot.ActionButton("✓ Confirm", "bind", "confirm"),
-			imbot.ActionButton("✏️ Change", "bind", "custom"),
-		).
-		AddRow(
-			imbot.ActionButton("❌ Cancel", "bind", "cancel"),
-		)
-}

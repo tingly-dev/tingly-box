@@ -1,18 +1,14 @@
 package bot
 
 import (
-	"strings"
-
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // BotSetting represents bot configuration with platform-specific auth
 type BotSetting struct {
 	UUID          string            `json:"uuid,omitempty"`           // UUID for bot identification
 	Name          string            `json:"name,omitempty"`           // User-defined name for the bot
-	Token         string            `json:"token,omitempty"`          // Legacy: for backward compatibility
 	Platform      string            `json:"platform"`                 // Platform identifier
 	AuthType      string            `json:"auth_type"`                // Auth type: token, oauth, qr
 	Auth          map[string]string `json:"auth"`                     // Dynamic auth fields based on platform
@@ -55,7 +51,6 @@ func SettingFromRecord(record db.Settings) BotSetting {
 	return BotSetting{
 		UUID:               record.UUID,
 		Name:               record.Name,
-		Token:              record.Auth["token"],
 		Platform:           record.Platform,
 		AuthType:           record.AuthType,
 		Auth:               record.Auth,
@@ -70,21 +65,6 @@ func SettingFromRecord(record db.Settings) BotSetting {
 		SmartGuideModel:    record.SmartGuideModel,
 		RequirePairing:     record.RequirePairing,
 	}
-}
-
-// CCProfileID extracts the Claude Code profile ID from DefaultAgent.
-// Returns "" for the main claude_code scenario (unset, "claude_code", or a
-// value whose base scenario isn't claude_code).
-func (b BotSetting) CCProfileID() string {
-	raw := strings.TrimSpace(b.DefaultAgent)
-	if raw == "" {
-		return ""
-	}
-	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(raw))
-	if base != typ.ScenarioClaudeCode {
-		return ""
-	}
-	return profileID
 }
 
 // IsRequirePairing reports whether this bot requires per-chat pairing.

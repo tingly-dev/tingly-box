@@ -358,24 +358,10 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 }
 
 func standaloneBotSetting(setting db.Settings, provider, model string) bot.BotSetting {
-	return bot.BotSetting{
-		UUID:               setting.UUID,
-		Name:               setting.Name,
-		Token:              setting.Auth["token"],
-		Platform:           setting.Platform,
-		AuthType:           setting.AuthType,
-		Auth:               setting.Auth,
-		ProxyURL:           setting.ProxyURL,
-		ChatIDLock:         setting.ChatIDLock,
-		BashAllowlist:      setting.BashAllowlist,
-		DefaultCwd:         setting.DefaultCwd,
-		DefaultAgent:       setting.DefaultAgent,
-		Enabled:            setting.Enabled,
-		Scenarios:          setting.Scenarios,
-		SmartGuideProvider: provider,
-		SmartGuideModel:    model,
-		RequirePairing:     setting.RequirePairing,
-	}
+	s := bot.SettingFromRecord(setting)
+	s.SmartGuideProvider = provider
+	s.SmartGuideModel = model
+	return s
 }
 
 // runBotWithSettingsInternal is an internal wrapper that calls the bot runner

@@ -63,8 +63,7 @@ func toolUseMsg(name, id string, input map[string]interface{}) *claude.ToolUseMe
 
 func TestStreamingHandler_BuffersToolsUntilTextFlush_Verbose(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
 
 	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-1", map[string]interface{}{"file_path": "/a/b.go"})))
 	require.NoError(t, h.OnMessage(toolUseMsg("Bash", "id-2", map[string]interface{}{"command": "ls"})))
@@ -83,8 +82,7 @@ func TestStreamingHandler_BuffersToolsUntilTextFlush_Verbose(t *testing.T) {
 
 func TestStreamingHandler_QuietFlushRendersSummary(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false)
 
 	for i := 0; i < 5; i++ {
 		require.NoError(t, h.OnMessage(toolUseMsg("Read", "id", map[string]interface{}{
@@ -104,8 +102,7 @@ func TestStreamingHandler_QuietFlushRendersSummary(t *testing.T) {
 
 func TestStreamingHandler_FlushOnThreshold(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
 
 	for i := 0; i < toolBufferFlushThreshold; i++ {
 		require.NoError(t, h.OnMessage(toolUseMsg("Bash", "id", map[string]interface{}{"command": "echo"})))
@@ -117,8 +114,7 @@ func TestStreamingHandler_FlushOnThreshold(t *testing.T) {
 
 func TestStreamingHandler_AssistantWithTextDoesNotBuffer(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
 
 	// AssistantMessage with both text and tool_use blocks is text-bearing:
 	// the formatter groups text + tools into a single render, so it must
@@ -141,8 +137,7 @@ func TestStreamingHandler_AssistantWithTextDoesNotBuffer(t *testing.T) {
 
 func TestStreamingHandler_OnErrorFlushesBuffer(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
 
 	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-1", map[string]interface{}{"file_path": "/a.go"})))
 	h.OnError(errors.New("boom"))
@@ -160,8 +155,7 @@ func TestStreamingHandler_OnErrorFlushesBuffer(t *testing.T) {
 // tool renders so they don't pile up across boundaries.
 func TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false)
 
 	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-1", map[string]interface{}{"file_path": "/a.go"})))
 	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-2", map[string]interface{}{"file_path": "/b.go"})))
@@ -181,8 +175,7 @@ func TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer(t *testing.T)
 
 func TestStreamingHandler_QuietSurfacesAPIRetry(t *testing.T) {
 	bot := &captureBot{}
-	meta := &ResponseMeta{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false, meta)
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false)
 
 	// An ordinary system message stays suppressed in quiet mode.
 	require.NoError(t, h.OnMessage(&claude.SystemMessage{
@@ -220,7 +213,7 @@ func TestIsRetryNotice(t *testing.T) {
 
 func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 	bot := &captureBot{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
 
 	// Buffer two tool events (mix top-level fields and nested data) ...
 	require.NoError(t, h.OnMessage(map[string]interface{}{
@@ -254,7 +247,7 @@ func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 // and ignores non-tool types, and that sendText flushes the buffer.
 func TestBufferToolEvent_Dispatcher(t *testing.T) {
 	bot := &captureBot{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true)
 
 	nestedFields := toolFieldsFromNestedMap(map[string]interface{}{
 		"data": map[string]interface{}{

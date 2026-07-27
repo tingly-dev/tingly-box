@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
+
 	feature2 "github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
@@ -44,20 +45,14 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		}
 		switch subAction {
 		case "clear":
-			// The menu is consumed by the tap; take it down before acting so a
-			// second tap cannot race the first.
-			h.removeActionKeyboard(bot, chatID)
 			h.handleClearCommand(hCtx)
 		case "bind":
-			h.removeActionKeyboard(bot, chatID)
 			h.handleBindInteractive(hCtx)
 		case "project":
-			h.removeActionKeyboard(bot, chatID)
 			h.handleBotProjectCommand(hCtx)
 		}
 
 	case "project":
-		h.removeActionKeyboard(bot, chatID)
 		if payload.Arg(1) == "switch" {
 			if projectID := payload.Arg(2); projectID != "" {
 				h.handleProjectSwitch(hCtx, projectID)
@@ -81,18 +76,11 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 		}
 
 	case "bind":
-		// Remove the action keyboard before handling
-		h.removeActionKeyboard(bot, chatID)
-		// Start interactive bind
 		subAction := payload.Arg(1)
 		if subAction == "" {
 			return
 		}
 		switch subAction {
-		case "confirm":
-			// Confirm bind to current directory
-			h.handleBindConfirm(hCtx)
-
 		case "dir", "up", "prev", "next":
 			// Every browser move is "mutate the flow state, then redraw in
 			// place". Keeping that one shape here means a new move cannot
@@ -211,7 +199,6 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 		Text:      BuildCustomPathPrompt(),
 		ParseMode: imbot.ParseModeMarkdown,
 		Actions:   kb.BuildActions(),
-		Metadata:  trackActionMenuMetadata(),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send custom path prompt")
@@ -242,32 +229,9 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
 		Actions:   kb.BuildActions(),
-		Metadata:  trackActionMenuMetadata(),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send create confirmation")
-	}
-}
-
-// removeActionKeyboard removes the action keyboard menu from the chat
-func (h *BotHandler) removeActionKeyboard(bot imbot.Bot, chatID string) {
-	h.actionMenuMessageIDMu.RLock()
-	msgID, ok := h.actionMenuMessageID[chatID]
-	h.actionMenuMessageIDMu.RUnlock()
-
-	if !ok || msgID == "" {
-		return
-	}
-
-	// Take the menu down wherever the platform supports it. Nil actions mean
-	// "no controls"; empty text leaves the message body alone.
-	ref := imbot.MessageRef{ChatID: chatID, MessageID: msgID}
-	if imbot.RestateOrIgnore(context.Background(), bot, ref, imbot.RestateOptions{}) {
-		h.actionMenuMessageIDMu.Lock()
-		delete(h.actionMenuMessageID, chatID)
-		h.actionMenuMessageIDMu.Unlock()
-	} else {
-		logrus.WithField("chatID", chatID).WithField("messageID", msgID).Debug("Could not remove action keyboard")
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
@@ -38,17 +37,9 @@ type BotHandler struct {
 	// SmartGuide session store for conversation history
 	tbSessionStore *smart_guide.SessionStore
 
-	// runningCancel tracks cancel functions for active executions per chatID
-	runningCancel   map[string]context.CancelFunc
-	runningCancelMu sync.RWMutex
-
-	// pendingBinds tracks bind confirmation requests for unbound chats
-	pendingBinds   map[string]*PendingBind
-	pendingBindsMu sync.RWMutex
-
-	// actionMenuMessageID tracks the message ID of the action keyboard menu per chatID
-	actionMenuMessageID   map[string]string
-	actionMenuMessageIDMu sync.RWMutex
+	// executions tracks the one running execution per chat; shared with the
+	// AgentRouter (duplicate-run guard) and the /stop paths (cancel).
+	executions *executionRegistry
 
 	// resumeListings caches the session-id list most recently shown by /resume
 	// per chat, so /resume <n> can resolve N back to a session_id without
@@ -66,13 +57,6 @@ type BotHandler struct {
 	pairing *bot.PairingManager
 }
 
-// PendingBind represents a pending bind confirmation request
-type PendingBind struct {
-	OriginalMessage string
-	ProposedPath    string
-	ExpiresAt       time.Time
-}
-
 // HandlerContext contains per-message context data
 type HandlerContext struct {
 	Bot       imbot.Bot
@@ -86,10 +70,6 @@ type HandlerContext struct {
 
 func (c *HandlerContext) IsDirect() bool {
 	return c.Message.IsDirectMessage()
-}
-
-func (c *HandlerContext) IsGroup() bool {
-	return c.Message.IsGroupMessage()
 }
 
 func (c *HandlerContext) Text() string {

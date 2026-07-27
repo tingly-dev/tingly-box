@@ -3,7 +3,6 @@ package remoteagent
 import (
 	"context"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -62,15 +61,11 @@ type ExecutorDependencies struct {
 	FileStore                  *FileStore
 	TBClient                   tbclient.TBClient
 	TBSessionStore             *smart_guide.SessionStore
-	RunningCancel              map[string]context.CancelFunc
-	RunningCancelMu            *sync.RWMutex
-	GetVerbose                 func(chatID string) bool
-	FormatResponseWithFooter   func(meta ResponseMeta, response string) string
+	Executions                 *executionRegistry
 	SendText                   func(hCtx HandlerContext, text string)
 	SendTextWithReply          func(hCtx HandlerContext, text string, replyTo string)
-	SendTextWithActionKeyboard func(hCtx HandlerContext, text string, replyTo string)
 	SendFile                   func(hCtx HandlerContext, filePath, caption string) error
-	NewStreamingMessageHandler func(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler
+	NewStreamingMessageHandler func(hCtx HandlerContext) *streamingMessageHandler
 }
 
 // GetBotSettingOrCache returns the current bot setting.

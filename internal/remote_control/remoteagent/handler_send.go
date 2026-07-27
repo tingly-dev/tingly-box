@@ -2,10 +2,8 @@ package remoteagent
 
 import (
 	"context"
-	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
@@ -63,51 +61,7 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 	}
 }
 
-// sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
-// Note: Manual chunking is kept here because the keyboard should only be attached to the LAST chunk.
-// The platform's BaseBot.ChunkText() doesn't support "last chunk only" metadata yet.
-// TODO: Add platform support for metadata that only applies to the last chunk.
-func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string, replyTo string) {
-	if strings.TrimSpace(text) == "" {
-		// ChunkText("") returns [""] which would otherwise produce an empty
-		// outbound bubble. Drop silently — there's nothing to render.
-		return
-	}
-	kb := feature.BuildActionKeyboard()
-
-	b := h.botFromCtx(hCtx)
-	if b == nil {
-		logrus.WithField("chatID", hCtx.ChatID).Warn("sendTextWithActionKeyboard: no bot available")
-		return
-	}
-
-	// Use public ChunkText API with smart break-point detection
-	chunks := b.ChunkText(text)
-	for i, chunk := range chunks {
-		opts := &imbot.SendMessageOptions{
-			Text: chunk,
-		}
-		if replyTo != "" {
-			opts.ReplyTo = replyTo
-		}
-		// Only attach the action menu to the last chunk
-		if i == len(chunks)-1 {
-			opts.Actions = kb.BuildActions()
-			opts.Metadata = trackActionMenuMetadata()
-		}
-		bot.ForwardReplyContext(opts, hCtx.Message)
-
-		result, err := b.SendMessage(context.Background(), hCtx.ChatID, opts)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to send message")
-			return
-		}
-
-		// Track the action menu message ID for later removal
-		if i == len(chunks)-1 && result != nil {
-			h.actionMenuMessageIDMu.Lock()
-			h.actionMenuMessageID[hCtx.ChatID] = result.MessageID
-			h.actionMenuMessageIDMu.Unlock()
-		}
-	}
+// newStreamingMessageHandler creates the per-execution streaming chat writer.
+func (h *BotHandler) newStreamingMessageHandler(hCtx HandlerContext) *streamingMessageHandler {
+	return newStreamingMessageHandler(hCtx.Bot, hCtx.ChatID, hCtx.MessageID, h.GetVerbose(hCtx.ChatID))
 }

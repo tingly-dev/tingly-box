@@ -61,23 +61,15 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 	meta := &ResponseMeta{
 		ProjectPath: projectPath,
 		AgentType:   string(agentType),
-		SessionID:   sessionID,
-		ChatID:      req.HCtx.ChatID,
-		UserID:      req.HCtx.SenderID,
 	}
 
-	// 4. Setup cancellable context + /stop bookkeeping.
-	// Check-and-set must happen atomically under the same lock: registering
-	// the cancel before the conflict check would always trip on our own entry.
+	// 4. Setup cancellable context + /stop bookkeeping via the execution
+	// registry (fails with errExecutionBusy when this chat is already running).
 	execCtx, cancel := context.WithCancel(ctx)
-	r.deps.RunningCancelMu.Lock()
-	if _, exists := r.deps.RunningCancel[req.HCtx.ChatID]; exists {
-		r.deps.RunningCancelMu.Unlock()
+	if err := r.deps.Executions.begin(req.HCtx.ChatID, cancel); err != nil {
 		cancel()
-		return fmt.Errorf("another execution is already in progress for this chat. Please wait for it to complete or use /stop to cancel it")
+		return err
 	}
-	r.deps.RunningCancel[req.HCtx.ChatID] = cancel
-	r.deps.RunningCancelMu.Unlock()
 
 	// 5. Build prepared request
 	prepared := PreparedRequest{
@@ -102,10 +94,8 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 	// 6. Delegate to executor
 	err := executor.Execute(execCtx, prepared)
 
-	// Always cleanup cancel on return
-	r.deps.RunningCancelMu.Lock()
-	delete(r.deps.RunningCancel, req.HCtx.ChatID)
-	r.deps.RunningCancelMu.Unlock()
+	// Always cleanup on return
+	r.deps.Executions.end(req.HCtx.ChatID)
 	cancel()
 
 	return err

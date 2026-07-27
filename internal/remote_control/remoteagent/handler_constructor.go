@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -91,41 +92,35 @@ func NewBotHandler(
 
 	// Create the BotHandler instance first (needed for method references)
 	handler := &BotHandler{
-		ctx:                 ctx,
-		botSetting:          botSetting,
-		chatStore:           chatStore,
-		sessionMgr:          sessionMgr,
-		agentService:        agentService,
-		directoryBrowser:    directoryBrowser,
-		manager:             manager,
-		imPrompter:          imPrompter,
-		fileStore:           fileStore,
-		tbClient:            tbClient,
-		handoffManager:      handoffMgr,
-		tbSessionStore:      tbSessionStore,
-		runningCancel:       make(map[string]context.CancelFunc),
-		pendingBinds:        make(map[string]*PendingBind),
-		actionMenuMessageID: make(map[string]string),
-		resumeListings:      make(map[string][]string),
-		pairing:             pairing,
+		ctx:              ctx,
+		botSetting:       botSetting,
+		chatStore:        chatStore,
+		sessionMgr:       sessionMgr,
+		agentService:     agentService,
+		directoryBrowser: directoryBrowser,
+		manager:          manager,
+		imPrompter:       imPrompter,
+		fileStore:        fileStore,
+		tbClient:         tbClient,
+		handoffManager:   handoffMgr,
+		tbSessionStore:   tbSessionStore,
+		executions:       newExecutionRegistry(),
+		resumeListings:   make(map[string][]string),
+		pairing:          pairing,
 	}
 
 	// Initialize AgentRouter with dependencies
 	deps := &ExecutorDependencies{
-		ChatStore:                  chatStore,
-		SessionMgr:                 sessionMgr,
-		AgentService:               agentService,
-		IMPrompter:                 imPrompter,
-		FileStore:                  fileStore,
-		TBClient:                   tbClient,
-		TBSessionStore:             tbSessionStore,
-		RunningCancel:              handler.runningCancel,
-		RunningCancelMu:            &handler.runningCancelMu,
-		GetVerbose:                 handler.GetVerbose,
-		FormatResponseWithFooter:   handler.formatResponseWithFooter,
-		SendText:                   handler.SendText,
-		SendTextWithReply:          handler.sendTextWithReply,
-		SendTextWithActionKeyboard: handler.sendTextWithActionKeyboard,
+		ChatStore:         chatStore,
+		SessionMgr:        sessionMgr,
+		AgentService:      agentService,
+		IMPrompter:        imPrompter,
+		FileStore:         fileStore,
+		TBClient:          tbClient,
+		TBSessionStore:    tbSessionStore,
+		Executions:        handler.executions,
+		SendText:          handler.SendText,
+		SendTextWithReply: handler.sendTextWithReply,
 		SendFile: func(hCtx HandlerContext, filePath, caption string) error {
 			return handler.SendFile(context.Background(), hCtx, filePath, caption)
 		},

@@ -23,29 +23,17 @@ func isStopCommand(text string) bool {
 
 // handleStopCommand handles stop commands (/stop, stop, /clear)
 func (h *BotHandler) handleStopCommand(hCtx HandlerContext, clearSession bool) {
-	h.runningCancelMu.Lock()
-	cancel, exists := h.runningCancel[hCtx.ChatID]
-	h.runningCancelMu.Unlock()
-
-	if !exists {
-		if clearSession {
-			h.handleClearCommand(hCtx)
-			return
-		}
-		h.SendText(hCtx, "No running task to stop.")
-		return
-	}
-
-	// Cancel the execution
-	cancel()
-	delete(h.runningCancel, hCtx.ChatID)
+	stopped := h.executions.cancel(hCtx.ChatID)
 
 	if clearSession {
 		h.handleClearCommand(hCtx)
 		return
 	}
-
-	h.SendText(hCtx, "🛑 Task stopped.")
+	if stopped {
+		h.SendText(hCtx, "🛑 Task stopped.")
+		return
+	}
+	h.SendText(hCtx, "No running task to stop.")
 }
 
 // handleSlashCommands handles slash commands via the registry
@@ -72,29 +60,12 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 		}
 	}
 
-	// Use the command registry
+	// Use the command registry. A bare "/" reads as a help request; the help
+	// command itself (and its aliases) is a regular registry entry.
 	if h.commandRegistry != nil {
 		cmdName := strings.TrimPrefix(cmd, "/")
-
-		// Special handling for help: build dynamic help text
-		if cmdName == "" || cmdName == "help" || cmdName == "h" || cmdName == "start" {
-			helpText := h.commandRegistry.BuildHelpText(hCtx.IsDirect())
-
-			helpText += "\n\n"
-			helpText += "@cc to handoff control to Claude Code\n"
-			helpText += "@tb to handoff control to Tingly Box Smart Guide\n"
-
-			// Surface the concrete chat id (principle #5/#11): it is the
-			// literal value the notify/interact API requires as chat_id, so
-			// the user must be able to copy it straight from the conversation
-			// where they take the next action.
-			helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
-			if hCtx.ChatID != "" {
-				helpText += fmt.Sprintf("\nChat ID: %s", hCtx.ChatID)
-			}
-			formattedHelp := h.formatHelpWithFooter(hCtx, helpText)
-			h.SendText(hCtx, formattedHelp)
-			return
+		if cmdName == "" {
+			cmdName = "help"
 		}
 
 		handler, ok := h.commandRegistry.Match(cmdName)
@@ -137,13 +108,8 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 
 	case agentClaudeCode, agentMock:
 		projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-		if projectPath == "" {
-			if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
-				projectPath = path
-			}
-		}
 
-		defaultPath := h.getDefaultProjectPath()
+		defaultPath := h.defaultProjectPath()
 		if projectPath == "" {
 			projectPath = defaultPath
 		}
@@ -228,32 +194,12 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 	keyboard := buildProjectKeyboard(currentPath, projectPaths)
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
-		Text:     text,
-		Actions:  keyboard.ToActionSet(),
-		Metadata: trackActionMenuMetadata(),
+		Text:    text,
+		Actions: keyboard.ToActionSet(),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send project list")
 	}
-}
-
-// formatHelpWithFooter formats help text with the standard reply footer
-// (agent + project path) appended at the bottom.
-func (h *BotHandler) formatHelpWithFooter(hCtx HandlerContext, helpText string) string {
-	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-	if projectPath == "" {
-		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
-			projectPath = path
-		}
-	}
-	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
-
-	meta := ResponseMeta{
-		ProjectPath: projectPath,
-		AgentType:   string(currentAgent),
-	}
-
-	return h.formatResponseWithFooter(meta, helpText)
 }
 
 // handleResumePick processes a tap on a /resume keyboard button. Mirrors the
@@ -271,7 +217,7 @@ func (h *BotHandler) handleResumePick(hCtx HandlerContext, sessionID string, msg
 		h.SendText(hCtx, "⚠️ /resume only works with Claude Code (@cc). Switch with: @cc")
 		return
 	}
-	projectPath := resolveProjectPath(h.commandAdapter, hCtx.ChatID, string(hCtx.Platform))
+	projectPath := resolveProjectPath(h.commandAdapter, hCtx.ChatID)
 	if projectPath == "" {
 		h.SendText(hCtx, "No project bound. Use /cd <path> first.")
 		return

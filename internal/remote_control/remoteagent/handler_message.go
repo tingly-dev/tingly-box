@@ -172,17 +172,12 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.Media
 	// Get project path for storage, use default if not bound
 	projectPath, ok := h.getProjectPath(hCtx)
 	if !ok {
-		projectPath = h.getDefaultProjectPath()
+		projectPath = h.defaultProjectPath()
 	}
 
 	// Set platform-specific token on FileStore if needed
 	if len(media) > 0 && strings.HasPrefix(media[0].URL, "tgfile://") {
-		// Get token from bot settings (check both Auth map and legacy Token field)
-		token := h.botSetting.Token
-		if token == "" && len(h.botSetting.Auth) > 0 {
-			token = h.botSetting.Auth["token"]
-		}
-		if token != "" {
+		if token := h.botSetting.Auth["token"]; token != "" {
 			h.fileStore.SetTelegramToken(token)
 		}
 	}

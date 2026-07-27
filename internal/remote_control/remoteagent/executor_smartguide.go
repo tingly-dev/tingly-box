@@ -121,7 +121,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) e
 			}
 
 			return &smart_guide.StatusInfo{
-				CurrentAgent:   "tingly-box",
+				CurrentAgent:   AgentNameTinglyBox,
 				SessionID:      chatID,
 				ProjectPath:    projectPath,
 				WorkingDir:     workingDir,
@@ -169,19 +169,17 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) e
 	}).Info("SmartGuide: Initial working directory set")
 
 	// 5. Send processing message
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, IconProcess+" "+MsgProcessing), req.ReplyTo)
+	e.deps.SendTextWithReply(req.HCtx, IconProcess+" "+MsgProcessing+BuildFooter(meta.AgentType, meta.ProjectPath), req.ReplyTo)
 
 	// 6. Create streaming handler (shared meta pointer)
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
+	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx)
 
 	// 7. Create completion callback
 	completionCallback := &SmartGuideCompletionCallback{
 		hCtx:           req.HCtx,
-		sessionID:      req.SessionID,
 		chatStore:      e.deps.ChatStore,
 		tbSessionStore: e.deps.TBSessionStore,
 		agent:          agent,
-		projectPath:    projectPath,
 		meta:           meta,
 		sendText:       e.deps.SendText,
 	}

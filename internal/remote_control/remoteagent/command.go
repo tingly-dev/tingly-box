@@ -55,9 +55,6 @@ type BotHandlerAdapter interface {
 	// SetProjectPath sets the project path for a chat
 	SetProjectPath(chatID, path string) error
 
-	// GetProjectPathForGroup gets project path with group fallback
-	GetProjectPathForGroup(chatID, platform string) (string, bool)
-
 	// GetSession gets session info
 	GetSession(chatID, agentType, projectPath string) (*SessionInfo, error)
 
@@ -67,8 +64,8 @@ type BotHandlerAdapter interface {
 	// UpdatePermissionMode updates the permission mode for a session
 	UpdatePermissionMode(sessionID, mode string) error
 
-	// ClearSession clears a session
-	ClearSession(chatID, agentType string) error
+	// ClearSession clears the current agent's session for the chat
+	ClearSession(chatID string) error
 
 	// StopExecution cancels a running execution, returns true if one was running
 	StopExecution(chatID string) bool
@@ -96,6 +93,9 @@ type BotHandlerAdapter interface {
 
 	// GetBashAllowlist returns the configured bash allowlist
 	GetBashAllowlist() map[string]struct{}
+
+	// BuildHelpText renders the registry's command list for /help.
+	BuildHelpText(isDirect bool) string
 
 	// ListChatProjectPaths lists the MRU per-chat project-path history.
 	ListChatProjectPaths(chatID string) ([]string, error)
@@ -133,7 +133,6 @@ type BotHandlerAdapter interface {
 // Channel-neutral so command code can render either compact text or buttons.
 type ResumableSession struct {
 	SessionID    string
-	ProjectPath  string
 	StartTime    time.Time
 	EndTime      time.Time
 	NumTurns     int
@@ -219,8 +218,21 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-help", "help", "Show available commands and help").
 		WithAliases("h", "start").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			// Help will be built by the registry's BuildHelpText, then formatted with meta
-			return nil // Handled specially in handleSlashCommands
+			helpText := adapter.BuildHelpText(ctx.IsDirectMessage)
+
+			helpText += "\n\n"
+			helpText += "@cc to handoff control to Claude Code\n"
+			helpText += "@tb to handoff control to Tingly Box Smart Guide\n"
+
+			// Surface the concrete chat id (principle #5/#11): it is the
+			// literal value the notify/interact API requires as chat_id, so
+			// the user must be able to copy it straight from the conversation
+			// where they take the next action.
+			helpText += fmt.Sprintf("\nYour ID: %s", ctx.SenderID)
+			if ctx.ChatID != "" {
+				helpText += fmt.Sprintf("\nChat ID: %s", ctx.ChatID)
+			}
+			return sendCommandText(adapter, ctx, helpText)
 		}).
 		WithCategory("session").
 		WithPriority(100).
@@ -299,12 +311,7 @@ func parsePositiveInt(s string) (int, bool) {
 func newClearCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-clear", "clear", "Clear context and start new session").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			agentType, err := adapter.GetCurrentAgent(ctx.ChatID)
-			if err != nil {
-				return sendCommandTextf(adapter, ctx, "Failed to get current agent: %v", err)
-			}
-
-			if err := adapter.ClearSession(ctx.ChatID, agentType); err != nil {
+			if err := adapter.ClearSession(ctx.ChatID); err != nil {
 				return sendCommandTextf(adapter, ctx, "Failed to clear session: %v", err)
 			}
 
@@ -333,7 +340,7 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-project", "project", "Show and switch between projects").
 		WithAliases("p").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			currentPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+			currentPath := resolveProjectPath(adapter, ctx.ChatID)
 			projectPaths, _ := adapter.ListChatProjectPaths(ctx.ChatID)
 
 			text := buildProjectText(currentPath, projectPaths)
@@ -344,9 +351,8 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 			if interactive && len(projectPaths) > 0 {
 				keyboard := buildProjectKeyboard(currentPath, projectPaths)
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
-					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					Actions:  keyboard.ToActionSet(),
-					Metadata: trackActionMenuMetadata(),
+					Text:    text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
+					Actions: keyboard.ToActionSet(),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send project list")
@@ -368,7 +374,7 @@ func newStatusCommand(adapter BotHandlerAdapter) imbot.Command {
 
 			// Smart Guide is stateless
 			if agentType == AgentNameTinglyBox {
-				projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+				projectPath := resolveProjectPath(adapter, ctx.ChatID)
 				var parts []string
 				parts = append(parts, "Agent: Smart Guide (@tb)")
 				parts = append(parts, "Status: Stateless (no session)")
@@ -379,7 +385,7 @@ func newStatusCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 
 			// For other agents (claude, mock), find the session
-			projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+			projectPath := resolveProjectPath(adapter, ctx.ChatID)
 			if projectPath == "" {
 				return sendCommandText(adapter, ctx, "No project bound. Use /cd <project_path> first.")
 			}
@@ -578,7 +584,7 @@ func newYoloCommand(adapter BotHandlerAdapter) imbot.Command {
 				return sendCommandText(adapter, ctx, "⚠️ Auto-approve mode is only available for Claude Code (@cc).\n\nSwitch to Claude Code first with: @cc")
 			}
 
-			projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+			projectPath := resolveProjectPath(adapter, ctx.ChatID)
 			if projectPath == "" {
 				return sendCommandText(adapter, ctx, "No project path found. Use /cd <project_path> to create a session first.")
 			}
@@ -710,7 +716,7 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 					"⚠️ /resume only works with Claude Code (@cc). Switch with: @cc")
 			}
 
-			projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+			projectPath := resolveProjectPath(adapter, ctx.ChatID)
 			if projectPath == "" {
 				return sendCommandText(adapter, ctx,
 					"No project bound. Use /cd <path> or /project to bind one first.")
@@ -766,9 +772,8 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 			if ctx.IsDirectMessage && caps != nil && caps.SupportsInteraction() {
 				keyboard := buildResumeKeyboard(sessions)
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
-					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					Actions:  keyboard.ToActionSet(),
-					Metadata: trackActionMenuMetadata(),
+					Text:    text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
+					Actions: keyboard.ToActionSet(),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send resume list with keyboard")

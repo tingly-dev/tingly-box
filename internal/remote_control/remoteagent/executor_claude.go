@@ -7,11 +7,14 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -78,7 +81,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 	// serves @cc: the main claude_code scenario or a profile
 	// ("claude_code:<id>"). Read dynamically so a profile switch in the web UI
 	// applies from the next message without a bot restart.
-	profileID := e.deps.GetBotSettingOrCache().CCProfileID()
+	profileID := ccProfileID(e.deps.GetBotSettingOrCache())
 
 	statusMsg := "⏳ CC: Processing new session..."
 	if !req.IsNewSession {
@@ -87,7 +90,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 	if profileID != "" {
 		statusMsg += fmt.Sprintf(" (profile: %s)", profileID)
 	}
-	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
+	e.deps.SendTextWithReply(req.HCtx, statusMsg+BuildFooter(meta.AgentType, meta.ProjectPath), req.ReplyTo)
 
 	shouldResume := !req.IsNewSession
 	permissionMode, autoApprove := claudePermissionPolicy(req.PermissionMode)
@@ -101,7 +104,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		"ccProfile":      profileID,
 	}).Info("Starting Claude Code execution")
 
-	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
+	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx)
 
 	// Route the Claude Code CLI through the tingly-box gateway. Two distinct
 	// mechanisms, matching what a local launch does for each case:
@@ -191,17 +194,16 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 		"duration":  duration,
 	}).Info("Claude Code execution completed")
 
-	response := ""
-	if result != nil {
-		response = result.TextOutput()
-	}
-
 	if werr != nil {
 		errMsg := werr.Error()
+		response := ""
+		if result != nil {
+			response = result.TextOutput()
+		}
 		if response == "" {
 			response = fmt.Sprintf("Execution failed: %v", werr)
 		}
-		if strings.Contains(errMsg, "Session ID") && strings.Contains(errMsg, "already in use") {
+		if isSessionInUseText(errMsg) {
 			response = fmt.Sprintf("⚠️ Session ID conflict: This session is already active in another Claude Code process.\n\nSession ID: %s\n\nPossible solutions:\n• Wait for the other session to complete\n• Use /stop to end the current session and try again\n• If the other process is stuck, terminate it manually", sessionID)
 		}
 		// The runner marks the session failed once it actually starts; if Run
@@ -214,9 +216,24 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) e
 	}
 
 	// Success: runner called Store.SetCompleted inside Wait(); send the "Task done" card.
-	e.sendTaskDoneCard(req.HCtx, meta)
+	sendTaskDoneCard(req.HCtx, meta)
 
 	return nil
+}
+
+// ccProfileID extracts the Claude Code profile ID from a bot's DefaultAgent
+// setting. Returns "" for the main claude_code scenario (unset, "claude_code",
+// or a value whose base scenario isn't claude_code).
+func ccProfileID(s bot.BotSetting) string {
+	raw := strings.TrimSpace(s.DefaultAgent)
+	if raw == "" {
+		return ""
+	}
+	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(raw))
+	if base != typ.ScenarioClaudeCode {
+		return ""
+	}
+	return profileID
 }
 
 // claudePermissionPolicy keeps an empty session mode empty so Claude Code can
@@ -227,17 +244,26 @@ func claudePermissionPolicy(sessionMode string) (string, bool) {
 	return mode, noApprovalModes[mode]
 }
 
-// sendTaskDoneCard emits the "Task done" action keyboard at the end of a
-// successful execution. Replaces the legacy CompletionCallback.OnComplete.
-func (e *ClaudeCodeExecutor) sendTaskDoneCard(hCtx HandlerContext, meta *ResponseMeta) {
+// isSessionInUseText reports whether an error's text is the Claude CLI's
+// "session file already in use by another process" complaint. The CLI
+// surfaces this only as text (no typed error crosses the agentboot
+// boundary), so the one substring match lives here — every session-conflict
+// rendering goes through this predicate.
+func isSessionInUseText(s string) bool {
+	return strings.Contains(s, "Session ID") && strings.Contains(s, "already in use")
+}
+
+// sendTaskDoneCard emits the "Task done" action keyboard that closes every
+// successful run — Claude Code and SmartGuide alike.
+func sendTaskDoneCard(hCtx HandlerContext, meta *ResponseMeta) {
 	kb := feature.BuildActionKeyboard()
 
-	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(meta.AgentType, meta.ProjectPath)
-	if _, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
-		Text:     doneText,
-		Actions:  kb.BuildActions(),
-		Metadata: trackActionMenuMetadata(),
-	}); err != nil {
-		logrus.WithError(err).Warn("ClaudeCodeExecutor: failed to send Task done card")
+	opts := &imbot.SendMessageOptions{
+		Text:    IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(meta.AgentType, meta.ProjectPath),
+		Actions: kb.BuildActions(),
+	}
+	bot.ForwardReplyContext(opts, hCtx.Message)
+	if _, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts); err != nil {
+		logrus.WithError(err).Warn("Failed to send Task done card")
 	}
 }

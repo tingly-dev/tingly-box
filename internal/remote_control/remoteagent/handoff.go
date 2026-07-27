@@ -1,17 +1,13 @@
 package remoteagent
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 )
@@ -20,11 +16,9 @@ import (
 // It saves messages to session, updates project path if changed, and sends response + action keyboard
 type SmartGuideCompletionCallback struct {
 	hCtx           HandlerContext
-	sessionID      string
 	chatStore      bot.ChatStoreInterface
 	tbSessionStore *smart_guide.SessionStore
 	agent          *smart_guide.TinglyBoxAgent
-	projectPath    string
 	meta           *ResponseMeta
 	sendText       func(hCtx HandlerContext, text string)
 	messagesSent   int // Track number of messages sent via hooks (for fallback)
@@ -116,9 +110,6 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *smart_guide.Completion
 				ch.BashCwd = currentWorkingDir
 			}); err != nil {
 				logrus.WithError(err).WithField("chatID", c.hCtx.ChatID).Warn("Failed to sync working directory to chat store")
-			} else {
-				// Update meta to reflect new project path
-				c.meta.ProjectPath = currentWorkingDir
 			}
 		}
 	}
@@ -156,27 +147,14 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *smart_guide.Completion
 		}).Debug("SmartGuide: Messages were sent via hooks - no fallback needed")
 	}
 
-	// Send action keyboard on completion
-	kb := feature.BuildActionKeyboard()
-
-	sgDoneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
-	opts := &imbot.SendMessageOptions{
-		Text:     sgDoneText,
-		Actions:  kb.BuildActions(),
-		Metadata: trackActionMenuMetadata(),
-	}
-	bot.ForwardReplyContext(opts, c.hCtx.Message)
-	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, opts)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to send action keyboard for SmartGuide")
-	}
+	// Send the "Task done" action card on completion
+	sendTaskDoneCard(c.hCtx, c.meta)
 
 	// Log completion event
 	logrus.WithFields(logrus.Fields{
-		"chatID":    c.hCtx.ChatID,
-		"sessionID": c.sessionID,
-		"success":   result.Success,
-		"duration":  result.DurationMS,
+		"chatID":   c.hCtx.ChatID,
+		"success":  result.Success,
+		"duration": result.DurationMS,
 	}).Info("SmartGuide execution completed via callback")
 }
 
@@ -204,19 +182,12 @@ func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.Age
 	h.reactDone(hCtx)
 }
 
-// isSessionBusyError reports whether err is the "another execution running /
-// session already in use" class of conflict, which gets a friendlier message.
-func isSessionBusyError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "already in progress") || strings.Contains(err.Error(), "already in use")
-}
-
 // executionErrorMessage renders an agent execution error for the chat,
-// substituting a guided message for session-conflict errors.
+// substituting a guided message for the two session-conflict cases: our own
+// duplicate-run guard (errExecutionBusy) and the Claude CLI's session-file
+// lock (isSessionInUseText).
 func executionErrorMessage(err error) string {
-	if isSessionBusyError(err) {
+	if errors.Is(err, errExecutionBusy) || isSessionInUseText(err.Error()) {
 		return "⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution"
 	}
 	return fmt.Sprintf("⚠️ **Error**: %v", err)
@@ -299,13 +270,12 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 	// Check for handoff commands first (supports "@cc help me" format)
 	if toAgent, isHandoff, remainingText := smart_guide.DetectHandoffCommand(text); isHandoff {
-		// Determine target agent by comparing string values
-		var targetAgent agentboot.AgentType
-		switch string(toAgent) {
-		case smart_guide.AgentTypeTinglyBox:
-			targetAgent = agentTinglyBox
-		case smart_guide.AgentTypeClaudeCode:
-			targetAgent = agentClaudeCode
+		// smart_guide names the handoff targets with the same identity strings
+		// this package routes on, so a typed conversion plus a validity check
+		// replaces the old value-by-value re-mapping.
+		targetAgent := agentboot.AgentType(toAgent)
+		switch targetAgent {
+		case agentTinglyBox, agentClaudeCode:
 		default:
 			return fmt.Errorf("unknown target agent: %s", toAgent)
 		}
@@ -353,43 +323,20 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 	return nil
 }
 
-// getProjectPath returns the project path for the current chat
+// getProjectPath returns the project path bound to the current chat (direct
+// and group chats share the same chat-id key in the store).
 func (h *BotHandler) getProjectPath(hCtx HandlerContext) (string, bool) {
-	if hCtx.IsDirect() {
-		// Direct chat: get project path from Chat store
-		projectPath, hasBound, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
-		if hasBound && projectPath != "" {
-			return projectPath, true
-		}
-	} else {
-		// Group chat: get bound project path
-		return getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform))
+	projectPath, hasBound, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	if hasBound && projectPath != "" {
+		return projectPath, true
 	}
 	return "", false
 }
 
-// getDefaultProjectPath returns the default project path for the bot
-// Priority: 1. DefaultCwd from bot setting, 2. Current working directory, 3. User home directory
-func (h *BotHandler) getDefaultProjectPath() string {
-	// 1. Check bot setting's DefaultCwd
-	if h.botSetting.DefaultCwd != "" {
-		expanded, err := ExpandPath(h.botSetting.DefaultCwd)
-		if err == nil {
-			return expanded
-		}
-		logrus.WithError(err).Warnf("Failed to expand DefaultCwd: %s", h.botSetting.DefaultCwd)
-	}
-
-	// 2. Use current working directory
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-
-	// 3. Fallback to user home directory
-	if home, err := os.UserHomeDir(); err == nil {
-		return home
-	}
-
-	// Ultimate fallback
-	return "/"
+// defaultProjectPath returns the bot's default project path. The resolution
+// (DefaultCwd → cwd → home → "/") lives on ExecutorDependencies so it reads
+// the CURRENT settings — an operator's DefaultCwd change applies without a
+// bot restart, here as on the execution path.
+func (h *BotHandler) defaultProjectPath() string {
+	return h.agentRouter.deps.ResolveDefaultProjectPath()
 }

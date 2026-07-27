@@ -24,8 +24,7 @@ type streamingMessageHandler struct {
 	replyTo   string
 	mu        sync.Mutex
 	formatter *claude.TextFormatter
-	verbose   bool          // If false, only show final results (hide intermediate messages)
-	meta      *ResponseMeta // Pointer so OnComplete sees updates from SmartGuideCompletionCallback
+	verbose   bool // If false, only show final results (hide intermediate messages)
 
 	// toolBuffer accumulates formatted tool-only renders between text-bearing
 	// messages. Messages act as the splitting boundary: when a text-bearing
@@ -47,14 +46,13 @@ const toolBufferFlushThreshold = 20
 const quietToolPreviewCount = 3
 
 // newStreamingMessageHandler creates a new streaming message handler
-func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool, meta *ResponseMeta) *streamingMessageHandler {
+func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool) *streamingMessageHandler {
 	return &streamingMessageHandler{
 		bot:       bot,
 		chatID:    chatID,
 		replyTo:   replyTo,
 		formatter: claude.NewTextFormatter(),
 		verbose:   verbose,
-		meta:      meta,
 	}
 }
 
@@ -215,9 +213,11 @@ func (h *streamingMessageHandler) sendText(text string) {
 // flushed buffer as a short summary; verbose mode keeps one line per tool.
 func (h *streamingMessageHandler) handleClaudeMessage(claudeMsg claude.Message) error {
 	formatted := h.formatter.Format(claudeMsg)
-	d, _ := json.Marshal(claudeMsg.GetRawData())
-	logrus.Infof("[bot] Raw: %s", d)
-	logrus.Infof("[bot] Formatted: %s", formatted)
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		d, _ := json.Marshal(claudeMsg.GetRawData())
+		logrus.Debugf("[bot] Raw: %s", d)
+		logrus.Debugf("[bot] Formatted: %s", formatted)
+	}
 
 	if strings.TrimSpace(formatted) == "" {
 		logrus.WithField("msgType", claudeMsg.GetType()).Debug("Skipping empty formatted message")
@@ -415,7 +415,7 @@ func (h *streamingMessageHandler) OnError(err error) {
 	var errMsg string
 
 	// Check for session ID conflict error and provide helpful message
-	if strings.Contains(errStr, "Session ID") && strings.Contains(errStr, "already in use") {
+	if isSessionInUseText(errStr) {
 		errMsg = fmt.Sprintf("⚠️ **Session ID Conflict**\n\nThe Claude CLI reported: %v\n\nThis usually means:\n• Another Claude Code process is using this session\n• The session file is locked\n\nTry using `/stop` to end the current session, then retry.", err)
 	} else {
 		errMsg = fmt.Sprintf("[ERROR] %v", err)

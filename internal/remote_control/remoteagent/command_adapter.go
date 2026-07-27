@@ -35,10 +35,7 @@ func (a *botHandlerAdapter) ctx(chatID string) HandlerContext {
 
 // SendText sends a text message to a chat.
 func (a *botHandlerAdapter) SendText(chatID, text string) error {
-	hCtx := HandlerContext{
-		ChatID: chatID,
-	}
-	a.handler.SendText(hCtx, text)
+	a.handler.SendText(a.ctx(chatID), text)
 	return nil
 }
 
@@ -56,11 +53,6 @@ func (a *botHandlerAdapter) SetProjectPath(chatID, path string) error {
 	}
 	a.handler.completeBind(a.ctx(chatID), expandedPath)
 	return nil
-}
-
-// GetProjectPathForGroup gets project path with group fallback.
-func (a *botHandlerAdapter) GetProjectPathForGroup(chatID, platform string) (string, bool) {
-	return getProjectPathForGroup(a.handler.chatStore, chatID, platform)
 }
 
 // sessionInfoFrom converts a session record into the command-facing SessionInfo.
@@ -108,26 +100,15 @@ func (a *botHandlerAdapter) UpdatePermissionMode(sessionID, mode string) error {
 	return nil
 }
 
-// ClearSession clears a session.
-func (a *botHandlerAdapter) ClearSession(chatID, agentType string) error {
+// ClearSession clears the current agent's session for the chat.
+func (a *botHandlerAdapter) ClearSession(chatID string) error {
 	a.handler.handleClearCommand(a.ctx(chatID))
 	return nil
 }
 
 // StopExecution cancels a running execution, returns true if one was running.
 func (a *botHandlerAdapter) StopExecution(chatID string) bool {
-	a.handler.runningCancelMu.Lock()
-	cancel, exists := a.handler.runningCancel[chatID]
-	if exists {
-		delete(a.handler.runningCancel, chatID)
-	}
-	a.handler.runningCancelMu.Unlock()
-
-	if exists && cancel != nil {
-		cancel()
-		return true
-	}
-	return false
+	return a.handler.executions.cancel(chatID)
 }
 
 // GetCurrentAgent gets the current agent for a chat.
@@ -170,6 +151,14 @@ func (a *botHandlerAdapter) SetBashCwd(chatID, path string) error {
 	return a.handler.chatStore.SetBashCwd(chatID, path)
 }
 
+// BuildHelpText renders the command registry's help listing.
+func (a *botHandlerAdapter) BuildHelpText(isDirect bool) string {
+	if a.handler.commandRegistry == nil {
+		return ""
+	}
+	return a.handler.commandRegistry.BuildHelpText(isDirect)
+}
+
 // GetBashAllowlist returns the configured bash allowlist.
 func (a *botHandlerAdapter) GetBashAllowlist() map[string]struct{} {
 	allowlist := normalizeAllowlistToMap(a.handler.botSetting.BashAllowlist)
@@ -194,7 +183,7 @@ func (a *botHandlerAdapter) VerifyAndPair(botUUID, chatID, senderID, platform, c
 // current agent for the chat. Returns "" when neither piece is available,
 // so unpaired/unbound chats see no decoration.
 func (a *botHandlerAdapter) BuildReplyFooter(chatID, platform string) string {
-	projectPath := resolveProjectPath(a, chatID, platform)
+	projectPath := resolveProjectPath(a, chatID)
 	agentType, _ := a.GetCurrentAgent(chatID)
 	if projectPath == "" && agentType == "" {
 		return ""
@@ -223,7 +212,6 @@ func (a *botHandlerAdapter) ListResumableSessions(projectPath string, limit int)
 	for _, m := range metas {
 		out = append(out, ResumableSession{
 			SessionID:    m.SessionID,
-			ProjectPath:  m.ProjectPath,
 			StartTime:    m.StartTime,
 			EndTime:      m.EndTime,
 			NumTurns:     m.NumTurns,
@@ -246,7 +234,7 @@ func (a *botHandlerAdapter) PrepareResume(chatID, agentType, projectPath, sessio
 	if old := a.handler.sessionMgr.FindBy(chatID, agentType, projectPath); old != nil && old.ID != sessionID {
 		a.handler.sessionMgr.Close(old.ID)
 	}
-	if existing, ok := a.handler.sessionMgr.GetOrLoad(sessionID); ok {
+	if _, ok := a.handler.sessionMgr.GetOrLoad(sessionID); ok {
 		// Already present (perhaps user re-armed the same id). Just refresh
 		// the binding to make sure FindBy returns it next time.
 		a.handler.sessionMgr.Update(sessionID, func(s *session.Session) {
@@ -256,7 +244,6 @@ func (a *botHandlerAdapter) PrepareResume(chatID, agentType, projectPath, sessio
 			s.Status = session.StatusPending
 			s.ExpiresAt = time.Time{}
 		})
-		_ = existing
 		return nil
 	}
 	if sess := a.handler.sessionMgr.CreateWithID(sessionID, chatID, agentType, projectPath); sess == nil {
@@ -310,13 +297,10 @@ func (h *BotHandler) GetCommandRegistry() *imbot.CommandRegistry {
 	return h.commandRegistry
 }
 
-// resolveProjectPath is a helper that resolves project path with group fallback.
-func resolveProjectPath(adapter BotHandlerAdapter, chatID, platform string) string {
+// resolveProjectPath returns the chat's bound project path ("" when none).
+// Direct and group chats are stored under the same chat-id key, so one store
+// query answers both.
+func resolveProjectPath(adapter BotHandlerAdapter, chatID string) string {
 	projectPath, _ := adapter.GetProjectPath(chatID)
-	if projectPath == "" {
-		if path, found := adapter.GetProjectPathForGroup(chatID, platform); found {
-			projectPath = path
-		}
-	}
 	return projectPath
 }
