@@ -75,15 +75,13 @@ func (h *Handler) GetPairingCode(c *gin.Context) {
 		return
 	}
 
-	if audit := h.botMgr.AuditLogger(); audit != nil {
-		audit.Info("imbot.pair.reveal", c.GetString("user_id"), c.ClientIP(),
-			"pairing code revealed via web UI",
-			map[string]interface{}{
-				"bot_uuid": uuid,
-				"by":       "web",
-			})
-	}
-	logrus.WithField("uuid", uuid).Info("ImBot pairing code revealed")
+	logrus.WithFields(logrus.Fields{
+		"action":   "imbot.pair.reveal",
+		"user_id":  c.GetString("user_id"),
+		"ip":       c.ClientIP(),
+		"bot_uuid": uuid,
+		"by":       "web",
+	}).Info("pairing code revealed via web UI")
 
 	c.JSON(http.StatusOK, PairingCodeResponse{
 		Success:   true,
@@ -140,15 +138,13 @@ func (h *Handler) RotatePairingCode(c *gin.Context) {
 		return
 	}
 
-	if audit := h.botMgr.AuditLogger(); audit != nil {
-		audit.Info("imbot.pair.rotate", c.GetString("user_id"), c.ClientIP(),
-			"pairing code rotated via web UI",
-			map[string]interface{}{
-				"bot_uuid": uuid,
-				"by":       "web",
-			})
-	}
-	logrus.WithField("uuid", uuid).Info("ImBot pairing code rotated")
+	logrus.WithFields(logrus.Fields{
+		"action":   "imbot.pair.rotate",
+		"user_id":  c.GetString("user_id"),
+		"ip":       c.ClientIP(),
+		"bot_uuid": uuid,
+		"by":       "web",
+	}).Info("pairing code rotated via web UI")
 
 	c.JSON(http.StatusOK, PairingCodeResponse{
 		Success:   true,

@@ -3,6 +3,8 @@ package bot
 import (
 	"errors"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // isBindCommand reports whether text is a (well-formed-enough) /bind invocation.
@@ -94,18 +96,32 @@ func (h *BotHandler) VerifyAndPair(botUUID, chatID, senderID, platform, code str
 	return nil
 }
 
-// auditInfo records an info-level audit event if a logger is configured.
+// auditInfo records an info-level security event (pairing attempts,
+// rejections, …) through the regular application log — these are just
+// structured log lines, not a separate audit trail.
 func (h *BotHandler) auditInfo(action, userID, message string, details map[string]interface{}) {
-	if h == nil || h.audit == nil {
+	if h == nil {
 		return
 	}
-	h.audit.Info(action, userID, "", message, details)
+	auditFields(action, userID, details).Info(message)
 }
 
-// auditWarn records a warn-level audit event if a logger is configured.
+// auditWarn records a warn-level security event.
 func (h *BotHandler) auditWarn(action, userID, message string, details map[string]interface{}) {
-	if h == nil || h.audit == nil {
+	if h == nil {
 		return
 	}
-	h.audit.Warn(action, userID, "", message, details)
+	auditFields(action, userID, details).Warn(message)
+}
+
+// auditFields builds the structured logrus fields shared by auditInfo/auditWarn.
+func auditFields(action, userID string, details map[string]interface{}) *logrus.Entry {
+	fields := logrus.Fields{"action": action}
+	if userID != "" {
+		fields["user_id"] = userID
+	}
+	for k, v := range details {
+		fields[k] = v
+	}
+	return logrus.WithFields(fields)
 }

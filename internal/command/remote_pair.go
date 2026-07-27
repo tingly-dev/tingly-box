@@ -3,9 +3,10 @@ package command
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 )
 
 // RemotePairEnable enables or disables RequirePairing for a bot.
@@ -61,9 +62,12 @@ func RemotePairRevoke(appManager *AppManager, botUUID, chatID string) error {
 	if err := chatStore.ClearPaired(chatID); err != nil {
 		return err
 	}
-	auditLog := audit.NewLogger(audit.Config{Console: true})
-	auditLog.Info("imbot.pair.revoked", "", "", "pairing revoked via CLI",
-		map[string]interface{}{"bot_uuid": botUUID, "chat_id": chatID, "by": "cli"})
+	logrus.WithFields(logrus.Fields{
+		"action":   "imbot.pair.revoked",
+		"bot_uuid": botUUID,
+		"chat_id":  chatID,
+		"by":       "cli",
+	}).Info("pairing revoked via CLI")
 	fmt.Printf("Revoked pairing for chat %s on bot %s. The chat will need to re-/bind.\n",
 		chatID, botUUID)
 	return nil

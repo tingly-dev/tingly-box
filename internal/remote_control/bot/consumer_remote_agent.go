@@ -8,7 +8,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
@@ -63,7 +62,6 @@ func (c *remoteAgentConsumer) Attach(
 	prompter *imchannel.IMPrompter,
 	chatStore ChatStoreInterface,
 	pairing *PairingManager,
-	auditLog *audit.Logger,
 	channels *channel.Registry,
 ) (*Attached, error) {
 	directoryBrowser := feature.NewDirectoryBrowser()
@@ -79,7 +77,6 @@ func (c *remoteAgentConsumer) Attach(
 		prompter,
 		c.tbClient,
 		pairing,
-		auditLog,
 		c.store,
 	)
 

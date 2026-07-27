@@ -22,7 +22,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -435,14 +434,13 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 		}
 	}
 
-	// Standalone bots get their own PairingManager + audit logger so that
-	// /bind works the same way as in server mode.
-	auditLog := audit.NewLogger(audit.Config{Console: true})
-	pairing := bot.NewPairingManager(auditLog)
+	// Standalone bots get their own PairingManager so that /bind works the
+	// same way as in server mode.
+	pairing := bot.NewPairingManager(bot.NewLogAuditor())
 
 	// Register unified message handler
 	// Pass nil as SettingsStore - standalone bots don't have dynamic config updates
-	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, directoryBrowser, manager, nil, tbClient, pairing, auditLog, nil)
+	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, directoryBrowser, manager, nil, tbClient, pairing, nil)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {

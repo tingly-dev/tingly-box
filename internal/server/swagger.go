@@ -102,7 +102,7 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// Bot interaction API — registers for OpenAPI generation with a nil-channel
 	// handler; at runtime server_control.go re-registers it with the real
 	// channel/interaction registries once the bot middle layer is wired.
-	botAPI := notifymodule.NewBotAPIHandler(nil, nil, nil, nil)
+	botAPI := notifymodule.NewBotAPIHandler(nil, nil, nil)
 	notifymodule.RegisterBotRoutes(apiV1, botAPI)
 
 	// Config apply API routes

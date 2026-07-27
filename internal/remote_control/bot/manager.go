@@ -11,7 +11,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 
@@ -30,7 +29,7 @@ import (
 //
 // chatStore is injected into the Manager and shared by every bot it runs —
 // see Manager.SetChatStore. This function must not close it.
-func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, auditLog *audit.Logger, channels *channel.Registry) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry) error {
 	// Create platform-specific auth config
 	authConfig := buildAuthConfig(setting)
 	platform := imbot.Platform(setting.Platform)
@@ -79,7 +78,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	// SmartGuide machinery — each consumer owns its own.
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {
-		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing, auditLog, channels)
+		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing, channels)
 		if err != nil {
 			return fmt.Errorf("attach inbound consumer %q: %w", consumer.Name(), err)
 		}
@@ -206,7 +205,6 @@ type Manager struct {
 	store     SettingsStore
 	consumers []Consumer        // Supply each bot's inbound behavior, in dispatch order (the decoupling seam)
 	pairing   *PairingManager   // Pairing-code (TOFU) manager
-	audit     *audit.Logger     // Audit logger for security events
 	channels  *channel.Registry // Remote channel registry for /tingly/:scenario routing (optional)
 
 	// chatStore is the ONE chat store every bot in this manager shares, and
@@ -227,13 +225,11 @@ type Manager struct {
 // claims the message, so the catch-all (remote_agent) goes last; and a bot
 // runs only while at least one consumer reports Mounted for it.
 func NewManager(store SettingsStore, consumers ...Consumer) *Manager {
-	auditLog := audit.NewLogger(audit.Config{Console: true})
 	return &Manager{
 		running:   make(map[string]*runningBot),
 		store:     store,
 		consumers: consumers,
-		audit:     auditLog,
-		pairing:   NewPairingManager(auditLog),
+		pairing:   NewPairingManager(NewLogAuditor()),
 	}
 }
 
@@ -263,11 +259,6 @@ func (m *Manager) SetChannelRegistry(reg *channel.Registry) {
 // helpers that mint, rotate, or revoke pairing codes.
 func (m *Manager) PairingManager() *PairingManager {
 	return m.pairing
-}
-
-// AuditLogger returns the manager's audit logger.
-func (m *Manager) AuditLogger() *audit.Logger {
-	return m.audit
 }
 
 // ChatStore returns the chat store shared by every bot this manager runs.
@@ -405,9 +396,8 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 
 	// Start bot in goroutine
 	pairing := m.pairing
-	auditLog := m.audit
 	channels := m.channels
-	go m.runBotSupervised(ctx, uuid, s, chatStore, mounted, pairing, auditLog, channels, doneChan)
+	go m.runBotSupervised(ctx, uuid, s, chatStore, mounted, pairing, channels, doneChan)
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
@@ -425,7 +415,6 @@ func (m *Manager) runBotSupervised(
 	chatStore ChatStoreInterface,
 	consumers []Consumer,
 	pairing *PairingManager,
-	auditLog *audit.Logger,
 	channels *channel.Registry,
 	doneChan chan struct{},
 ) {
@@ -442,18 +431,10 @@ func (m *Manager) runBotSupervised(
 				"panic":    fmt.Sprintf("%v", r),
 				"stack":    stack,
 			}).Error("Bot goroutine panicked; isolated from main process")
-			if auditLog != nil {
-				auditLog.Error("bot_panic", "", "", fmt.Sprintf("bot %s (%s) panicked: %v", uuid, s.Platform, r), false, map[string]interface{}{
-					"uuid":     uuid,
-					"name":     s.Name,
-					"platform": s.Platform,
-					"stack":    stack,
-				})
-			}
 		}
 	}()
 
-	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, auditLog, channels); err != nil {
+	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, channels); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 	}
 	logrus.WithField("uuid", uuid).Info("Bot stopped")

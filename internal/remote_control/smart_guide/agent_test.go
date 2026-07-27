@@ -2,6 +2,7 @@ package smart_guide
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -208,7 +209,7 @@ func TestSessionStore_BlankDirDisabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, msgs)
 	require.NoError(t, store.Save("chat-1", nil))
-	require.NoError(t, store.Delete("chat-1"))
+	require.NoError(t, store.Clear("chat-1"))
 }
 
 func TestSessionStore_SaveLoadRoundTrip(t *testing.T) {
@@ -244,8 +245,9 @@ func TestSessionStore_SaveLoadRoundTrip(t *testing.T) {
 	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, loaded[1].Role)
 }
 
-func TestSessionStore_Delete(t *testing.T) {
-	store, err := NewSessionStore(filepath.Join(t.TempDir(), "sessions"))
+func TestSessionStore_Clear(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "sessions")
+	store, err := NewSessionStore(dir)
 	require.NoError(t, err)
 	require.NotNil(t, store)
 
@@ -258,12 +260,24 @@ func TestSessionStore_Delete(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, loaded, 1)
 
-	require.NoError(t, store.Delete("chat-2"))
+	require.NoError(t, store.Clear("chat-2"))
 
 	loaded, err = store.Load("chat-2")
 	require.NoError(t, err)
-	assert.Empty(t, loaded, "history should be gone after delete")
+	assert.Empty(t, loaded, "the live session should be empty after clear")
 
-	// Deleting a non-existent chat is not an error.
-	require.NoError(t, store.Delete("chat-does-not-exist"))
+	// The cleared history is archived, not destroyed: exactly one other file
+	// remains in the store dir, holding the same messages.
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "cleared history should be archived, not deleted")
+
+	archived, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	require.NoError(t, err)
+	var archivedMsgs []anthropic.BetaMessageParam
+	require.NoError(t, json.Unmarshal(archived, &archivedMsgs))
+	require.Len(t, archivedMsgs, 1, "archived file should hold the pre-clear history")
+
+	// Clearing a chat with no live history is not an error.
+	require.NoError(t, store.Clear("chat-does-not-exist"))
 }

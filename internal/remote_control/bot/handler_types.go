@@ -11,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
@@ -70,9 +69,6 @@ type BotHandler struct {
 
 	// pairing handles TOFU pairing-code verification for direct messages.
 	pairing *PairingManager
-
-	// audit emits security events (pairing attempts, rejections, …).
-	audit *audit.Logger
 }
 
 // PendingBind represents a pending bind confirmation request

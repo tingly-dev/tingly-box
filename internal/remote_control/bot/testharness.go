@@ -12,7 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -40,7 +39,6 @@ type TestHarness struct {
 	SessionMgr   *session.Manager
 	AgentService *agentboot.AgentService
 	Pairing      *PairingManager
-	Audit        *audit.Logger
 	DataDir      string
 	Manager      *imbot.Manager
 
@@ -113,8 +111,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		}
 	}
 
-	auditLog := audit.NewLogger(audit.Config{Console: false, MaxEntries: 1000})
-	pairing := NewPairingManager(auditLog)
+	pairing := NewPairingManager(NewLogAuditor())
 	dirBrowser := feature.NewDirectoryBrowser()
 
 	ctx := t.Context()
@@ -129,7 +126,6 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		nil, // prompter — standalone: the handler creates (and routes) its own
 		nil, // tbClient — SmartGuide path not exercised by tests; falls back to mock/claude as configured
 		pairing,
-		auditLog,
 		nil, // store — not needed in test harness
 	)
 
@@ -142,7 +138,6 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		SessionMgr:   sessionMgr,
 		AgentService: agentService,
 		Pairing:      pairing,
-		Audit:        auditLog,
 		DataDir:      opt.DataDir,
 		Manager:      manager,
 	}

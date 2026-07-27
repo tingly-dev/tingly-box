@@ -11,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
@@ -27,7 +26,6 @@ func NewBotHandler(
 	prompter *imchannel.IMPrompter,
 	tbClient tbclient.TBClient,
 	pairing *PairingManager,
-	auditLog *audit.Logger,
 	store SettingsStore,
 ) *BotHandler {
 	// The bot's channel prompter for permission/ask requests. In the managed
@@ -114,7 +112,6 @@ func NewBotHandler(
 		resumeListings:      make(map[string][]string),
 		verbose:             true, // Default to verbose mode
 		pairing:             pairing,
-		audit:               auditLog,
 	}
 
 	// Initialize AgentRouter with dependencies

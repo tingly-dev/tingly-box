@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 )
@@ -43,7 +42,7 @@ type Attached struct {
 // "provider" (which in this codebase already means an LLM provider).
 //
 // The bot host owns the generic pieces (imbot.Manager, chat store, pairing,
-// audit, channel registry, the shared channel prompter) and passes them to
+// channel registry, the shared channel prompter) and passes them to
 // Attach; a consumer owns only its purpose-specific dependencies (agent
 // service, sessions, SmartGuide) captured at construction. None of Attach's
 // parameters reference a purpose's machinery, which is what keeps the
@@ -66,7 +65,6 @@ type Consumer interface {
 		prompter *imchannel.IMPrompter,
 		chatStore ChatStoreInterface,
 		pairing *PairingManager,
-		auditLog *audit.Logger,
 		channels *channel.Registry,
 	) (*Attached, error)
 }

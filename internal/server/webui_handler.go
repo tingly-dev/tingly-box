@@ -7,15 +7,14 @@ import (
 	"mime"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 )
 
@@ -109,25 +108,12 @@ func UseWebStaticEndpoints(engine *gin.Engine) {
 	}, middleware.Gzip(), UseIndexHTML)
 }
 
-// RuntimeAuditSink adapts an audit.Logger into the AuditFunc the
-// scenario runtime hands to plugins. Plugin actions (e.g.
-// claude_code.interactive.start / .done / .error) land here as audit
-// entries with structured details.
-func RuntimeAuditSink(log *audit.Logger) remotescenario.AuditFunc {
-	if log == nil {
-		return nil
-	}
+// RuntimeAuditSink builds the AuditFunc the scenario runtime hands to
+// plugins. Plugin actions (e.g. claude_code.interactive.start / .done /
+// .error) land here as regular structured log lines — no separate audit
+// trail is needed on top of the application log.
+func RuntimeAuditSink() remotescenario.AuditFunc {
 	return func(action string, fields map[string]any) {
-		details := map[string]interface{}{}
-		for k, v := range fields {
-			details[k] = v
-		}
-		log.Log(audit.Entry{
-			Timestamp: time.Now(),
-			Level:     audit.LevelInfo,
-			Action:    action,
-			Success:   true,
-			Details:   details,
-		})
+		logrus.WithFields(logrus.Fields(fields)).WithField("action", action).Info(action)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/session"
 
@@ -429,14 +428,4 @@ func (bm *BotManager) ChatStore() (bot.ChatStoreInterface, error) {
 		return nil, fmt.Errorf("bot manager not initialized")
 	}
 	return bm.manager.ChatStore()
-}
-
-// AuditLogger returns the bot manager's audit logger so HTTP handlers can
-// record security-relevant operations (pairing reveal, rotate) under the
-// same logger used by the bot runtime.
-func (bm *BotManager) AuditLogger() *audit.Logger {
-	if bm == nil || bm.manager == nil {
-		return nil
-	}
-	return bm.manager.AuditLogger()
 }

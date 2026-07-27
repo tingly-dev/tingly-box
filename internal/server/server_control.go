@@ -21,7 +21,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
@@ -136,8 +135,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		s.scenarioRegistry = remotescenario.NewRegistry()
 		s.scenarioRegistry.Register(claudecode.New(s.interactionRegistry))
 		resolver := binding.NewResolver(sm.ImBotSettings())
-		auditLog := audit.NewLogger(audit.Config{Console: true, MaxEntries: 1000})
-		runtime := remotescenario.NewDefaultRuntime(s.channelRegistry, resolver, RuntimeAuditSink(auditLog))
+		runtime := remotescenario.NewDefaultRuntime(s.channelRegistry, resolver, RuntimeAuditSink())
 		notifyHandler = notifymodule.NewHandlerWithRouting(s.scenarioRegistry, s.interactionRegistry, runtime)
 	} else {
 		notifyHandler = notifymodule.NewHandler()
@@ -206,7 +204,6 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// is wired (channelRegistry + interactionRegistry present); without IM
 	// settings there is no channel to drive. See .design/bot-interaction-api.md.
 	if s.channelRegistry != nil && s.interactionRegistry != nil {
-		auditLog := audit.NewLogger(audit.Config{Console: true, MaxEntries: 1000})
 		// chatLister backs GET /bots/:bot/chats — it scopes the shared chat
 		// store to the bot's platform (a bot can only reach chats on its own
 		// platform) and to its chat-id lock when one is set. nil when no IM
@@ -215,7 +212,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		if imbotHandler != nil {
 			chatLister = buildBotChatLister(s.channelRegistry, imbotHandler)
 		}
-		botAPI := notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, auditLog, chatLister)
+		botAPI := notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, chatLister)
 		notifymodule.RegisterBotRoutes(apiV1, botAPI)
 	}
 

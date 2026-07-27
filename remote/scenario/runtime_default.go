@@ -10,9 +10,9 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
-// AuditFunc is the audit callback the runtime emits to. Production
-// wiring connects this to the audit.Logger; tests can pass a closure
-// that records into a slice.
+// AuditFunc is the audit callback the runtime emits to. Production wiring
+// (server.RuntimeAuditSink) logs through the regular application logger;
+// tests can pass a closure that records into a slice.
 type AuditFunc func(action string, fields map[string]any)
 
 // DefaultRuntime is the production Runtime backed by a channel.Registry,

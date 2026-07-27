@@ -2,9 +2,11 @@ package smart_guide
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
@@ -97,16 +99,35 @@ func (s *SessionStore) Save(chatID string, messages []anthropic.BetaMessageParam
 	return nil
 }
 
-// Delete removes a chat's stored history.
-func (s *SessionStore) Delete(chatID string) error {
+// Clear ends a chat's current Smart Guide session: the live history file is
+// archived (renamed with a timestamp suffix) rather than deleted, so /clear
+// deactivates the conversation instead of destroying it — the same "closed,
+// not erased" semantics remote/session.Manager.Close gives @cc sessions. The
+// next Load for chatID sees no file and starts fresh; the archived file is
+// left on disk as that session's log.
+func (s *SessionStore) Clear(chatID string) error {
 	if s == nil {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := os.Remove(s.path(chatID)); err != nil && !os.IsNotExist(err) {
+	live := s.path(chatID)
+	if _, err := os.Stat(live); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
+	if err := os.Rename(live, s.archivePath(chatID)); err != nil {
+		return err
+	}
+	logrus.WithField("chatID", chatID).Debug("Archived SmartGuide session")
 	return nil
+}
+
+// archivePath returns a unique on-disk location for an archived (cleared)
+// history file, distinct from path()'s canonical live-session location.
+func (s *SessionStore) archivePath(chatID string) string {
+	return filepath.Join(s.dir, fmt.Sprintf("%s-smartguide.%d.json", fs.SafeFileKey(chatID), time.Now().UnixNano()))
 }

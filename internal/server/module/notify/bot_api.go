@@ -32,7 +32,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
@@ -53,7 +52,6 @@ const MaxInteractTimeout = 30 * time.Minute
 type BotAPIHandler struct {
 	channels   *channel.Registry
 	results    *interaction.Registry[interaction.Result]
-	audit      *audit.Logger
 	chatLister ChatLister
 }
 
@@ -77,10 +75,10 @@ type ChatSummary struct {
 type ChatLister func(botUUID string) ([]ChatSummary, error)
 
 // NewBotAPIHandler builds the handler. channels and results are the same
-// registries the Claude Code scenario path uses; audit may be nil.
+// registries the Claude Code scenario path uses.
 // chatLister may be nil — the /chats endpoint then reports unavailable.
-func NewBotAPIHandler(channels *channel.Registry, results *interaction.Registry[interaction.Result], auditLog *audit.Logger, chatLister ChatLister) *BotAPIHandler {
-	return &BotAPIHandler{channels: channels, results: results, audit: auditLog, chatLister: chatLister}
+func NewBotAPIHandler(channels *channel.Registry, results *interaction.Registry[interaction.Result], chatLister ChatLister) *BotAPIHandler {
+	return &BotAPIHandler{channels: channels, results: results, chatLister: chatLister}
 }
 
 // notifyRequest is the body of POST /bots/:bot/notify — a one-way push.
@@ -374,16 +372,10 @@ func replyDecision(reply interaction.Reply) map[string]any {
 	return decision
 }
 
-// auditLog records a structured audit entry when a logger is wired; no-op
-// otherwise. Keeps the handler testable without an audit dependency.
+// auditLog records a bot-interaction-API event through the regular
+// application log.
 func (h *BotAPIHandler) auditLog(botUUID, action string, details map[string]any) {
-	if h.audit == nil {
-		return
-	}
-	h.audit.Log(audit.Entry{
-		Action:  action,
-		Details: appendBot(details, botUUID),
-	})
+	logrus.WithFields(logrus.Fields(appendBot(details, botUUID))).WithField("action", action).Info(action)
 }
 
 func appendBot(details map[string]any, botUUID string) map[string]any {

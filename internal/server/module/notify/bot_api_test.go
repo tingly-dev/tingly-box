@@ -44,7 +44,7 @@ func newBotTestRouter(t *testing.T, ch channel.Channel, botUUID string, resultsT
 		registry.Register(ch)
 	}
 	results := interaction.New[interaction.Result](resultsTTL)
-	handler := NewBotAPIHandler(registry, results, nil, nil)
+	handler := NewBotAPIHandler(registry, results, nil)
 
 	// Mount exactly as RegisterBotRoutes does, but on a plain group so the
 	// test doesn't need the swagger RouteManager. Same path shape.
@@ -263,7 +263,7 @@ func TestListChats_ReturnsSummaries(t *testing.T) {
 	r := gin.New()
 	registry := channel.NewRegistry()
 	registry.Register(ch)
-	handler := NewBotAPIHandler(registry, nil, nil, lister)
+	handler := NewBotAPIHandler(registry, nil, lister)
 	g := r.Group("/api/v1")
 	g.GET("/bots/:bot/chats", handler.ListChats)
 
@@ -292,7 +292,7 @@ func TestListChats_EmptyArray(t *testing.T) {
 	r := gin.New()
 	registry := channel.NewRegistry()
 	registry.Register(ch)
-	handler := NewBotAPIHandler(registry, nil, nil, lister)
+	handler := NewBotAPIHandler(registry, nil, lister)
 	g := r.Group("/api/v1")
 	g.GET("/bots/:bot/chats", handler.ListChats)
 
@@ -312,7 +312,7 @@ func TestListChats_EmptyArray(t *testing.T) {
 func TestListChats_NotRunning(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	handler := NewBotAPIHandler(channel.NewRegistry(), nil, nil, func(string) ([]ChatSummary, error) {
+	handler := NewBotAPIHandler(channel.NewRegistry(), nil, func(string) ([]ChatSummary, error) {
 		t.Fatalf("lister should not be called for an unknown bot")
 		return nil, nil
 	})

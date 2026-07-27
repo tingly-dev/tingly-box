@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
@@ -47,7 +46,6 @@ func (c *notifyConsumer) Attach(
 	prompter *imchannel.IMPrompter,
 	chatStore ChatStoreInterface,
 	pairing *PairingManager,
-	auditLog *audit.Logger,
 	channels *channel.Registry,
 ) (*Attached, error) {
 	return &Attached{}, nil

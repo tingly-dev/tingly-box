@@ -20,11 +20,12 @@ var (
 
 // Constructor and option helpers forwarded from imbot/security.
 var (
-	NewPairingManager    = security.NewPairingManager
-	WithPairingTTL       = security.WithPairingTTL
-	WithPairingCodeLen   = security.WithPairingCodeLength
-	WithPairingMaxFails  = security.WithPairingMaxFails
-	WithPairingLockout   = security.WithPairingLockout
-	WithPairingRand      = security.WithPairingRand
-	WithPairingClock     = security.WithPairingClock
+	NewPairingManager   = security.NewPairingManager
+	NewLogAuditor       = security.NewLogAuditor
+	WithPairingTTL      = security.WithPairingTTL
+	WithPairingCodeLen  = security.WithPairingCodeLength
+	WithPairingMaxFails = security.WithPairingMaxFails
+	WithPairingLockout  = security.WithPairingLockout
+	WithPairingRand     = security.WithPairingRand
+	WithPairingClock    = security.WithPairingClock
 )

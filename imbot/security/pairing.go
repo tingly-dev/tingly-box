@@ -27,8 +27,8 @@ var (
 )
 
 // PairingAuditor is the minimal interface used by PairingManager to emit
-// structured pairing events. *audit.Logger from remote_control/audit satisfies
-// it automatically via Go structural typing — no adapter required.
+// structured pairing events. LogAuditor (this package) is the production
+// implementation, backed by the regular application logger.
 type PairingAuditor interface {
 	Info(action, userID, clientIP, message string, details map[string]interface{})
 	Warn(action, userID, clientIP, message string, details map[string]interface{})

@@ -113,11 +113,27 @@ append 一条消息要重新 marshal 整个 sessions 文件 → 消息数增长�
 `Resolver.Resolve` 要遍历所有 bot、逐个 parse blob 才能匹配一个
 (scenario, event)（`binding.go:124`）。查询、约束、部分更新全都做不了。
 
-### P2-1 审计不落盘
+### P2-1 审计不落盘 —— 已解决：删掉，不是修
 
 `remote/audit.Logger` 只有内存环形缓冲（`logger.go:41`），
-唯一的落盘入口是手动调用的 `ExportJSONToFile`（`logger.go:195`）。
-而 pairing code reveal 这类「每次都审计」的安全事件重启即蒸发。
+唯一的落盘入口是手动调用的、从未被生产代码调用的 `ExportJSONToFile`
+（`logger.go:195`）。读侧（`GetEntries`/`GetLogs`/`GetEntriesByUser`/...）
+同样零生产调用方——排查下来 `remote/audit` 整包只有写入，没有任何地方
+读回来给用户看。而 pairing code reveal 这类「每次都审计」的安全事件
+重启即蒸发。
+
+原计划是给它建 `remote_audit` 表（见下方 schema）换取持久化，但那等于
+维护第二套日志系统去解决"没有持久化"——而 `pkg/obs.MultiLogger` 已经是
+持久化的（JSON 文件 + rotation + retention，见 `.design/logging-redesign.md`），
+且已经有 `GET /api/v1/system/logs` 之类的出口。`remote/audit` 唯一自己的动作
+`logToConsole`（`logger.go:219`）本来就是转发到 logrus。
+
+所以实际落地是**删除 `remote/audit` 整个包**，全部约 15 处调用点
+（pairing 成功/失败/锁定、bot panic、bot 交互 API、scenario 插件生命周期）
+改成直接的结构化 `logrus.WithFields(...).Info/Warn(...)` 调用——这些日志
+本来就通过 `logToConsole` 落进 logrus，现在只是去掉中间那层从不被读的
+环形缓冲。`imbot/security.PairingAuditor` 接口保持不变（`NewPairingManager`
+的注入点），生产实现从 `*audit.Logger` 换成新的 `security.LogAuditor`。
 
 ### P2-2 UX：这些状态在产品里不可见
 
@@ -210,10 +226,11 @@ remote_bindings                   -- 取代 imbot_settings.scenarios JSON 列
   options            JSON          -- 真正开放的部分，保持 JSON
   PK(bot_uuid, scenario)
 
-remote_audit                      -- 取代内存环形缓冲
-  id / timestamp(idx) / level / action / user_id / client_ip
-  session_id / request_id / success / message / details JSON / duration_ms
 ```
+
+`remote_audit` 表**不做**——见上方 P2-1：`remote/audit` 整包已删除，
+安全/审计事件走常规 logrus（`pkg/obs.MultiLogger`，已持久化），
+不需要第二套日志系统。
 
 `Resolver.Resolve` 从「遍历所有 bot × parse blob」变成
 `WHERE scenario = ? AND enabled IS NOT FALSE`。
@@ -345,8 +362,22 @@ CLI 的 `remote run`（`internal/command/remote.go` 的 standalone 路径，单�
 **P3 · 出口**（真正兑现 UX 动机）
 - `GET /api/v1/remote/chats`、`/remote/chats/:id`、`/remote/sessions`
   + swagger 定义 + `task codegen`
-- UI：bot 详情里的「当前状态」面板 —— 配对了谁、绑到哪个项目、活跃会话、最近审计
-- audit 落盘 + retention
+- UI：bot 详情里的「当前状态」面板 —— 配对了谁、绑到哪个项目、活跃会话、最近安全事件
+  （安全事件走常规日志页，不是独立的 audit 出口 —— 见 P2-1）
+
+**已解决，不再是待办**：
+- **`/clear` 的语义统一。** @cc/@mock 的 `/clear`
+  （`internal/remote_control/bot/bot_command.go:handleClearCommand`）本来就是
+  软删除：`sessionMgr.Close` 把旧 session 标 `closed` 后持久化、逐出内存，
+  transcript 文件不动，下一条消息 lazily 建一个新 session（新 UUID）——
+  「关闭旧的、不是抹掉」的语义已经成立。@tb（SmartGuide）不是：
+  `tbSessionStore.Delete(chatID)` 直接删文件。已改为
+  `SessionStore.Clear`：把活跃的 `<chatID>-smartguide.json`
+  rename 成带时间戳后缀的归档文件而不是删除，画风和 @cc 对齐——
+  「clear = 停用当前 session、旧的留作日志」，不需要额外建审计层，
+  这份归档文件本身就是日志。SmartGuide 历史进不进库仍是待决策事项 #2，
+  与这次的改动无关（还是文件，只是不再是"唯一一份、可被清空"）。
+- audit 落盘 —— 见 P2-1，决定是删除 `remote/audit` 而不是给它建表。
 
 ## 8. 待决策事项
 
