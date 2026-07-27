@@ -21,6 +21,25 @@ type Manager struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	stopping atomic.Bool
+
+	// workerMu makes "check stopping, then wg.Add" atomic against shutdown's
+	// "set stopping, then wg.Wait". Without it a Disconnect-triggered
+	// reconnect goroutine can wg.Add concurrently with the Wait — a WaitGroup
+	// misuse the race detector flags — and escape the Wait entirely.
+	workerMu sync.Mutex
+}
+
+// tryAddWorker registers a tracked worker goroutine with the manager's
+// WaitGroup, refusing once shutdown has begun. Callers must run wg.Done when
+// the worker exits iff this returns true.
+func (m *Manager) tryAddWorker() bool {
+	m.workerMu.Lock()
+	defer m.workerMu.Unlock()
+	if m.stopping.Load() {
+		return false
+	}
+	m.wg.Add(1)
+	return true
 }
 
 // eventHandlers stores global event handlers
@@ -211,7 +230,13 @@ func (m *Manager) Start(ctx context.Context) error {
 
 // shutdown performs the actual shutdown (called from Stop goroutine or when context is cancelled)
 func (m *Manager) shutdown() {
+	// Set stopping under workerMu: after this, tryAddWorker refuses, so every
+	// wg.Add either happened-before this point (and Wait below covers it) or
+	// never happens. Disconnecting the bots below fires OnDisconnected
+	// handlers that would otherwise race a reconnect Add against the Wait.
+	m.workerMu.Lock()
 	m.stopping.Store(true)
+	m.workerMu.Unlock()
 
 	// Disconnect all bots without using WaitGroup to avoid deadlock
 	bots := m.snapshotBots()
@@ -430,7 +455,10 @@ func (m *Manager) recoverHandler(event string) {
 
 // handleReconnect handles auto-reconnect logic
 func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
-	m.wg.Add(1)
+	if !m.tryAddWorker() {
+		m.logger.Info("Skipping reconnect for %s bot: manager is stopping", platform)
+		return
+	}
 	go func() {
 		defer m.wg.Done()
 
@@ -440,9 +468,10 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 		for attempts < m.config.MaxReconnectAttempts {
 			// Check if manager context is cancelled - if so, don't reconnect
 			m.mu.RLock()
-			ctxCancelled := m.ctx.Err() != nil
+			ctx := m.ctx
 			autoReconnect := m.config.AutoReconnect
 			m.mu.RUnlock()
+			ctxCancelled := ctx.Err() != nil
 
 			// Don't reconnect if context is cancelled or auto-reconnect is disabled
 			if ctxCancelled || !autoReconnect || m.stopping.Load() {
@@ -459,7 +488,7 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 
 			time.Sleep(delay)
 
-			if err := bot.Connect(m.ctx); err == nil {
+			if err := bot.Connect(ctx); err == nil {
 				m.logger.Info("%s bot reconnected successfully", platform)
 				return
 			}
