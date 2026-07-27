@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"

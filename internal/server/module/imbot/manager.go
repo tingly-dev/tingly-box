@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/remoteagent"
 
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -15,7 +16,6 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/remoteagent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )

@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/remoteagent"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/remoteagent"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/session"

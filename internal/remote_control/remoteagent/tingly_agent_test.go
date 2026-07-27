@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/remoteagent"
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude/fixture"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/remoteagent"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 

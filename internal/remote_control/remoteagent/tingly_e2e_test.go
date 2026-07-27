@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/remoteagent"
 
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/remoteagent"
 )
 
 // bootHelper wires a fresh testenv.TestEnv together with a BotHandler in a

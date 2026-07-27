@@ -6,10 +6,10 @@ import (
 	"os"
 
 	"github.com/sirupsen/logrus"
+	feature2 "github.com/tingly-dev/tingly-box/internal/remote_control/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
 
 // handleCallbackQuery handles callback queries from inline keyboards
@@ -101,7 +101,7 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 				logrus.WithError(err).WithField("move", subAction).Warn("Directory browser move failed")
 				return
 			}
-			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, browserMessageID(msg))
+			_, _ = feature2.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, browserMessageID(msg))
 
 		case "select":
 			// Select current directory (path is in state)
@@ -205,7 +205,7 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, true, "")
 
 	// Send prompt with cancel keyboard
-	kb := feature.BuildCancelKeyboard()
+	kb := feature2.BuildCancelKeyboard()
 
 	result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      BuildCustomPathPrompt(),
@@ -236,7 +236,7 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	// Reset waiting input state (no longer waiting for text input)
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, false, "")
 
-	kb, text := feature.BuildCreateConfirmKeyboard(path)
+	kb, text := feature2.BuildCreateConfirmKeyboard(path)
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      text,

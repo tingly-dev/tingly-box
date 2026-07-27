@@ -490,7 +490,7 @@ import cycles with imbot/platform packages"——不成立，它只需要 `inter
 - `imbot/platform/feishu/card_callback_test.go` — button value 携带 segment 往返、
   含 `:` 的路径、legacy 扁平串仍可解、JSON 化后的 `[]interface{}` 形状，以及
   `getReceiveIdType` 的前缀映射（§7.7）。
-- `internal/remote_control/bot/feature/dir_browser_test.go` — 目录按钮携带**路径**
+- `../internal/remote_control/feature/telegram_dir_browser_test.go` — 目录按钮携带**路径**
   而非索引、含 `:` 的目录名可导航、create 确认按钮携带原始路径。
 - `imbot/platform/tingly/tingly_test.go` — 新契约（`Actions`）与兼容期
   （legacy metadata）各一。原 `TestBot_SendWithTelegramKeyboard` 已删除：它断言的
