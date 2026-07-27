@@ -112,14 +112,10 @@ func (s *SessionStore) Clear(chatID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	live := s.path(chatID)
-	if _, err := os.Stat(live); err != nil {
+	if err := os.Rename(s.path(chatID), s.archivePath(chatID)); err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return err
-	}
-	if err := os.Rename(live, s.archivePath(chatID)); err != nil {
 		return err
 	}
 	logrus.WithField("chatID", chatID).Debug("Archived SmartGuide session")
