@@ -50,12 +50,12 @@ internal/remote_control/bot/             HOST: Manager (lifecycle supervisor),
                                          BotSetting / ChatStoreInterface /
                                          SettingsStore, prompt-reply router
                                          (prompt_reply.go), pairing aliases
-internal/remote_control/bot/remoteagent/ PURPOSE remote_agent: bot.Consumer impl,
+internal/remote_control/remoteagent/     PURPOSE remote_agent: bot.Consumer impl,
                                          BotHandler (inbound catch-all), slash
                                          commands + adapter, agent router and
                                          the @cc/@tb executors, streaming chat
                                          renderer, file store, test harness
-internal/remote_control/bot/feature/     chat features (action menu, directory
+internal/remote_control/feature/         chat features (action menu, directory
                                          browser) shared by the purpose layer
 ```
 
