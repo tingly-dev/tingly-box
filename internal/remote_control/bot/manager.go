@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
@@ -76,7 +77,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	// SmartGuide machinery — each consumer owns its own.
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {
-		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing, channels)
+		attached, err := consumer.Attach(ctx, setting, manager, prompter, chatStore, pairing)
 		if err != nil {
 			return fmt.Errorf("attach inbound consumer %q: %w", consumer.Name(), err)
 		}
@@ -182,18 +183,6 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 // client rejects even if they had got that far.
 func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
 	return imbot.BuildAuthConfig(setting.Platform, setting.Auth)
-}
-
-// getProjectPathForGroup retrieves the project path bound to a group chat.
-func getProjectPathForGroup(chatStore ChatStoreInterface, chatID string, platform string) (string, bool) {
-	if chatStore == nil {
-		return "", false
-	}
-	path, ok, err := chatStore.GetProjectPath(chatID)
-	if err != nil {
-		return "", false
-	}
-	return path, ok
 }
 
 // Manager manages the lifecycle of running bot instances

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 )
 
@@ -65,6 +64,5 @@ type Consumer interface {
 		prompter *imchannel.IMPrompter,
 		chatStore ChatStoreInterface,
 		pairing *PairingManager,
-		channels *channel.Registry,
 	) (*Attached, error)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/remoteagent"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -91,7 +92,7 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
-	consumer := bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store)
+	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -181,7 +182,7 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
-	consumer := bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store)
+	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
@@ -249,7 +250,7 @@ func TestManager_MountGate_Tingly(t *testing.T) {
 	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
 
-	consumer := bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store)
+	consumer := remoteagent.NewConsumer(sessionMgr, svc, nil, store)
 	m := bot.NewManager(store, consumer)
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {

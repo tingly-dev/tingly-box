@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
@@ -32,7 +33,7 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 				Text:      text,
 				ParseMode: imbot.ParseModeMarkdown,
 			}
-			forwardReplyContext(opts, msg)
+			ForwardReplyContext(opts, msg)
 			_, _ = bot.SendMessage(context.Background(), chatID, opts)
 		}
 
@@ -40,7 +41,7 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 			if msg.Payload.Name() != "perm" {
 				return false
 			}
-			return handlePromptCallback(prompter, send, msg.Sender.ID, msg.Payload, true)
+			return HandlePromptCallback(prompter, send, msg.Sender.ID, msg.Payload, true)
 		}
 
 		if !msg.IsTextContent() {
@@ -52,7 +53,7 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 		if text == "" {
 			return false
 		}
-		return handlePromptTextReply(prompter, send, chatID, msg.Sender.ID, text)
+		return HandlePromptTextReply(prompter, send, chatID, msg.Sender.ID, text)
 	}
 }
 
@@ -63,7 +64,7 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 // remote-agent BotHandler keeps its own delegating paths for the standalone
 // (host-less) mode used by the CLI and the test harness.
 
-// handlePromptCallback routes one "perm" callback payload (segment 0 ==
+// HandlePromptCallback routes one "perm" callback payload (segment 0 ==
 // "perm") to the prompter's pending request. send delivers user-facing
 // feedback to the originating chat.
 //
@@ -71,7 +72,7 @@ func promptReplyRouter(mgr *imbot.Manager, prompter *imchannel.IMPrompter) OnMes
 // terminal consumer (remote agent) passes true and tells the user the request
 // expired; a first-in-line consumer (channel) passes false so the callback
 // falls through to the next consumer, which may own the request.
-func handlePromptCallback(prompter *imchannel.IMPrompter, send func(string), senderID string, payload imbot.Payload, claimUnknown bool) bool {
+func HandlePromptCallback(prompter *imchannel.IMPrompter, send func(string), senderID string, payload imbot.Payload, claimUnknown bool) bool {
 	subAction := payload.Arg(1)
 	requestID := payload.Arg(2)
 	if subAction == "" || requestID == "" {
@@ -180,11 +181,11 @@ func handlePromptCallback(prompter *imchannel.IMPrompter, send func(string), sen
 	return true
 }
 
-// handlePromptTextReply routes a plain-text reply to the prompter's most
+// HandlePromptTextReply routes a plain-text reply to the prompter's most
 // recent pending request for chatID. Returns false when nothing is pending in
 // that chat or the text is not a recognizable answer, so the caller can hand
 // the message to other handlers.
-func handlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), chatID, senderID, input string) bool {
+func HandlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), chatID, senderID, input string) bool {
 	// Check if there are pending permission requests for this chat
 	pendingReqs := prompter.GetPendingRequestsForChat(chatID)
 	if len(pendingReqs) == 0 {
@@ -255,4 +256,24 @@ func handlePromptTextReply(prompter *imchannel.IMPrompter, send func(string), ch
 	}).Info("User responded to permission request via text")
 
 	return true
+}
+
+// ForwardReplyContext copies the inbound message's reply-context token onto
+// outbound options. Weixin and WeCom tie each reply to the inbound message it
+// answers, and drop or misattribute a reply that arrives without the token.
+//
+// TODO(phase-4): this should not be the caller's job at all — the bot knows
+// which inbound message it is answering.
+func ForwardReplyContext(opts *imbot.SendMessageOptions, inbound imbot.Message) {
+	if inbound.Metadata == nil {
+		return
+	}
+	token, _ := inbound.Metadata["context_token"].(string)
+	if token == "" {
+		return
+	}
+	if opts.Metadata == nil {
+		opts.Metadata = make(map[string]interface{})
+	}
+	opts.Metadata["context_token"] = token
 }

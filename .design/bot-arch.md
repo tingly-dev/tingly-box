@@ -38,6 +38,32 @@ which read as "channel is one of the bot's purposes" — wrong layer. The final
 model below fixes that: the channel is the bot's usage surface; purposes are
 users of the channel.
 
+## 1.5 Code layout — host and purposes are separate packages
+
+The three-layer model from §2 is mirrored in the package tree (refactor
+2026-07): the host layer knows nothing about any purpose's machinery, and a
+purpose plugs in by implementing `bot.Consumer`.
+
+```
+internal/remote_control/bot/             HOST: Manager (lifecycle supervisor),
+                                         Consumer seam, notify consumer,
+                                         BotSetting / ChatStoreInterface /
+                                         SettingsStore, prompt-reply router
+                                         (prompt_reply.go), pairing aliases
+internal/remote_control/bot/remoteagent/ PURPOSE remote_agent: bot.Consumer impl,
+                                         BotHandler (inbound catch-all), slash
+                                         commands + adapter, agent router and
+                                         the @cc/@tb executors, streaming chat
+                                         renderer, file store, test harness
+internal/remote_control/bot/feature/     chat features (action menu, directory
+                                         browser) shared by the purpose layer
+```
+
+The host exports the shared prompt-reply mechanics
+(`bot.HandlePromptCallback` / `bot.HandlePromptTextReply` /
+`bot.ForwardReplyContext`); the standalone (host-less) BotHandler paths in
+`remoteagent` delegate to them, so behavior is identical either way (§6).
+
 ## 2. The model — resource, surface, purposes
 
 Three layers, strictly ordered. A **bot** is a connection resource. Its
@@ -86,7 +112,7 @@ Key consequences:
   claim-ordering tricks between prompters.
 - `notify` (`consumer_notify.go`) carries no wiring at all; its mount is
   purely the *reason to run* for a bot whose only job is scenario traffic.
-- `remote_agent` (`consumer_remote_agent.go`) owns the agent service,
+- `remote_agent` (`remoteagent/consumer.go`) owns the agent service,
   sessions, and SmartGuide; its `BotHandler` is the inbound catch-all and
   sends approval/ask prompts through the shared prompter like everyone else.
   In standalone mode (CLI `remote`, test harness — no host) it creates a

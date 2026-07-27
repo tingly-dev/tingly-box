@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/remoteagent"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -53,7 +54,7 @@ func newChannelTestManager(t *testing.T, uuid, scenarios string) (*bot.Manager, 
 	registry := channel.NewRegistry()
 	m := bot.NewManager(store,
 		bot.NewNotifyConsumer(),
-		bot.NewRemoteAgentConsumer(sessionMgr, svc, nil, store))
+		remoteagent.NewConsumer(sessionMgr, svc, nil, store))
 	sm, err := db.NewStoreManager(t.TempDir())
 	if err != nil {
 		t.Fatalf("open store manager: %v", err)
