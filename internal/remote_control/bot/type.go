@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
 // Agent routing constants
@@ -28,26 +29,13 @@ type ResponseMeta struct {
 	AgentType   string // Current agent identifier (e.g., "tingly-box", "claude")
 }
 
-// SettingsStore defines the interface for bot settings storage
-// This allows both the legacy bot.Store and the new db.ImBotSettingsStore to be used
+// SettingsStore is the read surface the bot lifecycle needs from the settings
+// store. db.ImBotSettingsStore satisfies it directly.
 type SettingsStore interface {
-	// GetSettingsByUUIDInterface returns settings by UUID as interface{}
-	GetSettingsByUUIDInterface(uuid string) (interface{}, error)
-	// ListEnabledSettingsInterface returns all enabled settings as interface{}
-	ListEnabledSettingsInterface() (interface{}, error)
-}
-
-// Lifecycle defines the interface for controlling bot lifecycle
-// This allows the API layer to control bot startup/shutdown without direct dependency on the Manager type
-type Lifecycle interface {
-	// Start starts a bot by UUID
-	Start(ctx context.Context, uuid string) error
-	// Stop stops a bot by UUID
-	Stop(uuid string)
-	// IsRunning checks if a bot is running
-	IsRunning(uuid string) bool
-	// Sync ensures running bots match the enabled settings
-	Sync(ctx context.Context) error
+	// GetSettingsByUUID returns the settings record for a bot.
+	GetSettingsByUUID(uuid string) (db.Settings, error)
+	// ListEnabledSettings returns all enabled settings records.
+	ListEnabledSettings() ([]db.Settings, error)
 }
 
 // runningBot tracks a running bot instance

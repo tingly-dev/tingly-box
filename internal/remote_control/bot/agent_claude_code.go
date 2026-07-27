@@ -54,10 +54,10 @@ func (p autoApprovePrompter) OnAsk(ctx context.Context, req agentboot.AskRequest
 }
 
 // Execute processes a user message through Claude Code.
-func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
+func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) error {
 	if strings.TrimSpace(req.Text) == "" {
 		e.deps.SendText(req.HCtx, "Please provide a message for Claude Code.")
-		return nil, fmt.Errorf("empty message text")
+		return fmt.Errorf("empty message text")
 	}
 
 	sessionID := req.SessionID
@@ -209,28 +209,13 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		// state. SetFailed is idempotent.
 		e.deps.SessionMgr.SetFailed(sessionID, errMsg)
 		e.deps.SendTextWithReply(req.HCtx, response, req.ReplyTo)
-		return &ExecutionResult{
-			SessionID:    sessionID,
-			Success:      false,
-			Error:        werr,
-			Response:     response,
-			Meta:         meta,
-			IsNewSession: req.IsNewSession,
-			Duration:     duration,
-		}, werr
+		return werr
 	}
 
 	// Success: runner called Store.SetCompleted inside Wait(); send the "Task done" card.
 	e.sendTaskDoneCard(req.HCtx, meta)
 
-	return &ExecutionResult{
-		SessionID:    sessionID,
-		Success:      true,
-		Response:     response,
-		Meta:         meta,
-		IsNewSession: req.IsNewSession,
-		Duration:     duration,
-	}, nil
+	return nil
 }
 
 // claudePermissionPolicy keeps an empty session mode empty so Claude Code can

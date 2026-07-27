@@ -94,17 +94,8 @@ type BotHandlerAdapter interface {
 	// SetBashCwd sets the bash working directory
 	SetBashCwd(chatID, path string) error
 
-	// ResolveChatID resolves a chat ID (for Telegram join command)
-	ResolveChatID(input string) (string, error)
-
-	// GetDefaultProjectPath returns the default project path
-	GetDefaultProjectPath() string
-
 	// GetBashAllowlist returns the configured bash allowlist
 	GetBashAllowlist() map[string]struct{}
-
-	// ListProjectPaths lists all project paths for a user
-	ListProjectPaths(ownerID, platform string) ([]string, error)
 
 	// ListChatProjectPaths lists the MRU per-chat project-path history.
 	ListChatProjectPaths(chatID string) ([]string, error)

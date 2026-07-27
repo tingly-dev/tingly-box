@@ -424,11 +424,6 @@ func (h *streamingMessageHandler) OnError(err error) {
 	h.sendMessage(errMsg)
 }
 
-// GetOutput returns the accumulated output (for compatibility, returns empty as we stream immediately)
-func (h *streamingMessageHandler) GetOutput() string {
-	return ""
-}
-
 // sendMessage sends a message to the bot
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *streamingMessageHandler) sendMessage(text string) {

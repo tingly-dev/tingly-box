@@ -374,16 +374,3 @@ func generateUUID() string {
 	// Simple UUID generation using timestamp and random
 	return fmt.Sprintf("%d-%s", time.Now().UnixNano(), "imbot")
 }
-
-// ============== SettingsStore interface implementation ==============
-// These methods implement the bot.SettingsStore interface for use with the Manager
-
-// GetSettingsByUUIDInterface returns settings as interface{} for SettingsStore interface
-func (s *ImBotSettingsStore) GetSettingsByUUIDInterface(uuid string) (interface{}, error) {
-	return s.GetSettingsByUUID(uuid)
-}
-
-// ListEnabledSettingsInterface returns settings as interface{} for SettingsStore interface
-func (s *ImBotSettingsStore) ListEnabledSettingsInterface() (interface{}, error) {
-	return s.ListEnabledSettings()
-}

@@ -24,8 +24,6 @@ type SmartGuideCompletionCallback struct {
 	agent          *smart_guide.TinglyBoxAgent
 	projectPath    string
 	meta           *ResponseMeta
-	behavior       OutputBehavior
-	formatResponse func(meta ResponseMeta, response string, showMeta bool) string
 	sendText       func(hCtx HandlerContext, text string)
 	messagesSent   int // Track number of messages sent via hooks (for fallback)
 }
@@ -61,11 +59,6 @@ func (w *messageTrackingWrapper) OnComplete(result *smart_guide.CompletionResult
 	// without this the last tool activity would be dropped before the banner.
 	w.delegate.Flush()
 	w.completionCallback.OnComplete(result)
-}
-
-// GetOutput forwards to delegate
-func (w *messageTrackingWrapper) GetOutput() string {
-	return w.delegate.GetOutput()
 }
 
 // OnComplete handles the smart-guide completion signal.
@@ -146,9 +139,8 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *smart_guide.Completion
 		}).Warn("SmartGuide: No messages sent via hooks - using fallback to send response")
 
 		// Send the response as a fallback (no meta for regular messages)
-		if c.formatResponse != nil && c.sendText != nil {
-			formattedResponse := c.formatResponse(*c.meta, responseText, false)
-			c.sendText(c.hCtx, formattedResponse)
+		if c.sendText != nil {
+			c.sendText(c.hCtx, responseText)
 		}
 	} else if c.messagesSent == 0 && responseText == "" {
 		logrus.WithFields(logrus.Fields{
@@ -202,18 +194,30 @@ func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.Age
 		ReplyToMessageID: hCtx.MessageID,
 	}
 
-	_, err := h.agentRouter.Execute(h.ctx, agent, req)
-	if err != nil {
+	if err := h.agentRouter.Execute(h.ctx, agent, req); err != nil {
 		logrus.WithError(err).Error("Agent execution failed via router")
-		// Provide helpful error message for session conflicts
-		errMsg := fmt.Sprintf("Agent execution failed: %v", err)
-		if strings.Contains(err.Error(), "already in progress") || strings.Contains(err.Error(), "already in use") {
-			errMsg = fmt.Sprintf("⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution")
-		}
-		h.SendText(hCtx, errMsg)
+		h.SendText(hCtx, executionErrorMessage(err))
 		return
 	}
 	h.reactDone(hCtx)
+}
+
+// isSessionBusyError reports whether err is the "another execution running /
+// session already in use" class of conflict, which gets a friendlier message.
+func isSessionBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "already in progress") || strings.Contains(err.Error(), "already in use")
+}
+
+// executionErrorMessage renders an agent execution error for the chat,
+// substituting a guided message for session-conflict errors.
+func executionErrorMessage(err error) string {
+	if isSessionBusyError(err) {
+		return "⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution"
+	}
+	return fmt.Sprintf("⚠️ **Error**: %v", err)
 }
 
 // getCurrentAgent retrieves the current agent for a chat
@@ -223,19 +227,12 @@ func (h *BotHandler) getCurrentAgent(chatID string) (agentboot.AgentType, error)
 	if err != nil {
 		return agentTinglyBox, err
 	}
-
-	// Return the stored agent type
-	if currentAgent == string(agentTinglyBox) {
+	switch agentboot.AgentType(currentAgent) {
+	case agentTinglyBox, agentClaudeCode, agentMock:
+		return agentboot.AgentType(currentAgent), nil
+	default:
 		return agentTinglyBox, nil
 	}
-	if currentAgent == string(agentClaudeCode) {
-		return agentClaudeCode, nil
-	}
-	if currentAgent == string(agentMock) {
-		return agentMock, nil
-	}
-
-	return agentTinglyBox, nil
 }
 
 // setCurrentAgent sets the current agent for a chat. The platform is
@@ -254,10 +251,7 @@ func (h *BotHandler) handleHandoff(hCtx HandlerContext, toAgent agentboot.AgentT
 	}
 
 	// Get project path
-	projectPath, _, _ := h.getProjectPathForChat(hCtx)
-	if projectPath == "" {
-		projectPath, _, _ = h.chatStore.GetProjectPath(hCtx.ChatID)
-	}
+	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 
 	// Create handoff state (no sessionID needed - sessions are managed per-agent)
 	handoffState := &smart_guide.HandoffState{
@@ -327,14 +321,11 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 				"remainingText": remainingText,
 			}).Info("Processing remaining text after handoff")
 
-			req := ExecutionRequest{
+			return h.agentRouter.Execute(h.ctx, targetAgent, ExecutionRequest{
 				HCtx:             hCtx,
 				Text:             remainingText,
 				ReplyToMessageID: hCtx.MessageID,
-			}
-
-			_, execErr := h.agentRouter.Execute(h.ctx, targetAgent, req)
-			return execErr
+			})
 		}
 
 		return nil
@@ -348,31 +339,16 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 	}
 
 	// Route to current agent via AgentRouter
-	req := ExecutionRequest{
+	execErr := h.agentRouter.Execute(h.ctx, currentAgent, ExecutionRequest{
 		HCtx:             hCtx,
 		Text:             text,
 		ReplyToMessageID: hCtx.MessageID,
-	}
-
-	_, execErr := h.agentRouter.Execute(h.ctx, currentAgent, req)
+	})
 	if execErr != nil {
 		logrus.WithError(execErr).Error("Agent execution failed via router")
 		return execErr
 	}
 	return nil
-}
-
-// getProjectPathForChat gets the project path for a chat
-func (h *BotHandler) getProjectPathForChat(hCtx HandlerContext) (string, bool, error) {
-	// Try direct chat first
-	if hCtx.IsDirect() {
-		projectPath, ok, err := h.chatStore.GetProjectPath(hCtx.ChatID)
-		return projectPath, ok, err
-	}
-
-	// Try group chat
-	projectPath, ok, err := h.chatStore.GetProjectPath(hCtx.ChatID)
-	return projectPath, ok, err
 }
 
 // getProjectPath returns the project path for the current chat

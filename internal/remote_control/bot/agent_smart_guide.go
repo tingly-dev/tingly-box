@@ -30,7 +30,7 @@ func (e *SmartGuideExecutor) GetAgentType() agentboot.AgentType {
 }
 
 // Execute processes a user message through Smart Guide
-func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
+func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) error {
 	projectPath := req.ProjectPath
 	meta := req.Meta
 
@@ -149,12 +149,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		e.deps.SendText(req.HCtx, "⚠️ Smart Guide (@tb) is currently unavailable due to configuration issues.\n"+
 			"Reason: "+err.Error()+"\n"+
 			"Type '/help' for available commands.")
-		return &ExecutionResult{
-			SessionID: req.SessionID,
-			Success:   false,
-			Error:     err,
-			Meta:      meta,
-		}, err
+		return err
 	}
 
 	// Set working directory from BashCwd (preferred) or projectPath (fallback)
@@ -186,10 +181,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		agent:          agent,
 		projectPath:    projectPath,
 		meta:           meta,
-		behavior:       botSetting.GetOutputBehavior(),
-		formatResponse: e.deps.FormatResponse,
 		sendText:       e.deps.SendText,
-		messagesSent:   0,
 	}
 
 	// 8. Create message tracker wrapper (streams messages + forwards completion)
@@ -210,13 +202,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	if err != nil {
 		logrus.WithError(err).Error("Smart guide agent failed")
 		e.deps.SendText(req.HCtx, fmt.Sprintf("%s Error: %v", IconError, err))
-		return &ExecutionResult{
-			SessionID: req.SessionID,
-			Success:   false,
-			Error:     err,
-			Meta:      meta,
-			Duration:  duration,
-		}, err
+		return err
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -225,10 +211,5 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		"duration": duration,
 	}).Info("SmartGuide execution completed")
 
-	return &ExecutionResult{
-		SessionID: req.SessionID,
-		Success:   true,
-		Meta:      meta,
-		Duration:  duration,
-	}, nil
+	return nil
 }

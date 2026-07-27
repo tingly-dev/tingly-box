@@ -24,25 +24,18 @@ func (h *BotHandler) GetVerbose(chatID string) bool {
 		}
 	}
 
-	// Fallback to bot setting default
-	botSetting := h.botSetting.GetOutputBehavior()
-	return botSetting.Verbose
+	// Fallback to bot setting default (nil = verbose on).
+	return h.botSetting.Verbose == nil || *h.botSetting.Verbose
 }
 
 // SetVerbose sets the verbose mode for a chat
 func (h *BotHandler) SetVerbose(chatID string, verbose bool) {
-	// Update in chat store
-	if h.chatStore != nil {
-		err := h.chatStore.UpdateChat(chatID, func(c *Chat) {
-			c.Verbose = &verbose
-		})
-		if err != nil {
-			logrus.WithError(err).WithField("chatID", chatID).Warn("Failed to update verbose in chat store")
-		}
+	if h.chatStore == nil {
+		return
 	}
-
-	// Also update in-memory default (fallback)
-	h.verboseMu.Lock()
-	h.verbose = verbose
-	h.verboseMu.Unlock()
+	if err := h.chatStore.UpdateChat(chatID, func(c *Chat) {
+		c.Verbose = &verbose
+	}); err != nil {
+		logrus.WithError(err).WithField("chatID", chatID).Warn("Failed to update verbose in chat store")
+	}
 }

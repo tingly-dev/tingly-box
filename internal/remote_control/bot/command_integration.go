@@ -63,12 +63,8 @@ func (a *botHandlerAdapter) GetProjectPathForGroup(chatID, platform string) (str
 	return getProjectPathForGroup(a.handler.chatStore, chatID, platform)
 }
 
-// GetSession gets session info.
-func (a *botHandlerAdapter) GetSession(chatID, agentType, projectPath string) (*SessionInfo, error) {
-	sess := a.handler.sessionMgr.FindBy(chatID, agentType, projectPath)
-	if sess == nil {
-		return nil, fmt.Errorf("session not found")
-	}
+// sessionInfoFrom converts a session record into the command-facing SessionInfo.
+func sessionInfoFrom(sess *session.Session) *SessionInfo {
 	return &SessionInfo{
 		ID:             sess.ID,
 		Status:         string(sess.Status),
@@ -77,7 +73,16 @@ func (a *botHandlerAdapter) GetSession(chatID, agentType, projectPath string) (*
 		Error:          sess.Error,
 		PermissionMode: sess.PermissionMode,
 		LastActivity:   sess.LastActivity,
-	}, nil
+	}
+}
+
+// GetSession gets session info.
+func (a *botHandlerAdapter) GetSession(chatID, agentType, projectPath string) (*SessionInfo, error) {
+	sess := a.handler.sessionMgr.FindBy(chatID, agentType, projectPath)
+	if sess == nil {
+		return nil, fmt.Errorf("session not found")
+	}
+	return sessionInfoFrom(sess), nil
 }
 
 // FindOrCreateSession finds an existing session or creates a new one.
@@ -89,15 +94,7 @@ func (a *botHandlerAdapter) FindOrCreateSession(chatID, agentType, projectPath s
 			s.ExpiresAt = time.Time{} // Persistent session
 		})
 	}
-	return &SessionInfo{
-		ID:             sess.ID,
-		Status:         string(sess.Status),
-		Project:        sess.Project,
-		Request:        sess.Request,
-		Error:          sess.Error,
-		PermissionMode: sess.PermissionMode,
-		LastActivity:   sess.LastActivity,
-	}, nil
+	return sessionInfoFrom(sess), nil
 }
 
 // UpdatePermissionMode updates the permission mode for a session.
@@ -173,16 +170,6 @@ func (a *botHandlerAdapter) SetBashCwd(chatID, path string) error {
 	return a.handler.chatStore.SetBashCwd(chatID, path)
 }
 
-// ResolveChatID resolves a chat ID using the Telegram bot.
-func (a *botHandlerAdapter) ResolveChatID(input string) (string, error) {
-	return input, nil
-}
-
-// GetDefaultProjectPath returns the default project path.
-func (a *botHandlerAdapter) GetDefaultProjectPath() string {
-	return a.handler.getDefaultProjectPath()
-}
-
 // GetBashAllowlist returns the configured bash allowlist.
 func (a *botHandlerAdapter) GetBashAllowlist() map[string]struct{} {
 	allowlist := normalizeAllowlistToMap(a.handler.botSetting.BashAllowlist)
@@ -195,23 +182,6 @@ func (a *botHandlerAdapter) GetBashAllowlist() map[string]struct{} {
 // ListChatProjectPaths returns the MRU project-path history for a chat.
 func (a *botHandlerAdapter) ListChatProjectPaths(chatID string) ([]string, error) {
 	return a.handler.chatStore.ListChatProjectPaths(chatID)
-}
-
-// ListProjectPaths lists all project paths for a user.
-func (a *botHandlerAdapter) ListProjectPaths(ownerID, platform string) ([]string, error) {
-	chats, err := a.handler.chatStore.ListChatsByOwner(ownerID, platform)
-	if err != nil {
-		return nil, err
-	}
-	seen := make(map[string]bool)
-	var paths []string
-	for _, chat := range chats {
-		if chat.ProjectPath != "" && !seen[chat.ProjectPath] {
-			paths = append(paths, chat.ProjectPath)
-			seen[chat.ProjectPath] = true
-		}
-	}
-	return paths, nil
 }
 
 // VerifyAndPair runs pairing-code verification and persists the binding.
@@ -333,25 +303,6 @@ func (h *BotHandler) InitCommandRegistry() error {
 	h.commandRegistry = registry
 	h.commandAdapter = adapter
 	return nil
-}
-
-// HandleCommandViaRegistry handles a command using the new command registry.
-func (h *BotHandler) HandleCommandViaRegistry(hCtx HandlerContext, cmdName string, args []string) error {
-	if h.commandRegistry == nil {
-		return fmt.Errorf("command registry not initialized")
-	}
-
-	handler, ok := h.commandRegistry.Match(cmdName)
-	if !ok {
-		return fmt.Errorf("command not found: %s", cmdName)
-	}
-
-	cmdCtx := imbot.NewHandlerContext(hCtx.Bot, hCtx.ChatID, hCtx.SenderID, hCtx.Platform).
-		WithText(hCtx.Text()).
-		WithDirectMessage(hCtx.IsDirect()).
-		WithMessageID(hCtx.MessageID)
-
-	return handler(cmdCtx, args)
 }
 
 // GetCommandRegistry returns the command registry.

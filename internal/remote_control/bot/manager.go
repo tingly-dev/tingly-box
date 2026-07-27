@@ -13,8 +13,6 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
-
-	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
 // runBotWithSettings starts a bot against the caller-supplied chat store.
@@ -305,47 +303,15 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		return nil
 	}
 
-	// Get bot settings - may return either bot.Settings or db.Settings
-	settingsAny, err := m.store.GetSettingsByUUIDInterface(uuid)
+	record, err := m.store.GetSettingsByUUID(uuid)
 	if err != nil {
 		return err
 	}
+	s := SettingFromRecord(record)
 
-	// Handle both bot.Settings and db.Settings types
-	// Determine the type and extract common fields
-	var platform string
-	var auth map[string]string
-	var name string
-	var record db.Settings
-	var ok bool
-
-	if record, ok = settingsAny.(db.Settings); !ok {
-		return fmt.Errorf("invalid bot setting")
-	}
-
-	// Convert db.Settings to the legacy Settings format
-	s := BotSetting{
-		UUID:               record.UUID,
-		Name:               record.Name,
-		Token:              record.Auth["token"],
-		Platform:           record.Platform,
-		AuthType:           record.AuthType,
-		Auth:               record.Auth,
-		ProxyURL:           record.ProxyURL,
-		ChatIDLock:         record.ChatIDLock,
-		BashAllowlist:      record.BashAllowlist,
-		DefaultCwd:         record.DefaultCwd,
-		DefaultAgent:       record.DefaultAgent,
-		Enabled:            record.Enabled,
-		Scenarios:          record.Scenarios,
-		SmartGuideProvider: record.SmartGuideProvider,
-		SmartGuideModel:    record.SmartGuideModel,
-		RequirePairing:     record.RequirePairing,
-	}
-
-	platform = s.Platform
-	auth = s.Auth
-	name = s.Name
+	platform := s.Platform
+	auth := s.Auth
+	name := s.Name
 
 	if platform == "" {
 		return fmt.Errorf("unknown platform: %s", platform)
@@ -492,33 +458,18 @@ func (m *Manager) IsRunning(uuid string) bool {
 
 // StartEnabled starts all enabled bots
 func (m *Manager) StartEnabled(ctx context.Context) error {
-	settingsAny, err := m.store.ListEnabledSettingsInterface()
+	settings, err := m.store.ListEnabledSettings()
 	if err != nil {
 		return err
 	}
 
-	// Handle both []bot.Settings and []db.Settings types
-	switch s := settingsAny.(type) {
-	case []db.Settings:
-		for _, setting := range s {
-			if setting.UUID == "" {
-				continue
-			}
-			if err := m.Start(ctx, setting.UUID); err != nil {
-				logrus.WithError(err).WithField("uuid", setting.UUID).Warn("Failed to start bot")
-			}
+	for _, setting := range settings {
+		if setting.UUID == "" {
+			continue
 		}
-	case []BotSetting:
-		for _, setting := range s {
-			if setting.UUID == "" {
-				continue
-			}
-			if err := m.Start(ctx, setting.UUID); err != nil {
-				logrus.WithError(err).WithField("uuid", setting.UUID).Warn("Failed to start bot")
-			}
+		if err := m.Start(ctx, setting.UUID); err != nil {
+			logrus.WithError(err).WithField("uuid", setting.UUID).Warn("Failed to start bot")
 		}
-	default:
-		return fmt.Errorf("unknown settings list type")
 	}
 
 	return nil
@@ -540,7 +491,7 @@ func (m *Manager) StopAll() {
 // Sync ensures the running bots match the enabled settings in the store.
 // It starts bots that are enabled but not running, and stops bots that are running but disabled.
 func (m *Manager) Sync(ctx context.Context) error {
-	settingsAny, err := m.store.ListEnabledSettingsInterface()
+	settings, err := m.store.ListEnabledSettings()
 	if err != nil {
 		return err
 	}
@@ -551,21 +502,10 @@ func (m *Manager) Sync(ctx context.Context) error {
 	// using, so it must not run — and if it is running (last mount just
 	// turned off), the stop pass below takes it down.
 	shouldRun := make(map[string]bool)
-	switch s := settingsAny.(type) {
-	case []db.Settings:
-		for _, setting := range s {
-			if setting.UUID != "" && len(m.mountedConsumers(BotSetting{Platform: setting.Platform, Scenarios: setting.Scenarios})) > 0 {
-				shouldRun[setting.UUID] = true
-			}
+	for _, setting := range settings {
+		if setting.UUID != "" && len(m.mountedConsumers(BotSetting{Platform: setting.Platform, Scenarios: setting.Scenarios})) > 0 {
+			shouldRun[setting.UUID] = true
 		}
-	case []BotSetting:
-		for _, setting := range s {
-			if setting.UUID != "" && len(m.mountedConsumers(setting)) > 0 {
-				shouldRun[setting.UUID] = true
-			}
-		}
-	default:
-		return fmt.Errorf("unknown settings list type")
 	}
 
 	// Start bots that should run but aren't (Start re-checks the mount gate).
@@ -592,12 +532,6 @@ func (m *Manager) Sync(ctx context.Context) error {
 	m.mu.Unlock()
 
 	return nil
-}
-
-// StartEnabledStopDisabled is a convenience method that ensures running bots match enabled settings.
-// It's an alias for Sync() with clearer naming for specific use cases.
-func (m *Manager) StartEnabledStopDisabled(ctx context.Context) error {
-	return m.Sync(ctx)
 }
 
 // removeRunning removes a bot from the running map (must be called with lock held or from within locked method)

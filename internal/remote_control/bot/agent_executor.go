@@ -15,10 +15,11 @@ import (
 )
 
 // AgentExecutor defines the interface for executing agent requests.
-// Each agent type (Claude Code, Smart Guide, Mock) implements this interface.
+// Each agent type (Claude Code, Smart Guide) implements this interface.
 type AgentExecutor interface {
-	// Execute processes a prepared request and returns the result.
-	Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error)
+	// Execute processes a prepared request. Streaming output and completion
+	// cards go straight to the chat; the caller only needs the error.
+	Execute(ctx context.Context, req PreparedRequest) error
 
 	// GetAgentType returns the agent type identifier
 	GetAgentType() agentboot.AgentType
@@ -41,19 +42,8 @@ type PreparedRequest struct {
 	Meta           *ResponseMeta // shared pointer, created by router
 	SessionID      string        // resolved session ID (chatID for SmartGuide)
 	IsNewSession   bool          // whether session was just created
-	PermissionMode string        // resolved from session (Claude Code / Mock)
+	PermissionMode string        // resolved from session (Claude Code)
 	ReplyTo        string
-}
-
-// ExecutionResult contains the outcome of agent execution
-type ExecutionResult struct {
-	Response     string
-	SessionID    string
-	Success      bool
-	Error        error
-	Meta         *ResponseMeta
-	IsNewSession bool
-	Duration     time.Duration
 }
 
 // ExecutorDependencies holds shared dependencies for agent executors and router.
@@ -64,17 +54,15 @@ type ExecutorDependencies struct {
 	GetBotSetting func() (BotSetting, error)
 
 	ChatStore                  ChatStoreInterface
-	SessionMgr                 *SessionManager
+	SessionMgr                 *session.Manager
 	AgentService               *agentboot.AgentService
 	IMPrompter                 *imchannel.IMPrompter
 	FileStore                  *FileStore
-	TBClient                   TBClient
-	TBSessionStore             *SmartGuideSessionStore
-	HandoffManager             *smart_guide.HandoffManager
+	TBClient                   tbclient.TBClient
+	TBSessionStore             *smart_guide.SessionStore
 	RunningCancel              map[string]context.CancelFunc
 	RunningCancelMu            *sync.RWMutex
 	GetVerbose                 func(chatID string) bool
-	FormatResponse             func(meta ResponseMeta, response string, showMeta bool) string
 	FormatResponseWithFooter   func(meta ResponseMeta, response string) string
 	SendText                   func(hCtx HandlerContext, text string)
 	SendTextWithReply          func(hCtx HandlerContext, text string, replyTo string)
@@ -121,7 +109,7 @@ func (d *ExecutorDependencies) ResolveDefaultProjectPath() string {
 	return "/"
 }
 
-// resolveSession finds or creates a session for session-based agents (Claude Code, Mock).
+// resolveSession finds or creates a session for session-based agents (Claude Code).
 // Returns (sessionID, isNew, permissionMode).
 func (d *ExecutorDependencies) resolveSession(chatID string, agentType string, projectPath string) (string, bool, string) {
 	sess := d.SessionMgr.FindBy(chatID, agentType, projectPath)
@@ -141,20 +129,3 @@ func (d *ExecutorDependencies) resolveSession(chatID string, agentType string, p
 	})
 	return sess.ID, false, sess.PermissionMode
 }
-
-// agentTypeToName maps agent type constant to display name.
-func agentTypeToName(t agentboot.AgentType) string {
-	switch t {
-	case agentTinglyBox:
-		return AgentNameTinglyBox
-	case agentClaudeCode:
-		return AgentNameClaude
-	default:
-		return string(t)
-	}
-}
-
-// Type aliases to avoid import cycles
-type SessionManager = session.Manager
-type TBClient = tbclient.TBClient
-type SmartGuideSessionStore = smart_guide.SessionStore

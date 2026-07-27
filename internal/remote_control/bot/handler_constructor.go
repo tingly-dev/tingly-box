@@ -7,7 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
@@ -36,9 +35,6 @@ func NewBotHandler(
 	if imPrompter == nil {
 		imPrompter = imchannel.NewIMPrompter(manager)
 	}
-
-	// Create interaction handler for platform-agnostic interactions
-	interactionHandler := imbot.NewInteractionHandler(manager)
 
 	// Create file store with proxy support
 	fileStore, err := NewFileStoreWithProxy(botSetting.ProxyURL)
@@ -102,7 +98,6 @@ func NewBotHandler(
 		manager:             manager,
 		imPrompter:          imPrompter,
 		fileStore:           fileStore,
-		interaction:         interactionHandler,
 		tbClient:            tbClient,
 		handoffManager:      handoffMgr,
 		tbSessionStore:      tbSessionStore,
@@ -110,7 +105,6 @@ func NewBotHandler(
 		pendingBinds:        make(map[string]*PendingBind),
 		actionMenuMessageID: make(map[string]string),
 		resumeListings:      make(map[string][]string),
-		verbose:             true, // Default to verbose mode
 		pairing:             pairing,
 	}
 
@@ -123,11 +117,9 @@ func NewBotHandler(
 		FileStore:                  fileStore,
 		TBClient:                   tbClient,
 		TBSessionStore:             tbSessionStore,
-		HandoffManager:             handoffMgr,
 		RunningCancel:              handler.runningCancel,
 		RunningCancelMu:            &handler.runningCancelMu,
 		GetVerbose:                 handler.GetVerbose,
-		FormatResponse:             handler.formatResponseWithHeader,
 		FormatResponseWithFooter:   handler.formatResponseWithFooter,
 		SendText:                   handler.SendText,
 		SendTextWithReply:          handler.sendTextWithReply,
@@ -141,32 +133,11 @@ func NewBotHandler(
 			if store == nil {
 				return botSetting, nil
 			}
-			settingsAny, err := store.GetSettingsByUUIDInterface(botSetting.UUID)
+			record, err := store.GetSettingsByUUID(botSetting.UUID)
 			if err != nil {
 				return botSetting, err
 			}
-			// Handle both bot.Settings and db.Settings types
-			if record, ok := settingsAny.(db.Settings); ok {
-				return BotSetting{
-					UUID:               record.UUID,
-					Name:               record.Name,
-					Token:              record.Auth["token"],
-					Platform:           record.Platform,
-					AuthType:           record.AuthType,
-					Auth:               record.Auth,
-					ProxyURL:           record.ProxyURL,
-					ChatIDLock:         record.ChatIDLock,
-					BashAllowlist:      record.BashAllowlist,
-					DefaultCwd:         record.DefaultCwd,
-					DefaultAgent:       record.DefaultAgent,
-					Enabled:            record.Enabled,
-					Scenarios:          record.Scenarios,
-					SmartGuideProvider: record.SmartGuideProvider,
-					SmartGuideModel:    record.SmartGuideModel,
-					RequirePairing:     record.RequirePairing,
-				}, nil
-			}
-			return botSetting, nil
+			return SettingFromRecord(record), nil
 		},
 	}
 	handler.agentRouter = NewAgentRouter(deps)

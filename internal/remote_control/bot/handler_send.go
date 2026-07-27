@@ -109,11 +109,3 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 	}
 }
-
-// formatResponseWithHeader adds project/session/user metadata to the response
-// Meta information includes: agent type, project path, chat_id, user_id, session_id
-// behavior.Debug controls whether meta information is shown
-// formatResponseWithHeader adds project/session/user metadata to the response
-// Meta information includes: agent type, project path, chat_id, user_id, session_id
-// Set showMeta=true to display meta (e.g., for help), false for regular messages
-// behavior.Verbose controls whether processing messages are sent (handled elsewhere)

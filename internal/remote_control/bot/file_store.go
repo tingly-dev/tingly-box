@@ -85,17 +85,6 @@ func NewFileStoreWithProxy(proxyURL string) (*FileStore, error) {
 	}, nil
 }
 
-// NewFileStoreWithLimits creates a new file store with custom limits
-func NewFileStoreWithLimits(maxImageSize, maxDocSize int64) *FileStore {
-	return &FileStore{
-		maxImageSize: maxImageSize,
-		maxDocSize:   maxDocSize,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
-	}
-}
-
 // SetTelegramToken sets the Telegram bot token for resolving file URLs
 func (s *FileStore) SetTelegramToken(token string) {
 	s.telegramToken = token
@@ -263,57 +252,6 @@ func (s *FileStore) DownloadFile(ctx context.Context, projectPath, url, mimeType
 		Path:     filePath,
 		RelPath:  filepath.Join(".agent", filename),
 		URL:      url,
-		Filename: filename,
-		Size:     written,
-		MimeType: mimeType,
-	}, nil
-}
-
-// StoreFile stores a file from a reader to the project's .download directory
-func (s *FileStore) StoreFile(ctx context.Context, projectPath string, reader io.Reader, filename, mimeType string) (*StoredFile, error) {
-	// Validate MIME type first
-	if !s.IsAllowedType(mimeType) {
-		return nil, fmt.Errorf("unsupported file type: %s", mimeType)
-	}
-
-	// Get download directory
-	downloadDir := s.GetDownloadDir(projectPath)
-	if err := os.MkdirAll(downloadDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create download directory: %w", err)
-	}
-
-	// Create file
-	filePath := filepath.Join(downloadDir, filename)
-	file, err := os.Create(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
-	}
-	defer file.Close()
-
-	// Use limited reader to enforce size limits
-	fileType := AllowedMIMETypes[mimeType]
-	maxSize := s.maxImageSize
-	if fileType == "document" {
-		maxSize = s.maxDocSize
-	}
-	limitedReader := io.LimitReader(reader, maxSize+1)
-
-	written, err := io.Copy(file, limitedReader)
-	if err != nil {
-		os.Remove(filePath) // Clean up on error
-		return nil, fmt.Errorf("failed to write file: %w", err)
-	}
-
-	// Check if we hit the limit
-	if written > maxSize {
-		os.Remove(filePath) // Clean up on error
-		return nil, fmt.Errorf("file too large: exceeds limit of %d bytes", maxSize)
-	}
-
-	return &StoredFile{
-		Path:     filePath,
-		RelPath:  filepath.Join(".agent", filename),
-		URL:      "",
 		Filename: filename,
 		Size:     written,
 		MimeType: mimeType,

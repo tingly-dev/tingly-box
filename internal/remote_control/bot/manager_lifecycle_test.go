@@ -25,17 +25,17 @@ type fakeSettingsStore struct {
 	settings map[string]db.Settings
 }
 
-func (s *fakeSettingsStore) GetSettingsByUUIDInterface(uuid string) (interface{}, error) {
+func (s *fakeSettingsStore) GetSettingsByUUID(uuid string) (db.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec, ok := s.settings[uuid]
 	if !ok {
-		return nil, fmt.Errorf("settings not found: %s", uuid)
+		return db.Settings{}, fmt.Errorf("settings not found: %s", uuid)
 	}
 	return rec, nil
 }
 
-func (s *fakeSettingsStore) ListEnabledSettingsInterface() (interface{}, error) {
+func (s *fakeSettingsStore) ListEnabledSettings() ([]db.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]db.Settings, 0, len(s.settings))

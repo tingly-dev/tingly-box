@@ -37,10 +37,10 @@ func (r *AgentRouter) RegisterExecutor(executor AgentExecutor) {
 
 // Execute routes the execution request to the appropriate agent executor.
 // It resolves project path, session, and builds shared *ResponseMeta before delegating.
-func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType, req ExecutionRequest) (*ExecutionResult, error) {
+func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType, req ExecutionRequest) error {
 	executor, exists := r.executors[agentType]
 	if !exists {
-		return nil, fmt.Errorf("no executor found for agent type: %s", agentType)
+		return fmt.Errorf("no executor found for agent type: %s", agentType)
 	}
 
 	// 1. Resolve project path
@@ -59,7 +59,7 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 	// 3. Build shared meta
 	meta := &ResponseMeta{
 		ProjectPath: projectPath,
-		AgentType:   agentTypeToName(agentType),
+		AgentType:   string(agentType),
 		SessionID:   sessionID,
 		ChatID:      req.HCtx.ChatID,
 		UserID:      req.HCtx.SenderID,
@@ -73,7 +73,7 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 	if _, exists := r.deps.RunningCancel[req.HCtx.ChatID]; exists {
 		r.deps.RunningCancelMu.Unlock()
 		cancel()
-		return nil, fmt.Errorf("another execution is already in progress for this chat. Please wait for it to complete or use /stop to cancel it")
+		return fmt.Errorf("another execution is already in progress for this chat. Please wait for it to complete or use /stop to cancel it")
 	}
 	r.deps.RunningCancel[req.HCtx.ChatID] = cancel
 	r.deps.RunningCancelMu.Unlock()
@@ -98,8 +98,8 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 		"newSession":  isNewSession,
 	}).Info("Routing prepared request to executor")
 
-	// 6. Delegate to executor (it is responsible for calling defer cleanup)
-	result, err := executor.Execute(execCtx, prepared)
+	// 6. Delegate to executor
+	err := executor.Execute(execCtx, prepared)
 
 	// Always cleanup cancel on return
 	r.deps.RunningCancelMu.Lock()
@@ -107,20 +107,5 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 	r.deps.RunningCancelMu.Unlock()
 	cancel()
 
-	return result, err
-}
-
-// GetExecutor returns the executor for a given agent type
-func (r *AgentRouter) GetExecutor(agentType agentboot.AgentType) (AgentExecutor, bool) {
-	executor, exists := r.executors[agentType]
-	return executor, exists
-}
-
-// ListExecutors returns all registered agent types
-func (r *AgentRouter) ListExecutors() []agentboot.AgentType {
-	types := make([]agentboot.AgentType, 0, len(r.executors))
-	for agentType := range r.executors {
-		types = append(types, agentType)
-	}
-	return types
+	return err
 }

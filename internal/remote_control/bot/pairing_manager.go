@@ -6,9 +6,8 @@ package bot
 
 import "github.com/tingly-dev/tingly-box/imbot/security"
 
-// Type aliases — fully transparent to callers.
+// Type alias — fully transparent to callers.
 type PairingManager = security.PairingManager
-type PairingManagerOption = security.PairingManagerOption
 
 // Error sentinels forwarded from imbot/security.
 var (
@@ -18,14 +17,9 @@ var (
 	ErrPairLocked       = security.ErrPairLocked
 )
 
-// Constructor and option helpers forwarded from imbot/security.
+// Constructor helpers forwarded from imbot/security. Callers needing the
+// tuning options (TTL, code length, …) should use imbot/security directly.
 var (
-	NewPairingManager   = security.NewPairingManager
-	NewLogAuditor       = security.NewLogAuditor
-	WithPairingTTL      = security.WithPairingTTL
-	WithPairingCodeLen  = security.WithPairingCodeLength
-	WithPairingMaxFails = security.WithPairingMaxFails
-	WithPairingLockout  = security.WithPairingLockout
-	WithPairingRand     = security.WithPairingRand
-	WithPairingClock    = security.WithPairingClock
+	NewPairingManager = security.NewPairingManager
+	NewLogAuditor     = security.NewLogAuditor
 )

@@ -21,19 +21,6 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-	// NEW: Check if this is an interaction response first
-	// This handles both callback queries (interactive mode) and text replies (text mode)
-	resp, err := h.interaction.HandleMessage(msg)
-	if err == nil && resp != nil {
-		// Message was handled as an interaction response
-		logrus.WithFields(logrus.Fields{
-			"request_id": resp.RequestID,
-			"action":     resp.Action.Type,
-			"chat_id":    chatID,
-		}).Debug("Interaction response handled")
-		return
-	}
-
 	// An action firing (a button press) dispatches on its payload, not on
 	// message text.
 	if msg.IsCallback() {
@@ -147,11 +134,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	if _, isHandoff, _ := smart_guide.DetectHandoffCommand(hCtx.Text()); isHandoff {
 		if routeErr := h.routeToAgent(hCtx, hCtx.Text()); routeErr != nil {
 			logrus.WithError(routeErr).Error("Failed to route handoff command")
-			errMsg := fmt.Sprintf("⚠️ **Error**: %v", routeErr)
-			if strings.Contains(routeErr.Error(), "already in progress") || strings.Contains(routeErr.Error(), "already in use") {
-				errMsg = fmt.Sprintf("⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution\n\nTechnical details: %v", routeErr)
-			}
-			h.SendText(hCtx, errMsg)
+			h.SendText(hCtx, executionErrorMessage(routeErr))
 		}
 		return
 	}
@@ -178,12 +161,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// Smart Guide can help with navigation, project setup, and handoff to @cc
 	if routeErr := h.routeToAgent(hCtx, hCtx.Text()); routeErr != nil {
 		logrus.WithError(routeErr).Error("Failed to route to agent")
-		// Send error message to user
-		errMsg := fmt.Sprintf("⚠️ **Error**: %v", routeErr)
-		if strings.Contains(routeErr.Error(), "already in progress") || strings.Contains(routeErr.Error(), "already in use") {
-			errMsg = fmt.Sprintf("⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution\n\nTechnical details: %v", routeErr)
-		}
-		h.SendText(hCtx, errMsg)
+		h.SendText(hCtx, executionErrorMessage(routeErr))
 	}
 }
 

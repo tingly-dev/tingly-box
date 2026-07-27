@@ -26,8 +26,7 @@ type BotHandler struct {
 	manager          *imbot.Manager
 	imPrompter       *imchannel.IMPrompter
 	fileStore        *FileStore
-	interaction      *imbot.InteractionHandler // New interaction handler
-	tbClient         tbclient.TBClient         // TB Client for model configuration
+	tbClient         tbclient.TBClient // TB Client for model configuration
 
 	// Agent router for delegating execution to agent executors
 	agentRouter *AgentRouter
@@ -55,11 +54,6 @@ type BotHandler struct {
 	// re-reading the on-disk store. Best-effort, no persistence.
 	resumeListings   map[string][]string
 	resumeListingsMu sync.RWMutex
-
-	// verbose controls whether to show intermediate messages (onMessage details)
-	// true = show all messages (default), false = show only final results
-	verbose   bool
-	verboseMu sync.RWMutex
 
 	// commandRegistry holds the strongly-typed command registry
 	commandRegistry *imbot.CommandRegistry

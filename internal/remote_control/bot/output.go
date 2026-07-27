@@ -11,17 +11,11 @@ import (
 const (
 	// Icons
 	IconProject    = "📁"  // Project/folder
-	IconChat       = "💬"  // Chat/conversation
-	IconUser       = "👤"  // User
-	IconSession    = "🔄"  // Session
 	IconAgentTB    = "🎯"  // Tingly-Box agent (@tb)
 	IconAgentCC    = "💬"  // Claude Code agent (@cc)
 	IconDone       = "✅"  // Task completed
 	IconError      = "❌"  // Error
-	IconWarning    = "⚠️" // Warning
-	IconStop       = "🛑"  // Stopped
 	IconProcess    = "⏳"  // Processing
-	IconMock       = "🧪"  // Mock agent
 	IconTool       = "🔧"  // Tool call
 	IconToolResult = "↳"  // Tool result
 )
@@ -34,62 +28,21 @@ const (
 	AgentNameClaude    = "claude"
 )
 
-// Separator line for message formatting
-const (
-	SeparatorLine = "───────────────"
-	SeparatorFull = "━━━━━━━━━━━━━━━━━━━━"
-)
+// SeparatorLine visually splits a message body from its footer.
+const SeparatorLine = "───────────────"
 
 // Status messages
 const (
 	MsgProcessing     = "Processing..."
 	MsgTaskDone       = "Task done"
-	MsgTaskStopped    = "Task stopped"
 	MsgContinueOrHelp = "Continue or /help."
-	MsgNoRunningTask  = "No running task to stop."
 )
-
-// Format templates (use with fmt.Sprintf)
-const (
-	// Status line formats
-	FormatProjectLine = "%s %s\n" // icon + path
-	FormatAgentLine   = "%s %s\n" // icon + agent name
-	FormatDebugLine   = "%s %s\n" // icon + id value
-
-	// Footer format (separator + agent + path)
-	FormatFooter = "\n%s\n%s %s\n📁 %s" // separator + icon + agent + path
-)
-
-// OutputBehavior controls what is shown in bot messages
-type OutputBehavior struct {
-	Verbose bool // Send intermediate processing messages
-}
-
-// DefaultOutputBehavior returns the default output behavior
-func DefaultOutputBehavior() OutputBehavior {
-	return OutputBehavior{
-		Verbose: true,
-	}
-}
-
-// GetOutputBehavior extracts output behavior from bot setting
-func (s BotSetting) GetOutputBehavior() OutputBehavior {
-	verbose := true // default
-	if s.Verbose != nil {
-		verbose = *s.Verbose
-	}
-	return OutputBehavior{
-		Verbose: verbose,
-	}
-}
 
 // GetAgentIcon returns the icon for an agent type
 func GetAgentIcon(agentType string) string {
 	switch agentType {
 	case AgentNameTinglyBox, AgentNameTB:
 		return IconAgentTB
-	case AgentNameClaude, AgentNameCC, "claude-code":
-		return IconAgentCC
 	default:
 		return IconAgentCC
 	}
@@ -105,18 +58,6 @@ func GetAgentDisplayName(agentType string) string {
 	default:
 		return agentType
 	}
-}
-
-// ShortenID truncates an ID to a readable length
-// e.g., "a1b2c3d4e5f6g7h8" -> "a1b2c3d4"
-func ShortenID(id string, maxLen int) string {
-	if maxLen <= 0 {
-		maxLen = 8
-	}
-	if len(id) <= maxLen {
-		return id
-	}
-	return id[:maxLen]
 }
 
 // BuildFooter creates a compact footer line with agent and path info.
@@ -141,26 +82,4 @@ func BuildFooter(agentType, projectPath string) string {
 		return ""
 	}
 	return "\n" + SeparatorLine + b.String()
-}
-
-// Helper functions for path handling (avoiding filepath import issues)
-func splitPath(path string) []string {
-	if path == "" {
-		return nil
-	}
-	// Handle both / and \ separators
-	path = strings.ReplaceAll(path, "\\", "/")
-	parts := strings.Split(path, "/")
-	// Filter empty parts
-	var result []string
-	for _, p := range parts {
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
-func joinPath(parts []string) string {
-	return strings.Join(parts, "/")
 }
