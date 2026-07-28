@@ -502,7 +502,11 @@ siblings above. Legacy `/remote-control/*` redirects to `/remote-agent/*`.
   notify "randomly" stopped working. Fixed by passing `channelRegistry`
   into `NewBotManager`/`imbot.NewHandler` and wiring it before
   `go bm.periodicBotSync(ctx)` is spawned, so there is no window in which a
-  bot can start without it.
+  bot can start without it. The now-redundant `SetChannelRegistry` setters on
+  `imbot.Handler`/`imbot.BotManager` were removed rather than left as
+  dead code — keeping them around would read as "this is still how you wire
+  it," inviting a future caller to reintroduce the exact race by calling one
+  after construction.
 
 ## 12. Tests
 

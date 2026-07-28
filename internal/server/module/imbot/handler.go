@@ -28,7 +28,6 @@ type LifecycleController interface {
 	RestartBotByUUID(ctx context.Context, uuid string) error
 	Sync(ctx context.Context) error
 	Shutdown()
-	SetChannelRegistry(reg *channel.Registry)
 }
 
 // Handler handles ImBot settings HTTP requests
@@ -607,16 +606,6 @@ func normalizeAllowlist(values []string) []string {
 		out = append(out, entry)
 	}
 	return out
-}
-
-// SetChannelRegistry wires the remote channel registry through to the
-// underlying bot manager. Used by the server during route registration so
-// each running bot exposes itself as a remote.channel.Channel.
-func (h *Handler) SetChannelRegistry(reg *channel.Registry) {
-	if h.botMgr == nil {
-		return
-	}
-	h.botMgr.SetChannelRegistry(reg)
 }
 
 // ChatStore returns the chat store shared by every running bot. It is owned

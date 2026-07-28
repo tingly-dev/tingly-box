@@ -397,16 +397,6 @@ func (bm *BotManager) GetStore() *db.ImBotSettingsStore {
 	return bm.store
 }
 
-// SetChannelRegistry passes the remote channel registry through to the
-// underlying bot manager so each running bot registers an imbot-backed
-// Channel reachable from the notify scenario plugins.
-func (bm *BotManager) SetChannelRegistry(reg *channel.Registry) {
-	if bm == nil || bm.manager == nil {
-		return
-	}
-	bm.manager.SetChannelRegistry(reg)
-}
-
 // GetTBClient returns the TBClient for SmartGuide model configuration.
 func (bm *BotManager) GetTBClient() tbclient.TBClient {
 	if bm == nil {
