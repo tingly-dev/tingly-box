@@ -40,10 +40,13 @@ type Handler struct {
 	feishuRegHandler *FeishuRegHandler     // Feishu/Lark one-click registration handler
 }
 
-// NewHandler creates a new ImBot settings handler
-func NewHandler(ctx context.Context, cfg *config.Config) (*Handler, error) {
+// NewHandler creates a new ImBot settings handler. channelRegistry is passed
+// straight through to NewBotManager — see its doc comment for why this must
+// happen at construction time rather than via a later SetChannelRegistry
+// call.
+func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry) (*Handler, error) {
 	sm := cfg.StoreManager()
-	botMgr, err := NewBotManager(ctx, cfg)
+	botMgr, err := NewBotManager(ctx, cfg, channelRegistry)
 	if err != nil {
 		return nil, err
 	}

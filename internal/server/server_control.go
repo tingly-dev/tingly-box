@@ -181,20 +181,22 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		usagemodule.RegisterRoutes(apiV1, usageHandler)
 	}
 
-	// ImBot settings API routes - register from imbotsettings module
-	imbotHandler, err := imbot.NewHandler(ctx, s.config)
+	// ImBot settings API routes - register from imbotsettings module.
+	// s.channelRegistry is passed in at construction (not wired later via
+	// SetChannelRegistry) so every bot NewHandler brings up — including bots
+	// enabled before the server started, which the background sync starts
+	// immediately on its own goroutine — registers itself as a
+	// remote.channel.Channel reachable from /tingly/:scenario and
+	// /api/v1/bots/:bot/*. Passing it after the fact left a startup race
+	// where such a bot could finish starting before the registry landed and
+	// would then never expose a channel until manually restarted.
+	imbotHandler, err := imbot.NewHandler(ctx, s.config, s.channelRegistry)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create imbotsettings handler, imbot settings APIs will not be available")
 	} else {
 		imbot.RegisterRoutes(apiV1, imbotHandler)
 		// Store handler reference for shutdown
 		s.imbotSettingsHandler = imbotHandler
-		// Wire the channel registry so each running bot exposes itself
-		// as a remote.channel.Channel reachable from /tingly/:scenario
-		// scenario plugins.
-		if s.channelRegistry != nil {
-			imbotHandler.SetChannelRegistry(s.channelRegistry)
-		}
 	}
 
 	// Bot interaction API — the general, caller-facing surface for driving a

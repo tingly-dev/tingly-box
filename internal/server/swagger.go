@@ -90,9 +90,12 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 		usagemodule.RegisterRoutes(apiV1, usageHandler)
 	}
 
-	// ImBot settings API routes - register from imbotsettings module
+	// ImBot settings API routes - register from imbotsettings module. No
+	// channel registry here — this path only generates OpenAPI docs and
+	// never drives real chats (see the bot-interaction API registration
+	// below, which mirrors server_control.go's nil-channel handler).
 	ctx := context.Background()
-	imbotHandler, err := imbot.NewHandler(ctx, cfg)
+	imbotHandler, err := imbot.NewHandler(ctx, cfg, nil)
 	if err != nil {
 		fmt.Printf("Failed to create imbotsettings handler: %v\n", err)
 	} else {

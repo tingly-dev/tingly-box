@@ -486,6 +486,23 @@ siblings above. Legacy `/remote-control/*` redirects to `/remote-agent/*`.
   as before the split, when one prompter served everything.
 - A bot with remote_agent mounted but no routes registers a channel nothing
   routes to; harmless, and it keeps "channel comes with running" simple.
+- **Wire the channel registry at construction, not with a post-hoc setter.**
+  `internal/server/module/imbot.NewBotManager` used to accept the registry
+  only via a later `SetChannelRegistry` call from `server_control.go`, after
+  `NewHandler` had already returned. But construction also spawns
+  `periodicBotSync`'s background goroutine, which runs an *immediate* sync
+  that `Start()`s every already-enabled bot right away (bots enabled while
+  the server was down). If that goroutine reached a given bot's `Start()`
+  before the main goroutine's later `SetChannelRegistry` call landed, that
+  bot came up fully connected but with no channel registered — silently
+  unreachable from `/tingly/:scenario/notify` and `/api/v1/bots/:bot/*` for
+  its entire run, since `Sync` never restarts an already-running bot. Purely
+  an initialization-order race (no data race — both sides take the same
+  mutex), so it did not reproduce every boot, which made it look like
+  notify "randomly" stopped working. Fixed by passing `channelRegistry`
+  into `NewBotManager`/`imbot.NewHandler` and wiring it before
+  `go bm.periodicBotSync(ctx)` is spawned, so there is no window in which a
+  bot can start without it.
 
 ## 12. Tests
 

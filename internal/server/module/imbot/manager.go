@@ -43,11 +43,18 @@ type BotStatus struct {
 }
 
 // NewBotManager creates a new BotManager with all required dependencies.
-// If a channel registry is supplied via SetChannelRegistry before bots
-// are started, each running bot exposes itself as a remote.channel.Channel
-// so Claude Code hooks routed to /tingly/:scenario/notify can drive
-// that bot's chat through the scenario plugin layer.
-func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error) {
+// channelRegistry is wired into the internal bot.Manager before the
+// background sync loop starts (see below) so every bot it brings up —
+// including bots enabled before the server started — registers itself as a
+// remote.channel.Channel. Passing it here rather than through a later
+// SetChannelRegistry call closes a startup race: periodicBotSync's initial
+// sync runs in its own goroutine immediately after construction, and used to
+// be able to Start() bots before a subsequent SetChannelRegistry call landed,
+// permanently starting them with no channel (Claude Code hooks and the bot
+// interaction API would then find "bot not running" for a bot that was, in
+// fact, running). channelRegistry may be nil (e.g. swagger doc generation,
+// which never drives real chats).
+func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry) (*BotManager, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -101,6 +108,9 @@ func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error)
 	// Create internal bot manager
 	internalMgr := bot.NewManager(store, notifyConsumer, remoteAgentConsumer)
 	internalMgr.SetChatStore(chatStore)
+	// Wire the channel registry BEFORE periodicBotSync's goroutine gets a
+	// chance to Start() any bot — see the constructor doc comment.
+	internalMgr.SetChannelRegistry(channelRegistry)
 
 	bm := &BotManager{
 		manager:      internalMgr,
