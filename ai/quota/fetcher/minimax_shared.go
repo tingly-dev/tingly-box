@@ -94,6 +94,7 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 		daily := &quota.UsageWindow{
 			Type: quota.WindowTypeDaily, Used: float64(modelDailyUsed), Limit: float64(model.CurrentIntervalTotalCount),
 			UsedPercent: calcPercent(float64(modelDailyUsed), float64(model.CurrentIntervalTotalCount)), Unit: quota.UsageUnitRequests, Label: "Daily",
+			WindowMinutes: minimaxWindowMinutes(model.StartTime, model.EndTime, 24*60),
 		}
 		if model.EndTime > 0 {
 			reset := time.UnixMilli(model.EndTime)
@@ -104,6 +105,7 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 			weekly := &quota.UsageWindow{
 				Type: quota.WindowTypeWeekly, Used: float64(modelWeeklyUsed), Limit: float64(model.CurrentWeeklyTotalCount),
 				UsedPercent: calcPercent(float64(modelWeeklyUsed), float64(model.CurrentWeeklyTotalCount)), Unit: quota.UsageUnitRequests, Label: "Weekly",
+				WindowMinutes: minimaxWindowMinutes(model.WeeklyStartTime, model.WeeklyEndTime, 7*24*60),
 			}
 			if model.WeeklyEndTime > 0 {
 				reset := time.UnixMilli(model.WeeklyEndTime)
@@ -114,21 +116,36 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 		usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{Key: model.ModelName, Label: model.ModelName, Group: "resource", Windows: windows})
 	}
 
+	first := apiResp.ModelRemains[0]
 	daily := usage.AddWindow("daily", 0, &quota.UsageWindow{
 		Type: quota.WindowTypeDaily, Used: float64(dailyUsed), Limit: float64(dailyLimit),
 		UsedPercent: calcPercent(float64(dailyUsed), float64(dailyLimit)), Unit: quota.UsageUnitRequests,
-		Label: "Daily Quota", Description: fmt.Sprintf("%d / %d requests", dailyUsed, dailyLimit),
+		WindowMinutes: minimaxWindowMinutes(first.StartTime, first.EndTime, 24*60),
+		Label:         "Daily Quota", Description: fmt.Sprintf("%d / %d requests", dailyUsed, dailyLimit),
 	})
-	if apiResp.ModelRemains[0].EndTime > 0 {
-		reset := time.UnixMilli(apiResp.ModelRemains[0].EndTime)
+	if first.EndTime > 0 {
+		reset := time.UnixMilli(first.EndTime)
 		daily.ResetsAt = &reset
 	}
 	if weeklyLimit > 0 {
 		usage.AddWindow("weekly", 1, &quota.UsageWindow{
 			Type: quota.WindowTypeWeekly, Used: float64(weeklyUsed), Limit: float64(weeklyLimit),
 			UsedPercent: calcPercent(float64(weeklyUsed), float64(weeklyLimit)), Unit: quota.UsageUnitRequests,
-			Label: "Weekly Quota", Description: fmt.Sprintf("%d / %d requests", weeklyUsed, weeklyLimit),
+			WindowMinutes: minimaxWindowMinutes(first.WeeklyStartTime, first.WeeklyEndTime, 7*24*60),
+			Label:         "Weekly Quota", Description: fmt.Sprintf("%d / %d requests", weeklyUsed, weeklyLimit),
 		})
 	}
 	return usage
+}
+
+// minimaxWindowMinutes derives the period from the interval upstream reports,
+// falling back to the nominal length when the timestamps are missing. The
+// reported interval is authoritative: a "daily" bucket is not always 24h.
+func minimaxWindowMinutes(startMs, endMs int64, fallback int) int {
+	if startMs > 0 && endMs > startMs {
+		if minutes := int((endMs - startMs) / 1000 / 60); minutes > 0 {
+			return minutes
+		}
+	}
+	return fallback
 }

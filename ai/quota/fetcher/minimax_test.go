@@ -113,3 +113,47 @@ func TestMiniMaxFetchersPreserveRawResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestMiniMaxWindowsCarryTheReportedInterval(t *testing.T) {
+	// Upstream reports the actual interval; a "daily" bucket is not always 24h,
+	// so the reported start/end wins over the nominal length.
+	start := time.Now().Add(-6 * time.Hour)
+	resp := minimaxRemainsResponse{ModelRemains: []minimaxModelRemain{{
+		ModelName:                 "MiniMax-M2",
+		StartTime:                 start.UnixMilli(),
+		EndTime:                   start.Add(12 * time.Hour).UnixMilli(),
+		CurrentIntervalTotalCount: 500,
+		CurrentIntervalUsageCount: 160,
+		WeeklyStartTime:           start.UnixMilli(),
+		WeeklyEndTime:             start.Add(7 * 24 * time.Hour).UnixMilli(),
+		CurrentWeeklyTotalCount:   3500,
+		CurrentWeeklyUsageCount:   2300,
+	}}}
+
+	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"}, quota.ProviderTypeMiniMax, resp, time.Now())
+	checkInvariants(t, usage)
+
+	if got := findWindow(t, usage, "daily").WindowMinutes; got != 12*60 {
+		t.Errorf("daily WindowMinutes = %d, want %d (the reported interval)", got, 12*60)
+	}
+	if got := findWindow(t, usage, "weekly").WindowMinutes; got != 7*24*60 {
+		t.Errorf("weekly WindowMinutes = %d, want %d", got, 7*24*60)
+	}
+}
+
+func TestMiniMaxWindowsFallBackToTheNominalPeriod(t *testing.T) {
+	resp := minimaxRemainsResponse{ModelRemains: []minimaxModelRemain{{
+		ModelName:                 "MiniMax-M2",
+		CurrentIntervalTotalCount: 500,
+		CurrentIntervalUsageCount: 160,
+		CurrentWeeklyTotalCount:   3500,
+		CurrentWeeklyUsageCount:   2300,
+	}}}
+
+	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"}, quota.ProviderTypeMiniMax, resp, time.Now())
+	checkInvariants(t, usage)
+
+	if got := findWindow(t, usage, "daily").WindowMinutes; got != 24*60 {
+		t.Errorf("daily WindowMinutes = %d, want %d", got, 24*60)
+	}
+}
