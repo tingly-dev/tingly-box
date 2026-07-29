@@ -311,10 +311,11 @@ Gemini 类的 provider 会报平均值，Copilot 会静默消失，OpenRouter �
 1. ~~**加字段 + 三个函数**~~ ✅ 纯新增，现有行为不变。另加 `checkInvariants` 共享断言，
    新 provider 漏填语义会在测试里挂掉。
 2. ~~**按 §7 逐个 provider 归一**~~ ✅ 一个提交一个 provider，用现有 fetcher fixture 断言。
-3. **接展示消费方**：statusline 换 `Tightest()` ✅、Summary 换 `Pct()` ✅、
-   窗口排序从 tier 改成周期 ✅；**前端待办**——需要先跑 `task codegen`，
-   然后把 `quotaToWindows` 的 `tier` 排序换成 `window_minutes`（否则前端会盖掉后端的新顺序），
-   再做额度 / 资源 / 不可知的分区展示。
+3. ~~**接展示消费方**~~ ✅ statusline / Summary / CLI 换成三个函数，
+   窗口排序从 tier 改成周期，前端同步（排序 + 不可知窗口不画百分比）。
+   **仍需跑 `task codegen`**：`kind` / `unknown` / `unlimited` 三个字段还没进
+   `openapi.json` 和生成的 client schema，前端暂时按 `TieredUsageWindow` 的既有方式
+   自行声明。
 
 到这里 quota 就已经"说人话"了，且没有任何行为风险——以上都只影响显示。
 
@@ -327,6 +328,8 @@ Gemini 类的 provider 会报平均值，Copilot 会静默消失，OpenRouter �
 不变量单测（跨所有 provider 统一跑，新增 provider 自动被兜住）：
 
 - `Countable()` 且 `Kind=limit` ⇒ `WindowMinutes > 0`
+- `Countable()` ⇒ `Limit > 0`（没有上限就没有可比的分母，`Countable()` 自带这条兜底）
+- `Type=balance` ⇒ `Kind=resource`（能抓到遗漏的那个方向；`AddWindow` 也会自动补）
 - `Unknown` ⇒ 不参与 `Pct()`，且前端不显示百分比
 - `Unlimited` ⇒ 不参与 `Pct()`
 - `Kind=resource` ⇒ `ResetsAt == nil`
