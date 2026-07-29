@@ -1,6 +1,7 @@
 package command
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -251,7 +252,6 @@ func printQuotaDetails(usage *quota.ProviderUsage) {
 
 // displayWindowsWithProgress displays quota windows with visual progress bars
 func displayWindowsWithProgress(usage *quota.ProviderUsage) {
-	usage.NormalizeWindows()
 	windows := usage.Windows
 
 	if len(windows) == 0 {
@@ -266,6 +266,14 @@ func displayWindowsWithProgress(usage *quota.ProviderUsage) {
 
 // printWindowWithProgress prints a single usage window with progress bar
 func printWindowWithProgress(window *quota.UsageWindow) {
+	// A window with no usage figure has no percentage, no bar and no status to
+	// show. Rendering one anyway would print a green "0.00 / 0.00 (0.0%)",
+	// which is the reading these windows exist to prevent.
+	if !window.Countable() {
+		fmt.Printf("◌ %s: %s\n", window.Label, cmp.Or(window.Description, "not reported"))
+		return
+	}
+
 	// Status icon based on usage percentage
 	statusIcon := getStatusIcon(window.UsedPercent)
 
