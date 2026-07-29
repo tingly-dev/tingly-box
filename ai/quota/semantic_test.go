@@ -1,0 +1,184 @@
+package quota
+
+import (
+	"testing"
+	"time"
+)
+
+func window(pct float64, minutes int, opts ...func(*UsageWindow)) *UsageWindow {
+	w := &UsageWindow{UsedPercent: pct, WindowMinutes: minutes, Limit: 100, Used: pct}
+	for _, opt := range opts {
+		opt(w)
+	}
+	return w
+}
+
+func labelled(label string) func(*UsageWindow) {
+	return func(w *UsageWindow) { w.Label = label }
+}
+
+func TestPctTakesTheTightestWindow(t *testing.T) {
+	// The Friday-night case: the 5h window just reset but the 7d window is
+	// nearly gone. Reporting the shortest window would say "plenty left".
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(12, 300, labelled("5h")),
+		window(96, 10080, labelled("7d")),
+	}}
+
+	pct, ok := usage.Pct()
+	if !ok || pct != 96 {
+		t.Fatalf("Pct() = %v, %v; want 96, true", pct, ok)
+	}
+	if got := usage.Tightest().Label; got != "7d" {
+		t.Fatalf("Tightest() = %q; want %q", got, "7d")
+	}
+}
+
+func TestPctIsMaxNotAverage(t *testing.T) {
+	// An exhausted model averaged against an untouched one reads as half full.
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(100, 1440, labelled("pro")),
+		window(0, 1440, labelled("flash")),
+	}}
+
+	if pct, ok := usage.Pct(); !ok || pct != 100 {
+		t.Fatalf("Pct() = %v, %v; want 100, true", pct, ok)
+	}
+}
+
+func TestUnknownIsNotZero(t *testing.T) {
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(0, 300, func(w *UsageWindow) { w.Unknown = true }),
+	}}
+
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown", pct, ok)
+	}
+	if usage.Tightest() != nil {
+		t.Fatal("Tightest() should be nil when nothing is countable")
+	}
+	if usage.RecoversAt() != nil {
+		t.Fatal("RecoversAt() should be nil when nothing is countable")
+	}
+}
+
+func TestUnknownDoesNotSuppressAKnownWindow(t *testing.T) {
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(0, 300, func(w *UsageWindow) { w.Unknown = true }),
+		window(40, 10080, labelled("weekly")),
+	}}
+
+	if pct, ok := usage.Pct(); !ok || pct != 40 {
+		t.Fatalf("Pct() = %v, %v; want 40, true", pct, ok)
+	}
+}
+
+func TestUnlimitedDoesNotCount(t *testing.T) {
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(0, 43200, func(w *UsageWindow) { w.Unlimited = true; w.Limit = 0 }),
+	}}
+
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown for an unlimited-only provider", pct, ok)
+	}
+}
+
+func TestNoWindowsIsUnknown(t *testing.T) {
+	// Copilot / Cursor / VertexAI today: an error and nothing else. That must
+	// not read the same as an untouched quota.
+	usage := &ProviderUsage{LastError: "quota API not available"}
+
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown", pct, ok)
+	}
+}
+
+func TestRecoversAtComesFromTheBindingWindow(t *testing.T) {
+	sunday := time.Date(2026, 8, 2, 3, 0, 0, 0, time.UTC)
+	soon := time.Date(2026, 7, 29, 18, 0, 0, 0, time.UTC)
+
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(12, 300, func(w *UsageWindow) { w.ResetsAt = &soon }),
+		window(96, 10080, func(w *UsageWindow) { w.ResetsAt = &sunday }),
+	}}
+
+	got := usage.RecoversAt()
+	if got == nil || !got.Equal(sunday) {
+		t.Fatalf("RecoversAt() = %v; want %v", got, sunday)
+	}
+}
+
+func TestResourcesDoNotRecoverOnTheirOwn(t *testing.T) {
+	// A drained balance comes back by topping up, not by waiting, so there is
+	// no recovery time to report even if a reset-ish timestamp exists.
+	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(90, 0, func(w *UsageWindow) {
+			w.Kind = WindowKindResource
+			w.ResetsAt = &expires
+		}),
+	}}
+
+	if got := usage.RecoversAt(); got != nil {
+		t.Fatalf("RecoversAt() = %v; want nil for a resource", got)
+	}
+	if pct, ok := usage.Pct(); !ok || pct != 90 {
+		t.Fatalf("Pct() = %v, %v; want 90, true — resources still count toward usage", pct, ok)
+	}
+}
+
+func TestEqualUsagePrefersTheShorterWindow(t *testing.T) {
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(80, 10080, labelled("7d")),
+		window(80, 300, labelled("5h")),
+	}}
+
+	if got := usage.Tightest().Label; got != "5h" {
+		t.Fatalf("Tightest() = %q; want %q", got, "5h")
+	}
+}
+
+func TestEqualUsageIgnoresWindowsOfUnknownLength(t *testing.T) {
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		window(80, 0, labelled("unsized")),
+		window(80, 300, labelled("5h")),
+	}}
+
+	if got := usage.Tightest().Label; got != "5h" {
+		t.Fatalf("Tightest() = %q; want %q", got, "5h")
+	}
+}
+
+func TestPctFallsBackToUsedOverLimit(t *testing.T) {
+	// Windows that never populated UsedPercent still have to answer.
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		{Used: 340, Limit: 500, Unit: UsageUnitRequests, WindowMinutes: 1440},
+	}}
+
+	pct, ok := usage.Pct()
+	if !ok || pct != 68 {
+		t.Fatalf("Pct() = %v, %v; want 68, true", pct, ok)
+	}
+}
+
+func TestBreakdownsDoNotAnswerForTheProvider(t *testing.T) {
+	// Breakdowns are scoped to one model; an exhausted model must not be read
+	// as the provider being exhausted, nor stand in when Windows is empty.
+	usage := &ProviderUsage{Breakdowns: []*UsageBreakdown{{
+		Key:     "gemini-2.5-pro",
+		Windows: []*UsageWindow{window(100, 1440)},
+	}}}
+
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown", pct, ok)
+	}
+}
+
+func TestKindDefaultsToLimit(t *testing.T) {
+	if got := (&UsageWindow{}).EffectiveKind(); got != WindowKindLimit {
+		t.Fatalf("EffectiveKind() = %q; want %q", got, WindowKindLimit)
+	}
+	if got := (&UsageWindow{Kind: WindowKindResource}).EffectiveKind(); got != WindowKindResource {
+		t.Fatalf("EffectiveKind() = %q; want %q", got, WindowKindResource)
+	}
+}

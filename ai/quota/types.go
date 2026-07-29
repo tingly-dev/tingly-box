@@ -43,6 +43,16 @@ const (
 	WindowTypeCodeReview WindowType = "code_review" // code review quota
 )
 
+// WindowKind distinguishes the two things a quota entry can be. The difference
+// that matters is whether running out resolves itself: an allowance refills at
+// ResetsAt, a resource has to be topped up.
+type WindowKind string
+
+const (
+	WindowKindLimit    WindowKind = "limit"    // periodic allowance (Anthropic 5h/7d, MiniMax daily)
+	WindowKindResource WindowKind = "resource" // standing balance (OpenRouter credit, Kimi booster)
+)
+
 // UsageUnit usage unit enumeration
 type UsageUnit string
 
@@ -121,6 +131,14 @@ type UsageWindow struct {
 	// Metadata
 	Label       string `json:"label"`       // display label, e.g., "Session Quota"
 	Description string `json:"description"` // description
+
+	// Semantics. Kind says whether running out resolves itself; Unknown and
+	// Unlimited say why UsedPercent should not be read as a usage figure.
+	// Between them they replace the three-way ambiguity of Limit == 0
+	// (unlimited / unknown / no entitlement).
+	Kind      WindowKind `json:"kind,omitempty"`      // defaults to WindowKindLimit, see Kind()
+	Unknown   bool       `json:"unknown,omitempty"`   // upstream did not report usage; not the same as 0%
+	Unlimited bool       `json:"unlimited,omitempty"` // no cap at all
 
 	// Limit status (optional)
 	Allowed      *bool `json:"allowed,omitempty"`       // whether requests are allowed
