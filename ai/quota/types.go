@@ -177,8 +177,18 @@ func (w *UsageWindow) CalculateUsedPercent() float64 {
 	return (w.Used / w.Limit) * 100
 }
 
-// NormalizeWindows ensures Windows contains all aggregate quota windows in display order.
-// Lower tier means more important and is rendered first.
+// NormalizeWindows puts Windows into display order: allowances first, shortest
+// period leading, then standing resources, then anything with no usage figure
+// to show.
+//
+// Short periods lead because they move fastest and are what a user watches; a
+// balance has no period at all, and an unknown or uncapped entry has nothing
+// to compare, so both sort after the windows that do.
+//
+// This used to order by Tier, which each fetcher filled in by its own rules —
+// Codex derives it from how many windows happen to precede a given one — so
+// tier 0 meant a 5-hour session for one provider and a credit balance for
+// another, and the ordering was not comparable across providers.
 func (p *ProviderUsage) NormalizeWindows() {
 	if p == nil {
 		return
@@ -190,17 +200,26 @@ func (p *ProviderUsage) NormalizeWindows() {
 
 	sort.SliceStable(p.Windows, func(i, j int) bool {
 		left, right := p.Windows[i], p.Windows[j]
-		if left == nil && right == nil {
-			return false
+		if left == nil || right == nil {
+			return right == nil && left != nil
 		}
-		if left == nil {
-			return false
+		if lr, rr := windowRank(left), windowRank(right); lr != rr {
+			return lr < rr
 		}
-		if right == nil {
-			return true
-		}
-		return left.Tier < right.Tier
+		return left.WindowMinutes < right.WindowMinutes
 	})
+}
+
+// windowRank groups windows for display; within a group they order by period.
+func windowRank(w *UsageWindow) int {
+	switch {
+	case !w.Countable():
+		return 2
+	case w.EffectiveKind() == WindowKindResource:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func applyWindowDefaults(window *UsageWindow, key string) {

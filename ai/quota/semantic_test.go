@@ -182,3 +182,40 @@ func TestKindDefaultsToLimit(t *testing.T) {
 		t.Fatalf("EffectiveKind() = %q; want %q", got, WindowKindResource)
 	}
 }
+
+func TestNormalizeWindowsOrdersByPeriodThenKind(t *testing.T) {
+	// Tier is deliberately reversed to prove it no longer drives the order.
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		{Key: "unknown", Tier: 0, Unknown: true},
+		{Key: "balance", Tier: 1, Kind: WindowKindResource, UsedPercent: 40, Limit: 100},
+		{Key: "weekly", Tier: 2, UsedPercent: 30, Limit: 100, WindowMinutes: 10080},
+		{Key: "session", Tier: 3, UsedPercent: 20, Limit: 100, WindowMinutes: 300},
+	}}
+
+	usage.NormalizeWindows()
+
+	var got []string
+	for _, w := range usage.Windows {
+		got = append(got, w.Key)
+	}
+	want := []string{"session", "weekly", "balance", "unknown"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("order = %v; want %v", got, want)
+		}
+	}
+}
+
+func TestNormalizeWindowsIsStableForEqualPeriods(t *testing.T) {
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		{Key: "a", UsedPercent: 10, Limit: 100, WindowMinutes: 1440},
+		{Key: "b", UsedPercent: 20, Limit: 100, WindowMinutes: 1440},
+	}}
+
+	usage.NormalizeWindows()
+
+	if usage.Windows[0].Key != "a" || usage.Windows[1].Key != "b" {
+		t.Errorf("equal periods should keep fetcher order, got %q then %q",
+			usage.Windows[0].Key, usage.Windows[1].Key)
+	}
+}
