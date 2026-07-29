@@ -260,30 +260,16 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	// Verify that a fetcher is registered.
 	f, ok := m.registry.Get(providerType)
 	if !ok {
-		usage := &ProviderUsage{
-			ProviderUUID: provider.UUID,
-			ProviderName: provider.Name,
-			ProviderType: providerType,
-			FetchedAt:    now,
-			ExpiresAt:    now.Add(m.config.CacheTTL),
-			LastError:    fmt.Sprintf("unsupported provider type: %q", providerType),
-			LastErrorAt:  ptrTime(now),
-		}
+		usage := m.unreadable(provider, providerType, now,
+			fmt.Sprintf("unsupported provider type: %q", providerType))
 		_ = m.store.Save(ctx, usage)
 		return usage, nil
 	}
 
 	// Validate the provider configuration.
 	if err := f.Validate(provider); err != nil {
-		usage := &ProviderUsage{
-			ProviderUUID: provider.UUID,
-			ProviderName: provider.Name,
-			ProviderType: providerType,
-			FetchedAt:    now,
-			ExpiresAt:    now.Add(m.config.CacheTTL),
-			LastError:    fmt.Sprintf("validation failed: %v", err),
-			LastErrorAt:  ptrTime(now),
-		}
+		usage := m.unreadable(provider, providerType, now,
+			fmt.Sprintf("validation failed: %v", err))
 		_ = m.store.Save(ctx, usage)
 		return usage, nil
 	}
@@ -291,15 +277,7 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	// Fetch quota data.
 	usage, err := f.Fetch(ctx, provider)
 	if err != nil {
-		usage = &ProviderUsage{
-			ProviderUUID: provider.UUID,
-			ProviderName: provider.Name,
-			ProviderType: providerType,
-			FetchedAt:    now,
-			ExpiresAt:    now.Add(m.config.CacheTTL),
-			LastError:    err.Error(),
-			LastErrorAt:  ptrTime(now),
-		}
+		usage = m.unreadable(provider, providerType, now, err.Error())
 	}
 
 	// Persist the result.
@@ -308,6 +286,13 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	}
 
 	return usage, nil
+}
+
+// unreadable records a provider whose quota could not be read. All three
+// failure paths produce the same shape, and each carries an explicit unknown
+// window so the state is visible rather than inferable from an empty slice.
+func (m *Manager) unreadable(provider *typ.Provider, providerType ProviderType, now time.Time, reason string) *ProviderUsage {
+	return Unobservable(provider.UUID, provider.Name, providerType, reason, now, m.config.CacheTTL)
 }
 
 // inferProviderType infers the provider type from OAuth metadata or the API base URL.
@@ -387,9 +372,4 @@ func (m *Manager) loggerWithError(provider *typ.Provider, err error) *logrus.Ent
 		"provider_name": provider.Name,
 		"error":         err.Error(),
 	})
-}
-
-// ptrTime returns a pointer to t.
-func ptrTime(t time.Time) *time.Time {
-	return &t
 }

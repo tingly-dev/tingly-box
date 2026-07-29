@@ -91,3 +91,27 @@ func tighter(a, b *UsageWindow) bool {
 	// resets.
 	return periodRank(a) < periodRank(b)
 }
+
+// Unobservable builds usage for a provider whose quota could not be read —
+// no API, a failed fetch, an unsupported type. It reports an explicit unknown
+// window rather than an empty one: with nothing in Windows, "we cannot see
+// this account" is indistinguishable from "this account is untouched", and
+// the more useful of those two readings is the one a caller will assume.
+func Unobservable(providerUUID, providerName string, providerType ProviderType, reason string, now time.Time, ttl time.Duration) *ProviderUsage {
+	usage := &ProviderUsage{
+		ProviderUUID: providerUUID,
+		ProviderName: providerName,
+		ProviderType: providerType,
+		FetchedAt:    now,
+		ExpiresAt:    now.Add(ttl),
+		LastError:    reason,
+		LastErrorAt:  &now,
+	}
+	usage.AddWindow("unavailable", 0, &UsageWindow{
+		Type:        WindowTypeCustom,
+		Unknown:     true,
+		Label:       "Quota unavailable",
+		Description: reason,
+	})
+	return usage
+}

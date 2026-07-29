@@ -138,3 +138,23 @@ func BenchmarkInferProviderType(b *testing.B) {
 		_ = inferProviderType(provider)
 	}
 }
+
+func TestUnreadableProvidersReportWhyRatherThanNothing(t *testing.T) {
+	// All three failure paths used to build the same windowless usage, which
+	// reads as an untouched allowance to anyone who does not check LastError.
+	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
+	usage := Unobservable("u", "n", ProviderTypeCursor, "quota API not available", now, time.Hour)
+
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown", pct, ok)
+	}
+	if len(usage.Windows) != 1 || usage.Windows[0].Countable() {
+		t.Fatal("want exactly one window, carrying no usage figure")
+	}
+	if usage.LastError == "" || usage.Windows[0].Description == "" {
+		t.Error("the reason should be reported on both the usage and the window")
+	}
+	if !usage.ExpiresAt.Equal(now.Add(time.Hour)) {
+		t.Errorf("ExpiresAt = %v; want the ttl applied to now", usage.ExpiresAt)
+	}
+}

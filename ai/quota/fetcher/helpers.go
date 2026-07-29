@@ -19,28 +19,7 @@ func calcPercent(used, limit float64) float64 {
 	return p
 }
 
-// unobservableUsage describes a provider that exposes no quota API. It reports
-// an explicit unknown window rather than an empty one: with nothing in
-// Windows, "we cannot see this account" is indistinguishable from "this
-// account is untouched", and the more useful of those two readings is the one
-// a caller will assume.
+// unobservableUsage describes a provider that exposes no quota API.
 func unobservableUsage(provider *ai.Provider, providerType quota.ProviderType, reason string) *quota.ProviderUsage {
-	now := time.Now()
-
-	usage := &quota.ProviderUsage{
-		ProviderUUID: provider.UUID,
-		ProviderName: provider.Name,
-		ProviderType: providerType,
-		FetchedAt:    now,
-		ExpiresAt:    now.Add(1 * time.Hour),
-		LastError:    reason,
-		LastErrorAt:  &now,
-	}
-	usage.AddWindow("unavailable", 0, &quota.UsageWindow{
-		Type:        quota.WindowTypeCustom,
-		Unknown:     true,
-		Label:       "Quota unavailable",
-		Description: reason,
-	})
-	return usage
+	return quota.Unobservable(provider.UUID, provider.Name, providerType, reason, time.Now(), 1*time.Hour)
 }
