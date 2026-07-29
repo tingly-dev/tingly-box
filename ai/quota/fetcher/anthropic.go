@@ -13,7 +13,9 @@ import (
 )
 
 // AnthropicFetcher retrieves Anthropic (Claude) quota data.
-type AnthropicFetcher struct{}
+type AnthropicFetcher struct {
+	baseURL string // empty → production URL; override in tests only
+}
 
 // NewAnthropicFetcher creates an Anthropic quota fetcher.
 func NewAnthropicFetcher() *AnthropicFetcher {
@@ -78,7 +80,11 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	// Build the request.
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/api/oauth/usage", nil)
+	apiBase := "https://api.anthropic.com"
+	if f.baseURL != "" {
+		apiBase = f.baseURL
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+"/api/oauth/usage", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -139,13 +145,14 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	// 7-day weekly quota (API returns utilization percentage only)
 	// Used/Limit normalized to 0-100 scale for unified frontend rendering
 	sevenDay := usage.AddWindow("seven_day", 1, &quota.UsageWindow{
-		Type:        quota.WindowTypeWeekly,
-		Used:        apiResp.SevenDay.Utilization,
-		Limit:       100,
-		UsedPercent: apiResp.SevenDay.Utilization,
-		Unit:        quota.UsageUnitPercent,
-		Label:       "7-Day Window",
-		Description: fmt.Sprintf("%.0f%% utilization", apiResp.SevenDay.Utilization),
+		Type:          quota.WindowTypeWeekly,
+		Used:          apiResp.SevenDay.Utilization,
+		Limit:         100,
+		UsedPercent:   apiResp.SevenDay.Utilization,
+		Unit:          quota.UsageUnitPercent,
+		WindowMinutes: 7 * 24 * 60,
+		Label:         "7-Day Window",
+		Description:   fmt.Sprintf("%.0f%% utilization", apiResp.SevenDay.Utilization),
 	})
 
 	// Parse the microsecond-precision ISO 8601 reset time with RFC3339Nano.
@@ -163,28 +170,26 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	// Extra usage (Max plan add-on), only if enabled
 	// API returns utilization percentage (nullable) and credit amounts
 	if apiResp.ExtraUsage.IsEnabled {
-		var utilPct float64
-		var used, limit float64
-		var desc string
-		if apiResp.ExtraUsage.Utilization != nil {
-			utilPct = *apiResp.ExtraUsage.Utilization
-			used = utilPct
-			limit = 100
-			desc = fmt.Sprintf("%.0f%% utilization", utilPct)
-		} else {
-			used = 0
-			limit = 100
-			desc = "utilization unavailable"
+		// A null utilization means the API did not say. Reporting it as 0%
+		// would tell the user the add-on is untouched — the opposite of what
+		// upstream conveyed.
+		extra := &quota.UsageWindow{
+			Type:          quota.WindowTypeMonthly,
+			Unit:          quota.UsageUnitPercent,
+			WindowMinutes: 30 * 24 * 60,
+			Label:         "Extra Usage",
 		}
-		usage.AddWindow("extra_usage", 2, &quota.UsageWindow{
-			Type:        quota.WindowTypeMonthly,
-			Used:        used,
-			Limit:       limit,
-			UsedPercent: utilPct,
-			Unit:        quota.UsageUnitPercent,
-			Label:       "Extra Usage",
-			Description: desc,
-		})
+		if apiResp.ExtraUsage.Utilization != nil {
+			utilPct := *apiResp.ExtraUsage.Utilization
+			extra.Used = utilPct
+			extra.Limit = 100
+			extra.UsedPercent = utilPct
+			extra.Description = fmt.Sprintf("%.0f%% utilization", utilPct)
+		} else {
+			extra.Unknown = true
+			extra.Description = "utilization unavailable"
+		}
+		usage.AddWindow("extra_usage", 2, extra)
 
 		usage.Cost = &quota.UsageCost{
 			Used:         apiResp.ExtraUsage.UsedCredits / 100,  // cents → dollars
