@@ -122,6 +122,13 @@ var zaiQuotaUnitScopeMap = map[int]string{
 	6: "week",
 }
 
+// Minutes per unit of lim.Number, for the same unit codes.
+var zaiQuotaUnitMinutes = map[int]int{
+	3: 60,
+	5: 30 * 24 * 60,
+	6: 7 * 24 * 60,
+}
+
 var zaiQuotaUnitToWindowType = map[int]quota.WindowType{
 	3: quota.WindowTypeSession,
 	5: quota.WindowTypeMonthly,
@@ -147,16 +154,17 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 	}
 
 	for _, lim := range apiResp.Data.Limits {
-		windowType, label, unit, tier := classifyZaiLimit(lim)
+		class := classifyZaiLimit(lim)
 		used, total, usedPercent, hasAbsoluteValues := zaiLimitValues(lim)
 
 		window := &quota.UsageWindow{
-			Type:        windowType,
-			Used:        used,
-			Limit:       total,
-			UsedPercent: usedPercent,
-			Unit:        unit,
-			Label:       label,
+			Type:          class.windowType,
+			Used:          used,
+			Limit:         total,
+			UsedPercent:   usedPercent,
+			Unit:          class.unit,
+			WindowMinutes: class.windowMinutes,
+			Label:         class.label,
 		}
 		if hasAbsoluteValues {
 			window.Description = fmt.Sprintf("%.0f / %.0f", used, total)
@@ -165,18 +173,44 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 		}
 		applyResetTime(window, lim.NextResetTime)
 
+		// A limit scoped to one feature does not gate ordinary requests, so it
+		// belongs beside the per-model detail rather than in the account-level
+		// windows that answer "does this provider have quota left".
+		if class.feature != "" {
+			usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
+				Key:     class.feature,
+				Label:   class.label,
+				Group:   "feature",
+				Windows: []*quota.UsageWindow{window},
+			})
+			continue
+		}
+
+		tier := class.tier
 		if tier < 0 {
 			tier = len(usage.Windows)
 		}
 		usage.AddWindow(zaiLimitKey(lim), tier, window)
 
-		addZaiUsageDetails(usage, lim, windowType, label, unit, total)
+		addZaiUsageDetails(usage, lim, class, total, hasAbsoluteValues)
 	}
 
 	return usage, nil
 }
 
-func classifyZaiLimit(lim zaiQuotaLimit) (quota.WindowType, string, quota.UsageUnit, int) {
+// zaiLimitClass is the normalized reading of one upstream limit entry.
+// feature is non-empty when the limit gates a single capability rather than
+// the account as a whole.
+type zaiLimitClass struct {
+	windowType    quota.WindowType
+	label         string
+	unit          quota.UsageUnit
+	tier          int
+	windowMinutes int
+	feature       string
+}
+
+func classifyZaiLimit(lim zaiQuotaLimit) zaiLimitClass {
 	scope, hasScope := zaiQuotaUnitScopeMap[lim.Unit.Int]
 	scopedLabel := func(name string) string {
 		if hasScope && lim.Number > 0 {
@@ -190,6 +224,11 @@ func classifyZaiLimit(lim zaiQuotaLimit) (quota.WindowType, string, quota.UsageU
 		scopedWindowType = zaiQuotaUnitToWindowType[lim.Unit.Int]
 	}
 
+	minutes := 0
+	if perUnit, ok := zaiQuotaUnitMinutes[lim.Unit.Int]; ok && lim.Number > 0 {
+		minutes = perUnit * lim.Number
+	}
+
 	switch lim.Type {
 	case "TOKENS_LIMIT":
 		tier := 0
@@ -201,11 +240,11 @@ func classifyZaiLimit(lim zaiQuotaLimit) (quota.WindowType, string, quota.UsageU
 		case 5:
 			tier = 3
 		}
-		return scopedWindowType, scopedLabel("Tokens"), quota.UsageUnitTokens, tier
+		return zaiLimitClass{scopedWindowType, scopedLabel("Tokens"), quota.UsageUnitTokens, tier, minutes, ""}
 	case "TIME_LIMIT":
-		return scopedWindowType, scopedLabel("MCP"), quota.UsageUnitRequests, 2
+		return zaiLimitClass{scopedWindowType, scopedLabel("MCP"), quota.UsageUnitRequests, 2, minutes, "mcp"}
 	default:
-		return quota.WindowTypeCustom, lim.Type, quota.UsageUnitRequests, -1
+		return zaiLimitClass{quota.WindowTypeCustom, lim.Type, quota.UsageUnitRequests, -1, minutes, ""}
 	}
 }
 
@@ -237,25 +276,38 @@ func zaiLimitKey(lim zaiQuotaLimit) string {
 	return lim.Type
 }
 
-func addZaiUsageDetails(usage *quota.ProviderUsage, lim zaiQuotaLimit, windowType quota.WindowType, label string, unit quota.UsageUnit, total float64) {
+func addZaiUsageDetails(usage *quota.ProviderUsage, lim zaiQuotaLimit, class zaiLimitClass, total float64, hasAbsoluteValues bool) {
 	if len(lim.UsageDetails) == 0 {
 		return
 	}
 
 	for _, detail := range lim.UsageDetails {
-		modelPercent := float64(0)
-		if lim.CurrentValue > 0 {
-			modelPercent = (detail.Usage / lim.CurrentValue) * 100
+		modelWindow := &quota.UsageWindow{
+			Type:          class.windowType,
+			Used:          detail.Usage,
+			Limit:         total,
+			Unit:          class.unit,
+			WindowMinutes: class.windowMinutes,
+			Label:         class.label,
+			Description:   fmt.Sprintf("%.0f / %.0f", detail.Usage, total),
 		}
 
-		modelWindow := &quota.UsageWindow{
-			Type:        windowType,
-			Used:        detail.Usage,
-			Limit:       total,
-			UsedPercent: modelPercent,
-			Unit:        unit,
-			Label:       label,
-			Description: fmt.Sprintf("%.0f / %.0f", detail.Usage, total),
+		// How much of the allowance this model ate. Its share of what has been
+		// consumed so far is a different quantity and must not land here: a
+		// model responsible for 85% of a barely-touched allowance would read
+		// as nearly exhausted.
+		if hasAbsoluteValues {
+			modelWindow.UsedPercent = calcPercent(detail.Usage, total)
+			if lim.CurrentValue > 0 {
+				modelWindow.Description = fmt.Sprintf("%.0f / %.0f · %.0f%% of usage",
+					detail.Usage, total, (detail.Usage/lim.CurrentValue)*100)
+			}
+		} else {
+			// The parent limit only reported a percentage, so there is nothing
+			// to measure this model's usage against.
+			modelWindow.Unknown = true
+			modelWindow.Limit = 0
+			modelWindow.Description = fmt.Sprintf("%.0f used", detail.Usage)
 		}
 		applyResetTime(modelWindow, lim.NextResetTime)
 
