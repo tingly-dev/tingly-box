@@ -104,3 +104,23 @@ func TestOpenAISpendWithoutALimitIsUnknown(t *testing.T) {
 		t.Errorf("spend Used = %v, want 12.5 — the figure we do have stays visible", spend.Used)
 	}
 }
+
+func TestOpenAIReportsSpendOnce(t *testing.T) {
+	// The spend window took over what Cost was carrying; leaving both would
+	// render the figure twice, the second as "$12.50 / $0.00" — a budget with
+	// nothing spent.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"current_usage_usd":12.5}]}`))
+	}))
+	defer server.Close()
+
+	usage, err := (&OpenAIFetcher{}).Fetch(context.Background(),
+		&ai.Provider{UUID: "u", Name: "OpenAI", Token: "k", APIBase: server.URL})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	if usage.Cost != nil {
+		t.Errorf("Cost = %+v; want nil — the spend window already reports it", usage.Cost)
+	}
+}

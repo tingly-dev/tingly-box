@@ -130,14 +130,6 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(10 * time.Minute), // Cache for 10 minutes.
 		RawResponse:  json.RawMessage(bodyBytes),
-
-		// Cost represents the prepaid balance.
-		Cost: &quota.UsageCost{
-			Used:         totalUsed,
-			Limit:        0, // OpenAI does not provide limit information.
-			CurrencyCode: "USD",
-			Label:        "Prepaid Credits",
-		},
 	}
 
 	// Spend is known but the cap never is, so there is no proportion to

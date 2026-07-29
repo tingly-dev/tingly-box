@@ -278,10 +278,13 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 		}
 		duration, timeUnit := item.windowDetail()
 		windowMinutes := kimiCodeWindowMinutes(duration, timeUnit)
+		// The type comes from what upstream actually said. The ordering key
+		// falls back to the plan's weekly window when it said nothing, so the
+		// entry stays orderable — but that fallback must not travel into the
+		// type, or an unsized limit would be labelled weekly on the strength
+		// of a number we made up.
+		windowType := kimiCodeWindowType(windowMinutes)
 		if windowMinutes <= 0 {
-			// Upstream did not state the period. Fall back to the weekly plan
-			// window rather than leaving it unset, which would make the entry
-			// unorderable against the others.
 			windowMinutes = 7 * 24 * 60
 		}
 		label := detail.label(kimiCodeWindowLabel(duration, timeUnit, index))
@@ -289,7 +292,7 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 			label = item.Scope
 		}
 		usage.AddWindow(fmt.Sprintf("limit_%d", index+1), index+1, &quota.UsageWindow{
-			Type:          kimiCodeWindowType(windowMinutes),
+			Type:          windowType,
 			Used:          used,
 			Limit:         limit,
 			Unit:          quota.UsageUnitCredits,

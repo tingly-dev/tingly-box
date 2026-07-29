@@ -357,3 +357,34 @@ func TestKimiCodeSemantics(t *testing.T) {
 		t.Errorf("limit_2 WindowMinutes = %d, want a fallback period", got)
 	}
 }
+
+func TestKimiCodeUnsizedLimitKeepsItsRealType(t *testing.T) {
+	// The period fallback exists so the entry can be ordered. It must not
+	// travel into the window type, or a limit upstream never sized would be
+	// labelled weekly on the strength of a number we invented.
+	const response = `{
+		"usage": {"name": "Weekly limit", "used": 400, "limit": 1000},
+		"limits": [{"detail": {"used": 5, "limit": 50}}]
+	}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	usage, err := (&KimiCodeFetcher{baseURL: server.URL}).Fetch(context.Background(), &ai.Provider{
+		UUID: "u", Name: "Kimi Code", AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "t"},
+	})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	limit := findWindow(t, usage, "limit_1")
+	if limit.Type != quota.WindowTypeCustom {
+		t.Errorf("Type = %q; want custom — upstream gave no period", limit.Type)
+	}
+	if limit.WindowMinutes <= 0 {
+		t.Error("WindowMinutes should still fall back so the entry stays orderable")
+	}
+}

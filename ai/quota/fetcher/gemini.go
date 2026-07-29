@@ -86,7 +86,8 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	}
 
 	if len(quotaResp.Buckets) == 0 {
-		return usage, nil
+		return unobservableUsage(provider, quota.ProviderTypeGemini,
+			"upstream reported no quota buckets"), nil
 	}
 
 	// Create breakdowns for each model, tracking the most-used one.
