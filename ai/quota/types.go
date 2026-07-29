@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 )
@@ -201,13 +202,23 @@ func (p *ProviderUsage) NormalizeWindows() {
 	sort.SliceStable(p.Windows, func(i, j int) bool {
 		left, right := p.Windows[i], p.Windows[j]
 		if left == nil || right == nil {
-			return right == nil && left != nil
+			return left != nil
 		}
 		if lr, rr := windowRank(left), windowRank(right); lr != rr {
 			return lr < rr
 		}
-		return left.WindowMinutes < right.WindowMinutes
+		return periodRank(left) < periodRank(right)
 	})
+}
+
+// periodRank orders by window length, putting unsized windows last: the same
+// rule tighter() uses, so a window cannot be least urgent for Tightest() and
+// most prominent for display.
+func periodRank(w *UsageWindow) int {
+	if w.WindowMinutes <= 0 {
+		return math.MaxInt
+	}
+	return w.WindowMinutes
 }
 
 // windowRank groups windows for display; within a group they order by period.
@@ -229,6 +240,24 @@ func applyWindowDefaults(window *UsageWindow, key string) {
 	if window.Key == "" {
 		window.Key = key
 	}
+	applyWindowSemantics(window)
+}
+
+// applyWindowSemantics fills in what the shared layer can derive, so a fetcher
+// only has to state what upstream told it.
+func applyWindowSemantics(window *UsageWindow) {
+	// A balance is a resource by definition. Leaving each fetcher to say so
+	// means one that forgets produces a balance claiming it refills, and
+	// RecoversAt() then promises a recovery that never arrives.
+	if window.Kind == "" && window.Type == WindowTypeBalance {
+		window.Kind = WindowKindResource
+	}
+	// A window with no usage figure must not carry one — a reader that skips
+	// the flags would see a plausible number and trust it.
+	if !window.Countable() {
+		window.UsedPercent = 0
+		return
+	}
 	if window.UsedPercent == 0 {
 		window.UsedPercent = window.CalculateUsedPercent()
 	}
@@ -241,11 +270,25 @@ func (p *ProviderUsage) AddWindow(key string, tier int, window *UsageWindow) *Us
 	}
 	window.Key = key
 	window.Tier = tier
-	if window.UsedPercent == 0 {
-		window.UsedPercent = window.CalculateUsedPercent()
-	}
+	applyWindowSemantics(window)
 	p.Windows = append(p.Windows, window)
 	return window
+}
+
+// AddBreakdown adds a scoped quota entry (per model, per feature) with the same
+// derivation AddWindow applies, which raw appends to Breakdowns bypass.
+func (p *ProviderUsage) AddBreakdown(key, label, group string, windows ...*UsageWindow) *UsageBreakdown {
+	if p == nil {
+		return nil
+	}
+	for _, w := range windows {
+		if w != nil {
+			applyWindowSemantics(w)
+		}
+	}
+	bd := &UsageBreakdown{Key: key, Label: label, Group: group, Windows: windows}
+	p.Breakdowns = append(p.Breakdowns, bd)
+	return bd
 }
 
 // IsExpired checks if quota data is expired

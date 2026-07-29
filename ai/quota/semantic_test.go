@@ -219,3 +219,50 @@ func TestNormalizeWindowsIsStableForEqualPeriods(t *testing.T) {
 			usage.Windows[0].Key, usage.Windows[1].Key)
 	}
 }
+
+func TestBalanceDefaultsToResource(t *testing.T) {
+	// A fetcher that states the type but forgets the kind would otherwise
+	// produce a balance claiming it refills.
+	usage := &ProviderUsage{}
+	reset := time.Date(2026, 8, 2, 3, 0, 0, 0, time.UTC)
+	w := usage.AddWindow("credits", 0, &UsageWindow{
+		Type: WindowTypeBalance, Used: 30, Limit: 100, ResetsAt: &reset,
+	})
+
+	if w.EffectiveKind() != WindowKindResource {
+		t.Errorf("EffectiveKind() = %q; want resource", w.EffectiveKind())
+	}
+	if usage.RecoversAt() != nil {
+		t.Error("a balance must not report a recovery time")
+	}
+}
+
+func TestUncountableWindowsNeverCarryAPercentage(t *testing.T) {
+	// Backfilling used_percent onto an unknown window would hand a plausible
+	// figure to any reader that skips the flag.
+	usage := &ProviderUsage{}
+	w := usage.AddWindow("spend", 0, &UsageWindow{
+		Unknown: true, Used: 12.5, Limit: 100,
+	})
+
+	if w.UsedPercent != 0 {
+		t.Errorf("UsedPercent = %v; want 0 for an unknown window", w.UsedPercent)
+	}
+}
+
+func TestOrderingAndTieBreakAgreeOnUnsizedWindows(t *testing.T) {
+	// An unsized window is least urgent for Tightest(), so it must not be the
+	// most prominent for display.
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		{Key: "unsized", UsedPercent: 50, Limit: 100},
+		{Key: "weekly", UsedPercent: 50, Limit: 100, WindowMinutes: 10080},
+	}}
+
+	if got := usage.Tightest().Key; got != "weekly" {
+		t.Errorf("Tightest() = %q; want weekly", got)
+	}
+	usage.NormalizeWindows()
+	if got := usage.Windows[0].Key; got != "weekly" {
+		t.Errorf("first window = %q; want weekly — display must match the tie-break", got)
+	}
+}

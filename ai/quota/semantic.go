@@ -89,12 +89,5 @@ func tighter(a, b *UsageWindow) bool {
 	// Equally used: prefer the shorter window. A window with no known duration
 	// sorts last — it cannot be the more urgent one if we cannot say when it
 	// resets.
-	switch {
-	case a.WindowMinutes <= 0:
-		return false
-	case b.WindowMinutes <= 0:
-		return true
-	default:
-		return a.WindowMinutes < b.WindowMinutes
-	}
+	return periodRank(a) < periodRank(b)
 }

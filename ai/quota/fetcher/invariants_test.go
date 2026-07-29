@@ -55,6 +55,13 @@ func checkWindow(t *testing.T, where string, w *quota.UsageWindow) {
 		t.Errorf("%s: resource has ResetsAt set; a balance does not refill on its own", where)
 	}
 
+	// The direction that catches an omission: a balance left as an allowance
+	// would claim it refills, and RecoversAt would promise a recovery that
+	// never arrives.
+	if w.Type == quota.WindowTypeBalance && w.EffectiveKind() != quota.WindowKindResource {
+		t.Errorf("%s: balance is not marked as a resource", where)
+	}
+
 	// Unknown and unlimited both mean "this is not a usage figure", so neither
 	// may also carry one — otherwise readers that ignore the flags see a
 	// plausible number and trust it.

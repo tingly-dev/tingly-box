@@ -81,7 +81,6 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 	}
 
 	var dailyLimit, dailyUsed, weeklyLimit, weeklyUsed int
-	usage.Breakdowns = make([]*quota.UsageBreakdown, 0, len(apiResp.ModelRemains))
 	for _, model := range apiResp.ModelRemains {
 		modelDailyUsed := model.CurrentIntervalTotalCount - model.CurrentIntervalUsageCount
 		modelWeeklyUsed := model.CurrentWeeklyTotalCount - model.CurrentWeeklyUsageCount
@@ -113,7 +112,7 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 			}
 			windows = append(windows, weekly)
 		}
-		usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{Key: model.ModelName, Label: model.ModelName, Group: "resource", Windows: windows})
+		usage.AddBreakdown(model.ModelName, model.ModelName, "resource", windows...)
 	}
 
 	first := apiResp.ModelRemains[0]

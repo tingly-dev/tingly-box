@@ -177,12 +177,7 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 		// belongs beside the per-model detail rather than in the account-level
 		// windows that answer "does this provider have quota left".
 		if class.feature != "" {
-			usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
-				Key:     class.feature,
-				Label:   class.label,
-				Group:   "feature",
-				Windows: []*quota.UsageWindow{window},
-			})
+			usage.AddBreakdown(class.feature, class.label, "feature", window)
 			continue
 		}
 
@@ -192,7 +187,7 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 		}
 		usage.AddWindow(zaiLimitKey(lim), tier, window)
 
-		addZaiUsageDetails(usage, lim, class, total, hasAbsoluteValues)
+		addZaiUsageDetails(usage, lim, window, hasAbsoluteValues)
 	}
 
 	return usage, nil
@@ -240,11 +235,30 @@ func classifyZaiLimit(lim zaiQuotaLimit) zaiLimitClass {
 		case 5:
 			tier = 3
 		}
-		return zaiLimitClass{scopedWindowType, scopedLabel("Tokens"), quota.UsageUnitTokens, tier, minutes, ""}
+		return zaiLimitClass{
+			windowType:    scopedWindowType,
+			label:         scopedLabel("Tokens"),
+			unit:          quota.UsageUnitTokens,
+			tier:          tier,
+			windowMinutes: minutes,
+		}
 	case "TIME_LIMIT":
-		return zaiLimitClass{scopedWindowType, scopedLabel("MCP"), quota.UsageUnitRequests, 2, minutes, "mcp"}
+		return zaiLimitClass{
+			windowType:    scopedWindowType,
+			label:         scopedLabel("MCP"),
+			unit:          quota.UsageUnitRequests,
+			tier:          2,
+			windowMinutes: minutes,
+			feature:       "mcp",
+		}
 	default:
-		return zaiLimitClass{quota.WindowTypeCustom, lim.Type, quota.UsageUnitRequests, -1, minutes, ""}
+		return zaiLimitClass{
+			windowType:    quota.WindowTypeCustom,
+			label:         lim.Type,
+			unit:          quota.UsageUnitRequests,
+			tier:          -1,
+			windowMinutes: minutes,
+		}
 	}
 }
 
@@ -276,56 +290,48 @@ func zaiLimitKey(lim zaiQuotaLimit) string {
 	return lim.Type
 }
 
-func addZaiUsageDetails(usage *quota.ProviderUsage, lim zaiQuotaLimit, class zaiLimitClass, total float64, hasAbsoluteValues bool) {
+func addZaiUsageDetails(usage *quota.ProviderUsage, lim zaiQuotaLimit, parent *quota.UsageWindow, hasAbsoluteValues bool) {
 	if len(lim.UsageDetails) == 0 {
 		return
 	}
 
 	for _, detail := range lim.UsageDetails {
-		modelWindow := &quota.UsageWindow{
-			Type:          class.windowType,
-			Used:          detail.Usage,
-			Limit:         total,
-			Unit:          class.unit,
-			WindowMinutes: class.windowMinutes,
-			Label:         class.label,
-			Description:   fmt.Sprintf("%.0f / %.0f", detail.Usage, total),
-		}
+		// A model's entry is the parent allowance with this model's amount on
+		// it, so start from the parent rather than deriving the shared fields
+		// a second time.
+		modelWindow := *parent
+		modelWindow.Used = detail.Usage
 
 		// How much of the allowance this model ate. Its share of what has been
 		// consumed so far is a different quantity and must not land here: a
 		// model responsible for 85% of a barely-touched allowance would read
 		// as nearly exhausted.
 		if hasAbsoluteValues {
-			modelWindow.UsedPercent = calcPercent(detail.Usage, total)
+			modelWindow.UsedPercent = calcPercent(detail.Usage, parent.Limit)
+			modelWindow.Description = fmt.Sprintf("%.0f / %.0f", detail.Usage, parent.Limit)
 			if lim.CurrentValue > 0 {
 				modelWindow.Description = fmt.Sprintf("%.0f / %.0f · %.0f%% of usage",
-					detail.Usage, total, (detail.Usage/lim.CurrentValue)*100)
+					detail.Usage, parent.Limit, (detail.Usage/lim.CurrentValue)*100)
 			}
 		} else {
 			// The parent limit only reported a percentage, so there is nothing
 			// to measure this model's usage against.
 			modelWindow.Unknown = true
+			modelWindow.UsedPercent = 0
 			modelWindow.Limit = 0
 			modelWindow.Description = fmt.Sprintf("%.0f used", detail.Usage)
 		}
-		applyResetTime(modelWindow, lim.NextResetTime)
 
 		found := false
 		for _, bd := range usage.Breakdowns {
 			if bd.Key == detail.ModelCode {
-				bd.Windows = append(bd.Windows, modelWindow)
+				bd.Windows = append(bd.Windows, &modelWindow)
 				found = true
 				break
 			}
 		}
 		if !found {
-			usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
-				Key:     detail.ModelCode,
-				Label:   detail.ModelCode,
-				Group:   "resource",
-				Windows: []*quota.UsageWindow{modelWindow},
-			})
+			usage.AddBreakdown(detail.ModelCode, detail.ModelCode, "resource", &modelWindow)
 		}
 	}
 }

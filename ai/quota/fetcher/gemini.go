@@ -91,7 +91,6 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	}
 
 	// Create breakdowns for each model, tracking the most-used one.
-	breakdowns := make([]*quota.UsageBreakdown, 0, len(quotaResp.Buckets))
 	var tightest *quota.UsageWindow
 	var tightestModel string
 
@@ -119,30 +118,17 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 			tightestModel = bucket.ModelID
 		}
 
-		breakdowns = append(breakdowns, &quota.UsageBreakdown{
-			Key:     bucket.ModelID,
-			Label:   bucket.ModelID,
-			Group:   "resource",
-			Windows: []*quota.UsageWindow{window},
-		})
+		usage.AddBreakdown(bucket.ModelID, bucket.ModelID, "resource", window)
 	}
-
-	usage.Breakdowns = breakdowns
 
 	// The account-level figure is the most-used bucket, not the mean of them.
 	// Averaging an exhausted model against an untouched one reads as half
 	// full, and routing to that provider then fails on the exhausted model.
-	usage.AddWindow("tightest", 0, &quota.UsageWindow{
-		Type:          quota.WindowTypeDaily,
-		Used:          tightest.Used,
-		Limit:         tightest.Limit,
-		UsedPercent:   tightest.UsedPercent,
-		Unit:          quota.UsageUnitPercent,
-		WindowMinutes: tightest.WindowMinutes,
-		ResetsAt:      tightest.ResetsAt,
-		Label:         tightestModel,
-		Description:   fmt.Sprintf("%.0f%% used — most-used of %d models", tightest.UsedPercent, len(quotaResp.Buckets)),
-	})
+	account := *tightest
+	account.Label = tightestModel
+	account.Description = fmt.Sprintf("%.0f%% used — most-used of %d models",
+		tightest.UsedPercent, len(quotaResp.Buckets))
+	usage.AddWindow("tightest", 0, &account)
 
 	return usage, nil
 }

@@ -1,6 +1,7 @@
 package fetcher
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -102,7 +103,7 @@ type codexUsageResponse struct {
 	AccountID      string      `json:"account_id"`
 }
 
-type codexWindow struct {
+type codexRateLimitWindow struct {
 	UsedPercent        int   `json:"used_percent"`
 	ResetAt            int64 `json:"reset_at"`             // unix epoch
 	LimitWindowSeconds int   `json:"limit_window_seconds"` // window duration in seconds
@@ -110,16 +111,34 @@ type codexWindow struct {
 }
 
 type codexRateLimit struct {
-	Allowed         bool         `json:"allowed"`
-	LimitReached    bool         `json:"limit_reached"`
-	PrimaryWindow   *codexWindow `json:"primary_window"`
-	SecondaryWindow *codexWindow `json:"secondary_window"`
+	Allowed         bool                  `json:"allowed"`
+	LimitReached    bool                  `json:"limit_reached"`
+	PrimaryWindow   *codexRateLimitWindow `json:"primary_window"`
+	SecondaryWindow *codexRateLimitWindow `json:"secondary_window"`
 }
 
 type codexAdditionalRateLimit struct {
 	LimitName      string         `json:"limit_name"`
 	MeteredFeature string         `json:"metered_feature"`
 	RateLimit      codexRateLimit `json:"rate_limit"`
+}
+
+// codexWindow builds a usage window from an upstream rate-limit window. All
+// four call sites derive Used/Limit/UsedPercent/ResetsAt/WindowMinutes the same
+// way; only the type, label and wording differ.
+func codexWindow(w *codexRateLimitWindow, typ quota.WindowType, label, description string) *quota.UsageWindow {
+	resetsAt := time.Unix(w.ResetAt, 0)
+	return &quota.UsageWindow{
+		Type:          typ,
+		Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
+		Limit:         100,                    // Normalize to 0-100 scale
+		UsedPercent:   float64(w.UsedPercent),
+		Unit:          quota.UsageUnitPercent,
+		ResetsAt:      &resetsAt,
+		WindowMinutes: w.LimitWindowSeconds / 60,
+		Label:         label,
+		Description:   description,
+	}
 }
 
 // ── Reset credits detail endpoint ─────────────────────────
@@ -207,32 +226,12 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 
 	if apiResp.RateLimit != nil {
 		if w := apiResp.RateLimit.PrimaryWindow; w != nil {
-			resetsAt := time.Unix(w.ResetAt, 0)
-			usage.AddWindow("current", 0, &quota.UsageWindow{
-				Type:          quota.WindowTypeSession,
-				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
-				Limit:         100,                    // Normalize to 0-100 scale
-				UsedPercent:   float64(w.UsedPercent),
-				Unit:          quota.UsageUnitPercent,
-				ResetsAt:      &resetsAt,
-				WindowMinutes: w.LimitWindowSeconds / 60,
-				Label:         "Current Window",
-				Description:   fmt.Sprintf("%dh window, %.0f%% used", w.LimitWindowSeconds/3600, float64(w.UsedPercent)),
-			})
+			usage.AddWindow("current", 0, codexWindow(w, quota.WindowTypeSession, "Current Window",
+				fmt.Sprintf("%dh window, %.0f%% used", w.LimitWindowSeconds/3600, float64(w.UsedPercent))))
 		}
 		if w := apiResp.RateLimit.SecondaryWindow; w != nil {
-			resetsAt := time.Unix(w.ResetAt, 0)
-			usage.AddWindow("weekly", 1, &quota.UsageWindow{
-				Type:          quota.WindowTypeWeekly,
-				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
-				Limit:         100,                    // Normalize to 0-100 scale
-				UsedPercent:   float64(w.UsedPercent),
-				Unit:          quota.UsageUnitPercent,
-				ResetsAt:      &resetsAt,
-				WindowMinutes: w.LimitWindowSeconds / 60,
-				Label:         "Weekly",
-				Description:   fmt.Sprintf("%dd window, %.0f%% used", w.LimitWindowSeconds/86400, float64(w.UsedPercent)),
-			})
+			usage.AddWindow("weekly", 1, codexWindow(w, quota.WindowTypeWeekly, "Weekly",
+				fmt.Sprintf("%dd window, %.0f%% used", w.LimitWindowSeconds/86400, float64(w.UsedPercent))))
 		}
 	}
 
@@ -245,57 +244,23 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 			continue
 		}
 		w := arl.RateLimit.PrimaryWindow
-		resetsAt := time.Unix(w.ResetAt, 0)
-		label := arl.LimitName
-		if label == "" {
-			label = arl.MeteredFeature
-		}
-		key := arl.MeteredFeature
-		if key == "" {
-			key = label
-		}
-		usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
-			Key:   key,
-			Label: label,
-			Group: "model",
-			Windows: []*quota.UsageWindow{{
-				Type:          quota.WindowTypeModel,
-				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
-				Limit:         100,                    // Normalize to 0-100 scale
-				UsedPercent:   float64(w.UsedPercent),
-				Unit:          quota.UsageUnitPercent,
-				ResetsAt:      &resetsAt,
-				WindowMinutes: w.LimitWindowSeconds / 60,
-				Label:         label,
-				Description:   fmt.Sprintf("%s: %.0f%% used", label, float64(w.UsedPercent)),
-				Allowed:       &arl.RateLimit.Allowed,
-				LimitReached:  &arl.RateLimit.LimitReached,
-			}},
-		})
+		label := cmp.Or(arl.LimitName, arl.MeteredFeature)
+		key := cmp.Or(arl.MeteredFeature, label)
+		window := codexWindow(w, quota.WindowTypeModel, label,
+			fmt.Sprintf("%s: %.0f%% used", label, float64(w.UsedPercent)))
+		window.Allowed = &arl.RateLimit.Allowed
+		window.LimitReached = &arl.RateLimit.LimitReached
+		usage.AddBreakdown(key, label, "model", window)
 	}
 
 	// Handle code_review_rate_limit if present
 	if apiResp.CodeReviewRateLimit != nil && apiResp.CodeReviewRateLimit.PrimaryWindow != nil {
 		w := apiResp.CodeReviewRateLimit.PrimaryWindow
-		resetsAt := time.Unix(w.ResetAt, 0)
-		usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
-			Key:   "code_review",
-			Label: "Code Review",
-			Group: "feature",
-			Windows: []*quota.UsageWindow{{
-				Type:          quota.WindowTypeCodeReview,
-				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
-				Limit:         100,                    // Normalize to 0-100 scale
-				UsedPercent:   float64(w.UsedPercent),
-				Unit:          quota.UsageUnitPercent,
-				ResetsAt:      &resetsAt,
-				WindowMinutes: w.LimitWindowSeconds / 60,
-				Label:         "Code Review",
-				Description:   fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)),
-				Allowed:       &apiResp.CodeReviewRateLimit.Allowed,
-				LimitReached:  &apiResp.CodeReviewRateLimit.LimitReached,
-			}},
-		})
+		window := codexWindow(w, quota.WindowTypeCodeReview, "Code Review",
+			fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)))
+		window.Allowed = &apiResp.CodeReviewRateLimit.Allowed
+		window.LimitReached = &apiResp.CodeReviewRateLimit.LimitReached
+		usage.AddBreakdown("code_review", "Code Review", "feature", window)
 	}
 
 	// Handle reset credits — show each credit as a resource in breakdowns
@@ -321,19 +286,13 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 				// time — its expiry is when it is lost, the opposite of when
 				// it comes back, and would be read as a recovery that never
 				// arrives. It stays in the description.
-				usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
-					Key:   c.ID,
-					Label: "Reset Credit",
-					Group: "resource",
-					Windows: []*quota.UsageWindow{{
-						Type:        quota.WindowTypeBalance,
-						Kind:        quota.WindowKindResource,
-						Used:        usedVal,
-						Limit:       1,
-						Unit:        quota.UsageUnitCredits,
-						Label:       c.Status,
-						Description: fmt.Sprintf("Granted %s · Expire %s", grantedAt.Format("2006-01-02"), expiresAt.Format("2006-01-02")),
-					}},
+				usage.AddBreakdown(c.ID, "Reset Credit", "resource", &quota.UsageWindow{
+					Type:        quota.WindowTypeBalance,
+					Used:        usedVal,
+					Limit:       1,
+					Unit:        quota.UsageUnitCredits,
+					Label:       c.Status,
+					Description: fmt.Sprintf("Granted %s · Expire %s", grantedAt.Format("2006-01-02"), expiresAt.Format("2006-01-02")),
 				})
 			}
 		}
