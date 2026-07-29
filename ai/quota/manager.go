@@ -13,6 +13,9 @@ import (
 
 const maxConcurrentRefreshes = 5
 
+// warningUsedPercent is where a provider counts as close to running out.
+const warningUsedPercent = 80
+
 // Manager coordinates quota fetching, storage, and refreshes.
 type Manager struct {
 	config      *Config
@@ -188,13 +191,12 @@ func (m *Manager) Summary(ctx context.Context) (*Summary, error) {
 		// Count providers by type.
 		summary.ByType[usage.ProviderType]++
 
-		// Count providers with a warning-level window.
-		usage.NormalizeWindows()
-		for _, window := range usage.Windows {
-			if window != nil && window.UsedPercent >= 80 {
-				summary.WarningProviders++
-				break
-			}
+		// Count providers close to running out. Pct is the tightest window, so
+		// this catches the one that will run out first rather than whichever
+		// window happens to come first, and skips providers whose usage is
+		// unknown instead of reading them as unused.
+		if pct, ok := usage.Pct(); ok && pct >= warningUsedPercent {
+			summary.WarningProviders++
 		}
 	}
 

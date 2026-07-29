@@ -338,21 +338,16 @@ func (h *Handler) populateQuotaData(resp *CombinedStatusData, providerUUID strin
 	}
 }
 
-// selectBestQuotaWindow selects the most relevant quota window.
-// Lower tier means more important, so the first meaningful window wins.
+// selectBestQuotaWindow selects the most relevant quota window: the one
+// closest to running out, since that is what the next request will hit.
+//
+// This used to take the first window by tier, but tier is a display order
+// each fetcher fills in by its own rules — Codex derives it from how many
+// windows happen to precede it — so tier 0 is a 5-hour session for one
+// provider and a credit balance for another. It also picked whichever window
+// came first even when a later one was nearly spent.
 func (h *Handler) selectBestQuotaWindow(usage *quota.ProviderUsage) *quota.UsageWindow {
-	if usage == nil {
-		return nil
-	}
-
-	usage.NormalizeWindows()
-	for _, w := range usage.Windows {
-		if w != nil && (w.Limit > 0 || w.UsedPercent > 0) {
-			return w
-		}
-	}
-
-	return nil
+	return usage.Tightest()
 }
 
 // buildQuotaInline builds quota (used/limit) information for inline display in statusline
@@ -371,11 +366,12 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 		return ""
 	}
 
-	// Collect all windows with meaningful data
+	// Collect all windows with meaningful data. Unknown and uncapped windows
+	// carry no usable used/limit pair, so they have nothing to render here.
 	usage.NormalizeWindows()
 	windows := make([]*quota.UsageWindow, 0, len(usage.Windows))
 	for _, window := range usage.Windows {
-		if window != nil && window.Limit > 0 {
+		if window.Countable() && window.Limit > 0 {
 			windows = append(windows, window)
 		}
 	}
