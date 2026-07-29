@@ -43,12 +43,11 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 
 ---
 
-## 3. 聚合：两条规则
+## 3. 聚合：取最紧
 
-> **窗口之间取最紧（max）；成员之间取最松（min）。**
+> **一个 provider 有多个窗口时，代表值取最紧的那个（max）。**
 
-一个 provider 有多个窗口时，卡住你的是**最紧**的那个。
-一个池子有多个 provider 时，救你的是**最松**的那个。
+卡住你的永远是最紧的那个窗口，所以它就是这个 provider 的用量。
 
 ### 为什么代表值不能固定取 5h
 
@@ -68,22 +67,6 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 今天 `AddWindow(key, tier, ...)` 的 tier 是各 fetcher 手填的，Codex 甚至用 `len(usage.Windows)`
 （`fetcher/codex.go:248`，同一个窗口的 tier 取决于前面碰巧有几个窗口），跨 provider 根本不可比。
 **排序改用窗口时长，tier 这个概念可以整个去掉。**
-
-### 池子取最松
-
-```
-一条 rule 挂 4 个 provider：
-
-    Anthropic    5h 62% / 7d 88%       →  Pct 88
-    MiniMax      daily 340/500          →  Pct 68
-    OpenRouter   $8.10 / $20 余额       →  Pct 40
-    Copilot      无配额 API             →  Pct 不可知
-
-池子的余量 = min = 40%（OpenRouter）
-"used_le 80" 匹配到的成员 = [MiniMax, OpenRouter]
-```
-
-**不能用平均**：Anthropic 88% 不妨碍 MiniMax 干活，平均成 65% 是在描述一个不存在的东西。
 
 ---
 
@@ -186,9 +169,10 @@ Zai / Gemini 都没填）——它现在是排序键，不能空着。
 func (p *ProviderUsage) Pct() (float64, bool)     // 所有已知条目取 max；bool=false 表示整个 provider 不可知
 func (p *ProviderUsage) Tightest() *UsageWindow   // Pct 最大的那条，用来说明「卡在哪」
 func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → ResetsAt；是资源 → nil
-
-func Loosest(usages []*ProviderUsage) *ProviderUsage  // 池子取 min
 ```
+
+**能比大小就够了。**跨 provider 的聚合（池子怎么算）等到真有消费方时再定，
+现在定了也是猜——见 §8。
 
 `Tightest()` 的价值：UI 和 trace 能直接说**"卡在 7 天窗口，周日 03:00 恢复"**，
 而不是今天那一排看不出重点的进度条。
@@ -214,134 +198,47 @@ func Loosest(usages []*ProviderUsage) *ProviderUsage  // 池子取 min
 
 ---
 
-## 8. quota 怎么参与路由
+## 8. quota 怎么参与路由（范围外，只记决定）
 
-> 这一节只定方向，**不在本次改动范围内**。写下来是为了确认 §2–§7 的数据模型够用、
-> 不会在真做的时候发现要返工。
-
-### 8.1 结论：quota 是 health 的前瞻版，不是新的选择维度
-
-系统里已经有一个"把候选摘掉"的机制，而且语义完全对得上：
-
-```
-今天（反应式）：
-    请求打过去 → 吃一个 429 → HealthMonitor.ReportRateLimit
-                            → 标 unhealthy
-                            → RateLimitedUntil = now + RecoveryTimeout   ← 猜的固定超时
-                            → HealthStage 把它从候选里摘掉
-
-有 quota（前瞻式）：
-    7d 窗口 100%            → 标 unhealthy
-                            → RateLimitedUntil = ResetsAt                ← 上游给的真值
-                            → 同一个 HealthStage 摘掉
-```
-
-一次拿到两个改进：**不用先吃 429**，且**恢复时间从"猜一个固定超时"变成"上游告诉你的重置时刻"**
-（`loadbalance/health_monitor.go:222` 现在是 `now.Add(health.RecoveryTimeout)`）。
-
-出口、降级规则、日志、trace 全部复用 `HealthStage`——**零新概念**。
-尤其是它已经写好的那条降级规则正是我们要的：
-
-```go
-// stage_health.go:44  「全都不健康就不过滤」
-if before > 0 && len(healthy) == 0 { ... keep the full set ... }
-```
-
-所以：**quota 只做减法，不做排序。**摘掉事实上不能用的，剩下的交给现有 tactic
+**结论：quota 只做减法，不做排序。**摘掉事实上不能用的候选，剩下的交给现有 tactic
 （轮询 / tier / affinity）——它们已经表达了用户的意图，quota 不该越权。
 
-### 8.2 为什么不是"选余量最高的"
-
-你的直觉是对的，理由比直觉更硬。假设三个 Anthropic 账号挂同一条 rule：
-
-**贪心选余量最高的（least-used）：**
+**为什么不是"选余量最高的"。**三个 Anthropic 账号挂同一条 rule，贪心选最空的那个：
 
 ```
 配额刷新间隔 15 min，两次刷新之间数字不动。
 
 t=0     A 0%   B 0%   C 0%    → 选 A → 之后 15 分钟所有请求都打 A
 t=15    A 25%  B 0%   C 0%    → 选 B → 之后 15 分钟所有请求都打 B
-t=30    A 25%  B 25%  C 0%    → 选 C
  ...
 t=3h    A 95%  B 95%  C 95%   → 三个同时见底，一个能兜底的都没有
 ```
 
-三个问题：
+- **拉平 = 一起见底**：花三份钱买的"轮流用"的冗余，正好被拉平消灭掉。
+- **它不是负载均衡**：刷新间隔内余量是常数，"选最高的"是 15 分钟粒度的轮流冲刷。
+- **prompt cache 全废**：cache 按账号维度，来回换账号吃不到 cache read 折扣。
 
-1. **拉平 = 一起见底**。你花三份钱买的是"轮流用"的冗余，拉平正好把冗余消灭掉。
-2. **它不是负载均衡，是 15 分钟粒度的轮流冲刷**。刷新间隔内余量数字是常数，
-   "选最高的"会把窗口内的全部流量打给同一个账号。
-3. **prompt cache 全废**。cache 是按账号维度的，15 分钟换一次账号，长会话基本吃不到
-   cache read 的折扣，而且 TTFT 变差。抖动更糟：A 90.1% vs B 90.0% 会让请求来回横跳。
+而且"拉平"和"顺序耗尽"本来就是两种买法，**项目里已经各有一个 tactic**：
+总量不够用 → `loadbalance` 加权轮询；怕被卡住 → `Service.Tier` + failover。
+quota 不该发明第三种。
 
-**顺序耗尽 + 自动兜底：**
+**真做的时候挂在哪。**`internal/server/routing/stage_health.go` 已经是一个"摘除候选"的
+stage，跑在 smart routing / affinity / LB 之前，且已经写好了需要的降级规则
+（`stage_health.go:44`：全都不健康就不过滤）。而 `loadbalance/health_monitor.go:222` 的
+`RateLimitedUntil = now.Add(RecoveryTimeout)` 是个**猜的固定超时**。于是：
 
 ```
-t=3h    A 100%（摘除，周日 03:00 恢复）   B 0%   C 0%
-        → 切到 B，手里还有两个满的储备
+今天（反应式）：吃一个 429 → 标 unhealthy → RateLimitedUntil = now + 固定超时   ← 猜的
+有 quota（前瞻）：窗口 100%  → 标 unhealthy → RateLimitedUntil = RecoversAt()   ← 上游真值
 ```
 
-**但这不代表"顺序"永远对。** 三个账号有两种买法：
+**quota 不是新的选择维度，是 health 的前瞻版**——不用先吃 429，恢复时间从猜变成准，
+出口 / 降级 / 日志全部复用，零新概念。
 
-| 目的 | 想要的行为 | 已有的表达方式 |
-|---|---|---|
-| 总量不够用 | 拉平，把所有额度都用上 | `loadbalance` 加权轮询 |
-| 怕被卡住 | 顺序耗尽，保住冗余 | `Service.Tier` + failover |
+保守方向写死：`Unknown` 或数据过期 → **不摘**（误摘健康账号的代价远大于不摘耗尽账号）。
 
-**这两个目的项目里已经各有一个 tactic 了，quota 不该发明第三种。**
-所以 quota 的角色只能是过滤，不能是选择——这也是 8.1 那个结论的另一半理由。
-
-至于"余量高的优先"，只在候选之间**本来就没有偏好**（等权重轮询）时才谈得上收益，
-而抖动和缓存的代价是实的。→ **默认不做**，将来真要做也只能是等权重时的 tie-break。
-
-### 8.3 摘除的规则
-
-**摘（事实，不是策略）**：`Pct() >= 100`，或上游直接说了 `limit_reached`（Codex 有）。
-
-**不摘（保守方向永远是"不干预"）**：
-
-- `Unknown` / 数据过期 → 不摘。误摘一个健康账号，比不摘一个耗尽账号代价大得多。
-- 全部候选都该摘 → 不摘，走 `HealthStage` 已有的降级分支，让用户吃真实的上游 429
-  而不是一个 "no service available" 路由错误。
-
-**按作用域摘**：Codex 某个模型的窗口耗尽，只摘 `Service{provider, model}` 那一条，
-不摘整个 provider——这正是 §5 把 model 级窗口放进 `Breakdowns` 的用处，
-filter 时按 `Service.Model` 去 `Breakdowns` 里查。
-
-**要能解释**：`HealthStage` 已经逐条打日志，quota 摘除沿用，理由写成
-`7d 窗口 100%,周日 03:00 恢复` 而不是 `rate_limited_or_auth_error`。
-用户看到请求走了 B，必须能一眼知道 A 为什么没被选。
-
-### 8.4 给 smart op 预留了什么（不现在做）
-
-filter 处理"**不能用**"，smart op 处理"**不想用**"——两者不重叠：
-
-```yaml
-# 这个只能由用户显式表达，filter 管不着：
-# 本周用超 85% 就省着点，切到便宜的池子（还没耗尽，只是不想用）
-- ops: [{position: quota, operation: used_ge, value: "85"}]
-  services: [{provider: openrouter, model: ...}]
-```
-
-真要做的时候，需要的东西 §2–§7 已经全部备齐，**不需要额外的数据设计**：
-
-| smart op 需要 | 来自 |
-|---|---|
-| 单 provider 的用量 | `Pct()` |
-| 池的聚合口径 | `Loosest()`（取最松，§3） |
-| 不可知怎么办 | 不参与聚合 = 不匹配 = 落到下一条 rule。不需要全局开关 |
-| 求值位置 | 和已有的 `service_ttft` / `service_capacity` 同构 |
-| op 集合 | `used_ge` / `used_le`，两个够了 |
-
-也就是说 smart op 是**零额外设计成本**的增量，等真有人要再加。
-
-### 8.5 其他消费方
-
-- `statusline/handler.go:343` 的 `selectBestQuotaWindow` 拿 tier 最小的当"最重要窗口"——
-  换成 `Tightest()`，顺带修掉 §3 提到的 tier 不可比。
-- `manager.go:194` 的硬编码 `UsedPercent >= 80` 换成 `Pct()`。
-- 前端展示分两区：**额度**（进度条，按窗口时长排序）+ **资源**（"3 张重置券 · $12.40"），
-  重置券不该和额度画成一样的进度条。
+**smart op 不做**。它管的是"不想用"（本周超 85% 就省着点切便宜池子），
+和摘除管的"不能用"不重叠。等真有人要再加；需要的数据 §6 已经够，不用回头改。
 
 ---
 
@@ -363,12 +260,8 @@ filter 处理"**不能用**"，smart op 处理"**不想用**"——两者不重�
   Copilot            无配额 API                      不可知  —
   ─────────────────────────────────────────────────────────────────────
 
-  池子（取最松）= OpenRouter 60%
-
-  规则 "used_le 70"  →  匹配 [MiniMax 68%, OpenRouter 60%]
-  规则 "used_ge 85"  →  只有 Anthropic 96%，但池子取最松是 60% → 不匹配（正确：池子还很健康）
-
   statusline 显示：Anthropic 96% · 卡在 7d 窗口 · 周日 03:00 恢复
+  四个 provider 的用量第一次可以放在一起比大小，且每个数字都是同一个意思。
 ```
 
 对照今天的行为：Anthropic 会因为 tier=0 报出 5h 的 **12%**（"还早呢"），
@@ -388,9 +281,9 @@ Gemini 类的 provider 会报平均值，Copilot 会静默消失，OpenRouter �
 
 往后是路由接入，**不在本次范围**，按 §8 的方向单独评估：
 
-4. **quota → health 前瞻摘除**（§8.1–8.3）。改动集中在给 `HealthMonitor` 加一个
+4. **quota → health 前瞻摘除**。改动集中在给 `HealthMonitor` 加一个
    "按 quota 预标记 + 用 `RecoversAt()` 覆盖 `RateLimitedUntil`" 的入口，`HealthStage` 不动。
-5. **smart op `quota` position**（§8.4）。等有人真的要"省着点用"时再加。
+5. **smart op `quota` position**。等有人真的要"省着点用"时再加。
 
 不变量单测（跨所有 provider 统一跑，新增 provider 自动被兜住）：
 
