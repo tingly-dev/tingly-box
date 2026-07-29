@@ -236,16 +236,29 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		}
 	}
 
-	// Handle additional_rate_limits (model-specific quotas like GPT-5.3-Codex-Spark)
+	// Model- and feature-scoped limits gate only the thing they name, so they
+	// go beside the per-model detail. Among the account windows they would
+	// answer for the provider as a whole: a spent Codex-Spark or code review
+	// allowance would make the whole account look exhausted.
 	for _, arl := range apiResp.AdditionalRateLimits {
-		if arl.RateLimit.PrimaryWindow != nil {
-			w := arl.RateLimit.PrimaryWindow
-			resetsAt := time.Unix(w.ResetAt, 0)
-			label := arl.LimitName
-			if label == "" {
-				label = arl.MeteredFeature
-			}
-			usage.AddWindow(fmt.Sprintf("model_%d", len(usage.Windows)), len(usage.Windows), &quota.UsageWindow{
+		if arl.RateLimit.PrimaryWindow == nil {
+			continue
+		}
+		w := arl.RateLimit.PrimaryWindow
+		resetsAt := time.Unix(w.ResetAt, 0)
+		label := arl.LimitName
+		if label == "" {
+			label = arl.MeteredFeature
+		}
+		key := arl.MeteredFeature
+		if key == "" {
+			key = label
+		}
+		usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
+			Key:   key,
+			Label: label,
+			Group: "model",
+			Windows: []*quota.UsageWindow{{
 				Type:          quota.WindowTypeModel,
 				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
 				Limit:         100,                    // Normalize to 0-100 scale
@@ -257,26 +270,31 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 				Description:   fmt.Sprintf("%s: %.0f%% used", label, float64(w.UsedPercent)),
 				Allowed:       &arl.RateLimit.Allowed,
 				LimitReached:  &arl.RateLimit.LimitReached,
-			})
-		}
+			}},
+		})
 	}
 
 	// Handle code_review_rate_limit if present
 	if apiResp.CodeReviewRateLimit != nil && apiResp.CodeReviewRateLimit.PrimaryWindow != nil {
 		w := apiResp.CodeReviewRateLimit.PrimaryWindow
 		resetsAt := time.Unix(w.ResetAt, 0)
-		usage.AddWindow("code_review", len(usage.Windows), &quota.UsageWindow{
-			Type:          quota.WindowTypeCodeReview,
-			Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
-			Limit:         100,                    // Normalize to 0-100 scale
-			UsedPercent:   float64(w.UsedPercent),
-			Unit:          quota.UsageUnitPercent,
-			ResetsAt:      &resetsAt,
-			WindowMinutes: w.LimitWindowSeconds / 60,
-			Label:         "Code Review",
-			Description:   fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)),
-			Allowed:       &apiResp.CodeReviewRateLimit.Allowed,
-			LimitReached:  &apiResp.CodeReviewRateLimit.LimitReached,
+		usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
+			Key:   "code_review",
+			Label: "Code Review",
+			Group: "feature",
+			Windows: []*quota.UsageWindow{{
+				Type:          quota.WindowTypeCodeReview,
+				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
+				Limit:         100,                    // Normalize to 0-100 scale
+				UsedPercent:   float64(w.UsedPercent),
+				Unit:          quota.UsageUnitPercent,
+				ResetsAt:      &resetsAt,
+				WindowMinutes: w.LimitWindowSeconds / 60,
+				Label:         "Code Review",
+				Description:   fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)),
+				Allowed:       &apiResp.CodeReviewRateLimit.Allowed,
+				LimitReached:  &apiResp.CodeReviewRateLimit.LimitReached,
+			}},
 		})
 	}
 
@@ -299,16 +317,20 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 					logrus.Error(err)
 				}
 
+				// A voucher is spent, not refilled, so it carries no reset
+				// time — its expiry is when it is lost, the opposite of when
+				// it comes back, and would be read as a recovery that never
+				// arrives. It stays in the description.
 				usage.Breakdowns = append(usage.Breakdowns, &quota.UsageBreakdown{
 					Key:   c.ID,
-					Label: fmt.Sprintf("Reset Credit"),
+					Label: "Reset Credit",
 					Group: "resource",
 					Windows: []*quota.UsageWindow{{
 						Type:        quota.WindowTypeBalance,
+						Kind:        quota.WindowKindResource,
 						Used:        usedVal,
 						Limit:       1,
 						Unit:        quota.UsageUnitCredits,
-						ResetsAt:    &expiresAt,
 						Label:       c.Status,
 						Description: fmt.Sprintf("Granted %s · Expire %s", grantedAt.Format("2006-01-02"), expiresAt.Format("2006-01-02")),
 					}},
@@ -317,14 +339,21 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		}
 	}
 
-	// Handle credits (balance is now a pointer)
+	// Handle credits (balance is now a pointer). Upstream reports what is left
+	// and never what was bought, so there is no percentage to be had: putting
+	// the balance in Limit made it render as "$0.00 / $12.40", a budget with
+	// nothing spent, and it would keep reading as nothing spent however much
+	// the balance drained.
 	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
-		usage.Cost = &quota.UsageCost{
-			Used:         0, // API doesn't report used amount directly
-			Limit:        float64(*apiResp.Credits.Balance),
-			CurrencyCode: "USD",
-			Label:        "Credits Balance",
-		}
+		balance := float64(*apiResp.Credits.Balance)
+		usage.AddWindow("credits", len(usage.Windows), &quota.UsageWindow{
+			Type:        quota.WindowTypeBalance,
+			Kind:        quota.WindowKindResource,
+			Unknown:     true,
+			Unit:        quota.UsageUnitCurrency,
+			Label:       "Credits Balance",
+			Description: fmt.Sprintf("$%.2f remaining", balance),
+		})
 	}
 
 	// Add spend control status to account info

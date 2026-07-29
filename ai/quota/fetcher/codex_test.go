@@ -121,8 +121,8 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	}
 
 	// Verify current window (5h session)
-	if len(usage.Windows) != 2 {
-		t.Fatalf("expected 2 windows (current + weekly), got %d", len(usage.Windows))
+	if len(usage.Windows) != 3 {
+		t.Fatalf("expected 3 windows (current + weekly + credits balance), got %d", len(usage.Windows))
 	}
 	current := usage.Windows[0]
 	if current.UsedPercent != 25 {
@@ -171,15 +171,16 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 		}
 	}
 
-	// Verify credits
-	if usage.Cost == nil {
-		t.Fatal("Cost is nil")
+	// Verify credits balance: a resource with no percentage to report.
+	credits := findWindow(t, usage, "credits")
+	if credits.EffectiveKind() != quota.WindowKindResource {
+		t.Errorf("credits Kind = %q, want resource", credits.EffectiveKind())
 	}
-	if usage.Cost.Limit != 150.0 {
-		t.Errorf("Cost.Limit = %f, want 150.0", usage.Cost.Limit)
+	if !credits.Unknown {
+		t.Error("credits balance has no percentage; it must be marked unknown")
 	}
-	if usage.Cost.CurrencyCode != "USD" {
-		t.Errorf("Cost.CurrencyCode = %q, want USD", usage.Cost.CurrencyCode)
+	if credits.Description != "$150.00 remaining" {
+		t.Errorf("credits Description = %q, want '$150.00 remaining'", credits.Description)
 	}
 }
 
@@ -432,12 +433,17 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 		t.Fatalf("Fetch() error: %v", err)
 	}
 
-	// Verify model window
-	if len(usage.Windows) != 3 {
-		t.Fatalf("Expected 3 windows, got %d", len(usage.Windows))
+	// A model-scoped limit gates only that model, so it must not sit among
+	// the account windows that answer for the provider as a whole.
+	if len(usage.Windows) != 2 {
+		t.Fatalf("Expected 2 account windows, got %d", len(usage.Windows))
+	}
+	extraBd := findBreakdown(t, usage, "codex_bengalfox")
+	if extraBd.Group != "model" {
+		t.Errorf("Extra breakdown Group = %q, want 'model'", extraBd.Group)
 	}
 
-	extra := usage.Windows[2]
+	extra := extraBd.Windows[0]
 	if extra.Label != "GPT-5.3-Codex-Spark" {
 		t.Errorf("Extra window label = %q, want 'GPT-5.3-Codex-Spark'", extra.Label)
 	}
@@ -510,12 +516,17 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 		t.Fatalf("Fetch() error: %v", err)
 	}
 
-	// Verify windows include code review
-	if len(usage.Windows) != 2 {
-		t.Fatalf("Expected 2 windows, got %d", len(usage.Windows))
+	// Code review gates only code review, so it is feature-scoped rather than
+	// an account window.
+	if len(usage.Windows) != 1 {
+		t.Fatalf("Expected 1 account window, got %d", len(usage.Windows))
+	}
+	codeReviewBd := findBreakdown(t, usage, "code_review")
+	if codeReviewBd.Group != "feature" {
+		t.Errorf("Code review breakdown Group = %q, want 'feature'", codeReviewBd.Group)
 	}
 
-	codeReview := usage.Windows[1]
+	codeReview := codeReviewBd.Windows[0]
 	if codeReview.Label != "Code Review" {
 		t.Errorf("Code review window label = %q, want 'Code Review'", codeReview.Label)
 	}
@@ -569,11 +580,12 @@ func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
 	}
 
 	// Verify credits
-	if usage.Cost == nil {
-		t.Fatal("Cost should not be nil when credits are present")
+	credits := findWindow(t, usage, "credits")
+	if credits.Description != "$150.00 remaining" {
+		t.Errorf("credits Description = %q, want '$150.00 remaining'", credits.Description)
 	}
-	if usage.Cost.Limit != 150.0 {
-		t.Errorf("Cost.Limit = %f, want 150.0", usage.Cost.Limit)
+	if credits.Countable() {
+		t.Error("a balance with no known original amount must not report a percentage")
 	}
 }
 
@@ -617,5 +629,107 @@ func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
 	// Should not have cost when balance is nil
 	if usage.Cost != nil {
 		t.Errorf("Cost should be nil when balance is nil, got %+v", usage.Cost)
+	}
+}
+
+func TestCodexFetcher_ScopedLimitsDoNotGateTheAccount(t *testing.T) {
+	// Code review and the Spark model are both exhausted; ordinary requests
+	// touch neither. If they answered for the account, Codex would look spent.
+	now := time.Now()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			_, _ = w.Write([]byte(`{"credits":[]}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan_type": "pro",
+			"rate_limit": map[string]any{
+				"primary_window": map[string]any{
+					"used_percent": 20, "reset_at": now.Add(5 * time.Hour).Unix(), "limit_window_seconds": 18000,
+				},
+			},
+			"code_review_rate_limit": map[string]any{
+				"allowed": false, "limit_reached": true,
+				"primary_window": map[string]any{
+					"used_percent": 100, "reset_at": now.Add(24 * time.Hour).Unix(), "limit_window_seconds": 86400,
+				},
+			},
+			"additional_rate_limits": []map[string]any{{
+				"limit_name": "GPT-5.3-Codex-Spark", "metered_feature": "codex_bengalfox",
+				"rate_limit": map[string]any{
+					"allowed": false, "limit_reached": true,
+					"primary_window": map[string]any{
+						"used_percent": 100, "reset_at": now.Add(3 * time.Hour).Unix(), "limit_window_seconds": 10800,
+					},
+				},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	usage, err := (&CodexFetcher{baseURL: server.URL}).Fetch(context.Background(), &ai.Provider{
+		UUID: "codex-pro", Name: "Codex Pro", AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "test-token"},
+	})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	checkInvariants(t, usage)
+
+	pct, ok := usage.Pct()
+	if !ok || pct != 20 {
+		t.Fatalf("Pct() = %v, %v; want 20, true — scoped limits must not gate the account", pct, ok)
+	}
+
+	// Both are still reported, just not account-wide.
+	if got := findBreakdown(t, usage, "code_review").Windows[0].UsedPercent; got != 100 {
+		t.Errorf("code review UsedPercent = %v, want 100", got)
+	}
+	if got := findBreakdown(t, usage, "codex_bengalfox").Windows[0].UsedPercent; got != 100 {
+		t.Errorf("spark UsedPercent = %v, want 100", got)
+	}
+}
+
+func TestCodexFetcher_ResetCreditCarriesNoRecoveryTime(t *testing.T) {
+	// A voucher's expiry is when it is lost, not when it comes back.
+	now := time.Now()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			_, _ = w.Write([]byte(`{"credits":[{"id":"rc_1","status":"available",
+				"granted_at":"2026-07-01T00:00:00Z","expires_at":"2026-12-31T00:00:00Z"}]}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan_type": "pro",
+			"rate_limit": map[string]any{
+				"primary_window": map[string]any{
+					"used_percent": 20, "reset_at": now.Add(5 * time.Hour).Unix(), "limit_window_seconds": 18000,
+				},
+			},
+			"rate_limit_reset_credits": map[string]any{"available_count": 1},
+		})
+	}))
+	defer server.Close()
+
+	usage, err := (&CodexFetcher{baseURL: server.URL}).Fetch(context.Background(), &ai.Provider{
+		UUID: "codex-pro", Name: "Codex Pro", AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "test-token"},
+	})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	checkInvariants(t, usage)
+
+	credit := findBreakdown(t, usage, "rc_1").Windows[0]
+	if credit.EffectiveKind() != quota.WindowKindResource {
+		t.Errorf("reset credit Kind = %q, want resource", credit.EffectiveKind())
+	}
+	if credit.ResetsAt != nil {
+		t.Error("a voucher does not refill on its own; ResetsAt must be nil")
+	}
+	if credit.Description == "" {
+		t.Error("the expiry should still be visible in the description")
 	}
 }
