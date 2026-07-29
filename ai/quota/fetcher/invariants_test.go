@@ -43,7 +43,9 @@ func checkWindow(t *testing.T, where string, w *quota.UsageWindow) {
 
 	// A periodic allowance has to say how long its period is: the duration is
 	// what orders windows for display and what breaks ties for Tightest().
-	if w.EffectiveKind() == quota.WindowKindLimit && w.WindowMinutes <= 0 {
+	// Only windows that carry a usage figure take part in either, so an
+	// unknown or uncapped one is exempt — its period is unknowable too.
+	if w.Countable() && w.EffectiveKind() == quota.WindowKindLimit && w.WindowMinutes <= 0 {
 		t.Errorf("%s: allowance has no WindowMinutes; callers cannot tell how long the period is", where)
 	}
 

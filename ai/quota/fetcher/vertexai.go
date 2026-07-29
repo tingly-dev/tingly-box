@@ -3,7 +3,6 @@ package fetcher
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
@@ -44,20 +43,5 @@ func (f *VertexAIFetcher) Validate(provider *ai.Provider) error {
 
 func (f *VertexAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// Vertex AI quotas are managed through Google Cloud Console and have no public API.
-	return f.createDefaultUsage(provider), nil
-}
-
-// createDefaultUsage creates fallback quota data.
-func (f *VertexAIFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
-	now := time.Now()
-
-	return &quota.ProviderUsage{
-		ProviderUUID: provider.UUID,
-		ProviderName: provider.Name,
-		ProviderType: quota.ProviderTypeVertexAI,
-		FetchedAt:    now,
-		ExpiresAt:    now.Add(1 * time.Hour),
-		LastError:    "quota API not available - check Google Cloud Console",
-		LastErrorAt:  &now,
-	}
+	return unobservableUsage(provider, quota.ProviderTypeVertexAI, "quota API not available - check Google Cloud Console"), nil
 }

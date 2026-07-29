@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 func TestOpenAIFetcherPreservesRawResponse(t *testing.T) {
@@ -32,5 +33,74 @@ func TestOpenAIFetcherPreservesRawResponse(t *testing.T) {
 	}
 	if string(usage.RawResponse) != response {
 		t.Errorf("RawResponse = %q, want %q", usage.RawResponse, response)
+	}
+}
+
+func TestUnobservableProvidersSaySo(t *testing.T) {
+	// A provider with no quota API used to return an empty Windows slice, which
+	// reads exactly like an untouched allowance. Each now carries an explicit
+	// unknown entry so the state is visible and cannot be mistaken for 0% used.
+	provider := &ai.Provider{UUID: "u", Name: "n", Token: "t"}
+
+	for _, tc := range []struct {
+		name  string
+		fetch func() (*quota.ProviderUsage, error)
+	}{
+		{"copilot", func() (*quota.ProviderUsage, error) {
+			return (&CopilotFetcher{}).Fetch(context.Background(), provider)
+		}},
+		{"cursor", func() (*quota.ProviderUsage, error) {
+			return (&CursorFetcher{}).Fetch(context.Background(), provider)
+		}},
+		{"vertex_ai", func() (*quota.ProviderUsage, error) {
+			return (&VertexAIFetcher{}).Fetch(context.Background(), provider)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usage, err := tc.fetch()
+			if err != nil {
+				t.Fatalf("Fetch() error: %v", err)
+			}
+
+			checkInvariants(t, usage)
+
+			if len(usage.Windows) == 0 {
+				t.Fatal("an unobservable provider must still report something")
+			}
+			if usage.Windows[0].Countable() {
+				t.Error("the placeholder must not contribute a usage figure")
+			}
+			if pct, ok := usage.Pct(); ok {
+				t.Errorf("Pct() = %v, %v; want unknown", pct, ok)
+			}
+			if usage.LastError == "" {
+				t.Error("the reason should still be reported")
+			}
+		})
+	}
+}
+
+func TestOpenAISpendWithoutALimitIsUnknown(t *testing.T) {
+	// OpenAI reports spend but never a cap, and used to return neither an
+	// error nor a window — a successful fetch that looked like a fresh account.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"current_usage_usd":12.5}]}`))
+	}))
+	defer server.Close()
+
+	usage, err := (&OpenAIFetcher{}).Fetch(context.Background(),
+		&ai.Provider{UUID: "u", Name: "OpenAI", Token: "k", APIBase: server.URL})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	checkInvariants(t, usage)
+
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown — OpenAI reports no cap", pct, ok)
+	}
+	spend := findWindow(t, usage, "spend")
+	if spend.Used != 12.5 {
+		t.Errorf("spend Used = %v, want 12.5 — the figure we do have stays visible", spend.Used)
 	}
 }

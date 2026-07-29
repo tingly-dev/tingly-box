@@ -3,7 +3,6 @@ package fetcher
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
@@ -44,20 +43,5 @@ func (f *CursorFetcher) Validate(provider *ai.Provider) error {
 
 func (f *CursorFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// Cursor has no public quota API, so return fallback data.
-	return f.createDefaultUsage(provider), nil
-}
-
-// createDefaultUsage creates fallback quota data.
-func (f *CursorFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
-	now := time.Now()
-
-	return &quota.ProviderUsage{
-		ProviderUUID: provider.UUID,
-		ProviderName: provider.Name,
-		ProviderType: quota.ProviderTypeCursor,
-		FetchedAt:    now,
-		ExpiresAt:    now.Add(1 * time.Hour),
-		LastError:    "quota API not available",
-		LastErrorAt:  &now,
-	}
+	return unobservableUsage(provider, quota.ProviderTypeCursor, "quota API not available"), nil
 }
