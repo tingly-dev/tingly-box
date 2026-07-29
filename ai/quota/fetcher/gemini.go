@@ -15,7 +15,9 @@ import (
 )
 
 // GeminiFetcher retrieves Google Gemini quota data.
-type GeminiFetcher struct{}
+type GeminiFetcher struct {
+	baseURL string // empty → production URL; override in tests only
+}
 
 // NewGeminiFetcher creates a Gemini quota fetcher.
 func NewGeminiFetcher() *GeminiFetcher {
@@ -87,28 +89,34 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		return usage, nil
 	}
 
-	// Create breakdowns for each model
+	// Create breakdowns for each model, tracking the most-used one.
 	breakdowns := make([]*quota.UsageBreakdown, 0, len(quotaResp.Buckets))
-	var totalUsedPercent float64
+	var tightest *quota.UsageWindow
+	var tightestModel string
 
 	for _, bucket := range quotaResp.Buckets {
 		usedPercent := math.Round((1-bucket.RemainingFraction)*10000) / 100
 		if usedPercent < 0 {
 			usedPercent = 0
 		}
-		totalUsedPercent += usedPercent
 
 		window := &quota.UsageWindow{
-			Type:        quota.WindowTypeDaily,
-			Used:        usedPercent, // Normalize to 0-100 scale
-			Limit:       100,         // Normalize to 0-100 scale
-			UsedPercent: usedPercent,
-			Unit:        quota.UsageUnitPercent,
-			Label:       "Daily",
-			Description: fmt.Sprintf("%.0f%% used", usedPercent),
+			Type:          quota.WindowTypeDaily,
+			Used:          usedPercent, // Normalize to 0-100 scale
+			Limit:         100,         // Normalize to 0-100 scale
+			UsedPercent:   usedPercent,
+			Unit:          quota.UsageUnitPercent,
+			WindowMinutes: 24 * 60,
+			Label:         "Daily",
+			Description:   fmt.Sprintf("%.0f%% used", usedPercent),
 		}
 
 		window.ResetsAt = parseGeminiResetTime(bucket.ResetTime)
+
+		if tightest == nil || usedPercent > tightest.UsedPercent {
+			tightest = window
+			tightestModel = bucket.ModelID
+		}
 
 		breakdowns = append(breakdowns, &quota.UsageBreakdown{
 			Key:     bucket.ModelID,
@@ -120,22 +128,20 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 
 	usage.Breakdowns = breakdowns
 
-	// Overall average usage across all models
-	avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
-	overall := usage.AddWindow("average", 0, &quota.UsageWindow{
-		Type:        quota.WindowTypeDaily,
-		Used:        avgUsedPercent, // Normalize to 0-100 scale
-		Limit:       100,            // Normalize to 0-100 scale
-		UsedPercent: avgUsedPercent,
-		Unit:        quota.UsageUnitPercent,
-		Label:       "Average Usage",
-		Description: fmt.Sprintf("%.0f%% across %d models", avgUsedPercent, len(quotaResp.Buckets)),
+	// The account-level figure is the most-used bucket, not the mean of them.
+	// Averaging an exhausted model against an untouched one reads as half
+	// full, and routing to that provider then fails on the exhausted model.
+	usage.AddWindow("tightest", 0, &quota.UsageWindow{
+		Type:          quota.WindowTypeDaily,
+		Used:          tightest.Used,
+		Limit:         tightest.Limit,
+		UsedPercent:   tightest.UsedPercent,
+		Unit:          quota.UsageUnitPercent,
+		WindowMinutes: tightest.WindowMinutes,
+		ResetsAt:      tightest.ResetsAt,
+		Label:         tightestModel,
+		Description:   fmt.Sprintf("%.0f%% used — most-used of %d models", tightest.UsedPercent, len(quotaResp.Buckets)),
 	})
-
-	// Set reset time from first bucket
-	if len(quotaResp.Buckets) > 0 {
-		overall.ResetsAt = parseGeminiResetTime(quotaResp.Buckets[0].ResetTime)
-	}
 
 	return usage, nil
 }
@@ -159,8 +165,12 @@ func (f *GeminiFetcher) fetchQuota(ctx context.Context, client *http.Client, tok
 	}
 	bodyBytes, _ := json.Marshal(body)
 
+	apiBase := "https://cloudcode-pa.googleapis.com"
+	if f.baseURL != "" {
+		apiBase = f.baseURL
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST",
-		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
+		apiBase+"/v1internal:retrieveUserQuota",
 		bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, "", fmt.Errorf("create request: %w", err)
