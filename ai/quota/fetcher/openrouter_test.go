@@ -186,3 +186,67 @@ func TestOpenRouterFetcher_Validate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func openrouterUsage(t *testing.T, response string) *quota.ProviderUsage {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(response))
+	}))
+	t.Cleanup(server.Close)
+
+	usage, err := (&OpenRouterFetcher{}).Fetch(context.Background(),
+		&ai.Provider{UUID: "u", Name: "OpenRouter", Token: "k", APIBase: server.URL})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+	return usage
+}
+
+func TestOpenRouterKeyLimitIsAResource(t *testing.T) {
+	usage := openrouterUsage(t,
+		`{"data":{"limit":20,"usage":8.1,"usage_monthly":8.1,"creator_user_id":"u1"}}`)
+
+	checkInvariants(t, usage)
+
+	keyLimit := findWindow(t, usage, "key_limit")
+	if keyLimit.EffectiveKind() != quota.WindowKindResource {
+		t.Errorf("key_limit Kind = %q, want resource", keyLimit.EffectiveKind())
+	}
+	if pct, ok := usage.Pct(); !ok || pct < 40.4 || pct > 40.6 {
+		t.Fatalf("Pct() = %v, %v; want ~40.5, true", pct, ok)
+	}
+	// Credits are topped up, not reset, so waiting brings nothing back.
+	if usage.RecoversAt() != nil {
+		t.Error("RecoversAt() should be nil when the binding entry is a credit pool")
+	}
+}
+
+func TestOpenRouterNoKeyLimitMeansUncapped(t *testing.T) {
+	// A bare Limit of 0 was ambiguous: no cap, or a cap we could not read.
+	usage := openrouterUsage(t,
+		`{"data":{"limit":null,"usage":8.1,"usage_monthly":8.1,"creator_user_id":"u1"}}`)
+
+	checkInvariants(t, usage)
+
+	monthly := findWindow(t, usage, "monthly")
+	if !monthly.Unlimited {
+		t.Error("with no key limit there is no cap; the window must say so")
+	}
+	if monthly.Countable() {
+		t.Error("an uncapped window has no usage proportion to contribute")
+	}
+	if pct, ok := usage.Pct(); ok {
+		t.Fatalf("Pct() = %v, %v; want unknown for an uncapped key", pct, ok)
+	}
+}
+
+func TestOpenRouterReportsMonthlySpendOnce(t *testing.T) {
+	// The uncapped path used to emit the same monthly figure twice.
+	usage := openrouterUsage(t,
+		`{"data":{"limit":null,"usage":8.1,"usage_monthly":8.1,"creator_user_id":"u1"}}`)
+
+	if len(usage.Windows) != 1 {
+		t.Fatalf("Windows = %d; want 1 monthly window, got duplicates", len(usage.Windows))
+	}
+}

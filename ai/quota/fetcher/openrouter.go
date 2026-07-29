@@ -113,12 +113,15 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		Tier: tier,
 	}
 
-	// Usage vs limit (if limit is set)
+	// A key limit is a prepaid credit pool: spending it down is permanent
+	// until the key is topped up, so it is a resource rather than an
+	// allowance that comes back on its own.
 	if data.Limit != nil && *data.Limit > 0 {
 		used := data.Usage
 		limit := *data.Limit
 		usage.AddWindow("key_limit", 0, &quota.UsageWindow{
 			Type:        quota.WindowTypeBalance,
+			Kind:        quota.WindowKindResource,
 			Used:        used,
 			Limit:       limit,
 			UsedPercent: calcPercent(used, limit),
@@ -126,30 +129,26 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 			Label:       "Key Limit",
 			Description: fmt.Sprintf("Balance: $%.2f / $%.2f", limit-used, limit),
 		})
-	} else {
-		// No limit set — show monthly usage first
-		usage.AddWindow("monthly_usage", 0, &quota.UsageWindow{
-			Type:        quota.WindowTypeMonthly,
-			Used:        data.UsageMonthly,
-			Limit:       0,
-			UsedPercent: 0,
-			Unit:        quota.UsageUnitCurrency,
-			Label:       "Monthly Usage",
-			Description: fmt.Sprintf("This month: $%.4f (no limit set)", data.UsageMonthly),
-		})
 	}
 
-	// Monthly usage breakdown
-	usage.AddWindow("monthly", 1, &quota.UsageWindow{
-		Type:        quota.WindowTypeMonthly,
-		Used:        data.UsageMonthly,
-		Limit:       0,
-		UsedPercent: 0,
-		Unit:        quota.UsageUnitCurrency,
-		Label:       "Monthly",
+	// Monthly spend. With no key limit there is no cap to be used up, which is
+	// a different thing from a cap we failed to read — say so explicitly
+	// rather than leaving a bare Limit of 0 to be guessed at.
+	monthly := &quota.UsageWindow{
+		Type:          quota.WindowTypeMonthly,
+		Used:          data.UsageMonthly,
+		Unit:          quota.UsageUnitCurrency,
+		WindowMinutes: 30 * 24 * 60,
+		Label:         "Monthly",
 		Description: fmt.Sprintf("Daily: $%.4f | Weekly: $%.4f | Monthly: $%.4f | Total: $%.4f",
 			data.UsageDaily, data.UsageWeekly, data.UsageMonthly, data.Usage),
-	})
+	}
+	if data.Limit == nil || *data.Limit <= 0 {
+		monthly.Unlimited = true
+		monthly.Label = "Monthly Usage"
+		monthly.Description = fmt.Sprintf("This month: $%.4f (no limit set)", data.UsageMonthly)
+	}
+	usage.AddWindow("monthly", 1, monthly)
 
 	// Cost
 	usage.Cost = &quota.UsageCost{
