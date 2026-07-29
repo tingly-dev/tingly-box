@@ -117,8 +117,11 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 		ExpiresAt:    now.Add(5 * time.Minute),
 		RawResponse:  rawResponse,
 	}
+	// A prepaid balance: it comes back by topping up, not by waiting. Both
+	// halves are reported, so the proportion consumed is still measurable.
 	usage.AddWindow("credits", 0, &quota.UsageWindow{
 		Type:        quota.WindowTypeBalance,
+		Kind:        quota.WindowKindResource,
 		Used:        consumed,
 		Limit:       total,
 		UsedPercent: usedPercent,

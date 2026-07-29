@@ -301,3 +301,59 @@ func kimiCodeTestProvider() *ai.Provider {
 		},
 	}
 }
+
+func TestKimiCodeSemantics(t *testing.T) {
+	t.Parallel()
+
+	const response = `{
+		"usage": {"name": "Weekly limit", "used": 400, "limit": 1000, "resetAt": "2026-08-02T12:00:00Z"},
+		"limits": [
+			{"detail": {"used": 1, "limit": 100}, "window": {"duration": 300, "timeUnit": "MINUTE"}},
+			{"detail": {"used": 5, "limit": 50}}
+		],
+		"boosterWallet": {
+			"balance": {"type": "BOOSTER", "amount": "20000000000", "amountLeft": "10000000000"},
+			"monthlyChargeLimitEnabled": true,
+			"monthlyChargeLimit": {"currency": "USD", "priceInCents": "20000"},
+			"monthlyUsed": {"currency": "USD", "priceInCents": 5000}
+		}
+	}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	usage, err := (&KimiCodeFetcher{baseURL: server.URL}).Fetch(context.Background(), &ai.Provider{
+		UUID: "u", Name: "Kimi Code", AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "t"},
+	})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	checkInvariants(t, usage)
+
+	// A wallet balance does not come back by waiting.
+	booster := findWindow(t, usage, "booster")
+	if booster.EffectiveKind() != quota.WindowKindResource {
+		t.Errorf("booster Kind = %q, want resource", booster.EffectiveKind())
+	}
+
+	// The weekly limit is the binding one here (40% vs the balance's 50% is
+	// close, so assert on the figure rather than which window won).
+	if pct, ok := usage.Pct(); !ok || pct != 50 {
+		t.Fatalf("Pct() = %v, %v; want 50, true", pct, ok)
+	}
+
+	// Every window states a period, including the one upstream left unsized.
+	if got := findWindow(t, usage, "weekly").WindowMinutes; got != 7*24*60 {
+		t.Errorf("weekly WindowMinutes = %d, want %d", got, 7*24*60)
+	}
+	if got := findWindow(t, usage, "limit_1").WindowMinutes; got != 300 {
+		t.Errorf("limit_1 WindowMinutes = %d, want 300", got)
+	}
+	if got := findWindow(t, usage, "limit_2").WindowMinutes; got <= 0 {
+		t.Errorf("limit_2 WindowMinutes = %d, want a fallback period", got)
+	}
+}

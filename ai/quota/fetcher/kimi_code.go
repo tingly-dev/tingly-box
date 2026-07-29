@@ -259,13 +259,14 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 
 	if used, limit, ok := apiResp.Usage.values(); ok {
 		usage.AddWindow("weekly", 0, &quota.UsageWindow{
-			Type:        quota.WindowTypeWeekly,
-			Used:        used,
-			Limit:       limit,
-			Unit:        quota.UsageUnitCredits,
-			ResetsAt:    apiResp.Usage.resetTime(),
-			Label:       apiResp.Usage.label("Weekly limit"),
-			Description: formatKimiCodeUsage(used, limit),
+			Type:          quota.WindowTypeWeekly,
+			Used:          used,
+			Limit:         limit,
+			Unit:          quota.UsageUnitCredits,
+			ResetsAt:      apiResp.Usage.resetTime(),
+			WindowMinutes: 7 * 24 * 60,
+			Label:         apiResp.Usage.label("Weekly limit"),
+			Description:   formatKimiCodeUsage(used, limit),
 		})
 	}
 
@@ -277,6 +278,12 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 		}
 		duration, timeUnit := item.windowDetail()
 		windowMinutes := kimiCodeWindowMinutes(duration, timeUnit)
+		if windowMinutes <= 0 {
+			// Upstream did not state the period. Fall back to the weekly plan
+			// window rather than leaving it unset, which would make the entry
+			// unorderable against the others.
+			windowMinutes = 7 * 24 * 60
+		}
 		label := detail.label(kimiCodeWindowLabel(duration, timeUnit, index))
 		if item.Scope != "" && detail.Name == "" && detail.Title == "" {
 			label = item.Scope
@@ -382,8 +389,11 @@ func addKimiCodeWallet(usage *quota.ProviderUsage, wallet *kimiCodeBoosterWallet
 		currency = "USD"
 	}
 
+	// A wallet balance is topped up, not reset, so waiting brings none of it
+	// back. Both halves are known, so the proportion spent is still real.
 	usage.AddWindow("booster", len(usage.Windows), &quota.UsageWindow{
 		Type:        quota.WindowTypeBalance,
+		Kind:        quota.WindowKindResource,
 		Used:        used,
 		Limit:       total,
 		Unit:        quota.UsageUnitCurrency,

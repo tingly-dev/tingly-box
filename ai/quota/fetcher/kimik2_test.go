@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 func TestKimiK2FetcherPreservesJSONResponse(t *testing.T) {
@@ -65,5 +66,32 @@ func TestKimiK2FetcherPreservesHeaderFallbackResponse(t *testing.T) {
 	}
 	if raw.Headers["X-Credits-Remaining"] != "75" {
 		t.Errorf("raw header = %q, want 75", raw.Headers["X-Credits-Remaining"])
+	}
+}
+
+func TestKimiK2CreditsAreAResource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"consumed":300,"remaining":700}`))
+	}))
+	defer server.Close()
+
+	usage, err := (&KimiK2Fetcher{baseURL: server.URL}).Fetch(context.Background(),
+		&ai.Provider{UUID: "u", Name: "Kimi K2", Token: "k"})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	checkInvariants(t, usage)
+
+	credits := findWindow(t, usage, "credits")
+	if credits.EffectiveKind() != quota.WindowKindResource {
+		t.Errorf("credits Kind = %q, want resource", credits.EffectiveKind())
+	}
+	if pct, ok := usage.Pct(); !ok || pct != 30 {
+		t.Fatalf("Pct() = %v, %v; want 30, true", pct, ok)
+	}
+	// Waiting does not refill a balance.
+	if usage.RecoversAt() != nil {
+		t.Error("RecoversAt() should be nil for a balance")
 	}
 }
