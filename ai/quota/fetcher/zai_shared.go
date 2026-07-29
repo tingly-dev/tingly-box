@@ -178,14 +178,13 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 		// windows that answer "does this provider have quota left".
 		if class.feature != "" {
 			usage.AddBreakdown(class.feature, class.label, "feature", window)
-			continue
+		} else {
+			tier := class.tier
+			if tier < 0 {
+				tier = len(usage.Windows)
+			}
+			usage.AddWindow(zaiLimitKey(lim), tier, window)
 		}
-
-		tier := class.tier
-		if tier < 0 {
-			tier = len(usage.Windows)
-		}
-		usage.AddWindow(zaiLimitKey(lim), tier, window)
 
 		addZaiUsageDetails(usage, lim, window, hasAbsoluteValues)
 	}

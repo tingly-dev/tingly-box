@@ -250,3 +250,24 @@ func TestOpenRouterReportsMonthlySpendOnce(t *testing.T) {
 		t.Fatalf("Windows = %d; want 1 monthly window, got duplicates", len(usage.Windows))
 	}
 }
+
+func TestOpenRouterMonthlySpendNeverPosesAsACap(t *testing.T) {
+	// The key limit caps lifetime usage, not the month, so the monthly window
+	// has no cap even when a key limit is set. Left unflagged it read as
+	// "$8.10 of $0.00" and, being an allowance, sorted ahead of the real one.
+	usage := openrouterUsage(t,
+		`{"data":{"limit":20,"usage":8.1,"usage_monthly":8.1,"creator_user_id":"u1"}}`)
+
+	checkInvariants(t, usage)
+
+	monthly := findWindow(t, usage, "monthly")
+	if monthly.Countable() {
+		t.Error("monthly spend has no cap; it must not contribute a usage figure")
+	}
+	if got := usage.Tightest().Key; got != "key_limit" {
+		t.Errorf("Tightest() = %q; want key_limit, the window that actually has a cap", got)
+	}
+	if usage.Windows[0].Key != "key_limit" {
+		t.Errorf("first window = %q; want key_limit ahead of the uncapped one", usage.Windows[0].Key)
+	}
+}

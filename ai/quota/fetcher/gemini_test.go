@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
@@ -105,5 +106,18 @@ func TestGeminiFetcher_NoBucketsIsUnknownNotZero(t *testing.T) {
 	}
 	if usage.LastError == "" {
 		t.Error("the reason should be reported")
+	}
+}
+
+func TestGeminiFetcher_NoBucketsKeepsTheEvidence(t *testing.T) {
+	// "Unavailable" is exactly when someone wants to look at the raw response,
+	// and a transient empty answer should not pin the provider for an hour.
+	usage := geminiUsage(t, `{"buckets":[]}`)
+
+	if len(usage.RawResponse) == 0 {
+		t.Error("raw response should survive; it is the evidence for the message")
+	}
+	if ttl := usage.ExpiresAt.Sub(usage.FetchedAt); ttl > 10*time.Minute {
+		t.Errorf("cache ttl = %v; want the fetcher's own, not a stretched fallback", ttl)
 	}
 }

@@ -266,3 +266,20 @@ func TestOrderingAndTieBreakAgreeOnUnsizedWindows(t *testing.T) {
 		t.Errorf("first window = %q; want weekly — display must match the tie-break", got)
 	}
 }
+
+func TestWindowWithNoCapIsNotCountable(t *testing.T) {
+	// A fetcher reporting spend with no cap and no flag would otherwise
+	// contribute a fabricated 0% that sorts ahead of real windows.
+	usage := &ProviderUsage{Windows: []*UsageWindow{
+		{Key: "uncapped", Used: 8.1, Limit: 0, WindowMinutes: 43200},
+		{Key: "capped", Used: 0, Limit: 20, WindowMinutes: 43200},
+	}}
+
+	if got := usage.Tightest().Key; got != "capped" {
+		t.Errorf("Tightest() = %q; want capped — the uncapped window has nothing to compare", got)
+	}
+	usage.NormalizeWindows()
+	if usage.Windows[0].Key != "capped" {
+		t.Errorf("first window = %q; want capped", usage.Windows[0].Key)
+	}
+}

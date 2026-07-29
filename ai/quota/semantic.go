@@ -29,10 +29,15 @@ func (w *UsageWindow) Pct() float64 {
 }
 
 // Countable reports whether this window carries a usage figure that can be
-// compared with another provider's. Unknown means upstream did not say, and
-// unlimited means there is nothing to be used up — neither is a usage of 0%.
+// compared with another provider's. Unknown means upstream did not say,
+// unlimited means there is nothing to be used up, and without a cap there is
+// nothing to measure against — none of the three is a usage of 0%.
+//
+// The cap check is the backstop: a fetcher that reports spend without a limit
+// and forgets the flag would otherwise contribute a fabricated 0%, which sorts
+// ahead of real windows and wins ties against them.
 func (w *UsageWindow) Countable() bool {
-	return w != nil && !w.Unknown && !w.Unlimited
+	return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
 }
 
 // Pct returns the provider's usage as a single 0-100 figure: the tightest
@@ -104,14 +109,24 @@ func Unobservable(providerUUID, providerName string, providerType ProviderType, 
 		ProviderType: providerType,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(ttl),
-		LastError:    reason,
-		LastErrorAt:  &now,
 	}
-	usage.AddWindow("unavailable", 0, &UsageWindow{
+	usage.MarkUnobservable(reason, now)
+	return usage
+}
+
+// MarkUnobservable records that a usage could not be read, keeping whatever the
+// caller already gathered — the raw response above all, which is what someone
+// asking "why does this say unavailable" wants to look at.
+func (p *ProviderUsage) MarkUnobservable(reason string, now time.Time) {
+	if p == nil {
+		return
+	}
+	p.LastError = reason
+	p.LastErrorAt = &now
+	p.AddWindow("unavailable", 0, &UsageWindow{
 		Type:        WindowTypeCustom,
 		Unknown:     true,
 		Label:       "Quota unavailable",
 		Description: reason,
 	})
-	return usage
 }

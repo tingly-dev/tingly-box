@@ -136,3 +136,19 @@ func TestZai_PercentOnlyLimitLeavesModelDetailUnknown(t *testing.T) {
 		t.Error("model detail should be unknown when the parent limit reported no totals")
 	}
 }
+
+func TestZai_FeatureLimitKeepsItsModelDetail(t *testing.T) {
+	// Scoping the MCP limit out of the account windows must not drop the
+	// per-model rows that hang off it.
+	usage := zaiUsage(t, `{"code":0,"success":true,"data":{"level":"pro","limits":[
+		{"type":"TIME_LIMIT","unit":3,"number":5,"usage":100,"currentValue":50,
+		 "usageDetails":[{"modelCode":"glm-4.6","usage":30}]}
+	]}}`)
+
+	checkInvariants(t, usage)
+
+	findBreakdown(t, usage, "mcp")
+	if got := findBreakdown(t, usage, "glm-4.6").Windows[0].Used; got != 30 {
+		t.Errorf("glm-4.6 Used = %v; want 30", got)
+	}
+}

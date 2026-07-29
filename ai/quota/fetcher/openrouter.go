@@ -131,12 +131,13 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		})
 	}
 
-	// Monthly spend. With no key limit there is no cap to be used up, which is
-	// a different thing from a cap we failed to read — say so explicitly
-	// rather than leaving a bare Limit of 0 to be guessed at.
+	// Monthly spend is never capped — the key limit caps lifetime usage, not
+	// the month — so this window has no cap in either branch and says so.
+	// A bare Limit of 0 would be read as a budget with nothing spent.
 	monthly := &quota.UsageWindow{
 		Type:          quota.WindowTypeMonthly,
 		Used:          data.UsageMonthly,
+		Unlimited:     true,
 		Unit:          quota.UsageUnitCurrency,
 		WindowMinutes: 30 * 24 * 60,
 		Label:         "Monthly",
@@ -144,7 +145,6 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 			data.UsageDaily, data.UsageWeekly, data.UsageMonthly, data.Usage),
 	}
 	if data.Limit == nil || *data.Limit <= 0 {
-		monthly.Unlimited = true
 		monthly.Label = "Monthly Usage"
 		monthly.Description = fmt.Sprintf("This month: $%.4f (no limit set)", data.UsageMonthly)
 	}

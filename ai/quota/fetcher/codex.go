@@ -239,13 +239,13 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	// go beside the per-model detail. Among the account windows they would
 	// answer for the provider as a whole: a spent Codex-Spark or code review
 	// allowance would make the whole account look exhausted.
-	for _, arl := range apiResp.AdditionalRateLimits {
+	for i, arl := range apiResp.AdditionalRateLimits {
 		if arl.RateLimit.PrimaryWindow == nil {
 			continue
 		}
 		w := arl.RateLimit.PrimaryWindow
-		label := cmp.Or(arl.LimitName, arl.MeteredFeature)
-		key := cmp.Or(arl.MeteredFeature, label)
+		label := cmp.Or(arl.LimitName, arl.MeteredFeature, "Model limit")
+		key := cmp.Or(arl.MeteredFeature, arl.LimitName, fmt.Sprintf("model_%d", i))
 		window := codexWindow(w, quota.WindowTypeModel, label,
 			fmt.Sprintf("%s: %.0f%% used", label, float64(w.UsedPercent)))
 		window.Allowed = &arl.RateLimit.Allowed
