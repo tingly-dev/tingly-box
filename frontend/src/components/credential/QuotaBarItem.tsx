@@ -1,11 +1,11 @@
 import React from 'react';
 import { Box, Stack, Tooltip, Typography, tooltipClasses } from '@mui/material';
-import type { UsageWindow } from '@/types/quota';
-import { formatQuotaPercent, formatQuotaUsage } from '@/types/quota';
+import type { TieredUsageWindow } from '@/types/quota';
+import { formatQuotaPercent, formatQuotaUsage, isCountable } from '@/types/quota';
 import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
 
 interface QuotaBarItemProps {
-  window: UsageWindow;
+  window: TieredUsageWindow;
   /**
    * Whether to show detailed info (used/limit, reset time)
    * If false, only shows label, bar, and percent
@@ -42,7 +42,11 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
     return QUOTA_COLORS.success;
   };
 
-  const barColor = forcedBarColor ?? getColor(window.used_percent);
+  // A window with no usage figure gets no percentage and no colour. Painting a
+  // green empty bar for a provider whose quota we cannot read — a dead token,
+  // or one with no quota API — says the opposite of what we know.
+  const countable = isCountable(window);
+  const barColor = forcedBarColor ?? (countable ? getColor(window.used_percent) : QUOTA_COLORS.secondary);
 
   // Format reset time
   const formatResetTime = () => {
@@ -158,11 +162,13 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
               overflow: 'hidden',
             }}
           >
-            {/* Fill bar */}
+            {/* Fill bar. An uncountable window shows a hairline rather than
+                an empty bar, which would read as 0% used. */}
             <Box
               sx={{
                 height: '100%',
-                width: `${Math.min(window.used_percent, 100)}%`,
+                width: countable ? `${Math.min(window.used_percent, 100)}%` : '100%',
+                opacity: countable ? 1 : 0.25,
                 bgcolor: barColor,
                 borderRadius: 1,
                 transition: 'width 0.3s ease',
@@ -180,7 +186,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
             whiteSpace: 'nowrap',
           }}
         >
-          {percentLabel ?? formatQuotaPercent(window)}
+          {percentLabel ?? (countable ? formatQuotaPercent(window) : '—')}
         </Typography>
 
         {/* Optional details inline */}

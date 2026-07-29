@@ -10,7 +10,42 @@ import type {
 export type TieredUsageWindow = UsageWindow & {
     key?: string;
     tier?: number;
+    // Backend semantics. Declared here because `task codegen` has not yet
+    // regenerated the client schema; the fields ship on the wire today.
+    // See .design/quota-semantics.md.
+    kind?: 'limit' | 'resource';
+    unknown?: boolean;
+    unlimited?: boolean;
 };
+
+/** The fields that decide whether a window has a figure to show. */
+type CountableFields = {
+    limit: number;
+    unknown?: boolean;
+    unlimited?: boolean;
+};
+
+/**
+ * Whether a window carries a usage figure worth comparing. Unknown means the
+ * provider never reported one, unlimited means there is nothing to use up, and
+ * without a cap there is nothing to measure against — none of the three is a
+ * usage of 0%, and rendering one as a bar reads as an untouched allowance.
+ */
+export function isCountable(window: CountableFields): boolean {
+    return !window.unknown && !window.unlimited && window.limit > 0;
+}
+
+/** Windows sort by the length of their period; a balance and anything with no
+ * figure to show come after the allowances. Matches the backend ordering,
+ * which the previous sort by `tier` undid — tier is each fetcher's own
+ * numbering and is not comparable across providers. */
+function windowSortKey(window: TieredUsageWindow): [number, number] {
+    const rank = !isCountable(window) ? 2 : window.kind === 'resource' ? 1 : 0;
+    const minutes = window.window_minutes && window.window_minutes > 0
+        ? window.window_minutes
+        : Number.MAX_SAFE_INTEGER;
+    return [rank, minutes];
+}
 
 // Type aliases for convenience and backward compatibility
 export type ProviderQuota = ProviderUsage & {
@@ -30,13 +65,13 @@ export interface QuotaWindowDisplayItem {
 }
 
 function windowPercent(window: TieredUsageWindow): number {
+    if (!isCountable(window)) {
+        return 0;
+    }
     if (typeof window.used_percent === 'number') {
         return window.used_percent;
     }
-    if (window.limit > 0) {
-        return Math.min((window.used / window.limit) * 100, 100);
-    }
-    return 0;
+    return Math.min((window.used / window.limit) * 100, 100);
 }
 
 function withWindowDefaults(
@@ -61,7 +96,11 @@ export function quotaToWindows(quota?: ProviderQuota): QuotaWindowDisplayItem[] 
 
     return quota.windows
         .map((window, index) => withWindowDefaults(window, `window-${index}`, 100 + index))
-        .sort((a, b) => (a.window.tier ?? 999) - (b.window.tier ?? 999));
+        .sort((a, b) => {
+            const [ra, ma] = windowSortKey(a.window);
+            const [rb, mb] = windowSortKey(b.window);
+            return ra !== rb ? ra - rb : ma - mb;
+        });
 }
 
 // Extended quota with breakdowns flattened for UI consumption
@@ -102,7 +141,8 @@ interface FormatQuotaUsageOptions {
     formatNumber?: (value: number) => string;
 }
 
-type QuotaUsageValues = Pick<UsageWindow, 'used' | 'limit' | 'used_percent' | 'unit'>;
+type QuotaUsageValues = Pick<UsageWindow, 'used' | 'limit' | 'used_percent' | 'unit'> &
+    Pick<TieredUsageWindow, 'unknown' | 'unlimited'>;
 
 export function formatQuotaPercent(window: QuotaUsageValues): string {
     return `${window.used_percent.toFixed(0)}%`;
@@ -112,10 +152,11 @@ export function formatQuotaUsage(
     window: QuotaUsageValues,
     { includePercent = false, formatNumber = String }: FormatQuotaUsageOptions = {}
 ): string {
+    if (!isCountable(window)) {
+        // No figure to show, so show none — "0 / 0 (0%)" would read as unused.
+        return window.unknown ? 'not reported' : 'no limit';
+    }
     if (window.unit === 'percent') {
-        if (window.used === 0 && window.limit === 0) {
-            return formatQuotaPercent(window);
-        }
         const usage = `${formatNumber(window.used)}% / ${formatNumber(window.limit)}%`;
         return includePercent ? `${usage} (${formatQuotaPercent(window)})` : usage;
     }
