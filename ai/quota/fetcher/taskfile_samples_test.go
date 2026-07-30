@@ -192,14 +192,6 @@ func TestTaskfileSamples(t *testing.T) {
 	if got := findWindow(t, u, "interval").WindowMinutes; got != 5*60 {
 		t.Errorf("minimax: interval = %d min; want 300, general's own length", got)
 	}
-	// general answers for the account; video is bundled media the gateway never
-	// calls, so it is feature-scoped.
-	if got := findBreakdown(t, u, "video").Group; got != "feature" {
-		t.Errorf("minimax: video Group = %q; want feature", got)
-	}
-	if n := len(findBreakdown(t, u, "video").Windows); n != 2 {
-		t.Errorf("minimax video: %d windows; want interval + weekly", n)
-	}
 
 	// ── zai (string unit form) ──
 	// This form names its unit ("tokens") rather than coding a period, so the

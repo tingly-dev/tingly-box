@@ -277,16 +277,10 @@ func printWindowWithProgress(window *quota.UsageWindow) {
 	// Status icon based on usage percentage
 	statusIcon := getStatusIcon(window.UsedPercent)
 
-	// Format usage values
-	var usageStr string
-	if window.Used == 0 && window.Limit == 0 && window.Unit == quota.UsageUnitPercent {
-		// Percentage-only quota
-		usageStr = fmt.Sprintf("%.1f%%", window.UsedPercent)
-	} else {
-		usedStr := formatUsageValue(window.Used, window.Unit)
-		limitStr := formatUsageValue(window.Limit, window.Unit)
-		usageStr = fmt.Sprintf("%s / %s (%.1f%%)", usedStr, limitStr, window.UsedPercent)
-	}
+	usageStr := fmt.Sprintf("%s / %s (%.1f%%)",
+		formatUsageValue(window.Used, window.Unit),
+		formatUsageValue(window.Limit, window.Unit),
+		window.UsedPercent)
 
 	// Progress bar
 	progressBar := renderProgressBar(window.UsedPercent, 20)
@@ -370,49 +364,6 @@ func formatResetTime(resetsAt time.Time) string {
 	return fmt.Sprintf("resets %s", resetsAt.Format("Jan 2 15:04"))
 }
 
-// printUsageWindow prints a usage window
-func printUsageWindow(w *quota.UsageWindow, indent int) {
-	prefix := strings.Repeat("  ", indent)
-	fmt.Printf("%sLabel:     %s\n", prefix, w.Label)
-	fmt.Printf("%sType:      %s\n", prefix, w.Type)
-
-	// For percentage-only quotas, show only percentage
-	if w.Used == 0 && w.Limit == 0 && w.Unit == quota.UsageUnitPercent {
-		fmt.Printf("%sUtilization: %.1f%%\n", prefix, w.UsedPercent)
-	} else {
-		fmt.Printf("%sUsed:      %s", prefix, formatUsageValue(w.Used, w.Unit))
-		fmt.Printf(" / %s\n", formatUsageValue(w.Limit, w.Unit))
-		fmt.Printf("%sPercent:   %.1f%%\n", prefix, w.UsedPercent)
-	}
-
-	if w.ResetsAt != nil {
-		if time.Until(*w.ResetsAt) > 0 {
-			fmt.Printf("%sResets in: %s\n", prefix, formatDuration(time.Until(*w.ResetsAt)))
-		} else {
-			fmt.Printf("%sResets at: %s\n", prefix, w.ResetsAt.Format("2006-01-02 15:04"))
-		}
-	}
-}
-
-// printUsageWindowInline prints a usage window on a single line (for breakdowns)
-func printUsageWindowInline(w *quota.UsageWindow, indent int) {
-	prefix := strings.Repeat("  ", indent)
-
-	// For percentage-only quotas (Used=0, Limit=0), show only percentage
-	if w.Used == 0 && w.Limit == 0 && w.Unit == quota.UsageUnitPercent {
-		fmt.Printf("%s%s: %.1f%%", prefix, w.Label, w.UsedPercent)
-	} else {
-		fmt.Printf("%s%s: %s / %s (%.1f%%)", prefix, w.Label, formatUsageValue(w.Used, w.Unit), formatUsageValue(w.Limit, w.Unit), w.UsedPercent)
-	}
-
-	if w.ResetsAt != nil {
-		if time.Until(*w.ResetsAt) > 0 {
-			fmt.Printf(" — resets in %s", formatDuration(time.Until(*w.ResetsAt)))
-		}
-	}
-	fmt.Println()
-}
-
 // formatUsageValue formats a usage value with appropriate unit
 func formatUsageValue(value float64, unit quota.UsageUnit) string {
 	switch unit {
@@ -438,22 +389,5 @@ func formatUsageValue(value float64, unit quota.UsageUnit) string {
 		return fmt.Sprintf("%.0f", value)
 	default:
 		return fmt.Sprintf("%.2f", value)
-	}
-}
-
-// formatDuration formats a duration in human-readable form
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%d seconds", int(d.Seconds()))
-	} else if d < time.Hour {
-		return fmt.Sprintf("%d minutes", int(d.Minutes()))
-	} else if d < 24*time.Hour {
-		hours := int(d.Hours())
-		mins := int(d.Minutes()) % 60
-		return fmt.Sprintf("%dh %dm", hours, mins)
-	} else {
-		days := int(d.Hours() / 24)
-		hours := int(d.Hours()) % 24
-		return fmt.Sprintf("%dd %dh", days, hours)
 	}
 }

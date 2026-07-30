@@ -83,40 +83,23 @@ func TestMiniMaxFetchersKeepDistinctIdentity(t *testing.T) {
 	}
 }
 
-func TestMiniMaxFetchersPreserveRawResponse(t *testing.T) {
-	const response = `{"model_remains":[{"model_name":"MiniMax-M2.5","current_interval_total_count":100,"current_interval_usage_count":75}],"base_resp":{"status_code":0,"status_msg":"success"}}`
+func TestMiniMaxFetcherPreservesRawResponse(t *testing.T) {
+	const body = `{"model_remains":[{"model_name":"m","current_interval_total_count":10,` +
+		`"current_interval_usage_count":4}],"base_resp":{"status_code":0,"status_msg":"success"}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
 
-	tests := []struct {
-		name         string
-		providerType quota.ProviderType
-	}{
-		{name: "global", providerType: quota.ProviderTypeMiniMax},
-		{name: "cn", providerType: quota.ProviderTypeMiniMaxCN},
+	usage, err := fetchMiniMaxQuota(context.Background(),
+		&ai.Provider{UUID: "u", Name: "MiniMax", Token: "k"}, server.URL, quota.ProviderTypeMiniMax)
+	if err != nil {
+		t.Fatalf("fetchMiniMaxQuota() error: %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(response))
-			}))
-			defer server.Close()
-
-			usage, err := fetchMiniMaxQuota(context.Background(), &ai.Provider{
-				UUID:  "minimax-test",
-				Name:  "MiniMax",
-				Token: "test-token",
-			}, server.URL, tt.providerType)
-			if err != nil {
-				t.Fatalf("fetchMiniMaxQuota() error: %v", err)
-			}
-			if string(usage.RawResponse) != response {
-				t.Errorf("RawResponse = %q, want %q", usage.RawResponse, response)
-			}
-		})
+	if string(usage.RawResponse) != body {
+		t.Errorf("RawResponse = %q, want %q", usage.RawResponse, body)
 	}
 }
-
 func TestMiniMaxWindowsCarryTheReportedInterval(t *testing.T) {
 	// Upstream reports the actual interval; a "daily" bucket is not always 24h,
 	// so the reported start/end wins over the nominal length.

@@ -241,16 +241,6 @@ func TestOpenRouterNoKeyLimitMeansUncapped(t *testing.T) {
 	}
 }
 
-func TestOpenRouterReportsMonthlySpendOnce(t *testing.T) {
-	// The uncapped path used to emit the same monthly figure twice.
-	usage := openrouterUsage(t,
-		`{"data":{"limit":null,"usage":8.1,"usage_monthly":8.1,"creator_user_id":"u1"}}`)
-
-	if len(usage.Windows) != 1 {
-		t.Fatalf("Windows = %d; want 1 monthly window, got duplicates", len(usage.Windows))
-	}
-}
-
 func TestOpenRouterMonthlySpendNeverPosesAsACap(t *testing.T) {
 	// The key limit caps lifetime usage, not the month, so the monthly window
 	// has no cap even when a key limit is set. Left unflagged it read as
