@@ -1,11 +1,13 @@
 # Quota 语义归一
 
-> 适用对象：改 `ai/quota/**`、`internal/smart_routing/**`、`internal/server/module/statusline`、
+> 适用对象：改 `ai/quota/**`、`internal/server/module/statusline`、`internal/command/quota.go`、
 > `frontend/src/types/quota.ts` 的贡献者。
+> 结构：调研（§1–§2）→ 设计（§3–§4）→ 实现（§5–§6）→ 结果（§7）→ 范围外决定（§8）→ 待定（§9）。
+> 下文凡说「原先」，指本次改动之前的行为。
 
 ---
 
-## 1. 用户在问什么
+## 1. 问题
 
 配额这件事，用户只问两个问题：
 
@@ -13,380 +15,283 @@
 
 `tokens` / `requests` / `credits` / `$` 都是这两个答案的**说法**，不是答案本身。
 
-`ai/quota` 把 14 个 fetcher 归一成了同一个 `UsageWindow` 结构，但**结构相同不等于含义相同**——
-同一组字段在不同 provider 里回答的是不同的问题，所以谁也没法拿它做判定。
-
-本文档要做的事就一句话：**让每个 provider 都能回答这两个问题，用同一种说法。**
-
-> 下文凡说「原先」，指的是本次改动之前的行为。四个真实上游返回的归一结果固化在
-> `ai/quota/fetcher/taskfile_samples_test.go`，样本本身在 `build/Taskfile.quota.yml`。
+`ai/quota` 把 14 个 fetcher 归一成了同一个 `UsageWindow` 结构，但**结构相同不等于含义相同**：
+同一组字段在不同 provider 里回答的是不同的问题，于是没有任何跨 provider 的判定成立——
+展示会误导，未来想做的路由判定更无从谈起。
 
 ---
 
-## 2. 归一到什么
+## 2. 调研
 
-### 一个百分比 + 一个重置时间
+### 2.1 各上游到底返回什么
+
+对 14 个 fetcher 的上游响应逐一核对（真实样本在 `build/Taskfile.quota.yml`，
+其中 anthropic / codex / minimax / glm 是线上抓包）：
+
+| 上游 | 给什么 | 不给什么 |
+|---|---|---|
+| Anthropic | 5h / 7d 两个窗口的利用率百分比；溢价额度（**利用率可为 null**） | 绝对量 |
+| Codex | primary / secondary 窗口的 `used_percent` + `limit_window_seconds`（**free 套餐的 primary 是 604800s，即一周**）；模型专属限额；code review 限额；重置券；余额（**只给余额，不给原始总额**） | — |
+| Gemini | 每模型 `remainingFraction` + 日重置时间 | 账户级汇总 |
+| Z.ai / GLM | 编码单位制（3=时 5=月 6=周）的 token 限额，或字符串单位制（**不含时长**）；MCP 限额；每模型消耗明细（**是占消耗的比例，不是占额度的**） | — |
+| MiniMax | 每模型两个区间（自己的 interval + 共享周），**counts 常为 0/0**，此时只有 `*_remaining_percent`；套餐捆绑视频/语音/图片/音乐 | — |
+| Kimi Code | 周额度 + N 个 limit（**部分不给时长**）；booster 钱包 | — |
+| Kimi K2 | `consumed` / `remaining` | 原始总额（只能合成） |
+| OpenRouter | key 终身限额（可为 null）；日/周/月花费（**月花费永远无上限**——key limit 管终身不管当月） | — |
+| OpenAI | 花费时序（`/v1/usage` 常 404） | 上限 |
+| Copilot / Cursor / VertexAI | 无配额 API | 一切 |
+
+### 2.2 归一失败的具体形态
+
+结构归一掩盖了七类语义分歧，每类都在产出用户可见的误读：
+
+1. **不可知读作 0%。** Anthropic 溢价额度 `utilization: null` 被填成 `0/100`；
+   Copilot 等返回空 `Windows`；MiniMax 按 counts 读 `0/0` 得不出上限——
+   三种"读不到"全都渲染成"一点没用，随便刷"。方向是反的。
+2. **占比冒充耗尽。** Z.ai 把"某模型占已消耗量的比例"写进 `UsedPercent`：
+   本周只用了 32%，glm-4.6 占其中 85%，UI 把它染红、80% 阈值被误触发。
+3. **平均掩盖耗尽。** Gemini 对模型 bucket 取平均：pro 100% + flash 0% 报 50%，
+   路由过去就 429。MiniMax 的求和是同病：打满的编码额度被未动的媒体额度稀释成 27%。
+4. **作用域窗口误 gate。** Codex 的 `model_*` / `code_review`、Z.ai 的 MCP、
+   MiniMax 捆绑的视频/语音额度和账户级窗口平铺在一个数组里，
+   一个耗尽的 code review 额度让整个账号看起来没额度——而普通请求根本不经过它。
+5. **`Limit == 0` 三义。** 真·无限制 / 不可知 / 无额度共用一个 0，
+   消费方按 `Limit > 0` 过滤，三种情况全被静默丢弃。
+6. **周期名不可比。** `session` 在 Anthropic 是 5 小时、在 Codex 是任意
+   `limit_window_seconds`、在 Z.ai 是 N 小时、在 Kimi Code 是"小于 24h"。
+   四家的同一个词是四个长度。
+7. **`Tier` 是假排序键。** 各 fetcher 手填（Codex 传 `len(usage.Windows)`），
+   跨 provider 不可比，且全仓库只写不读。
+
+---
+
+## 3. 设计
+
+### 3.1 归一目标：一个百分比 + 一个重置时间
 
 ```
-Pct        0-100，已用比例。唯一的归一量。
+Pct        0-100，已用比例。唯一参与判定的量。
 ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 ```
 
-绝对值（`340/500 requests`、`$8.10/$20`）全部保留，但**只给人看**，不参与任何判定。
-不做单位换算，不折算汇率——比例本身就是公共货币。
+绝对值（`340/500 requests`、`$8.10/$20`）全部保留，但**只给人看**。
+不做单位换算、不折算汇率——比例本身就是公共货币，换算只会制造虚假精度。
 
-### 两类条目
+### 3.2 两类条目
 
 | | 会重置吗 | 耗尽意味着 | 例子 |
 |---|---|---|---|
-| **额度** `limit` | 会 | **等一会** | Anthropic 5h/7d、Codex 周窗口、MiniMax 区间/周、Zai token 限额 |
-| **资源** `resource` | 不会 | **得充钱** | OpenRouter 余额、KimiK2 credits、Kimi booster、Codex 重置券 |
+| **额度** `limit` | 会 | **等一会** | Anthropic 5h/7d、Codex 周窗口、MiniMax 区间/周 |
+| **资源** `resource` | 不会 | **得充钱** | OpenRouter key 余额、KimiK2 credits、booster、重置券 |
 
-这就是你说的"附加的资源 quota"。它俩的区别只有一条：**耗尽后会不会自愈**。
-所以 `ResetsAt` 对资源天然是 `nil`——不需要额外的枚举来表达。
+区别只有一条：**耗尽后会不会自愈**。资源天然没有 `ResetsAt`，不需要更多枚举。
+
+### 3.3 聚合：取最紧
+
+一个 provider 有多个窗口时，代表值取**最紧**的那个（max）——卡住下一个请求的就是它。
+
+不取最短：周五晚上 5h 刚重置（12%）而 7d 到 96%，取最短会报"还早呢"，下一个请求就 429。
+不取平均：见 §2.2-3。同分平手取周期短的（变化快，更值得看）。
+
+**跨模型同理**：Gemini / MiniMax 的账户级窗口取最紧的那个模型，并把**模型名**写进标签——
+"Average Usage 50%" 指不出该停用哪个模型，`gemini-2.5-pro 100%` 指得出。
+
+### 3.4 周期：一个数，不是一个枚举
+
+`WindowMinutes`（5h=300，1w=10080，1m=43200）取代枚举参与排序与平手判定。
+取值按可信度分三档：**上游明说**（Codex 的 `limit_window_seconds`）＞
+**从时间戳算**（MiniMax 的 `EndTime - StartTime`，每模型不同）＞
+**按套餐契约写死**（Anthropic 300/10080）。上游什么都没给 → 保持 0 + `Type=custom`，不编数。
+
+周期**只做**排序和平手判定，刻意不参与 `Pct` 加权——5h 的 96% 和 1w 的 96%
+都是"离耗尽还有 4%"，本来就可比；加权需要一个没有正确答案的旋钮。
+周期的差别体现在 `RecoversAt()`：同样 96%，一个两小时后没事，一个要等三天。
+
+### 3.5 作用域：gateway 会不会往这里发请求
+
+会 → 账户级 `Windows`；不会 → `Breakdowns`（`feature` / `model` 组），照常展示但不替账户回答。
+Codex code review、Z.ai MCP、MiniMax 的视频/语音/图片/音乐额度都属于后者。
+
+### 3.6 没有信息就什么都不显示
+
+「读不到额度」由 `Pct()` 返回 `ok=false` 表达——没有窗口自然没有 countable 的，
+**不造 "Quota unavailable" 占位行**（每个界面多一行说不出任何可操作信息的噪声）。
+原因记在 `LastError`，要看的界面（CLI 的 `Status: Error:`、前端原始响应入口）本来就读它。
+
+但**有部分信息**的窗口要留：溢价额度（开了但上游不肯说用量）、无上限的月度花费（$8.10）、
+只报余额的 Codex credits——显示自己的数值，不画进度条、不报百分数。
+
+### 3.7 刻意不做的
+
+- **单位/货币换算**、**周期加权**：制造虚假精度或不可解释的旋钮。
+- **跨 provider 的池聚合**：没有消费方，现在定口径就是猜（见 §8）。
+- **证据分级 / 四态可用性 / burn rate**：早期设计稿有过，被"能比大小就够了"砍掉。
 
 ---
 
-## 3. 聚合：取最紧
+## 4. 数据模型
 
-> **一个 provider 有多个窗口时，代表值取最紧的那个（max）。**
+`UsageWindow` 增三个字段、删一个：
 
-卡住你的永远是最紧的那个窗口，所以它就是这个 provider 的用量。
-
-### 为什么代表值不能固定取 5h
-
-你提到"5h 先于 1w"。**排序**上对——短窗口变化快，用户天天盯的是它，所以列表按窗口时长升序排。
-但**代表值**不能固定取最短的：
-
-```
-周五晚上的 Anthropic：
-    5h  12%   （刚重置）
-    7d  96%
-
-固定取 5h  →  报 12%  →  规则 "used_le 80" 匹配  →  路由过去  →  下一个请求就 429
-取最紧     →  报 96%  →  规则不匹配             →  正确落到下一档
+```go
+Kind      WindowKind `json:"kind,omitempty"`      // "limit"（会重置）| "resource"（要充钱）
+Unknown   bool       `json:"unknown,omitempty"`   // 上游没说；不等于 0%
+Unlimited bool       `json:"unlimited,omitempty"` // 真·无限制
+// Tier 已删除：全仓库只写不读，排序改用周期后没有任何消费方
 ```
 
-好在"取最紧"和"按时长排序"不冲突，而且比"手写优先级"更省事——
-`AddWindow(key, tier, ...)` 的 tier 是各 fetcher 手填的，Codex 甚至用 `len(usage.Windows)`
-（`fetcher/codex.go`，同一个窗口的 tier 取决于前面碰巧有几个窗口），跨 provider 根本不可比。
-**排序改用窗口时长，`Tier` 字段随之删除**——本次改动前它就只写不读。
+`Unknown` / `Unlimited` 合起来消掉 `Limit == 0` 的三义。`Windows` 走 JSON 持久化，
+新字段自动 round-trip，**不需要 DB 迁移**；旧行缺字段按 false 解码，行为不变。
 
-### 5h / 1w / 1m 怎么统一
+判定 API（`ai/quota/semantic.go`）：
 
-**归一成一个数，不是一个枚举**：`WindowMinutes`（5h=300，1w=10080，1m=43200）。
+```go
+func (p *ProviderUsage) Pct() (float64, bool)     // 最紧窗口的百分比；false = 整个 provider 不可知
+func (p *ProviderUsage) Tightest() *UsageWindow   // 卡住你的那个窗口（能说"卡在哪"）
+func (p *ProviderUsage) RecoversAt() *time.Time   // 额度 → ResetsAt；资源/不可知 → nil
 
-枚举名不可比——`session` 在 Anthropic 是 5 小时、在 Codex 是上游给的任意
-`limit_window_seconds`、在 Zai 是 N 小时、在 KimiCode 是"小于 24 小时就叫 session"
-（`fetcher/kimi_code.go`）。四家的 `session` 是四个长度。
-`Type` 枚举保留，但降级为纯展示。
+func (w *UsageWindow) Percent() float64           // 窗口自己的百分比
+func (w *UsageWindow) Countable() bool            // 是否带可比用量
+func (w *UsageWindow) EffectiveKind() WindowKind  // Kind 缺省为额度（兼容旧数据）
+```
 
-这个数按可信度分三档取：
+`Countable` 是整个模型的门闩：
 
-| 来源 | provider |
+```go
+return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
+```
+
+`Limit > 0` 是兜底——一个报了花费却没上限、又忘了打标记的窗口，否则会贡献一个伪造的 0%，
+排在真窗口前面并在平手时赢下 `Tightest()`（OpenRouter 月度花费踩过）。
+
+共享层自动推导（`applyWindowSemantics`，`AddWindow` / `AddBreakdown` / 排序都过它）：
+`Type=balance` 未填 `Kind` → 自动补 `resource`（漏填会产出一个"声称会回满"的余额）；
+不可比窗口的 `UsedPercent` 强制归零（跳过标记的读者不该看到一个像样的数）。
+
+**排序**（`NormalizeWindows`）：额度按周期升序 → 资源 → 无数值，取代原先的 tier。
+无周期窗口在排序和平手判定里共用一条规则（`periodRank`），不会"最不紧急却排最前"。
+
+---
+
+## 5. 实现
+
+### 5.1 代码地图
+
+| 职责 | 位置 |
 |---|---|
-| 上游明说 | Codex（`LimitWindowSeconds / 60`） |
-| 从时间戳算 | MiniMax（`EndTime - StartTime`；每个模型不一样，general 5h、video 24h） |
-| 按契约写死 | Anthropic 300/10080/43200、Zai `Number × 单位`、Gemini 1440、OpenRouter 43200 |
+| 判定 API、排序、`Unreadable` | `ai/quota/semantic.go` |
+| 字段定义、`AddWindow` / `AddBreakdown`、语义推导 | `ai/quota/types.go` |
+| 14 个 fetcher | `ai/quota/fetcher/*.go` |
+| 共享助手（`endpoint` / `calcPercent` / `windowTypeForMinutes` / `unreadableUsage`） | `ai/quota/fetcher/helpers.go` |
+| 不变量断言（每个 provider 测试调用） | `ai/quota/fetcher/invariants_test.go` |
+| 真实样本固化 | `ai/quota/fetcher/taskfile_samples_test.go` + `build/Taskfile.quota.yml` |
+| 消费方 | `statusline/handler.go`（`Tightest`）、`manager.go` Summary（`Pct`）、`internal/command/quota.go`、前端 `types/quota.ts` |
 
-**周期只做两件事**：排序，和 `Tightest()` 的平手判定（用量相同取短的）。
+### 5.2 各 provider 的归一
 
-**不做的事：不参与 `Pct()` 加权。**5h 的 96% 和 1w 的 96% 都是"离耗尽还有 4%"，
-本来就可比。加权要引入一个没有正确答案的旋钮（"三天后恢复"该打几折），
-还会让这个数字不再只回答一个问题。
-
-**周期的差别体现在 `RecoversAt()`，不在用量里**：
-
-```
-5h  96%  →  18:00 恢复        （两小时后没事）
-1w  96%  →  周日 03:00 恢复   （得等三天）
-```
-
-用量一样紧，难受程度差 36 倍。所以 `Tightest()` 返回的是**哪个窗口**而不只是数字——
-statusline 才能说"卡在 7d 窗口，周日 03:00 恢复"。
-
----
-
-## 4. 三个必须掰开的地方
-
-这三个都是当前代码里真实的 bug，也是"结构归一但语义没归一"的具体体现。每个配一个例子。
-
-### 4.1 不可知 ≠ 0%
-
-```go
-// fetcher/anthropic.go   溢价额度，上游返回 utilization = null
-} else {
-    used  = 0
-    limit = 100          // → 前端显示「0% 已用」
-}
-```
-
-上游说"我不知道"，我们对用户说"一点没用，随便刷"。方向反了。
-
-Copilot / Cursor / VertexAI 更直接——返回空 `Windows` + `LastError`
-（`fetcher/copilot.go`），消费方看到的和"额度充足"一模一样。
-
-**改法**：`Pct` 可空。不可知的条目不参与 max、不显示百分比、也不谎报 0。
-一个 `unknown` 布尔字段就够，不需要"证据等级"那套东西。
-
-**不要造占位行**。「读不到额度」这件事，`Pct()` 返回 `ok=false` 就已经表达了——
-没有窗口，自然没有 countable 的。再补一条 "Quota unavailable" 的空窗口只是给每个界面
-加一行说不出任何可操作信息的噪声（ux-principles #9）。原因记在 `LastError` 里，
-需要它的界面（CLI 的 `Status: Error:`、前端的原始响应）本来就会读。
-
-**没有信息就什么都不显示。**但**有部分信息**的窗口要留：溢价额度（上游说开了但不肯说用量）、
-OpenRouter 的月度花费（$8.10，没有上限）、Codex 的余额（$12.40）——它们有真东西可说，
-只是没有"百分比"。这类窗口显示自己的数值，不画进度条、不报百分数。
-
-### 4.2 占比 ≠ 耗尽
-
-```go
-// fetcher/zai_shared.go
-modelPercent = (detail.Usage / lim.CurrentValue) * 100   // 该模型占「已消耗量」的比例
-...
-UsedPercent: modelPercent,                               // 写进了「耗尽程度」字段
-```
-
-```
-本周实际用掉 32%，其中 glm-4.6 占了 85%
-
-原先：glm-4.6 那条 used_percent = 85  →  UI 染红（≥80 染红）
-改后：本周窗口 32%；glm-4.6 按占**额度**的比例算（27.2%），占消耗的比例只进 Description
-```
-
-**改法**：一条规则——`UsedPercent` 只准表示"离耗尽还有多远"。
-构成占比不是配额，不写进这个字段。
-
-### 4.3 平均掩盖耗尽
-
-```go
-// fetcher/gemini.go
-avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
-```
-
-```
-gemini-2.5-pro    100%  （已经打不通了）
-gemini-2.5-flash    0%
-
-原先：平均 50%  →  "还有一半呢"  →  路由过去  →  429
-改后：报最紧的那个 bucket = 100%，标签就写 `gemini-2.5-pro`
-```
-
-**改法**：account 级窗口从"平均"改成"最紧的那个 bucket"，并用**该模型的名字**当标签——
-"Average Usage 50%" 指不出该停用哪个模型，`gemini-2.5-pro 100%` 指得出（ux-principles #5）。
-
----
-
-## 5. 顺带修掉的两个小歧义
-
-**`Limit == 0` 三义**。`types.go` 的注释写"0 means unlimited"，实际有三种来源：
-真·无限制（OpenRouter 没设 key limit，`fetcher/openrouter.go`）、
-不可知（OpenAI 没有 limit API）、无额度。
-消费方一律按 `Limit > 0` 过滤（`statusline/handler.go`），于是"随便用"和"别乱用"都被静默丢掉。
-→ 用 `unlimited` 和 `unknown` 两个布尔显式表达，不再靠 0 猜。
-
-**作用域窗口误 gate**。Codex 的 `model_*`、`code_review`，Zai 的 MCP `TIME_LIMIT`（`zai_shared.go` 的 `classifyZaiLimit`），
-MiniMax 套餐里捆的 `video` / `speech` / `image` / `music`
-和账户级窗口平铺在同一个 `Windows` 数组里，导致"这个 provider 还有没有额度"被无关窗口污染。
-判断标准很简单：**gateway 会不会往这里发请求**。不会的，就不该替账户回答。
-→ 这些窗口移进已有的 `Breakdowns`（本来就是干这个的），`Windows` 只留账户级。零新概念。
-
----
-
-## 6. 数据模型改动
-
-不新建类型，不动 fetcher 输出契约。`UsageWindow` 加三个字段：
-
-```go
-type UsageWindow struct {
-    // ... 现有字段全部保留 ...
-
-    Kind      WindowKind `json:"kind,omitempty"`      // "limit"（会重置）| "resource"（要充钱）
-    Unknown   bool       `json:"unknown,omitempty"`   // Pct 不可知，不参与聚合
-    Unlimited bool       `json:"unlimited,omitempty"` // 真·无限制，区别于 Limit==0 的其他两义
-}
-```
-
-`WindowMinutes` 保留，并成为排序键（原先 Anthropic 的 `seven_day`、Zai、Gemini 都没填）。
-不参与比较的条目豁免——不可知 / 无上限的窗口既不排序也不平手判定，周期本来也无从得知。
-`Type`（session/daily/weekly/...）降级为纯展示，判定一律不读。
-`Tier` **已删除**——它只写不读（Go 侧只有 `AddWindow` 写入，前端也从不读），
-排序改用周期之后它就没有消费方了，`AddWindow(key, window)` 因此少一个参数。
-
-判定 API 就三个函数：
-
-```go
-func (p *ProviderUsage) Pct() (float64, bool)     // 所有已知条目取 max；bool=false 表示整个 provider 不可知
-                                                  // 窗口自己的百分比是 (*UsageWindow).Percent()
-func (p *ProviderUsage) Tightest() *UsageWindow   // Pct 最大的那条，用来说明「卡在哪」
-func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → ResetsAt；是资源 → nil
-```
-
-外加窗口上的两个小助手：`EffectiveKind()`（缺省为额度，兼容旧数据）和
-`Countable()`（是否带可比的用量）：
-
-```go
-func (w *UsageWindow) Countable() bool {
-    return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
-}
-```
-
-`Limit > 0` 是兜底：一个报了花费却没上限、又忘了打标记的窗口，否则会贡献一个伪造的 0%，
-而这个 0% 会排在真窗口前面、并在平手时赢下 `Tightest()`。OpenRouter 的月度花费就踩过。
-
-**能比大小就够了。**跨 provider 的聚合（池子怎么算）等到真有消费方时再定，
-现在定了也是猜——见 §8。
-
-`Tightest()` 的价值：UI 和 trace 能直接说**"卡在 7 天窗口，周日 03:00 恢复"**，
-而不是今天那一排看不出重点的进度条。
-
----
-
-## 7. 各 provider 要改什么
-
-| Provider | 改动 |
+| Provider | 语义修正 |
 |---|---|
-| anthropic | `seven_day` 补 `WindowMinutes=10080`；`extra_usage` 的 `utilization==null` → `Unknown=true`（不再填 0） |
-| codex | `model_*` / `code_review` 移进 `Breakdowns`；重置券 `Kind=resource`；`Cost.Limit=balance` 的错位改成资源条目（`fetcher/codex.go`） |
-| gemini | average 窗口换成**最紧的那个 bucket**，并用模型名当标签（"Average Usage 50%" 指不出该停用哪个模型）；每个 bucket 进 `Breakdowns` |
-| zai | `usageDetails` 的 `modelPercent` 不再写进 `UsedPercent`；MCP `TIME_LIMIT` 移进 `Breakdowns`；`Number×unit` → `WindowMinutes` |
-| minimax | 只有**文本模型**（`general` / `MiniMax-M*`）答账户级；套餐捆的 `video` / `speech-*` / `image-*` / `music-*` / `Hailuo-*` 是 gateway 从不请求的媒体生成，移进 `Breakdowns` 的 `feature` 组（否则一个打满的视频额度会让整个 provider 看起来没额度——和 Codex code_review、Zai MCP 同一类）。每个条目出**两个窗口**：自己的区间（general 5h / video 24h）+ 共享周窗口。counts 为 `0/0` 时用 `*_remaining_percent`（真实返回常是这种形态，只按 counts 读会让整个 provider 变"不可知"）；两者都没有 → 该窗口不产出。只有一个文本模型时不再额外出 per-model 行，那只是把账户级窗口重复一遍 |
-| kimi_code | `booster` → `Kind=resource`；`weekly` 补 7d 周期（套餐周期是明确的）。上游**没给时长**的 limit 保持无周期 + `Type=custom`，不编数（编出来会顺带被推成 `weekly`）。币种没提成字段——Description 和 `Cost.CurrencyCode` 已经带了，没有消费方要读它 |
-| kimik2 | `credits` → `Kind=resource` |
-| openrouter | 余额 → `Kind=resource`；`monthly` 的 `Limit=0` → `Unlimited=true`；去掉重复的第二个 monthly 窗口 |
-| openai | 有花费没上限 → `spend` 窗口标 `Unknown`（数值仍可见）；404 时只记 `LastError` |
-| copilot / cursor / vertex_ai | 只记 `LastError`，不产出窗口——`Pct()` 已经答"不可知"；三份重复兜底合成 `unreadableUsage` |
+| anthropic | `seven_day` 补周期；溢价额度 `utilization==null` → `Unknown`（不再填 0） |
+| codex | `model_*` / `code_review` → `Breakdowns`；重置券 → `resource` 且去掉"恢复时间"（券的过期是失去不是回血）；余额从 `Cost.Limit` 错位改成 `Unknown` 资源窗口（原先渲染 "$0.00 / $12.40"）；窗口类型按 `limit_window_seconds` 长度推（free 套餐的 primary 实为一周） |
+| gemini | 平均 → 最紧 bucket + 模型名标签；空 bucket → `MarkUnreadable`（保留 RawResponse 与 5min TTL） |
+| zai / glm | 模型明细改按**占额度**算，占消耗的比例只进 Description；MCP → `feature` breakdown（明细保留）；编码单位 → 周期，字符串单位 → `custom` 不编数 |
+| minimax | 只有文本模型答账户级，视频/语音/图片/音乐 → `feature`（判据 §3.5）；每模型两个窗口（自己的 interval + 共享周）；counts 0/0 时读 `*_remaining_percent`；两者皆无 → 不产出该窗口 |
+| kimi_code | booster → `resource`；weekly 补 7d；无时长 limit 保持 `custom` |
+| kimik2 | credits → `resource` |
+| openrouter | key 余额 → `resource`；月度花费两个分支都标 `Unlimited`（key limit 管终身不管当月）；去掉重复的第二个 monthly 窗口 |
+| openai | 有花费无上限 → `Unknown` 窗口（数值可见）；404 → 只记 `LastError` |
+| copilot / cursor / vertex_ai | 只记 `LastError`，不产出窗口 |
 
-新增 provider 必须填 `Kind` + `WindowMinutes`，靠单测的不变量断言兜住（§9）。
+### 5.3 不变量（`checkInvariants`，新 provider 漏填语义在测试里挂掉）
 
----
+- `Countable()` 且 `Type` 点明周期（session/daily/weekly/monthly）⇒ `WindowMinutes > 0`；`custom` 豁免
+- `Type=balance` ⇒ `Kind=resource`（能抓到遗漏的方向；`AddWindow` 也自动补）
+- `Kind=resource` ⇒ `ResetsAt == nil`
+- `Unknown` 与 `Unlimited` 互斥；不可比窗口 ⇒ `UsedPercent == 0`
+- `Percent()` ∈ [0,100]
 
-## 8. quota 怎么参与路由（范围外，只记决定）
+### 5.4 消费方
 
-**结论：quota 只做减法，不做排序。**摘掉事实上不能用的候选，剩下的交给现有 tactic
-（轮询 / tier / affinity）——它们已经表达了用户的意图，quota 不该越权。
-
-**为什么不是"选余量最高的"。**三个 Anthropic 账号挂同一条 rule，贪心选最空的那个：
-
-```
-配额刷新间隔 15 min，两次刷新之间数字不动。
-
-t=0     A 0%   B 0%   C 0%    → 选 A → 之后 15 分钟所有请求都打 A
-t=15    A 25%  B 0%   C 0%    → 选 B → 之后 15 分钟所有请求都打 B
- ...
-t=3h    A 95%  B 95%  C 95%   → 三个同时见底，一个能兜底的都没有
-```
-
-- **拉平 = 一起见底**：花三份钱买的"轮流用"的冗余，正好被拉平消灭掉。
-- **它不是负载均衡**：刷新间隔内余量是常数，"选最高的"是 15 分钟粒度的轮流冲刷。
-- **prompt cache 全废**：cache 按账号维度，来回换账号吃不到 cache read 折扣。
-
-而且"拉平"和"顺序耗尽"本来就是两种买法，**项目里已经各有一个 tactic**：
-总量不够用 → `loadbalance` 加权轮询；怕被卡住 → `Service.Tier` + failover。
-quota 不该发明第三种。
-
-**真做的时候挂在哪。**`internal/server/routing/stage_health.go` 已经是一个"摘除候选"的
-stage，跑在 smart routing / affinity / LB 之前，且已经写好了需要的降级规则
-（"全都不健康就不过滤"那条降级分支）。而 `loadbalance/health_monitor.go` 里的
-`RateLimitedUntil = now.Add(RecoveryTimeout)` 是个**猜的固定超时**。于是：
-
-```
-今天（反应式）：吃一个 429 → 标 unhealthy → RateLimitedUntil = now + 固定超时   ← 猜的
-有 quota（前瞻）：窗口 100%  → 标 unhealthy → RateLimitedUntil = RecoversAt()   ← 上游真值
-```
-
-**quota 不是新的选择维度，是 health 的前瞻版**——不用先吃 429，恢复时间从猜变成准，
-出口 / 降级 / 日志全部复用，零新概念。
-
-保守方向写死：`Unknown` 或数据过期 → **不摘**（误摘健康账号的代价远大于不摘耗尽账号）。
-
-**smart op 不做**。它管的是"不想用"（本周超 85% 就省着点切便宜池子），
-和摘除管的"不能用"不重叠。等真有人要再加；需要的数据 §6 已经够，不用回头改。
+- **statusline**：`Tightest()` 供 `TBQuota*` 字段；`Usage:` 段只列 `Countable()` 窗口。
+  原先按 tier 取第一个窗口——tier 各家规则不同，5h 刚重置时会盖住 96% 的周窗口。
+- **Summary**：`Pct() >= 80` 计 warning，不可知不再计入"未用"。
+- **CLI**：不可比窗口打 `· <label>: <description>` 一行，不画伪 0% 进度条。
+- **前端**：`isCountable` 同款门闩；无比例的窗口显示数值不画条；排序同后端
+  （`kind`/`unknown`/`unlimited` 以 `QuotaWindow` 交集类型声明，等 codegen 后收编）；
+  mock（`frontend/src/mocks/handlers.ts`）按 taskfile 真实样本重写，覆盖全部渲染态。
 
 ---
 
-## 9. 端到端示例
+## 6. 验证
 
-一条 rule 挂四个 provider（示意数字；真实上游返回的归一结果见
-`ai/quota/fetcher/taskfile_samples_test.go`）：
+- **真实样本固化**：`taskfile_samples_test.go` 把四份线上抓包（anthropic / codex 限流 /
+  minimax 0-0 counts / glm）+ 文档样本的归一结果钉死。这些样本覆盖手写 fixture 想不到的形态：
+  null 利用率、一周长的 "primary" 窗口、captureed 0/0 counts。
+- **review 流程**：/simplify（4 视角）+ correctness（共享层 / fetcher / 消费方 3 agent 并行），
+  各自抓到并修掉本分支引入的缺陷——最重要的两个：`Countable` 缺 `Limit > 0` 兜底、
+  前端把占位窗口渲染成满绿 0% 条（后来占位行整个删除）。
+- 全量 `go build ./...` + `go test ./ai/... ./internal/...` 通过。
+
+---
+
+## 7. 结果
+
+同一条 rule 下四个 provider，改动前后（示意数字，真实结果见样本测试）：
 
 ```
                      窗口                              Pct     恢复
   ─────────────────────────────────────────────────────────────────────────
-  Anthropic          5h    12%  （刚重置）
-                     7d    96%  ← 最紧                  96%    周日 03:00
-                     溢价额度   不可知（上游不肯说）
-  ─────────────────────────────────────────────────────────────────────────
-  MiniMax            区间(5h)  60% ← 最紧               60%    18:00
-                     周        12%
+  Anthropic          5h 12%（刚重置） / 7d 96% ←最紧    96%    周日 03:00
+                     溢价额度：不可知（上游不肯说）
+  MiniMax            区间(5h) 60% ←最紧 / 周 12%        60%    18:00
                      ·video 100%（feature，不替账户回答）
-  ─────────────────────────────────────────────────────────────────────────
-  OpenRouter         余额  $8.10/$20 = 40% ← 最紧       40%    nil（要充钱）
-                     月度花费  无上限（不算百分比）
-  ─────────────────────────────────────────────────────────────────────────
+  OpenRouter         余额 $8.10/$20 = 40% ←最紧         40%    nil（要充钱）
+                     月度花费：无上限（不算百分比）
   Copilot            无配额 API                         不可知  —
-  ─────────────────────────────────────────────────────────────────────────
-
-  statusline：Anthropic 96% · 卡在 7d 窗口 · 周日 03:00 恢复
 ```
 
+statusline：`Anthropic 96% · 卡在 7d 窗口 · 周日 03:00 恢复`。
 四个 provider 的用量第一次能放在一起比大小，且每个数字都是同一个意思。
 
-**改之前**同一组数据是这样的：Anthropic 因为 `tier=0` 报 5h 的 **12%**（"还早呢"）；
-Gemini 类的 provider 报跨模型平均值；MiniMax 把编码模型和视频额度加总，
-一个打满的 video 会让整个 provider 看起来耗尽；OpenRouter 的余额和无上限的月度花费
-画成一样的进度条，后者还显示 "$8.10 / $0.00"；Copilot 静默消失，
-和"额度充足"无法区分。
+**改动前**同一组数据：Anthropic 报 5h 的 12%（"还早呢"）；Gemini 类报平均值；
+MiniMax 打满的视频额度让全账号显得耗尽；OpenRouter 的月度花费显示 "$8.10 / $0.00"
+并排在真窗口前面；Copilot 静默消失，与"额度充足"无法区分。
+
+**遗留**：`task codegen` 未跑——`kind`/`unknown`/`unlimited` 未进 `openapi.json`，
+删掉的 `tier` 还在里面（optional，无消费方）；前端的 `QuotaWindow` 交集类型是过渡。
 
 ---
 
-## 10. 落地顺序
+## 8. 范围外决定：quota 怎么参与路由（只记结论，未实现）
 
-1. ~~**加字段 + 三个函数**~~ ✅ 纯新增，现有行为不变。另加 `checkInvariants` 共享断言，
-   新 provider 漏填语义会在测试里挂掉。
-2. ~~**按 §7 逐个 provider 归一**~~ ✅ 一个提交一个 provider，用现有 fetcher fixture 断言。
-3. ~~**接展示消费方**~~ ✅ statusline / Summary / CLI 换成三个函数，
-   窗口排序从 tier 改成周期，前端同步（排序 + 不可知窗口不画百分比）。
-   **仍需跑 `task codegen`**：`kind` / `unknown` / `unlimited` 三个字段还没进
-   `openapi.json`，删掉的 `tier` 也还在里面（它是 optional，没有客户端读它）。
-   前端暂时用 `QuotaWindow` 这个交集类型自行声明，codegen 之后这个类型就可以整个去掉。
+**quota 只做减法，不做排序**——摘掉事实上不能用的候选，选择交给现有 tactic。
 
-到这里 quota 就已经"说人话"了，且没有任何行为风险——以上都只影响显示。
+**为什么不是"选余量最高的"**：配额 15 分钟才刷新一次，窗口内余量是常数，
+"选最高"退化成 15 分钟粒度的轮流冲刷；三个账号被拉平后**同时**见底，
+花三份钱买的冗余正好被消灭；账号间来回切换让 prompt cache 全废。
+"拉平"和"顺序耗尽"两种意图项目里已各有 tactic（加权轮询 / `Service.Tier` + failover），
+quota 不该发明第三种。
 
-往后是路由接入，**不在本次范围**，按 §8 的方向单独评估：
+**真做时挂在哪**：`routing/stage_health.go` 已是现成的摘除点（含"全不健康就不过滤"降级）；
+`health_monitor.go` 的 `RateLimitedUntil = now + 固定超时` 是猜的，`RecoversAt()` 是上游真值——
+quota 是 health 的**前瞻版**：不用先吃 429，恢复时间从猜变准，出口/降级/日志全复用。
+保守方向写死：`Unknown` 或数据过期 → 不摘。
 
-4. **quota → health 前瞻摘除**。改动集中在给 `HealthMonitor` 加一个
-   "按 quota 预标记 + 用 `RecoversAt()` 覆盖 `RateLimitedUntil`" 的入口，`HealthStage` 不动。
-5. **smart op `quota` position**。等有人真的要"省着点用"时再加。
-
-不变量单测（跨所有 provider 统一跑，新增 provider 自动被兜住）：
-
-- `Countable()` 且 `Type` **点明了周期**（session / daily / weekly / monthly）⇒ `WindowMinutes > 0`。
-  `custom` 豁免——它的意思就是"上游没给任何可归类的信息"，那里编一个长度比留空更糟
-  （Zai 有一种形态把 unit 写成字符串 `"tokens"`，根本没给时长）
-- `Type=balance` ⇒ `Kind=resource`（能抓到遗漏的那个方向；`AddWindow` 也会自动补）
-- `Unknown` ⇒ 不参与 `Pct()`，且前端不显示百分比
-- `Unlimited` ⇒ 不参与 `Pct()`
-- `Kind=resource` ⇒ `ResetsAt == nil`
-- Gemini 的 `pro=100% / flash=0%` fixture ⇒ `Pct() == 100`（原先是 50）
-- 不可知 / 无上限的条目 ⇒ `UsedPercent == 0`（不许既说"没有数"又带一个数）
+**smart op 不做**：它管"不想用"（超 85% 就切便宜池子），与摘除管的"不能用"不重叠；
+需要的数据 §4 已备齐，等真有人要再加。
 
 ---
 
-## 11. 待定
+## 9. 待定
 
-1. **数据过期怎么办**。刷新间隔 15min，但各 fetcher 自己硬编码 `ExpiresAt`（5min / 10min / 1h），
-   和 `Config.CacheTTL` 各行其是。倾向：TTL 归 Manager 所有，超过 4×TTL 的数据 `Pct()` 返回不可知。
-   展示阶段无所谓，**但 §8 的摘除依赖它**——不能拿一小时前的快照摘账号。做 §8 之前必须先解决。
-2. **Anthropic 溢价额度**：主额度耗尽后落到 extra usage，`Pct` 该报 100 还是报溢价额度的用量？
-   倾向报溢价额度的用量，但 `Tightest().Label` 要说明"已进入溢价"——用户需要知道现在开始花钱了。
-   （对 §8 也有影响：进了溢价的账号不该被摘，但也不该和没进溢价的一样优先。）
-3. **平手判定只比用量，不比恢复距离**。`5h 96%（两小时后恢复）` 会盖过
-   `1w 95%（三天后恢复）`，于是 `RecoversAt()` 报的是乐观的那个——18:00 之后 5h 回满，
-   但你仍贴着 95% 的周窗口。对"现在能不能发"是对的（卡住下一个请求的确实是 96%），
-   对"还能撑多久"偏乐观。修它要引入"紧迫度 = 用量 × 恢复距离"的加权，
-   那个旋钮没有显然正确的值。**先保持一个口径**，等真有消费方问第二个问题时再说。
-4. **同一个上游账号被配成多个 provider 记录**时（不同 APIBase / 不同模型集合），
-   会有多份 quota 行指向同一份上游额度，摘除时可能不一致。
-   `UsageAccount.ID` / `Email` 已经有了（Codex / OpenRouter / KimiCode 都填了，Zai 只填 tier），
-   可以用它识别"共享配额组"。等 §8 真做的时候再看，展示阶段不受影响。
+1. **数据新鲜度**：各 fetcher 硬编码 `ExpiresAt`（5min/1h）与 `Config.CacheTTL` 各行其是。
+   展示无所谓，但 §8 的摘除不能拿一小时前的快照做——做 §8 前必须先收敛。
+2. **MiniMax `*_status` 字段**（观察到 1 / 3）语义未知，未解析。若 3 表示"本套餐无此额度"，
+   video 的 0% 窗口应整个不出而非显示 0%。
+3. **Anthropic 溢价额度**：主额度耗尽落到 extra usage 后，`Pct` 报 100 还是报溢价用量？
+   倾向后者 + 标签注明"已进入溢价"（开始花钱了，用户需要知道）。
+4. **平手判定只比用量不比恢复距离**：`5h 96%（2h 后恢复）` 盖过 `1w 95%（3 天后恢复）`，
+   `RecoversAt()` 报的是乐观的那个。对"现在能不能发"是对的，对"还能撑多久"偏乐观。
+   修它需要"用量 × 恢复距离"的加权，旋钮没有显然正确的值——保持单一口径，等有消费方问第二个问题再说。
+5. **同一上游账号配成多个 provider 记录**时会有多份 quota 指向同一份额度；
+   `UsageAccount.ID/Email` 可识别"共享配额组"，做 §8 时再处理。
