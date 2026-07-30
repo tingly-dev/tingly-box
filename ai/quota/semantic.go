@@ -1,11 +1,16 @@
 package quota
 
-import "time"
+import (
+	"fmt"
+	"math"
+	"sort"
+	"time"
+)
 
 // Every provider reports quota in its own currency — percentages, request
-// counts, credits, dollars. The three accessors here reduce that to the two
-// things a caller can actually act on: how much is used, and when it comes
-// back. See .design/quota-semantics.md.
+// counts, credits, dollars. This file reduces that to the two things a caller
+// can act on: how much is used, and when it comes back.
+// See .design/quota-semantics.md.
 
 // EffectiveKind reports the window kind, defaulting to WindowKindLimit for
 // windows written before the field existed.
@@ -16,9 +21,9 @@ func (w *UsageWindow) EffectiveKind() WindowKind {
 	return w.Kind
 }
 
-// Pct returns the window's used percentage, falling back to used/limit for
-// windows that never populated UsedPercent.
-func (w *UsageWindow) Pct() float64 {
+// Percent returns the window's used percentage, falling back to used/limit for
+// windows that have not had UsedPercent filled in yet.
+func (w *UsageWindow) Percent() float64 {
 	if w == nil {
 		return 0
 	}
@@ -52,7 +57,7 @@ func (p *ProviderUsage) Pct() (float64, bool) {
 	if w == nil {
 		return 0, false
 	}
-	return w.Pct(), true
+	return w.Percent(), true
 }
 
 // Tightest returns the window Pct came from, so callers can say which window
@@ -88,7 +93,7 @@ func (p *ProviderUsage) RecoversAt() *time.Time {
 
 // tighter reports whether a should displace b as the binding window.
 func tighter(a, b *UsageWindow) bool {
-	if pa, pb := a.Pct(), b.Pct(); pa != pb {
+	if pa, pb := a.Percent(), b.Percent(); pa != pb {
 		return pa > pb
 	}
 	// Equally used: prefer the shorter window. A window with no known duration
@@ -97,11 +102,67 @@ func tighter(a, b *UsageWindow) bool {
 	return periodRank(a) < periodRank(b)
 }
 
+// NormalizeWindows puts Windows into display order: allowances first, shortest
+// period leading, then standing resources, then anything with no usage figure
+// to show.
+//
+// Short periods lead because they move fastest and are what a user watches; a
+// balance has no period at all, and an unknown or uncapped entry has nothing
+// to compare, so both sort after the windows that do.
+func (p *ProviderUsage) NormalizeWindows() {
+	if p == nil {
+		return
+	}
+
+	for i, window := range p.Windows {
+		if window == nil {
+			continue
+		}
+		if window.Key == "" {
+			window.Key = fmt.Sprintf("window_%d", i)
+		}
+		applyWindowSemantics(window)
+	}
+
+	sort.SliceStable(p.Windows, func(i, j int) bool {
+		left, right := p.Windows[i], p.Windows[j]
+		if left == nil || right == nil {
+			return left != nil
+		}
+		if lr, rr := windowRank(left), windowRank(right); lr != rr {
+			return lr < rr
+		}
+		return periodRank(left) < periodRank(right)
+	})
+}
+
+// periodRank orders by window length, putting unsized windows last: the same
+// rule tighter() uses, so a window cannot be least urgent for Tightest() and
+// most prominent for display.
+func periodRank(w *UsageWindow) int {
+	if w.WindowMinutes <= 0 {
+		return math.MaxInt
+	}
+	return w.WindowMinutes
+}
+
+// windowRank groups windows for display; within a group they order by period.
+func windowRank(w *UsageWindow) int {
+	switch {
+	case !w.Countable():
+		return 2
+	case w.EffectiveKind() == WindowKindResource:
+		return 1
+	default:
+		return 0
+	}
+}
+
 // Unreadable builds usage for a provider whose quota could not be read — no
 // API, a failed fetch, an unsupported type. It records the reason and reports
-// no windows: Pct() already answers "unknown" for a usage with nothing
-// countable in it, so a placeholder window would add a row to every surface
-// without adding anything a reader can act on.
+// no windows: Pct already answers "unknown" for a usage with nothing countable
+// in it, so a placeholder window would add a row to every surface without
+// adding anything a reader can act on.
 func Unreadable(providerUUID, providerName string, providerType ProviderType, reason string, now time.Time, ttl time.Duration) *ProviderUsage {
 	usage := &ProviderUsage{
 		ProviderUUID: providerUUID,
@@ -114,9 +175,8 @@ func Unreadable(providerUUID, providerName string, providerType ProviderType, re
 	return usage
 }
 
-// MarkUnreadable records why a usage could not be read, keeping whatever the
-// caller already gathered — the raw response above all, which is what someone
-// asking "why is there nothing here" wants to look at.
+// MarkUnreadable records why a usage could not be read, leaving whatever the
+// caller already gathered in place.
 func (p *ProviderUsage) MarkUnreadable(reason string, now time.Time) {
 	if p == nil {
 		return

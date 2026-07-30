@@ -128,7 +128,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	account.Label = tightestModel
 	account.Description = fmt.Sprintf("%.0f%% used — most-used of %d models",
 		tightest.UsedPercent, len(quotaResp.Buckets))
-	usage.AddWindow("tightest", 0, &account)
+	usage.AddWindow("tightest", &account)
 
 	return usage, nil
 }
@@ -152,12 +152,8 @@ func (f *GeminiFetcher) fetchQuota(ctx context.Context, client *http.Client, tok
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	apiBase := "https://cloudcode-pa.googleapis.com"
-	if f.baseURL != "" {
-		apiBase = f.baseURL
-	}
 	req, err := http.NewRequestWithContext(ctx, "POST",
-		apiBase+"/v1internal:retrieveUserQuota",
+		endpoint(f.baseURL, "https://cloudcode-pa.googleapis.com", "/v1internal:retrieveUserQuota"),
 		bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, "", fmt.Errorf("create request: %w", err)

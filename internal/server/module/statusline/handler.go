@@ -354,28 +354,14 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 		return ""
 	}
 
-	// Collect all windows with meaningful data. Unknown and uncapped windows
-	// carry no usable used/limit pair, so they have nothing to render here.
-	windows := make([]*quota.UsageWindow, 0, len(usage.Windows))
-	for _, window := range usage.Windows {
-		if window.Countable() && window.Limit > 0 {
-			windows = append(windows, window)
-		}
-	}
-
-	if len(windows) == 0 {
-		return ""
-	}
-
-	// Build quota string for each window
+	// Unknown and uncapped windows carry no usable used/limit pair, so they
+	// have nothing to render here.
 	var parts []string
-	for _, w := range windows {
-		part := h.formatQuotaWindow(w)
-		if part != "" {
-			parts = append(parts, part)
+	for _, window := range usage.Windows {
+		if window.Countable() {
+			parts = append(parts, formatQuotaWindow(window))
 		}
 	}
-
 	if len(parts) == 0 {
 		return ""
 	}
@@ -386,13 +372,8 @@ func (h *Handler) buildQuotaInline(mapping *tbModelMappingResult) string {
 }
 
 // formatQuotaWindow formats a single quota window
-func (h *Handler) formatQuotaWindow(window *quota.UsageWindow) string {
-	used := window.Used
-	limit := window.Limit
-
-	if limit <= 0 {
-		return ""
-	}
+func formatQuotaWindow(window *quota.UsageWindow) string {
+	used, limit := window.Used, window.Limit
 
 	// Requests and credits always show actual numbers, never a K/M suffix.
 	if window.Unit == quota.UsageUnitRequests || window.Unit == quota.UsageUnitCredits {

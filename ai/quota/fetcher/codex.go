@@ -15,6 +15,8 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
+const codexAPIBase = "https://chatgpt.com"
+
 // CodexFetcher retrieves OpenAI Codex quota data.
 // Uses: GET https://chatgpt.com/backend-api/wham/usage
 // Requires OAuth access_token + optional account_id (from oauth_detail.extra_fields)
@@ -172,13 +174,8 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	// Resolve account_id from OAuth extra_fields
 	accountID := provider.OAuthDetail.GetExtraFieldString("account_id")
 
-	apiBase := "https://chatgpt.com"
-	if f.baseURL != "" {
-		apiBase = f.baseURL
-	}
-	url := apiBase + "/backend-api/wham/usage"
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		endpoint(f.baseURL, codexAPIBase, "/backend-api/wham/usage"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -226,11 +223,11 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 
 	if apiResp.RateLimit != nil {
 		if w := apiResp.RateLimit.PrimaryWindow; w != nil {
-			usage.AddWindow("current", 0, codexWindow(w, windowTypeForMinutes(w.LimitWindowSeconds/60), "Current Window",
+			usage.AddWindow("current", codexWindow(w, windowTypeForMinutes(w.LimitWindowSeconds/60), "Current Window",
 				fmt.Sprintf("%dh window, %.0f%% used", w.LimitWindowSeconds/3600, float64(w.UsedPercent))))
 		}
 		if w := apiResp.RateLimit.SecondaryWindow; w != nil {
-			usage.AddWindow("weekly", 1, codexWindow(w, windowTypeForMinutes(w.LimitWindowSeconds/60), "Weekly",
+			usage.AddWindow("weekly", codexWindow(w, windowTypeForMinutes(w.LimitWindowSeconds/60), "Weekly",
 				fmt.Sprintf("%dd window, %.0f%% used", w.LimitWindowSeconds/86400, float64(w.UsedPercent))))
 		}
 	}
@@ -305,7 +302,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	// the balance drained.
 	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
 		balance := float64(*apiResp.Credits.Balance)
-		usage.AddWindow("credits", len(usage.Windows), &quota.UsageWindow{
+		usage.AddWindow("credits", &quota.UsageWindow{
 			Type:        quota.WindowTypeBalance,
 			Kind:        quota.WindowKindResource,
 			Unknown:     true,
@@ -329,13 +326,8 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 // fetchResetCreditsDetail calls the detail endpoint for per-credit reset info.
 // GET /backend-api/wham/rate-limit-reset-credits
 func (f *CodexFetcher) fetchResetCreditsDetail(ctx context.Context, client *http.Client, token, accountID string) (*codexResetCreditsResponse, error) {
-	apiBase := "https://chatgpt.com"
-	if f.baseURL != "" {
-		apiBase = f.baseURL
-	}
-	url := apiBase + "/backend-api/wham/rate-limit-reset-credits"
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		endpoint(f.baseURL, codexAPIBase, "/backend-api/wham/rate-limit-reset-credits"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

@@ -288,8 +288,7 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	return usage, nil
 }
 
-// unreadable records a provider whose quota could not be read. All three
-// failure paths produce the same shape: the reason, and no windows.
+// unreadable records a provider whose quota could not be read.
 func (m *Manager) unreadable(provider *typ.Provider, providerType ProviderType, now time.Time, reason string) *ProviderUsage {
 	return Unreadable(provider.UUID, provider.Name, providerType, reason, now, m.config.CacheTTL)
 }

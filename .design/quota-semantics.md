@@ -70,7 +70,7 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 好在"取最紧"和"按时长排序"不冲突，而且比"手写优先级"更省事——
 `AddWindow(key, tier, ...)` 的 tier 是各 fetcher 手填的，Codex 甚至用 `len(usage.Windows)`
 （`fetcher/codex.go`，同一个窗口的 tier 取决于前面碰巧有几个窗口），跨 provider 根本不可比。
-**排序改用窗口时长，tier 不再参与判定。**
+**排序改用窗口时长，`Tier` 字段随之删除**——本次改动前它就只写不读。
 
 ### 5h / 1w / 1m 怎么统一
 
@@ -209,12 +209,15 @@ type UsageWindow struct {
 
 `WindowMinutes` 保留，并成为排序键（原先 Anthropic 的 `seven_day`、Zai、Gemini 都没填）。
 不参与比较的条目豁免——不可知 / 无上限的窗口既不排序也不平手判定，周期本来也无从得知。
-`Type`（session/daily/weekly/...）和 `Tier` 降级为纯展示，判定一律不读。
+`Type`（session/daily/weekly/...）降级为纯展示，判定一律不读。
+`Tier` **已删除**——它只写不读（Go 侧只有 `AddWindow` 写入，前端也从不读），
+排序改用周期之后它就没有消费方了，`AddWindow(key, window)` 因此少一个参数。
 
 判定 API 就三个函数：
 
 ```go
 func (p *ProviderUsage) Pct() (float64, bool)     // 所有已知条目取 max；bool=false 表示整个 provider 不可知
+                                                  // 窗口自己的百分比是 (*UsageWindow).Percent()
 func (p *ProviderUsage) Tightest() *UsageWindow   // Pct 最大的那条，用来说明「卡在哪」
 func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → ResetsAt；是资源 → nil
 ```
@@ -345,8 +348,8 @@ Gemini 类的 provider 报跨模型平均值；MiniMax 把编码模型和视频�
 3. ~~**接展示消费方**~~ ✅ statusline / Summary / CLI 换成三个函数，
    窗口排序从 tier 改成周期，前端同步（排序 + 不可知窗口不画百分比）。
    **仍需跑 `task codegen`**：`kind` / `unknown` / `unlimited` 三个字段还没进
-   `openapi.json` 和生成的 client schema，前端暂时按 `TieredUsageWindow` 的既有方式
-   自行声明。
+   `openapi.json`，删掉的 `tier` 也还在里面（它是 optional，没有客户端读它）。
+   前端暂时用 `QuotaWindow` 这个交集类型自行声明，codegen 之后这个类型就可以整个去掉。
 
 到这里 quota 就已经"说人话"了，且没有任何行为风险——以上都只影响显示。
 

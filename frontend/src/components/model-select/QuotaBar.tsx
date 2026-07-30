@@ -2,11 +2,11 @@ import { Box, Tooltip } from '@mui/material';
 import { QuotaTooltipContent } from './QuotaTooltip';
 import type { QuotaTooltipData, QuotaWindowDisplay } from './QuotaTooltip';
 import { QUOTA_COLORS } from '../dashboard/chartStyles';
-import type { ProviderQuota, TieredUsageWindow } from '../../types/quota';
+import type { ProviderQuota, QuotaWindow } from '../../types/quota';
 
 interface QuotaBarProps {
   quota: ProviderQuota;
-  window?: TieredUsageWindow;
+  window?: QuotaWindow;
   windowIndex?: 0 | 1 | 2;  // Legacy fallback only
 }
 

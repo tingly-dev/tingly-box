@@ -184,12 +184,13 @@ func TestKindDefaultsToLimit(t *testing.T) {
 }
 
 func TestNormalizeWindowsOrdersByPeriodThenKind(t *testing.T) {
-	// Tier is deliberately reversed to prove it no longer drives the order.
+	// Deliberately declared out of order, to show the order comes from the
+	// windows themselves.
 	usage := &ProviderUsage{Windows: []*UsageWindow{
-		{Key: "unknown", Tier: 0, Unknown: true},
-		{Key: "balance", Tier: 1, Kind: WindowKindResource, UsedPercent: 40, Limit: 100},
-		{Key: "weekly", Tier: 2, UsedPercent: 30, Limit: 100, WindowMinutes: 10080},
-		{Key: "session", Tier: 3, UsedPercent: 20, Limit: 100, WindowMinutes: 300},
+		{Key: "unknown", Unknown: true},
+		{Key: "balance", Kind: WindowKindResource, UsedPercent: 40, Limit: 100},
+		{Key: "weekly", UsedPercent: 30, Limit: 100, WindowMinutes: 10080},
+		{Key: "session", UsedPercent: 20, Limit: 100, WindowMinutes: 300},
 	}}
 
 	usage.NormalizeWindows()
@@ -225,7 +226,7 @@ func TestBalanceDefaultsToResource(t *testing.T) {
 	// produce a balance claiming it refills.
 	usage := &ProviderUsage{}
 	reset := time.Date(2026, 8, 2, 3, 0, 0, 0, time.UTC)
-	w := usage.AddWindow("credits", 0, &UsageWindow{
+	w := usage.AddWindow("credits", &UsageWindow{
 		Type: WindowTypeBalance, Used: 30, Limit: 100, ResetsAt: &reset,
 	})
 
@@ -241,7 +242,7 @@ func TestUncountableWindowsNeverCarryAPercentage(t *testing.T) {
 	// Backfilling used_percent onto an unknown window would hand a plausible
 	// figure to any reader that skips the flag.
 	usage := &ProviderUsage{}
-	w := usage.AddWindow("spend", 0, &UsageWindow{
+	w := usage.AddWindow("spend", &UsageWindow{
 		Unknown: true, Used: 12.5, Limit: 100,
 	})
 

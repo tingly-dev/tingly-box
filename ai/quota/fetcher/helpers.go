@@ -1,6 +1,8 @@
 package fetcher
 
 import (
+	"cmp"
+	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -41,4 +43,10 @@ func windowTypeForMinutes(minutes int) quota.WindowType {
 	default:
 		return quota.WindowTypeMonthly
 	}
+}
+
+// endpoint resolves a request URL, preferring the test override over the
+// production host.
+func endpoint(override, production, path string) string {
+	return strings.TrimRight(cmp.Or(override, production), "/") + path
 }

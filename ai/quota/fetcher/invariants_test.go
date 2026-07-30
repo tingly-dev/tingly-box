@@ -83,7 +83,7 @@ func checkWindow(t *testing.T, where string, w *quota.UsageWindow) {
 		t.Errorf("%s: uncountable window still reports UsedPercent=%v", where, w.UsedPercent)
 	}
 
-	if p := w.Pct(); p < 0 || p > 100 {
-		t.Errorf("%s: Pct() = %v, outside 0-100", where, p)
+	if p := w.Percent(); p < 0 || p > 100 {
+		t.Errorf("%s: Percent() = %v, outside 0-100", where, p)
 	}
 }

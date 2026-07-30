@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -50,11 +49,8 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
-	url := "https://kimi-k2.ai/api/user/credits"
-	if f.baseURL != "" {
-		url = strings.TrimRight(f.baseURL, "/") + "/api/user/credits"
-	}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		endpoint(f.baseURL, "https://kimi-k2.ai", "/api/user/credits"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -106,7 +102,6 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	consumed := body.Consumed
 	remaining := body.Remaining
 	total := consumed + remaining
-	usedPercent := calcPercent(consumed, total)
 
 	now := time.Now()
 	usage := &quota.ProviderUsage{
@@ -119,12 +114,11 @@ func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	}
 	// A prepaid balance: it comes back by topping up, not by waiting. Both
 	// halves are reported, so the proportion consumed is still measurable.
-	usage.AddWindow("credits", 0, &quota.UsageWindow{
+	usage.AddWindow("credits", &quota.UsageWindow{
 		Type:        quota.WindowTypeBalance,
 		Kind:        quota.WindowKindResource,
 		Used:        consumed,
 		Limit:       total,
-		UsedPercent: usedPercent,
 		Unit:        quota.UsageUnitCredits,
 		Label:       "Credits",
 		Description: fmt.Sprintf("%.0f consumed, %.0f remaining", consumed, remaining),

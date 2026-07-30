@@ -7,23 +7,19 @@ import type {
     ProviderUsage,
 } from '@/client';
 
-export type TieredUsageWindow = UsageWindow & {
-    key?: string;
-    tier?: number;
-    // Backend semantics. Declared here because `task codegen` has not yet
-    // regenerated the client schema; the fields ship on the wire today.
-    // See .design/quota-semantics.md.
+/**
+ * A quota window plus the semantics fields. Declared here because `task
+ * codegen` has not yet regenerated the client schema; they ship on the wire
+ * today. See .design/quota-semantics.md.
+ */
+export type QuotaWindow = UsageWindow & {
     kind?: 'limit' | 'resource';
     unknown?: boolean;
     unlimited?: boolean;
 };
 
 /** The fields that decide whether a window has a figure to show. */
-type CountableFields = {
-    limit: number;
-    unknown?: boolean;
-    unlimited?: boolean;
-};
+type CountableFields = Pick<QuotaWindow, 'limit' | 'unknown' | 'unlimited'>;
 
 /**
  * Whether a window carries a usage figure worth comparing. Unknown means the
@@ -35,11 +31,8 @@ export function isCountable(window: CountableFields): boolean {
     return !window.unknown && !window.unlimited && window.limit > 0;
 }
 
-/** Windows sort by the length of their period; a balance and anything with no
- * figure to show come after the allowances. Matches the backend ordering,
- * which the previous sort by `tier` undid — tier is each fetcher's own
- * numbering and is not comparable across providers. */
-function windowSortKey(window: TieredUsageWindow): [number, number] {
+/** Rank, then period length — the same order the backend establishes. */
+function windowSortKey(window: QuotaWindow): [number, number] {
     const rank = !isCountable(window) ? 2 : window.kind === 'resource' ? 1 : 0;
     const minutes = window.window_minutes && window.window_minutes > 0
         ? window.window_minutes
@@ -49,7 +42,7 @@ function windowSortKey(window: TieredUsageWindow): [number, number] {
 
 // Type aliases for convenience and backward compatibility
 export type ProviderQuota = ProviderUsage & {
-    windows?: TieredUsageWindow[];
+    windows?: QuotaWindow[];
 };
 
 // Re-export for consumers
@@ -61,41 +54,17 @@ export type { UsageWindow, UsageCost, UsageAccount, UsageBreakdown, ProviderUsag
 export interface QuotaWindowDisplayItem {
     key: string;
     label: string;
-    window: TieredUsageWindow;
-}
-
-function windowPercent(window: TieredUsageWindow): number {
-    if (!isCountable(window)) {
-        return 0;
-    }
-    if (typeof window.used_percent === 'number') {
-        return window.used_percent;
-    }
-    return Math.min((window.used / window.limit) * 100, 100);
-}
-
-function withWindowDefaults(
-    window: TieredUsageWindow,
-    key: string,
-    tier: number
-): QuotaWindowDisplayItem {
-    return {
-        key: window.key || key,
-        label: window.label || key,
-        window: {
-            ...window,
-            key: window.key || key,
-            tier: window.tier ?? tier,
-            used_percent: windowPercent(window),
-        },
-    };
+    window: QuotaWindow;
 }
 
 export function quotaToWindows(quota?: ProviderQuota): QuotaWindowDisplayItem[] {
     if (!quota || !quota.windows?.length) return [];
 
     return quota.windows
-        .map((window, index) => withWindowDefaults(window, `window-${index}`, 100 + index))
+        .map((window, index) => {
+            const key = window.key || `window-${index}`;
+            return { key, label: window.label || key, window };
+        })
         .sort((a, b) => {
             const [ra, ma] = windowSortKey(a.window);
             const [rb, mb] = windowSortKey(b.window);
@@ -141,8 +110,7 @@ interface FormatQuotaUsageOptions {
     formatNumber?: (value: number) => string;
 }
 
-type QuotaUsageValues = Pick<UsageWindow, 'used' | 'limit' | 'used_percent' | 'unit'> &
-    Pick<TieredUsageWindow, 'unknown' | 'unlimited'>;
+type QuotaUsageValues = CountableFields & Pick<UsageWindow, 'used' | 'used_percent' | 'unit'>;
 
 export function formatQuotaPercent(window: QuotaUsageValues): string {
     return `${window.used_percent.toFixed(0)}%`;

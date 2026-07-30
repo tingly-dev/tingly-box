@@ -150,14 +150,13 @@ func isMiniMaxMediaFeature(model string) bool {
 	return false
 }
 
-// minimaxWindowsFor builds an entry's interval and weekly windows, dropping
-// either when upstream reported nothing for it.
+// minimaxWindowsFor builds an entry's interval and weekly windows.
 func minimaxWindowsFor(model minimaxModelRemain) []*quota.UsageWindow {
 	windows := make([]*quota.UsageWindow, 0, 2)
 	if w := minimaxWindow(minimaxWindowInput{
 		total: model.CurrentIntervalTotalCount, remaining: model.CurrentIntervalUsageCount,
 		pctLeft: model.CurrentIntervalRemainingPercent,
-		startMs: model.StartTime, endMs: model.EndTime, resetAtMs: model.EndTime,
+		startMs: model.StartTime, endMs: model.EndTime,
 		fallback: 24 * 60, label: "Interval",
 	}); w != nil {
 		windows = append(windows, w)
@@ -165,7 +164,7 @@ func minimaxWindowsFor(model minimaxModelRemain) []*quota.UsageWindow {
 	if w := minimaxWindow(minimaxWindowInput{
 		total: model.CurrentWeeklyTotalCount, remaining: model.CurrentWeeklyUsageCount,
 		pctLeft: model.CurrentWeeklyRemainingPercent,
-		startMs: model.WeeklyStartTime, endMs: model.WeeklyEndTime, resetAtMs: model.WeeklyEndTime,
+		startMs: model.WeeklyStartTime, endMs: model.WeeklyEndTime,
 		fallback: 7 * 24 * 60, label: "Weekly",
 	}); w != nil {
 		windows = append(windows, w)
@@ -173,44 +172,10 @@ func minimaxWindowsFor(model minimaxModelRemain) []*quota.UsageWindow {
 	return windows
 }
 
-// addMiniMaxAccountWindows lifts the most-used text model's windows to the
-// account level, one per period, naming the model they came from.
-func addMiniMaxAccountWindows(usage *quota.ProviderUsage, models []minimaxModelWindows) {
-	type binding struct {
-		window *quota.UsageWindow
-		model  string
-	}
-	tightest := map[string]binding{}
-
-	for _, mw := range models {
-		for _, w := range mw.windows {
-			cur, seen := tightest[w.Label]
-			if !w.Countable() && seen {
-				continue
-			}
-			if !seen || w.Pct() > cur.window.Pct() {
-				tightest[w.Label] = binding{w, mw.name}
-			}
-		}
-	}
-
-	for tier, label := range []string{"Interval", "Weekly"} {
-		b, ok := tightest[label]
-		if !ok {
-			continue
-		}
-		account := *b.window
-		account.Label = label + " Quota"
-		account.Description = fmt.Sprintf("%s · %s", b.window.Description, b.model)
-		usage.AddWindow(strings.ToLower(label), tier, &account)
-	}
-}
-
 type minimaxWindowInput struct {
 	total, remaining int
 	pctLeft          *float64
 	startMs, endMs   int64
-	resetAtMs        int64
 	fallback         int
 	label            string
 }
@@ -231,7 +196,6 @@ func minimaxWindow(in minimaxWindowInput) *quota.UsageWindow {
 	case in.total > 0:
 		used := float64(in.total - in.remaining)
 		w.Used, w.Limit = used, float64(in.total)
-		w.UsedPercent = calcPercent(used, float64(in.total))
 		w.Unit = quota.UsageUnitRequests
 		w.Description = fmt.Sprintf("%.0f / %d requests", used, in.total)
 	case in.pctLeft != nil:
@@ -245,11 +209,37 @@ func minimaxWindow(in minimaxWindowInput) *quota.UsageWindow {
 		return nil
 	}
 
-	if in.resetAtMs > 0 {
-		reset := time.UnixMilli(in.resetAtMs)
+	if in.endMs > 0 {
+		reset := time.UnixMilli(in.endMs)
 		w.ResetsAt = &reset
 	}
 	return w
+}
+
+// addMiniMaxAccountWindows lifts the most-used text model's windows to the
+// account level, one per period, naming the model they came from.
+func addMiniMaxAccountWindows(usage *quota.ProviderUsage, models []minimaxModelWindows) {
+	for _, label := range []string{"Interval", "Weekly"} {
+		var best *quota.UsageWindow
+		var bestModel string
+		for _, mw := range models {
+			for _, w := range mw.windows {
+				if w.Label != label {
+					continue
+				}
+				if best == nil || w.Percent() > best.Percent() {
+					best, bestModel = w, mw.name
+				}
+			}
+		}
+		if best == nil {
+			continue
+		}
+		account := *best
+		account.Label = label + " Quota"
+		account.Description = fmt.Sprintf("%s · %s", best.Description, bestModel)
+		usage.AddWindow(strings.ToLower(label), &account)
+	}
 }
 
 // minimaxWindowMinutes derives the period from the interval upstream reports,

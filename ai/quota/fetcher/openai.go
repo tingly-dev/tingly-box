@@ -135,7 +135,7 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	// Spend is known but the cap never is, so there is no proportion to
 	// report. Without saying so, a successful fetch that carries no window
 	// reads as an account with nothing used.
-	usage.AddWindow("spend", 0, &quota.UsageWindow{
+	usage.AddWindow("spend", &quota.UsageWindow{
 		Type:        quota.WindowTypeBalance,
 		Kind:        quota.WindowKindResource,
 		Unknown:     true,

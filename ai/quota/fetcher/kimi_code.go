@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	kimiCodeUsageURL       = "https://api.kimi.com/coding/v1/usages"
+	kimiCodeAPIBase        = "https://api.kimi.com/coding/v1"
 	kimiCodeFixedPointCent = 1_000_000
 )
 
@@ -205,12 +205,8 @@ type kimiCodeUsageResponse struct {
 }
 
 func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
-	url := kimiCodeUsageURL
-	if f.baseURL != "" {
-		url = strings.TrimRight(f.baseURL, "/") + "/usages"
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		endpoint(f.baseURL, kimiCodeAPIBase, "/usages"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -258,7 +254,7 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 	}
 
 	if used, limit, ok := apiResp.Usage.values(); ok {
-		usage.AddWindow("weekly", 0, &quota.UsageWindow{
+		usage.AddWindow("weekly", &quota.UsageWindow{
 			Type:          quota.WindowTypeWeekly,
 			Used:          used,
 			Limit:         limit,
@@ -286,7 +282,7 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 		if item.Scope != "" && detail.Name == "" && detail.Title == "" {
 			label = item.Scope
 		}
-		usage.AddWindow(fmt.Sprintf("limit_%d", index+1), index+1, &quota.UsageWindow{
+		usage.AddWindow(fmt.Sprintf("limit_%d", index+1), &quota.UsageWindow{
 			Type:          windowType,
 			Used:          used,
 			Limit:         limit,
@@ -372,7 +368,7 @@ func addKimiCodeWallet(usage *quota.ProviderUsage, wallet *kimiCodeBoosterWallet
 
 	// A wallet balance is topped up, not reset, so waiting brings none of it
 	// back. Both halves are known, so the proportion spent is still real.
-	usage.AddWindow("booster", len(usage.Windows), &quota.UsageWindow{
+	usage.AddWindow("booster", &quota.UsageWindow{
 		Type:        quota.WindowTypeBalance,
 		Kind:        quota.WindowKindResource,
 		Used:        used,

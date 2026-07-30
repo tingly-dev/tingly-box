@@ -1,11 +1,11 @@
 import React from 'react';
 import { Box, Stack, Tooltip, Typography, tooltipClasses } from '@mui/material';
-import type { TieredUsageWindow } from '@/types/quota';
+import type { QuotaWindow } from '@/types/quota';
 import { formatQuotaPercent, formatQuotaUsage, isCountable } from '@/types/quota';
 import { QUOTA_COLORS, formatNumber } from '../dashboard/chartStyles';
 
 interface QuotaBarItemProps {
-  window: TieredUsageWindow;
+  window: QuotaWindow;
   /**
    * Whether to show detailed info (used/limit, reset time)
    * If false, only shows label, bar, and percent
@@ -28,8 +28,6 @@ interface QuotaBarItemProps {
    */
   tooltipContent?: React.ReactNode;
 }
-
-const formatCompactNumber = formatNumber;
 
 /**
  * Compact inline display of a single quota window.
@@ -68,7 +66,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
   };
 
   const resetTime = formatResetTime();
-  const detailedInfo = formatQuotaUsage(window, { formatNumber: formatCompactNumber });
+  const detailedInfo = formatQuotaUsage(window, { formatNumber: formatNumber });
 
   const tooltipContent = (
     <Box

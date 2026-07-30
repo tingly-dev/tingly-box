@@ -119,12 +119,11 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 	if data.Limit != nil && *data.Limit > 0 {
 		used := data.Usage
 		limit := *data.Limit
-		usage.AddWindow("key_limit", 0, &quota.UsageWindow{
+		usage.AddWindow("key_limit", &quota.UsageWindow{
 			Type:        quota.WindowTypeBalance,
 			Kind:        quota.WindowKindResource,
 			Used:        used,
 			Limit:       limit,
-			UsedPercent: calcPercent(used, limit),
 			Unit:        quota.UsageUnitCurrency,
 			Label:       "Key Limit",
 			Description: fmt.Sprintf("Balance: $%.2f / $%.2f", limit-used, limit),
@@ -148,7 +147,7 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		monthly.Label = "Monthly Usage"
 		monthly.Description = fmt.Sprintf("This month: $%.4f (no limit set)", data.UsageMonthly)
 	}
-	usage.AddWindow("monthly", 1, monthly)
+	usage.AddWindow("monthly", monthly)
 
 	// Cost
 	usage.Cost = &quota.UsageCost{

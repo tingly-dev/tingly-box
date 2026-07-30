@@ -4,8 +4,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"math"
-	"sort"
 	"time"
 )
 
@@ -74,7 +72,7 @@ type ProviderUsage struct {
 	FetchedAt    time.Time    `json:"fetched_at"`    // fetch time
 	ExpiresAt    time.Time    `json:"expires_at"`    // data expiration time
 
-	// Normalized quota windows for frontend display. Lower tier values are more important and displayed first.
+	// Account-level quota windows, in display order (see NormalizeWindows).
 	Windows []*UsageWindow `json:"windows,omitempty"`
 
 	// Cost information (e.g., monthly costs)
@@ -110,9 +108,8 @@ type UsageBreakdown struct {
 
 // UsageWindow represents a single quota window
 type UsageWindow struct {
-	// Display key and priority tier. Lower tier values are more important and displayed first.
-	Key  string `json:"key,omitempty"`
-	Tier int    `json:"tier,omitempty"`
+	// Display key.
+	Key string `json:"key,omitempty"`
 
 	// Window type identifier
 	Type WindowType `json:"type"` // session, weekly, monthly, daily, custom, balance
@@ -137,7 +134,7 @@ type UsageWindow struct {
 	// Unlimited say why UsedPercent should not be read as a usage figure.
 	// Between them they replace the three-way ambiguity of Limit == 0
 	// (unlimited / unknown / no entitlement).
-	Kind      WindowKind `json:"kind,omitempty"`      // defaults to WindowKindLimit, see Kind()
+	Kind      WindowKind `json:"kind,omitempty"`      // defaults to WindowKindLimit, see EffectiveKind()
 	Unknown   bool       `json:"unknown,omitempty"`   // upstream did not report usage; not the same as 0%
 	Unlimited bool       `json:"unlimited,omitempty"` // no cap at all
 
@@ -178,71 +175,6 @@ func (w *UsageWindow) CalculateUsedPercent() float64 {
 	return (w.Used / w.Limit) * 100
 }
 
-// NormalizeWindows puts Windows into display order: allowances first, shortest
-// period leading, then standing resources, then anything with no usage figure
-// to show.
-//
-// Short periods lead because they move fastest and are what a user watches; a
-// balance has no period at all, and an unknown or uncapped entry has nothing
-// to compare, so both sort after the windows that do.
-//
-// This used to order by Tier, which each fetcher filled in by its own rules —
-// Codex derives it from how many windows happen to precede a given one — so
-// tier 0 meant a 5-hour session for one provider and a credit balance for
-// another, and the ordering was not comparable across providers.
-func (p *ProviderUsage) NormalizeWindows() {
-	if p == nil {
-		return
-	}
-
-	for i, window := range p.Windows {
-		applyWindowDefaults(window, fmt.Sprintf("window_%d", i))
-	}
-
-	sort.SliceStable(p.Windows, func(i, j int) bool {
-		left, right := p.Windows[i], p.Windows[j]
-		if left == nil || right == nil {
-			return left != nil
-		}
-		if lr, rr := windowRank(left), windowRank(right); lr != rr {
-			return lr < rr
-		}
-		return periodRank(left) < periodRank(right)
-	})
-}
-
-// periodRank orders by window length, putting unsized windows last: the same
-// rule tighter() uses, so a window cannot be least urgent for Tightest() and
-// most prominent for display.
-func periodRank(w *UsageWindow) int {
-	if w.WindowMinutes <= 0 {
-		return math.MaxInt
-	}
-	return w.WindowMinutes
-}
-
-// windowRank groups windows for display; within a group they order by period.
-func windowRank(w *UsageWindow) int {
-	switch {
-	case !w.Countable():
-		return 2
-	case w.EffectiveKind() == WindowKindResource:
-		return 1
-	default:
-		return 0
-	}
-}
-
-func applyWindowDefaults(window *UsageWindow, key string) {
-	if window == nil {
-		return
-	}
-	if window.Key == "" {
-		window.Key = key
-	}
-	applyWindowSemantics(window)
-}
-
 // applyWindowSemantics fills in what the shared layer can derive, so a fetcher
 // only has to state what upstream told it.
 func applyWindowSemantics(window *UsageWindow) {
@@ -263,13 +195,13 @@ func applyWindowSemantics(window *UsageWindow) {
 	}
 }
 
-// AddWindow adds a quota window with canonical display metadata.
-func (p *ProviderUsage) AddWindow(key string, tier int, window *UsageWindow) *UsageWindow {
+// AddWindow adds an account-level quota window. Display order comes from
+// NormalizeWindows, so callers only name the window.
+func (p *ProviderUsage) AddWindow(key string, window *UsageWindow) *UsageWindow {
 	if p == nil || window == nil {
 		return nil
 	}
 	window.Key = key
-	window.Tier = tier
 	applyWindowSemantics(window)
 	p.Windows = append(p.Windows, window)
 	return window

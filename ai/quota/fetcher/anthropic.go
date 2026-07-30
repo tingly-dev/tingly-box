@@ -80,11 +80,8 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	// Build the request.
-	apiBase := "https://api.anthropic.com"
-	if f.baseURL != "" {
-		apiBase = f.baseURL
-	}
-	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+"/api/oauth/usage", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		endpoint(f.baseURL, "https://api.anthropic.com", "/api/oauth/usage"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -131,7 +128,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 
 	// 5-hour session quota (API returns utilization percentage only)
 	// Used/Limit normalized to 0-100 scale for unified frontend rendering
-	fiveHour := usage.AddWindow("five_hour", 0, &quota.UsageWindow{
+	fiveHour := usage.AddWindow("five_hour", &quota.UsageWindow{
 		Type:          quota.WindowTypeSession,
 		Used:          apiResp.FiveHour.Utilization,
 		Limit:         100,
@@ -144,7 +141,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 
 	// 7-day weekly quota (API returns utilization percentage only)
 	// Used/Limit normalized to 0-100 scale for unified frontend rendering
-	sevenDay := usage.AddWindow("seven_day", 1, &quota.UsageWindow{
+	sevenDay := usage.AddWindow("seven_day", &quota.UsageWindow{
 		Type:          quota.WindowTypeWeekly,
 		Used:          apiResp.SevenDay.Utilization,
 		Limit:         100,
@@ -189,7 +186,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 			extra.Unknown = true
 			extra.Description = "utilization unavailable"
 		}
-		usage.AddWindow("extra_usage", 2, extra)
+		usage.AddWindow("extra_usage", extra)
 
 		usage.Cost = &quota.UsageCost{
 			Used:         apiResp.ExtraUsage.UsedCredits / 100,  // cents → dollars

@@ -140,9 +140,7 @@ func BenchmarkInferProviderType(b *testing.B) {
 }
 
 func TestUnreadableProvidersReportWhyAndNothingElse(t *testing.T) {
-	// Pct already answers "unknown" for a usage with nothing countable in it,
-	// so there is no placeholder window — inventing one would put a row on
-	// every surface saying nothing a reader can act on.
+	// No placeholder window; see Unreadable.
 	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
 	usage := Unreadable("u", "n", ProviderTypeCursor, "quota API not available", now, time.Hour)
 

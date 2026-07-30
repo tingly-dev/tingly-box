@@ -179,11 +179,7 @@ func buildZaiProviderUsage(provider *ai.Provider, providerType quota.ProviderTyp
 		if class.feature != "" {
 			usage.AddBreakdown(class.feature, class.label, "feature", window)
 		} else {
-			tier := class.tier
-			if tier < 0 {
-				tier = len(usage.Windows)
-			}
-			usage.AddWindow(zaiLimitKey(lim), tier, window)
+			usage.AddWindow(zaiLimitKey(lim), window)
 		}
 
 		addZaiUsageDetails(usage, lim, window, hasAbsoluteValues)
@@ -199,7 +195,6 @@ type zaiLimitClass struct {
 	windowType    quota.WindowType
 	label         string
 	unit          quota.UsageUnit
-	tier          int
 	windowMinutes int
 	feature       string
 }
@@ -225,20 +220,10 @@ func classifyZaiLimit(lim zaiQuotaLimit) zaiLimitClass {
 
 	switch lim.Type {
 	case "TOKENS_LIMIT":
-		tier := 0
-		switch lim.Unit.Int {
-		case 3:
-			tier = 0
-		case 6:
-			tier = 1
-		case 5:
-			tier = 3
-		}
 		return zaiLimitClass{
 			windowType:    scopedWindowType,
 			label:         scopedLabel("Tokens"),
 			unit:          quota.UsageUnitTokens,
-			tier:          tier,
 			windowMinutes: minutes,
 		}
 	case "TIME_LIMIT":
@@ -246,7 +231,6 @@ func classifyZaiLimit(lim zaiQuotaLimit) zaiLimitClass {
 			windowType:    scopedWindowType,
 			label:         scopedLabel("MCP"),
 			unit:          quota.UsageUnitRequests,
-			tier:          2,
 			windowMinutes: minutes,
 			feature:       "mcp",
 		}
@@ -255,7 +239,6 @@ func classifyZaiLimit(lim zaiQuotaLimit) zaiLimitClass {
 			windowType:    quota.WindowTypeCustom,
 			label:         lim.Type,
 			unit:          quota.UsageUnitRequests,
-			tier:          -1,
 			windowMinutes: minutes,
 		}
 	}
