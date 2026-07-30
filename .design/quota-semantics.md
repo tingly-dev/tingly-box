@@ -181,8 +181,10 @@ gemini-2.5-flash    0%
 消费方一律按 `Limit > 0` 过滤（`statusline/handler.go:378`），于是"随便用"和"别乱用"都被静默丢掉。
 → 用 `unlimited` 和 `unknown` 两个布尔显式表达，不再靠 0 猜。
 
-**作用域窗口误 gate**。Codex 的 `model_*`、`code_review`，Zai 的 MCP `TIME_LIMIT`（`zai_shared.go` 的 `classifyZaiLimit`）
+**作用域窗口误 gate**。Codex 的 `model_*`、`code_review`，Zai 的 MCP `TIME_LIMIT`（`zai_shared.go` 的 `classifyZaiLimit`），
+MiniMax 套餐里捆的 `video` / `speech` / `image` / `music`
 和账户级窗口平铺在同一个 `Windows` 数组里，导致"这个 provider 还有没有额度"被无关窗口污染。
+判断标准很简单：**gateway 会不会往这里发请求**。不会的，就不该替账户回答。
 → 这些窗口移进已有的 `Breakdowns`（本来就是干这个的），`Windows` 只留账户级。零新概念。
 
 ---
@@ -233,7 +235,7 @@ func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → Rese
 | codex | `model_*` / `code_review` 移进 `Breakdowns`；重置券 `Kind=resource`；`Cost.Limit=balance` 的错位改成资源条目（`fetcher/codex.go:324`） |
 | gemini | average 窗口换成**最紧的那个 bucket**，并用模型名当标签（"Average Usage 50%" 指不出该停用哪个模型）；每个 bucket 进 `Breakdowns` |
 | zai | `usageDetails` 的 `modelPercent` 不再写进 `UsedPercent`；MCP `TIME_LIMIT` 移进 `Breakdowns`；`Number×unit` → `WindowMinutes` |
-| minimax | 账户级取**最紧的那个模型**（原先把编码模型和语音/图片/视频的请求数加总，一个打满的编码额度会被媒体额度稀释）；每个模型出**两个窗口**——自己的区间（general 5h / video 24h）+ 共享周窗口；counts 为 `0/0` 时用 `*_remaining_percent`（真实返回里常是这种形态，按 counts 读会让整个 provider 变"不可知"）；两者都没有 → 该窗口不产出 |
+| minimax | 只有**文本模型**（`general` / `MiniMax-M*`）答账户级；套餐捆的 `video` / `speech-*` / `image-*` / `music-*` / `Hailuo-*` 是 gateway 从不请求的媒体生成，移进 `Breakdowns` 的 `feature` 组（否则一个打满的视频额度会让整个 provider 看起来没额度——和 Codex code_review、Zai MCP 同一类）。每个条目出**两个窗口**：自己的区间（general 5h / video 24h）+ 共享周窗口。counts 为 `0/0` 时用 `*_remaining_percent`（真实返回常是这种形态，只按 counts 读会让整个 provider 变"不可知"）；两者都没有 → 该窗口不产出。只有一个文本模型时不再额外出 per-model 行，那只是把账户级窗口重复一遍 |
 | kimi_code | `booster` → `Kind=resource`；`weekly` 及上游没给周期的 limit 补上周期。币种没提成字段——Description 和 `Cost.CurrencyCode` 已经带了，没有消费方要读它 |
 | kimik2 | `credits` → `Kind=resource` |
 | openrouter | 余额 → `Kind=resource`；`monthly` 的 `Limit=0` → `Unlimited=true`；去掉重复的第二个 monthly 窗口 |

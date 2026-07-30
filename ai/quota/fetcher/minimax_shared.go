@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -92,58 +93,117 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 		ExpiresAt:    now.Add(5 * time.Minute),
 	}
 
-	// The account-level figures are the most-used model, not the sum across
-	// models. The plan covers unrelated products — a coding model, speech,
-	// image, music — so adding their request counts together lets an exhausted
-	// coding quota hide behind untouched media ones.
-	var tightestInterval, tightestWeekly *quota.UsageWindow
-	var intervalModel, weeklyModel string
-
+	// Only the text models answer for the account. The plan bundles media
+	// generation — video, speech, image, music — which the gateway never sends
+	// a request to, so a spent video quota must not make MiniMax look
+	// exhausted. Same reasoning as Codex's code review limit and Z.ai's MCP one.
+	var accountModels, features []minimaxModelWindows
 	for _, model := range apiResp.ModelRemains {
-		windows := make([]*quota.UsageWindow, 0, 2)
-
-		interval := minimaxWindow(minimaxWindowInput{
-			total:     model.CurrentIntervalTotalCount,
-			remaining: model.CurrentIntervalUsageCount,
-			pctLeft:   model.CurrentIntervalRemainingPercent,
-			startMs:   model.StartTime,
-			endMs:     model.EndTime,
-			fallback:  24 * 60,
-			label:     "Interval",
-			resetAtMs: model.EndTime,
-		})
-		if interval != nil {
-			windows = append(windows, interval)
-			if interval.Countable() && (tightestInterval == nil || interval.Pct() > tightestInterval.Pct()) {
-				tightestInterval, intervalModel = interval, model.ModelName
-			}
+		mw := minimaxModelWindows{name: model.ModelName, windows: minimaxWindowsFor(model)}
+		if len(mw.windows) == 0 {
+			continue
 		}
-
-		weekly := minimaxWindow(minimaxWindowInput{
-			total:     model.CurrentWeeklyTotalCount,
-			remaining: model.CurrentWeeklyUsageCount,
-			pctLeft:   model.CurrentWeeklyRemainingPercent,
-			startMs:   model.WeeklyStartTime,
-			endMs:     model.WeeklyEndTime,
-			fallback:  7 * 24 * 60,
-			label:     "Weekly",
-			resetAtMs: model.WeeklyEndTime,
-		})
-		if weekly != nil {
-			windows = append(windows, weekly)
-			if weekly.Countable() && (tightestWeekly == nil || weekly.Pct() > tightestWeekly.Pct()) {
-				tightestWeekly, weeklyModel = weekly, model.ModelName
-			}
-		}
-
-		if len(windows) > 0 {
-			usage.AddBreakdown(model.ModelName, model.ModelName, "resource", windows...)
+		if isMiniMaxMediaFeature(model.ModelName) {
+			features = append(features, mw)
+		} else {
+			accountModels = append(accountModels, mw)
 		}
 	}
 
-	addMiniMaxAccountWindow(usage, "interval", 0, tightestInterval, intervalModel)
-	addMiniMaxAccountWindow(usage, "weekly", 1, tightestWeekly, weeklyModel)
+	addMiniMaxAccountWindows(usage, accountModels)
+
+	// A per-model row for an account model only adds something when there is
+	// more than one of them; with a single "general" it would repeat the
+	// account windows verbatim.
+	if len(accountModels) > 1 {
+		for _, mw := range accountModels {
+			usage.AddBreakdown(mw.name, mw.name, "resource", mw.windows...)
+		}
+	}
+	for _, mw := range features {
+		usage.AddBreakdown(mw.name, mw.name, "feature", mw.windows...)
+	}
+
 	return usage
+}
+
+// minimaxModelWindows is one entry's windows, in the order upstream describes
+// them: its own interval first, then the shared week.
+type minimaxModelWindows struct {
+	name    string
+	windows []*quota.UsageWindow
+}
+
+// miniMaxMediaFeatures are the product families the plan bundles alongside the
+// text models. Anything unrecognised stays account-level: a new media product
+// showing up would at worst raise a false alarm, whereas misreading the text
+// model as a feature would leave the account with no usage figure at all.
+var miniMaxMediaFeatures = []string{"video", "speech", "image", "music", "audio", "voice", "hailuo"}
+
+func isMiniMaxMediaFeature(model string) bool {
+	name := strings.ToLower(model)
+	for _, family := range miniMaxMediaFeatures {
+		if strings.Contains(name, family) {
+			return true
+		}
+	}
+	return false
+}
+
+// minimaxWindowsFor builds an entry's interval and weekly windows, dropping
+// either when upstream reported nothing for it.
+func minimaxWindowsFor(model minimaxModelRemain) []*quota.UsageWindow {
+	windows := make([]*quota.UsageWindow, 0, 2)
+	if w := minimaxWindow(minimaxWindowInput{
+		total: model.CurrentIntervalTotalCount, remaining: model.CurrentIntervalUsageCount,
+		pctLeft: model.CurrentIntervalRemainingPercent,
+		startMs: model.StartTime, endMs: model.EndTime, resetAtMs: model.EndTime,
+		fallback: 24 * 60, label: "Interval",
+	}); w != nil {
+		windows = append(windows, w)
+	}
+	if w := minimaxWindow(minimaxWindowInput{
+		total: model.CurrentWeeklyTotalCount, remaining: model.CurrentWeeklyUsageCount,
+		pctLeft: model.CurrentWeeklyRemainingPercent,
+		startMs: model.WeeklyStartTime, endMs: model.WeeklyEndTime, resetAtMs: model.WeeklyEndTime,
+		fallback: 7 * 24 * 60, label: "Weekly",
+	}); w != nil {
+		windows = append(windows, w)
+	}
+	return windows
+}
+
+// addMiniMaxAccountWindows lifts the most-used text model's windows to the
+// account level, one per period, naming the model they came from.
+func addMiniMaxAccountWindows(usage *quota.ProviderUsage, models []minimaxModelWindows) {
+	type binding struct {
+		window *quota.UsageWindow
+		model  string
+	}
+	tightest := map[string]binding{}
+
+	for _, mw := range models {
+		for _, w := range mw.windows {
+			cur, seen := tightest[w.Label]
+			if !w.Countable() && seen {
+				continue
+			}
+			if !seen || w.Pct() > cur.window.Pct() {
+				tightest[w.Label] = binding{w, mw.name}
+			}
+		}
+	}
+
+	for tier, label := range []string{"Interval", "Weekly"} {
+		b, ok := tightest[label]
+		if !ok {
+			continue
+		}
+		account := *b.window
+		account.Label = label + " Quota"
+		account.Description = fmt.Sprintf("%s · %s", b.window.Description, b.model)
+		usage.AddWindow(strings.ToLower(label), tier, &account)
+	}
 }
 
 type minimaxWindowInput struct {
@@ -190,18 +250,6 @@ func minimaxWindow(in minimaxWindowInput) *quota.UsageWindow {
 		w.ResetsAt = &reset
 	}
 	return w
-}
-
-// addMiniMaxAccountWindow copies the most-used model's window up to the account
-// level, naming the model so a user knows which one is running out.
-func addMiniMaxAccountWindow(usage *quota.ProviderUsage, key string, tier int, tightest *quota.UsageWindow, model string) {
-	if tightest == nil {
-		return
-	}
-	account := *tightest
-	account.Label = tightest.Label + " Quota"
-	account.Description = fmt.Sprintf("%s · %s", tightest.Description, model)
-	usage.AddWindow(key, tier, &account)
 }
 
 // minimaxWindowMinutes derives the period from the interval upstream reports,

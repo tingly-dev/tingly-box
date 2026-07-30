@@ -1261,9 +1261,10 @@ const mockQuotas: Record<string, any> = {
         },
     },
 
-    // Real MiniMax capture: the counts come back 0/0 and the remaining
-    // percentages carry the whole story, and each model reports its own
-    // interval length (5h here, 24h for video) beside the shared week.
+    // Real MiniMax capture. The counts come back 0/0 and the remaining
+    // percentages carry the whole story. general answers for the account —
+    // video is bundled media the gateway never sends a request to, so a spent
+    // video quota must not make MiniMax look exhausted.
     'mock-provider-minimax': {
         provider_uuid: 'mock-provider-minimax',
         provider_name: 'MiniMax',
@@ -1274,14 +1275,14 @@ const mockQuotas: Record<string, any> = {
             {
                 key: 'interval',
                 type: 'session',
-                used: 35,
+                used: 60,
                 limit: 100,
-                used_percent: 35,
+                used_percent: 60,
                 resets_at: inOneHour,
                 window_minutes: 300,
                 unit: 'percent',
                 label: 'Interval Quota',
-                description: '35% used · general',
+                description: '60% used · general',
             },
             {
                 key: 'weekly',
@@ -1298,36 +1299,19 @@ const mockQuotas: Record<string, any> = {
         ],
         breakdowns: [
             {
-                key: 'general',
-                label: 'general',
-                group: 'resource',
-                windows: [
-                    {
-                        type: 'session', used: 35, limit: 100, used_percent: 35,
-                        resets_at: inOneHour, window_minutes: 300, unit: 'percent',
-                        label: 'Interval', description: '35% used',
-                    },
-                    {
-                        type: 'weekly', used: 12, limit: 100, used_percent: 12,
-                        resets_at: inSixDays, window_minutes: 10080, unit: 'percent',
-                        label: 'Weekly', description: '12% used',
-                    },
-                ],
-            },
-            {
                 key: 'video',
                 label: 'video',
-                group: 'resource',
+                group: 'feature',
                 windows: [
                     {
-                        type: 'daily', used: 0, limit: 100, used_percent: 0,
+                        type: 'daily', used: 100, limit: 100, used_percent: 100,
                         resets_at: inTwoDays, window_minutes: 1440, unit: 'percent',
-                        label: 'Interval', description: '0% used',
+                        label: 'Interval', description: '100% used',
                     },
                     {
-                        type: 'weekly', used: 0, limit: 100, used_percent: 0,
+                        type: 'weekly', used: 100, limit: 100, used_percent: 100,
                         resets_at: inSixDays, window_minutes: 10080, unit: 'percent',
-                        label: 'Weekly', description: '0% used',
+                        label: 'Weekly', description: '100% used',
                     },
                 ],
             },
@@ -1341,7 +1325,7 @@ const mockQuotas: Record<string, any> = {
                     current_weekly_total_count: 0, current_weekly_usage_count: 0,
                     weekly_start_time: 1785081600000, weekly_end_time: 1785686400000,
                     weekly_remains_time: 305840499,
-                    current_interval_status: 1, current_interval_remaining_percent: 65,
+                    current_interval_status: 1, current_interval_remaining_percent: 40,
                     current_weekly_status: 3, current_weekly_remaining_percent: 88,
                 },
                 {
@@ -1351,8 +1335,8 @@ const mockQuotas: Record<string, any> = {
                     current_weekly_total_count: 0, current_weekly_usage_count: 0,
                     weekly_start_time: 1785081600000, weekly_end_time: 1785686400000,
                     weekly_remains_time: 305840499,
-                    current_interval_status: 3, current_interval_remaining_percent: 100,
-                    current_weekly_status: 3, current_weekly_remaining_percent: 100,
+                    current_interval_status: 3, current_interval_remaining_percent: 0,
+                    current_weekly_status: 3, current_weekly_remaining_percent: 0,
                 },
             ],
             base_resp: { status_code: 0, status_msg: 'success' },

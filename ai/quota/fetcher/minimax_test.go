@@ -229,24 +229,28 @@ func TestMiniMaxFallsBackToTheRemainingPercent(t *testing.T) {
 		t.Errorf("Description = %q; want it to name the model", got)
 	}
 
-	// Each model reports both of its windows, at the interval upstream gave it.
-	for _, tc := range []struct {
-		model   string
-		minutes int
-	}{
-		{"general", 5 * 60},
-		{"video", 24 * 60},
-	} {
-		bd := findBreakdown(t, usage, tc.model)
-		if len(bd.Windows) != 2 {
-			t.Fatalf("%s: %d windows; want interval + weekly", tc.model, len(bd.Windows))
-		}
-		if got := bd.Windows[0].WindowMinutes; got != tc.minutes {
-			t.Errorf("%s: interval = %d min; want %d", tc.model, got, tc.minutes)
-		}
-		if got := bd.Windows[1].WindowMinutes; got != 7*24*60 {
-			t.Errorf("%s: weekly = %d min; want %d", tc.model, got, 7*24*60)
-		}
+	// general drives both account windows, each at the length upstream gave it.
+	if got := findWindow(t, usage, "interval").WindowMinutes; got != 5*60 {
+		t.Errorf("interval = %d min; want 300, general's own length", got)
+	}
+	if got := findWindow(t, usage, "weekly").WindowMinutes; got != 7*24*60 {
+		t.Errorf("weekly = %d min; want %d", got, 7*24*60)
+	}
+
+	// The single text model needs no per-model row — it would repeat the
+	// account windows. Video gets one, scoped as a feature.
+	if len(usage.Breakdowns) != 1 {
+		t.Fatalf("Breakdowns = %d; want just the media feature", len(usage.Breakdowns))
+	}
+	video := findBreakdown(t, usage, "video")
+	if video.Group != "feature" {
+		t.Errorf("video Group = %q; want feature", video.Group)
+	}
+	if len(video.Windows) != 2 {
+		t.Fatalf("video: %d windows; want interval + weekly", len(video.Windows))
+	}
+	if got := video.Windows[0].WindowMinutes; got != 24*60 {
+		t.Errorf("video interval = %d min; want %d", got, 24*60)
 	}
 }
 
