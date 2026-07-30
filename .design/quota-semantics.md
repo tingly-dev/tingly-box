@@ -12,10 +12,14 @@
 > **「还剩多少？」** 和 **「什么时候回来？」**
 
 `tokens` / `requests` / `credits` / `$` 都是这两个答案的**说法**，不是答案本身。
-今天 `ai/quota` 把 15 个 provider 归一成了同一个 `UsageWindow` 结构，但没归一成同一个**答案**——
-所以谁也没法拿它做判定。
+
+`ai/quota` 把 14 个 fetcher 归一成了同一个 `UsageWindow` 结构，但**结构相同不等于含义相同**——
+同一组字段在不同 provider 里回答的是不同的问题，所以谁也没法拿它做判定。
 
 本文档要做的事就一句话：**让每个 provider 都能回答这两个问题，用同一种说法。**
+
+> 下文凡说「原先」，指的是本次改动之前的行为。四个真实上游返回的归一结果固化在
+> `ai/quota/fetcher/taskfile_samples_test.go`，样本本身在 `build/Taskfile.quota.yml`。
 
 ---
 
@@ -35,7 +39,7 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 
 | | 会重置吗 | 耗尽意味着 | 例子 |
 |---|---|---|---|
-| **额度** `limit` | 会 | **等一会** | Anthropic 5h/7d、Codex 周窗口、MiniMax 日/周、Zai token 限额 |
+| **额度** `limit` | 会 | **等一会** | Anthropic 5h/7d、Codex 周窗口、MiniMax 区间/周、Zai token 限额 |
 | **资源** `resource` | 不会 | **得充钱** | OpenRouter 余额、KimiK2 credits、Kimi booster、Codex 重置券 |
 
 这就是你说的"附加的资源 quota"。它俩的区别只有一条：**耗尽后会不会自愈**。
@@ -64,8 +68,8 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 ```
 
 好在"取最紧"和"按时长排序"不冲突，而且比"手写优先级"更省事——
-今天 `AddWindow(key, tier, ...)` 的 tier 是各 fetcher 手填的，Codex 甚至用 `len(usage.Windows)`
-（`fetcher/codex.go:248`，同一个窗口的 tier 取决于前面碰巧有几个窗口），跨 provider 根本不可比。
+`AddWindow(key, tier, ...)` 的 tier 是各 fetcher 手填的，Codex 甚至用 `len(usage.Windows)`
+（`fetcher/codex.go`，同一个窗口的 tier 取决于前面碰巧有几个窗口），跨 provider 根本不可比。
 **排序改用窗口时长，tier 不再参与判定。**
 
 ### 5h / 1w / 1m 怎么统一
@@ -74,7 +78,7 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 
 枚举名不可比——`session` 在 Anthropic 是 5 小时、在 Codex 是上游给的任意
 `limit_window_seconds`、在 Zai 是 N 小时、在 KimiCode 是"小于 24 小时就叫 session"
-（`fetcher/kimi_code.go:311`）。四家的 `session` 是四个长度。
+（`fetcher/kimi_code.go`）。四家的 `session` 是四个长度。
 `Type` 枚举保留，但降级为纯展示。
 
 这个数按可信度分三档取：
@@ -110,7 +114,7 @@ statusline 才能说"卡在 7d 窗口，周日 03:00 恢复"。
 ### 4.1 不可知 ≠ 0%
 
 ```go
-// fetcher/anthropic.go:169-178   溢价额度，上游返回 utilization = null
+// fetcher/anthropic.go   溢价额度，上游返回 utilization = null
 } else {
     used  = 0
     limit = 100          // → 前端显示「0% 已用」
@@ -120,7 +124,7 @@ statusline 才能说"卡在 7d 窗口，周日 03:00 恢复"。
 上游说"我不知道"，我们对用户说"一点没用，随便刷"。方向反了。
 
 Copilot / Cursor / VertexAI 更直接——返回空 `Windows` + `LastError`
-（`fetcher/copilot.go:58`），消费方看到的和"额度充足"一模一样。
+（`fetcher/copilot.go`），消费方看到的和"额度充足"一模一样。
 
 **改法**：`Pct` 可空。不可知的条目不参与 max、不显示百分比、也不谎报 0。
 一个 `unknown` 布尔字段就够，不需要"证据等级"那套东西。
@@ -137,7 +141,7 @@ OpenRouter 的月度花费（$8.10，没有上限）、Codex 的余额（$12.40�
 ### 4.2 占比 ≠ 耗尽
 
 ```go
-// fetcher/zai_shared.go:246-255
+// fetcher/zai_shared.go
 modelPercent = (detail.Usage / lim.CurrentValue) * 100   // 该模型占「已消耗量」的比例
 ...
 UsedPercent: modelPercent,                               // 写进了「耗尽程度」字段
@@ -146,9 +150,8 @@ UsedPercent: modelPercent,                               // 写进了「耗尽�
 ```
 本周实际用掉 32%，其中 glm-4.6 占了 85%
 
-现在：glm-4.6 那条显示 used_percent = 85  →  UI 染红（QuotaBarItem 对 ≥80 染红）
-      规则 "used_ge 80" 被误触发
-应该：本周窗口 32%；glm-4.6 只是 Used 的一个明细，不产生自己的 Pct
+原先：glm-4.6 那条 used_percent = 85  →  UI 染红（≥80 染红）
+改后：本周窗口 32%；glm-4.6 按占**额度**的比例算（27.2%），占消耗的比例只进 Description
 ```
 
 **改法**：一条规则——`UsedPercent` 只准表示"离耗尽还有多远"。
@@ -157,7 +160,7 @@ UsedPercent: modelPercent,                               // 写进了「耗尽�
 ### 4.3 平均掩盖耗尽
 
 ```go
-// fetcher/gemini.go:124
+// fetcher/gemini.go
 avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
 ```
 
@@ -165,20 +168,21 @@ avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
 gemini-2.5-pro    100%  （已经打不通了）
 gemini-2.5-flash    0%
 
-现在：平均 50%  →  "还有一半呢"  →  路由过去  →  429
-改后：max 100%  →  这个 provider 的 pro 额度已耗尽
+原先：平均 50%  →  "还有一半呢"  →  路由过去  →  429
+改后：报最紧的那个 bucket = 100%，标签就写 `gemini-2.5-pro`
 ```
 
-**改法**：删掉 average 窗口，套 §3 的 max。改动是一行。
+**改法**：account 级窗口从"平均"改成"最紧的那个 bucket"，并用**该模型的名字**当标签——
+"Average Usage 50%" 指不出该停用哪个模型，`gemini-2.5-pro 100%` 指得出（ux-principles #5）。
 
 ---
 
 ## 5. 顺带修掉的两个小歧义
 
-**`Limit == 0` 三义**。`types.go:111` 注释写"0 means unlimited"，实际有三种来源：
-真·无限制（OpenRouter 没设 key limit，`fetcher/openrouter.go:134`）、
+**`Limit == 0` 三义**。`types.go` 的注释写"0 means unlimited"，实际有三种来源：
+真·无限制（OpenRouter 没设 key limit，`fetcher/openrouter.go`）、
 不可知（OpenAI 没有 limit API）、无额度。
-消费方一律按 `Limit > 0` 过滤（`statusline/handler.go:378`），于是"随便用"和"别乱用"都被静默丢掉。
+消费方一律按 `Limit > 0` 过滤（`statusline/handler.go`），于是"随便用"和"别乱用"都被静默丢掉。
 → 用 `unlimited` 和 `unknown` 两个布尔显式表达，不再靠 0 猜。
 
 **作用域窗口误 gate**。Codex 的 `model_*`、`code_review`，Zai 的 MCP `TIME_LIMIT`（`zai_shared.go` 的 `classifyZaiLimit`），
@@ -197,15 +201,14 @@ MiniMax 套餐里捆的 `video` / `speech` / `image` / `music`
 type UsageWindow struct {
     // ... 现有字段全部保留 ...
 
-    Kind      WindowKind `json:"kind"`                // "limit"（会重置）| "resource"（要充钱）
+    Kind      WindowKind `json:"kind,omitempty"`      // "limit"（会重置）| "resource"（要充钱）
     Unknown   bool       `json:"unknown,omitempty"`   // Pct 不可知，不参与聚合
     Unlimited bool       `json:"unlimited,omitempty"` // 真·无限制，区别于 Limit==0 的其他两义
 }
 ```
 
-`WindowMinutes` 保留但**要求带用量的 fetcher 填满**（原先 Anthropic 的 `seven_day`、
-Zai、Gemini 都没填）——它现在是排序键。不可知 / 无上限的条目豁免：它们既不参与排序也不参与
-平手判定，周期本来也无从得知，强求只会逼人编一个数。
+`WindowMinutes` 保留，并成为排序键（原先 Anthropic 的 `seven_day`、Zai、Gemini 都没填）。
+不参与比较的条目豁免——不可知 / 无上限的窗口既不排序也不平手判定，周期本来也无从得知。
 `Type`（session/daily/weekly/...）和 `Tier` 降级为纯展示，判定一律不读。
 
 判定 API 就三个函数：
@@ -216,8 +219,17 @@ func (p *ProviderUsage) Tightest() *UsageWindow   // Pct 最大的那条，用�
 func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → ResetsAt；是资源 → nil
 ```
 
-外加窗口上的两个小助手：`EffectiveKind()`（缺省为额度，兼容旧数据）和 `Countable()`
-（是否带可比的用量，即 `!Unknown && !Unlimited`）。
+外加窗口上的两个小助手：`EffectiveKind()`（缺省为额度，兼容旧数据）和
+`Countable()`（是否带可比的用量）：
+
+```go
+func (w *UsageWindow) Countable() bool {
+    return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
+}
+```
+
+`Limit > 0` 是兜底：一个报了花费却没上限、又忘了打标记的窗口，否则会贡献一个伪造的 0%，
+而这个 0% 会排在真窗口前面、并在平手时赢下 `Tightest()`。OpenRouter 的月度花费就踩过。
 
 **能比大小就够了。**跨 provider 的聚合（池子怎么算）等到真有消费方时再定，
 现在定了也是猜——见 §8。
@@ -232,11 +244,11 @@ func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → Rese
 | Provider | 改动 |
 |---|---|
 | anthropic | `seven_day` 补 `WindowMinutes=10080`；`extra_usage` 的 `utilization==null` → `Unknown=true`（不再填 0） |
-| codex | `model_*` / `code_review` 移进 `Breakdowns`；重置券 `Kind=resource`；`Cost.Limit=balance` 的错位改成资源条目（`fetcher/codex.go:324`） |
+| codex | `model_*` / `code_review` 移进 `Breakdowns`；重置券 `Kind=resource`；`Cost.Limit=balance` 的错位改成资源条目（`fetcher/codex.go`） |
 | gemini | average 窗口换成**最紧的那个 bucket**，并用模型名当标签（"Average Usage 50%" 指不出该停用哪个模型）；每个 bucket 进 `Breakdowns` |
 | zai | `usageDetails` 的 `modelPercent` 不再写进 `UsedPercent`；MCP `TIME_LIMIT` 移进 `Breakdowns`；`Number×unit` → `WindowMinutes` |
 | minimax | 只有**文本模型**（`general` / `MiniMax-M*`）答账户级；套餐捆的 `video` / `speech-*` / `image-*` / `music-*` / `Hailuo-*` 是 gateway 从不请求的媒体生成，移进 `Breakdowns` 的 `feature` 组（否则一个打满的视频额度会让整个 provider 看起来没额度——和 Codex code_review、Zai MCP 同一类）。每个条目出**两个窗口**：自己的区间（general 5h / video 24h）+ 共享周窗口。counts 为 `0/0` 时用 `*_remaining_percent`（真实返回常是这种形态，只按 counts 读会让整个 provider 变"不可知"）；两者都没有 → 该窗口不产出。只有一个文本模型时不再额外出 per-model 行，那只是把账户级窗口重复一遍 |
-| kimi_code | `booster` → `Kind=resource`；`weekly` 及上游没给周期的 limit 补上周期。币种没提成字段——Description 和 `Cost.CurrencyCode` 已经带了，没有消费方要读它 |
+| kimi_code | `booster` → `Kind=resource`；`weekly` 补 7d 周期（套餐周期是明确的）。上游**没给时长**的 limit 保持无周期 + `Type=custom`，不编数（编出来会顺带被推成 `weekly`）。币种没提成字段——Description 和 `Cost.CurrencyCode` 已经带了，没有消费方要读它 |
 | kimik2 | `credits` → `Kind=resource` |
 | openrouter | 余额 → `Kind=resource`；`monthly` 的 `Limit=0` → `Unlimited=true`；去掉重复的第二个 monthly 窗口 |
 | openai | 有花费没上限 → `spend` 窗口标 `Unknown`（数值仍可见）；404 时只记 `LastError` |
@@ -272,7 +284,7 @@ quota 不该发明第三种。
 
 **真做的时候挂在哪。**`internal/server/routing/stage_health.go` 已经是一个"摘除候选"的
 stage，跑在 smart routing / affinity / LB 之前，且已经写好了需要的降级规则
-（`stage_health.go:44`：全都不健康就不过滤）。而 `loadbalance/health_monitor.go:222` 的
+（"全都不健康就不过滤"那条降级分支）。而 `loadbalance/health_monitor.go` 里的
 `RateLimitedUntil = now.Add(RecoveryTimeout)` 是个**猜的固定超时**。于是：
 
 ```
@@ -292,28 +304,36 @@ stage，跑在 smart routing / affinity / LB 之前，且已经写好了需要�
 
 ## 9. 端到端示例
 
-一条 rule 挂 4 个 provider，周五晚上：
+一条 rule 挂四个 provider（示意数字；真实上游返回的归一结果见
+`ai/quota/fetcher/taskfile_samples_test.go`）：
 
 ```
-                     窗口                          Pct     恢复
-  ─────────────────────────────────────────────────────────────────────
-  Anthropic          5h    12%   （刚重置）
-                     7d    96%   ← 最紧              96%    周日 03:00
-  ─────────────────────────────────────────────────────────────────────
-  MiniMax            daily  340/500  = 68% ← 最紧    68%    明天 00:00
-                     weekly 1200/3500 = 34%
-  ─────────────────────────────────────────────────────────────────────
-  OpenRouter         余额  $8.10/$20 = 60% ← 最紧    60%    nil（要充钱）
-  ─────────────────────────────────────────────────────────────────────
-  Copilot            无配额 API                      不可知  —
-  ─────────────────────────────────────────────────────────────────────
+                     窗口                              Pct     恢复
+  ─────────────────────────────────────────────────────────────────────────
+  Anthropic          5h    12%  （刚重置）
+                     7d    96%  ← 最紧                  96%    周日 03:00
+                     溢价额度   不可知（上游不肯说）
+  ─────────────────────────────────────────────────────────────────────────
+  MiniMax            区间(5h)  60% ← 最紧               60%    18:00
+                     周        12%
+                     ·video 100%（feature，不替账户回答）
+  ─────────────────────────────────────────────────────────────────────────
+  OpenRouter         余额  $8.10/$20 = 40% ← 最紧       40%    nil（要充钱）
+                     月度花费  无上限（不算百分比）
+  ─────────────────────────────────────────────────────────────────────────
+  Copilot            无配额 API                         不可知  —
+  ─────────────────────────────────────────────────────────────────────────
 
-  statusline 显示：Anthropic 96% · 卡在 7d 窗口 · 周日 03:00 恢复
-  四个 provider 的用量第一次可以放在一起比大小，且每个数字都是同一个意思。
+  statusline：Anthropic 96% · 卡在 7d 窗口 · 周日 03:00 恢复
 ```
 
-对照今天的行为：Anthropic 会因为 tier=0 报出 5h 的 **12%**（"还早呢"），
-Gemini 类的 provider 会报平均值，Copilot 会静默消失，OpenRouter 的余额和周期额度画成一样的条。
+四个 provider 的用量第一次能放在一起比大小，且每个数字都是同一个意思。
+
+**改之前**同一组数据是这样的：Anthropic 因为 `tier=0` 报 5h 的 **12%**（"还早呢"）；
+Gemini 类的 provider 报跨模型平均值；MiniMax 把编码模型和视频额度加总，
+一个打满的 video 会让整个 provider 看起来耗尽；OpenRouter 的余额和无上限的月度花费
+画成一样的进度条，后者还显示 "$8.10 / $0.00"；Copilot 静默消失，
+和"额度充足"无法区分。
 
 ---
 
@@ -338,8 +358,9 @@ Gemini 类的 provider 会报平均值，Copilot 会静默消失，OpenRouter �
 
 不变量单测（跨所有 provider 统一跑，新增 provider 自动被兜住）：
 
-- `Countable()` 且 `Kind=limit` ⇒ `WindowMinutes > 0`
-- `Countable()` ⇒ `Limit > 0`（没有上限就没有可比的分母，`Countable()` 自带这条兜底）
+- `Countable()` 且 `Type` **点明了周期**（session / daily / weekly / monthly）⇒ `WindowMinutes > 0`。
+  `custom` 豁免——它的意思就是"上游没给任何可归类的信息"，那里编一个长度比留空更糟
+  （Zai 有一种形态把 unit 写成字符串 `"tokens"`，根本没给时长）
 - `Type=balance` ⇒ `Kind=resource`（能抓到遗漏的那个方向；`AddWindow` 也会自动补）
 - `Unknown` ⇒ 不参与 `Pct()`，且前端不显示百分比
 - `Unlimited` ⇒ 不参与 `Pct()`
