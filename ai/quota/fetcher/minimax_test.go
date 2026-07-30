@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,11 +48,13 @@ func TestBuildMiniMaxUsage(t *testing.T) {
 	if len(usage.Windows) != 2 {
 		t.Fatalf("len(Windows) = %d, want 2", len(usage.Windows))
 	}
-	if usage.Windows[0].Used != 75 || usage.Windows[0].Limit != 300 {
-		t.Fatalf("daily window = %.0f/%.0f, want 75/300", usage.Windows[0].Used, usage.Windows[0].Limit)
+	// The account figures come from the most-used model, not the sum: both
+	// models sit at 25% daily, so the first wins the tie with its own numbers.
+	if usage.Windows[0].Used != 25 || usage.Windows[0].Limit != 100 {
+		t.Fatalf("daily window = %.0f/%.0f, want 25/100", usage.Windows[0].Used, usage.Windows[0].Limit)
 	}
-	if usage.Windows[1].Used != 300 || usage.Windows[1].Limit != 1500 {
-		t.Fatalf("weekly window = %.0f/%.0f, want 300/1500", usage.Windows[1].Used, usage.Windows[1].Limit)
+	if usage.Windows[1].Used != 100 || usage.Windows[1].Limit != 500 {
+		t.Fatalf("weekly window = %.0f/%.0f, want 100/500", usage.Windows[1].Used, usage.Windows[1].Limit)
 	}
 	if usage.Windows[0].ResetsAt == nil || !usage.Windows[0].ResetsAt.Equal(time.UnixMilli(reset)) {
 		t.Fatalf("daily reset = %v, want %v", usage.Windows[0].ResetsAt, time.UnixMilli(reset))
@@ -136,6 +139,10 @@ func TestMiniMaxWindowsCarryTheReportedInterval(t *testing.T) {
 	if got := findWindow(t, usage, "daily").WindowMinutes; got != 12*60 {
 		t.Errorf("daily WindowMinutes = %d, want %d (the reported interval)", got, 12*60)
 	}
+	// The account figure is the most-used model, not the sum across products.
+	if got := findWindow(t, usage, "daily").Limit; got != 500 {
+		t.Errorf("daily Limit = %v, want 500 (one model's cap, not a total)", got)
+	}
 	if got := findWindow(t, usage, "weekly").WindowMinutes; got != 7*24*60 {
 		t.Errorf("weekly WindowMinutes = %d, want %d", got, 7*24*60)
 	}
@@ -155,5 +162,27 @@ func TestMiniMaxWindowsFallBackToTheNominalPeriod(t *testing.T) {
 
 	if got := findWindow(t, usage, "daily").WindowMinutes; got != 24*60 {
 		t.Errorf("daily WindowMinutes = %d, want %d", got, 24*60)
+	}
+}
+
+func TestMiniMaxSumDoesNotMaskAnExhaustedModel(t *testing.T) {
+	// The plan covers unrelated products. Adding a spent coding quota to
+	// untouched media ones reported 1500/5500 — 27% — for an account that
+	// cannot serve another coding request.
+	resp := minimaxRemainsResponse{ModelRemains: []minimaxModelRemain{
+		{ModelName: "MiniMax-M2", CurrentIntervalTotalCount: 1500, CurrentIntervalUsageCount: 0},
+		{ModelName: "speech-hd", CurrentIntervalTotalCount: 4000, CurrentIntervalUsageCount: 4000},
+	}}
+
+	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"},
+		quota.ProviderTypeMiniMax, resp, time.Now())
+	checkInvariants(t, usage)
+
+	pct, ok := usage.Pct()
+	if !ok || pct != 100 {
+		t.Fatalf("Pct() = %v, %v; want 100, true — the coding model is spent", pct, ok)
+	}
+	if got := usage.Tightest().Description; !strings.Contains(got, "MiniMax-M2") {
+		t.Errorf("Description = %q; want it to name the model that ran out", got)
 	}
 }

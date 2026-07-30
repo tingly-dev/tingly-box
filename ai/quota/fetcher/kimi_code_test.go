@@ -353,8 +353,11 @@ func TestKimiCodeSemantics(t *testing.T) {
 	if got := findWindow(t, usage, "limit_1").WindowMinutes; got != 300 {
 		t.Errorf("limit_1 WindowMinutes = %d, want 300", got)
 	}
-	if got := findWindow(t, usage, "limit_2").WindowMinutes; got <= 0 {
-		t.Errorf("limit_2 WindowMinutes = %d, want a fallback period", got)
+	// A limit upstream did not size stays unsized rather than being given an
+	// invented period; it sorts after the sized ones.
+	unsized := findWindow(t, usage, "limit_2")
+	if unsized.WindowMinutes != 0 || unsized.Type != quota.WindowTypeCustom {
+		t.Errorf("limit_2 = %d min, type %q; want unsized and custom", unsized.WindowMinutes, unsized.Type)
 	}
 }
 
@@ -384,7 +387,7 @@ func TestKimiCodeUnsizedLimitKeepsItsRealType(t *testing.T) {
 	if limit.Type != quota.WindowTypeCustom {
 		t.Errorf("Type = %q; want custom — upstream gave no period", limit.Type)
 	}
-	if limit.WindowMinutes <= 0 {
-		t.Error("WindowMinutes should still fall back so the entry stays orderable")
+	if limit.WindowMinutes != 0 {
+		t.Errorf("WindowMinutes = %d; want 0 rather than an invented period", limit.WindowMinutes)
 	}
 }

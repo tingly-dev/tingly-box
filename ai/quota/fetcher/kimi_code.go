@@ -277,16 +277,11 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 			continue
 		}
 		duration, timeUnit := item.windowDetail()
+		// A limit upstream did not size stays unsized: it comes out as a custom
+		// window that sorts after the sized ones, rather than being labelled
+		// weekly on the strength of a number we made up.
 		windowMinutes := kimiCodeWindowMinutes(duration, timeUnit)
-		// The type comes from what upstream actually said. The ordering key
-		// falls back to the plan's weekly window when it said nothing, so the
-		// entry stays orderable — but that fallback must not travel into the
-		// type, or an unsized limit would be labelled weekly on the strength
-		// of a number we made up.
-		windowType := kimiCodeWindowType(windowMinutes)
-		if windowMinutes <= 0 {
-			windowMinutes = 7 * 24 * 60
-		}
+		windowType := windowTypeForMinutes(windowMinutes)
 		label := detail.label(kimiCodeWindowLabel(duration, timeUnit, index))
 		if item.Scope != "" && detail.Name == "" && detail.Title == "" {
 			label = item.Scope
@@ -324,23 +319,6 @@ func kimiCodeWindowMinutes(duration float64, unit string) int {
 		return int(duration * 24 * 60)
 	default:
 		return int(duration / 60)
-	}
-}
-
-func kimiCodeWindowType(minutes int) quota.WindowType {
-	switch {
-	case minutes <= 0:
-		return quota.WindowTypeCustom
-	case minutes < 24*60:
-		return quota.WindowTypeSession
-	case minutes == 24*60:
-		return quota.WindowTypeDaily
-	case minutes >= 28*24*60:
-		return quota.WindowTypeMonthly
-	case minutes >= 7*24*60:
-		return quota.WindowTypeWeekly
-	default:
-		return quota.WindowTypeCustom
 	}
 }
 

@@ -226,11 +226,11 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 
 	if apiResp.RateLimit != nil {
 		if w := apiResp.RateLimit.PrimaryWindow; w != nil {
-			usage.AddWindow("current", 0, codexWindow(w, quota.WindowTypeSession, "Current Window",
+			usage.AddWindow("current", 0, codexWindow(w, windowTypeForMinutes(w.LimitWindowSeconds/60), "Current Window",
 				fmt.Sprintf("%dh window, %.0f%% used", w.LimitWindowSeconds/3600, float64(w.UsedPercent))))
 		}
 		if w := apiResp.RateLimit.SecondaryWindow; w != nil {
-			usage.AddWindow("weekly", 1, codexWindow(w, quota.WindowTypeWeekly, "Weekly",
+			usage.AddWindow("weekly", 1, codexWindow(w, windowTypeForMinutes(w.LimitWindowSeconds/60), "Weekly",
 				fmt.Sprintf("%dd window, %.0f%% used", w.LimitWindowSeconds/86400, float64(w.UsedPercent))))
 		}
 	}
