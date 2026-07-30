@@ -379,7 +379,7 @@ func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
 	// OpenAI Responses API: input=50 total, cached=8 → stored as 50-8=42 (uncached only)
 	assert.Equal(t, 42, usage.InputTokens)
 	assert.Equal(t, 30, usage.OutputTokens)
-	assert.Equal(t, 8, usage.CacheInputTokens)
+	assert.Equal(t, 8, usage.CacheReadTokens)
 	assert.Equal(t, 12, usage.ReasoningTokens)
 }
 

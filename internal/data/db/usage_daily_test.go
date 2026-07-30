@@ -38,7 +38,7 @@ func seedUsageRecords(t *testing.T, store *UsageStore, days int) int {
 					Timestamp:        now.Add(-time.Duration(d)*24*time.Hour - time.Duration(h)*time.Hour),
 					InputTokens:      100 + d*10 + h,
 					OutputTokens:     50 + h,
-					CacheInputTokens: 20 * i,
+					CacheReadTokens:  20 * i,
 					CacheWriteTokens: 7 * (d % 3),
 					SystemTokens:     5,
 					Status:           status,
@@ -113,7 +113,7 @@ func TestAggregatedStatsDailyMatchesRaw(t *testing.T) {
 				m.TotalTokens != r.TotalTokens ||
 				m.InputTokens != r.InputTokens ||
 				m.OutputTokens != r.OutputTokens ||
-				m.CacheInputTokens != r.CacheInputTokens ||
+				m.CacheReadTokens != r.CacheReadTokens ||
 				m.CacheWriteTokens != r.CacheWriteTokens ||
 				m.SystemTokens != r.SystemTokens ||
 				m.ErrorCount != r.ErrorCount ||
@@ -214,7 +214,7 @@ func TestTimeSeriesDailyMatchesRaw(t *testing.T) {
 			m.TotalTokens != r.TotalTokens ||
 			m.InputTokens != r.InputTokens ||
 			m.OutputTokens != r.OutputTokens ||
-			m.CacheInputTokens != r.CacheInputTokens ||
+			m.CacheReadTokens != r.CacheReadTokens ||
 			m.CacheWriteTokens != r.CacheWriteTokens ||
 			m.ErrorCount != r.ErrorCount {
 			t.Fatalf("bucket %d mismatch:\nmerged=%+v\nraw=%+v", i, m, r)
@@ -445,18 +445,18 @@ func seedUsageRecordsWithoutWrites(t *testing.T, store *UsageStore, days int) {
 	for d := 0; d < days; d++ {
 		for h := 0; h < 24; h += 5 {
 			rec := &UsageRecord{
-				ProviderUUID:     "prov-a",
-				ProviderName:     "Provider A",
-				Model:            "model-x",
-				Scenario:         "default",
-				UserID:           "admin",
-				Timestamp:        now.Add(-time.Duration(d)*24*time.Hour - time.Duration(h)*time.Hour),
-				InputTokens:      100 + d*10 + h,
-				OutputTokens:     50 + h,
-				CacheInputTokens: 20,
-				SystemTokens:     5,
-				Status:           "success",
-				LatencyMs:        200 + h*3,
+				ProviderUUID:    "prov-a",
+				ProviderName:    "Provider A",
+				Model:           "model-x",
+				Scenario:        "default",
+				UserID:          "admin",
+				Timestamp:       now.Add(-time.Duration(d)*24*time.Hour - time.Duration(h)*time.Hour),
+				InputTokens:     100 + d*10 + h,
+				OutputTokens:    50 + h,
+				CacheReadTokens: 20,
+				SystemTokens:    5,
+				Status:          "success",
+				LatencyMs:       200 + h*3,
 			}
 			if err := store.RecordUsage(rec); err != nil {
 				t.Fatalf("RecordUsage failed: %v", err)

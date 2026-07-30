@@ -75,7 +75,7 @@ interface UserUsageRow extends APITokenInfo {
     total_tokens: number;
     total_input_tokens: number;
     total_output_tokens: number;
-    cache_input_tokens: number;
+    cache_read_tokens: number;
     cache_write_tokens: number;
     error_count: number;
     error_rate: number;
@@ -266,7 +266,7 @@ export default function UserUsagePage() {
                 total_tokens: getTotalTokens(stat ?? {}),
                 total_input_tokens: stat?.total_input_tokens || 0,
                 total_output_tokens: stat?.total_output_tokens || 0,
-                cache_input_tokens: stat?.cache_input_tokens || 0,
+                cache_read_tokens: stat?.cache_read_tokens || 0,
                 cache_write_tokens: stat?.cache_write_tokens || 0,
                 error_count: stat?.error_count || 0,
                 error_rate: stat?.error_rate || 0,
@@ -334,7 +334,7 @@ export default function UserUsagePage() {
             (acc, row) => {
                 acc.tokens += row.total_tokens;
                 acc.inputTokens += row.total_input_tokens;
-                acc.cacheTokens += row.cache_input_tokens;
+                acc.cacheTokens += row.cache_read_tokens;
                 acc.cacheWriteTokens += row.cache_write_tokens;
                 acc.requests += row.request_count;
                 acc.errors += row.error_count;
@@ -807,7 +807,7 @@ export default function UserUsagePage() {
                                     {[
                                         { label: t('dashboard.userUsage.input', { defaultValue: 'Input' }), value: selectedUser.total_input_tokens, color: TOKEN_COLORS.input.main },
                                         { label: t('dashboard.userUsage.output', { defaultValue: 'Output' }), value: selectedUser.total_output_tokens, color: TOKEN_COLORS.output.main },
-                                        { label: t('dashboard.userUsage.cacheRead', { defaultValue: 'Cache Read' }), value: selectedUser.cache_input_tokens, color: TOKEN_COLORS.cache.main },
+                                        { label: t('dashboard.userUsage.cacheRead', { defaultValue: 'Cache Read' }), value: selectedUser.cache_read_tokens, color: TOKEN_COLORS.cache.main },
                                     ].map(({ label, value, color }) => (
                                         <Grid
                                             key={label}

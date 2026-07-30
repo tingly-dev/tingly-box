@@ -39,7 +39,7 @@ type AggregatedStat struct {
 	ErrorRate        float64 `json:"error_rate" example:"0.0022"`
 	StreamedCount    int64   `json:"streamed_count" example:"4800"`
 	StreamedRate     float64 `json:"streamed_rate" example:"0.885"`
-	CacheInputTokens int64   `json:"cache_input_tokens" example:"500000"`
+	CacheReadTokens  int64   `json:"cache_read_tokens" example:"500000"`
 	CacheWriteTokens int64   `json:"cache_write_tokens" example:"75000"`
 }
 
@@ -74,7 +74,7 @@ type TimeSeriesData struct {
 	TotalTokens      int64   `json:"total_tokens" example:"52000"`
 	InputTokens      int64   `json:"input_tokens" example:"32000"`
 	OutputTokens     int64   `json:"output_tokens" example:"20000"`
-	CacheInputTokens int64   `json:"cache_input_tokens" example:"10000"`
+	CacheReadTokens  int64   `json:"cache_read_tokens" example:"10000"`
 	CacheWriteTokens int64   `json:"cache_write_tokens" example:"1500"`
 	ErrorCount       int64   `json:"error_count" example:"0"`
 	AvgLatencyMs     float64 `json:"avg_latency_ms" example:"1100"`
@@ -119,7 +119,7 @@ type UsageRecordResponse struct {
 	InputTokens      int    `json:"input_tokens" example:"1000"`
 	OutputTokens     int    `json:"output_tokens" example:"500"`
 	TotalTokens      int    `json:"total_tokens" example:"1500"`
-	CacheInputTokens int    `json:"cache_input_tokens" example:"2000"`
+	CacheReadTokens  int    `json:"cache_read_tokens" example:"2000"`
 	CacheWriteTokens int    `json:"cache_write_tokens" example:"300"`
 	Status           string `json:"status" example:"success"`
 	ErrorCode        string `json:"error_code,omitempty"`

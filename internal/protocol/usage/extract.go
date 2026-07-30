@@ -86,14 +86,14 @@ func FromAnthropicBetaMessage(u anthropic.BetaUsage) *protocol.TokenUsage {
 // CompletionUsage wire struct. OpenAI wire semantics: PromptTokens = TOTAL
 // (uncached + cached), CachedTokens is a reported subset.
 func ChatUsage(u *protocol.TokenUsage) openai.CompletionUsage {
-	totalInput := u.InputTokens + u.CacheInputTokens
+	totalInput := u.InputTokens + u.CacheReadTokens
 	cu := openai.CompletionUsage{
 		PromptTokens:     int64(totalInput),
 		CompletionTokens: int64(u.OutputTokens),
 		TotalTokens:      int64(totalInput + u.OutputTokens),
 	}
-	if u.CacheInputTokens > 0 {
-		cu.PromptTokensDetails.CachedTokens = int64(u.CacheInputTokens)
+	if u.CacheReadTokens > 0 {
+		cu.PromptTokensDetails.CachedTokens = int64(u.CacheReadTokens)
 	}
 	if u.CacheWriteTokens > 0 {
 		cu.PromptTokensDetails.CacheWriteTokens = int64(u.CacheWriteTokens)

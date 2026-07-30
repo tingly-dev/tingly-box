@@ -146,8 +146,8 @@ export const formatNumber = (n: number): string => compactNumberFormatter.format
 export const getTotalTokens = (stat: {
     total_input_tokens?: number;
     total_output_tokens?: number;
-    cache_input_tokens?: number;
-}): number => (stat.total_input_tokens || 0) + (stat.total_output_tokens || 0) + (stat.cache_input_tokens || 0);
+    cache_read_tokens?: number;
+}): number => (stat.total_input_tokens || 0) + (stat.total_output_tokens || 0) + (stat.cache_read_tokens || 0);
 
 // Cache / (cache + input), as a percentage.
 export const getCacheHitRate = (cacheTokens: number, inputTokens: number): number =>

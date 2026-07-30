@@ -63,7 +63,7 @@ func TestAnthropicToOpenAIStream_VModelFullUsage(t *testing.T) {
 			assert.Equal(t, 17, usage.OutputTokens, "OutputTokens should reflect upstream output_tokens")
 			// The returned usage (what gets persisted) must retain cache_read_input_tokens
 			// instead of dropping it to 0 on the conversion path.
-			assert.Equal(t, 11, usage.CacheInputTokens, "CacheInputTokens should retain cache_read_input_tokens for recorded usage")
+			assert.Equal(t, 11, usage.CacheReadTokens, "CacheReadTokens should retain cache_read_input_tokens for recorded usage")
 			assert.Equal(t, 5, usage.CacheWriteTokens, "CacheWriteTokens should retain cache_creation_input_tokens")
 
 			body := w.Body.String()

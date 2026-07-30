@@ -294,7 +294,7 @@ func (c *openAIToAnthropicConverter) emitTerminalEvents() {
 	usage := c.Usage()
 	logrus.Debugf("OpenAI->Anthropic stream usage: model=%s in=%d out=%d cache=%d cache_write=%d reasoning=%d stop=%s",
 		c.responseModel, usage.InputTokens, usage.OutputTokens,
-		usage.CacheInputTokens, usage.CacheWriteTokens, usage.ReasoningTokens, c.pendingFinishReason)
+		usage.CacheReadTokens, usage.CacheWriteTokens, usage.ReasoningTokens, c.pendingFinishReason)
 	c.emitEnsureMessageStart()
 	c.emitStopEvents()
 	stopReason := c.mapFinishReason(c.pendingFinishReason)

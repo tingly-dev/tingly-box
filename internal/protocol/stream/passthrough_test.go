@@ -331,7 +331,7 @@ func TestHandleOpenAIResponsesStream_UsageTokens(t *testing.T) {
 	// OpenAI Responses API: input=50 total, cached=7 → stored as 50-7=43 (uncached only)
 	assert.Equal(t, 43, usage.InputTokens)
 	assert.Equal(t, 30, usage.OutputTokens)
-	assert.Equal(t, 7, usage.CacheInputTokens)
+	assert.Equal(t, 7, usage.CacheReadTokens)
 	assert.Equal(t, 15, usage.ReasoningTokens)
 }
 
@@ -353,7 +353,7 @@ func TestHandleOpenAIResponsesStream_ZeroReasoningTokens(t *testing.T) {
 
 	assert.Equal(t, 20, usage.InputTokens)
 	assert.Equal(t, 10, usage.OutputTokens)
-	assert.Equal(t, 0, usage.CacheInputTokens)
+	assert.Equal(t, 0, usage.CacheReadTokens)
 	assert.Equal(t, 0, usage.ReasoningTokens)
 }
 
@@ -430,7 +430,7 @@ func TestHandleOpenAIResponsesStreamToAnthropic_UsageTokens(t *testing.T) {
 	// OpenAI Responses API: input=60 total, cached=12 → stored as 60-12=48 (uncached only)
 	assert.Equal(t, 48, usage.InputTokens)
 	assert.Equal(t, 25, usage.OutputTokens)
-	assert.Equal(t, 12, usage.CacheInputTokens)
+	assert.Equal(t, 12, usage.CacheReadTokens)
 	assert.Equal(t, 8, usage.ReasoningTokens)
 }
 
@@ -450,7 +450,7 @@ func TestHandleOpenAIResponsesStreamToAnthropic_ZeroCacheAndReasoning(t *testing
 
 	assert.Equal(t, 30, usage.InputTokens)
 	assert.Equal(t, 15, usage.OutputTokens)
-	assert.Equal(t, 0, usage.CacheInputTokens)
+	assert.Equal(t, 0, usage.CacheReadTokens)
 	assert.Equal(t, 0, usage.ReasoningTokens)
 }
 
@@ -478,7 +478,7 @@ func TestHandleAnthropic_UsageTokens(t *testing.T) {
 
 	assert.Equal(t, 35, usage.InputTokens)
 	assert.Equal(t, 18, usage.OutputTokens)
-	assert.Equal(t, 5, usage.CacheInputTokens)
+	assert.Equal(t, 5, usage.CacheReadTokens)
 	assert.Equal(t, 0, usage.ReasoningTokens) // Anthropic SDK has no reasoning tokens
 }
 
@@ -505,7 +505,7 @@ func TestHandleAnthropic_RealStreamFormat(t *testing.T) {
 
 	assert.Equal(t, 35, usage.InputTokens, "input_tokens must come from message_start")
 	assert.Equal(t, 18, usage.OutputTokens)
-	assert.Equal(t, 5, usage.CacheInputTokens)
+	assert.Equal(t, 5, usage.CacheReadTokens)
 }
 
 // ---------------------------------------------------------------------------
@@ -534,7 +534,7 @@ func TestHandleAnthropicBeta_RealStreamFormat(t *testing.T) {
 
 	assert.Equal(t, 40, usage.InputTokens, "input_tokens must come from message_start")
 	assert.Equal(t, 22, usage.OutputTokens)
-	assert.Equal(t, 8, usage.CacheInputTokens)
+	assert.Equal(t, 8, usage.CacheReadTokens)
 }
 
 // ---------------------------------------------------------------------------

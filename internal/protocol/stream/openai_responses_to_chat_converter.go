@@ -184,7 +184,7 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		if evt.Response.Usage.TotalTokens != 0 {
 			c.totalTokens = evt.Response.Usage.TotalTokens
 		} else {
-			c.totalTokens = int64(c.usage.InputTokens + c.usage.CacheInputTokens + c.usage.OutputTokens)
+			c.totalTokens = int64(c.usage.InputTokens + c.usage.CacheReadTokens + c.usage.OutputTokens)
 		}
 		c.emitCompletedOutput(evt.Response.Output)
 		finishReason := responsesToChatFinishReason(&evt.Response, c.hasToolCalls)

@@ -57,9 +57,9 @@ func (sr *StreamRecorder) Finish(model string, usage *protocol.TokenUsage) {
 	}
 	if (usage == nil || (usage.InputTokens == 0 && usage.OutputTokens == 0)) && sr.hasUsage {
 		usage = &protocol.TokenUsage{
-			InputTokens:      sr.inputTokens,
-			OutputTokens:     sr.outputTokens,
-			CacheInputTokens: sr.cacheReadTokens,
+			InputTokens:     sr.inputTokens,
+			OutputTokens:    sr.outputTokens,
+			CacheReadTokens: sr.cacheReadTokens,
 		}
 	}
 	if usage == nil {
@@ -80,8 +80,8 @@ func (sr *StreamRecorder) Finish(model string, usage *protocol.TokenUsage) {
 		"input_tokens":  usage.InputTokens,
 		"output_tokens": usage.OutputTokens,
 	}
-	if usage.CacheInputTokens > 0 {
-		usageMap["cache_read_input_tokens"] = usage.CacheInputTokens
+	if usage.CacheReadTokens > 0 {
+		usageMap["cache_read_input_tokens"] = usage.CacheReadTokens
 	}
 	fallback["usage"] = usageMap
 	sr.recorder.SetAssembledResponse(fallback)

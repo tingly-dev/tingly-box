@@ -84,7 +84,7 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
                     dataMap.set(format(parsedDate, 'yyyy-MM-dd'), {
                         inputTokens: item.input_tokens || 0,
                         outputTokens: item.output_tokens || 0,
-                        cacheTokens: item.cache_input_tokens || 0,
+                        cacheTokens: item.cache_read_tokens || 0,
                     });
                 }
             }

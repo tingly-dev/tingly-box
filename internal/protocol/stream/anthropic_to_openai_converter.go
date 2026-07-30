@@ -229,15 +229,15 @@ func (c *anthropicToOpenAIConverter) newChunk(delta wire.ChatStreamDelta, finish
 // cache_write_tokens reported, disjoint subsets. Anthropic's
 // cache_creation_input_tokens lands in cache_write_tokens.
 func chatStreamUsageWire(u *protocol.TokenUsage) *wire.ChatStreamUsage {
-	totalInput := u.InputTokens + u.CacheInputTokens
+	totalInput := u.InputTokens + u.CacheReadTokens
 	su := &wire.ChatStreamUsage{
 		PromptTokens:     int64(totalInput),
 		CompletionTokens: int64(u.OutputTokens),
 		TotalTokens:      int64(totalInput + u.OutputTokens),
 	}
-	if u.CacheInputTokens > 0 || u.CacheWriteTokens > 0 {
+	if u.CacheReadTokens > 0 || u.CacheWriteTokens > 0 {
 		su.PromptTokensDetails = &wire.ChatStreamPromptTokenDetails{
-			CachedTokens:     int64(u.CacheInputTokens),
+			CachedTokens:     int64(u.CacheReadTokens),
 			CacheWriteTokens: int64(u.CacheWriteTokens),
 		}
 	}

@@ -373,7 +373,7 @@ export default function DashboardPage() {
     const totalRequests = stats.reduce((sum, s) => sum + (s.request_count || 0), 0);
     const totalInputTokens = stats.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0);
     const totalOutputTokens = stats.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0);
-    const totalCacheTokens = stats.reduce((sum, s) => sum + (s.cache_input_tokens || 0), 0);
+    const totalCacheTokens = stats.reduce((sum, s) => sum + (s.cache_read_tokens || 0), 0);
     // Cache writes are already inside total_input_tokens (they are billed at a
     // premium but are still this prompt's input), so they are reported next to
     // the read hits rather than added to any total.

@@ -63,7 +63,7 @@ func TestFromOpenAIChatCompletion(t *testing.T) {
 			got := usage.FromOpenAIChatCompletion(u)
 			assert.Equal(t, tc.wantInput, got.InputTokens)
 			assert.Equal(t, tc.wantOutput, got.OutputTokens)
-			assert.Equal(t, tc.wantCache, got.CacheInputTokens)
+			assert.Equal(t, tc.wantCache, got.CacheReadTokens)
 			assert.Equal(t, tc.wantReasoning, got.ReasoningTokens)
 		})
 	}
@@ -113,7 +113,7 @@ func TestFromOpenAIResponses(t *testing.T) {
 			got := usage.FromOpenAIResponses(u)
 			assert.Equal(t, tc.wantInput, got.InputTokens)
 			assert.Equal(t, tc.wantOutput, got.OutputTokens)
-			assert.Equal(t, tc.wantCache, got.CacheInputTokens)
+			assert.Equal(t, tc.wantCache, got.CacheReadTokens)
 			assert.Equal(t, tc.wantReasoning, got.ReasoningTokens)
 		})
 	}
@@ -159,7 +159,7 @@ func TestFromAnthropicMessage(t *testing.T) {
 			got := usage.FromAnthropicMessage(u)
 			assert.Equal(t, tc.wantInput, got.InputTokens)
 			assert.Equal(t, tc.wantOutput, got.OutputTokens)
-			assert.Equal(t, tc.wantCache, got.CacheInputTokens)
+			assert.Equal(t, tc.wantCache, got.CacheReadTokens)
 		})
 	}
 }
@@ -174,7 +174,7 @@ func TestFromAnthropicBetaMessage(t *testing.T) {
 	got := usage.FromAnthropicBetaMessage(u)
 	assert.Equal(t, 300, got.InputTokens) // 100 + 200
 	assert.Equal(t, 50, got.OutputTokens)
-	assert.Equal(t, 400, got.CacheInputTokens)
+	assert.Equal(t, 400, got.CacheReadTokens)
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +283,7 @@ func TestAnthropicAccumulator_RealFormat(t *testing.T) {
 	got := acc.Result()
 	assert.Equal(t, 35, got.InputTokens)
 	assert.Equal(t, 18, got.OutputTokens)
-	assert.Equal(t, 5, got.CacheInputTokens)
+	assert.Equal(t, 5, got.CacheReadTokens)
 	assert.True(t, acc.HasUsage())
 }
 
@@ -306,7 +306,7 @@ func TestAnthropicAccumulator_WithCacheCreation(t *testing.T) {
 	got := acc.Result()
 	assert.Equal(t, 1000, got.InputTokens) // 100 + 900
 	assert.Equal(t, 50, got.OutputTokens)
-	assert.Equal(t, 800, got.CacheInputTokens)
+	assert.Equal(t, 800, got.CacheReadTokens)
 }
 
 // TestAnthropicAccumulator_NonStandardDelta verifies backward compat for providers
@@ -349,7 +349,7 @@ func TestAnthropicAccumulator_Beta(t *testing.T) {
 	got := acc.Result()
 	assert.Equal(t, 45, got.InputTokens) // 40 + 5
 	assert.Equal(t, 22, got.OutputTokens)
-	assert.Equal(t, 8, got.CacheInputTokens)
+	assert.Equal(t, 8, got.CacheReadTokens)
 }
 
 // TestAnthropicAccumulator_NoUsage verifies HasUsage is false when no usage seen.
@@ -416,12 +416,12 @@ func TestFromOpenAI_CacheWriteStaysInsideInput(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, 400, got.InputTokens, "only cached_tokens is subtracted; writes stay in")
-			assert.Equal(t, 600, got.CacheInputTokens)
+			assert.Equal(t, 600, got.CacheReadTokens)
 			assert.Equal(t, 600, got.CacheReadTokens)
 			assert.Equal(t, 150, got.CacheWriteTokens)
 			assert.Equal(t, 80, got.OutputTokens)
 			// The invariant every downstream consumer relies on.
-			assert.Equal(t, int(prompt), got.InputTokens+got.CacheInputTokens)
+			assert.Equal(t, int(prompt), got.InputTokens+got.CacheReadTokens)
 			assert.LessOrEqual(t, got.CacheWriteTokens, got.InputTokens,
 				"CacheWriteTokens is a subset of InputTokens, never an addition")
 		})
@@ -436,7 +436,7 @@ func TestFromOpenAI_NoCacheWriteReported(t *testing.T) {
 
 	got := usage.FromOpenAIChatCompletion(chat)
 	assert.Equal(t, 300, got.InputTokens)
-	assert.Equal(t, 200, got.CacheInputTokens)
+	assert.Equal(t, 200, got.CacheReadTokens)
 	assert.Zero(t, got.CacheWriteTokens)
 }
 
@@ -454,7 +454,7 @@ func TestChatUsage_RoundTripsCacheWrite(t *testing.T) {
 	// Round trip back through normalization must be lossless.
 	back := usage.FromOpenAIChatCompletion(cu)
 	assert.Equal(t, u.InputTokens, back.InputTokens)
-	assert.Equal(t, u.CacheInputTokens, back.CacheInputTokens)
+	assert.Equal(t, u.CacheReadTokens, back.CacheReadTokens)
 	assert.Equal(t, u.CacheWriteTokens, back.CacheWriteTokens)
 }
 
@@ -479,7 +479,7 @@ func TestAnthropicAndOpenAI_NormalizeToSameShape(t *testing.T) {
 
 	assert.Equal(t, 250, fromOpenAI.InputTokens)
 	assert.Equal(t, fromOpenAI.InputTokens, fromAnthropic.InputTokens)
-	assert.Equal(t, fromOpenAI.CacheInputTokens, fromAnthropic.CacheInputTokens)
+	assert.Equal(t, fromOpenAI.CacheReadTokens, fromAnthropic.CacheReadTokens)
 	assert.Equal(t, fromOpenAI.CacheWriteTokens, fromAnthropic.CacheWriteTokens)
 	assert.Equal(t, fromOpenAI.OutputTokens, fromAnthropic.OutputTokens)
 }
@@ -496,6 +496,6 @@ func TestToAnthropicUsageMap_UnfoldsCacheWrite(t *testing.T) {
 	assert.Equal(t, 800, m["cache_read_input_tokens"])
 
 	// input + creation + read must reconstruct the original prompt total.
-	assert.Equal(t, u.InputTokens+u.CacheInputTokens,
+	assert.Equal(t, u.InputTokens+u.CacheReadTokens,
 		m["input_tokens"].(int)+m["cache_creation_input_tokens"].(int)+m["cache_read_input_tokens"].(int))
 }

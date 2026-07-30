@@ -160,7 +160,7 @@ func TestOpenAIToAnthropicStream_VModelFullUsage(t *testing.T) {
 
 			assert.Equal(t, 31, usage.InputTokens)
 			assert.Equal(t, 17, usage.OutputTokens)
-			assert.Equal(t, 11, usage.CacheInputTokens)
+			assert.Equal(t, 11, usage.CacheReadTokens)
 			assert.Equal(t, 5, usage.CacheWriteTokens)
 			assert.Equal(t, 9, usage.ReasoningTokens)
 

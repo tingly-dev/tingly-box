@@ -199,9 +199,9 @@ func TestCalculateTPS_NegativeTokens(t *testing.T) {
 func TestDetectCacheHit(t *testing.T) {
 	t.Run("cache hit", func(t *testing.T) {
 		usage := &protocol.TokenUsage{
-			InputTokens:      100,
-			OutputTokens:     50,
-			CacheInputTokens: 80, // Cache was used
+			InputTokens:     100,
+			OutputTokens:    50,
+			CacheReadTokens: 80, // Cache was used
 		}
 
 		cacheHit := DetectCacheHit(usage)
@@ -210,9 +210,9 @@ func TestDetectCacheHit(t *testing.T) {
 
 	t.Run("cache miss", func(t *testing.T) {
 		usage := &protocol.TokenUsage{
-			InputTokens:      100,
-			OutputTokens:     50,
-			CacheInputTokens: 0, // No cache
+			InputTokens:     100,
+			OutputTokens:    50,
+			CacheReadTokens: 0, // No cache
 		}
 
 		cacheHit := DetectCacheHit(usage)

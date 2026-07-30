@@ -51,7 +51,7 @@ func TestHandleResponsesToAnthropicStreamIncompleteKeepsUsageAndMaxTokens(t *tes
 
 	// Usage from the incomplete terminal event (input = 100 total - 40 cached).
 	assert.Equal(t, 60, usage.InputTokens)
-	assert.Equal(t, 40, usage.CacheInputTokens)
+	assert.Equal(t, 40, usage.CacheReadTokens)
 	assert.Equal(t, 20, usage.OutputTokens)
 	assert.Equal(t, 5, usage.ReasoningTokens)
 

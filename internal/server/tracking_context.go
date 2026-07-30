@@ -208,8 +208,8 @@ func CalculateTPS(c *gin.Context, outputTokens int, streamed bool) float64 {
 // Returns true if cache was hit, false otherwise.
 //
 // Detection logic:
-//   - OpenAI: usage.CacheInputTokens > 0 (cache_read_input_tokens field)
-//   - Anthropic: usage.CacheInputTokens > 0 (cache_read_input_tokens field)
+//   - OpenAI: usage.CacheReadTokens > 0 (cache_read_input_tokens field)
+//   - Anthropic: usage.CacheReadTokens > 0 (cache_read_input_tokens field)
 //   - Other providers: Returns false (conservative - assumes cache miss)
 //
 // Parameters:
@@ -222,7 +222,7 @@ func DetectCacheHit(usage *protocol.TokenUsage) bool {
 		return false
 	}
 
-	// OpenAI and Anthropic both expose cache tokens via CacheInputTokens field
+	// OpenAI and Anthropic both expose cache tokens via CacheReadTokens field
 	// If cache tokens > 0, it means cache was hit
-	return usage.CacheInputTokens > 0
+	return usage.CacheReadTokens > 0
 }

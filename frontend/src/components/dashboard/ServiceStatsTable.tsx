@@ -26,7 +26,7 @@ export interface AggregatedStat {
     total_tokens?: number;
     total_input_tokens: number;
     total_output_tokens: number;
-    cache_input_tokens?: number;
+    cache_read_tokens?: number;
     cache_write_tokens?: number;
     avg_latency_ms?: number;
     error_count?: number;
@@ -222,7 +222,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             </Typography>
                                         </TableCell>
                                         <TableCell align="right">{formatRequests(stat.request_count)}</TableCell>
-                                        <TableCell align="right">{formatTokens(stat.cache_input_tokens || 0)}</TableCell>
+                                        <TableCell align="right">{formatTokens(stat.cache_read_tokens || 0)}</TableCell>
                                         {showCacheWrite && (
                                             <TableCell align="right">{formatTokens(stat.cache_write_tokens || 0)}</TableCell>
                                         )}
@@ -234,7 +234,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                                 }}
                                             >
                                                 {(() => {
-                                                    const cacheTokens = stat.cache_input_tokens || 0;
+                                                    const cacheTokens = stat.cache_read_tokens || 0;
                                                     const inputTokens = stat.total_input_tokens || 0;
                                                     const ratio = (cacheTokens + inputTokens) > 0
                                                         ? (cacheTokens / (cacheTokens + inputTokens)) * 100

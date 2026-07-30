@@ -52,19 +52,19 @@ func TestRecordUsage_StandardMetricShape(t *testing.T) {
 	tracker, reader := newTestTracker(t)
 
 	tracker.RecordUsage(context.Background(), UsageOptions{
-		Provider:         "openai",
-		ProviderUUID:     "provider-123",
-		Model:            "gpt-4-0613",
-		RequestModel:     "gpt-4",
-		RuleUUID:         "rule-456",
-		Scenario:         "openai",
-		InputTokens:      100,
-		OutputTokens:     50,
-		CacheInputTokens: 30,
-		Streamed:         true,
-		Status:           "success",
-		LatencyMs:        250,
-		UserTier:         "enterprise",
+		Provider:        "openai",
+		ProviderUUID:    "provider-123",
+		Model:           "gpt-4-0613",
+		RequestModel:    "gpt-4",
+		RuleUUID:        "rule-456",
+		Scenario:        "openai",
+		InputTokens:     100,
+		OutputTokens:    50,
+		CacheReadTokens: 30,
+		Streamed:        true,
+		Status:          "success",
+		LatencyMs:       250,
+		UserTier:        "enterprise",
 	})
 
 	metrics := collect(t, reader)

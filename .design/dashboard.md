@@ -158,7 +158,7 @@ Layout facts that keep the grid stable:
 
 Caching is two costs, not one. Reads are the discount; writes are billed at a
 premium (Anthropic `cache_creation`, OpenAI `cache_write_tokens` since
-gpt-5.6). The API exposes both: `cache_input_tokens` is reads only,
+gpt-5.6). The API exposes both: `cache_read_tokens` is reads only,
 `cache_write_tokens` is writes.
 
 **`cache_write_tokens` is a SUBSET of `total_input_tokens`, never an addend.**

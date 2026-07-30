@@ -89,8 +89,8 @@ type UsageOptions struct {
 	// OutputTokens is the number of output/completion tokens consumed
 	OutputTokens int
 
-	// CacheInputTokens is the number of cache-READ tokens consumed
-	CacheInputTokens int
+	// CacheReadTokens is the number of cache-READ tokens consumed
+	CacheReadTokens int
 
 	// CacheWriteTokens is the number of tokens written to the prompt cache.
 	// Billed separately (Anthropic cache_creation, OpenAI cache_write_tokens
@@ -194,7 +194,7 @@ func (tt *TokenTracker) RecordUsage(ctx context.Context, opts UsageOptions) {
 	// token_type element).
 	tt.recordTokens(ctx, commonAttrs, tokenTypeInput, opts.InputTokens)
 	tt.recordTokens(ctx, commonAttrs, tokenTypeOutput, opts.OutputTokens)
-	tt.recordTokens(ctx, commonAttrs, tokenTypeCacheRead, opts.CacheInputTokens)
+	tt.recordTokens(ctx, commonAttrs, tokenTypeCacheRead, opts.CacheReadTokens)
 	tt.recordTokens(ctx, commonAttrs, tokenTypeCacheWrite, opts.CacheWriteTokens)
 	tt.recordTokens(ctx, commonAttrs, tokenTypeSystem, opts.SystemTokens)
 

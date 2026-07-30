@@ -125,9 +125,9 @@ func TestAnthropicStreamAssembler_SetUsage(t *testing.T) {
 func TestAnthropicStreamAssembler_SetUsageFromTokenUsage_CarriesCacheRead(t *testing.T) {
 	assembler := NewAnthropicStreamAssembler()
 	assembler.SetUsageFromTokenUsage(&ai.TokenUsage{
-		InputTokens:      42,
-		OutputTokens:     17,
-		CacheInputTokens: 11,
+		InputTokens:     42,
+		OutputTokens:    17,
+		CacheReadTokens: 11,
 	})
 	assembler.msgID = "msg_cache"
 	assembler.blocks[0] = anthropic.ContentBlockUnion{Type: "text", Text: "ok"}
@@ -251,7 +251,7 @@ func TestAnthropicStreamAssembler_SetUsageFromTokenUsage_CarriesCacheWrite(t *te
 	assembler.SetUsageFromTokenUsage(&ai.TokenUsage{
 		InputTokens:      47, // 42 uncached + 5 written
 		OutputTokens:     17,
-		CacheInputTokens: 11,
+		CacheReadTokens:  11,
 		CacheWriteTokens: 5,
 	})
 	assembler.msgID = "msg_cache_write"

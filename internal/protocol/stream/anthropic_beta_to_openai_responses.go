@@ -78,13 +78,13 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, _
 }
 
 func responsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
-	totalInput := int64(u.InputTokens + u.CacheInputTokens)
+	totalInput := int64(u.InputTokens + u.CacheReadTokens)
 	return &wire.ResponsesUsageWire{
 		InputTokens:  totalInput,
 		OutputTokens: int64(u.OutputTokens),
 		TotalTokens:  totalInput + int64(u.OutputTokens),
 		InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
-			CachedTokens:     int64(u.CacheInputTokens),
+			CachedTokens:     int64(u.CacheReadTokens),
 			CacheWriteTokens: int64(u.CacheWriteTokens),
 		},
 		OutputTokensDetails: wire.ResponsesOutputTokensDetailsWire{

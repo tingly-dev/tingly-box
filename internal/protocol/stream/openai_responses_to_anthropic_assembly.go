@@ -232,8 +232,8 @@ func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream ResponsesStream
 	if usage != nil {
 		msg.Usage.InputTokens = int64(usage.InputTokens)
 		msg.Usage.OutputTokens = int64(usage.OutputTokens)
-		if usage.CacheInputTokens > 0 {
-			msg.Usage.CacheReadInputTokens = int64(usage.CacheInputTokens)
+		if usage.CacheReadTokens > 0 {
+			msg.Usage.CacheReadInputTokens = int64(usage.CacheReadTokens)
 		}
 	}
 
@@ -282,8 +282,8 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream ResponsesStre
 	if usage != nil {
 		msg.Usage.InputTokens = int64(usage.InputTokens)
 		msg.Usage.OutputTokens = int64(usage.OutputTokens)
-		if usage.CacheInputTokens > 0 {
-			msg.Usage.CacheReadInputTokens = int64(usage.CacheInputTokens)
+		if usage.CacheReadTokens > 0 {
+			msg.Usage.CacheReadInputTokens = int64(usage.CacheReadTokens)
 		}
 	}
 

@@ -48,7 +48,7 @@ export interface UsageRecord {
     input_tokens: number;
     output_tokens: number;
     total_tokens: number;
-    cache_input_tokens: number;
+    cache_read_tokens: number;
     cache_write_tokens?: number;
     status: string;
     error_code?: string;
@@ -105,7 +105,7 @@ function DonutTooltip({ active, payload }: any) {
 function TokenDonut({ records }: { records: UsageRecord[] }) {
     const totalInput  = records.reduce((s, r) => s + r.input_tokens, 0);
     const totalOutput = records.reduce((s, r) => s + r.output_tokens, 0);
-    const totalCache  = records.reduce((s, r) => s + r.cache_input_tokens, 0);
+    const totalCache  = records.reduce((s, r) => s + r.cache_read_tokens, 0);
     // Cache writes live INSIDE input_tokens, so they must not become a fourth
     // slice — that would inflate the total by counting them twice. They annotate
     // the Input slice instead.
@@ -379,7 +379,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Tokens */}
                                 <TableCell align="right">
                                     {(() => {
-                                        const cacheTokens = r.cache_input_tokens || 0;
+                                        const cacheTokens = r.cache_read_tokens || 0;
                                         const inputTokens = r.input_tokens || 0;
                                         const total = cacheTokens + inputTokens;
                                         const ratio = total > 0 ? (cacheTokens / total) * 100 : 0;

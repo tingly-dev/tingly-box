@@ -63,9 +63,8 @@ flowchart TD
 type TokenUsage struct {
     InputTokens      int `json:"input_tokens"`                 // 输入/prompt，已扣除 cache read（仍含 cache write）
     OutputTokens     int `json:"output_tokens"`                // 输出/completion
-    CacheInputTokens int `json:"cache_input_tokens,omitempty"` // cache read 命中（不含 write）
-    CacheReadTokens  int `json:"cache_read_tokens,omitempty"`  // = CacheInputTokens，计费明细
-    CacheWriteTokens int `json:"cache_write_tokens,omitempty"` // cache write，⊂ InputTokens，计费明细
+    CacheReadTokens  int `json:"cache_read_tokens,omitempty"`  // cache read 命中（折扣的那半）
+    CacheWriteTokens int `json:"cache_write_tokens,omitempty"` // cache write，⊂ InputTokens（溢价的那半）
     ReasoningTokens  int `json:"reasoning_tokens,omitempty"`   // o1/o3 reasoning，是 OutputTokens 的子集
     SystemTokens     int `json:"system_tokens,omitempty"`      // 模板/系统指令/框架开销
 }
@@ -77,7 +76,7 @@ type TokenUsage struct {
 |---|---|
 | `TotalTokens()` | `Input + Output`（**不含 cache**；cache 单独算成本） |
 | `HasUsage()` | 任一 Input/Output/Cache/System > 0 |
-| `HasCacheUsage()` | `CacheInputTokens > 0` |
+| `HasCacheUsage()` | `CacheReadTokens > 0` |
 | `NewTokenUsage(in, out)` | 基础 |
 | `NewTokenUsageWithCache(in, out, cache)` | + cache |
 | `NewTokenUsageWithCacheDetails(in, out, read, write)` | + cache 读写明细 |
@@ -90,7 +89,9 @@ type TokenUsage struct {
 
 > **wire usage map 只能由这些方法产出。** 之前每个 converter 各自手搓 `prompt_tokens_details`，加一个字段要改 9 处，漏一处就是静默少算一个计费维度。converter 若需微调（如 `total_tokens` 用上游原值），在返回的 map 上覆盖那一个键，不要 fork 整个构造。
 
-> ⚠️ `CacheInputTokens` 仅代表 **cache read 命中**。Write 成本（Anthropic `cache_creation_input_tokens` / OpenAI `cache_write_tokens`）**已并入 `InputTokens`**，两家归一化后语义一致。`CacheReadTokens` / `CacheWriteTokens` 是**计费明细字段**：`CacheReadTokens == CacheInputTokens`，`CacheWriteTokens ⊂ InputTokens`——所以**不要**把 `CacheWriteTokens` 再加进任何总量，否则重复计数。
+> ⚠️ `CacheReadTokens` 仅代表 **cache read 命中**。Write 成本（Anthropic `cache_creation_input_tokens` / OpenAI `cache_write_tokens`）**已并入 `InputTokens`**，两家归一化后语义一致。所以 `CacheWriteTokens ⊂ InputTokens`——**不要**把它再加进任何总量，否则重复计数。
+>
+> 📛 **命名**：这个字段以前叫 `CacheInputTokens`，且和一个同义的 `CacheReadTokens` 并存。缓存只有一笔账时"input"尚可含混，有了 write 就成了命名碰撞。现已收敛为单一的 `CacheReadTokens`（对外 JSON `cache_read_tokens`）。DB 物理列名仍是 `cache_input_tokens`——改名要 ALTER 三张表却换不来任何行为收益，因此只在 GORM tag 上钉住，原始 SQL 用 `as cache_read_tokens` 别名对齐。
 
 ---
 
@@ -99,10 +100,10 @@ type TokenUsage struct {
 各 provider 上报 token 的语义互不兼容，必须先归一化，否则前端 cache-hit 公式算不对：
 
 ```
-cache_hit_ratio = CacheInputTokens / (InputTokens + CacheInputTokens)
+cache_hit_ratio = CacheReadTokens / (InputTokens + CacheReadTokens)
 ```
 
-| Provider | wire 语义 | 归一化后 InputTokens | 归一化后 CacheInputTokens | 归一化后 CacheWriteTokens |
+| Provider | wire 语义 | 归一化后 InputTokens | 归一化后 CacheReadTokens | 归一化后 CacheWriteTokens |
 |---|---|---|---|---|
 | **OpenAI Chat / Responses** | `prompt_tokens` = 总数（含 cached **和** cache_write） | `prompt_tokens − cached_tokens` | `cached_tokens` | `cache_write_tokens` |
 | **Anthropic** | `input_tokens` = 仅未命中；`cache_creation_input_tokens` = 写入成本 | `input_tokens + cache_creation_input_tokens` | `cache_read_input_tokens` | `cache_creation_input_tokens` |
@@ -131,7 +132,7 @@ cache_hit_ratio = CacheInputTokens / (InputTokens + CacheInputTokens)
 
 ```
 InputTokens      = prompt_tokens − cached_tokens   // 只减 read；write 留在 input 里（它要按写入价计费）
-CacheInputTokens = cached_tokens                    // 命中缓存（读）
+CacheReadTokens = cached_tokens                    // 命中缓存（读）
 CacheWriteTokens = cache_write_tokens               // 写入缓存，⊂ InputTokens，仅作计费明细
 OutputTokens     = completion_tokens                // 原样保留（reasoning 仍含在内，不减）
 ReasoningTokens  = reasoning_tokens                 // 仅作展示，是 Output 的子集，下游不再相加
@@ -154,7 +155,7 @@ ReasoningTokens  = reasoning_tokens                 // 仅作展示，是 Output
 
 ```
 InputTokens      = input_tokens + cache_creation_input_tokens  // 写入成本并进 input（进分母）
-CacheInputTokens = cache_read_input_tokens                      // 命中缓存（读）
+CacheReadTokens = cache_read_input_tokens                      // 命中缓存（读）
 CacheWriteTokens = cache_creation_input_tokens                  // 写入明细，⊂ InputTokens
 OutputTokens     = output_tokens                                // thinking 已含在内
 ReasoningTokens  = 0                                            // Anthropic 不单列 reasoning
@@ -167,13 +168,13 @@ ReasoningTokens  = 0                                            // Anthropic 不
 不管哪个 provider，归一化完都满足：
 
 ```
-本次 prompt 总量 = InputTokens + CacheInputTokens
-cache_hit_ratio = CacheInputTokens / (InputTokens + CacheInputTokens)
+本次 prompt 总量 = InputTokens + CacheReadTokens
+cache_hit_ratio = CacheReadTokens / (InputTokens + CacheReadTokens)
 TotalTokens()   = InputTokens + OutputTokens          // ⚠️ 不含 cache —— cache 单独计费，不进 total
 CacheWriteTokens ≤ InputTokens                        // 明细字段，已被 InputTokens 覆盖，不再单独相加
 ```
 
-`CacheInputTokens` 在两侧统一只表示**缓存读命中**那部分；两家的写入成本（Anthropic `cache_creation`、OpenAI `cache_write_tokens`）都被并进 `InputTokens`，并同时记在 `CacheWriteTokens` 供计费拆分。
+`CacheReadTokens` 在两侧统一只表示**缓存读命中**那部分；两家的写入成本（Anthropic `cache_creation`、OpenAI `cache_write_tokens`）都被并进 `InputTokens`，并同时记在 `CacheWriteTokens` 供计费拆分。
 
 #### 一个对照例子
 
@@ -183,7 +184,7 @@ CacheWriteTokens ≤ InputTokens                        // 明细字段，已被
 |---|---|---|---|
 | input 父字段 | `prompt_tokens = 1050`（含 cached + write） | `input_tokens = 200`（不含任何 cache） | — |
 | cache 写入 | `cache_write_tokens = 50`（子集） | `cache_creation = 50`（独立） | `CacheWriteTokens = 50` |
-| cache 读命中 | `cached_tokens = 800`（子集） | `cache_read = 800`（独立） | `CacheInputTokens = 800` |
+| cache 读命中 | `cached_tokens = 800`（子集） | `cache_read = 800`（独立） | `CacheReadTokens = 800` |
 | output | `completion_tokens = 500` | `output_tokens = 500` | `OutputTokens = 500` |
 | **InputTokens** | `1050 − 800 = 250` | `200 + 50 = 250` | **250** |
 
@@ -199,7 +200,7 @@ usage.FromAnthropicBetaMessage(resp.Usage) // anthropic.BetaUsage
 ```
 
 OpenAI 侧：`InputTokens = prompt − cached`，cache read / cache write / reasoning 直接读 details。
-Anthropic 侧：`InputTokens = input + cache_creation`，`CacheInputTokens = cache_read`，`CacheWriteTokens = cache_creation`，无 reasoning。
+Anthropic 侧：`InputTokens = input + cache_creation`，`CacheReadTokens = cache_read`，`CacheWriteTokens = cache_creation`，无 reasoning。
 
 反向（`*TokenUsage` → wire）：
 
@@ -319,7 +320,7 @@ OpenAI→Anthropic converter 的终态收口在 `emitTerminalEvents()`：从 cou
 - `SetUsageFromTokenUsage(u *ai.TokenUsage)`：canonical 入口
   - `UncachedInputTokens() → anthropic.Usage.InputTokens`（**注意不是 `InputTokens` 直传**：canonical 把写入成本折进了 `InputTokens`，而 Anthropic wire 的 `input_tokens` 不含它，直传会和下一行一起把写入计两次）
   - `OutputTokens → anthropic.Usage.OutputTokens`
-  - `CacheInputTokens → anthropic.Usage.CacheReadInputTokens`
+  - `CacheReadTokens → anthropic.Usage.CacheReadInputTokens`
   - `CacheWriteTokens → anthropic.Usage.CacheCreationInputTokens`
   - `ReasoningTokens` 丢弃（Anthropic 无对应字段，已计入 output）
 - `Finish(model, in, out) → *anthropic.Message`：有 `SetUsage*` 数据就用它，否则回退入参
@@ -357,7 +358,7 @@ func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage)
 4. `detectCacheHit(usage)` → `SetCacheHit(c, …)`；算 `TTFT` / `TPS`
 5. 分发：
    - `updateServiceStats(rule, provider, model, MetricsData{...})`（内存 stats）
-   - `tokenTracker.RecordUsage(ctx, UsageOptions{... CacheInputTokens, CacheWriteTokens, SystemTokens ...})`（OTel；`cache_write` 是新增的 token_type，`recordTokens` 对 0 值早退，所以不上报写入的通道不会产生空 timeseries）
+   - `tokenTracker.RecordUsage(ctx, UsageOptions{... CacheReadTokens, CacheWriteTokens, SystemTokens ...})`（OTel；`cache_write` 是新增的 token_type，`recordTokens` 对 0 值早退，所以不上报写入的通道不会产生空 timeseries）
    - `recordDetailedUsageWithTokenUsage(...)`（写 DB，见 §6）
    - `reportHealthStatus(...)`；429 时 enterprise 限流告警 hook
 
@@ -384,13 +385,13 @@ func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage)
 | `user_id` | 多租户（`not null; default ''`，迁移见下） |
 | `timestamp` | 索引（含 `idx_timestamp_scenario`） |
 | `input_tokens` / `output_tokens` / `total_tokens` | `total = input + output` |
-| `cache_input_tokens` | cache **read** 命中（`default 0`；列名是 §6.2 那次合并迁移留下的历史称呼） |
+| `cache_input_tokens` | cache **read** 命中（`default 0`；列名是历史称呼，Go 侧字段叫 `CacheReadTokens`，靠 GORM tag 钉住） |
 | `cache_write_tokens` | cache **write**（`default 0`；⊂ `input_tokens`，不另计入 total） |
 | `system_tokens` | 框架开销（`default 0`） |
 | `status` / `error_code` | success / error / partial / canceled |
 | `latency_ms` / `ttft_ms` / `streamed` | 性能 |
 
-聚合表：`UsageDailyRecord`（`usage_daily`）、`UsageMonthlyRecord`（`usage_monthly`）——`RequestCount / TotalTokens / Input / Output / CacheInputTokens / CacheWriteTokens / SystemTokens / ErrorCount`，按 `date(timestamp)` 或 `year/month` SUM。`usage_monthly` 目前只建表、无写入方。
+聚合表：`UsageDailyRecord`（`usage_daily`）、`UsageMonthlyRecord`（`usage_monthly`）——`RequestCount / TotalTokens / Input / Output / CacheReadTokens / CacheWriteTokens / SystemTokens / ErrorCount`，按 `date(timestamp)` 或 `year/month` SUM。`usage_monthly` 目前只建表、无写入方。
 
 ### 6.2 Schema 迁移（`ensureUsageRecordSchema`）
 
@@ -419,7 +420,7 @@ dev-stage 破坏式清理，按存在性条件执行：
 
 响应模型（`types.go`）：`UsageStatsResponse{Meta, []AggregatedStat}` / `TimeSeriesResponse{Meta, []TimeSeriesData}` / `UsageRecordsResponse{Meta, []UsageRecordResponse}` / `DeleteOldRecordsResponse{deleted_count, cutoff_date}`。
 
-`AggregatedStat`：`Key / Provider* / Model / Scenario / UserID / RequestCount / TotalTokens / Input / Output / CacheInputTokens / AvgInput / AvgOutput / AvgLatencyMs / ErrorCount / ErrorRate / StreamedCount / StreamedRate`。
+`AggregatedStat`：`Key / Provider* / Model / Scenario / UserID / RequestCount / TotalTokens / Input / Output / CacheReadTokens / AvgInput / AvgOutput / AvgLatencyMs / ErrorCount / ErrorRate / StreamedCount / StreamedRate`。
 
 ---
 
@@ -601,7 +602,7 @@ Azure OpenAI 上 gpt-5.6 的 usage **完全不上报 `cache_write_tokens`**，�
 
 ### 12.5 落库与 Dashboard
 
-`usage_records` / `usage_daily` / `usage_monthly` 都有独立的 `cache_write_tokens` 列，rollup / stats / timeseries 三类查询与 OTel（新增 `cache_write` token_type）全部带上。列语义与 canonical 一致：`cache_input_tokens` 仅表示 read，`cache_write_tokens` 是 `input_tokens` 的**子集**。
+`usage_records` / `usage_daily` / `usage_monthly` 都有独立的 `cache_write_tokens` 列，rollup / stats / timeseries 三类查询与 OTel（新增 `cache_write` token_type）全部带上。列语义与 canonical 一致：`cache_read_tokens` 仅表示 read，`cache_write_tokens` 是 `input_tokens` 的**子集**。
 
 > ✅ **`usage_daily` 不需要 DROP 重建。** 它和 `usage_records` 在同一次迁移里加列，所以「这里是新列」意味着「那边也是新列」——所有历史记录的写入量都是 0，AutoMigrate 的零填充**恰好就是正确的聚合值**。丢表重建只会扔掉 14 列正确数据，再花一轮全量重聚合算回同样的 0。只有当**源列已有历史非零数据**（拆分/回填一个既存度量）时才需要重建。回归测试见 `usage_daily_test.go::TestUpgradeAddingSummedColumnKeepsAggregates`。
 

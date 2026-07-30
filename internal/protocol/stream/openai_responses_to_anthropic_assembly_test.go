@@ -77,7 +77,7 @@ func TestHandleResponsesToAnthropicV1Assembly_Golden(t *testing.T) {
 	// Usage: input normalized to uncached (10-2), cache read carried separately.
 	assert.Equal(t, 8, usage.InputTokens)
 	assert.Equal(t, 5, usage.OutputTokens)
-	assert.Equal(t, 2, usage.CacheInputTokens)
+	assert.Equal(t, 2, usage.CacheReadTokens)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	// JSON body must be labeled application/json — a text/event-stream label

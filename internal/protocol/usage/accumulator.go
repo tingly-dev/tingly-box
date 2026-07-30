@@ -158,7 +158,6 @@ func (a *AnthropicAccumulator) Result() *protocol.TokenUsage {
 		return protocol.ZeroTokenUsage()
 	}
 	result := *a.usage
-	result.CacheInputTokens = result.CacheReadTokens
 	return &result
 }
 

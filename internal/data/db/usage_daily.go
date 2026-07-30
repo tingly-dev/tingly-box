@@ -187,7 +187,7 @@ func (us *UsageStore) aggregatedStatsFromDaily(q UsageStatsQuery) ([]AggregatedS
 				cur.TotalTokens += b.TotalTokens
 				cur.InputTokens += b.InputTokens
 				cur.OutputTokens += b.OutputTokens
-				cur.CacheInputTokens += b.CacheInputTokens
+				cur.CacheReadTokens += b.CacheReadTokens
 				cur.CacheWriteTokens += b.CacheWriteTokens
 				cur.SystemTokens += b.SystemTokens
 				cur.ErrorCount += b.ErrorCount
@@ -283,7 +283,7 @@ func (us *UsageStore) dailyStatBuckets(q UsageStatsQuery, firstDay, lastDayEx ti
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
-		COALESCE(SUM(cache_input_tokens), 0) as cache_input_tokens,
+		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(error_count), 0) as error_count,
@@ -424,7 +424,7 @@ func (us *UsageStore) dailyTimeSeries(firstDay, lastDayEx time.Time, filters map
 		TotalTokens      int64
 		InputTokens      int64
 		OutputTokens     int64
-		CacheInputTokens int64
+		CacheReadTokens  int64
 		CacheWriteTokens int64
 		SystemTokens     int64
 		ErrorCount       int64
@@ -436,7 +436,7 @@ func (us *UsageStore) dailyTimeSeries(firstDay, lastDayEx time.Time, filters map
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
-		COALESCE(SUM(cache_input_tokens), 0) as cache_input_tokens,
+		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(error_count), 0) as error_count,
@@ -461,7 +461,7 @@ func (us *UsageStore) dailyTimeSeries(firstDay, lastDayEx time.Time, filters map
 			TotalTokens:      r.TotalTokens,
 			InputTokens:      r.InputTokens,
 			OutputTokens:     r.OutputTokens,
-			CacheInputTokens: r.CacheInputTokens,
+			CacheReadTokens:  r.CacheReadTokens,
 			CacheWriteTokens: r.CacheWriteTokens,
 			SystemTokens:     r.SystemTokens,
 			ErrorCount:       r.ErrorCount,

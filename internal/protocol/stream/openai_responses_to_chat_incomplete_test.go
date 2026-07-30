@@ -63,7 +63,7 @@ func TestHandleResponsesToOpenAIChatStreamIncompleteKeepsUsageAndLengthFinish(t 
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.Equal(t, 60, usage.InputTokens)
-	require.Equal(t, 40, usage.CacheInputTokens)
+	require.Equal(t, 40, usage.CacheReadTokens)
 	require.Equal(t, 20, usage.OutputTokens)
 	require.Equal(t, 5, usage.ReasoningTokens)
 	body := w.Body.String()

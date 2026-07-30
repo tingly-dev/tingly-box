@@ -68,22 +68,17 @@ type TokenUsage struct {
 	// OutputTokens is the number of output/completion tokens consumed
 	OutputTokens int `json:"output_tokens"`
 
-	// CacheInputTokens is the number of cache-read-hit tokens consumed.
-	// Cache-write cost is tracked separately in CacheWriteTokens.
-	// Note: normalization folds CacheWriteTokens into InputTokens on both
-	// sides (Anthropic: InputTokens += cache_creation; OpenAI: cache_write is
-	// left inside prompt_tokens and only cached_tokens is subtracted), so
-	// InputTokens already covers write cost.
-	// Total prompt cost = InputTokens + CacheInputTokens.
-	CacheInputTokens int `json:"cache_input_tokens,omitempty"`
+	// CacheReadTokens is the number of cache-read-hit tokens consumed — the
+	// discounted half of caching. Total prompt cost = InputTokens + CacheReadTokens.
+	CacheReadTokens int `json:"cache_read_tokens,omitempty"`
 
-	// CacheReadTokens and CacheWriteTokens provide detail for billing.
-	// CacheReadTokens  = cache-read hits (same as CacheInputTokens).
-	// CacheWriteTokens = cache writes, a SUBSET of InputTokens — never add it
-	// on top of InputTokens or the write cost is counted twice. Sourced from
-	// Anthropic cache_creation_input_tokens and, since gpt-5.6, OpenAI
-	// cache_write_tokens (billed at 1.25x the uncached input rate).
-	CacheReadTokens  int `json:"cache_read_tokens,omitempty"`
+	// CacheWriteTokens is the premium-rate half: a SUBSET of InputTokens —
+	// never add it on top of InputTokens or the write cost is counted twice.
+	// Sourced from Anthropic cache_creation_input_tokens and, since gpt-5.6,
+	// OpenAI cache_write_tokens (billed at 1.25x the uncached input rate).
+	// Normalization folds it into InputTokens on both sides (Anthropic:
+	// InputTokens += cache_creation; OpenAI: cache_write is left inside
+	// prompt_tokens and only cached_tokens is subtracted).
 	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
 
 	// ReasoningTokens is the number of tokens used for internal reasoning
@@ -104,12 +99,12 @@ func (u *TokenUsage) TotalTokens() int {
 // HasUsage returns true if any token count is non-zero.
 func (u *TokenUsage) HasUsage() bool {
 	return u.InputTokens > 0 || u.OutputTokens > 0 ||
-		u.CacheInputTokens > 0 || u.SystemTokens > 0
+		u.CacheReadTokens > 0 || u.SystemTokens > 0
 }
 
 // HasCacheUsage returns true if cache tokens are present.
 func (u *TokenUsage) HasCacheUsage() bool {
-	return u.CacheInputTokens > 0
+	return u.CacheReadTokens > 0
 }
 
 // ToAnthropicUsageMap converts canonical usage into Anthropic message usage shape.
@@ -159,7 +154,7 @@ func (u *TokenUsage) ToAnthropicMessageDeltaUsageMap() map[string]interface{} {
 // uncached + written + read. Canonical InputTokens already folds writes in, so
 // only the read hits are added back.
 func (u *TokenUsage) PromptTotalTokens() int {
-	return u.InputTokens + u.CacheInputTokens
+	return u.InputTokens + u.CacheReadTokens
 }
 
 // promptCacheDetails builds the cache breakdown shared by the Chat
@@ -168,10 +163,10 @@ func (u *TokenUsage) PromptTotalTokens() int {
 // than zero: an absent value means the channel does not report writes at all
 // (Azure, pre-gpt-5.6), which is not the same as "no writes happened".
 func (u *TokenUsage) promptCacheDetails() map[string]interface{} {
-	if u.CacheInputTokens <= 0 && u.CacheWriteTokens <= 0 {
+	if u.CacheReadTokens <= 0 && u.CacheWriteTokens <= 0 {
 		return nil
 	}
-	details := map[string]interface{}{"cached_tokens": u.CacheInputTokens}
+	details := map[string]interface{}{"cached_tokens": u.CacheReadTokens}
 	if u.CacheWriteTokens > 0 {
 		details["cache_write_tokens"] = u.CacheWriteTokens
 	}
@@ -236,7 +231,6 @@ func NewTokenUsageWithCacheDetails(inputTokens, outputTokens, cacheReadTokens, c
 	return &TokenUsage{
 		InputTokens:      inputTokens,
 		OutputTokens:     outputTokens,
-		CacheInputTokens: cacheReadTokens,
 		CacheReadTokens:  cacheReadTokens,
 		CacheWriteTokens: cacheWriteTokens,
 	}

@@ -61,7 +61,7 @@ export const formatTooltipTime = (timestamp: string, isDayMode: boolean): string
 
 export const formatChartData = (data: TimeSeriesData[], isDayMode: boolean): ChartDataPoint[] => {
     return data.map((item) => {
-        const cache = item.cache_input_tokens || 0;
+        const cache = item.cache_read_tokens || 0;
         const input = item.input_tokens || 0;
         const cacheRatio = cache + input > 0 ? cache / (cache + input) : 0;
         return {
@@ -99,7 +99,7 @@ export const aggregateTo5MinBuckets = (data: TimeSeriesData[]): TimeSeriesData[]
         timestamp: string;
         input_tokens: number;
         output_tokens: number;
-        cache_input_tokens: number;
+        cache_read_tokens: number;
         cache_write_tokens: number;
         request_count: number;
         error_count: number;
@@ -129,7 +129,7 @@ export const aggregateTo5MinBuckets = (data: TimeSeriesData[]): TimeSeriesData[]
         if (existing) {
             existing.input_tokens += item.input_tokens || 0;
             existing.output_tokens += item.output_tokens || 0;
-            existing.cache_input_tokens += item.cache_input_tokens || 0;
+            existing.cache_read_tokens += item.cache_read_tokens || 0;
             existing.cache_write_tokens += item.cache_write_tokens || 0;
             existing.request_count += requestCount;
             existing.error_count += item.error_count || 0;
@@ -139,7 +139,7 @@ export const aggregateTo5MinBuckets = (data: TimeSeriesData[]): TimeSeriesData[]
                 timestamp: bucketKey,
                 input_tokens: item.input_tokens || 0,
                 output_tokens: item.output_tokens || 0,
-                cache_input_tokens: item.cache_input_tokens || 0,
+                cache_read_tokens: item.cache_read_tokens || 0,
                 cache_write_tokens: item.cache_write_tokens || 0,
                 request_count: requestCount,
                 error_count: item.error_count || 0,
@@ -155,7 +155,7 @@ export const aggregateTo5MinBuckets = (data: TimeSeriesData[]): TimeSeriesData[]
             timestamp: bucket.timestamp,
             input_tokens: bucket.input_tokens,
             output_tokens: bucket.output_tokens,
-            cache_input_tokens: bucket.cache_input_tokens,
+            cache_read_tokens: bucket.cache_read_tokens,
             cache_write_tokens: bucket.cache_write_tokens,
             request_count: bucket.request_count,
             error_count: bucket.error_count,

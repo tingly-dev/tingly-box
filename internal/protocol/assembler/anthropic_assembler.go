@@ -223,7 +223,7 @@ func (a *AnthropicStreamAssembler) SetUsageFromTokenUsage(u *ai.TokenUsage) {
 	a.usageData = &anthropic.Usage{
 		InputTokens:              int64(u.UncachedInputTokens()),
 		OutputTokens:             int64(u.OutputTokens),
-		CacheReadInputTokens:     int64(u.CacheInputTokens),
+		CacheReadInputTokens:     int64(u.CacheReadTokens),
 		CacheCreationInputTokens: int64(u.CacheWriteTokens),
 	}
 }
