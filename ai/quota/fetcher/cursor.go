@@ -43,5 +43,5 @@ func (f *CursorFetcher) Validate(provider *ai.Provider) error {
 
 func (f *CursorFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// Cursor has no public quota API, so return fallback data.
-	return unobservableUsage(provider, quota.ProviderTypeCursor, "quota API not available"), nil
+	return unreadableUsage(provider, quota.ProviderTypeCursor, "quota API not available"), nil
 }

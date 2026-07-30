@@ -43,5 +43,5 @@ func (f *VertexAIFetcher) Validate(provider *ai.Provider) error {
 
 func (f *VertexAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// Vertex AI quotas are managed through Google Cloud Console and have no public API.
-	return unobservableUsage(provider, quota.ProviderTypeVertexAI, "quota API not available - check Google Cloud Console"), nil
+	return unreadableUsage(provider, quota.ProviderTypeVertexAI, "quota API not available - check Google Cloud Console"), nil
 }

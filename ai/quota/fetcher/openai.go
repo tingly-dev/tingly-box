@@ -96,7 +96,7 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 
 	if resp.StatusCode == http.StatusNotFound {
 		// OpenAI has no unified usage API, so return fallback data.
-		return unobservableUsage(provider, quota.ProviderTypeOpenAI,
+		return unreadableUsage(provider, quota.ProviderTypeOpenAI,
 			"quota API not available - see the OpenAI dashboard"), nil
 	}
 

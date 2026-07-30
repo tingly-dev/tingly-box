@@ -219,11 +219,11 @@ func TestTaskfileSamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "openai 404", u, want{ok: false, windows: 1})
+	check(t, "openai 404", u, want{ok: false, windows: 0})
 
 	u, _ = (&CopilotFetcher{}).Fetch(context.Background(), oauthProvider("Copilot"))
-	check(t, "copilot", u, want{ok: false, windows: 1})
-	if u.Windows[0].Countable() {
-		t.Error("copilot: an unreadable quota must not contribute a usage figure")
+	check(t, "copilot", u, want{ok: false, windows: 0})
+	if u.LastError == "" {
+		t.Error("copilot: the reason should be recorded even though no window is")
 	}
 }

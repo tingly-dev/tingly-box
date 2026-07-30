@@ -97,12 +97,12 @@ func tighter(a, b *UsageWindow) bool {
 	return periodRank(a) < periodRank(b)
 }
 
-// Unobservable builds usage for a provider whose quota could not be read —
-// no API, a failed fetch, an unsupported type. It reports an explicit unknown
-// window rather than an empty one: with nothing in Windows, "we cannot see
-// this account" is indistinguishable from "this account is untouched", and
-// the more useful of those two readings is the one a caller will assume.
-func Unobservable(providerUUID, providerName string, providerType ProviderType, reason string, now time.Time, ttl time.Duration) *ProviderUsage {
+// Unreadable builds usage for a provider whose quota could not be read — no
+// API, a failed fetch, an unsupported type. It records the reason and reports
+// no windows: Pct() already answers "unknown" for a usage with nothing
+// countable in it, so a placeholder window would add a row to every surface
+// without adding anything a reader can act on.
+func Unreadable(providerUUID, providerName string, providerType ProviderType, reason string, now time.Time, ttl time.Duration) *ProviderUsage {
 	usage := &ProviderUsage{
 		ProviderUUID: providerUUID,
 		ProviderName: providerName,
@@ -110,23 +110,17 @@ func Unobservable(providerUUID, providerName string, providerType ProviderType, 
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(ttl),
 	}
-	usage.MarkUnobservable(reason, now)
+	usage.MarkUnreadable(reason, now)
 	return usage
 }
 
-// MarkUnobservable records that a usage could not be read, keeping whatever the
+// MarkUnreadable records why a usage could not be read, keeping whatever the
 // caller already gathered — the raw response above all, which is what someone
-// asking "why does this say unavailable" wants to look at.
-func (p *ProviderUsage) MarkUnobservable(reason string, now time.Time) {
+// asking "why is there nothing here" wants to look at.
+func (p *ProviderUsage) MarkUnreadable(reason string, now time.Time) {
 	if p == nil {
 		return
 	}
 	p.LastError = reason
 	p.LastErrorAt = &now
-	p.AddWindow("unavailable", 0, &UsageWindow{
-		Type:        WindowTypeCustom,
-		Unknown:     true,
-		Label:       "Quota unavailable",
-		Description: reason,
-	})
 }

@@ -19,9 +19,9 @@ func calcPercent(used, limit float64) float64 {
 	return p
 }
 
-// unobservableUsage describes a provider that exposes no quota API.
-func unobservableUsage(provider *ai.Provider, providerType quota.ProviderType, reason string) *quota.ProviderUsage {
-	return quota.Unobservable(provider.UUID, provider.Name, providerType, reason, time.Now(), 1*time.Hour)
+// unreadableUsage describes a provider whose quota cannot be read.
+func unreadableUsage(provider *ai.Provider, providerType quota.ProviderType, reason string) *quota.ProviderUsage {
+	return quota.Unreadable(provider.UUID, provider.Name, providerType, reason, time.Now(), 1*time.Hour)
 }
 
 // windowTypeForMinutes names a period from its length. Upstream types are not

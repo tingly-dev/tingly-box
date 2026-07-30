@@ -289,10 +289,9 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 }
 
 // unreadable records a provider whose quota could not be read. All three
-// failure paths produce the same shape, and each carries an explicit unknown
-// window so the state is visible rather than inferable from an empty slice.
+// failure paths produce the same shape: the reason, and no windows.
 func (m *Manager) unreadable(provider *typ.Provider, providerType ProviderType, now time.Time, reason string) *ProviderUsage {
-	return Unobservable(provider.UUID, provider.Name, providerType, reason, now, m.config.CacheTTL)
+	return Unreadable(provider.UUID, provider.Name, providerType, reason, now, m.config.CacheTTL)
 }
 
 // inferProviderType infers the provider type from OAuth metadata or the API base URL.

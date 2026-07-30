@@ -47,5 +47,5 @@ func (f *CopilotFetcher) Validate(provider *ai.Provider) error {
 
 func (f *CopilotFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// GitHub Copilot has no public quota API, so return fallback data.
-	return unobservableUsage(provider, quota.ProviderTypeCopilot, "quota API not available"), nil
+	return unreadableUsage(provider, quota.ProviderTypeCopilot, "quota API not available"), nil
 }

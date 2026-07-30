@@ -874,9 +874,8 @@ const inThirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOStr
 // rendering state: an allowance, a balance, an uncapped window, a scoped limit
 // that must not answer for the account, and a quota we cannot read at all.
 const mockQuotas: Record<string, any> = {
-    // Validation failed (an API-key provider where usage needs OAuth). The
-    // unknown window is the point: with no windows at all this row used to
-    // vanish, which reads the same as an untouched allowance.
+    // Nothing readable: the reason is recorded, no windows are invented, and
+    // the credential row shows no quota section at all.
     'mock-provider-anthropic': {
         provider_uuid: 'mock-provider-anthropic',
         provider_name: 'Anthropic',
@@ -885,22 +884,8 @@ const mockQuotas: Record<string, any> = {
         expires_at: inOneHour,
         last_error: 'validation failed: usage requires OAuth authentication',
         last_error_at: now.toISOString(),
-        windows: [
-            {
-                key: 'unavailable',
-                type: 'custom',
-                unknown: true,
-                used: 0,
-                limit: 0,
-                used_percent: 0,
-                unit: '',
-                label: 'Quota unavailable',
-                description: 'validation failed: usage requires OAuth authentication',
-            },
-        ],
     },
 
-    // No quota API at all.
     'mock-provider-openai': {
         provider_uuid: 'mock-provider-openai',
         provider_name: 'OpenAI',
@@ -909,19 +894,6 @@ const mockQuotas: Record<string, any> = {
         expires_at: inOneHour,
         last_error: 'quota API not available - see the OpenAI dashboard',
         last_error_at: now.toISOString(),
-        windows: [
-            {
-                key: 'unavailable',
-                type: 'custom',
-                unknown: true,
-                used: 0,
-                limit: 0,
-                used_percent: 0,
-                unit: '',
-                label: 'Quota unavailable',
-                description: 'quota API not available - see the OpenAI dashboard',
-            },
-        ],
     },
 
     // Free key: monthly spend has no cap, so there is no percentage to report.

@@ -266,11 +266,11 @@ func displayWindowsWithProgress(usage *quota.ProviderUsage) {
 
 // printWindowWithProgress prints a single usage window with progress bar
 func printWindowWithProgress(window *quota.UsageWindow) {
-	// A window with no usage figure has no percentage, no bar and no status to
-	// show. Rendering one anyway would print a green "0.00 / 0.00 (0.0%)",
-	// which is the reading these windows exist to prevent.
+	// A window with no proportion to show gets no bar and no percentage —
+	// printing one would read as a green "0.00 / 0.00 (0.0%)". What it does
+	// carry (this month's spend, a balance) goes out as-is.
 	if !window.Countable() {
-		fmt.Printf("◌ %s: %s\n", window.Label, cmp.Or(window.Description, "not reported"))
+		fmt.Printf("· %s: %s\n", window.Label, cmp.Or(window.Description, "no limit reported"))
 		return
 	}
 

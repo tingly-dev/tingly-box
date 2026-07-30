@@ -42,11 +42,12 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
     return QUOTA_COLORS.success;
   };
 
-  // A window with no usage figure gets no percentage and no colour. Painting a
-  // green empty bar for a provider whose quota we cannot read — a dead token,
-  // or one with no quota API — says the opposite of what we know.
+  // A window with no usage figure gets no bar and no percentage. It still has
+  // something to say — a balance, this month's spend, an add-on whose usage
+  // upstream withholds — so the figure it does have takes the bar's place
+  // rather than a green one filled to 0%.
   const countable = isCountable(window);
-  const barColor = forcedBarColor ?? (countable ? getColor(window.used_percent) : QUOTA_COLORS.secondary);
+  const barColor = forcedBarColor ?? getColor(window.used_percent);
 
   // Format reset time
   const formatResetTime = () => {
@@ -143,8 +144,8 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
           {window.label}:
         </Typography>
 
-        {/* Bar */}
-        <Box
+        {/* Bar — only for windows with a proportion to draw */}
+        {countable && <Box
           sx={{
             position: 'relative',
             width: 40,
@@ -162,31 +163,29 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
               overflow: 'hidden',
             }}
           >
-            {/* Fill bar. An uncountable window shows a hairline rather than
-                an empty bar, which would read as 0% used. */}
+            {/* Fill bar */}
             <Box
               sx={{
                 height: '100%',
-                width: countable ? `${Math.min(window.used_percent, 100)}%` : '100%',
-                opacity: countable ? 1 : 0.25,
+                width: `${Math.min(window.used_percent, 100)}%`,
                 bgcolor: barColor,
                 borderRadius: 1,
                 transition: 'width 0.3s ease',
               }}
             />
           </Box>
-        </Box>
+        </Box>}
 
-        {/* Percent / count label */}
+        {/* Percent, or the figure itself when there is no proportion */}
         <Typography
           variant="body2"
           sx={{
-            color: percentLabel ? 'text.secondary' : barColor,
+            color: percentLabel || !countable ? 'text.secondary' : barColor,
             fontSize: '12px',
             whiteSpace: 'nowrap',
           }}
         >
-          {percentLabel ?? (countable ? formatQuotaPercent(window) : '—')}
+          {percentLabel ?? (countable ? formatQuotaPercent(window) : formatQuotaUsage(window))}
         </Typography>
 
         {/* Optional details inline */}

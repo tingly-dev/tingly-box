@@ -36,10 +36,9 @@ func TestOpenAIFetcherPreservesRawResponse(t *testing.T) {
 	}
 }
 
-func TestUnobservableProvidersSaySo(t *testing.T) {
-	// A provider with no quota API used to return an empty Windows slice, which
-	// reads exactly like an untouched allowance. Each now carries an explicit
-	// unknown entry so the state is visible and cannot be mistaken for 0% used.
+func TestUnreadableProvidersReportNoUsage(t *testing.T) {
+	// Nothing to show, so nothing is shown: Pct answers unknown, the reason is
+	// in LastError, and no row is invented for any surface to render.
 	provider := &ai.Provider{UUID: "u", Name: "n", Token: "t"}
 
 	for _, tc := range []struct {
@@ -64,11 +63,8 @@ func TestUnobservableProvidersSaySo(t *testing.T) {
 
 			checkInvariants(t, usage)
 
-			if len(usage.Windows) == 0 {
-				t.Fatal("an unobservable provider must still report something")
-			}
-			if usage.Windows[0].Countable() {
-				t.Error("the placeholder must not contribute a usage figure")
+			if len(usage.Windows) != 0 {
+				t.Errorf("Windows = %d; want none", len(usage.Windows))
 			}
 			if pct, ok := usage.Pct(); ok {
 				t.Errorf("Pct() = %v, %v; want unknown", pct, ok)

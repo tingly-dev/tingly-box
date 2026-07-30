@@ -86,7 +86,7 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	}
 
 	if len(quotaResp.Buckets) == 0 {
-		usage.MarkUnobservable("upstream reported no quota buckets", now)
+		usage.MarkUnreadable("upstream reported no quota buckets", now)
 		return usage, nil
 	}
 

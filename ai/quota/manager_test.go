@@ -139,20 +139,21 @@ func BenchmarkInferProviderType(b *testing.B) {
 	}
 }
 
-func TestUnreadableProvidersReportWhyRatherThanNothing(t *testing.T) {
-	// All three failure paths used to build the same windowless usage, which
-	// reads as an untouched allowance to anyone who does not check LastError.
+func TestUnreadableProvidersReportWhyAndNothingElse(t *testing.T) {
+	// Pct already answers "unknown" for a usage with nothing countable in it,
+	// so there is no placeholder window — inventing one would put a row on
+	// every surface saying nothing a reader can act on.
 	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
-	usage := Unobservable("u", "n", ProviderTypeCursor, "quota API not available", now, time.Hour)
+	usage := Unreadable("u", "n", ProviderTypeCursor, "quota API not available", now, time.Hour)
 
 	if pct, ok := usage.Pct(); ok {
 		t.Fatalf("Pct() = %v, %v; want unknown", pct, ok)
 	}
-	if len(usage.Windows) != 1 || usage.Windows[0].Countable() {
-		t.Fatal("want exactly one window, carrying no usage figure")
+	if len(usage.Windows) != 0 {
+		t.Errorf("Windows = %d; want none", len(usage.Windows))
 	}
-	if usage.LastError == "" || usage.Windows[0].Description == "" {
-		t.Error("the reason should be reported on both the usage and the window")
+	if usage.LastError == "" || usage.LastErrorAt == nil {
+		t.Error("the reason should be recorded")
 	}
 	if !usage.ExpiresAt.Equal(now.Add(time.Hour)) {
 		t.Errorf("ExpiresAt = %v; want the ttl applied to now", usage.ExpiresAt)

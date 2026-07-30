@@ -125,6 +125,15 @@ Copilot / Cursor / VertexAI 更直接——返回空 `Windows` + `LastError`
 **改法**：`Pct` 可空。不可知的条目不参与 max、不显示百分比、也不谎报 0。
 一个 `unknown` 布尔字段就够，不需要"证据等级"那套东西。
 
+**不要造占位行**。「读不到额度」这件事，`Pct()` 返回 `ok=false` 就已经表达了——
+没有窗口，自然没有 countable 的。再补一条 "Quota unavailable" 的空窗口只是给每个界面
+加一行说不出任何可操作信息的噪声（ux-principles #9）。原因记在 `LastError` 里，
+需要它的界面（CLI 的 `Status: Error:`、前端的原始响应）本来就会读。
+
+**没有信息就什么都不显示。**但**有部分信息**的窗口要留：溢价额度（上游说开了但不肯说用量）、
+OpenRouter 的月度花费（$8.10，没有上限）、Codex 的余额（$12.40）——它们有真东西可说，
+只是没有"百分比"。这类窗口显示自己的数值，不画进度条、不报百分数。
+
 ### 4.2 占比 ≠ 耗尽
 
 ```go
@@ -228,8 +237,8 @@ func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → Rese
 | kimi_code | `booster` → `Kind=resource`；`weekly` 及上游没给周期的 limit 补上周期。币种没提成字段——Description 和 `Cost.CurrencyCode` 已经带了，没有消费方要读它 |
 | kimik2 | `credits` → `Kind=resource` |
 | openrouter | 余额 → `Kind=resource`；`monthly` 的 `Limit=0` → `Unlimited=true`；去掉重复的第二个 monthly 窗口 |
-| openai | 无 limit API → `Unknown=true` |
-| copilot / cursor / vertex_ai | 产出一条 `Unknown=true` 的占位条目，让"不可观测"能被看见、被判定；三份重复兜底合成 `unobservableUsage` |
+| openai | 有花费没上限 → `spend` 窗口标 `Unknown`（数值仍可见）；404 时只记 `LastError` |
+| copilot / cursor / vertex_ai | 只记 `LastError`，不产出窗口——`Pct()` 已经答"不可知"；三份重复兜底合成 `unreadableUsage` |
 
 新增 provider 必须填 `Kind` + `WindowMinutes`，靠单测的不变量断言兜住（§9）。
 

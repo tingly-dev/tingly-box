@@ -99,13 +99,13 @@ func TestGeminiFetcher_NoBucketsIsUnknownNotZero(t *testing.T) {
 	if pct, ok := usage.Pct(); ok {
 		t.Fatalf("Pct() = %v, %v; want unknown when upstream returned no buckets", pct, ok)
 	}
-	// Same state as a provider with no quota API: say so rather than returning
-	// an empty slice that reads as an untouched allowance.
-	if len(usage.Windows) == 0 {
-		t.Error("no buckets should still report an explicit unknown window")
+	// No windows and no invented placeholder — Pct already says unknown. The
+	// reason lives in LastError, which the surfaces that want it already read.
+	if len(usage.Windows) != 0 {
+		t.Errorf("Windows = %d; want none", len(usage.Windows))
 	}
 	if usage.LastError == "" {
-		t.Error("the reason should be reported")
+		t.Error("the reason should be recorded")
 	}
 }
 
