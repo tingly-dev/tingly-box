@@ -352,41 +352,71 @@ tasks:
   minimax:
     cmds:
       - |
-        echo "example"
+        echo "example (real capture — note the 0/0 counts: the remaining"
+        echo "percentages are the only usage figures here, and each model"
+        echo "reports its own interval length alongside the shared week)"
         cat << EOF
         {
           "model_remains": [
             {
-              "start_time": 1775113200000,
-              "end_time": 1775131200000,
-              "remains_time": 16061196,
-              "current_interval_total_count": 1500,
-              "current_interval_usage_count": 1482,
-              "model_name": "MiniMax-M*",
+              "start_time": 1785376800000,
+              "end_time": 1785394800000,
+              "remains_time": 14240499,
+              "current_interval_total_count": 0,
+              "current_interval_usage_count": 0,
+              "model_name": "general",
               "current_weekly_total_count": 0,
               "current_weekly_usage_count": 0,
-              "weekly_start_time": 1774800000000,
-              "weekly_end_time": 1775404800000,
-              "weekly_remains_time": 289661196
+              "weekly_start_time": 1785081600000,
+              "weekly_end_time": 1785686400000,
+              "weekly_remains_time": 305840499,
+              "current_interval_status": 1,
+              "current_interval_remaining_percent": 100,
+              "current_weekly_status": 3,
+              "current_weekly_remaining_percent": 100
             },
             {
-              "start_time": 1775059200000,
-              "end_time": 1775145600000,
-              "remains_time": 30461196,
-              "current_interval_total_count": 4000,
-              "current_interval_usage_count": 4000,
-              "model_name": "speech-hd",
-              "current_weekly_total_count": 28000,
-              "current_weekly_usage_count": 28000,
-              "weekly_start_time": 1774800000000,
-              "weekly_end_time": 1775404800000,
-              "weekly_remains_time": 289661196
+              "start_time": 1785340800000,
+              "end_time": 1785427200000,
+              "remains_time": 46640499,
+              "current_interval_total_count": 0,
+              "current_interval_usage_count": 0,
+              "model_name": "video",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1785081600000,
+              "weekly_end_time": 1785686400000,
+              "weekly_remains_time": 305840499,
+              "current_interval_status": 3,
+              "current_interval_remaining_percent": 100,
+              "current_weekly_status": 3,
+              "current_weekly_remaining_percent": 100
             }
           ],
           "base_resp": {
             "status_code": 0,
             "status_msg": "success"
           }
+        }
+        EOF
+      - |
+        echo "example (count-based form)"
+        cat << EOF
+        {
+          "model_remains": [
+            {
+              "start_time": 1775113200000,
+              "end_time": 1775131200000,
+              "current_interval_total_count": 1500,
+              "current_interval_usage_count": 1482,
+              "model_name": "MiniMax-M*",
+              "current_weekly_total_count": 0,
+              "current_weekly_usage_count": 0,
+              "weekly_start_time": 1774800000000,
+              "weekly_end_time": 1775404800000
+            }
+          ],
+          "base_resp": { "status_code": 0, "status_msg": "success" }
         }
         EOF
       - |

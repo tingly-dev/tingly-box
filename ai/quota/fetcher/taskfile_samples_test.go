@@ -165,23 +165,38 @@ func TestTaskfileSamples(t *testing.T) {
 		t.Error("kimi-k2: a credit balance does not come back by waiting")
 	}
 
-	// ── minimax ──
+	// ── minimax (real capture) ──
+	// Counts are 0/0 and the remaining percentages carry the whole story.
+	// Each model reports its own interval length — 5h for general, 24h for
+	// video — alongside the shared week.
 	s = serve(t, `{"model_remains":[
-	 {"start_time":1775113200000,"end_time":1775131200000,"current_interval_total_count":1500,
-	  "current_interval_usage_count":1482,"model_name":"MiniMax-M*","current_weekly_total_count":0,
-	  "current_weekly_usage_count":0,"weekly_start_time":1774800000000,"weekly_end_time":1775404800000},
-	 {"start_time":1775059200000,"end_time":1775145600000,"current_interval_total_count":4000,
-	  "current_interval_usage_count":4000,"model_name":"speech-hd","current_weekly_total_count":28000,
-	  "current_weekly_usage_count":28000,"weekly_start_time":1774800000000,"weekly_end_time":1775404800000}],
+	 {"start_time":1785376800000,"end_time":1785394800000,"remains_time":14240499,
+	  "current_interval_total_count":0,"current_interval_usage_count":0,"model_name":"general",
+	  "current_weekly_total_count":0,"current_weekly_usage_count":0,
+	  "weekly_start_time":1785081600000,"weekly_end_time":1785686400000,
+	  "current_interval_status":1,"current_interval_remaining_percent":100,
+	  "current_weekly_status":3,"current_weekly_remaining_percent":100},
+	 {"start_time":1785340800000,"end_time":1785427200000,"remains_time":46640499,
+	  "current_interval_total_count":0,"current_interval_usage_count":0,"model_name":"video",
+	  "current_weekly_total_count":0,"current_weekly_usage_count":0,
+	  "weekly_start_time":1785081600000,"weekly_end_time":1785686400000,
+	  "current_interval_status":3,"current_interval_remaining_percent":100,
+	  "current_weekly_status":3,"current_weekly_remaining_percent":100}],
 	"base_resp":{"status_code":0,"status_msg":"success"}}`)
 	u, err = fetchMiniMaxQuota(context.Background(),
 		&ai.Provider{UUID: "u", Name: "MiniMax", Token: "k"}, s.URL, quota.ProviderTypeMiniMax)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// MiniMax-M* is at 1.2% and speech-hd untouched. Summing them reported
-	// 0.33%, diluting the coding model with unrelated media quotas.
-	check(t, "minimax", u, want{pct: 1.2, ok: true, tightest: "daily", windows: 2})
+	check(t, "minimax", u, want{pct: 0, ok: true, tightest: "interval", windows: 2})
+	if got := findWindow(t, u, "interval").WindowMinutes; got != 5*60 {
+		t.Errorf("minimax: interval = %d min; want 300, general's own length", got)
+	}
+	for _, model := range []string{"general", "video"} {
+		if n := len(findBreakdown(t, u, model).Windows); n != 2 {
+			t.Errorf("minimax %s: %d windows; want interval + weekly", model, n)
+		}
+	}
 
 	// ── zai (string unit form) ──
 	// This form names its unit ("tokens") rather than coding a period, so the

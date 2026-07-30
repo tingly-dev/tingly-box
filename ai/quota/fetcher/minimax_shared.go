@@ -12,6 +12,15 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
+// minimaxModelRemain is one model's entry. Each carries two windows: a short
+// interval whose length upstream reports per model (5h for one, 24h for
+// another), and a shared weekly one.
+//
+// The counts are "how many are left", not how many were spent — several models
+// in a fresh plan report total == usage_count, which only reads as untouched.
+// They are also frequently 0/0, in which case the remaining percentage is the
+// only figure upstream gives. Pointers so an absent percentage is not read as
+// "nothing left".
 type minimaxModelRemain struct {
 	ModelName                 string `json:"model_name"`
 	StartTime                 int64  `json:"start_time"`
@@ -24,6 +33,9 @@ type minimaxModelRemain struct {
 	WeeklyStartTime           int64  `json:"weekly_start_time"`
 	WeeklyEndTime             int64  `json:"weekly_end_time"`
 	WeeklyRemainsTime         int64  `json:"weekly_remains_time"`
+
+	CurrentIntervalRemainingPercent *float64 `json:"current_interval_remaining_percent"`
+	CurrentWeeklyRemainingPercent   *float64 `json:"current_weekly_remaining_percent"`
 }
 
 type minimaxRemainsResponse struct {
@@ -84,69 +96,118 @@ func buildMiniMaxUsage(provider *ai.Provider, providerType quota.ProviderType, a
 	// models. The plan covers unrelated products — a coding model, speech,
 	// image, music — so adding their request counts together lets an exhausted
 	// coding quota hide behind untouched media ones.
-	var tightestDaily, tightestWeekly *quota.UsageWindow
-	var dailyModel, weeklyModel string
+	var tightestInterval, tightestWeekly *quota.UsageWindow
+	var intervalModel, weeklyModel string
 
 	for _, model := range apiResp.ModelRemains {
-		modelDailyUsed := model.CurrentIntervalTotalCount - model.CurrentIntervalUsageCount
-		modelWeeklyUsed := model.CurrentWeeklyTotalCount - model.CurrentWeeklyUsageCount
-
 		windows := make([]*quota.UsageWindow, 0, 2)
-		dailyMinutes := minimaxWindowMinutes(model.StartTime, model.EndTime, 24*60)
-		daily := &quota.UsageWindow{
-			Type: windowTypeForMinutes(dailyMinutes), Used: float64(modelDailyUsed), Limit: float64(model.CurrentIntervalTotalCount),
-			UsedPercent: calcPercent(float64(modelDailyUsed), float64(model.CurrentIntervalTotalCount)), Unit: quota.UsageUnitRequests, Label: "Daily",
-			WindowMinutes: dailyMinutes,
-		}
-		if model.EndTime > 0 {
-			reset := time.UnixMilli(model.EndTime)
-			daily.ResetsAt = &reset
-		}
-		windows = append(windows, daily)
-		if daily.Countable() && (tightestDaily == nil || daily.Pct() > tightestDaily.Pct()) {
-			tightestDaily, dailyModel = daily, model.ModelName
+
+		interval := minimaxWindow(minimaxWindowInput{
+			total:     model.CurrentIntervalTotalCount,
+			remaining: model.CurrentIntervalUsageCount,
+			pctLeft:   model.CurrentIntervalRemainingPercent,
+			startMs:   model.StartTime,
+			endMs:     model.EndTime,
+			fallback:  24 * 60,
+			label:     "Interval",
+			resetAtMs: model.EndTime,
+		})
+		if interval != nil {
+			windows = append(windows, interval)
+			if interval.Countable() && (tightestInterval == nil || interval.Pct() > tightestInterval.Pct()) {
+				tightestInterval, intervalModel = interval, model.ModelName
+			}
 		}
 
-		if model.CurrentWeeklyTotalCount > 0 {
-			weeklyMinutes := minimaxWindowMinutes(model.WeeklyStartTime, model.WeeklyEndTime, 7*24*60)
-			weekly := &quota.UsageWindow{
-				Type: windowTypeForMinutes(weeklyMinutes), Used: float64(modelWeeklyUsed), Limit: float64(model.CurrentWeeklyTotalCount),
-				UsedPercent: calcPercent(float64(modelWeeklyUsed), float64(model.CurrentWeeklyTotalCount)), Unit: quota.UsageUnitRequests, Label: "Weekly",
-				WindowMinutes: weeklyMinutes,
-			}
-			if model.WeeklyEndTime > 0 {
-				reset := time.UnixMilli(model.WeeklyEndTime)
-				weekly.ResetsAt = &reset
-			}
+		weekly := minimaxWindow(minimaxWindowInput{
+			total:     model.CurrentWeeklyTotalCount,
+			remaining: model.CurrentWeeklyUsageCount,
+			pctLeft:   model.CurrentWeeklyRemainingPercent,
+			startMs:   model.WeeklyStartTime,
+			endMs:     model.WeeklyEndTime,
+			fallback:  7 * 24 * 60,
+			label:     "Weekly",
+			resetAtMs: model.WeeklyEndTime,
+		})
+		if weekly != nil {
 			windows = append(windows, weekly)
 			if weekly.Countable() && (tightestWeekly == nil || weekly.Pct() > tightestWeekly.Pct()) {
 				tightestWeekly, weeklyModel = weekly, model.ModelName
 			}
 		}
 
-		usage.AddBreakdown(model.ModelName, model.ModelName, "resource", windows...)
+		if len(windows) > 0 {
+			usage.AddBreakdown(model.ModelName, model.ModelName, "resource", windows...)
+		}
 	}
 
-	addMiniMaxAccountWindow(usage, "daily", 0, tightestDaily, dailyModel, "Daily")
-	addMiniMaxAccountWindow(usage, "weekly", 1, tightestWeekly, weeklyModel, "Weekly")
+	addMiniMaxAccountWindow(usage, "interval", 0, tightestInterval, intervalModel)
+	addMiniMaxAccountWindow(usage, "weekly", 1, tightestWeekly, weeklyModel)
 	return usage
+}
+
+type minimaxWindowInput struct {
+	total, remaining int
+	pctLeft          *float64
+	startMs, endMs   int64
+	resetAtMs        int64
+	fallback         int
+	label            string
+}
+
+// minimaxWindow builds one window from whichever form upstream filled in:
+// absolute counts when there is a cap, otherwise the remaining percentage.
+// Returns nil when it gave neither — a model with no quota under this plan has
+// nothing to show, and a window reporting 0% of 0 would read as untouched.
+func minimaxWindow(in minimaxWindowInput) *quota.UsageWindow {
+	minutes := minimaxWindowMinutes(in.startMs, in.endMs, in.fallback)
+	w := &quota.UsageWindow{
+		Type:          windowTypeForMinutes(minutes),
+		WindowMinutes: minutes,
+		Label:         in.label,
+	}
+
+	switch {
+	case in.total > 0:
+		used := float64(in.total - in.remaining)
+		w.Used, w.Limit = used, float64(in.total)
+		w.UsedPercent = calcPercent(used, float64(in.total))
+		w.Unit = quota.UsageUnitRequests
+		w.Description = fmt.Sprintf("%.0f / %d requests", used, in.total)
+	case in.pctLeft != nil:
+		// No cap reported, only how much is left. Normalize to 0-100 the way
+		// the percentage-only providers do.
+		usedPct := min(max(100-*in.pctLeft, 0), 100)
+		w.Used, w.Limit, w.UsedPercent = usedPct, 100, usedPct
+		w.Unit = quota.UsageUnitPercent
+		w.Description = fmt.Sprintf("%.0f%% used", usedPct)
+	default:
+		return nil
+	}
+
+	if in.resetAtMs > 0 {
+		reset := time.UnixMilli(in.resetAtMs)
+		w.ResetsAt = &reset
+	}
+	return w
 }
 
 // addMiniMaxAccountWindow copies the most-used model's window up to the account
 // level, naming the model so a user knows which one is running out.
-func addMiniMaxAccountWindow(usage *quota.ProviderUsage, key string, tier int, tightest *quota.UsageWindow, model, period string) {
+func addMiniMaxAccountWindow(usage *quota.ProviderUsage, key string, tier int, tightest *quota.UsageWindow, model string) {
 	if tightest == nil {
 		return
 	}
 	account := *tightest
-	account.Label = period + " Quota"
-	account.Description = fmt.Sprintf("%.0f / %.0f requests · %s", tightest.Used, tightest.Limit, model)
+	account.Label = tightest.Label + " Quota"
+	account.Description = fmt.Sprintf("%s · %s", tightest.Description, model)
 	usage.AddWindow(key, tier, &account)
 }
 
 // minimaxWindowMinutes derives the period from the interval upstream reports,
 // falling back to the nominal length when the timestamps are missing. The
-// reported interval is authoritative: a "daily" bucket is not always 24h.
+// reported interval is authoritative and differs per model: one entry reports a
+// 5-hour interval while another reports 24 hours.
 func minimaxWindowMinutes(startMs, endMs int64, fallback int) int {
 	if startMs > 0 && endMs > startMs {
 		if minutes := int((endMs - startMs) / 1000 / 60); minutes > 0 {

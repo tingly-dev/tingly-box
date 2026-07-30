@@ -51,7 +51,7 @@ func TestBuildMiniMaxUsage(t *testing.T) {
 	// The account figures come from the most-used model, not the sum: both
 	// models sit at 25% daily, so the first wins the tie with its own numbers.
 	if usage.Windows[0].Used != 25 || usage.Windows[0].Limit != 100 {
-		t.Fatalf("daily window = %.0f/%.0f, want 25/100", usage.Windows[0].Used, usage.Windows[0].Limit)
+		t.Fatalf("interval window = %.0f/%.0f, want 25/100", usage.Windows[0].Used, usage.Windows[0].Limit)
 	}
 	if usage.Windows[1].Used != 100 || usage.Windows[1].Limit != 500 {
 		t.Fatalf("weekly window = %.0f/%.0f, want 100/500", usage.Windows[1].Used, usage.Windows[1].Limit)
@@ -136,12 +136,12 @@ func TestMiniMaxWindowsCarryTheReportedInterval(t *testing.T) {
 	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"}, quota.ProviderTypeMiniMax, resp, time.Now())
 	checkInvariants(t, usage)
 
-	if got := findWindow(t, usage, "daily").WindowMinutes; got != 12*60 {
-		t.Errorf("daily WindowMinutes = %d, want %d (the reported interval)", got, 12*60)
+	if got := findWindow(t, usage, "interval").WindowMinutes; got != 12*60 {
+		t.Errorf("interval WindowMinutes = %d, want %d (the reported interval)", got, 12*60)
 	}
 	// The account figure is the most-used model, not the sum across products.
-	if got := findWindow(t, usage, "daily").Limit; got != 500 {
-		t.Errorf("daily Limit = %v, want 500 (one model's cap, not a total)", got)
+	if got := findWindow(t, usage, "interval").Limit; got != 500 {
+		t.Errorf("interval Limit = %v, want 500 (one model's cap, not a total)", got)
 	}
 	if got := findWindow(t, usage, "weekly").WindowMinutes; got != 7*24*60 {
 		t.Errorf("weekly WindowMinutes = %d, want %d", got, 7*24*60)
@@ -160,8 +160,8 @@ func TestMiniMaxWindowsFallBackToTheNominalPeriod(t *testing.T) {
 	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"}, quota.ProviderTypeMiniMax, resp, time.Now())
 	checkInvariants(t, usage)
 
-	if got := findWindow(t, usage, "daily").WindowMinutes; got != 24*60 {
-		t.Errorf("daily WindowMinutes = %d, want %d", got, 24*60)
+	if got := findWindow(t, usage, "interval").WindowMinutes; got != 24*60 {
+		t.Errorf("interval WindowMinutes = %d, want %d", got, 24*60)
 	}
 }
 
@@ -184,5 +184,87 @@ func TestMiniMaxSumDoesNotMaskAnExhaustedModel(t *testing.T) {
 	}
 	if got := usage.Tightest().Description; !strings.Contains(got, "MiniMax-M2") {
 		t.Errorf("Description = %q; want it to name the model that ran out", got)
+	}
+}
+
+func TestMiniMaxFallsBackToTheRemainingPercent(t *testing.T) {
+	// The real payload frequently reports 0/0 counts, leaving the remaining
+	// percentage as the only figure. Read literally, 0 of 0 gives no cap to
+	// measure against and the whole provider comes out unknown.
+	full := 100.0
+	half := 40.0
+	start := time.UnixMilli(1785376800000)
+	resp := minimaxRemainsResponse{ModelRemains: []minimaxModelRemain{
+		{
+			ModelName:                       "general",
+			StartTime:                       start.UnixMilli(),
+			EndTime:                         start.Add(5 * time.Hour).UnixMilli(),
+			WeeklyStartTime:                 start.UnixMilli(),
+			WeeklyEndTime:                   start.Add(7 * 24 * time.Hour).UnixMilli(),
+			CurrentIntervalRemainingPercent: &half,
+			CurrentWeeklyRemainingPercent:   &full,
+		},
+		{
+			ModelName:                       "video",
+			StartTime:                       start.UnixMilli(),
+			EndTime:                         start.Add(24 * time.Hour).UnixMilli(),
+			WeeklyStartTime:                 start.UnixMilli(),
+			WeeklyEndTime:                   start.Add(7 * 24 * time.Hour).UnixMilli(),
+			CurrentIntervalRemainingPercent: &full,
+			CurrentWeeklyRemainingPercent:   &full,
+		},
+	}}
+
+	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"},
+		quota.ProviderTypeMiniMax, resp, time.Now())
+	checkInvariants(t, usage)
+
+	// 40% left on general's interval is 60% used, and that is the account
+	// figure — video is untouched and must not dilute it.
+	pct, ok := usage.Pct()
+	if !ok || pct != 60 {
+		t.Fatalf("Pct() = %v, %v; want 60, true", pct, ok)
+	}
+	if got := usage.Tightest().Description; !strings.Contains(got, "general") {
+		t.Errorf("Description = %q; want it to name the model", got)
+	}
+
+	// Each model reports both of its windows, at the interval upstream gave it.
+	for _, tc := range []struct {
+		model   string
+		minutes int
+	}{
+		{"general", 5 * 60},
+		{"video", 24 * 60},
+	} {
+		bd := findBreakdown(t, usage, tc.model)
+		if len(bd.Windows) != 2 {
+			t.Fatalf("%s: %d windows; want interval + weekly", tc.model, len(bd.Windows))
+		}
+		if got := bd.Windows[0].WindowMinutes; got != tc.minutes {
+			t.Errorf("%s: interval = %d min; want %d", tc.model, got, tc.minutes)
+		}
+		if got := bd.Windows[1].WindowMinutes; got != 7*24*60 {
+			t.Errorf("%s: weekly = %d min; want %d", tc.model, got, 7*24*60)
+		}
+	}
+}
+
+func TestMiniMaxSkipsModelsWithNothingToReport(t *testing.T) {
+	// No counts and no percentage means this model carries no quota under the
+	// plan. A window there would report 0% of 0 and read as untouched.
+	resp := minimaxRemainsResponse{ModelRemains: []minimaxModelRemain{
+		{ModelName: "music-2.5"},
+	}}
+
+	usage := buildMiniMaxUsage(&ai.Provider{UUID: "u", Name: "MiniMax"},
+		quota.ProviderTypeMiniMax, resp, time.Now())
+	checkInvariants(t, usage)
+
+	if len(usage.Windows) != 0 || len(usage.Breakdowns) != 0 {
+		t.Errorf("windows=%d breakdowns=%d; want none", len(usage.Windows), len(usage.Breakdowns))
+	}
+	if _, ok := usage.Pct(); ok {
+		t.Error("Pct() should be unknown when no model reported anything")
 	}
 }

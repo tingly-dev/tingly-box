@@ -191,6 +191,15 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
+            uuid: 'mock-provider-minimax', name: 'MiniMax',
+            api_base: 'https://api.minimax.io/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'mm-****wxyz', enabled: true, proxy_url: '',
+            api_base_openai: 'https://api.minimax.io/v1', api_base_anthropic: null,
+        },
+        models: ['MiniMax-M2', 'MiniMax-Text-01'],
+    },
+    {
+        provider: {
             uuid: 'mock-provider-openrouter', name: 'OpenRouter',
             api_base: 'https://openrouter.ai/api/v1', api_style: 'openai', auth_type: 'api_key',
             token: 'sk-or-****ijkl', enabled: false, proxy_url: '',
@@ -1249,6 +1258,104 @@ const mockQuotas: Record<string, any> = {
             }],
             credits: { has_credits: false, unlimited: false, balance: '0' },
             rate_limit_reset_credits: { available_count: 4 },
+        },
+    },
+
+    // Real MiniMax capture: the counts come back 0/0 and the remaining
+    // percentages carry the whole story, and each model reports its own
+    // interval length (5h here, 24h for video) beside the shared week.
+    'mock-provider-minimax': {
+        provider_uuid: 'mock-provider-minimax',
+        provider_name: 'MiniMax',
+        provider_type: 'minimax',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        windows: [
+            {
+                key: 'interval',
+                type: 'session',
+                used: 35,
+                limit: 100,
+                used_percent: 35,
+                resets_at: inOneHour,
+                window_minutes: 300,
+                unit: 'percent',
+                label: 'Interval Quota',
+                description: '35% used · general',
+            },
+            {
+                key: 'weekly',
+                type: 'weekly',
+                used: 12,
+                limit: 100,
+                used_percent: 12,
+                resets_at: inSixDays,
+                window_minutes: 10080,
+                unit: 'percent',
+                label: 'Weekly Quota',
+                description: '12% used · general',
+            },
+        ],
+        breakdowns: [
+            {
+                key: 'general',
+                label: 'general',
+                group: 'resource',
+                windows: [
+                    {
+                        type: 'session', used: 35, limit: 100, used_percent: 35,
+                        resets_at: inOneHour, window_minutes: 300, unit: 'percent',
+                        label: 'Interval', description: '35% used',
+                    },
+                    {
+                        type: 'weekly', used: 12, limit: 100, used_percent: 12,
+                        resets_at: inSixDays, window_minutes: 10080, unit: 'percent',
+                        label: 'Weekly', description: '12% used',
+                    },
+                ],
+            },
+            {
+                key: 'video',
+                label: 'video',
+                group: 'resource',
+                windows: [
+                    {
+                        type: 'daily', used: 0, limit: 100, used_percent: 0,
+                        resets_at: inTwoDays, window_minutes: 1440, unit: 'percent',
+                        label: 'Interval', description: '0% used',
+                    },
+                    {
+                        type: 'weekly', used: 0, limit: 100, used_percent: 0,
+                        resets_at: inSixDays, window_minutes: 10080, unit: 'percent',
+                        label: 'Weekly', description: '0% used',
+                    },
+                ],
+            },
+        ],
+        raw_response: {
+            model_remains: [
+                {
+                    start_time: 1785376800000, end_time: 1785394800000, remains_time: 14240499,
+                    current_interval_total_count: 0, current_interval_usage_count: 0,
+                    model_name: 'general',
+                    current_weekly_total_count: 0, current_weekly_usage_count: 0,
+                    weekly_start_time: 1785081600000, weekly_end_time: 1785686400000,
+                    weekly_remains_time: 305840499,
+                    current_interval_status: 1, current_interval_remaining_percent: 65,
+                    current_weekly_status: 3, current_weekly_remaining_percent: 88,
+                },
+                {
+                    start_time: 1785340800000, end_time: 1785427200000, remains_time: 46640499,
+                    current_interval_total_count: 0, current_interval_usage_count: 0,
+                    model_name: 'video',
+                    current_weekly_total_count: 0, current_weekly_usage_count: 0,
+                    weekly_start_time: 1785081600000, weekly_end_time: 1785686400000,
+                    weekly_remains_time: 305840499,
+                    current_interval_status: 3, current_interval_remaining_percent: 100,
+                    current_weekly_status: 3, current_weekly_remaining_percent: 100,
+                },
+            ],
+            base_resp: { status_code: 0, status_msg: 'success' },
         },
     },
 

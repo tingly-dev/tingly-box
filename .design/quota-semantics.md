@@ -82,7 +82,7 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 | 来源 | provider |
 |---|---|
 | 上游明说 | Codex（`LimitWindowSeconds / 60`） |
-| 从时间戳算 | MiniMax（`EndTime - StartTime`，所以"daily"不一定是 24h） |
+| 从时间戳算 | MiniMax（`EndTime - StartTime`；每个模型不一样，general 5h、video 24h） |
 | 按契约写死 | Anthropic 300/10080/43200、Zai `Number × 单位`、Gemini 1440、OpenRouter 43200 |
 
 **周期只做两件事**：排序，和 `Tightest()` 的平手判定（用量相同取短的）。
@@ -233,7 +233,7 @@ func (p *ProviderUsage) RecoversAt() *time.Time   // Tightest 是额度 → Rese
 | codex | `model_*` / `code_review` 移进 `Breakdowns`；重置券 `Kind=resource`；`Cost.Limit=balance` 的错位改成资源条目（`fetcher/codex.go:324`） |
 | gemini | average 窗口换成**最紧的那个 bucket**，并用模型名当标签（"Average Usage 50%" 指不出该停用哪个模型）；每个 bucket 进 `Breakdowns` |
 | zai | `usageDetails` 的 `modelPercent` 不再写进 `UsedPercent`；MCP `TIME_LIMIT` 移进 `Breakdowns`；`Number×unit` → `WindowMinutes` |
-| minimax | `WindowMinutes` 从上游 `EndTime - StartTime` 算，缺时间戳才退回 1440 / 10080 |
+| minimax | 账户级取**最紧的那个模型**（原先把编码模型和语音/图片/视频的请求数加总，一个打满的编码额度会被媒体额度稀释）；每个模型出**两个窗口**——自己的区间（general 5h / video 24h）+ 共享周窗口；counts 为 `0/0` 时用 `*_remaining_percent`（真实返回里常是这种形态，按 counts 读会让整个 provider 变"不可知"）；两者都没有 → 该窗口不产出 |
 | kimi_code | `booster` → `Kind=resource`；`weekly` 及上游没给周期的 limit 补上周期。币种没提成字段——Description 和 `Cost.CurrencyCode` 已经带了，没有消费方要读它 |
 | kimik2 | `credits` → `Kind=resource` |
 | openrouter | 余额 → `Kind=resource`；`monthly` 的 `Limit=0` → `Unlimited=true`；去掉重复的第二个 monthly 窗口 |
