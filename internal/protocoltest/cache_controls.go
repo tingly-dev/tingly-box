@@ -30,6 +30,25 @@ func cacheControlScenario() Scenario {
 	return s
 }
 
+func cacheControlIdempotentCases() []IdempotentCase {
+	cases := append([]IdempotentCase(nil), DefaultIdempotentCases()...)
+	cases = append(cases,
+		IdempotentCase{
+			Name:     "anthropic_beta_via_openai_chat",
+			Source:   protocol.TypeAnthropicBeta,
+			Mid:      protocol.TypeOpenAIChat,
+			Baseline: protocol.TypeAnthropicBeta,
+		},
+		IdempotentCase{
+			Name:     "anthropic_beta_via_openai_responses",
+			Source:   protocol.TypeAnthropicBeta,
+			Mid:      protocol.TypeOpenAIResponses,
+			Baseline: protocol.TypeAnthropicBeta,
+		},
+	)
+	return cases
+}
+
 // cacheControlBody returns the same stable system + user prefix in each source
 // protocol. cached controls both markers and OpenAI's explicit cache mode.
 func cacheControlBody(source protocol.APIType, model string, streaming, cached bool) map[string]any {
@@ -94,6 +113,23 @@ func cacheControlBody(source protocol.APIType, model string, streaming, cached b
 	panic(fmt.Sprintf("unsupported cache-control source protocol %s", source))
 }
 
+// automaticCacheControlBody exercises the request-level/implicit cache mode:
+// Anthropic names it top-level cache_control, while OpenAI names it
+// prompt_cache_options.mode="implicit". Unlike cacheControlBody, it contains
+// no explicit content breakpoint.
+func automaticCacheControlBody(source protocol.APIType, model string, streaming bool) map[string]any {
+	body := cacheControlBody(source, model, streaming, false)
+	switch source {
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		body["cache_control"] = map[string]any{"type": "ephemeral"}
+	case protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses:
+		body["prompt_cache_options"] = map[string]any{"mode": "implicit"}
+	default:
+		panic(fmt.Sprintf("unsupported automatic cache-control source protocol %s", source))
+	}
+	return body
+}
+
 func cacheControlEndpoint(target protocol.APIType) EndpointKind {
 	switch target {
 	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
@@ -115,6 +151,17 @@ func sendCacheControlBody(t flagTB, env *TestEnv, source, target protocol.APITyp
 	if err != nil {
 		t.Fatalf("dispatch %s -> %s (cached=%v, streaming=%v): %v",
 			source, target, cached, streaming, err)
+	}
+}
+
+func sendAutomaticCacheControlBody(t flagTB, env *TestEnv, source, target protocol.APIType, scenarioName, model string, streaming bool) {
+	t.Helper()
+	path, _ := buildRequest(source, model, streaming)
+	_, err := env.dispatch(source, target, scenarioName, path,
+		mustMarshal(automaticCacheControlBody(source, model, streaming)), nil, streaming)
+	if err != nil {
+		t.Fatalf("dispatch automatic cache %s -> %s (streaming=%v): %v",
+			source, target, streaming, err)
 	}
 }
 
@@ -215,6 +262,50 @@ func assertCapturedCacheState(t flagTB, env *TestEnv, target protocol.APIType, c
 	}
 }
 
+func assertCapturedAutomaticCacheState(t flagTB, env *TestEnv, target protocol.APIType, label string) {
+	t.Helper()
+	endpoint := cacheControlEndpoint(target)
+	if endpoint == "" {
+		t.Fatalf("%s: unsupported target protocol %s", label, target)
+	}
+	captured := env.virtual.LastRequest(endpoint)
+	if captured == nil {
+		t.Fatalf("%s: final provider received no %s request", label, endpoint)
+	}
+	body := captured.JSON()
+
+	if endpoint == EndpointAnthropic {
+		raw, ok := body["cache_control"]
+		if !ok {
+			t.Errorf("%s: final Anthropic body has no top-level cache_control; body=%s",
+				label, truncate(string(captured.Body), 1200))
+			return
+		}
+		control, _ := raw.(map[string]any)
+		if got, _ := control["type"].(string); got != "ephemeral" {
+			t.Errorf("%s: final cache_control.type = %q, want ephemeral; body=%s",
+				label, got, truncate(string(captured.Body), 1200))
+		}
+		// Automatic caching must not invent explicit content breakpoints.
+		delete(body, "cache_control")
+		if explicit := countCacheMarkers(t, body, "cache_control", "type", "ephemeral"); explicit != 0 {
+			t.Errorf("%s: final Anthropic body contains %d explicit cache marker(s); body=%s",
+				label, explicit, truncate(string(captured.Body), 1200))
+		}
+		return
+	}
+
+	options, _ := body["prompt_cache_options"].(map[string]any)
+	if got, _ := options["mode"].(string); got != "implicit" {
+		t.Errorf("%s: final prompt_cache_options.mode = %q, want implicit; body=%s",
+			label, got, truncate(string(captured.Body), 1200))
+	}
+	if explicit := countCacheMarkers(t, body, "prompt_cache_breakpoint", "mode", "explicit"); explicit != 0 {
+		t.Errorf("%s: final OpenAI body contains %d explicit cache marker(s); body=%s",
+			label, explicit, truncate(string(captured.Body), 1200))
+	}
+}
+
 func runSingleCacheControlCase(t flagTB, env *TestEnv, pair ProtocolPair, streaming bool) {
 	t.Helper()
 	s := cacheControlScenario()
@@ -230,6 +321,10 @@ func runSingleCacheControlCase(t flagTB, env *TestEnv, pair ProtocolPair, stream
 		sendCacheControlBody(t, env, pair.Source, pair.Target, s.Name, model, streaming, cached)
 		assertCapturedCacheState(t, env, pair.Target, cached, label)
 	}
+	label := fmt.Sprintf("single/%s→%s/automatic/%s",
+		pair.Source, pair.Target, streamMode(streaming))
+	sendAutomaticCacheControlBody(t, env, pair.Source, pair.Target, s.Name, model, streaming)
+	assertCapturedAutomaticCacheState(t, env, pair.Target, label)
 }
 
 func runABACacheControlCase(t flagTB, env *TestEnv, ic IdempotentCase, streaming bool) {
@@ -254,6 +349,10 @@ func runABACacheControlCase(t flagTB, env *TestEnv, ic IdempotentCase, streaming
 		sendCacheControlBody(t, env, ic.Source, ic.Mid, s.Name, headModel, streaming, cached)
 		assertCapturedCacheState(t, env, ic.Baseline, cached, label)
 	}
+	label := fmt.Sprintf("aba/%s→%s→%s/automatic/%s",
+		ic.Source, ic.Mid, ic.Baseline, streamMode(streaming))
+	sendAutomaticCacheControlBody(t, env, ic.Source, ic.Mid, s.Name, headModel, streaming)
+	assertCapturedAutomaticCacheState(t, env, ic.Baseline, label)
 }
 
 func cacheStateName(cached bool) string {
@@ -290,7 +389,7 @@ func (m *Matrix) ExecuteAllCacheControls() []TestResult {
 		}
 	}
 
-	for _, ic := range DefaultIdempotentCases() {
+	for _, ic := range cacheControlIdempotentCases() {
 		for _, streaming := range m.Streaming {
 			ic := ic
 			streaming := streaming

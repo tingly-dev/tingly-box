@@ -579,7 +579,8 @@ by the matrix's fixed request. `cache_controls.go` uses the same raw-request and
 provider-capture approach as `content_shapes`, across two path classes:
 
 - **single-hop**: every pair in `DefaultPairs()` (A→B);
-- **ABA**: every case in `DefaultIdempotentCases()` (A→B→A).
+- **ABA**: every case in `DefaultIdempotentCases()` plus Anthropic Beta
+  variants (A→B→A).
 
 ABA cases reuse `setupChainHopRoute`: the A→B provider points back at the
 gateway's B endpoint, so the same request genuinely re-enters the HTTP gateway
@@ -591,7 +592,10 @@ For every path and stream mode, the suite sends:
 1. a cached request with two stable-prefix markers and verifies both markers
    plus OpenAI explicit mode at the final provider;
 2. the matching no-cache request and verifies that no marker or explicit mode
-   was synthesized.
+   was synthesized;
+3. an automatic-cache request and verifies Anthropic's top-level
+   `cache_control` ↔ OpenAI's `prompt_cache_options.mode="implicit"` through
+   both the JSON re-entry boundary and the final provider request.
 
 Run it with:
 
