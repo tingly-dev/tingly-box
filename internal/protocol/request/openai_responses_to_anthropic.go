@@ -23,6 +23,9 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 	defaultMaxTokens int64,
 ) *anthropic.BetaMessageNewParams {
 	anthropicParams := &anthropic.BetaMessageNewParams{}
+	if params.PromptCacheOptions.Mode == "implicit" {
+		anthropicParams.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
+	}
 
 	// Convert model
 	if params.Model != "" {

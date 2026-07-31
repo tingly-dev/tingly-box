@@ -56,6 +56,104 @@ func TestAnthropicOpenAIAnthropicPreservesCacheControl(t *testing.T) {
 	require.False(t, anthropicparam.IsOmitted(out.Messages[0].Content[0].OfText.CacheControl))
 }
 
+func TestAnthropicAutomaticCacheControlRoundTripsThroughOpenAIWire(t *testing.T) {
+	t.Run("chat", func(t *testing.T) {
+		in := &anthropic.MessageNewParams{
+			Model:        "claude-test",
+			MaxTokens:    256,
+			CacheControl: anthropic.NewCacheControlEphemeralParam(),
+			System:       []anthropic.TextBlockParam{{Text: "stable system prompt"}},
+			Messages: []anthropic.MessageParam{
+				anthropic.NewUserMessage(anthropic.NewTextBlock("growing conversation")),
+			},
+		}
+
+		chat, _ := ConvertAnthropicToOpenAIRequest(in, true, false, false)
+		require.Equal(t, "implicit", chat.PromptCacheOptions.Mode)
+
+		wire, err := json.Marshal(chat)
+		require.NoError(t, err)
+		require.Contains(t, string(wire), `"prompt_cache_options":{"mode":"implicit"}`)
+
+		var reparsed openai.ChatCompletionNewParams
+		require.NoError(t, json.Unmarshal(wire, &reparsed))
+		out := ConvertOpenAIToAnthropicRequest(&reparsed, 4096)
+		require.False(t, anthropicparam.IsOmitted(out.CacheControl))
+	})
+
+	t.Run("responses", func(t *testing.T) {
+		in := &anthropic.MessageNewParams{
+			Model:        "claude-test",
+			MaxTokens:    256,
+			CacheControl: anthropic.NewCacheControlEphemeralParam(),
+			System:       []anthropic.TextBlockParam{{Text: "stable system prompt"}},
+			Messages: []anthropic.MessageParam{
+				anthropic.NewUserMessage(anthropic.NewTextBlock("growing conversation")),
+			},
+		}
+
+		responsesReq := ConvertAnthropicV1ToResponsesRequest(in)
+		require.Equal(t, "implicit", responsesReq.PromptCacheOptions.Mode)
+
+		wire, err := json.Marshal(responsesReq)
+		require.NoError(t, err)
+		require.Contains(t, string(wire), `"prompt_cache_options":{"mode":"implicit"}`)
+
+		var reparsed responses.ResponseNewParams
+		require.NoError(t, json.Unmarshal(wire, &reparsed))
+		out := ConvertOpenAIResponsesToAnthropicBetaRequest(reparsed, 4096)
+		require.False(t, anthropicparam.IsOmitted(out.CacheControl))
+	})
+}
+
+func TestAnthropicAutomaticAndExplicitCacheControlsCoexist(t *testing.T) {
+	user := anthropic.NewTextBlock("stable conversation prefix")
+	user.OfText.CacheControl = anthropic.NewCacheControlEphemeralParam()
+	in := &anthropic.MessageNewParams{
+		Model:        "claude-test",
+		MaxTokens:    256,
+		CacheControl: anthropic.NewCacheControlEphemeralParam(),
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(user),
+		},
+	}
+	chat, _ := ConvertAnthropicToOpenAIRequest(in, true, false, false)
+	require.Equal(t, "implicit", chat.PromptCacheOptions.Mode)
+	require.False(t, openaiparam.IsOmitted(
+		chat.Messages[0].OfUser.Content.OfArrayOfContentParts[0].OfText.PromptCacheBreakpoint))
+
+	responsesReq := ConvertAnthropicV1ToResponsesRequest(in)
+	require.Equal(t, "implicit", responsesReq.PromptCacheOptions.Mode)
+	requireResponsesTextBreakpoint(t, responsesReq.Input.OfInputItemList[0], "user")
+}
+
+func TestAnthropicCacheControlTTLDegradesExplicitlyAcrossOpenAI(t *testing.T) {
+	in := &anthropic.MessageNewParams{
+		Model:     "claude-test",
+		MaxTokens: 256,
+		CacheControl: anthropic.CacheControlEphemeralParam{
+			Type: "ephemeral",
+			TTL:  anthropic.CacheControlEphemeralTTLTTL1h,
+		},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("growing conversation")),
+		},
+	}
+	view := viewAnthropicV1Request(in)
+	require.True(t, view.AutomaticCacheControl.Present)
+	require.Equal(t, "1h", view.AutomaticCacheControl.TTL)
+
+	chat, _ := ConvertAnthropicToOpenAIRequest(in, true, false, false)
+	require.Equal(t, "implicit", chat.PromptCacheOptions.Mode)
+	require.Empty(t, chat.PromptCacheOptions.Ttl,
+		"Anthropic 1h must not be mistranslated as OpenAI's only supported 30m TTL")
+
+	out := ConvertOpenAIToAnthropicRequest(chat, 4096)
+	require.False(t, anthropicparam.IsOmitted(out.CacheControl))
+	require.Empty(t, out.CacheControl.TTL,
+		"cross-family round trip preserves automatic caching but Anthropic 1h has no OpenAI equivalent")
+}
+
 func TestAnthropicToolCacheControlAdvancesToOpenAICacheableContent(t *testing.T) {
 	in := &anthropic.MessageNewParams{
 		Model:     "claude-test",

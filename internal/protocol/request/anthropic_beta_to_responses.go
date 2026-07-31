@@ -83,8 +83,13 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	hasRepresentableCacheControl := hasSystemCacheControl || anthropicBetaMessagesHaveRepresentableCacheControl(anthropicReq.Messages)
 	hasFallbackCacheControl := anthropicBetaToolsHaveCacheControl(anthropicReq.Tools) ||
 		anthropicBetaMessagesHaveToolUseCacheControl(anthropicReq.Messages)
-	if hasRepresentableCacheControl || hasFallbackCacheControl {
-		params.PromptCacheOptions.Mode = "explicit"
+	hasAutomaticCacheControl := !param.IsOmitted(anthropicReq.CacheControl)
+	if hasAutomaticCacheControl || hasRepresentableCacheControl || hasFallbackCacheControl {
+		if hasAutomaticCacheControl {
+			params.PromptCacheOptions.Mode = "implicit"
+		} else {
+			params.PromptCacheOptions.Mode = "explicit"
+		}
 		if !hasRepresentableCacheControl && hasFallbackCacheControl {
 			applyFirstResponsesCacheBreakpoint(params)
 		}

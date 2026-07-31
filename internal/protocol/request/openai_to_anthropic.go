@@ -136,6 +136,9 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		Messages:  messages,
 		MaxTokens: maxTokens,
 	}
+	if req.PromptCacheOptions.Mode == "implicit" {
+		params.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
+	}
 
 	// Add system blocks if any. Array-form OpenAI content keeps standard
 	// prompt_cache_breakpoint markers from an earlier Anthropic hop.

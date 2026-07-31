@@ -36,6 +36,15 @@ const (
 	blockViewImage
 )
 
+// cacheControlView retains the Anthropic cache metadata even when the target
+// protocol cannot express all of it. In particular, OpenAI currently has only
+// a 30m request-level TTL, so Anthropic's 5m/1h value must not be silently
+// rewritten as an allegedly equivalent OpenAI value.
+type cacheControlView struct {
+	Present bool
+	TTL     string
+}
+
 // anthropicBlockView is a normalized view of a v1/beta content block.
 type anthropicBlockView struct {
 	Kind anthropicBlockKind
@@ -60,7 +69,7 @@ type anthropicBlockView struct {
 
 	// CacheControl marks the end of a reusable prompt prefix. OpenAI Chat has
 	// the same concept under prompt_cache_breakpoint.
-	CacheControl bool
+	CacheControl cacheControlView
 }
 
 // anthropicMessageView is a normalized view of a v1/beta message.
@@ -73,7 +82,7 @@ type anthropicMessageView struct {
 type anthropicToolView struct {
 	Name         string
 	Description  string
-	CacheControl bool
+	CacheControl cacheControlView
 	// InputSchema is the full schema param value (marshalled for Google).
 	InputSchema any
 	// Properties/Required are the schema fields (used for OpenAI parameters).
@@ -94,10 +103,14 @@ type anthropicToolChoiceView struct {
 type anthropicRequestView struct {
 	Model     string
 	MaxTokens int64
+	// AutomaticCacheControl represents Anthropic's request-level
+	// cache_control. OpenAI expresses the same moving last-block behavior with
+	// prompt_cache_options.mode="implicit".
+	AutomaticCacheControl cacheControlView
 	// SystemTexts holds one entry per system text block; the OpenAI core
 	// joins them without separators, the Google core joins with "\n".
 	SystemTexts         []string
-	SystemCacheControls []bool
+	SystemCacheControls []cacheControlView
 	Messages            []anthropicMessageView
 	Tools               []anthropicToolView
 	HasTools            bool
@@ -108,14 +121,28 @@ type anthropicRequestView struct {
 	OutputEffort    string
 }
 
+func viewAnthropicV1CacheControl(control *anthropic.CacheControlEphemeralParam) cacheControlView {
+	if control == nil || anthropicparam.IsOmitted(*control) {
+		return cacheControlView{}
+	}
+	return cacheControlView{Present: true, TTL: string(control.TTL)}
+}
+
+func viewAnthropicBetaCacheControl(control *anthropic.BetaCacheControlEphemeralParam) cacheControlView {
+	if control == nil || anthropicparam.IsOmitted(*control) {
+		return cacheControlView{}
+	}
+	return cacheControlView{Present: true, TTL: string(control.TTL)}
+}
+
 // ───────────────────────── v1 adapters ─────────────────────────
 
 func viewAnthropicV1Block(block anthropic.ContentBlockParamUnion) anthropicBlockView {
 	cacheControl := block.GetCacheControl()
-	hasCacheControl := cacheControl != nil && !anthropicparam.IsOmitted(*cacheControl)
+	cache := viewAnthropicV1CacheControl(cacheControl)
 	switch {
 	case block.OfText != nil:
-		return anthropicBlockView{Kind: blockViewText, Text: block.OfText.Text, CacheControl: hasCacheControl}
+		return anthropicBlockView{Kind: blockViewText, Text: block.OfText.Text, CacheControl: cache}
 	case block.OfThinking != nil:
 		return anthropicBlockView{Kind: blockViewThinking, Text: block.OfThinking.Thinking}
 	case block.OfRedactedThinking != nil:
@@ -126,17 +153,17 @@ func viewAnthropicV1Block(block anthropic.ContentBlockParamUnion) anthropicBlock
 			ToolID:       block.OfToolUse.ID,
 			ToolName:     block.OfToolUse.Name,
 			ToolInput:    block.OfToolUse.Input,
-			CacheControl: hasCacheControl,
+			CacheControl: cache,
 		}
 	case block.OfToolResult != nil:
 		return anthropicBlockView{
 			Kind:           blockViewToolResult,
 			ToolResultID:   block.OfToolResult.ToolUseID,
 			ToolResultText: convertToolResultContent(block.OfToolResult.Content),
-			CacheControl:   hasCacheControl,
+			CacheControl:   cache,
 		}
 	case block.OfImage != nil:
-		v := anthropicBlockView{Kind: blockViewImage, CacheControl: hasCacheControl}
+		v := anthropicBlockView{Kind: blockViewImage, CacheControl: cache}
 		if block.OfImage.Source.OfBase64 != nil {
 			v.ImageMediaType = string(block.OfImage.Source.OfBase64.MediaType)
 			v.ImageData = block.OfImage.Source.OfBase64.Data
@@ -173,7 +200,7 @@ func viewAnthropicV1Tools(tools []anthropic.ToolUnionParam) []anthropicToolView 
 			Properties:    tool.InputSchema.Properties,
 			Required:      tool.InputSchema.Required,
 			HasProperties: tool.InputSchema.Properties != nil,
-			CacheControl:  !anthropicparam.IsOmitted(tool.CacheControl),
+			CacheControl:  viewAnthropicV1CacheControl(&tool.CacheControl),
 		})
 	}
 	return out
@@ -193,17 +220,18 @@ func viewAnthropicV1ToolChoice(tc *anthropic.ToolChoiceUnionParam) anthropicTool
 
 func viewAnthropicV1Request(req *anthropic.MessageNewParams) anthropicRequestView {
 	view := anthropicRequestView{
-		Model:           string(req.Model),
-		MaxTokens:       req.MaxTokens,
-		HasTools:        len(req.Tools) > 0,
-		Tools:           viewAnthropicV1Tools(req.Tools),
-		ToolChoice:      viewAnthropicV1ToolChoice(&req.ToolChoice),
-		ThinkingEnabled: req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || IsThinkingEnabled(req),
-		OutputEffort:    string(req.OutputConfig.Effort),
+		Model:                 string(req.Model),
+		MaxTokens:             req.MaxTokens,
+		AutomaticCacheControl: viewAnthropicV1CacheControl(&req.CacheControl),
+		HasTools:              len(req.Tools) > 0,
+		Tools:                 viewAnthropicV1Tools(req.Tools),
+		ToolChoice:            viewAnthropicV1ToolChoice(&req.ToolChoice),
+		ThinkingEnabled:       req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || IsThinkingEnabled(req),
+		OutputEffort:          string(req.OutputConfig.Effort),
 	}
 	for _, sys := range req.System {
 		view.SystemTexts = append(view.SystemTexts, sys.Text)
-		view.SystemCacheControls = append(view.SystemCacheControls, !anthropicparam.IsOmitted(sys.CacheControl))
+		view.SystemCacheControls = append(view.SystemCacheControls, viewAnthropicV1CacheControl(&sys.CacheControl))
 	}
 	for _, msg := range req.Messages {
 		view.Messages = append(view.Messages, viewAnthropicV1Message(msg))
@@ -215,10 +243,10 @@ func viewAnthropicV1Request(req *anthropic.MessageNewParams) anthropicRequestVie
 
 func viewAnthropicBetaBlock(block anthropic.BetaContentBlockParamUnion) anthropicBlockView {
 	cacheControl := block.GetCacheControl()
-	hasCacheControl := cacheControl != nil && !anthropicparam.IsOmitted(*cacheControl)
+	cache := viewAnthropicBetaCacheControl(cacheControl)
 	switch {
 	case block.OfText != nil:
-		return anthropicBlockView{Kind: blockViewText, Text: block.OfText.Text, CacheControl: hasCacheControl}
+		return anthropicBlockView{Kind: blockViewText, Text: block.OfText.Text, CacheControl: cache}
 	case block.OfThinking != nil:
 		return anthropicBlockView{Kind: blockViewThinking, Text: block.OfThinking.Thinking}
 	case block.OfRedactedThinking != nil:
@@ -229,17 +257,17 @@ func viewAnthropicBetaBlock(block anthropic.BetaContentBlockParamUnion) anthropi
 			ToolID:       block.OfToolUse.ID,
 			ToolName:     block.OfToolUse.Name,
 			ToolInput:    block.OfToolUse.Input,
-			CacheControl: hasCacheControl,
+			CacheControl: cache,
 		}
 	case block.OfToolResult != nil:
 		return anthropicBlockView{
 			Kind:           blockViewToolResult,
 			ToolResultID:   block.OfToolResult.ToolUseID,
 			ToolResultText: convertBetaToolResultContent(block.OfToolResult.Content),
-			CacheControl:   hasCacheControl,
+			CacheControl:   cache,
 		}
 	case block.OfImage != nil:
-		v := anthropicBlockView{Kind: blockViewImage, CacheControl: hasCacheControl}
+		v := anthropicBlockView{Kind: blockViewImage, CacheControl: cache}
 		if block.OfImage.Source.OfBase64 != nil {
 			v.ImageMediaType = string(block.OfImage.Source.OfBase64.MediaType)
 			v.ImageData = block.OfImage.Source.OfBase64.Data
@@ -276,7 +304,7 @@ func viewAnthropicBetaTools(tools []anthropic.BetaToolUnionParam) []anthropicToo
 			Properties:    tool.InputSchema.Properties,
 			Required:      tool.InputSchema.Required,
 			HasProperties: tool.InputSchema.Properties != nil,
-			CacheControl:  !anthropicparam.IsOmitted(tool.CacheControl),
+			CacheControl:  viewAnthropicBetaCacheControl(&tool.CacheControl),
 		})
 	}
 	return out
@@ -296,17 +324,18 @@ func viewAnthropicBetaToolChoice(tc *anthropic.BetaToolChoiceUnionParam) anthrop
 
 func viewAnthropicBetaRequest(req *anthropic.BetaMessageNewParams) anthropicRequestView {
 	view := anthropicRequestView{
-		Model:           string(req.Model),
-		MaxTokens:       req.MaxTokens,
-		HasTools:        len(req.Tools) > 0,
-		Tools:           viewAnthropicBetaTools(req.Tools),
-		ToolChoice:      viewAnthropicBetaToolChoice(&req.ToolChoice),
-		ThinkingEnabled: req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || IsThinkingEnabledBeta(req),
-		OutputEffort:    string(req.OutputConfig.Effort),
+		Model:                 string(req.Model),
+		MaxTokens:             req.MaxTokens,
+		AutomaticCacheControl: viewAnthropicBetaCacheControl(&req.CacheControl),
+		HasTools:              len(req.Tools) > 0,
+		Tools:                 viewAnthropicBetaTools(req.Tools),
+		ToolChoice:            viewAnthropicBetaToolChoice(&req.ToolChoice),
+		ThinkingEnabled:       req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || IsThinkingEnabledBeta(req),
+		OutputEffort:          string(req.OutputConfig.Effort),
 	}
 	for _, sys := range req.System {
 		view.SystemTexts = append(view.SystemTexts, sys.Text)
-		view.SystemCacheControls = append(view.SystemCacheControls, !anthropicparam.IsOmitted(sys.CacheControl))
+		view.SystemCacheControls = append(view.SystemCacheControls, viewAnthropicBetaCacheControl(&sys.CacheControl))
 	}
 	for _, msg := range req.Messages {
 		view.Messages = append(view.Messages, viewAnthropicBetaMessage(msg))
@@ -346,7 +375,7 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 			parts := make([]openai.ChatCompletionContentPartTextParam, 0, len(view.SystemTexts))
 			for i, text := range view.SystemTexts {
 				part := openai.ChatCompletionContentPartTextParam{Text: text}
-				if i < len(view.SystemCacheControls) && view.SystemCacheControls[i] {
+				if i < len(view.SystemCacheControls) && view.SystemCacheControls[i].Present {
 					part.PromptCacheBreakpoint = openai.NewChatCompletionContentPartTextPromptCacheBreakpointParam()
 				}
 				parts = append(parts, part)
@@ -368,8 +397,12 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 
 	hasRepresentableCacheControl := viewHasRepresentableCacheControl(view)
 	hasFallbackCacheControl := viewHasToolDefinitionCacheControl(view) || viewHasToolUseCacheControl(view)
-	if hasRepresentableCacheControl || hasFallbackCacheControl {
-		openaiReq.PromptCacheOptions.Mode = "explicit"
+	if view.AutomaticCacheControl.Present || hasRepresentableCacheControl || hasFallbackCacheControl {
+		if view.AutomaticCacheControl.Present {
+			openaiReq.PromptCacheOptions.Mode = "implicit"
+		} else {
+			openaiReq.PromptCacheOptions.Mode = "explicit"
+		}
 		if !hasRepresentableCacheControl && hasFallbackCacheControl {
 			// OpenAI cannot put a breakpoint on a tool definition or tool call.
 			// Advance that boundary to the first cacheable content block, which
@@ -412,7 +445,7 @@ func convertAnthropicViewAssistantToOpenAI(blocks []anthropicBlockView) openai.C
 		switch block.Kind {
 		case blockViewText:
 			if preserveTextParts {
-				part := openAITextPart(block.Text, block.CacheControl)
+				part := openAITextPart(block.Text, block.CacheControl.Present)
 				textParts = append(textParts, openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{
 					OfText: &part,
 				})
@@ -472,7 +505,7 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropicBlockView) []openai.Chat
 		case blockViewImage:
 			hasImage = true
 		}
-		hasCache = hasCache || block.CacheControl
+		hasCache = hasCache || block.CacheControl.Present
 	}
 
 	switch {
@@ -486,7 +519,7 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropicBlockView) []openai.Chat
 			case blockViewToolResult:
 				// Convert tool_result to OpenAI role="tool" message.
 				// Truncate tool_call_id to meet OpenAI's 40 character limit.
-				if block.CacheControl {
+				if block.CacheControl.Present {
 					part := openAITextPart(block.ToolResultText, true)
 					result = append(result, openai.ChatCompletionMessageParamUnion{
 						OfTool: &openai.ChatCompletionToolMessageParam{
@@ -511,7 +544,7 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropicBlockView) []openai.Chat
 		for _, block := range blocks {
 			switch block.Kind {
 			case blockViewText:
-				part := openAITextPart(block.Text, block.CacheControl)
+				part := openAITextPart(block.Text, block.CacheControl.Present)
 				parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfText: &part})
 			case blockViewImage:
 				url := imageViewToOpenAIURL(block)
@@ -521,7 +554,7 @@ func convertAnthropicViewUserToOpenAI(blocks []anthropicBlockView) []openai.Chat
 				imagePart := openai.ChatCompletionContentPartImageParam{
 					ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: url},
 				}
-				if block.CacheControl {
+				if block.CacheControl.Present {
 					imagePart.PromptCacheBreakpoint = openai.NewChatCompletionContentPartImagePromptCacheBreakpointParam()
 				}
 				parts = append(parts, openai.ChatCompletionContentPartUnionParam{OfImageURL: &imagePart})
@@ -554,9 +587,9 @@ func openAITextPart(text string, cacheControl bool) openai.ChatCompletionContent
 	return part
 }
 
-func hasCacheControl(values []bool) bool {
+func hasCacheControl(values []cacheControlView) bool {
 	for _, value := range values {
-		if value {
+		if value.Present {
 			return true
 		}
 	}
@@ -565,7 +598,7 @@ func hasCacheControl(values []bool) bool {
 
 func blocksHaveCacheControl(blocks []anthropicBlockView) bool {
 	for _, block := range blocks {
-		if block.CacheControl &&
+		if block.CacheControl.Present &&
 			(block.Kind == blockViewText || block.Kind == blockViewImage || block.Kind == blockViewToolResult) {
 			return true
 		}
@@ -587,7 +620,7 @@ func viewHasRepresentableCacheControl(view anthropicRequestView) bool {
 
 func viewHasToolDefinitionCacheControl(view anthropicRequestView) bool {
 	for _, tool := range view.Tools {
-		if tool.CacheControl {
+		if tool.CacheControl.Present {
 			return true
 		}
 	}
@@ -597,7 +630,7 @@ func viewHasToolDefinitionCacheControl(view anthropicRequestView) bool {
 func viewHasToolUseCacheControl(view anthropicRequestView) bool {
 	for _, message := range view.Messages {
 		for _, block := range message.Blocks {
-			if block.Kind == blockViewToolUse && block.CacheControl {
+			if block.Kind == blockViewToolUse && block.CacheControl.Present {
 				return true
 			}
 		}
