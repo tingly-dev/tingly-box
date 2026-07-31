@@ -186,8 +186,8 @@ func TestAnthropicViewPreservesSDKCacheControlShape(t *testing.T) {
 	view := viewAnthropicV1Request(in)
 	require.Equal(t, cache1h.TTL, view.CacheControl.TTL)
 	require.Equal(t, cache5m.TTL, view.System[0].CacheControl.TTL)
-	require.Equal(t, cache1h.TTL, view.Messages[0].Blocks[0].CacheControl.TTL)
-	require.Equal(t, cache1h.TTL, view.Tools[0].CacheControl.TTL)
+	require.Equal(t, cache1h.TTL, view.Messages[0].Content[0].OfText.CacheControl.TTL)
+	require.Equal(t, cache1h.TTL, view.Tools[0].OfTool.CacheControl.TTL)
 
 	betaCache1h := anthropic.BetaCacheControlEphemeralParam{
 		Type: "ephemeral",
@@ -220,8 +220,80 @@ func TestAnthropicViewPreservesSDKCacheControlShape(t *testing.T) {
 	betaView := viewAnthropicBetaRequest(betaIn)
 	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.CacheControl.TTL)
 	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL5m, betaView.System[0].CacheControl.TTL)
-	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Messages[0].Blocks[0].CacheControl.TTL)
-	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Tools[0].CacheControl.TTL)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Messages[0].Content[0].OfText.CacheControl.TTL)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Tools[0].OfTool.CacheControl.TTL)
+}
+
+func TestAnthropicViewUsesSDKCanonicalShape(t *testing.T) {
+	t.Run("v1 fields pass through without flattening", func(t *testing.T) {
+		text := anthropic.NewTextBlock("hello")
+		tool := anthropic.ToolUnionParamOfTool(
+			anthropic.ToolInputSchemaParam{Type: "object", Properties: map[string]any{"q": map[string]any{"type": "string"}}},
+			"lookup",
+		)
+		toolChoice := anthropic.ToolChoiceParamOfTool("lookup")
+		thinking := anthropic.ThinkingConfigParamOfEnabled(2048)
+		in := &anthropic.MessageNewParams{
+			Model:        "claude-test",
+			MaxTokens:    256,
+			Messages:     []anthropic.MessageParam{anthropic.NewUserMessage(text)},
+			Tools:        []anthropic.ToolUnionParam{tool},
+			ToolChoice:   toolChoice,
+			Thinking:     thinking,
+			OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
+		}
+
+		view := viewAnthropicV1Request(in)
+		require.Same(t, in.Messages[0].Content[0].OfText, view.Messages[0].Content[0].OfText)
+		require.Same(t, in.Tools[0].OfTool, view.Tools[0].OfTool)
+		require.Same(t, in.ToolChoice.OfTool, view.ToolChoice.OfTool)
+		require.Same(t, in.Thinking.OfEnabled, view.Thinking.OfEnabled)
+		require.Equal(t, in.OutputConfig.Effort, view.OutputConfig.Effort)
+	})
+
+	t.Run("beta fields bridge into v1 SDK unions", func(t *testing.T) {
+		image := anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+			Data:      "aGVsbG8=",
+			MediaType: anthropic.BetaBase64ImageSourceMediaTypeImagePNG,
+		})
+		thinkingBlock := anthropic.NewBetaThinkingBlock("signature", "reasoning")
+		tool := anthropic.BetaToolUnionParamOfTool(
+			anthropic.BetaToolInputSchemaParam{
+				Type:       "object",
+				Properties: map[string]any{"q": map[string]any{"type": "string"}},
+				Required:   []string{"q"},
+			},
+			"lookup",
+		)
+		toolChoice := anthropic.BetaToolChoiceParamOfTool("lookup")
+		toolChoice.OfTool.DisableParallelToolUse = anthropic.Bool(true)
+		thinking := anthropic.BetaThinkingConfigParamOfEnabled(2048)
+		thinking.OfEnabled.Display = anthropic.BetaThinkingConfigEnabledDisplayOmitted
+		in := &anthropic.BetaMessageNewParams{
+			Model:     "claude-test",
+			MaxTokens: 256,
+			Messages: []anthropic.BetaMessageParam{{
+				Role:    anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{image, thinkingBlock},
+			}},
+			Tools:        []anthropic.BetaToolUnionParam{tool},
+			ToolChoice:   toolChoice,
+			Thinking:     thinking,
+			OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortHigh},
+		}
+
+		view := viewAnthropicBetaRequest(in)
+		require.NotNil(t, view.Messages[0].Content[0].OfImage)
+		require.Equal(t, "aGVsbG8=", view.Messages[0].Content[0].OfImage.Source.OfBase64.Data)
+		require.Equal(t, "signature", view.Messages[0].Content[1].OfThinking.Signature)
+		require.NotNil(t, view.Tools[0].OfTool)
+		require.Equal(t, []string{"q"}, view.Tools[0].OfTool.InputSchema.Required)
+		require.Equal(t, "lookup", view.ToolChoice.OfTool.Name)
+		require.True(t, view.ToolChoice.OfTool.DisableParallelToolUse.Value)
+		require.EqualValues(t, 2048, view.Thinking.OfEnabled.BudgetTokens)
+		require.Equal(t, anthropic.ThinkingConfigEnabledDisplayOmitted, view.Thinking.OfEnabled.Display)
+		require.Equal(t, anthropic.OutputConfigEffortHigh, view.OutputConfig.Effort)
+	})
 }
 
 func TestAnthropicToolCacheControlAdvancesToOpenAICacheableContent(t *testing.T) {

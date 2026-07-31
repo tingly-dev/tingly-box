@@ -23,7 +23,7 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 
 // ConvertAnthropicToolsToOpenAI converts Anthropic tools to OpenAI format
 func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	return convertAnthropicToolViewsToOpenAI(viewAnthropicV1Tools(tools))
+	return convertAnthropicToolViewsToOpenAI(tools)
 }
 
 func convertAnthropicInputSchemaToOpenAIParameters(properties any, required []string) shared.FunctionParameters {
@@ -70,7 +70,10 @@ func ConvertAnthropicToolsToOpenAIWithTransformedSchema(tools []anthropic.ToolUn
 
 // ConvertAnthropicToolChoiceToOpenAI converts Anthropic tool_choice to OpenAI format
 func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) openai.ChatCompletionToolChoiceOptionUnionParam {
-	return convertAnthropicToolChoiceViewToOpenAI(viewAnthropicV1ToolChoice(tc))
+	if tc == nil {
+		return convertAnthropicToolChoiceViewToOpenAI(anthropic.ToolChoiceUnionParam{})
+	}
+	return convertAnthropicToolChoiceViewToOpenAI(*tc)
 }
 
 // convertToolResultContent extracts the content from a tool result block
@@ -128,7 +131,7 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 // This handles both text content and tool_use blocks
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewAssistantToOpenAI(viewAnthropicV1Message(msg).Blocks)
+	return convertAnthropicViewAssistantToOpenAI(msg.Content)
 }
 
 // convertAnthropicUserMessageToOpenAI converts Anthropic user message to OpenAI format
@@ -136,5 +139,5 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 // tool_result blocks in Anthropic become separate role="tool" messages in OpenAI
 // Returns a slice of messages because tool results become separate messages
 func convertAnthropicUserMessageToOpenAI(msg anthropic.MessageParam) []openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewUserToOpenAI(viewAnthropicV1Message(msg).Blocks)
+	return convertAnthropicViewUserToOpenAI(msg.Content)
 }

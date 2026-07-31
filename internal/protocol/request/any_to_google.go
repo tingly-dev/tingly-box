@@ -279,11 +279,14 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 }
 
 func ConvertAnthropicToGoogleTools(tools []anthropic.ToolUnionParam) []*genai.FunctionDeclaration {
-	return convertAnthropicToolViewsToGoogle(viewAnthropicV1Tools(tools))
+	return convertAnthropicToolViewsToGoogle(tools)
 }
 
 func ConvertAnthropicToGoogleToolChoice(tc *anthropic.ToolChoiceUnionParam) *genai.ToolConfig {
-	return convertAnthropicToolChoiceViewToGoogle(viewAnthropicV1ToolChoice(tc))
+	if tc == nil {
+		return convertAnthropicToolChoiceViewToGoogle(anthropic.ToolChoiceUnionParam{})
+	}
+	return convertAnthropicToolChoiceViewToGoogle(*tc)
 }
 
 // ConvertAnthropicBetaToGoogleRequest converts Anthropic beta request to

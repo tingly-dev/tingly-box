@@ -78,10 +78,10 @@ func betaImageBlockToOpenAIURL(img *anthropic.BetaImageBlockParam) string {
 // convertAnthropicBetaAssistantMessageToOpenAI converts Anthropic beta assistant message to OpenAI format
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam) openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewAssistantToOpenAI(viewAnthropicBetaMessage(msg).Blocks)
+	return convertAnthropicViewAssistantToOpenAI(viewAnthropicBetaMessage(msg).Content)
 }
 
 // convertAnthropicBetaUserMessageToOpenAI converts Anthropic beta user message to OpenAI format
 func convertAnthropicBetaUserMessageToOpenAI(msg anthropic.BetaMessageParam) []openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewUserToOpenAI(viewAnthropicBetaMessage(msg).Blocks)
+	return convertAnthropicViewUserToOpenAI(viewAnthropicBetaMessage(msg).Content)
 }
