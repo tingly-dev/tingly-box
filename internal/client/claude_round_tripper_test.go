@@ -26,6 +26,30 @@ func TestClaudeSDKHeaders(t *testing.T) {
 	assert.Equal(t, "600", stainlessTimeout)
 }
 
+func TestApplyClaudeCodeHeadersOrganizationID(t *testing.T) {
+	newReq := func() *http.Request {
+		req, err := http.NewRequest(http.MethodPost, "https://api.anthropic.com/v1/messages", nil)
+		assert.NoError(t, err)
+		req.Header.Set("X-Api-Key", "sk-ant-oat01-test")
+		return req
+	}
+
+	t.Run("forwards org id captured at OAuth login", func(t *testing.T) {
+		rt := &claudeRoundTripper{organizationID: "11111111-2222-3333-4444-555555555555"}
+		req := newReq()
+		rt.applyClaudeCodeHeaders(req, true, "claude-sonnet-4-6", "")
+		assert.Equal(t, "11111111-2222-3333-4444-555555555555", req.Header.Get("anthropic-organization-id"))
+	})
+
+	t.Run("no header when org id unknown, upstream value stripped", func(t *testing.T) {
+		rt := &claudeRoundTripper{}
+		req := newReq()
+		req.Header.Set("Anthropic-Organization-Id", "stale-upstream-value")
+		rt.applyClaudeCodeHeaders(req, true, "claude-sonnet-4-6", "")
+		assert.Empty(t, req.Header.Get("anthropic-organization-id"))
+	})
+}
+
 func TestAnthropicBetaFlags(t *testing.T) {
 	for _, flag := range []string{
 		"claude-code-20250219",

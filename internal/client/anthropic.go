@@ -76,7 +76,8 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	if provider.AuthType == typ.AuthTypeOAuth {
 		if provider.OAuthDetail != nil && provider.OAuthDetail.Issuer == ai.IssuerClaudeCode {
 			transport = &claudeRoundTripper{
-				RoundTripper: createSessionBoundTransport(provider, sessionID),
+				RoundTripper:   createSessionBoundTransport(provider, sessionID),
+				organizationID: provider.OAuthDetail.GetExtraFieldString("organization_id"),
 			}
 			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s",
 				provider.OAuthDetail.GetIssuer(), sessionID.Value)

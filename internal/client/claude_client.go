@@ -117,6 +117,13 @@ func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *t
 		anthropicOption.WithHeader("x-stainless-timeout", stainlessTimeout),
 	)
 
+	// Attribute the request to the organization the OAuth token was issued for.
+	// Without this, Anthropic falls back to the token's default context, which
+	// breaks org-bound entitlements (e.g. Cyber Verification).
+	if orgID := provider.OAuthDetail.GetExtraFieldString("organization_id"); orgID != "" {
+		options = append(options, anthropicOption.WithHeader("anthropic-organization-id", orgID))
+	}
+
 	return options
 }
 

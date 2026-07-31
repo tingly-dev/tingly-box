@@ -399,6 +399,13 @@ func mergeBetaFlags(required []string, upstream []string, requiredOAuth string) 
 // - Manages conditional Authorization vs x-api-key header
 type claudeRoundTripper struct {
 	http.RoundTripper
+
+	// organizationID is the Anthropic organization the OAuth token belongs to,
+	// captured at login into OAuthDetail.ExtraFields["organization_id"]. It must
+	// be re-attached here as anthropic-organization-id: the header cleanup in
+	// applyClaudeCodeHeaders strips every anthropic-* header, so a value set via
+	// SDK options would not survive.
+	organizationID string
 }
 
 func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -573,6 +580,13 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 		"x-stainless-arch":                          stainlessArch(),
 		"x-stainless-os":                            stainlessOS(),
 		"x-stainless-timeout":                       stainlessTimeout,
+	}
+
+	// Attribute the request to the organization the OAuth token was issued for.
+	// Without this, Anthropic falls back to the token's default context, which
+	// breaks org-bound entitlements (e.g. Cyber Verification).
+	if t.organizationID != "" {
+		headers["anthropic-organization-id"] = t.organizationID
 	}
 
 	for k, v := range headers {
