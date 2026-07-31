@@ -219,6 +219,13 @@ func (c *Config) RegisterProviderDeleteHook(hook ProviderDeleteHook) {
 }
 
 // notifyProviderUpdate notifies all registered hooks about a provider create/update change.
+//
+// Hooks run synchronously (with panic isolation): they are cheap in-memory
+// invalidations (transport pool cleanup), and running them inline guarantees
+// that by the time the mutating call returns, the next outbound request builds
+// its connection from the updated provider. The previous async (goroutine)
+// dispatch left a window where a request issued right after the update could
+// still reuse a transport configured from the pre-update provider.
 func (c *Config) notifyProviderUpdate(provider *typ.Provider) {
 	c.hookMu.RLock()
 	hooks := make([]ProviderUpdateHook, len(c.providerUpdateHooks))
@@ -226,8 +233,7 @@ func (c *Config) notifyProviderUpdate(provider *typ.Provider) {
 	c.hookMu.RUnlock()
 
 	for _, hook := range hooks {
-		// Call hook in goroutine to avoid blocking the update operation
-		go func(h ProviderUpdateHook) {
+		func(h ProviderUpdateHook) {
 			defer func() {
 				if r := recover(); r != nil {
 					logrus.Errorf("Provider update hook panic: %v", r)
@@ -238,7 +244,8 @@ func (c *Config) notifyProviderUpdate(provider *typ.Provider) {
 	}
 }
 
-// notifyProviderDelete notifies all registered hooks about a provider deletion
+// notifyProviderDelete notifies all registered hooks about a provider deletion.
+// Synchronous for the same reason as notifyProviderUpdate.
 func (c *Config) notifyProviderDelete(uuid string) {
 	c.hookMu.RLock()
 	hooks := make([]ProviderDeleteHook, len(c.providerDeleteHooks))
@@ -246,7 +253,7 @@ func (c *Config) notifyProviderDelete(uuid string) {
 	c.hookMu.RUnlock()
 
 	for _, hook := range hooks {
-		go func(h ProviderDeleteHook) {
+		func(h ProviderDeleteHook) {
 			defer func() {
 				if r := recover(); r != nil {
 					logrus.Errorf("Provider delete hook panic: %v", r)

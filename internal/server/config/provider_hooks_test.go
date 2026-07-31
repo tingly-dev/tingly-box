@@ -48,6 +48,42 @@ func TestAddProviderNotifiesUpdateHooks(t *testing.T) {
 	}
 }
 
+// TestProviderMutationHooksAreSynchronous locks in the contract that hook
+// side effects are visible the moment the mutating call returns — no
+// goroutine window during which a request could still use stale caches.
+func TestProviderMutationHooksAreSynchronous(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()), WithDisableMigration(), WithDisableBuiltIn())
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	var updates []string
+	cfg.RegisterProviderUpdateHook(providerUpdateHookFunc(func(p *typ.Provider) {
+		updates = append(updates, p.UUID)
+	}))
+
+	provider := &typ.Provider{
+		UUID:    "provider-sync-hook",
+		Name:    "provider sync hook",
+		APIBase: "https://example.com/v1",
+		Token:   "sk-test",
+	}
+	if err := cfg.AddProvider(provider); err != nil {
+		t.Fatalf("AddProvider error: %v", err)
+	}
+	if len(updates) != 1 {
+		t.Fatalf("update hook not invoked synchronously on AddProvider: %v", updates)
+	}
+
+	provider.Token = "sk-rotated"
+	if err := cfg.UpdateProvider(provider.UUID, provider); err != nil {
+		t.Fatalf("UpdateProvider error: %v", err)
+	}
+	if len(updates) != 2 {
+		t.Fatalf("update hook not invoked synchronously on UpdateProvider: %v", updates)
+	}
+}
+
 func TestAddProviderInvalidatesRegisteredClientPool(t *testing.T) {
 	transportPool := client.GetGlobalTransportPool()
 	transportPool.Clear()
