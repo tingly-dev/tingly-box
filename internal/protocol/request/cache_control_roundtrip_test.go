@@ -140,8 +140,8 @@ func TestAnthropicCacheControlTTLDegradesExplicitlyAcrossOpenAI(t *testing.T) {
 		},
 	}
 	view := viewAnthropicV1Request(in)
-	require.True(t, view.AutomaticCacheControl.Present)
-	require.Equal(t, "1h", view.AutomaticCacheControl.TTL)
+	require.False(t, anthropicparam.IsOmitted(view.CacheControl))
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, view.CacheControl.TTL)
 
 	chat, _ := ConvertAnthropicToOpenAIRequest(in, true, false, false)
 	require.Equal(t, "implicit", chat.PromptCacheOptions.Mode)
@@ -152,6 +152,76 @@ func TestAnthropicCacheControlTTLDegradesExplicitlyAcrossOpenAI(t *testing.T) {
 	require.False(t, anthropicparam.IsOmitted(out.CacheControl))
 	require.Empty(t, out.CacheControl.TTL,
 		"cross-family round trip preserves automatic caching but Anthropic 1h has no OpenAI equivalent")
+}
+
+func TestAnthropicViewPreservesSDKCacheControlShape(t *testing.T) {
+	cache1h := anthropic.CacheControlEphemeralParam{
+		Type: "ephemeral",
+		TTL:  anthropic.CacheControlEphemeralTTLTTL1h,
+	}
+	cache5m := anthropic.CacheControlEphemeralParam{
+		Type: "ephemeral",
+		TTL:  anthropic.CacheControlEphemeralTTLTTL5m,
+	}
+	user := anthropic.NewTextBlock("stable conversation prefix")
+	user.OfText.CacheControl = cache1h
+	in := &anthropic.MessageNewParams{
+		Model:        "claude-test",
+		MaxTokens:    256,
+		CacheControl: cache1h,
+		System: []anthropic.TextBlockParam{{
+			Text:         "stable system prompt",
+			CacheControl: cache5m,
+		}},
+		Messages: []anthropic.MessageParam{anthropic.NewUserMessage(user)},
+		Tools: []anthropic.ToolUnionParam{{
+			OfTool: &anthropic.ToolParam{
+				Name:         "lookup",
+				InputSchema:  anthropic.ToolInputSchemaParam{Type: "object"},
+				CacheControl: cache1h,
+			},
+		}},
+	}
+
+	view := viewAnthropicV1Request(in)
+	require.Equal(t, cache1h.TTL, view.CacheControl.TTL)
+	require.Equal(t, cache5m.TTL, view.System[0].CacheControl.TTL)
+	require.Equal(t, cache1h.TTL, view.Messages[0].Blocks[0].CacheControl.TTL)
+	require.Equal(t, cache1h.TTL, view.Tools[0].CacheControl.TTL)
+
+	betaCache1h := anthropic.BetaCacheControlEphemeralParam{
+		Type: "ephemeral",
+		TTL:  anthropic.BetaCacheControlEphemeralTTLTTL1h,
+	}
+	betaCache5m := anthropic.BetaCacheControlEphemeralParam{
+		Type: "ephemeral",
+		TTL:  anthropic.BetaCacheControlEphemeralTTLTTL5m,
+	}
+	betaUser := anthropic.NewBetaTextBlock("stable conversation prefix")
+	betaUser.OfText.CacheControl = betaCache1h
+	betaIn := &anthropic.BetaMessageNewParams{
+		Model:        "claude-test",
+		MaxTokens:    256,
+		CacheControl: betaCache1h,
+		System: []anthropic.BetaTextBlockParam{{
+			Text:         "stable system prompt",
+			CacheControl: betaCache5m,
+		}},
+		Messages: []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(betaUser)},
+		Tools: []anthropic.BetaToolUnionParam{{
+			OfTool: &anthropic.BetaToolParam{
+				Name:         "lookup",
+				InputSchema:  anthropic.BetaToolInputSchemaParam{Type: "object"},
+				CacheControl: betaCache1h,
+			},
+		}},
+	}
+
+	betaView := viewAnthropicBetaRequest(betaIn)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.CacheControl.TTL)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL5m, betaView.System[0].CacheControl.TTL)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Messages[0].Blocks[0].CacheControl.TTL)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Tools[0].CacheControl.TTL)
 }
 
 func TestAnthropicToolCacheControlAdvancesToOpenAICacheableContent(t *testing.T) {
