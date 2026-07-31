@@ -126,6 +126,7 @@ const BotTable: React.FC<BotTableProps> = ({
                             return (
                                 <TableRow
                                     key={bot.uuid}
+                                    hover
                                     sx={{
                                         '& > .MuiTableCell-root': {py: 1.25},
                                     }}

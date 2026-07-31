@@ -253,6 +253,7 @@ const ApiKeyTable = ({
                         <React.Fragment key={provider.uuid}>
                             {/* Main provider row */}
                             <TableRow
+                                hover
                                 sx={{
                                     "& > .MuiTableCell-root": {
                                         py: 1.25,
