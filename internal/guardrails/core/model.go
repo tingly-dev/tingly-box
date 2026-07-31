@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 // Verdict is the overall decision from a policy or engine.
@@ -150,7 +151,7 @@ func (i Input) CredentialMaskState() *CredentialMaskState {
 		return i.State.CredentialMask
 	}
 	if i.Runtime.Context != nil {
-		if value, ok := i.Runtime.Context.Get(CredentialMaskStateContextKey); ok {
+		if value, ok := i.Runtime.Context.Get(constant.CtxKeyCredentialMaskState); ok {
 			if state, ok := value.(*CredentialMaskState); ok {
 				return state
 			}

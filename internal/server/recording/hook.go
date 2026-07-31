@@ -6,14 +6,11 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// streamRecorderContextKey is the gin context key under which the active
-// streamRecorder is published for protocol-layer code to feed events into.
-const streamRecorderContextKey = "stream_event_recorder"
 
 // StreamRecorder couples a ProtocolRecorder with a stream assembler so that
 // raw SSE events emitted during protocol conversion are mirrored into both
@@ -149,7 +146,7 @@ func (sr *StreamRecorder) SetupStreamRecorderInContext(c *gin.Context) {
 	if sr == nil {
 		return
 	}
-	c.Set(streamRecorderContextKey, sr)
+	c.Set(constant.CtxKeyStreamEventRecorder, sr)
 }
 
 // AttachRecorderHooks wires a ProtocolRecorder into a native Anthropic stream

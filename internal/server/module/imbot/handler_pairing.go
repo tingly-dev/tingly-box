@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
 )
@@ -25,7 +26,7 @@ func resolveRequirePairing(s db.Settings) bool {
 // bot.NewLogAuditor), so the imbot.pair.* action family stays consistent
 // whether the event came from a chat command or the web UI.
 func logPairAudit(c *gin.Context, action, uuid, message string) {
-	bot.NewLogAuditor().Info(action, c.GetString("user_id"), c.ClientIP(), message, map[string]interface{}{
+	bot.NewLogAuditor().Info(action, c.GetString(constant.CtxKeyUserID), c.ClientIP(), message, map[string]interface{}{
 		"bot_uuid": uuid,
 		"by":       "web",
 	})

@@ -99,9 +99,8 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
-
-	c.Set("provider", provider.UUID)
-	c.Set("model", model)
+	c.Set(ContextKeyProvider, provider)
+	c.Set(ContextKeyModel, model)
 
 	apiStyle := provider.APIStyle
 	wrapper := ph.deps.ClientPool.GetAnthropicClient(context.Background(), provider, model)

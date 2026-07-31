@@ -4,6 +4,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
@@ -61,13 +62,13 @@ func EnsureGuardrailsCredentialMaskState(c *gin.Context) *guardrailscore.Credent
 	if c == nil {
 		return nil
 	}
-	if existing, ok := c.Get(guardrailscore.CredentialMaskStateContextKey); ok {
+	if existing, ok := c.Get(constant.CtxKeyCredentialMaskState); ok {
 		if state, ok := existing.(*guardrailscore.CredentialMaskState); ok && state != nil {
 			return state
 		}
 	}
 	state := guardrailscore.NewCredentialMaskState()
-	c.Set(guardrailscore.CredentialMaskStateContextKey, state)
+	c.Set(constant.CtxKeyCredentialMaskState, state)
 	return state
 }
 

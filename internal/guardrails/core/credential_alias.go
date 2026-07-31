@@ -5,10 +5,6 @@ import (
 	"strings"
 )
 
-// CredentialMaskStateContextKey is the shared gin-context key used to carry
-// request-scoped alias mappings from request masking to stream/tool restoration.
-const CredentialMaskStateContextKey = "guardrails_credential_mask_state"
-
 // CredentialMaskState tracks the credential substitutions observed in one request flow.
 type CredentialMaskState struct {
 	AliasToReal map[string]string `json:"alias_to_real,omitempty"`

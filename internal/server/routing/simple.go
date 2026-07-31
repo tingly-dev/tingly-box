@@ -75,9 +75,6 @@ func (s *SimpleSelector) SelectService(
 	// this, not the bare session, or they'll miss partition-scoped pins.
 	c.Set(constant.CtxKeyAffinityKey, AffinitySessionKey(ctx.SessionID.String(), result.MatchedSmartRuleIndex))
 
-	// Store result metadata for observability
-	c.Set("routing_source", result.Source)
-
 	// Store LB trajectory: which upstream was selected and via which tactic.
 	// SourceSmartRouting and SourceAffinity bypass the normal LB tactic, so
 	// label them explicitly; otherwise use the rule's configured tactic name.

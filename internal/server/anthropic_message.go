@@ -225,15 +225,12 @@ func (ph *ProtocolHandler) runAnthropicV1Attempt(c *gin.Context, req *protocol.A
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
+	c.Set(ContextKeyProvider, provider)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}
 
 	req.Model = anthropic.Model(requestModel)
-
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
-	c.Set("provider", provider.UUID)
-	c.Set("model", requestModel)
 
 	// Build and run server-side pre-transform chain (scenario-driven flags)
 	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)
@@ -351,15 +348,12 @@ func (ph *ProtocolHandler) runAnthropicBetaAttempt(c *gin.Context, req *protocol
 	// Resolve dual endpoint: when the provider has an Anthropic-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleAnthropic)
+	c.Set(ContextKeyProvider, provider)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}
 
 	req.Model = anthropic.Model(requestModel)
-
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
-	c.Set("provider", provider.UUID)
-	c.Set("model", requestModel)
 
 	// Build and run server-side pre-transform chain (scenario-driven flags)
 	maxAllowed := ph.deps.TemplateManager.GetMaxTokensForModelByProvider(provider, requestModel)

@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -33,11 +34,11 @@ type MetricsData struct {
 // This ensures that JWT API token authentication takes precedence for user tracking.
 func GetUserIDFromContext(c *gin.Context) string {
 	// First, try user_id from JWT API token authentication or global auth
-	if userID := c.GetString("user_id"); userID != "" {
+	if userID := c.GetString(constant.CtxKeyUserID); userID != "" {
 		return userID
 	}
 	// Fall back to enterprise_user_id from enterprise context JWT
-	if enterpriseUserID := c.GetString("enterprise_user_id"); enterpriseUserID != "" {
+	if enterpriseUserID := c.GetString(constant.CtxKeyEnterpriseUserID); enterpriseUserID != "" {
 		return enterpriseUserID
 	}
 	return ""
@@ -115,7 +116,7 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 	// 2. Record to OTel (primary path for metrics)
 	if s.tokenTracker != nil {
 		userTier := ""
-		if strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+		if strings.TrimSpace(c.GetString(constant.CtxKeyEnterpriseUserID)) != "" {
 			userTier = "enterprise"
 		}
 		// Metric attributes must stay low-cardinality: pass the bounded error
@@ -144,13 +145,13 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 	s.reportHealthStatus(provider, model, err, errorCode)
 
 	// 5. Enterprise key-level 429 alerting hook (best-effort).
-	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString(constant.CtxKeyEnterpriseUserID)) != "" {
 		_ = reportEnterpriseRateLimitEvent(
 			c.Request.Context(),
-			c.GetString("enterprise_key_prefix"),
+			c.GetString(constant.CtxKeyEnterpriseKeyPrefix),
 			provider.UUID,
 			scenario,
-			c.GetString("enterprise_user_id"),
+			c.GetString(constant.CtxKeyEnterpriseUserID),
 		)
 	}
 }
@@ -259,13 +260,13 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 	s.reportHealthStatus(provider, model, err, errorCode)
 
 	// 5. Enterprise key-level 429 alerting hook (best-effort).
-	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString("enterprise_user_id")) != "" {
+	if err != nil && isRateLimitError(err) && strings.TrimSpace(c.GetString(constant.CtxKeyEnterpriseUserID)) != "" {
 		_ = reportEnterpriseRateLimitEvent(
 			c.Request.Context(),
-			c.GetString("enterprise_key_prefix"),
+			c.GetString(constant.CtxKeyEnterpriseKeyPrefix),
 			provider.UUID,
 			scenario,
-			c.GetString("enterprise_user_id"),
+			c.GetString(constant.CtxKeyEnterpriseUserID),
 		)
 	}
 }
@@ -463,17 +464,6 @@ func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, mode
 			}
 			return
 		}
-	}
-}
-
-// TrackUsage implements the UsageTracker interface.
-// It extracts the gin.Context from the provided context and calls trackUsageFromContext.
-// The gin.Context should be stored in the context with the key "gin_context".
-func (s *Server) TrackUsage(ctx context.Context, inputTokens, outputTokens int, err error) {
-	// Try to get gin.Context from the context
-	// This is set when creating HandleContext
-	if c, ok := ctx.Value("gin_context").(*gin.Context); ok {
-		s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 	}
 }
 

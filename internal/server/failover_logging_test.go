@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	internalobs "github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -268,7 +269,7 @@ func TestFailoverRecordsBreakerFailureIndependentlyOfRecorder(t *testing.T) {
 					if err != nil {
 						t.Fatalf("NewProtocolRecorder: %v", err)
 					}
-					c.Set(recording.RecorderContextKey, protocolRecorder)
+					c.Set(constant.CtxKeyProtocolRecorder, protocolRecorder)
 				}
 
 				attempt := func(provider *typ.Provider, model string) {

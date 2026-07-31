@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -278,10 +279,9 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			// Direct token comparison
 			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
 				// Token matches the one in global config, allow access
-				c.Set("client_id", "user_authenticated")
 				// For UI user authentication, set user_id to default admin
 				// This matches the migrated user_id in usage_records
-				c.Set("user_id", db.DefaultAdminUserID)
+				c.Set(constant.CtxKeyUserID, db.DefaultAdminUserID)
 				c.Next()
 				return
 			}
@@ -328,10 +328,7 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 				tokenRecord, validateErr := am.apiTokenStore.ValidateToken(token)
 				if validateErr == nil && tokenRecord != nil {
 					// Token is valid and enabled
-					c.Set("user_id", tokenRecord.UserID)
-					c.Set("token_id", tokenRecord.TokenID)
-					c.Set("client_id", "model_authenticated")
-					c.Set("auth_method", "api_token")
+					c.Set(constant.CtxKeyUserID, tokenRecord.UserID)
 
 					// Update last used asynchronously
 					go am.apiTokenStore.UpdateLastUsed(tokenRecord.TokenID)
@@ -358,11 +355,9 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 
 		// Direct token comparison
 		if token == configToken || xApiKey == configToken {
-			c.Set("client_id", "model_authenticated")
-			c.Set("auth_method", "global_token")
 			// Set UserID to default admin for usage tracking consistency
 			// This matches the migrated user_id values in usage_records
-			c.Set("user_id", db.DefaultAdminUserID)
+			c.Set(constant.CtxKeyUserID, db.DefaultAdminUserID)
 			contextJWT := strings.TrimSpace(c.GetHeader("X-TBE-Context-JWT"))
 			if contextJWT != "" {
 				claims, verifyErr := verifyEnterpriseContextJWT(cfg, contextJWT)
@@ -371,12 +366,12 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 					return
 				}
 				if claims != nil {
-					c.Set("enterprise_user_id", claims.UserID)
-					c.Set("enterprise_department_id", claims.DepartmentID)
-					c.Set("enterprise_key_prefix", claims.KeyPrefix)
-					c.Set("enterprise_user_tier", claims.Tier)
-					c.Set("enterprise_context_jti", claims.JTI)
-					c.Set("enterprise_context_verified", true)
+					c.Set(constant.CtxKeyEnterpriseUserID, claims.UserID)
+					c.Set(constant.CtxKeyEnterpriseDepartmentID, claims.DepartmentID)
+					c.Set(constant.CtxKeyEnterpriseKeyPrefix, claims.KeyPrefix)
+					c.Set(constant.CtxKeyEnterpriseUserTier, claims.Tier)
+					c.Set(constant.CtxKeyEnterpriseContextJTI, claims.JTI)
+					c.Set(constant.CtxKeyEnterpriseContextVerified, true)
 				}
 			}
 			c.Next()

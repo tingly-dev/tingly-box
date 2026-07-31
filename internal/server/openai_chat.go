@@ -187,6 +187,7 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
+	c.Set(ContextKeyProvider, provider)
 	if provider.Timeout <= 0 {
 		provider.Timeout = constant.DefaultRequestTimeout
 	}

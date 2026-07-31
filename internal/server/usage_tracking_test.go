@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -156,9 +157,8 @@ func TestTrackUsageFromContext_ReportsEnterpriseRateLimit(t *testing.T) {
 	rule := &typ.Rule{UUID: "r1"}
 	provider := &typ.Provider{UUID: "p1", Name: "provider-1"}
 	SetTrackingContext(c, rule, provider, "tingly/cc", "tingly/cc", false)
-	c.Set("client_id", "enterprise_access_token")
-	c.Set("enterprise_key_prefix", "sk-tbe-12345678")
-	c.Set("enterprise_user_id", "u1")
+	c.Set(constant.CtxKeyEnterpriseKeyPrefix, "sk-tbe-12345678")
+	c.Set(constant.CtxKeyEnterpriseUserID, "u1")
 
 	s := &Server{}
 	s.trackUsageFromContext(c, 0, 0, errors.New("upstream returned 429 rate limit"))

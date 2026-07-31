@@ -289,8 +289,8 @@ func AuthMiddleware(cfg *Config) gin.HandlerFunc {
 				normalized = normalized[7:]
 			}
 			if cfg.UserToken != "" && normalized == cfg.UserToken {
-				c.Set("client_id", "user")
-				c.Set("claims", &auth.Claims{ClientID: "user"})
+				c.Set(constant.CtxKeyRemoteClientID, "user")
+				c.Set(constant.CtxKeyRemoteClaims, &auth.Claims{ClientID: "user"})
 				c.Next()
 				return
 			}
@@ -306,8 +306,8 @@ func AuthMiddleware(cfg *Config) gin.HandlerFunc {
 		}
 
 		// Store claims in context
-		c.Set("client_id", claims.ClientID)
-		c.Set("claims", claims)
+		c.Set(constant.CtxKeyRemoteClientID, claims.ClientID)
+		c.Set(constant.CtxKeyRemoteClaims, claims)
 
 		logrus.Debugf("Authenticated request from client: %s", claims.ClientID)
 

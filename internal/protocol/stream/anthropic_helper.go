@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -143,7 +144,7 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData any, f
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
 
-	if recorder, exists := c.Get("stream_event_recorder"); exists {
+	if recorder, exists := c.Get(constant.CtxKeyStreamEventRecorder); exists {
 		if r, ok := recorder.(StreamEventRecorder); ok {
 			if m, ok := eventData.(map[string]interface{}); ok {
 				r.RecordRawMapEvent(eventType, m)

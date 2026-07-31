@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -205,7 +206,7 @@ func (ph *ProtocolHandler) applyVisionProxy(c *gin.Context, scenarioType typ.Rul
 // isEnterpriseContextPresent reports whether the request carries an
 // enterprise-runtime identity (already authorized upstream by TBE).
 func isEnterpriseContextPresent(c *gin.Context) bool {
-	return strings.TrimSpace(c.GetString("enterprise_user_id")) != ""
+	return strings.TrimSpace(c.GetString(constant.CtxKeyEnterpriseUserID)) != ""
 }
 
 // resolveSessionID returns the session identifier for the current request as
@@ -296,6 +297,6 @@ func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario strin
 		return nil
 	}
 	rec.BindProvider(provider, model, mode)
-	c.Set(recording.RecorderContextKey, rec)
+	c.Set(constant.CtxKeyProtocolRecorder, rec)
 	return rec
 }

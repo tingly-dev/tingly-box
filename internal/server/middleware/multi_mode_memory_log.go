@@ -14,11 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-// GinRequestIDKey is the gin context key under which the per-request
-// correlation id is stored. Handlers and later stages read it via
-// c.GetString(GinRequestIDKey) to tie their logs to the request.
-const GinRequestIDKey = "request_id"
-
 // MultiModeMemoryLogMiddleware is the HTTP access log for the whole request
 // chain. It records one structured entry per request — method, path, status,
 // latency, error, and (for AI routes) routing metadata — correlated across
@@ -78,9 +73,9 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 			requestID = uuid.NewString()
 		}
 		// Store on gin context so Gin middleware/handlers that hold *gin.Context
-		// can read it via c.GetString(GinRequestIDKey) — e.g. the access log
+		// can read it via CtxKeyRequestID — e.g. the access log
 		// fields below and stage_smart_routing's emitTrace.
-		c.Set(GinRequestIDKey, requestID)
+		c.Set(constant.CtxKeyRequestID, requestID)
 
 		// Also carry the id on the Go request context so code that only has
 		// context.Context (protocol converters, upstream client calls) can log

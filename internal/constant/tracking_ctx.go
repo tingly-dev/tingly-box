@@ -1,9 +1,22 @@
 package constant
 
-// Gin context key constants for per-request tracking metadata.
-// Defined here so that server/, routing/, and middleware/ sub-packages
-// can all reference the same values without import cycles.
+// Gin context key constants for per-request metadata. Defined here so that
+// server/, routing/, middleware/, and protocol/ sub-packages can share the
+// writer/reader contract without import cycles or duplicated string literals.
 const (
+	// Authentication metadata.
+	CtxKeyUserID                    = "user_id"                     // string
+	CtxKeyEnterpriseUserID          = "enterprise_user_id"          // string
+	CtxKeyEnterpriseDepartmentID    = "enterprise_department_id"    // string
+	CtxKeyEnterpriseKeyPrefix       = "enterprise_key_prefix"       // string
+	CtxKeyEnterpriseUserTier        = "enterprise_user_tier"        // string
+	CtxKeyEnterpriseContextJTI      = "enterprise_context_jti"      // string
+	CtxKeyEnterpriseContextVerified = "enterprise_context_verified" // bool
+	CtxKeyRemoteClientID            = "client_id"                   // string
+	CtxKeyRemoteClaims              = "claims"                      // *auth.Claims
+	CtxKeyRequestID                 = "request_id"                  // string
+
+	// Request tracking metadata.
 	CtxKeyRule           = "tracking_rule"             // *typ.Rule
 	CtxKeyProvider       = "tracking_provider"         // *typ.Provider
 	CtxKeyModel          = "tracking_model"            // string (actual model used)
@@ -17,4 +30,11 @@ const (
 	CtxKeyAffinityKey    = "tracking_affinity_key"     // string (scoped affinity store key: session + matched smart partition)
 	CtxKeyLBServiceID    = "tracking_lb_service_id"    // string (selected upstream, e.g. "provider-uuid:model")
 	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "random")
+
+	// Protocol recording metadata.
+	CtxKeyProtocolRecorder    = "protocol_recorder"     // *recording.ProtocolRecorder
+	CtxKeyStreamEventRecorder = "stream_event_recorder" // protocol/stream.StreamEventRecorder
+
+	// Guardrail runtime metadata.
+	CtxKeyCredentialMaskState = "guardrails_credential_mask_state" // *guardrails/core.CredentialMaskState
 )

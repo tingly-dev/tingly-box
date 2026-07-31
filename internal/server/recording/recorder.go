@@ -10,14 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// RecorderContextKey is the gin context key under which the active
-// ProtocolRecorder is stored so later handler stages can reuse it.
-const RecorderContextKey = "protocol_recorder"
 
 // ProtocolRecorder captures a single client→tingly-box→provider cycle.
 //
@@ -108,7 +104,7 @@ func GetRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
 }
 
 func getRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
-	v, exists := c.Get(RecorderContextKey)
+	v, exists := c.Get(constant.CtxKeyProtocolRecorder)
 	if !exists {
 		return nil, false
 	}
@@ -313,7 +309,7 @@ func (sr *ProtocolRecorder) release() {
 // runs outside an HTTP request.
 func (sr *ProtocolRecorder) resolveRequestID() string {
 	if sr.c != nil {
-		if id := sr.c.GetString(middleware.GinRequestIDKey); id != "" {
+		if id := sr.c.GetString(constant.CtxKeyRequestID); id != "" {
 			return id
 		}
 	}
@@ -349,12 +345,6 @@ func (sr *ProtocolRecorder) synthesizeFinalResponse() *obs.RecordResponse {
 		bodyJSON["_stream_chunks"] = len(sr.streamChunks)
 		bodyJSON["_note"] = "assembled response unavailable"
 		logrus.Debugf("obs: ProtocolRecorder fallback response, chunks=%d", len(sr.streamChunks))
-	} else if sr.c != nil {
-		if responseBody, exists := sr.c.Get("response_body"); exists {
-			if b, ok := responseBody.([]byte); ok {
-				_ = json.Unmarshal(b, &bodyJSON)
-			}
-		}
 	}
 
 	resp := &obs.RecordResponse{

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -108,7 +109,7 @@ func (s *SmartRoutingStage) emitTrace(
 	}
 	if ctx.GinContext != nil {
 		fields["client_ip"] = ctx.GinContext.ClientIP()
-		fields["request_id"] = ctx.GinContext.GetString("request_id")
+		fields["request_id"] = ctx.GinContext.GetString(constant.CtxKeyRequestID)
 	}
 
 	if s.multiLogger != nil {
