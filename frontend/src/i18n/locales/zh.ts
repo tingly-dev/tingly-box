@@ -1234,12 +1234,8 @@ export default {
   },
   "onboarding": {
     "title": "欢迎使用 Tingly Box",
-    "subtitle": "添加你的第一个 AI 提供商。可以从清单里挑一个，也可以粘贴一段配置文本让系统自动识别。",
+    "subtitle": "添加你的第一个 AI 提供商。可以从清单里挑一个，也可以用「粘贴并识别」贴入一段配置文本让系统自动识别。",
     "hint": "识别完全在本地完成，粘贴的内容不会发送到任何第三方。",
-    "tab": {
-      "browse": "浏览提供商",
-      "paste": "粘贴并识别"
-    },
     "browse": {
       "searchPlaceholder": "搜索提供商",
       "empty": "没有匹配的提供商。",

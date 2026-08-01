@@ -1,13 +1,10 @@
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
-import ConnectProviderDialog from '@/components/ConnectProviderDialog';
+import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import EmptyState from '@/components/EmptyState';
-import ImportModal from '@/components/ImportModal';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
-import PasteDetectDialog from '@/components/paste-detect/PasteDetectDialog';
 import OAuthTable from '@/components/OAuthTable.tsx';
 import PageHeader from '@/components/PageHeader';
 import { PageLayout } from '@/components/PageLayout';
-import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
@@ -35,8 +32,8 @@ const CredentialPage = () => {
     const [loading, setLoading] = useState(true);
     const notify = useNotify();
 
-    // OAuth Dialog state (page-local: needs reauth/refresh handling the shared
-    // add-form hook doesn't cover)
+    // Reauthorize dialog state (page-local: re-authenticates an existing OAuth
+    // provider in place — the shared Connect AI flow only covers adding).
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
     const [oauthReauthUuid, setOAuthReauthUuid] = useState<string | null>(null);
@@ -47,10 +44,6 @@ const CredentialPage = () => {
         reason: string;
     }>({ open: false, providerUuid: '', providerName: '', reason: '' });
 
-    // Import Dialog state
-    const [showImportModal, setShowImportModal] = useState(false);
-    const [importing, setImporting] = useState(false);
-
     useEffect(() => { loadProviders(); }, []);
 
     const { quotaData, refreshing, refreshQuota } = useProviderQuota(providers, { fetchOnMount: true });
@@ -59,31 +52,12 @@ const CredentialPage = () => {
         notify[severity](message);
     }, [notify]);
 
-    // Standard "Connect AI" add flow: picker + form (add/force-add/import/oauth routing).
-    const {
-        providerDialogOpen,
-        providerFormData,
-        handleProviderSubmit,
-        handleProviderForceAdd,
-        handleCloseDialog,
-        handleFieldChange,
-        connectDialogOpen,
-        handleConnectAIClick,
-        handleConnectSelect,
-        handleCloseConnect,
-        handlePastePick,
-        pasteDialogOpen,
-        handleClosePasteDialog,
-        fromConnectPicker,
-        optionalEditableToken,
-    } = useProviderDialog(showNotification, {
+    // Standard "Connect AI" add flow: picker + every downstream dialog
+    // (form / OAuth / paste / import) via the shared hook + ConnectAIDialogs.
+    const connectAI = useProviderDialog(showNotification, {
         onProviderAdded: () => loadProviders(),
-        onImport: () => setShowImportModal(true),
-        onOAuth: (providerId) => {
-            setOAuthAutoStartId(providerId);
-            setOAuthDialogOpen(true);
-        },
     });
+    const { handleConnectAIClick } = connectAI;
 
     const loadProviders = async () => {
         setLoading(true);
@@ -132,12 +106,9 @@ const CredentialPage = () => {
         }
     }, [searchParams, setSearchParams, handleConnectAIClick]);
 
-    // OAuth handlers
-    const handleOAuthSuccess = () => {
-        showNotification(
-            oauthReauthUuid ? 'Provider reauthorized successfully!' : 'OAuth provider added successfully!',
-            'success',
-        );
+    // Reauthorize handlers (add-flow OAuth success is handled by the shared hook)
+    const handleReauthSuccess = () => {
+        showNotification('Provider reauthorized successfully!', 'success');
         setOAuthReauthUuid(null);
         loadProviders();
     };
@@ -164,25 +135,6 @@ const CredentialPage = () => {
         } catch (error: any) {
             promptReauthAfterRefreshFailure(providerUuid, error?.response?.data?.error || error?.message || 'Unknown error');
         }
-    };
-
-    const handleImportData = async (data: string) => {
-        setImporting(true);
-        try {
-            const result = await api.importProvider(data);
-            if (result.success) {
-                const providersCreated = result.data?.providers_created || 0;
-                const providersUsed = result.data?.providers_used || 0;
-                let message = 'Provider import completed';
-                if (providersCreated > 0) message += `. ${providersCreated} new provider${providersCreated > 1 ? 's' : ''} created`;
-                if (providersUsed > 0) message += `. ${providersUsed} existing provider${providersUsed > 1 ? 's' : ''} referenced`;
-                if (providersCreated === 0 && providersUsed === 0) message = 'No providers found in import data';
-                showNotification(message, 'success');
-                setShowImportModal(false);
-                await loadProviders();
-            } else { showNotification(`Import failed: ${result.error || 'Unknown error'}`, 'error'); }
-        } catch (err: any) { showNotification(`Import failed: ${err?.message || 'Unknown error'}`, 'error'); }
-        finally { setImporting(false); }
     };
 
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
@@ -262,22 +214,11 @@ const CredentialPage = () => {
                     )}
                 </Surface>
             </Stack>
-            {/* API Key Provider Dialog — unified add flow (edit goes through useProviderEditDialog) */}
-            <ProviderFormDialog
-                open={providerDialogOpen}
-                onClose={handleCloseDialog}
-                onBack={fromConnectPicker ? () => { handleCloseDialog(); handleConnectAIClick(); } : undefined}
-                onSubmit={handleProviderSubmit}
-                onForceAdd={handleProviderForceAdd}
-                data={providerFormData}
-                onChange={handleFieldChange}
-                mode="add"
-                optionalEditableToken={optionalEditableToken}
-            />
-            {/* Unified provider picker */}
-            <ConnectProviderDialog open={connectDialogOpen} onClose={handleCloseConnect} onSelect={handleConnectSelect}/>
-            {/* OAuth Add Dialog */}
-            <OAuthDialog open={oauthDialogOpen} autoStartProviderId={oauthAutoStartId} reauthProviderUuid={oauthReauthUuid} onClose={() => { setOAuthDialogOpen(false); setOAuthAutoStartId(null); setOAuthReauthUuid(null); }} onSuccess={handleOAuthSuccess}/>
+            {/* Unified Connect AI add flow: picker + form/OAuth/paste/import dialogs
+                (edit goes through useProviderEditDialog) */}
+            <ConnectAIDialogs flow={connectAI}/>
+            {/* Reauthorize dialog (existing OAuth provider, in place) */}
+            <OAuthDialog open={oauthDialogOpen} autoStartProviderId={oauthAutoStartId} reauthProviderUuid={oauthReauthUuid} onClose={() => { setOAuthDialogOpen(false); setOAuthAutoStartId(null); setOAuthReauthUuid(null); }} onSuccess={handleReauthSuccess}/>
             {/* Refresh-failed → reauthorize guidance */}
             <Dialog open={refreshFailPrompt.open} onClose={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))} maxWidth="xs" fullWidth>
                 <DialogTitle>Token refresh failed</DialogTitle>
@@ -297,13 +238,6 @@ const CredentialPage = () => {
                 </DialogActions>
             </Dialog>
             {providerEditDialogs}
-            {/* Import Modal */}
-            <ImportModal open={showImportModal} onClose={() => setShowImportModal(false)} onImport={handleImportData} loading={importing}/>
-            <PasteDetectDialog
-                open={pasteDialogOpen}
-                onClose={handleClosePasteDialog}
-                onPick={handlePastePick}
-            />
         </PageLayout>
     );
 };

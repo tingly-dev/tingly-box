@@ -1234,12 +1234,8 @@ export default {
   },
   "onboarding": {
     "title": "Welcome to Tingly Box",
-    "subtitle": "Add your first AI provider to get started. Browse the catalog or paste a config snippet — we’ll figure out the rest.",
+    "subtitle": "Add your first AI provider to get started. Browse the catalog, or use Paste & detect with a config snippet — we’ll figure out the rest.",
     "hint": "Detection runs locally in the box; pasted text is not sent to any third party.",
-    "tab": {
-      "browse": "Browse providers",
-      "paste": "Paste & detect"
-    },
     "browse": {
       "searchPlaceholder": "Search providers",
       "empty": "No providers match your search.",

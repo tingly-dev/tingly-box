@@ -45,8 +45,6 @@ interface ProviderListContentProps {
     hideOfficialInfo?: boolean;
     showDetails?: boolean; // If true, show website links and other details
     wide?: boolean; // If true, use wider grid layout (2-3 columns)
-    /** If false, hide the "Paste & detect" card (e.g. onboarding has its own paste tab). */
-    showPasteCard?: boolean;
 }
 
 type Accent = 'custom' | 'oauth' | 'key' | 'local';
@@ -283,7 +281,6 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     hideOfficialInfo = false,
     showDetails = false,
     wide = false,
-    showPasteCard = true,
 }) => {
     const keyProviders = useProviderTemplates();
 
@@ -396,15 +393,13 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'import'})}
                             />
-                            {showPasteCard && (
-                                <ProviderCard
-                                    icon={<ContentPaste/>}
-                                    name="Paste & detect"
-                                    meta="Paste a .env, curl, or JSON — we extract the URL and key"
-                                    badge={keyBadge}
-                                    onClick={() => onSelect({kind: 'paste'})}
-                                />
-                            )}
+                            <ProviderCard
+                                icon={<ContentPaste/>}
+                                name="Paste & detect"
+                                meta="Paste a .env, curl, or JSON — we extract the URL and key"
+                                badge={keyBadge}
+                                onClick={() => onSelect({kind: 'paste'})}
+                            />
                         </CardGrid>
                     </>
                 )}

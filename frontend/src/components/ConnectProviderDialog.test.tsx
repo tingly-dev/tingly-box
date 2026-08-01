@@ -65,16 +65,18 @@ describe('ConnectProviderDialog', () => {
         expect(onSelect).toHaveBeenCalledTimes(3);
     });
 
-    it('hides the Paste & detect card when showPasteCard is false', () => {
+    it('renders the Import card emitting kind:import', () => {
+        const onSelect = vi.fn();
+
         render(
             <ProviderListContent
-                onSelect={vi.fn()}
+                onSelect={onSelect}
                 query=""
                 onQueryChange={vi.fn()}
-                showPasteCard={false}
             />,
         );
 
-        expect(screen.queryByRole('button', { name: /Paste & detect/ })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: /Import: From file or clipboard/ }));
+        expect(onSelect).toHaveBeenCalledWith({ kind: 'import' });
     });
 });

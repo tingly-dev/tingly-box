@@ -73,10 +73,21 @@ configuration is no longer a separate picker card or mode. See [dual-provider.md
                     └─────────────────────┘
 ```
 
-Three surfaces render this picker → form sequence and each should wire the same
-`ConnectSelection` kinds: `CredentialPage.tsx` (full credential management),
-`useProviderDialog.tsx` (shared add-flow hook), and `ConnectProviderFlow.tsx`
-(the scenario "Use …" pages).
+Every surface renders this picker → route sequence through the same pair:
+`useProviderDialog` (owns all flow state and routes every `ConnectSelection`
+kind — form, OAuth, paste & detect, import) plus `ConnectAIDialogs` (renders
+the complete downstream dialog stack in one component). Surfaces never wire
+individual kinds themselves, so no entry point can drift to a subset:
+
+- `CredentialPage.tsx` — full credential management (plus a page-local
+  OAuthDialog used only for reauthorizing an existing provider)
+- `TemplatePage.tsx` — rule pages' in-place "Connect AI" toolbar action
+- `UseClaudeCodePage` / `UseCodexPage` / `UseOpenCodePage` / `UseVSCodePage` —
+  scenario "Use …" pages
+- `Onboarding.tsx` — renders `ProviderListContent` inline as page content and
+  passes `inline` to `ConnectAIDialogs` (no picker dialog, no "← Back to
+  picker" in the form). The old separate "Paste & detect" tab is gone; paste
+  is a picker card here like everywhere else.
 
 ---
 
@@ -151,8 +162,8 @@ enter their key without unchecking a separate toggle.
 | `frontend/src/components/ProviderFormDialog.tsx` | Step 2 — API key / custom / protocol-slot form; `onBack` prop for picker navigation |
 | `frontend/src/components/OAuthDialog.tsx` | Step 2 — OAuth flow; `autoStartProviderId` for direct mode |
 | `frontend/src/pages/CredentialPage.tsx` | Credential-management surface; standard add flow uses `useProviderDialog`, edit flow uses `useProviderEditDialog` |
-| `frontend/src/hooks/useProviderDialog.tsx` | Shared picker → form routing for the standard add flow; owns optional self-hosted token behavior and add-provider payload |
-| `frontend/src/components/ConnectProviderFlow.tsx` | Scenario "Use …" pages: local picker → form/OAuth routing |
+| `frontend/src/hooks/useProviderDialog.tsx` | Single source of truth for the add flow: picker state + routing for every `ConnectSelection` kind, form submit, OAuth / paste / import dialog state |
+| `frontend/src/components/ConnectAIDialogs.tsx` | Renders the full downstream dialog stack (picker, form, OAuth, paste & detect, import) from the hook's return; `inline` variant for onboarding |
 | `frontend/src/components/provider-form-dialog/ApiKeyField.tsx` | Key field; optional editable token state for self-hosted providers |
 | `frontend/src/components/provider-form-dialog/ProtocolSlot.tsx` | OpenAI / Anthropic URL slot UI |
 | `frontend/src/components/provider-form-dialog/ProxyUrlField.tsx` | Proxy URL and global quick-proxy selector |

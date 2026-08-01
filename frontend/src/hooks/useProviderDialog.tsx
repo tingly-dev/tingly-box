@@ -6,9 +6,6 @@ import type { ConnectSelection } from '@/components/ConnectProviderDialog';
 interface UseProviderDialogOptions {
     defaultApiStyle?: 'openai' | 'anthropic' | undefined;
     onProviderAdded?: () => void;
-    onImport?: () => void;
-    /** Invoked when the user picks an OAuth sign-in provider. */
-    onOAuth?: (providerId: string) => void;
 }
 
 // ── Shared: ConnectSelection → form data ────────────────────────────
@@ -66,11 +63,9 @@ export function buildProviderFormData(selection: ConnectSelection): ConnectFormR
     };
 }
 
-interface UseProviderDialogReturn {
+export interface UseProviderDialogReturn {
     providerDialogOpen: boolean;
     providerFormData: EnhancedProviderFormData;
-    /** @deprecated Use handleConnectAIClick to open the picker instead. */
-    handleAddProviderClick: () => void;
     handleProviderSubmit: (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => Promise<void>;
     handleProviderForceAdd: () => Promise<void>;
     handleCloseDialog: () => void;
@@ -84,30 +79,42 @@ interface UseProviderDialogReturn {
     /** Open state for the built-in PasteDetectDialog (owned by this hook). */
     pasteDialogOpen: boolean;
     handleClosePasteDialog: () => void;
+    /** Open state for the built-in ImportModal (owned by this hook). */
+    importModalOpen: boolean;
+    importing: boolean;
+    handleImportClick: () => void;
+    handleCloseImport: () => void;
+    handleImportData: (data: string) => Promise<void>;
+    /** Open state for the built-in add-flow OAuthDialog (owned by this hook). */
+    oauthDialogOpen: boolean;
+    oauthAutoStartId: string | null;
+    handleCloseOAuth: () => void;
+    handleOAuthSuccess: () => void;
     fromConnectPicker: boolean;
     /** Self-hosted / local providers: token is optional but editable. */
     optionalEditableToken: boolean;
 }
 
+// Owns the complete "Connect AI" add flow: the picker plus every downstream
+// dialog it can route to (API-key form, OAuth sign-in, paste & detect,
+// import). Render the dialogs with <ConnectAIDialogs flow={...}/> so every
+// surface responds to every picker card the same way.
 export const useProviderDialog = (
     showNotification: (message: string, severity: 'success' | 'error') => void,
     options: UseProviderDialogOptions = {}
 ): UseProviderDialogReturn => {
-    const { defaultApiStyle, onProviderAdded, onImport, onOAuth } = options;
+    const { defaultApiStyle, onProviderAdded } = options;
 
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
     const [connectDialogOpen, setConnectDialogOpen] = useState(false);
     const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
+    const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
     const [optionalEditableToken, setOptionalEditableToken] = useState(false);
     const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>(emptyForm(defaultApiStyle));
-
-    const handleAddProviderClick = () => {
-        setProviderFormData(emptyForm(defaultApiStyle));
-        setFromConnectPicker(false);
-        setOptionalEditableToken(false);
-        setProviderDialogOpen(true);
-    };
 
     const handleConnectAIClick = useCallback(() => {
         setConnectDialogOpen(true);
@@ -123,21 +130,20 @@ export const useProviderDialog = (
 
         const built = buildProviderFormData(selection);
         if (!built) {
-            // oauth / import — handled by caller via other dialogs
-            if (selection.kind === 'oauth') onOAuth?.(selection.providerId);
-            if (selection.kind === 'import') onImport?.();
-            // paste — this hook owns the built-in PasteDetectDialog so every
-            // consumer gets it for free.
-            if (selection.kind === 'paste') {
-                setPasteDialogOpen(true);
+            // Non-form routes — all owned here so every consumer gets them.
+            if (selection.kind === 'oauth') {
+                setOAuthAutoStartId(selection.providerId);
+                setOAuthDialogOpen(true);
             }
+            if (selection.kind === 'import') setImportModalOpen(true);
+            if (selection.kind === 'paste') setPasteDialogOpen(true);
             return;
         }
 
         setProviderFormData(built.formData);
         setOptionalEditableToken(built.optionalEditableToken);
         setProviderDialogOpen(true);
-    }, [defaultApiStyle, onImport, onOAuth]);
+    }, []);
 
     // Paste-detected prefill: apply it and open the form (token always required
     // here — paste produces an explicit value or the user chose manual fill).
@@ -152,6 +158,50 @@ export const useProviderDialog = (
     const handleClosePasteDialog = useCallback(() => {
         setPasteDialogOpen(false);
     }, []);
+
+    const handleImportClick = useCallback(() => {
+        setImportModalOpen(true);
+    }, []);
+
+    const handleCloseImport = useCallback(() => {
+        setImportModalOpen(false);
+    }, []);
+
+    const handleImportData = useCallback(async (data: string) => {
+        setImporting(true);
+        try {
+            const result = await api.importProvider(data);
+            if (result.success) {
+                const created = result.data?.providers_created || 0;
+                const used = result.data?.providers_used || 0;
+                let message = 'Provider import completed';
+                if (created > 0) message += `. ${created} new provider${created > 1 ? 's' : ''} created`;
+                if (used > 0) message += `. ${used} existing provider${used > 1 ? 's' : ''} referenced`;
+                if (created === 0 && used === 0) message = 'No providers found in import data';
+                showNotification(message, 'success');
+                setImportModalOpen(false);
+                onProviderAdded?.();
+            } else {
+                showNotification(`Import failed: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch (err: any) {
+            showNotification(`Import failed: ${err?.message || 'Unknown error'}`, 'error');
+        } finally {
+            setImporting(false);
+        }
+    }, [showNotification, onProviderAdded]);
+
+    const handleCloseOAuth = useCallback(() => {
+        setOAuthDialogOpen(false);
+        setOAuthAutoStartId(null);
+    }, []);
+
+    const handleOAuthSuccess = useCallback(() => {
+        setOAuthDialogOpen(false);
+        setOAuthAutoStartId(null);
+        showNotification('Provider connected via OAuth!', 'success');
+        onProviderAdded?.();
+    }, [showNotification, onProviderAdded]);
 
     const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();
@@ -219,7 +269,6 @@ export const useProviderDialog = (
     return {
         providerDialogOpen,
         providerFormData,
-        handleAddProviderClick,
         handleProviderSubmit,
         handleProviderForceAdd,
         handleCloseDialog,
@@ -231,6 +280,15 @@ export const useProviderDialog = (
         handlePastePick,
         pasteDialogOpen,
         handleClosePasteDialog,
+        importModalOpen,
+        importing,
+        handleImportClick,
+        handleCloseImport,
+        handleImportData,
+        oauthDialogOpen,
+        oauthAutoStartId,
+        handleCloseOAuth,
+        handleOAuthSuccess,
         fromConnectPicker,
         optionalEditableToken,
     };

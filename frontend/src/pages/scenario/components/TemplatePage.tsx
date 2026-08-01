@@ -2,15 +2,12 @@ import ApiKeyModal from '@/components/ApiKeyModal';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Alert, Box, Fab, Snackbar} from '@mui/material';
+import {Box, Fab} from '@mui/material';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
 import EmptyState from '@/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
-import ImportModal from '@/components/ImportModal';
-import ProviderFormDialog from '@/components/ProviderFormDialog';
-import ConnectProviderDialog from '@/components/ConnectProviderDialog';
-import PasteDetectDialog from '@/components/paste-detect/PasteDetectDialog';
+import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import type {TemplatePageProps} from './TemplatePage.types';
@@ -22,7 +19,6 @@ import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
-import api from '@/services/api';
 
 // First-run education: the Direct routing guide auto-opens once per user (new
 // and existing), then never again — the toolbar "?" stays as the manual
@@ -84,10 +80,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
     const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
-    const [showImportModal, setShowImportModal] = useState<boolean>(false);
     const [logDialogOpen, setLogDialogOpen] = useState<boolean>(false);
-    const [importing, setImporting] = useState<boolean>(false);
-    const [importError, setImportError] = useState<{ open: boolean; message: string }>({open: false, message: ''});
     const [showGuide, setShowGuide] = useState<boolean>(false);
 
     // Auto-open the Direct guide the first time a user lands on a populated
@@ -182,30 +175,16 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         openModelSelect({ruleUuid, configRecord, providerUuid, mode, addTier});
     }, [openModelSelect]);
 
-    // Add-provider dialog opened in place (rather than navigating away).
+    // Add-provider flow opened in place (rather than navigating away).
     // Refreshes providers locally on success so the new key shows up
-    // without leaving the current scenario.
-    const {
-        providerDialogOpen,
-        providerFormData,
-        handleProviderSubmit,
-        handleProviderForceAdd,
-        handleCloseDialog,
-        handleFieldChange,
-        connectDialogOpen,
-        handleConnectAIClick,
-        handleConnectSelect,
-        handleCloseConnect,
-        handlePastePick,
-        pasteDialogOpen,
-        handleClosePasteDialog,
-        fromConnectPicker,
-    } = useProviderDialog(showNotification, {
+    // without leaving the current scenario. The hook + ConnectAIDialogs own
+    // every picker route: form, OAuth, paste & detect, import.
+    const connectAI = useProviderDialog(showNotification, {
         onProviderAdded: () => {
             void onProvidersLoad?.();
         },
-        onImport: () => setShowImportModal(true),
     });
+    const { handleConnectAIClick } = connectAI;
 
     const handleAddApiKeyClick = useCallback(() => {
         handleConnectAIClick();
@@ -307,46 +286,12 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         }
     }, []);
 
-    // Import from clipboard handler
-    const handleImportFromClipboard = useCallback(() => {
-        setShowImportModal(true);
-    }, []);
-
     // "Test all rules": bump a signal consumed by each card's QuickProbeButton;
     // every active rule runs its quick streaming probe and shows its own pill.
     const [probeAllSignal, setProbeAllSignal] = useState(0);
     const handleProbeAll = useCallback(() => {
         setProbeAllSignal((s) => s + 1);
     }, []);
-
-    // Handle import data (from modal). Import is provider-only — no rule is
-    // created or updated, so only the provider list needs refreshing.
-    const handleImportData = useCallback(async (data: string) => {
-        setImporting(true);
-        try {
-            const result = await api.importProvider(data);
-            if (result.success) {
-                // Refresh providers so newly imported ones are available
-                if (onProvidersLoad) {
-                    await onProvidersLoad();
-                }
-
-                const providersMsg = result.data?.providers_created > 0
-                    ? `${result.data.providers_created} provider(s) imported.`
-                    : result.data?.providers_used > 0
-                        ? `${result.data.providers_used} existing provider(s) used.`
-                        : 'No providers were imported.';
-                showNotification(providersMsg, 'success');
-                setShowImportModal(false);
-            } else {
-                setImportError({open: true, message: result.error || 'Import failed'});
-            }
-        } catch (err) {
-            setImportError({open: true, message: (err as Error).message || 'Import failed'});
-        } finally {
-            setImporting(false);
-        }
-    }, [showNotification, onProvidersLoad]);
 
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (
@@ -466,34 +411,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                 }}
             />
 
-            <ImportModal
-                open={showImportModal}
-                onClose={() => setShowImportModal(false)}
-                onImport={handleImportData}
-                loading={importing}
-            />
-
-            <ConnectProviderDialog
-                open={connectDialogOpen}
-                onClose={handleCloseConnect}
-                onSelect={handleConnectSelect}
-            />
-            <PasteDetectDialog
-                open={pasteDialogOpen}
-                onClose={handleClosePasteDialog}
-                onPick={handlePastePick}
-            />
-
-            <ProviderFormDialog
-                open={providerDialogOpen}
-                onClose={handleCloseDialog}
-                onBack={fromConnectPicker ? () => { handleCloseDialog(); handleConnectAIClick(); } : undefined}
-                onSubmit={handleProviderSubmit}
-                onForceAdd={handleProviderForceAdd}
-                data={providerFormData}
-                onChange={handleFieldChange}
-                mode="add"
-            />
+            <ConnectAIDialogs flow={connectAI}/>
 
             {showScrollTop && (
                 <Fab
@@ -510,17 +428,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                     <KeyboardArrowUpIcon/>
                 </Fab>
             )}
-            <Snackbar
-                open={importError.open}
-                autoHideDuration={6000}
-                onClose={() => setImportError({open: false, message: ''})}
-                anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
-            >
-                <Alert severity="error" onClose={() => setImportError({open: false, message: ''})}>
-                    {importError.message}
-                </Alert>
-            </Snackbar>
-
             {scenario && (
                 <ScenarioLogDialog
                     open={logDialogOpen}

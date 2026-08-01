@@ -2,7 +2,8 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
-import ConnectProviderFlow from '@/components/ConnectProviderFlow';
+import ConnectAIDialogs from '@/components/ConnectAIDialogs';
+import {useProviderDialog} from '@/hooks/useProviderDialog';
 import OpenCodeConfigModal from './components/OpenCodeConfigModal';
 import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
@@ -27,7 +28,10 @@ const UseOpenCodePageContent: React.FC = () => {
     } = useScenarioPageInternal(scenario);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
-    const [connectProviderOpen, setConnectProviderOpen] = useState(false);
+    // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs).
+    const connectAI = useProviderDialog(showNotification, {
+        onProviderAdded: () => window.location.reload(),
+    });
     const [configJson, setConfigJson] = useState('');
     const [scriptWindows, setScriptWindows] = useState('');
     const [scriptUnix, setScriptUnix] = useState('');
@@ -126,7 +130,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     onViewConfig={handleOpenConfigModal}
                     hasModelSelected={hasModelOnAnyRule(rules)}
                     onSelectModel={scrollToModelsCard}
-                    onConnectProvider={() => setConnectProviderOpen(true)}
+                    onConnectProvider={connectAI.handleConnectAIClick}
                 />
                 <TemplatePage
                     scenario={scenario}
@@ -144,12 +148,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     isApplyLoading={isApplyLoading}
                     isLoading={isConfigLoading}
                 />
-                <ConnectProviderFlow
-                    open={connectProviderOpen}
-                    onClose={() => setConnectProviderOpen(false)}
-                    showNotification={showNotification}
-                    onProviderAdded={() => window.location.reload()}
-                />
+                <ConnectAIDialogs flow={connectAI}/>
             </CardGrid>
         </PageLayout>
     );
