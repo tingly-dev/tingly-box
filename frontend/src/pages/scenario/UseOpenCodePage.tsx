@@ -44,14 +44,14 @@ const UseOpenCodePageContent: React.FC = () => {
                 setConfigJson('// Error: ' + (result.message || 'Failed to load config'));
                 setScriptWindows('// Error loading config');
                 setScriptUnix('// Error: Failed to connect to server');
-                showNotification('Failed to load config preview: ' + (result.message || 'Unknown error'), 'error');
+                showNotification(t('scenarioPage.opencode.previewFailed', { reason: result.message || t('scenarioPage.unknownError') }), 'error');
             }
         } catch (err) {
             console.error('Failed to fetch config preview:', err);
             setConfigJson('// Error: Failed to connect to server');
             setScriptWindows('// Error: Failed to connect to server');
             setScriptUnix('// Error: Failed to connect to server');
-            showNotification('Failed to load config preview', 'error');
+            showNotification(t('scenarioPage.opencode.previewFailedGeneric'), 'error');
         } finally {
             setIsConfigLoading(false);
         }
@@ -73,9 +73,9 @@ const UseOpenCodePageContent: React.FC = () => {
                     files: ['~/.config/opencode/opencode.json'],
                 };
             }
-            return { success: false, error: result.message || 'Unknown error' };
+            return { success: false, error: result.message || t('scenarioPage.unknownError') };
         } catch {
-            return { success: false, error: 'Failed to apply OpenCode config' };
+            return { success: false, error: t('scenarioPage.opencode.applyFailed') };
         } finally {
             setIsApplyLoading(false);
         }
@@ -107,7 +107,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="OpenCode Configuration"
+                        title={t('scenarioPage.opencode.configTitle')}
                         baseUrlPath="/tingly/opencode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

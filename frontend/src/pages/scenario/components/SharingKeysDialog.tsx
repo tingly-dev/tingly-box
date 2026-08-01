@@ -11,6 +11,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
@@ -21,6 +22,7 @@ interface SharingKeysDialogProps {
 }
 
 const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) => {
+    const { t } = useTranslation();
     const notify = useNotify();
 
     const [sharingKeys, setSharingKeys] = useState<SharingKey[]>([]);
@@ -50,19 +52,19 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
 
     const handleCreateToken = async () => {
         if (!newTokenName.trim()) {
-            notify.error('Display Name is required');
+            notify.error(t('sharingKeys.nameRequired'));
             return;
         }
         setCreatingToken(true);
         const result = await api.createAPIToken({ display_name: newTokenName.trim() });
         setCreatingToken(false);
         if (result.success) {
-            notify.success('Token created successfully');
+            notify.success(t('sharingKeys.createSuccess'));
             setCreateDialogOpen(false);
             setNewTokenName('');
             loadSharingKeys();
         } else {
-            notify.error(result.error?.message || 'Failed to create token');
+            notify.error(result.error?.message || t('sharingKeys.createFailed'));
         }
     };
 
@@ -72,12 +74,12 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
         const result = await api.deleteAPIToken(tokenToDelete.token_id);
         setDeletingToken(false);
         if (result.success) {
-            notify.success('Token deleted successfully');
+            notify.success(t('sharingKeys.deleteSuccess'));
             setDeleteDialogOpen(false);
             setTokenToDelete(null);
             loadSharingKeys();
         } else {
-            notify.error(result.error?.message || 'Failed to delete token');
+            notify.error(result.error?.message || t('sharingKeys.deleteFailed'));
         }
     };
 
@@ -89,14 +91,14 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                         alignItems: "center"
                     }}>
                         <IconKey />
-                        <span>Sharing Keys</span>
+                        <span>{t('sharingKeys.title')}</span>
                     </Stack>
                     <Button
                         variant="contained"
                         startIcon={<IconPlus sx={{ fontSize: 18 }} />}
                         onClick={() => setCreateDialogOpen(true)}
                     >
-                        Create Token
+                        {t('sharingKeys.createToken')}
                     </Button>
                 </DialogTitle>
                 <DialogContent>
@@ -107,15 +109,15 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                         onToggleVisibility={(tokenId) => setVisibleTokens(prev => ({ ...prev, [tokenId]: !prev[tokenId] }))}
                         onCopy={(tokenId) => {
                             navigator.clipboard.writeText(tokenId);
-                            notify.success('Token copied to clipboard');
+                            notify.success(t('sharingKeys.copiedToClipboard'));
                         }}
                         onToggleEnabled={async (key) => {
                             const result = await api.setAPITokenEnabled(key.token_id, !key.enabled);
                             if (result.success) {
-                                notify.success(key.enabled ? 'Token disabled' : 'Token enabled');
+                                notify.success(key.enabled ? t('sharingKeys.disabled') : t('sharingKeys.enabled'));
                                 loadSharingKeys();
                             } else {
-                                notify.error(result.error?.message || 'Failed to update token');
+                                notify.error(result.error?.message || t('sharingKeys.updateFailed'));
                             }
                         }}
                         onDelete={(key) => {
@@ -129,29 +131,29 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
             </Dialog>
             {/* Create Token Dialog */}
             <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Create Sharing Key</DialogTitle>
+                <DialogTitle>{t('sharingKeys.createDialogTitle')}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ mt: 1 }}>
                         <TextField
-                            label="Display Name"
+                            label={t('sharingKeys.displayName')}
                             fullWidth
                             value={newTokenName}
                             onChange={(e) => setNewTokenName(e.target.value)}
-                            placeholder="e.g., Team Alpha Key"
-                            helperText="A descriptive name for this sharing key"
+                            placeholder={t('sharingKeys.displayNamePlaceholder')}
+                            helperText={t('sharingKeys.displayNameHelper')}
                             autoFocus
                         />
                     </Stack>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={() => setCreateDialogOpen(false)}>{t('common.cancel')}</Button>
                     <Button
                         variant="contained"
                         onClick={handleCreateToken}
                         disabled={creatingToken || !newTokenName.trim()}
                         startIcon={creatingToken ? <CircularProgress size={16} /> : <IconPlus sx={{ fontSize: 18 }} />}
                     >
-                        Create Token
+                        {t('sharingKeys.createToken')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -162,17 +164,16 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                         alignItems: "center"
                     }}>
                         <IconTrash color="error" />
-                        <span>Delete Token</span>
+                        <span>{t('sharingKeys.deleteToken')}</span>
                     </Stack>
                 </DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Are you sure you want to delete the token <strong>"{tokenToDelete?.display_name}"</strong>?
-                        This action cannot be undone.
+                        {t('sharingKeys.deleteConfirm', { name: tokenToDelete?.display_name })}
                     </Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeleteDialogOpen(false)} disabled={deletingToken}>Cancel</Button>
+                    <Button onClick={() => setDeleteDialogOpen(false)} disabled={deletingToken}>{t('common.cancel')}</Button>
                     <Button
                         variant="contained"
                         color="error"
@@ -180,7 +181,7 @@ const SharingKeysDialog: React.FC<SharingKeysDialogProps> = ({ open, onClose }) 
                         disabled={deletingToken}
                         startIcon={deletingToken ? <CircularProgress size={16} /> : <IconTrash sx={{ fontSize: 18 }} />}
                     >
-                        Delete Token
+                        {t('sharingKeys.deleteToken')}
                     </Button>
                 </DialogActions>
             </Dialog>

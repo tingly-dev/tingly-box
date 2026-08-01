@@ -33,16 +33,17 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
-const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
-    { value: 'unified', label: 'Unified Model', description: 'Config unified model for all claude code requests', enabled: true },
-    { value: 'separate', label: 'Separate Model', description: 'Config different models for claude code scenario, like subagent, summary, default, ...', enabled: true },
-    { value: 'smart', label: 'Smart', description: '(WIP) Smart routing according to request field / content / model feature / user intent / ...', enabled: false },
-];
-
 const SCENARIO = 'claude_code';
 
 const UseClaudeCodePageContent: React.FC = () => {
     const { t } = useTranslation();
+
+    const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
+        { value: 'unified', label: t('claudeCode.configModes.unified.label'), description: t('claudeCode.configModes.unified.description'), enabled: true },
+        { value: 'separate', label: t('claudeCode.configModes.separate.label'), description: t('claudeCode.configModes.separate.description'), enabled: true },
+        { value: 'smart', label: t('claudeCode.configModes.smart.label'), description: t('claudeCode.configModes.smart.description'), enabled: false },
+    ];
+    const modeLabel = (mode: ConfigMode | null) => CONFIG_MODES.find(m => m.value === mode)?.label ?? mode ?? '';
 
     const {
         showNotification,
@@ -118,15 +119,15 @@ const UseClaudeCodePageContent: React.FC = () => {
                 setConfigMode(pendingMode);
 
                 showNotification(
-                    `Configuration mode changed to ${pendingMode}. Please reapply the configuration to Claude Code.`,
+                    t('claudeCode.modeChange.success', { mode: modeLabel(pendingMode) }),
                     'success'
                 );
             } else {
-                showNotification('Failed to save configuration mode', 'error');
+                showNotification(t('claudeCode.modeChange.failed'), 'error');
             }
         } catch (error) {
             console.error('Failed to save scenario config:', error);
-            showNotification('Failed to save configuration mode', 'error');
+            showNotification(t('claudeCode.modeChange.failed'), 'error');
         } finally {
             setPendingMode(null);
         }
@@ -194,9 +195,9 @@ const UseClaudeCodePageContent: React.FC = () => {
                     backupPaths: result.backupPaths || [],
                 };
             }
-            return { success: false, error: result?.message || 'Apply failed' };
+            return { success: false, error: result?.message || t('agentSetup.apply.failed') };
         } catch (e: any) {
-            return { success: false, error: e?.message || 'Failed to apply configurations' };
+            return { success: false, error: e?.message || t('claudeCode.modeChange.applyFailed') };
         } finally {
             setIsApplyLoading(false);
         }
@@ -298,23 +299,23 @@ const UseClaudeCodePageContent: React.FC = () => {
                     maxWidth="sm"
                     fullWidth
                 >
-                    <DialogTitle>Change Configuration Mode?</DialogTitle>
+                    <DialogTitle>{t('claudeCode.modeChange.title')}</DialogTitle>
                     <DialogContent>
                         <Typography variant="body1" sx={{ mb: 1 }}>
-                            You are about to switch from <strong>{configMode}</strong> to <strong>{pendingMode}</strong> mode.
+                            {t('claudeCode.modeChange.body', { from: modeLabel(configMode), to: modeLabel(pendingMode) })}
                         </Typography>
                         <Typography variant="body2" sx={{
                             color: "text.secondary"
                         }}>
-                            After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
+                            {t('claudeCode.modeChange.hint')}
                         </Typography>
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
                         <Button onClick={cancelModeChange} color="inherit" size="small">
-                            Cancel
+                            {t('claudeCode.modeChange.cancel')}
                         </Button>
                         <Button onClick={confirmModeChange} variant="contained" size="small">
-                            Confirm
+                            {t('claudeCode.modeChange.confirm')}
                         </Button>
                     </DialogActions>
                 </Dialog>

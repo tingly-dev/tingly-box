@@ -134,7 +134,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         } catch (error: any) {
             updateRuns((currentRuns) => currentRuns.filter((run) => run.id !== runId));
             const status = error?.status ? `${error.status}: ` : '';
-            const message = error?.error?.message || error?.message || 'Request failed';
+            const message = error?.error?.message || error?.message || t('playground.requestFailed', { defaultValue: 'Request failed' });
             showNotification(`${status}${message}`, 'error');
         }
     }, [count, model, prompt, quality, showNotification, size, updateRuns]);

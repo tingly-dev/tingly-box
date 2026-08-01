@@ -12,6 +12,8 @@ export default {
     "active": "Active",
     "inactive": "Inactive",
     "close": "Close",
+    "done": "Done",
+    "applying": "Applying...",
     "copy": "Copy",
     "refresh": "Refresh",
     "verify": "Verify",
@@ -833,7 +835,70 @@ export default {
     "pageTitle": "Activity Log & History",
     "subtitle": "{{count}} recent activity entries"
   },
+  "openCodeConfig": {
+    "title": "Configure OpenCode",
+    "subtitle": "Set up OpenCode to use Tingly Box as your AI model proxy",
+    "configLocation": "Config Location:",
+    "configurationTitle": "Configuration"
+  },
+  "codexConfig": {
+    "title": "Configure Codex",
+    "subtitle": "Configure Codex to use Tingly Box through `~/.codex/config.toml` and `~/.codex/auth.json`",
+    "resetTooltip": "Reset model & reasoning to defaults",
+    "tabQuick": "Quick Config",
+    "tabManual": "Manual",
+    "applySuccess": "Codex configuration applied to ~/.codex",
+    "applyFailed": "Failed to apply configuration",
+    "selectOAuthProvider": "Select a Codex OAuth provider to export.",
+    "authMode": {
+      "title": "Authentication",
+      "apikey": {
+        "label": "Tingly Box gateway",
+        "captionPrefix": "codex routes through Tingly Box. Gateway key written to"
+      },
+      "hybrid": {
+        "label": "Tingly Box gateway + keep official ChatGPT login",
+        "caption": "Routes through Tingly Box, but the gateway key moves into config.toml so your ChatGPT login in auth.json stays intact — Codex App still recognizes your account (remote control, plugins, account display)."
+      },
+      "chatgpt": {
+        "label": "Direct to OpenAI",
+        "caption": "codex talks to OpenAI directly using your official ChatGPT login. No gateway."
+      }
+    },
+    "oauthAccount": {
+      "title": "ChatGPT account",
+      "tooltipHybrid": "The gateway token is written into config.toml's provider block (experimental_bearer_token). Pick a stored Codex login to (re)write it into auth.json, or leave it as \u201cKeep existing\u201d to not touch the file.",
+      "tooltipChatgpt": "Exports the OAuth tokens to ~/.codex/auth.json and removes the tingly gateway keys from config.toml so codex CLI talks directly to OpenAI. Tingly Box will not manage token refresh after this — codex CLI owns the token lifecycle. If id_token is missing in the exported file, re-authenticate via the OAuth page and apply again.",
+      "noProvider": "No Codex OAuth provider — log in first",
+      "selectProvider": "Select a Codex OAuth provider",
+      "keepExisting": "Keep existing auth.json (don\u2019t modify)"
+    }
+  },
   "claudeCode": {
+    "configModes": {
+      "unified": {
+        "label": "Unified Model",
+        "description": "Config unified model for all claude code requests"
+      },
+      "separate": {
+        "label": "Separate Model",
+        "description": "Config different models for claude code scenario, like subagent, summary, default, ..."
+      },
+      "smart": {
+        "label": "Smart",
+        "description": "(WIP) Smart routing according to request field / content / model feature / user intent / ..."
+      }
+    },
+    "modeChange": {
+      "title": "Change Configuration Mode?",
+      "body": "You are about to switch from {{from}} to {{to}} mode.",
+      "hint": "After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "success": "Configuration mode changed to {{mode}}. Please reapply the configuration to Claude Code.",
+      "failed": "Failed to save configuration mode",
+      "applyFailed": "Failed to apply configurations"
+    },
     "configPath": "Add env config to Claude Code config file",
     "copyConfig": "Config",
     "oneClickScript": "One-Click Script",
@@ -1202,6 +1267,47 @@ export default {
     "goToDashboard": "Dashboard",
     "goToHelp": "Help & Docs"
   },
+  "imageGenQuickStart": {
+    "title": "Image Generation Quick Start",
+    "closeAriaLabel": "Close quick start",
+    "description": "Call the image generation endpoint, then decode the base64 response into an image file. The model token is available from GET /api/v1/token."
+  },
+  "templatePage": {
+    "noProviders": {
+      "title": "No Providers Configured",
+      "description": "Add an API key provider to start routing requests",
+      "action": "Get started"
+    },
+    "noRules": "No rules yet. Click \"New Rule\" to add one.",
+    "copiedToClipboard": "{{label}} copied to clipboard!"
+  },
+  "sharingKeys": {
+    "title": "Sharing Keys",
+    "createToken": "Create Token",
+    "createDialogTitle": "Create Sharing Key",
+    "displayName": "Display Name",
+    "displayNamePlaceholder": "e.g., Team Alpha Key",
+    "displayNameHelper": "A descriptive name for this sharing key",
+    "deleteToken": "Delete Token",
+    "deleteConfirm": "Are you sure you want to delete the token \"{{name}}\"? This action cannot be undone.",
+    "nameRequired": "Display Name is required",
+    "createSuccess": "Token created successfully",
+    "createFailed": "Failed to create token",
+    "deleteSuccess": "Token deleted successfully",
+    "deleteFailed": "Failed to delete token",
+    "copiedToClipboard": "Token copied to clipboard",
+    "disabled": "Token disabled",
+    "enabled": "Token enabled",
+    "updateFailed": "Failed to update token"
+  },
+  "context1M": {
+    "enabledTitle": "1M Context Window Enabled",
+    "disabledTitle": "1M Context Window Disabled",
+    "enabledBody": "Model names have been updated with [1m] suffix for extended context support.",
+    "disabledBody": "Model names have been updated to remove [1m] suffix.",
+    "requiresApplyHint": "Please apply the configuration below and restart {{client}} for changes to take effect.",
+    "restartOnlyHint": "Please restart {{client}} and re-select the model for changes to take effect."
+  },
   "playground": {
     "imageTitle": "Image Playground",
     "noImageModels": "Add an image generation model rule below to start generating images.",
@@ -1222,6 +1328,7 @@ export default {
     "openResult": "Open generated image {{number}}",
     "resultAlt": "Generated image {{number}}",
     "emptyResult": "No image returned",
+    "requestFailed": "Request failed",
     "closePreview": "Close image preview"
   },
   "agentSetup": {
@@ -1278,6 +1385,17 @@ export default {
     "config": "Config",
     "autoConfig": "Auto Config",
     "quickStart": "Quick Start",
+    "unknownError": "Unknown error",
+    "codex": {
+      "configTitle": "Codex Configuration",
+      "applyFailed": "Failed to apply Codex config"
+    },
+    "opencode": {
+      "configTitle": "OpenCode Configuration",
+      "applyFailed": "Failed to apply OpenCode config",
+      "previewFailed": "Failed to load config preview: {{reason}}",
+      "previewFailedGeneric": "Failed to load config preview"
+    },
     "sharingKeys": "Sharing Keys",
     "modelRules": "Model Rules",
     "embedModelRules": "Embedding Model Rules",
@@ -1297,7 +1415,9 @@ export default {
       "viewMarketplace": "View Marketplace",
       "applyStepLabel": "Follow VS Code Guide",
       "applyStepDescription": "Open the Tingly Box extension in VS Code and follow its built-in setup guide.",
-      "openGuide": "Open Guide"
+      "openGuide": "Open Guide",
+      "configTitle": "Configure VS Code",
+      "modalDescription": "Install the Tingly Box extension, then follow the setup guide inside VS Code. The extension handles the required endpoint and API key configuration for you.",
     }
   },
   "scenarioOverview": {

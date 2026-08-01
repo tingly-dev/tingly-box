@@ -49,9 +49,9 @@ const UseCodexPageContent: React.FC = () => {
                 }
                 return { success: true, files };
             }
-            return { success: false, error: result.message || 'Unknown error' };
+            return { success: false, error: result.message || t('scenarioPage.unknownError') };
         } catch (err: any) {
-            return { success: false, error: err?.message || 'Failed to apply Codex config' };
+            return { success: false, error: err?.message || t('scenarioPage.codex.applyFailed') };
         } finally {
             setIsApplyLoading(false);
         }
@@ -88,7 +88,7 @@ const UseCodexPageContent: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="Codex Configuration"
+                        title={t('scenarioPage.codex.configTitle')}
                         baseUrlPath="/tingly/codex"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

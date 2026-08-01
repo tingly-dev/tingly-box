@@ -1,5 +1,6 @@
 import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { InfoOutlined, RestartAlt } from '@/components/icons';
 import CodeBlock from '@/components/CodeBlock';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs, mergeSavedCodexPrefs } from './CodexQuickConfig';
@@ -45,6 +46,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     pendingContext1MChange,
     showNotification,
 }) => {
+    const { t } = useTranslation();
     // Keep token in context as a fallback for the auth.json preview while
     // the preview API request is in flight.
     const { token } = useScenarioPageModal();
@@ -249,7 +251,7 @@ EOF`;
 
     const handleApplyConfiguration = async () => {
         if (authMode === 'chatgpt' && !selectedOAuthProvider) {
-            showNotification?.('Select a Codex OAuth provider to export.', 'error');
+            showNotification?.(t('codexConfig.selectOAuthProvider'), 'error');
             return;
         }
         setIsApplying(true);
@@ -261,12 +263,12 @@ EOF`;
                 showOAuthSelector ? (selectedOAuthProvider || undefined) : undefined,
             );
             if (response?.success) {
-                showNotification?.('Codex configuration applied to ~/.codex', 'success');
+                showNotification?.(t('codexConfig.applySuccess'), 'success');
             } else {
-                showNotification?.(response?.message || 'Failed to apply configuration', 'error');
+                showNotification?.(response?.message || t('codexConfig.applyFailed'), 'error');
             }
         } catch (err: any) {
-            showNotification?.(err?.message || 'Failed to apply configuration', 'error');
+            showNotification?.(err?.message || t('codexConfig.applyFailed'), 'error');
         } finally {
             setIsApplying(false);
         }
@@ -296,7 +298,7 @@ EOF`;
                 <Typography variant="h6" sx={{
                     fontWeight: 600
                 }}>
-                    Configure Codex
+                    {t('codexConfig.title')}
                 </Typography>
                 <Typography
                     variant="body2"
@@ -304,12 +306,12 @@ EOF`;
                         color: "text.secondary",
                         mt: 0.5
                     }}>
-                    Configure Codex to use Tingly Box through `~/.codex/config.toml` and `~/.codex/auth.json`
+                    {t('codexConfig.subtitle')}
                 </Typography>
                 {/* Reset only touches the Quick Config prefs, so it's shown only
                     where those prefs are visible (Quick tab, non-direct). */}
                 {mainTab === 'quick' && authMode !== 'chatgpt' && (
-                    <Tooltip title="Reset model & reasoning to defaults" arrow>
+                    <Tooltip title={t('codexConfig.resetTooltip')} arrow>
                         <IconButton
                             size="small"
                             onClick={() => setPrefs(defaultCodexPrefs())}
@@ -324,8 +326,8 @@ EOF`;
                     onChange={(_, value) => setMainTab(value)}
                     sx={{ mt: 1, minHeight: 40, '& .MuiTabs-indicator': { height: 3 } }}
                 >
-                    <Tab label="Quick Config" value="quick" sx={{ minHeight: 40, textTransform: 'none' }} />
-                    <Tab label="Manual" value="manual" sx={{ minHeight: 40, textTransform: 'none' }} />
+                    <Tab label={t('codexConfig.tabQuick')} value="quick" sx={{ minHeight: 40, textTransform: 'none' }} />
+                    <Tab label={t('codexConfig.tabManual')} value="manual" sx={{ minHeight: 40, textTransform: 'none' }} />
                 </Tabs>
             </DialogTitle>
             <DialogContent sx={{ p: 3 }}>
@@ -339,7 +341,7 @@ EOF`;
                         (routing + what lands in auth.json) so the two
                         gateway-based options are easy to tell apart. */}
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Authentication
+                        {t('codexConfig.authMode.title')}
                     </Typography>
                     <RadioGroup
                         value={authMode}
@@ -351,11 +353,11 @@ EOF`;
                             control={<Radio size="small" sx={{ pt: 0 }} />}
                             label={
                                 <Box>
-                                    <Typography variant="body2">Tingly Box gateway</Typography>
+                                    <Typography variant="body2">{t('codexConfig.authMode.apikey.label')}</Typography>
                                     <Typography variant="caption" sx={{
                                         color: "text.secondary"
                                     }}>
-                                        codex routes through Tingly Box. Gateway key written to <code>~/.codex/auth.json</code>.
+                                        {t('codexConfig.authMode.apikey.captionPrefix')} <code>~/.codex/auth.json</code>.
                                     </Typography>
                                 </Box>
                             }
@@ -367,14 +369,12 @@ EOF`;
                             label={
                                 <Box>
                                     <Typography variant="body2">
-                                        Tingly Box gateway + keep official ChatGPT login
+                                        {t('codexConfig.authMode.hybrid.label')}
                                     </Typography>
                                     <Typography variant="caption" sx={{
                                         color: "text.secondary"
                                     }}>
-                                        Routes through Tingly Box, but the gateway key moves into <code>config.toml</code> so
-                                        your ChatGPT login in <code>auth.json</code> stays intact — Codex App still recognizes
-                                        your account (remote control, plugins, account display).
+                                        {t('codexConfig.authMode.hybrid.caption')}
                                     </Typography>
                                 </Box>
                             }
@@ -385,11 +385,11 @@ EOF`;
                             control={<Radio size="small" sx={{ pt: 0 }} />}
                             label={
                                 <Box>
-                                    <Typography variant="body2">Direct to OpenAI</Typography>
+                                    <Typography variant="body2">{t('codexConfig.authMode.chatgpt.label')}</Typography>
                                     <Typography variant="caption" sx={{
                                         color: "text.secondary"
                                     }}>
-                                        codex talks to OpenAI directly using your official ChatGPT login. No gateway.
+                                        {t('codexConfig.authMode.chatgpt.caption')}
                                     </Typography>
                                 </Box>
                             }
@@ -403,29 +403,17 @@ EOF`;
                 {showOAuthSelector && (
                     <Box sx={{ mb: 2, px: 0.5 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                            <Typography variant="subtitle2">ChatGPT account</Typography>
+                            <Typography variant="subtitle2">{t('codexConfig.oauthAccount.title')}</Typography>
                             <Tooltip
                                 arrow
                                 placement="top"
                                 title={
                                     <Box sx={{ maxWidth: 320 }}>
-                                        {authMode === 'hybrid' ? (
-                                            <Typography variant="caption">
-                                                The gateway token is written into <code>config.toml</code>'s provider
-                                                block (<code>experimental_bearer_token</code>). Pick a stored Codex
-                                                login to (re)write it into <code>auth.json</code>, or leave it as
-                                                “Keep existing” to not touch the file.
-                                            </Typography>
-                                        ) : (
-                                            <Typography variant="caption">
-                                                Exports the OAuth tokens to <code>~/.codex/auth.json</code> and removes
-                                                the tingly gateway keys from <code>config.toml</code> so codex CLI talks
-                                                directly to OpenAI. Tingly Box will <strong>not</strong> manage token
-                                                refresh after this — codex CLI owns the token lifecycle. If
-                                                <code> id_token</code> is missing in the exported file, re-authenticate
-                                                via the OAuth page and apply again.
-                                            </Typography>
-                                        )}
+                                        <Typography variant="caption">
+                                            {authMode === 'hybrid'
+                                                ? t('codexConfig.oauthAccount.tooltipHybrid')
+                                                : t('codexConfig.oauthAccount.tooltipChatgpt')}
+                                        </Typography>
                                     </Box>
                                 }
                             >
@@ -441,9 +429,9 @@ EOF`;
                                 <MenuItem value="" disabled={authMode === 'chatgpt'}>
                                     {authMode === 'chatgpt'
                                         ? (codexOAuthProviders.length === 0
-                                            ? 'No Codex OAuth provider — log in first'
-                                            : 'Select a Codex OAuth provider')
-                                        : 'Keep existing auth.json (don’t modify)'}
+                                            ? t('codexConfig.oauthAccount.noProvider')
+                                            : t('codexConfig.oauthAccount.selectProvider'))
+                                        : t('codexConfig.oauthAccount.keepExisting')}
                                 </MenuItem>
                                 {codexOAuthProviders.map((p) => (
                                     <MenuItem key={p.uuid} value={p.uuid}>{p.name}</MenuItem>
@@ -703,7 +691,7 @@ EOF`;
             <DialogActions sx={{ px: 3, pb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, width: '100%' }}>
                     <Button onClick={onClose} variant="outlined">
-                        Close
+                        {t('common.close')}
                     </Button>
                     <Button
                         onClick={handleApplyConfiguration}
@@ -711,7 +699,7 @@ EOF`;
                         disabled={isApplying}
                         startIcon={isApplying ? <CircularProgress size={16} color="inherit" /> : null}
                     >
-                        {isApplying ? 'Applying...' : 'Auto Config'}
+                        {isApplying ? t('common.applying') : t('scenarioPage.autoConfig')}
                     </Button>
                 </Box>
             </DialogActions>

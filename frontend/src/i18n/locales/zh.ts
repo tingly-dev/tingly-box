@@ -12,6 +12,8 @@ export default {
     "active": "活动",
     "inactive": "非活动",
     "close": "关闭",
+    "done": "完成",
+    "applying": "应用中...",
     "copy": "复制",
     "refresh": "刷新",
     "verify": "验证",
@@ -835,7 +837,70 @@ export default {
     "pageTitle": "活动日志和历史",
     "subtitle": "{{count}} 条最近的活动记录"
   },
+  "openCodeConfig": {
+    "title": "配置 OpenCode",
+    "subtitle": "将 OpenCode 设置为通过 Tingly Box 作为 AI 模型代理",
+    "configLocation": "配置位置：",
+    "configurationTitle": "配置"
+  },
+  "codexConfig": {
+    "title": "配置 Codex",
+    "subtitle": "通过 `~/.codex/config.toml` 和 `~/.codex/auth.json` 配置 Codex 使用 Tingly Box",
+    "resetTooltip": "将模型与推理设置重置为默认值",
+    "tabQuick": "快速配置",
+    "tabManual": "手动配置",
+    "applySuccess": "Codex 配置已应用到 ~/.codex",
+    "applyFailed": "应用配置失败",
+    "selectOAuthProvider": "请选择要导出的 Codex OAuth 账号。",
+    "authMode": {
+      "title": "认证方式",
+      "apikey": {
+        "label": "Tingly Box 网关",
+        "captionPrefix": "codex 通过 Tingly Box 路由。网关密钥写入"
+      },
+      "hybrid": {
+        "label": "Tingly Box 网关 + 保留官方 ChatGPT 登录",
+        "caption": "通过 Tingly Box 路由，但网关密钥移入 config.toml，使 auth.json 中的 ChatGPT 登录保持不变——Codex App 仍能识别你的账号（远程控制、插件、账号展示）。"
+      },
+      "chatgpt": {
+        "label": "直连 OpenAI",
+        "caption": "codex 使用你的官方 ChatGPT 登录直接与 OpenAI 通信，不经过网关。"
+      }
+    },
+    "oauthAccount": {
+      "title": "ChatGPT 账号",
+      "tooltipHybrid": "网关令牌会写入 config.toml 的 provider 区块（experimental_bearer_token）。选择一个已保存的 Codex 登录以（重新）写入 auth.json，或保持「保留现有」以不修改该文件。",
+      "tooltipChatgpt": "将 OAuth 令牌导出到 ~/.codex/auth.json，并从 config.toml 中移除 tingly 网关密钥，使 codex CLI 直接与 OpenAI 通信。此后 Tingly Box 将不再管理令牌刷新——由 codex CLI 自行负责令牌生命周期。如果导出的文件中缺少 id_token，请通过 OAuth 页面重新认证后再次应用。",
+      "noProvider": "暂无 Codex OAuth 账号——请先登录",
+      "selectProvider": "选择一个 Codex OAuth 账号",
+      "keepExisting": "保留现有 auth.json（不修改）"
+    }
+  },
   "claudeCode": {
+    "configModes": {
+      "unified": {
+        "label": "统一模型",
+        "description": "为所有 Claude Code 请求配置同一个模型"
+      },
+      "separate": {
+        "label": "分离模型",
+        "description": "为 Claude Code 的不同场景（如子代理、摘要、默认等）分别配置模型"
+      },
+      "smart": {
+        "label": "智能",
+        "description": "（开发中）根据请求字段/内容/模型特性/用户意图等智能路由"
+      }
+    },
+    "modeChange": {
+      "title": "切换配置模式？",
+      "body": "即将从 {{from}} 切换到 {{to}} 模式。",
+      "hint": "切换模式后，需要重新将配置应用到 Claude Code 才能生效。",
+      "cancel": "取消",
+      "confirm": "确认",
+      "success": "配置模式已切换为{{mode}}，请重新应用配置到 Claude Code。",
+      "failed": "保存配置模式失败",
+      "applyFailed": "应用配置失败"
+    },
     "configPath": "将环境配置添加到 Claude Code 配置文件",
     "copyConfig": "配置",
     "oneClickScript": "一键脚本",
@@ -1202,6 +1267,47 @@ export default {
     "goToDashboard": "控制台",
     "goToHelp": "帮助与文档"
   },
+  "imageGenQuickStart": {
+    "title": "图像生成快速开始",
+    "closeAriaLabel": "关闭快速开始",
+    "description": "调用图像生成接口，然后将 base64 响应解码为图像文件。模型令牌可通过 GET /api/v1/token 获取。"
+  },
+  "templatePage": {
+    "noProviders": {
+      "title": "尚未配置提供商",
+      "description": "添加一个 API Key 提供商以开始路由请求",
+      "action": "开始使用"
+    },
+    "noRules": "还没有规则。点击「新建规则」添加一条。",
+    "copiedToClipboard": "{{label}} 已复制到剪贴板！"
+  },
+  "sharingKeys": {
+    "title": "共享密钥",
+    "createToken": "创建令牌",
+    "createDialogTitle": "创建共享密钥",
+    "displayName": "显示名称",
+    "displayNamePlaceholder": "例如：Team Alpha Key",
+    "displayNameHelper": "为此共享密钥起一个便于识别的名称",
+    "deleteToken": "删除令牌",
+    "deleteConfirm": "确定要删除令牌 \"{{name}}\" 吗？此操作无法撤销。",
+    "nameRequired": "显示名称为必填项",
+    "createSuccess": "令牌创建成功",
+    "createFailed": "创建令牌失败",
+    "deleteSuccess": "令牌删除成功",
+    "deleteFailed": "删除令牌失败",
+    "copiedToClipboard": "令牌已复制到剪贴板",
+    "disabled": "令牌已停用",
+    "enabled": "令牌已启用",
+    "updateFailed": "更新令牌失败"
+  },
+  "context1M": {
+    "enabledTitle": "已启用 1M 上下文窗口",
+    "disabledTitle": "已关闭 1M 上下文窗口",
+    "enabledBody": "模型名称已添加 [1m] 后缀，以支持扩展上下文。",
+    "disabledBody": "模型名称已移除 [1m] 后缀。",
+    "requiresApplyHint": "请应用下方的配置并重启 {{client}} 以使更改生效。",
+    "restartOnlyHint": "请重启 {{client}} 并重新选择模型以使更改生效。"
+  },
   "playground": {
     "imageTitle": "图像实验台",
     "noImageModels": "先在下方添加一条图像生成模型规则，即可开始生成图像。",
@@ -1222,6 +1328,7 @@ export default {
     "openResult": "打开生成的第 {{number}} 张图像",
     "resultAlt": "生成的第 {{number}} 张图像",
     "emptyResult": "未返回图像",
+    "requestFailed": "请求失败",
     "closePreview": "关闭图像预览"
   },
   "agentSetup": {
@@ -1278,6 +1385,17 @@ export default {
     "config": "配置",
     "autoConfig": "自动配置",
     "quickStart": "快速开始",
+    "unknownError": "未知错误",
+    "codex": {
+      "configTitle": "Codex 配置",
+      "applyFailed": "应用 Codex 配置失败",
+    },
+    "opencode": {
+      "configTitle": "OpenCode 配置",
+      "applyFailed": "应用 OpenCode 配置失败",
+      "previewFailed": "加载配置预览失败：{{reason}}",
+      "previewFailedGeneric": "加载配置预览失败",
+    },
     "sharingKeys": "共享密钥",
     "modelRules": "模型规则",
     "embedModelRules": "向量模型规则",
@@ -1298,6 +1416,8 @@ export default {
       "applyStepLabel": "按 VS Code 指引配置",
       "applyStepDescription": "在 VS Code 中打开 Tingly Box 扩展，按其内置的设置指引操作。",
       "openGuide": "打开指引",
+      "configTitle": "配置 VS Code",
+      "modalDescription": "安装 Tingly Box 扩展，然后按 VS Code 内的设置指引操作。扩展会自动为你处理所需的端点和 API 密钥配置。",
     },
   },
   "scenarioOverview": {

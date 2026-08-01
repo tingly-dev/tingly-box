@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Box,
     Button,
@@ -103,6 +104,7 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
     model = 'gpt-image-1',
     onCopy,
 }) => {
+    const { t } = useTranslation();
     const [tab, setTab] = useState<Lang>('python');
     const active = TABS.find((item) => item.value === tab)!;
     const code = buildSnippet(tab, baseUrl, model);
@@ -120,8 +122,8 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
             <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography component="span" variant="h6" sx={{
                     fontWeight: 600
-                }}>Image Generation Quick Start</Typography>
-                <IconButton onClick={onClose} size="small" aria-label="Close quick start">
+                }}>{t('imageGenQuickStart.title')}</Typography>
+                <IconButton onClick={onClose} size="small" aria-label={t('imageGenQuickStart.closeAriaLabel')}>
                     <Close fontSize="small" />
                 </IconButton>
             </DialogTitle>
@@ -132,8 +134,7 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
                         color: "text.secondary",
                         mb: 2
                     }}>
-                    Call the image generation endpoint, then decode the base64 response into an image file.
-                    The model token is available from GET /api/v1/token.
+                    {t('imageGenQuickStart.description')}
                 </Typography>
                 <Tabs
                     value={tab}
@@ -161,7 +162,7 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
                 </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
-                <Button onClick={onClose} variant="contained">Done</Button>
+                <Button onClick={onClose} variant="contained">{t('common.done')}</Button>
             </DialogActions>
         </Dialog>
     );

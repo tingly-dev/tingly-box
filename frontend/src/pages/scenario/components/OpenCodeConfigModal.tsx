@@ -65,7 +65,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                 <Typography variant="h6" sx={{
                     fontWeight: 600
                 }}>
-                    Configure OpenCode
+                    {t('openCodeConfig.title')}
                 </Typography>
                 <Typography
                     variant="body2"
@@ -73,7 +73,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                         color: "text.secondary",
                         mt: 0.5
                     }}>
-                    Set up OpenCode to use Tingly Box as your AI model proxy
+                    {t('openCodeConfig.subtitle')}
                 </Typography>
             </DialogTitle>
             <DialogContent sx={{ p: 3 }}>
@@ -83,7 +83,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                         <Typography variant="body2" sx={{
                             color: "info.dark"
                         }}>
-                            <strong>Config Location:</strong> ~/.config/opencode/opencode.json
+                            <strong>{t('openCodeConfig.configLocation')}</strong> ~/.config/opencode/opencode.json
                         </Typography>
                     </Box>
 
@@ -93,7 +93,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                             <Typography variant="subtitle2" sx={{
                                 color: "text.secondary"
                             }}>
-                                Configuration
+                                {t('openCodeConfig.configurationTitle')}
                             </Typography>
                             <Tabs
                                 value={configTab}
@@ -154,7 +154,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end' }}>
                 <Button onClick={onClose} color="inherit">
-                    Cancel
+                    {t('common.cancel')}
                 </Button>
                 {/* Hide Apply button in lite edition */}
                 {isFullEdition && onApply && (
@@ -164,7 +164,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                         disabled={isApplyLoading}
                         startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
                     >
-                        {isApplyLoading ? 'Applying...' : 'Auto Config'}
+                        {isApplyLoading ? t('common.applying') : t('scenarioPage.autoConfig')}
                     </Button>
                 )}
             </DialogActions>

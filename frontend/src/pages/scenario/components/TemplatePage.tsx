@@ -377,10 +377,10 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         return (
             <UnifiedCard size="full" title={title}>
                 <EmptyState
-                    title={"No Providers Configured"}
-                    description={"Add an API key provider to start routing requests"}
+                    title={t('templatePage.noProviders.title')}
+                    description={t('templatePage.noProviders.description')}
                     primaryAction={{
-                        label: 'Get started',
+                        label: t('templatePage.noProviders.action'),
                         onClick: onAddApiKeyClick || (() => navigate('/onboarding')),
                     }}
                 />
@@ -414,7 +414,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             py: 8,
                             color: 'text.secondary'
                         }}>
-                            No rules yet. Click "New Rule" to add one.
+                            {t('templatePage.noRules')}
                         </Box>
                     ) : (
                         rules.map((rule, index) => {
@@ -462,7 +462,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                 token={token}
                 onCopy={async (text, label) => {
                     await copyToClipboard(text, label);
-                    showNotification(`${label} copied to clipboard!`, 'success');
+                    showNotification(t('templatePage.copiedToClipboard', { label }), 'success');
                 }}
             />
 

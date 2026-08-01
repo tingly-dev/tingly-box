@@ -1,5 +1,6 @@
 import { Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack, Link } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface VSCodeConfigModalProps {
     open: boolean;
@@ -13,6 +14,7 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
     open,
     onClose,
 }) => {
+    const { t } = useTranslation();
     return (
         <Dialog
             open={open}
@@ -31,7 +33,7 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
                 <Typography variant="h6" sx={{
                     fontWeight: 600
                 }}>
-                    Configure VS Code
+                    {t('scenarioPage.vscode.configTitle')}
                 </Typography>
             </DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
@@ -39,8 +41,7 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
                     <Typography variant="body2" sx={{
                         color: "text.secondary"
                     }}>
-                        Install the Tingly Box extension, then follow the setup guide inside VS Code.
-                        The extension handles the required endpoint and API key configuration for you.
+                        {t('scenarioPage.vscode.modalDescription')}
                     </Typography>
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -50,7 +51,7 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
                             variant="contained"
                             sx={{ flex: 1 }}
                         >
-                            Install in VS Code
+                            {t('scenarioPage.vscode.installInVSCode')}
                         </Button>
                         <Button
                             component={Link}
@@ -60,14 +61,14 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
                             variant="outlined"
                             sx={{ flex: 1 }}
                         >
-                            View Marketplace
+                            {t('scenarioPage.vscode.viewMarketplace')}
                         </Button>
                     </Stack>
                 </Stack>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
                 <Button onClick={onClose} variant="contained">
-                    Done
+                    {t('common.done')}
                 </Button>
             </DialogActions>
         </Dialog>
