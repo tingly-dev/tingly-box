@@ -369,7 +369,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             spacing={1.25}
                             onClick={installDone ? () => toggleDoneStep(2) : undefined}
                             sx={[{
-                                alignItems: "center"
+                                alignItems: "center",
+                                flexWrap: 'wrap',
+                                rowGap: 0.5
                             }, installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : false]}>
                             <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
                             <Typography
@@ -385,6 +387,20 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
                                 }}>Installed</Typography>
+                            )}
+                            {/* Step-completing action lives in the row's right action
+                                column, same as steps 1 / 2 / 4. */}
+                            {!installDone && firstIncomplete === 2 && (
+                                <Tooltip title={`Run the install command below, then confirm here once ${agentName} is installed.`}>
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        onClick={(e) => { e.stopPropagation(); markInstallDone(); }}
+                                        sx={{ py: 0.25 }}
+                                    >
+                                        I've installed it
+                                    </Button>
+                                </Tooltip>
                             )}
                             {installDone && (
                                 expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
@@ -454,11 +470,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         )}
                                     </>
                                 )}
-                                <Box>
-                                    <Button size="small" variant="text" onClick={markInstallDone} sx={{ py: 0, textTransform: 'none', color: 'text.secondary' }}>
-                                        I've installed it
-                                    </Button>
-                                </Box>
                             </Stack>
                         </Collapse>
                     </Box>
