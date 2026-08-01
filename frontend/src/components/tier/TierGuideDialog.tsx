@@ -186,6 +186,35 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                         py: { xs: 2, sm: 3 },
                         px: { xs: 2, sm: 3 },
                     }}>
+                        {/* Explanation Text */}
+                        <Box sx={{ mb: 2, p: { xs: 2, sm: 3 }, bgcolor: 'background.default', borderRadius: 1 }}>
+                            <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
+                                {t(currentStep.content, { defaultValue: currentStep.content })}
+                            </Typography>
+
+                            {/* Annotations */}
+                            {currentStep.annotations && currentStep.annotations.length > 0 && (
+                                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                    {currentStep.annotations.map((annotation, idx) => (
+                                        <Paper
+                                            key={idx}
+                                            variant="outlined"
+                                            sx={{
+                                                p: 1.5,
+                                                bgcolor: 'action.hover',
+                                                borderRadius: 1,
+                                                flex: '1 1 45%',
+                                            }}
+                                        >
+                                            <Typography variant="caption" color="primary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                                                {t(annotation.text, { defaultValue: annotation.text })}
+                                            </Typography>
+                                        </Paper>
+                                    ))}
+                                </Box>
+                            )}
+                        </Box>
+
                         {/* Static Graph Diagram */}
                         <Box sx={{
                             bgcolor: 'background.default',
@@ -222,35 +251,6 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                             }}>
                                 💡 {t('rule.tier.guide.hoverHint', { defaultValue: 'Action buttons shown - try hovering over nodes!' })}
                             </Box>
-                        </Box>
-
-                        {/* Explanation Text */}
-                        <Box sx={{ mt: 2, p: { xs: 2, sm: 3 }, bgcolor: 'background.default', borderRadius: 1 }}>
-                            <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
-                                {t(currentStep.content, { defaultValue: currentStep.content })}
-                            </Typography>
-
-                            {/* Annotations */}
-                            {currentStep.annotations && currentStep.annotations.length > 0 && (
-                                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                    {currentStep.annotations.map((annotation, idx) => (
-                                        <Paper
-                                            key={idx}
-                                            variant="outlined"
-                                            sx={{
-                                                p: 1.5,
-                                                bgcolor: 'action.hover',
-                                                borderRadius: 1,
-                                                flex: '1 1 45%',
-                                            }}
-                                        >
-                                            <Typography variant="caption" color="primary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                                                {t(annotation.text, { defaultValue: annotation.text })}
-                                            </Typography>
-                                        </Paper>
-                                    ))}
-                                </Box>
-                            )}
                         </Box>
                     </Box>
                 </Box>
