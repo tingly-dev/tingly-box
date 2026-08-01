@@ -1,0 +1,23 @@
+$ErrorActionPreference = 'Stop'
+$ws = New-Object -ComObject WScript.Shell
+$target = {{.Target}}
+$arguments = {{.Arguments}}
+$workdir = {{.WorkDir}}
+$name = {{.Name}}
+$dests = @()
+{{if .IncludeDesktop}}$dests += [Environment]::GetFolderPath('Desktop')
+{{end -}}
+{{if .IncludeMenu}}$dests += [Environment]::GetFolderPath('Programs')
+{{end -}}
+foreach ($dir in $dests) {
+  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  $lnk = Join-Path $dir ($name + '.lnk')
+  $sc = $ws.CreateShortcut($lnk)
+  $sc.TargetPath = $target
+  $sc.Arguments = $arguments
+  $sc.WorkingDirectory = $workdir
+  $sc.WindowStyle = 7
+  $sc.Description = 'Start Tingly Box and open the web UI'
+  $sc.Save()
+  Write-Output $lnk
+}

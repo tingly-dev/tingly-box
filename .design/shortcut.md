@@ -34,6 +34,10 @@ double-click. Two things create/refresh it:
 internal/shortcut/        # pure domain — no Kong, no CLI imports
     shortcut.go           #   LaunchSpec, Options, ResolveLaunch, Create
     shortcut_test.go
+    templates/            #   the actual script/entry text, as text/template
+        windows_shortcut.ps1.tmpl
+        macos_command.sh.tmpl
+        linux_desktop.desktop.tmpl
 
 internal/command/
     shortcut.go           # Kong shell: ShortcutCmdKong, LaunchSource type,
@@ -48,6 +52,17 @@ script, `.desktop` entry) lives in `internal/shortcut/`. Anything Kong-shaped
 or stdout-shaped lives in `internal/command/`. A future HTTP handler under
 `internal/server/api/` can call `shortcut.ResolveLaunch` + `shortcut.Create`
 directly — no CLI dependency.
+
+The generated file *content* (the actual PowerShell/shell/desktop-entry
+text) lives in `templates/*.tmpl`, `//go:embed`-ed and rendered with
+`text/template`, rather than assembled via `strings.Builder`/`fmt.Sprintf`
+calls in Go. A reviewer (or anyone auditing what this binary writes to a
+user's Desktop/Start Menu) can open one `.tmpl` file and read the exact
+script top to bottom, instead of reconstructing it mentally from a chain of
+`WriteString` calls. Values are still escaped/quoted in Go before being
+handed to the template (`psQuote`, `shJoin`) — `text/template` does no
+shell/PowerShell-aware escaping on its own, it's just the structural
+substitution.
 
 ---
 
@@ -148,43 +163,31 @@ re-running explicitly (e.g. after deleting it, or with
 | macOS    | `.command`    | `~/Desktop`, `~/Applications`                            | Terminal.app (double-click) |
 | Linux    | `.desktop`    | `~/Desktop` (if present), `~/.local/share/applications`  | freedesktop launcher     |
 
-### Windows: hidden launch via a generated .vbs + wscript.exe
+### Windows: PowerShell/COM, TargetPath set directly — no hidden-launch trick
 
 A `.lnk` is a structured shell-link blob, not a symlink. We build it through
-the WScript.Shell COM object inside a PowerShell `-Command` script generated
-by `windowsShortcutScript`. The script resolves `Desktop` and `Programs` via
-`[Environment]::GetFolderPath` (handles **OneDrive redirection**
-automatically — the user's "Desktop" often lives under `…\OneDrive\Desktop`)
-and emits each created `.lnk` path on its own line so the Go side can echo
-them back.
+the WScript.Shell COM object inside a PowerShell `-Command` script rendered
+from `templates/windows_shortcut.ps1.tmpl`. The script resolves `Desktop`
+and `Programs` via `[Environment]::GetFolderPath` (handles **OneDrive
+redirection** automatically — the user's "Desktop" often lives under
+`…\OneDrive\Desktop`) and emits each created `.lnk` path on its own line so
+the Go side can echo them back. `TargetPath`/`Arguments` are set directly to
+the real command (the binary, or `cmd.exe /c npx …`) and `WindowStyle = 7`
+(start minimized) — a documented `IShellLink` property — is the only
+cosmetic mitigation applied.
 
-Pointing the `.lnk`'s `TargetPath` straight at the binary (or at
-`cmd.exe /c npx …`) — the original approach — pops a visible console window
-every time. On some terminal hosts (Windows Terminal set as the default
-console host, with a profile's "close on exit" not set to auto) that window
-doesn't even close itself afterward; it sits there showing "Process exited"
-until the user dismisses it by hand — for a background daemon relaunch, that
-window shouldn't exist at all. So instead of TargetPath-ing the real command
-directly, we generate a small VBScript helper next to the `.lnk`
-(`<name>.vbs`) that does:
-
-```vbscript
-Set sh = CreateObject("WScript.Shell")
-sh.CurrentDirectory = "<workdir>"
-sh.Run "<the real command>", 0, False
-```
-
-`Run(cmd, 0, False)` — window style **0** — is the standard WSH idiom for
-"launch a process with no window at all". The `.lnk` itself then targets
-`wscript.exe //B //Nologo "<name>.vbs"`, with `IconLocation` pointed back at
-the original executable so it still looks like a Tingly Box shortcut rather
-than a generic script icon. Double quotes inside the real command (e.g.
-around a `C:\Program Files\...` path) are doubled (`""`) before being
-embedded in the `.vbs`'s string literal, per VBScript's escaping rule.
-
-This eliminates the lingering-console problem entirely rather than papering
-over one terminal host's default setting — no window ever appears, on any
-terminal host.
+**We deliberately do *not* route the launch through a generated helper
+script run with a hidden window** (e.g. writing a `.vbs` next to the `.lnk`
+and having it call `WScript.Shell.Run(cmd, 0, False)`, or the PowerShell
+equivalent `Start-Process -WindowStyle Hidden`). That shape — a program that
+writes a script to disk and launches it invisibly — is close to a textbook
+dropper pattern, and real antivirus/SmartScreen heuristics flag exactly
+that; VBScript is also being phased out of Windows entirely. Getting
+Tingly Box's installer flagged as malware to avoid a console flash is a bad
+trade. So a `cmd /c`-based npx launch may still pop a visible (now
+minimized) console, and on a terminal host configured to never auto-close,
+it can still linger until the user dismisses it — that's an accepted,
+lesser cost, not something we've fully solved on Windows yet.
 
 ### macOS: `.command`, closing itself on success
 
@@ -317,13 +320,14 @@ lives only as long as the process that was actually launched that way.
 | surface the artifact for next action | last line tells the user "Double-click it to start Tingly Box and open the web UI."   |
 | scope side effects to current surface| writes only under user-owned dirs (`~/Desktop`, `~/.local/share`, `%APPDATA%`); never sudo |
 | diagnostics traverse the real path   | source comes from the actual invocation, not a guess                                  |
-| reduce visual noise                  | Windows never shows a console at all (hidden wscript launch); macOS closes its Terminal window on success, only staying open when there's an error to show |
+| reduce visual noise                  | Windows starts the shortcut minimized; macOS closes its Terminal window on success, only staying open when there's an error to show |
 
-> **Testing note:** the Windows generator (§5) was verified by hand-tracing
-> the PowerShell/VBScript quote-escaping and by unit-testing the generated
-> script's text (`TestWindowsShortcutScriptHiddenLaunch`), not by executing
-> it on real Windows — this dev environment has no Windows host. Worth a
-> smoke test on an actual machine before treating it as fully proven.
+> **Testing note:** none of the platform-specific generators have been
+> executed on their real OS in this dev environment (Linux-only sandbox) —
+> only verified via unit tests against the rendered script/entry text
+> (`internal/shortcut/shortcut_test.go`) plus manual end-to-end runs of the
+> Linux path (the one this sandbox can actually execute). Worth a smoke test
+> on real Windows/macOS machines before treating those two as fully proven.
 
 ---
 
@@ -332,6 +336,7 @@ lives only as long as the process that was actually launched that way.
 | ref                                          | content                                  |
 |----------------------------------------------|------------------------------------------|
 | `internal/shortcut/shortcut.go`              | domain (this package, reusable)          |
+| `internal/shortcut/templates/*.tmpl`         | the actual generated script/entry text   |
 | `internal/shortcut/shortcut_test.go`         | tests against public API                 |
 | `internal/command/shortcut.go`               | Kong shell, `LaunchSource`, `refreshShortcut` |
 | `internal/command/server.go`                 | `start`/`restart` call `refreshShortcut` |

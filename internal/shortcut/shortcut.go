@@ -4,13 +4,36 @@
 package shortcut
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"text/template"
 )
+
+//go:embed templates/*.tmpl
+var templateFS embed.FS
+
+var (
+	windowsShortcutTemplate = template.Must(template.ParseFS(templateFS, "templates/windows_shortcut.ps1.tmpl"))
+	macCommandTemplate      = template.Must(template.ParseFS(templateFS, "templates/macos_command.sh.tmpl"))
+	linuxDesktopTemplate    = template.Must(template.ParseFS(templateFS, "templates/linux_desktop.desktop.tmpl"))
+)
+
+// render executes a parsed template against data and returns the result.
+// Errors here would only come from a template/data mismatch, i.e. a coding
+// mistake caught by the package's own tests — not something callers need to
+// handle at runtime, so we panic like template.Must does for parsing.
+func render(t *template.Template, data any) string {
+	var b strings.Builder
+	if err := t.Execute(&b, data); err != nil {
+		panic(fmt.Sprintf("shortcut: template %s: %v", t.Name(), err))
+	}
+	return b.String()
+}
 
 // Launch sources. They describe how Tingly Box is installed/started and which
 // command a shortcut should run.
@@ -132,58 +155,32 @@ func createWindowsShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 	return created, nil
 }
 
-// windowsShortcutScript builds a PowerShell script that resolves the Desktop
-// and Start Menu Programs folders at runtime (handling OneDrive redirection)
-// and, for each, writes a small hidden-launch .vbs helper plus a .lnk that
-// runs it via wscript.exe.
-//
-// A .lnk pointing straight at cmd.exe/the binary always pops a console
-// window, and on some terminal hosts (Windows Terminal set as default, with
-// "close on exit" not set to auto) it lingers after the command finishes
-// showing "Process exited". WScript.Shell's Run(cmd, 0, False) — window
-// style 0 — is the standard way to launch a process with no window at all,
-// so we route through it instead of launching TargetPath/Arguments directly.
-// It prints each created .lnk path on its own line.
+// windowsShortcutScript renders internal/shortcut/templates/windows_shortcut.ps1.tmpl,
+// a PowerShell script that resolves the Desktop and Start Menu Programs
+// folders at runtime (handling OneDrive redirection) and writes a .lnk via
+// the WScript.Shell COM object. It points TargetPath directly at the real
+// command (the binary, or cmd.exe for the npx case) — deliberately not
+// through a generated script that launches something with a hidden window.
+// That's the standard shape of a malware dropper (write a .vbs, run it via
+// wscript with window style 0) and real antivirus/SmartScreen heuristics
+// flag it; VBScript is also being phased out on Windows. WindowStyle=7
+// (start minimized) is the one mitigation that stays inside IShellLink's own
+// documented, unsuspicious surface — it won't stop `cmd /c` from lingering
+// on a terminal host with "close on exit" set to never, but it keeps the
+// window out of the way while it's up. It prints each created path on its
+// own line.
 func windowsShortcutScript(opts Options, spec LaunchSpec) string {
-	vbsCommand := fmt.Sprintf("\"%s\" %s", spec.WinTarget, spec.WinArgs)
-
-	var b strings.Builder
-	b.WriteString("$ErrorActionPreference = 'Stop'\n")
-	b.WriteString("$ws = New-Object -ComObject WScript.Shell\n")
-	b.WriteString(fmt.Sprintf("$icon = %s\n", psQuote(spec.WinTarget)))
-	b.WriteString(fmt.Sprintf("$workdir = %s\n", psQuote(spec.WorkDir)))
-	b.WriteString(fmt.Sprintf("$name = %s\n", psQuote(opts.Name)))
-	b.WriteString(fmt.Sprintf("$vbsCommand = %s\n", psQuote(vbsCommand)))
-	b.WriteString("$wscript = Join-Path $env:SystemRoot 'System32\\wscript.exe'\n")
-	b.WriteString("$dests = @()\n")
-	if !opts.NoDesktop {
-		b.WriteString("$dests += [Environment]::GetFolderPath('Desktop')\n")
-	}
-	if !opts.NoMenu {
-		b.WriteString("$dests += [Environment]::GetFolderPath('Programs')\n")
-	}
-	b.WriteString("foreach ($dir in $dests) {\n")
-	b.WriteString("  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }\n")
-	b.WriteString("  $vbs = Join-Path $dir ($name + '.vbs')\n")
-	b.WriteString("  $cmdEsc = $vbsCommand.Replace('\"', '\"\"')\n")
-	b.WriteString("  $dirEsc = $workdir.Replace('\"', '\"\"')\n")
-	b.WriteString("  $lines = @(\n")
-	b.WriteString("    'Set sh = CreateObject(\"WScript.Shell\")',\n")
-	b.WriteString("    'sh.CurrentDirectory = \"' + $dirEsc + '\"',\n")
-	b.WriteString("    'sh.Run \"' + $cmdEsc + '\", 0, False'\n")
-	b.WriteString("  )\n")
-	b.WriteString("  Set-Content -Path $vbs -Value $lines -Encoding UTF8\n")
-	b.WriteString("  $lnk = Join-Path $dir ($name + '.lnk')\n")
-	b.WriteString("  $sc = $ws.CreateShortcut($lnk)\n")
-	b.WriteString("  $sc.TargetPath = $wscript\n")
-	b.WriteString("  $sc.Arguments = '//B //Nologo \"' + $vbs + '\"'\n")
-	b.WriteString("  $sc.WorkingDirectory = $workdir\n")
-	b.WriteString("  $sc.IconLocation = $icon + ',0'\n")
-	b.WriteString("  $sc.Description = 'Start Tingly Box and open the web UI'\n")
-	b.WriteString("  $sc.Save()\n")
-	b.WriteString("  Write-Output $lnk\n")
-	b.WriteString("}\n")
-	return b.String()
+	return render(windowsShortcutTemplate, struct {
+		Target, Arguments, WorkDir, Name string
+		IncludeDesktop, IncludeMenu      bool
+	}{
+		Target:         psQuote(spec.WinTarget),
+		Arguments:      psQuote(spec.WinArgs),
+		WorkDir:        psQuote(spec.WorkDir),
+		Name:           psQuote(opts.Name),
+		IncludeDesktop: !opts.NoDesktop,
+		IncludeMenu:    !opts.NoMenu,
+	})
 }
 
 // psQuote wraps a string as a PowerShell single-quoted literal, escaping single
@@ -221,28 +218,16 @@ func createMacShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 	return created, nil
 }
 
-// commandScriptContent builds a macOS .command shell script that launches the
-// binary. Double-clicking a .command file runs it in Terminal.app, which by
-// default leaves the window open showing "[Process completed]" after the
-// script exits — the user has to close it by hand every time. We close it
-// for them on success (identifying "this" window by its tty so we don't
-// touch any other open Terminal window); on failure the window stays open
-// so the error is visible instead of vanishing.
+// commandScriptContent renders internal/shortcut/templates/macos_command.sh.tmpl,
+// a macOS .command shell script that launches the binary. Double-clicking a
+// .command file runs it in Terminal.app, which by default leaves the window
+// open showing "[Process completed]" after the script exits — the user has
+// to close it by hand every time. We close it for them on success
+// (identifying "this" window by its tty so we don't touch any other open
+// Terminal window); on failure the window stays open so the error is
+// visible instead of vanishing.
 func commandScriptContent(argv []string) string {
-	return fmt.Sprintf(`#!/bin/sh
-%s
-status=$?
-if [ "$status" -eq 0 ]; then
-  tty_path=$(tty)
-  osascript -e "tell application \"Terminal\" to close (every window whose tty is \"$tty_path\")" >/dev/null 2>&1 &
-  exit 0
-fi
-echo
-echo "tingly-box exited with status $status."
-printf 'Press Enter to close this window...'
-read -r _
-exit "$status"
-`, shJoin(argv))
+	return render(macCommandTemplate, struct{ Command string }{Command: shJoin(argv)})
 }
 
 // ---------------- Linux ----------------
@@ -277,16 +262,10 @@ func createLinuxShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 	return created, nil
 }
 
-// desktopEntryContent builds a freedesktop .desktop entry.
+// desktopEntryContent renders internal/shortcut/templates/linux_desktop.desktop.tmpl,
+// a freedesktop .desktop entry.
 func desktopEntryContent(name string, argv []string) string {
-	return fmt.Sprintf(`[Desktop Entry]
-Type=Application
-Name=%s
-Comment=Start Tingly Box and open the web UI
-Exec=%s
-Terminal=false
-Categories=Utility;Network;
-`, name, shJoin(argv))
+	return render(linuxDesktopTemplate, struct{ Name, Exec string }{Name: name, Exec: shJoin(argv)})
 }
 
 func desktopFileName(name string) string {

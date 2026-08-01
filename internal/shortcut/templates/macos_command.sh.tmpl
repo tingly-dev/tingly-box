@@ -1,0 +1,13 @@
+#!/bin/sh
+{{.Command}}
+status=$?
+if [ "$status" -eq 0 ]; then
+  tty_path=$(tty)
+  osascript -e "tell application \"Terminal\" to close (every window whose tty is \"$tty_path\")" >/dev/null 2>&1 &
+  exit 0
+fi
+echo
+echo "tingly-box exited with status $status."
+printf 'Press Enter to close this window...'
+read -r _
+exit "$status"

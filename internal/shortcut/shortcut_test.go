@@ -102,7 +102,7 @@ func TestDesktopFileName(t *testing.T) {
 	}
 }
 
-func TestWindowsShortcutScriptHiddenLaunch(t *testing.T) {
+func TestWindowsShortcutScript(t *testing.T) {
 	spec := LaunchSpec{
 		WinTarget: `C:\Program Files\tingly-box\tingly-box.exe`,
 		WinArgs:   "restart --daemon",
@@ -110,19 +110,45 @@ func TestWindowsShortcutScriptHiddenLaunch(t *testing.T) {
 	}
 	script := windowsShortcutScript(Options{Name: "Tingly Box"}, spec)
 
-	// The .lnk must target wscript.exe (hidden launch), not the binary/cmd
-	// directly, so no console window ever appears.
-	if !strings.Contains(script, `$sc.TargetPath = $wscript`) {
-		t.Errorf("shortcut should target wscript.exe for a hidden launch:\n%s", script)
+	// The .lnk must target the real command directly — no generated helper
+	// script launched with a hidden window. That shape (write a script, run
+	// it via a host with window style 0) is a classic dropper pattern and
+	// trips antivirus/SmartScreen heuristics; it's also written in VBScript,
+	// which Windows is phasing out. Keep it simple and inspectable.
+	if !strings.Contains(script, `$sc.TargetPath = $target`) {
+		t.Errorf("shortcut should target the real command directly:\n%s", script)
 	}
-	if !strings.Contains(script, `'sh.Run "' + $cmdEsc + '", 0, False'`) {
-		t.Errorf("vbs helper should call WshShell.Run with window style 0 (hidden):\n%s", script)
+	if strings.Contains(script, "wscript") || strings.Contains(script, ".vbs") {
+		t.Errorf("shortcut should not route through a generated hidden-launch script:\n%s", script)
 	}
-	if !strings.Contains(script, `//B //Nologo`) {
-		t.Errorf("wscript should be invoked in batch/no-logo mode:\n%s", script)
+	if !strings.Contains(script, "$target = 'C:\\Program Files\\tingly-box\\tingly-box.exe'") {
+		t.Errorf("missing quoted target:\n%s", script)
 	}
-	if !strings.Contains(script, `$sc.IconLocation = $icon + ',0'`) {
-		t.Errorf("shortcut should keep the original executable's icon:\n%s", script)
+	if !strings.Contains(script, "$sc.WindowStyle = 7") {
+		t.Errorf("shortcut should start minimized (documented IShellLink property, not a hidden launch):\n%s", script)
+	}
+	if !strings.Contains(script, "[Environment]::GetFolderPath('Desktop')") {
+		t.Errorf("missing Desktop destination:\n%s", script)
+	}
+	if !strings.Contains(script, "[Environment]::GetFolderPath('Programs')") {
+		t.Errorf("missing Programs destination:\n%s", script)
+	}
+}
+
+func TestWindowsShortcutScriptRespectsNoDesktopNoMenu(t *testing.T) {
+	spec := LaunchSpec{WinTarget: `C:\tingly-box.exe`, WinArgs: "restart --daemon", WorkDir: `C:\`}
+
+	noDesktop := windowsShortcutScript(Options{Name: "Tingly Box", NoDesktop: true}, spec)
+	if strings.Contains(noDesktop, "'Desktop'") {
+		t.Errorf("--no-desktop should drop the Desktop destination:\n%s", noDesktop)
+	}
+	if !strings.Contains(noDesktop, "'Programs'") {
+		t.Errorf("--no-desktop should still include Programs:\n%s", noDesktop)
+	}
+
+	noMenu := windowsShortcutScript(Options{Name: "Tingly Box", NoMenu: true}, spec)
+	if strings.Contains(noMenu, "'Programs'") {
+		t.Errorf("--no-menu should drop the Programs destination:\n%s", noMenu)
 	}
 }
 
