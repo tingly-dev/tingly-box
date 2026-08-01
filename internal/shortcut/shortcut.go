@@ -20,12 +20,22 @@ const (
 	SourceNpxBundle = "npx-bundle"
 )
 
-// npxPackageForSource returns the npm package an npx-based launch should run.
-func npxPackageForSource(source string) string {
+// npxPackageForSource returns the npm package + version spec an npx-based
+// launch should run. It pins to the currently-running version so the
+// shortcut relaunches the exact build the user is already on — not whatever
+// happens to be newest on the registry at double-click time — and so it
+// works offline once npm has that version cached. version is empty (or the
+// "dev"/"unknown" placeholders used by unversioned builds) falls back to
+// "@latest".
+func npxPackageForSource(source, version string) string {
+	pkg := "tingly-box"
 	if source == SourceNpxBundle {
-		return "tingly-box-bundle@latest"
+		pkg = "tingly-box-bundle"
 	}
-	return "tingly-box@latest"
+	if version == "" || version == "dev" || version == "unknown" {
+		return pkg + "@latest"
+	}
+	return pkg + "@" + version
 }
 
 // LaunchArgs are the CLI args the shortcut runs: restart the daemon and
@@ -55,13 +65,14 @@ type Options struct {
 // through npx, then builds the platform-specific launch vectors. source is how
 // the *current* process was invoked (SourceNpx / SourceNpxBundle / anything
 // else meaning a plain binary) — the caller always knows this first-hand, so
-// there is no detection or persistence to do here.
-func ResolveLaunch(exePath, source string) LaunchSpec {
+// there is no detection or persistence to do here. version pins an npx-based
+// shortcut to the currently-running release (see npxPackageForSource).
+func ResolveLaunch(exePath, source, version string) LaunchSpec {
 	args := LaunchArgs()
 
 	if source == SourceNpx || source == SourceNpxBundle {
-		// e.g. "npx -y tingly-box@latest restart --daemon"
-		npxArgv := append([]string{"npx", "-y", npxPackageForSource(source)}, args...)
+		// e.g. "npx -y tingly-box@1.4.2 restart --daemon"
+		npxArgv := append([]string{"npx", "-y", npxPackageForSource(source, version)}, args...)
 		cmdStr := strings.Join(npxArgv, " ")
 		home, _ := os.UserHomeDir()
 
@@ -121,18 +132,29 @@ func createWindowsShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 	return created, nil
 }
 
-// windowsShortcutScript builds a PowerShell script that resolves the Desktop and
-// Start Menu Programs folders at runtime (handling OneDrive redirection) and
-// writes a .lnk via the WScript.Shell COM object. It prints each created path on
-// its own line.
+// windowsShortcutScript builds a PowerShell script that resolves the Desktop
+// and Start Menu Programs folders at runtime (handling OneDrive redirection)
+// and, for each, writes a small hidden-launch .vbs helper plus a .lnk that
+// runs it via wscript.exe.
+//
+// A .lnk pointing straight at cmd.exe/the binary always pops a console
+// window, and on some terminal hosts (Windows Terminal set as default, with
+// "close on exit" not set to auto) it lingers after the command finishes
+// showing "Process exited". WScript.Shell's Run(cmd, 0, False) — window
+// style 0 — is the standard way to launch a process with no window at all,
+// so we route through it instead of launching TargetPath/Arguments directly.
+// It prints each created .lnk path on its own line.
 func windowsShortcutScript(opts Options, spec LaunchSpec) string {
+	vbsCommand := fmt.Sprintf("\"%s\" %s", spec.WinTarget, spec.WinArgs)
+
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
 	b.WriteString("$ws = New-Object -ComObject WScript.Shell\n")
-	b.WriteString(fmt.Sprintf("$target = %s\n", psQuote(spec.WinTarget)))
-	b.WriteString(fmt.Sprintf("$arguments = %s\n", psQuote(spec.WinArgs)))
+	b.WriteString(fmt.Sprintf("$icon = %s\n", psQuote(spec.WinTarget)))
 	b.WriteString(fmt.Sprintf("$workdir = %s\n", psQuote(spec.WorkDir)))
 	b.WriteString(fmt.Sprintf("$name = %s\n", psQuote(opts.Name)))
+	b.WriteString(fmt.Sprintf("$vbsCommand = %s\n", psQuote(vbsCommand)))
+	b.WriteString("$wscript = Join-Path $env:SystemRoot 'System32\\wscript.exe'\n")
 	b.WriteString("$dests = @()\n")
 	if !opts.NoDesktop {
 		b.WriteString("$dests += [Environment]::GetFolderPath('Desktop')\n")
@@ -142,11 +164,21 @@ func windowsShortcutScript(opts Options, spec LaunchSpec) string {
 	}
 	b.WriteString("foreach ($dir in $dests) {\n")
 	b.WriteString("  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }\n")
+	b.WriteString("  $vbs = Join-Path $dir ($name + '.vbs')\n")
+	b.WriteString("  $cmdEsc = $vbsCommand.Replace('\"', '\"\"')\n")
+	b.WriteString("  $dirEsc = $workdir.Replace('\"', '\"\"')\n")
+	b.WriteString("  $lines = @(\n")
+	b.WriteString("    'Set sh = CreateObject(\"WScript.Shell\")',\n")
+	b.WriteString("    'sh.CurrentDirectory = \"' + $dirEsc + '\"',\n")
+	b.WriteString("    'sh.Run \"' + $cmdEsc + '\", 0, False'\n")
+	b.WriteString("  )\n")
+	b.WriteString("  Set-Content -Path $vbs -Value $lines -Encoding UTF8\n")
 	b.WriteString("  $lnk = Join-Path $dir ($name + '.lnk')\n")
 	b.WriteString("  $sc = $ws.CreateShortcut($lnk)\n")
-	b.WriteString("  $sc.TargetPath = $target\n")
-	b.WriteString("  $sc.Arguments = $arguments\n")
+	b.WriteString("  $sc.TargetPath = $wscript\n")
+	b.WriteString("  $sc.Arguments = '//B //Nologo \"' + $vbs + '\"'\n")
 	b.WriteString("  $sc.WorkingDirectory = $workdir\n")
+	b.WriteString("  $sc.IconLocation = $icon + ',0'\n")
 	b.WriteString("  $sc.Description = 'Start Tingly Box and open the web UI'\n")
 	b.WriteString("  $sc.Save()\n")
 	b.WriteString("  Write-Output $lnk\n")
@@ -190,9 +222,27 @@ func createMacShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 }
 
 // commandScriptContent builds a macOS .command shell script that launches the
-// binary. Double-clicking a .command file runs it in Terminal.
+// binary. Double-clicking a .command file runs it in Terminal.app, which by
+// default leaves the window open showing "[Process completed]" after the
+// script exits — the user has to close it by hand every time. We close it
+// for them on success (identifying "this" window by its tty so we don't
+// touch any other open Terminal window); on failure the window stays open
+// so the error is visible instead of vanishing.
 func commandScriptContent(argv []string) string {
-	return fmt.Sprintf("#!/bin/sh\nexec %s\n", shJoin(argv))
+	return fmt.Sprintf(`#!/bin/sh
+%s
+status=$?
+if [ "$status" -eq 0 ]; then
+  tty_path=$(tty)
+  osascript -e "tell application \"Terminal\" to close (every window whose tty is \"$tty_path\")" >/dev/null 2>&1 &
+  exit 0
+fi
+echo
+echo "tingly-box exited with status $status."
+printf 'Press Enter to close this window...'
+read -r _
+exit "$status"
+`, shJoin(argv))
 }
 
 // ---------------- Linux ----------------

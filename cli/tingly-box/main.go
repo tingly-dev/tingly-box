@@ -30,7 +30,7 @@ type CLI struct {
 	ConfigDir string `kong:"flag,name='config-dir',help='Configuration directory'"`
 	Verbose   bool   `kong:"flag,name='verbose',short='v',help='Verbose output'"`
 	PProf     bool   `kong:"flag,name='pprof',help='Run with pprof in :6060'"`
-	Source    string `kong:"flag,name='source',help='How tingly-box was launched (binary, npx, npx-bundle); recorded so shortcuts can match the install method'"`
+	Source    string `kong:"flag,name='source',help='How tingly-box was launched (binary, npx, npx-bundle); used to match the shortcut it creates/refreshes to the install method'"`
 
 	// Server commands
 	Start   command.StartCmdKong   `kong:"cmd,help='Start the server'"`

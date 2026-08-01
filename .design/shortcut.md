@@ -21,9 +21,10 @@ So: a shortcut on the desktop / start menu that launches Tingly Box with a
 double-click. Two things create/refresh it:
 
 - `tingly-box shortcut` — explicit, user-triggered
-- `tingly-box start` / `restart` — silently refreshes it every time the
-  server (re)starts, so the shortcut is always ready for *next* time without
-  the user having to think about it
+- `tingly-box start` / `restart --shortcut` (**default on**) — refreshes it
+  every time the server (re)starts, so the shortcut is ready for *next* time
+  without the user having to think about it; `--no-shortcut` opts out (e.g.
+  headless/CI/Docker runs where writing a desktop file makes no sense)
 
 ---
 
@@ -58,8 +59,25 @@ the **same** path the user is already using:
 | install path                  | how the shortcut launches it                          |
 |-------------------------------|---------------------------------------------------------|
 | native binary (Homebrew, etc.)| `<exePath> restart --daemon`                             |
-| `npx tingly-box@latest`       | `sh -lc 'npx -y tingly-box@latest restart --daemon'`     |
-| `npx tingly-box-bundle@latest`| `sh -lc 'npx -y tingly-box-bundle@latest restart --daemon'` |
+| `npx tingly-box@latest`       | `sh -lc 'npx -y tingly-box@1.4.2 restart --daemon'`      |
+| `npx tingly-box-bundle@latest`| `sh -lc 'npx -y tingly-box-bundle@1.4.2 restart --daemon'` |
+
+The npx package spec is **pinned to the currently-running version**
+(`internal/command.BuildVersion`, threaded through as `ResolveLaunch`'s
+`version` param), not `@latest`. Two reasons:
+
+- a shortcut that silently pulls whatever is newest on the registry every
+  time it's double-clicked is a surprise auto-upgrade the user didn't ask
+  for — the whole point of the shortcut is "start the thing I already have
+  working again"
+- it works **offline** once npm has that exact version cached; `@latest`
+  requires hitting the registry to resolve the tag every single launch
+
+The shortcut still tracks upgrades: since `start`/`restart` refresh it every
+launch (§4), the moment the user runs a newer version once (any way), the
+next refresh repins the shortcut to that version. `version == ""` (or the
+`"dev"`/`"unknown"` placeholders unversioned/dev builds report) falls back to
+`@latest`, since there's nothing meaningful to pin to.
 
 ### How the source is known — no detection, no persistence
 
@@ -83,7 +101,7 @@ So the CLI just uses the `--source` flag **for the invocation it's already
 handling** — no config field, no fallback chain, no path sniffing:
 
 ```go
-func ResolveLaunch(exePath, source string) LaunchSpec
+func ResolveLaunch(exePath, source, version string) LaunchSpec
 ```
 
 `source` is `""` (plain binary), `"npx"`, or `"npx-bundle"`. There is nothing
@@ -101,19 +119,24 @@ which subcommand is being run. It is bound into `ctx.Run()` as a typed
 
 ## 4. Refresh on every start/restart
 
-`internal/command/shortcut.go` exposes `refreshShortcut(source
-LaunchSource)`, called at the top of `StartCmdKong.Run` and
-`RestartCmdKong.Run` (before the daemon fork, so it always sees the original
-`--source`, not the re-exec'd child's trimmed args). It silently
-(re)writes the desktop + menu shortcut with the default name, matching the
-current launch method. Failures are logged at debug level and never block
-startup — a shortcut write is a nice-to-have, not a precondition for serving
-traffic.
+`StartCmdKong` (and `RestartCmdKong`, which embeds it) has an `EnableShortcut
+bool` field — `--shortcut`, **default true** — following the same
+opt-out-not-opt-in convention as `--ui`/`--browser`/`--adapter` on the same
+struct. When set, `internal/command/shortcut.go`'s `refreshShortcut(source
+LaunchSource)` runs at the top of `Run()`, before the daemon fork (so it
+always sees the original `--source`, not the re-exec'd child's trimmed
+args). It silently (re)writes the desktop + menu shortcut with the default
+name, matching the current launch method and version. Failures are logged at
+debug level and never block startup — a shortcut write is a nice-to-have,
+not a precondition for serving traffic.
 
 This means: the very first time a user starts Tingly Box (any of the three
 ways), a shortcut is already waiting for them by the time they look for one.
-`tingly-box shortcut` still exists for re-running explicitly (e.g. after
-deleting it, or with `--no-desktop`/`--no-menu`).
+`--no-shortcut` opts out for non-interactive contexts (CI, Docker, headless
+servers) where writing a desktop file is meaningless or could hit a
+read-only/nonexistent home directory. `tingly-box shortcut` still exists for
+re-running explicitly (e.g. after deleting it, or with
+`--no-desktop`/`--no-menu`).
 
 ---
 
@@ -125,33 +148,81 @@ deleting it, or with `--no-desktop`/`--no-menu`).
 | macOS    | `.command`    | `~/Desktop`, `~/Applications`                            | Terminal.app (double-click) |
 | Linux    | `.desktop`    | `~/Desktop` (if present), `~/.local/share/applications`  | freedesktop launcher     |
 
-### Windows: PowerShell instead of CreateSymbolicLink
+### Windows: hidden launch via a generated .vbs + wscript.exe
 
 A `.lnk` is a structured shell-link blob, not a symlink. We build it through
 the WScript.Shell COM object inside a PowerShell `-Command` script generated
-by `windowsShortcutScript`. The script:
+by `windowsShortcutScript`. The script resolves `Desktop` and `Programs` via
+`[Environment]::GetFolderPath` (handles **OneDrive redirection**
+automatically — the user's "Desktop" often lives under `…\OneDrive\Desktop`)
+and emits each created `.lnk` path on its own line so the Go side can echo
+them back.
 
-- resolves `Desktop` and `Programs` via `[Environment]::GetFolderPath`
-  (handles **OneDrive redirection** automatically — the user's "Desktop"
-  often lives under `…\OneDrive\Desktop`)
-- emits each created path on its own line so the Go side can echo them back
+Pointing the `.lnk`'s `TargetPath` straight at the binary (or at
+`cmd.exe /c npx …`) — the original approach — pops a visible console window
+every time. On some terminal hosts (Windows Terminal set as the default
+console host, with a profile's "close on exit" not set to auto) that window
+doesn't even close itself afterward; it sits there showing "Process exited"
+until the user dismisses it by hand — for a background daemon relaunch, that
+window shouldn't exist at all. So instead of TargetPath-ing the real command
+directly, we generate a small VBScript helper next to the `.lnk`
+(`<name>.vbs`) that does:
 
-For npx sources the `.lnk` runs `cmd.exe /c npx -y …` rather than the
-extracted binary directly, so updates picked up by `npx -y …@latest` apply
-immediately.
+```vbscript
+Set sh = CreateObject("WScript.Shell")
+sh.CurrentDirectory = "<workdir>"
+sh.Run "<the real command>", 0, False
+```
 
-### macOS: `.command` over `.app`
+`Run(cmd, 0, False)` — window style **0** — is the standard WSH idiom for
+"launch a process with no window at all". The `.lnk` itself then targets
+`wscript.exe //B //Nologo "<name>.vbs"`, with `IconLocation` pointed back at
+the original executable so it still looks like a Tingly Box shortcut rather
+than a generic script icon. Double quotes inside the real command (e.g.
+around a `C:\Program Files\...` path) are doubled (`""`) before being
+embedded in the `.vbs`'s string literal, per VBScript's escaping rule.
+
+This eliminates the lingering-console problem entirely rather than papering
+over one terminal host's default setting — no window ever appears, on any
+terminal host.
+
+### macOS: `.command`, closing itself on success
 
 A `.command` is just a shell script with `chmod +x` and the right extension.
-Double-clicking opens Terminal and runs it. We could ship a `.app` bundle
-instead, but:
+Double-clicking opens Terminal.app and runs it. We could ship a `.app`
+bundle instead (sidestepping Terminal entirely, the way the Windows fix
+above sidesteps its console), but:
 
 - `.app` requires an `Info.plist`, code-signing for Gatekeeper, and a custom
   icon to look passable
-- `.command` works without any of that, and the user already accepts a
-  terminal window briefly when installing dev tools
+- `.command` works without any of that
 
-So `.command` wins on UX-vs-cost.
+So `.command` still wins on UX-vs-cost — but Terminal.app's default behavior
+is to leave the window open after the script exits, showing
+`[Process completed]`, requiring a manual close every single time. The
+generated script now closes that window itself **only on success**:
+
+```sh
+#!/bin/sh
+'/path/to/tingly-box' 'restart' '--daemon'
+status=$?
+if [ "$status" -eq 0 ]; then
+  tty_path=$(tty)
+  osascript -e "tell application \"Terminal\" to close (every window whose tty is \"$tty_path\")" >/dev/null 2>&1 &
+  exit 0
+fi
+echo
+echo "tingly-box exited with status $status."
+printf 'Press Enter to close this window...'
+read -r _
+exit "$status"
+```
+
+It targets the window by **its own tty** (`$(tty)`), so it never touches any
+other Terminal window the user has open. On failure the window stays open
+with the error visible and a "press Enter" prompt — auto-closing
+unconditionally would hide exactly the information the user needs when
+something goes wrong (port in use, permissions, etc.).
 
 ### Linux: `.desktop` with quoted `Exec`
 
@@ -165,7 +236,7 @@ detaches itself; no need to flash a terminal window.
 Both macOS and Linux non-binary shortcuts run
 
 ```sh
-sh -lc 'npx -y tingly-box@latest restart --daemon'
+sh -lc 'npx -y tingly-box@1.4.2 restart --daemon'
 ```
 
 A login-shell wrapper is required because GUI-launched processes inherit a
@@ -198,7 +269,7 @@ type Options struct {
     NoMenu    bool
 }
 
-func ResolveLaunch(exePath, source string) LaunchSpec
+func ResolveLaunch(exePath, source, version string) LaunchSpec
 func Create(opts Options, spec LaunchSpec) ([]string, error)
 ```
 
@@ -223,7 +294,8 @@ func (h *ShortcutAPI) Create(c *gin.Context) {
     _ = c.BindJSON(&req)
 
     exePath, _ := os.Executable()
-    spec := shortcut.ResolveLaunch(exePath, h.launchSource) // set once at boot
+    // both set once at boot from how this process itself was invoked
+    spec := shortcut.ResolveLaunch(exePath, h.launchSource, h.version)
     created, err := shortcut.Create(shortcut.Options{
         Name: req.Name, NoDesktop: req.NoDesktop, NoMenu: req.NoMenu,
     }, spec)
@@ -240,11 +312,18 @@ lives only as long as the process that was actually launched that way.
 
 | principle                            | how this feature satisfies it                                                       |
 |--------------------------------------|--------------------------------------------------------------------------------------|
-| smart defaults over toggles          | shortcut refreshes automatically on start/restart; `--no-desktop`/`--no-menu` are opt-out on the explicit command |
-| show concrete values not aliases     | success output prints the **real paths** written, not "Created 2 shortcuts"           |
+| smart defaults over toggles          | `--shortcut` defaults on for start/restart (opt-out, `--no-shortcut`); `--no-desktop`/`--no-menu` are opt-out on the explicit command |
+| show concrete values not aliases     | success output prints the **real paths** written, not "Created 2 shortcuts"; npx shortcuts pin a real version number, not the `latest` alias |
 | surface the artifact for next action | last line tells the user "Double-click it to start Tingly Box and open the web UI."   |
 | scope side effects to current surface| writes only under user-owned dirs (`~/Desktop`, `~/.local/share`, `%APPDATA%`); never sudo |
 | diagnostics traverse the real path   | source comes from the actual invocation, not a guess                                  |
+| reduce visual noise                  | Windows never shows a console at all (hidden wscript launch); macOS closes its Terminal window on success, only staying open when there's an error to show |
+
+> **Testing note:** the Windows generator (§5) was verified by hand-tracing
+> the PowerShell/VBScript quote-escaping and by unit-testing the generated
+> script's text (`TestWindowsShortcutScriptHiddenLaunch`), not by executing
+> it on real Windows — this dev environment has no Windows host. Worth a
+> smoke test on an actual machine before treating it as fully proven.
 
 ---
 

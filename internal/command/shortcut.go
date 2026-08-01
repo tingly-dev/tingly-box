@@ -30,7 +30,7 @@ func refreshShortcut(source LaunchSource) {
 		exePath = resolved
 	}
 
-	spec := shortcut.ResolveLaunch(exePath, string(source))
+	spec := shortcut.ResolveLaunch(exePath, string(source), BuildVersion)
 	if _, err := shortcut.Create(shortcut.Options{Name: "Tingly Box"}, spec); err != nil {
 		logrus.WithError(err).Debug("failed to refresh shortcut")
 	}
@@ -55,7 +55,7 @@ func (s *ShortcutCmdKong) Run(source LaunchSource) error {
 		exePath = resolved
 	}
 
-	spec := shortcut.ResolveLaunch(exePath, string(source))
+	spec := shortcut.ResolveLaunch(exePath, string(source), BuildVersion)
 	created, err := shortcut.Create(shortcut.Options{
 		Name:      s.Name,
 		NoDesktop: s.NoDesktop,
