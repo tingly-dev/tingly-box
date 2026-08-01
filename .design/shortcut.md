@@ -1,7 +1,7 @@
 # Desktop Shortcut: Design and Decisions
 
-> Audience: contributors touching the `tingly-box shortcut` command, the npx
-> wrappers, or the upcoming HTTP "set up shortcut" handler.
+> Audience: contributors touching the `tingly-box shortcut` command, `start`/
+> `restart`, the npx wrappers, or a future HTTP "set up shortcut" handler.
 
 ---
 
@@ -17,8 +17,13 @@ restart --daemon` in a terminal" — which fails the UX bar set by
 - "remembering and typing the right command" is exactly the kind of cognitive
   load the product is supposed to remove
 
-The `shortcut` subcommand exists so that a single `tingly-box shortcut`
-invocation drops a double-clickable launcher on the desktop / start menu.
+So: a shortcut on the desktop / start menu that launches Tingly Box with a
+double-click. Two things create/refresh it:
+
+- `tingly-box shortcut` — explicit, user-triggered
+- `tingly-box start` / `restart` — silently refreshes it every time the
+  server (re)starts, so the shortcut is always ready for *next* time without
+  the user having to think about it
 
 ---
 
@@ -26,89 +31,47 @@ invocation drops a double-clickable launcher on the desktop / start menu.
 
 ```
 internal/shortcut/        # pure domain — no Kong, no CLI imports
-    shortcut.go           #   LaunchSpec, Options, ResolveLaunch, Create,
-                          #   IsKnownSource, IsNpxCachedBinary, LaunchArgs
+    shortcut.go           #   LaunchSpec, Options, ResolveLaunch, Create
     shortcut_test.go
 
 internal/command/
-    shortcut.go           # Kong shell:
-                          #   ShortcutCmdKong (flags), Run(), PersistLaunchSource
+    shortcut.go           # Kong shell: ShortcutCmdKong, LaunchSource type,
+                          # refreshShortcut() (called from start/restart)
 
-cli/tingly-box/main.go    # wires the global --source flag + subcommand
+cli/tingly-box/main.go    # wires the global --source flag, binds LaunchSource
 build/npx/*/bin.js        # injects --source=npx / --source=npx-bundle
 ```
 
 **Rule:** anything platform-specific (PowerShell COM script, `.command`
-script, `.desktop` entry, npx cache detection) lives in `internal/shortcut/`.
-Anything Kong-shaped or stdout-shaped lives in `internal/command/`. A
-future HTTP handler under `internal/server/api/` can call
-`shortcut.ResolveLaunch` + `shortcut.Create` directly — no CLI dependency.
-
-Why split: keeping the platform writers behind a Kong struct (the previous
-shape) would have forced the API handler to instantiate Kong types and
-re-parse `--target=auto`. The domain types (`LaunchSpec`, `Options`) are the
-real contract; flags and JSON are two surfaces on top of them.
+script, `.desktop` entry) lives in `internal/shortcut/`. Anything Kong-shaped
+or stdout-shaped lives in `internal/command/`. A future HTTP handler under
+`internal/server/api/` can call `shortcut.ResolveLaunch` + `shortcut.Create`
+directly — no CLI dependency.
 
 ---
 
-## 3. Three install shapes, one shortcut command
+## 3. Three install shapes, one launch source
 
 Tingly Box ships through three install paths, and the shortcut has to launch
-the **same** path the user is already using — otherwise the shortcut updates
-through a different channel than the rest of the user's invocations:
+the **same** path the user is already using:
 
-| install path                  | how shortcut launches it                          |
-|-------------------------------|---------------------------------------------------|
-| native binary (Homebrew, etc.)| `<exePath> restart --daemon`                       |
-| `npx tingly-box@latest`       | `sh -lc 'npx -y tingly-box@latest restart --daemon'` |
+| install path                  | how the shortcut launches it                          |
+|-------------------------------|---------------------------------------------------------|
+| native binary (Homebrew, etc.)| `<exePath> restart --daemon`                             |
+| `npx tingly-box@latest`       | `sh -lc 'npx -y tingly-box@latest restart --daemon'`     |
 | `npx tingly-box-bundle@latest`| `sh -lc 'npx -y tingly-box-bundle@latest restart --daemon'` |
 
-This is exposed via `--target`:
+### How the source is known — no detection, no persistence
 
-```
-tingly-box shortcut                 # auto-detect (recommended)
-tingly-box shortcut --target=binary
-tingly-box shortcut --target=npx
-tingly-box shortcut --target=npx-bundle
-```
+Earlier revisions of this feature tried to have `tingly-box shortcut` guess
+its install method after the fact: a `--target=auto` flag that fell back to
+a **recorded** `launch_source` in `config.json`, which itself fell back to
+sniffing whether the executable path lived under the npx cache directory.
 
-### Why a single `--target` flag (not a mode picker)
-
-UX principle: **eliminate mode pickers when one default is right for 95% of
-users.** `auto` is the default and resolves correctly without user input in
-the common case. Users who have a strong opinion (e.g. installed both
-ways and want the npx variant pinned) can still set the value explicitly.
-
-### Auto resolution
-
-`shortcut.ResolveLaunch(exePath, target, persistedSource)` decides the launch
-shape with this precedence:
-
-1. If `target` is an explicit known source → use it.
-2. Else if the config has a `launch_source` recorded → use that.
-3. Else if `exePath` lives under the npx cache root → assume `npx`.
-4. Else → `binary`.
-
-(2) is the interesting one. See §4.
-
----
-
-## 4. Recording the launch source
-
-The `auto` resolver needs to know how the **current** process was started,
-because by the time the user runs `tingly-box shortcut` we cannot
-distinguish:
-
-- "Homebrew binary on PATH" — should drop a binary shortcut
-- "`npx tingly-box@latest shortcut`" — should drop an npx shortcut
-- "`npx tingly-box-bundle@latest shortcut`" — should drop an npx-bundle shortcut
-
-`os.Executable()` returns the resolved path on disk in all three cases, and
-under npx that path can look indistinguishable from a regular install once
-the binary is extracted. Path-sniffing alone is unreliable (cache locations
-move; symlinks lie).
-
-**Fix: the npx wrappers tell us.**
+That machinery only exists to answer "how was *this* process launched"
+*after* the fact, in a *different* invocation than the one that actually
+knows. But the npx wrapper already knows for certain, on the **very same
+invocation** that runs `shortcut`/`start`/`restart`:
 
 ```js
 // build/npx/tingly-box/bin.js
@@ -116,28 +79,41 @@ const SOURCE_ARGS = ["--source=npx"];
 spawn(binary, [...SOURCE_ARGS, ...process.argv.slice(2)], …);
 ```
 
-The Go binary treats `--source` as a **global flag** (declared on the root
-Kong struct, not on a subcommand) so every invocation through npx is
-tagged. On startup, `command.PersistLaunchSource` writes the value into
-`config.json` if it's known and different from the recorded value.
+So the CLI just uses the `--source` flag **for the invocation it's already
+handling** — no config field, no fallback chain, no path sniffing:
 
-Then `shortcut --target=auto` reads it back.
+```go
+func ResolveLaunch(exePath, source string) LaunchSpec
+```
 
-### Why `--source` is global, not per-subcommand
+`source` is `""` (plain binary), `"npx"`, or `"npx-bundle"`. There is nothing
+to persist and nothing to detect: whoever is generating or refreshing the
+shortcut right now is, by construction, the process that was launched the
+way the shortcut should launch again.
 
-Earlier the flag lived on `start` only. That broke `npx tingly-box-bundle
-restart` and any other subcommand the npx wrapper might forward in the
-future. Promoting it to the root means **every** invocation through the npx
-wrapper, regardless of subcommand, gets recorded. The Kong-level cost is
-zero (the flag is a single string on the root struct).
+`--source` stays a **global** Kong flag (not per-subcommand) purely so the
+npx wrapper can prepend it once to every invocation without special-casing
+which subcommand is being run. It is bound into `ctx.Run()` as a typed
+`command.LaunchSource` value and read directly by `ShortcutCmdKong.Run`,
+`StartCmdKong.Run`, and `RestartCmdKong.Run` — never written to disk.
 
-### Why the persisted value can be wrong, and why that's OK
+---
 
-The user can launch via Homebrew on Monday and via npx on Tuesday. The
-config records the **most recent** source. `--target` lets the user
-override. The cost of a wrong default is "the shortcut runs npm instead of
-the binary" — annoying, not destructive. The benefit of auto-detection is
-that 95% of users never see this flag.
+## 4. Refresh on every start/restart
+
+`internal/command/shortcut.go` exposes `refreshShortcut(source
+LaunchSource)`, called at the top of `StartCmdKong.Run` and
+`RestartCmdKong.Run` (before the daemon fork, so it always sees the original
+`--source`, not the re-exec'd child's trimmed args). It silently
+(re)writes the desktop + menu shortcut with the default name, matching the
+current launch method. Failures are logged at debug level and never block
+startup — a shortcut write is a nice-to-have, not a precondition for serving
+traffic.
+
+This means: the very first time a user starts Tingly Box (any of the three
+ways), a shortcut is already waiting for them by the time they look for one.
+`tingly-box shortcut` still exists for re-running explicitly (e.g. after
+deleting it, or with `--no-desktop`/`--no-menu`).
 
 ---
 
@@ -160,7 +136,7 @@ by `windowsShortcutScript`. The script:
   often lives under `…\OneDrive\Desktop`)
 - emits each created path on its own line so the Go side can echo them back
 
-For npx targets the `.lnk` runs `cmd.exe /c npx -y …` rather than the
+For npx sources the `.lnk` runs `cmd.exe /c npx -y …` rather than the
 extracted binary directly, so updates picked up by `npx -y …@latest` apply
 immediately.
 
@@ -184,7 +160,7 @@ component. That keeps paths with spaces (e.g. `/opt/tingly box/tingly-box`)
 intact across desktop environments. `Terminal=false` because the daemon
 detaches itself; no need to flash a terminal window.
 
-### npx targets: wrap in `sh -lc`
+### npx sources: wrap in `sh -lc`
 
 Both macOS and Linux non-binary shortcuts run
 
@@ -207,9 +183,7 @@ const (
     SourceNpxBundle = "npx-bundle"
 )
 
-func IsKnownSource(source string) bool
-func LaunchArgs() []string                 // ["restart", "--daemon"]
-func IsNpxCachedBinary(exePath string) bool
+func LaunchArgs() []string   // ["restart", "--daemon"]
 
 type LaunchSpec struct {
     Argv      []string   // POSIX command vector — macOS / Linux
@@ -224,7 +198,7 @@ type Options struct {
     NoMenu    bool
 }
 
-func ResolveLaunch(exePath, target, persistedSource string) LaunchSpec
+func ResolveLaunch(exePath, source string) LaunchSpec
 func Create(opts Options, spec LaunchSpec) ([]string, error)
 ```
 
@@ -234,20 +208,22 @@ handler tomorrow) can display them. Nothing in this package writes to
 
 ### Future HTTP handler sketch
 
+A running server process was itself started via `start`/`restart` with some
+`--source`, and could stash that value in memory (not disk) at boot to
+answer an API request later:
+
 ```go
 // POST /api/v1/shortcut
 func (h *ShortcutAPI) Create(c *gin.Context) {
     var req struct {
         Name      string `json:"name"`
-        Target    string `json:"target"`     // auto|binary|npx|npx-bundle
         NoDesktop bool   `json:"no_desktop"`
         NoMenu    bool   `json:"no_menu"`
     }
     _ = c.BindJSON(&req)
 
     exePath, _ := os.Executable()
-    persisted := h.appCfg.GetLaunchSource()
-    spec := shortcut.ResolveLaunch(exePath, req.Target, persisted)
+    spec := shortcut.ResolveLaunch(exePath, h.launchSource) // set once at boot
     created, err := shortcut.Create(shortcut.Options{
         Name: req.Name, NoDesktop: req.NoDesktop, NoMenu: req.NoMenu,
     }, spec)
@@ -255,7 +231,8 @@ func (h *ShortcutAPI) Create(c *gin.Context) {
 }
 ```
 
-No new domain logic required.
+No new domain logic required, and still no disk persistence — `launchSource`
+lives only as long as the process that was actually launched that way.
 
 ---
 
@@ -263,12 +240,11 @@ No new domain logic required.
 
 | principle                            | how this feature satisfies it                                                       |
 |--------------------------------------|--------------------------------------------------------------------------------------|
-| eliminate mode pickers               | `--target=auto` is the default and resolves the right thing without input             |
-| smart defaults over toggles          | `--no-desktop` / `--no-menu` are opt-out, not opt-in                                  |
+| smart defaults over toggles          | shortcut refreshes automatically on start/restart; `--no-desktop`/`--no-menu` are opt-out on the explicit command |
 | show concrete values not aliases     | success output prints the **real paths** written, not "Created 2 shortcuts"           |
 | surface the artifact for next action | last line tells the user "Double-click it to start Tingly Box and open the web UI."   |
 | scope side effects to current surface| writes only under user-owned dirs (`~/Desktop`, `~/.local/share`, `%APPDATA%`); never sudo |
-| diagnostics traverse the real path   | npx detection uses the **actual** cache path, not a hard-coded directory              |
+| diagnostics traverse the real path   | source comes from the actual invocation, not a guess                                  |
 
 ---
 
@@ -278,9 +254,8 @@ No new domain logic required.
 |----------------------------------------------|------------------------------------------|
 | `internal/shortcut/shortcut.go`              | domain (this package, reusable)          |
 | `internal/shortcut/shortcut_test.go`         | tests against public API                 |
-| `internal/command/shortcut.go`               | Kong shell + `PersistLaunchSource`       |
-| `cli/tingly-box/main.go`                     | global `--source` + subcommand wiring    |
+| `internal/command/shortcut.go`               | Kong shell, `LaunchSource`, `refreshShortcut` |
+| `internal/command/server.go`                 | `start`/`restart` call `refreshShortcut` |
+| `cli/tingly-box/main.go`                     | global `--source` flag, binds `LaunchSource` into `ctx.Run` |
 | `build/npx/tingly-box/bin.js`                | npx wrapper, injects `--source=npx`      |
 | `build/npx/tingly-box-bundle/bin.js`         | bundle wrapper, injects `--source=npx-bundle` |
-| `internal/server/config/config.go`           | `launch_source` field, getter/setter     |
-| `internal/config/app_config.go`              | AppConfig delegators for launch source   |

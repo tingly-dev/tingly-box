@@ -1,7 +1,6 @@
 package shortcut
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -41,7 +40,7 @@ func TestCommandScriptContent(t *testing.T) {
 }
 
 func TestResolveLaunchBinary(t *testing.T) {
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "binary", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "binary")
 
 	if want := []string{"/usr/local/bin/tingly-box", "restart", "--daemon"}; strings.Join(spec.Argv, " ") != strings.Join(want, " ") {
 		t.Fatalf("unexpected argv: %v", spec.Argv)
@@ -54,8 +53,16 @@ func TestResolveLaunchBinary(t *testing.T) {
 	}
 }
 
+func TestResolveLaunchEmptySourceDefaultsToBinary(t *testing.T) {
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "")
+
+	if spec.WinTarget != "/usr/local/bin/tingly-box" {
+		t.Errorf("expected binary default, got winTarget=%q", spec.WinTarget)
+	}
+}
+
 func TestResolveLaunchNpx(t *testing.T) {
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx")
 
 	wantArgv := []string{"sh", "-lc", "npx -y tingly-box@latest restart --daemon"}
 	if strings.Join(spec.Argv, "\x00") != strings.Join(wantArgv, "\x00") {
@@ -67,39 +74,10 @@ func TestResolveLaunchNpx(t *testing.T) {
 }
 
 func TestResolveLaunchNpxBundle(t *testing.T) {
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx-bundle", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx-bundle")
 
 	if spec.WinArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
 		t.Errorf("unexpected winArgs: %q", spec.WinArgs)
-	}
-}
-
-func TestResolveLaunchAutoUsesPersistedSource(t *testing.T) {
-	// A binary not in the npx cache, but the recorded launch source was npx-bundle.
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "auto", "npx-bundle")
-
-	if spec.WinArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
-		t.Errorf("auto did not honor persisted source: %q", spec.WinArgs)
-	}
-}
-
-func TestResolveLaunchAutoFallsBackToBinary(t *testing.T) {
-	spec := ResolveLaunch("/usr/local/bin/tingly-box", "auto", "")
-
-	if spec.WinTarget != "/usr/local/bin/tingly-box" {
-		t.Errorf("expected binary fallback, got winTarget=%q", spec.WinTarget)
-	}
-}
-
-func TestIsNpxCachedBinary(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", "/home/u/.cache")
-
-	cached := filepath.Join("/home/u/.cache", "tingly-box", "latest", "bin", "tingly-box")
-	if !IsNpxCachedBinary(cached) {
-		t.Errorf("expected %q to be detected as npx-cached", cached)
-	}
-	if IsNpxCachedBinary("/usr/local/bin/tingly-box") {
-		t.Errorf("did not expect /usr/local/bin/tingly-box to be npx-cached")
 	}
 }
 

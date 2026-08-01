@@ -38,18 +38,17 @@ const (
 
 // Config represents the global configuration
 type Config struct {
-	Rules              []typ.Rule           `yaml:"rules" json:"rules"`                                     // List of request configurations
-	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"`           // Index of the default Rule
-	UserToken          string               `yaml:"user_token" json:"user_token"`                           // User token for UI and control API authentication
-	ModelToken         string               `yaml:"model_token" json:"model_token"`                         // Model token for OpenAI and Anthropic API authentication
-	InternalAPIToken   string               `json:"-"`                                                      // Internal API token for probe testing (generated at startup, not persisted)
-	EncryptProviders   bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`             // Whether to encrypt provider info (default false)
-	Scenarios          []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                             // Scenario-specific configurations
-	GUI                GUIConfig            `json:"gui"`                                                    // GUI-specific settings
-	RemoteCoder        RemoteCoderConfig    `json:"remote_coder"`                                           // Remote-coder service settings
-	RandomUUID         string               `json:"random_uuid"`                                            // A random uuid to help protocol transform for some special provider
-	ClaudeCodeDeviceID string               `json:"claude_code_device_id"`                                  // Calc from random claude code device id with sha256
-	LaunchSource       string               `json:"launch_source,omitempty" yaml:"launch_source,omitempty"` // How tingly-box was last launched (binary, npx, npx-bundle); used to generate matching shortcuts
+	Rules              []typ.Rule           `yaml:"rules" json:"rules"`                           // List of request configurations
+	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
+	UserToken          string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
+	ModelToken         string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
+	InternalAPIToken   string               `json:"-"`                                            // Internal API token for probe testing (generated at startup, not persisted)
+	EncryptProviders   bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
+	Scenarios          []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                   // Scenario-specific configurations
+	GUI                GUIConfig            `json:"gui"`                                          // GUI-specific settings
+	RemoteCoder        RemoteCoderConfig    `json:"remote_coder"`                                 // Remote-coder service settings
+	RandomUUID         string               `json:"random_uuid"`                                  // A random uuid to help protocol transform for some special provider
+	ClaudeCodeDeviceID string               `json:"claude_code_device_id"`                        // Calc from random claude code device id with sha256
 
 	// Merged fields from Config struct
 	// ProvidersV1 and Providers are legacy JSON-config storage for providers.
@@ -1359,22 +1358,6 @@ func (c *Config) SetOpenBrowser(openBrowser bool) error {
 	defer c.mu.Unlock()
 	c.OpenBrowser = openBrowser
 	return nil
-}
-
-// GetLaunchSource returns the recorded launch source (binary, npx, npx-bundle)
-func (c *Config) GetLaunchSource() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.LaunchSource
-}
-
-// SetLaunchSource records how tingly-box was launched, so shortcuts can be
-// generated to match (e.g. an npx user gets an npx-based shortcut).
-func (c *Config) SetLaunchSource(source string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.LaunchSource = source
-	return c.Save()
 }
 
 // ============

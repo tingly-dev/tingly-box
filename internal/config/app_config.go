@@ -142,16 +142,6 @@ func (ac *AppConfig) DeleteProvider(name string) error {
 	return ac.config.DeleteProvider(name)
 }
 
-// GetLaunchSource returns the recorded launch source (binary, npx, npx-bundle)
-func (ac *AppConfig) GetLaunchSource() string {
-	return ac.config.GetLaunchSource()
-}
-
-// SetLaunchSource records how tingly-box was launched
-func (ac *AppConfig) SetLaunchSource(source string) error {
-	return ac.config.SetLaunchSource(source)
-}
-
 // FetchAndSaveProviderModels fetches models from a provider and saves them
 func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 	return ac.config.FetchAndSaveProviderModels(providerName)
@@ -159,24 +149,24 @@ func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 
 // Server settings
 
-func (ac *AppConfig) GetServerPort() int          { return ac.config.GetServerPort() }
+func (ac *AppConfig) GetServerPort() int           { return ac.config.GetServerPort() }
 func (ac *AppConfig) SetServerPort(port int) error { return ac.config.SetServerPort(port) }
 func (ac *AppConfig) GetJWTSecret() string         { return ac.config.GetJWTSecret() }
 
 // Runtime flags
 
-func (ac *AppConfig) GetVerbose() bool                { return ac.config.GetVerbose() }
-func (ac *AppConfig) SetVerbose(verbose bool) error   { return ac.config.SetVerbose(verbose) }
-func (ac *AppConfig) GetDebug() bool                  { return ac.config.GetDebug() }
-func (ac *AppConfig) SetDebug(debug bool) error       { return ac.config.SetDebug(debug) }
-func (ac *AppConfig) GetOpenBrowser() bool            { return ac.config.GetOpenBrowser() }
-func (ac *AppConfig) SetOpenBrowser(v bool) error     { return ac.config.SetOpenBrowser(v) }
+func (ac *AppConfig) GetVerbose() bool              { return ac.config.GetVerbose() }
+func (ac *AppConfig) SetVerbose(verbose bool) error { return ac.config.SetVerbose(verbose) }
+func (ac *AppConfig) GetDebug() bool                { return ac.config.GetDebug() }
+func (ac *AppConfig) SetDebug(debug bool) error     { return ac.config.SetDebug(debug) }
+func (ac *AppConfig) GetOpenBrowser() bool          { return ac.config.GetOpenBrowser() }
+func (ac *AppConfig) SetOpenBrowser(v bool) error   { return ac.config.SetOpenBrowser(v) }
 
 // GUI configuration
 
-func (ac *AppConfig) GetGUIDebug() bool               { return ac.config.GetGUIDebug() }
-func (ac *AppConfig) SetGUIDebug(debug bool) error    { return ac.config.SetGUIDebug(debug) }
-func (ac *AppConfig) GetGUIPort() int                 { return ac.config.GetGUIPort() }
-func (ac *AppConfig) SetGUIPort(port int) error       { return ac.config.SetGUIPort(port) }
-func (ac *AppConfig) GetGUIVerbose() bool             { return ac.config.GetGUIVerbose() }
+func (ac *AppConfig) GetGUIDebug() bool                { return ac.config.GetGUIDebug() }
+func (ac *AppConfig) SetGUIDebug(debug bool) error     { return ac.config.SetGUIDebug(debug) }
+func (ac *AppConfig) GetGUIPort() int                  { return ac.config.GetGUIPort() }
+func (ac *AppConfig) SetGUIPort(port int) error        { return ac.config.SetGUIPort(port) }
+func (ac *AppConfig) GetGUIVerbose() bool              { return ac.config.GetGUIVerbose() }
 func (ac *AppConfig) SetGUIVerbose(verbose bool) error { return ac.config.SetGUIVerbose(verbose) }

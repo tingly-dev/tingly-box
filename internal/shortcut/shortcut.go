@@ -20,16 +20,6 @@ const (
 	SourceNpxBundle = "npx-bundle"
 )
 
-// IsKnownSource reports whether source is one we recognize for persistence.
-func IsKnownSource(source string) bool {
-	switch source {
-	case SourceBinary, SourceNpx, SourceNpxBundle:
-		return true
-	default:
-		return false
-	}
-}
-
 // npxPackageForSource returns the npm package an npx-based launch should run.
 func npxPackageForSource(source string) string {
 	if source == SourceNpxBundle {
@@ -62,22 +52,11 @@ type Options struct {
 }
 
 // ResolveLaunch decides whether the shortcut runs the binary directly or goes
-// through npx, then builds the platform-specific launch vectors. When target
-// is "" or "auto" it prefers the recorded launch source, then falls back to
-// detecting the npx cache, and finally to the binary.
-func ResolveLaunch(exePath, target, persistedSource string) LaunchSpec {
-	source := target
-	if source == "" || source == "auto" {
-		switch {
-		case IsKnownSource(persistedSource):
-			source = persistedSource
-		case IsNpxCachedBinary(exePath):
-			source = SourceNpx
-		default:
-			source = SourceBinary
-		}
-	}
-
+// through npx, then builds the platform-specific launch vectors. source is how
+// the *current* process was invoked (SourceNpx / SourceNpxBundle / anything
+// else meaning a plain binary) — the caller always knows this first-hand, so
+// there is no detection or persistence to do here.
+func ResolveLaunch(exePath, source string) LaunchSpec {
 	args := LaunchArgs()
 
 	if source == SourceNpx || source == SourceNpxBundle {
@@ -263,56 +242,6 @@ Categories=Utility;Network;
 func desktopFileName(name string) string {
 	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 	return slug + ".desktop"
-}
-
-// ---------------- npx detection ----------------
-
-// npxCacheRoot mirrors the directory the npx wrapper (build/npx/tingly-box/bin.js)
-// extracts the binary into: <os-cache-dir>/tingly-box. Returns "" if it cannot
-// be determined.
-func npxCacheRoot() string {
-	switch runtime.GOOS {
-	case "windows":
-		base := os.Getenv("LOCALAPPDATA")
-		if base == "" {
-			if up := os.Getenv("USERPROFILE"); up != "" {
-				base = filepath.Join(up, "AppData", "Local")
-			}
-		}
-		if base == "" {
-			return ""
-		}
-		return filepath.Join(base, "tingly-box")
-	case "darwin":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		return filepath.Join(home, "Library", "Caches", "tingly-box")
-	default:
-		if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
-			return filepath.Join(xdg, "tingly-box")
-		}
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		return filepath.Join(home, ".cache", "tingly-box")
-	}
-}
-
-// IsNpxCachedBinary reports whether exePath lives inside the npx cache directory,
-// i.e. the binary was launched via `npx tingly-box`.
-func IsNpxCachedBinary(exePath string) bool {
-	root := npxCacheRoot()
-	if root == "" {
-		return false
-	}
-	rel, err := filepath.Rel(root, exePath)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // ---------------- shared helpers ----------------

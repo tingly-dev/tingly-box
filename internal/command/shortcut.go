@@ -4,25 +4,36 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/shortcut"
 )
 
-// PersistLaunchSource records how tingly-box was launched (best-effort) so that
-// `shortcut --target=auto` can generate a matching shortcut later. It is a no-op
-// for empty / unknown values (including "auto") and only writes when the value
-// changes.
-func PersistLaunchSource(appManager *AppManager, source string) {
-	source = strings.TrimSpace(source)
-	if !shortcut.IsKnownSource(source) {
+// LaunchSource is how the running tingly-box process was invoked (binary,
+// npx, npx-bundle) — see internal/shortcut for the source constants. It comes
+// from the global --source flag and is bound into Kong's Run() calls, so any
+// subcommand that needs it (shortcut, start, restart) can read it directly
+// without persisting it anywhere.
+type LaunchSource string
+
+// refreshShortcut best-effort (re)writes the desktop/menu shortcut so it
+// keeps launching through whatever way tingly-box is currently being run.
+// Failures are logged, not surfaced — a shortcut write should never block
+// starting the server.
+func refreshShortcut(source LaunchSource) {
+	exePath, err := os.Executable()
+	if err != nil {
 		return
 	}
-	cfg := appManager.GetGlobalConfig()
-	if cfg == nil || cfg.GetLaunchSource() == source {
-		return
+	if resolved, rerr := filepath.EvalSymlinks(exePath); rerr == nil {
+		exePath = resolved
 	}
-	_ = cfg.SetLaunchSource(source)
+
+	spec := shortcut.ResolveLaunch(exePath, string(source))
+	if _, err := shortcut.Create(shortcut.Options{Name: "Tingly Box"}, spec); err != nil {
+		logrus.WithError(err).Debug("failed to refresh shortcut")
+	}
 }
 
 // ShortcutCmdKong creates a desktop / start-menu shortcut that launches
@@ -31,12 +42,11 @@ func PersistLaunchSource(appManager *AppManager, source string) {
 // Windows.
 type ShortcutCmdKong struct {
 	Name      string `kong:"flag,name='name',default='Tingly Box',help='Shortcut name'"`
-	Target    string `kong:"flag,name='target',enum='auto,binary,npx,npx-bundle',default='auto',help='What the shortcut runs: binary (this executable), npx, npx-bundle, or auto-detect from the recorded launch source'"`
 	NoDesktop bool   `kong:"flag,name='no-desktop',help='Do not create a desktop shortcut'"`
 	NoMenu    bool   `kong:"flag,name='no-menu',help='Do not create a Start Menu / application menu entry'"`
 }
 
-func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
+func (s *ShortcutCmdKong) Run(source LaunchSource) error {
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to resolve executable path: %w", err)
@@ -45,12 +55,7 @@ func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
 		exePath = resolved
 	}
 
-	var persisted string
-	if cfg := appManager.GetGlobalConfig(); cfg != nil {
-		persisted = cfg.GetLaunchSource()
-	}
-
-	spec := shortcut.ResolveLaunch(exePath, s.Target, persisted)
+	spec := shortcut.ResolveLaunch(exePath, string(source))
 	created, err := shortcut.Create(shortcut.Options{
 		Name:      s.Name,
 		NoDesktop: s.NoDesktop,

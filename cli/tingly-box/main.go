@@ -153,12 +153,10 @@ func main() {
 
 	appManager := command.NewAppManagerWithConfig(appConfig)
 
-	// Record how tingly-box was launched (best-effort) so `shortcut` can
-	// generate a launcher matching the install method (binary vs npx vs bundle).
-	command.PersistLaunchSource(appManager, cli.Source)
-
-	// Run the selected command
-	if err := ctx.Run(appManager); err != nil {
+	// Run the selected command. command.LaunchSource carries how this process
+	// was invoked (binary/npx/npx-bundle, from --source) so `shortcut`, `start`,
+	// and `restart` can generate/refresh a launcher matching the install method.
+	if err := ctx.Run(appManager, command.LaunchSource(cli.Source)); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
