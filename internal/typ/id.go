@@ -193,6 +193,40 @@ func GetClientUserAgent(ctx context.Context) string {
 // client, whose Beta/Messages methods add the context-1m beta flag per request.
 const Context1MKey contextKey = "context_1m"
 
+// ClaudeOrgIDKey carries the rule-level claude_org_id override down to the
+// outbound Anthropic client/transport, which sends it as the
+// anthropic-organization-id header instead of the provider's login-time
+// organization.
+const ClaudeOrgIDKey contextKey = "claude_org_id"
+
+// ClaudeOrgIDAuto is the sentinel claude_org_id value that attaches the
+// organization captured at OAuth login
+// (OAuthDetail.ExtraFields["organization_id"]) as anthropic-organization-id.
+// Sending the organization is opt-in: an unset (empty) flag attaches no
+// organization header at all, preserving the classic behavior.
+const ClaudeOrgIDAuto = "auto"
+
+// WithClaudeOrgID attaches the anthropic-organization-id override that the
+// outbound Anthropic client reads at request time. Empty values are not
+// attached (no override).
+func WithClaudeOrgID(ctx context.Context, orgID string) context.Context {
+	if orgID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, ClaudeOrgIDKey, orgID)
+}
+
+// GetClaudeOrgID returns the per-request organization-id override, or "" if none.
+func GetClaudeOrgID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if orgID, ok := ctx.Value(ClaudeOrgIDKey).(string); ok {
+		return orgID
+	}
+	return ""
+}
+
 // WithContext1M marks the request as wanting Anthropic's 1M context window.
 func WithContext1M(ctx context.Context) context.Context {
 	return context.WithValue(ctx, Context1MKey, true)

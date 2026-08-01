@@ -222,6 +222,18 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryApp,
 		},
 		{
+			Key:         "claude_org_id",
+			Label:       "Claude organization ID",
+			Description: "Control the anthropic-organization-id header sent to Anthropic for this rule (Claude OAuth providers). Leave empty (default) to attach no organization header — the classic behavior, so existing setups are unaffected. Choose \"Login organization\" to attribute requests to the organization captured at OAuth login (org-bound entitlements such as Cyber Verification need this), or enter an organization UUID to attribute requests to that specific organization.",
+			Type:        FlagTypeString,
+			Category:    FlagCategoryRequestAnthropic,
+			Placeholder: "e.g. 12345678-1234-1234-1234-123456789012",
+			Suggestions: []FlagOption{
+				// Sentinel preset — see typ.ClaudeOrgIDAuto.
+				{Label: "Login organization (from OAuth)", Value: ClaudeOrgIDAuto},
+			},
+		},
+		{
 			Key:         "context_1m",
 			Label:       "1M Context Window",
 			Description: "Enable Anthropic's 1M token context window for supported models (Sonnet 4.6+, Opus 4.6+). Injects the context-1m-2025-08-07 beta flag into the upstream anthropic-beta header; the model name sent to the provider is unchanged. Only enable for models that support the 1M context window.",

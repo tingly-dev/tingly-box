@@ -134,7 +134,7 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 
 	// Check if this is a Claude Code OAuth provider
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
-		client, err = NewClaudeClient(provider, model, sessionID)
+		client, err = NewClaudeClient(ctx, provider, model, sessionID)
 		if err != nil {
 			logrus.WithContext(ctx).Errorf("Failed to create Claude client for provider %s: %v", provider.Name, err)
 			return nil

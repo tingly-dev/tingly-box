@@ -64,7 +64,7 @@ func TestNewClaudeClient_OAuthToken(t *testing.T) {
 	provider := newOAuthProvider()
 	sessionID := typ.SessionID{Value: "test-session-123"}
 
-	c, err := NewClaudeClient(provider, "claude-sonnet-4-6", sessionID)
+	c, err := NewClaudeClient(context.Background(), provider, "claude-sonnet-4-6", sessionID)
 	require.NoError(t, err)
 	require.NotNil(t, c)
 	assert.NotNil(t, c.AnthropicClient)
@@ -74,7 +74,7 @@ func TestNewClaudeClient_APIKey(t *testing.T) {
 	provider := newAPIKeyProvider()
 	sessionID := typ.SessionID{Value: "test-session-456"}
 
-	c, err := NewClaudeClient(provider, "claude-opus-4-6", sessionID)
+	c, err := NewClaudeClient(context.Background(), provider, "claude-opus-4-6", sessionID)
 	require.NoError(t, err)
 	require.NotNil(t, c)
 }
@@ -88,7 +88,7 @@ func TestNewClaudeClient_StripV1FromBase(t *testing.T) {
 		Token:    "sk-ant-api-test",
 	}
 	sessionID := typ.SessionID{Value: "sess"}
-	c, err := NewClaudeClient(provider, "", sessionID)
+	c, err := NewClaudeClient(context.Background(), provider, "", sessionID)
 	require.NoError(t, err)
 	require.NotNil(t, c)
 }
@@ -99,7 +99,7 @@ func TestNewClaudeClient_StripV1FromBase(t *testing.T) {
 
 func TestClaudeClient_ListModels_ReturnsError(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	models, err := c.ListModels(context.Background())
@@ -222,7 +222,7 @@ func TestRestoreBetaToolNamesInMessage(t *testing.T) {
 
 func TestGuard_DisablesThinkingWhenUnset(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	// Build a valid metadata user_id (JSON format)
@@ -242,7 +242,7 @@ func TestGuard_DisablesThinkingWhenUnset(t *testing.T) {
 
 func TestGuard_PreservesExistingThinking(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -270,7 +270,7 @@ func TestGuard_PreservesExistingThinking(t *testing.T) {
 
 func TestGuardBeta_DisablesThinkingWhenUnset(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -288,7 +288,7 @@ func TestGuardBeta_DisablesThinkingWhenUnset(t *testing.T) {
 
 func TestGuardBeta_PreservesExistingThinking(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -311,7 +311,7 @@ func TestGuardBeta_PreservesExistingThinking(t *testing.T) {
 
 func TestGuardBeta_StripsClearThinkingEditWhenThinkingDisabled(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -337,7 +337,7 @@ func TestGuardBeta_StripsClearThinkingEditWhenThinkingDisabled(t *testing.T) {
 
 func TestGuardBeta_KeepsClearThinkingEditWhenThinkingEnabled(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -363,7 +363,7 @@ func TestGuardBeta_KeepsClearThinkingEditWhenThinkingEnabled(t *testing.T) {
 
 func TestGuardBeta_KeepsClearThinkingEditWhenEffortSet(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -389,7 +389,7 @@ func TestGuardBeta_KeepsClearThinkingEditWhenEffortSet(t *testing.T) {
 
 func TestGuardBeta_StripsClearThinkingWhenDisabledOverridesEffort(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -413,7 +413,7 @@ func TestGuardBeta_StripsClearThinkingWhenDisabledOverridesEffort(t *testing.T) 
 
 func TestGuard_DoesNotDisableThinkingWhenEffortSet(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -436,7 +436,7 @@ func TestGuard_DoesNotDisableThinkingWhenEffortSet(t *testing.T) {
 
 func TestGuard_RemapsToolNames(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
@@ -457,7 +457,7 @@ func TestGuard_RemapsToolNames(t *testing.T) {
 
 func TestGuardBeta_RemapsToolNames(t *testing.T) {
 	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	c, err := NewClaudeClient(context.Background(), provider, "", typ.SessionID{Value: "s"})
 	require.NoError(t, err)
 
 	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`

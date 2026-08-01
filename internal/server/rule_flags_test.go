@@ -591,3 +591,34 @@ func TestResolveRuleFlagsWithScenario_CleanHeaderSuppressedForClaudeOAuth(t *tes
 		t.Error("CleanHeader should be preserved when provider is nil")
 	}
 }
+
+func TestApplyClaudeOrgID(t *testing.T) {
+	t.Run("attaches override to request context", func(t *testing.T) {
+		c := newGinContext(t)
+		applyClaudeOrgID(c, typ.RuleFlags{ClaudeOrgID: "org-uuid"})
+		if got := typ.GetClaudeOrgID(c.Request.Context()); got != "org-uuid" {
+			t.Errorf("claude org id in ctx = %q, want %q", got, "org-uuid")
+		}
+	})
+
+	t.Run("empty flag is a no-op", func(t *testing.T) {
+		c := newGinContext(t)
+		applyClaudeOrgID(c, typ.RuleFlags{})
+		if got := typ.GetClaudeOrgID(c.Request.Context()); got != "" {
+			t.Errorf("claude org id in ctx = %q, want empty", got)
+		}
+	})
+}
+
+func TestResolveRuleFlagsWithScenario_ClaudeOrgIDReachesContext(t *testing.T) {
+	c := newGinContext(t)
+	rule := &typ.Rule{Flags: typ.RuleFlags{ClaudeOrgID: "org-uuid"}}
+	got := ResolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, &typ.ScenarioConfig{},
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+	if got.ClaudeOrgID != "org-uuid" {
+		t.Errorf("ClaudeOrgID = %q, want %q", got.ClaudeOrgID, "org-uuid")
+	}
+	if ctxVal := typ.GetClaudeOrgID(c.Request.Context()); ctxVal != "org-uuid" {
+		t.Errorf("claude org id in ctx = %q, want %q", ctxVal, "org-uuid")
+	}
+}

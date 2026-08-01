@@ -35,7 +35,11 @@ type ClaudeClient struct {
 // NewClaudeClient creates a new Claude client wrapper.
 // It builds an Anthropic SDK client with Claude Code specific headers and middleware,
 // then wraps it in an AnthropicClient for delegation.
-func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
+//
+// ctx is the inbound request context: the pool constructs a client per request,
+// so per-request hints resolved here (the claude_org_id rule flag via
+// typ.GetClaudeOrgID) are correctly scoped to the request being served.
+func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
 	logrus.Debug("creating claude-client")
 
 	// Handle API base URL - Anthropic SDK expects base without /v1
@@ -54,7 +58,7 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 	isOAuthToken := IsClaudeOAuthToken(provider.GetAccessToken())
 
 	// Apply Claude Code specific headers
-	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken)
+	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken, typ.GetClaudeOrgID(ctx))
 
 	// Add beta query parameter
 	options = append(options, anthropicOption.WithQuery("beta", "true"))
@@ -79,7 +83,9 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 }
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.
-func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, sessionID string, isOAuthToken bool) []anthropicOption.RequestOption {
+// orgOverride, when non-empty, replaces the login-time organization as the
+// anthropic-organization-id value (the claude_org_id rule flag).
+func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, sessionID string, isOAuthToken bool, orgOverride string) []anthropicOption.RequestOption {
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
 
@@ -117,10 +123,22 @@ func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *t
 		anthropicOption.WithHeader("x-stainless-timeout", stainlessTimeout),
 	)
 
-	// Attribute the request to the organization the OAuth token was issued for.
-	// Without this, Anthropic falls back to the token's default context, which
-	// breaks org-bound entitlements (e.g. Cyber Verification).
-	if orgID := provider.OAuthDetail.GetExtraFieldString("organization_id"); orgID != "" {
+	// Organization attribution is opt-in via the claude_org_id rule flag:
+	// unset (empty) attaches no organization header — the classic default;
+	// "auto" attributes the request to the organization the OAuth token was
+	// issued for (login-time capture), which org-bound entitlements (e.g.
+	// Cyber Verification) rely on; any other value attributes the request to
+	// that organization instead.
+	var orgID string
+	switch orgOverride {
+	case "":
+		// default: no organization header
+	case typ.ClaudeOrgIDAuto:
+		orgID = provider.OAuthDetail.GetExtraFieldString("organization_id")
+	default:
+		orgID = orgOverride
+	}
+	if orgID != "" {
 		options = append(options, anthropicOption.WithHeader("anthropic-organization-id", orgID))
 	}
 

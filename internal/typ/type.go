@@ -256,6 +256,14 @@ type RuleFlags struct {
 	// anthropic-beta header. The model name sent to Anthropic is unchanged —
 	// only the beta header changes behavior.
 	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
+
+	// ClaudeOrgID overrides the anthropic-organization-id header sent upstream.
+	// By default the Claude OAuth client attributes requests to the organization
+	// captured at login (OAuthDetail.ExtraFields["organization_id"]), which is
+	// immutable. This flag lets a rule attribute its requests to a different
+	// Anthropic organization on demand (e.g. org-bound entitlements). Empty
+	// means no override — the provider's login-time organization is used.
+	ClaudeOrgID string `json:"claude_org_id,omitempty" yaml:"claude_org_id,omitempty"`
 }
 
 // VisionProxyService identifies the upstream used to describe images for the

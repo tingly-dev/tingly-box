@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -107,7 +108,7 @@ func TestClaudeClient_TimeoutValidation(t *testing.T) {
 			}
 
 			// Test that Claude Code client creation succeeds with timeout handling
-			client, err := NewClaudeClient(provider, "claude-3-5-sonnet-20241022", typ.SessionID{})
+			client, err := NewClaudeClient(context.Background(), provider, "claude-3-5-sonnet-20241022", typ.SessionID{})
 			if err != nil {
 				t.Fatalf("NewClaudeClient() should not fail with timeout %d: %v", tt.providerTimeout, err)
 			}

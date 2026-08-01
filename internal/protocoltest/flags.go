@@ -460,6 +460,84 @@ func ruleFlagCases() []flagCase {
 			}
 		}},
 
+		// ── claude_org_id ────────────────────────────────────────────────────
+		// Asserted on the real Claude OAuth path (pool → NewClaudeClient). The
+		// flag is tri-state: unset sends no anthropic-organization-id header
+		// (classic default — the login-time capture is opt-in), "auto" sends
+		// the organization captured in OAuthDetail.ExtraFields, and a custom
+		// value sends exactly that. All three states are driven through rules
+		// on the same provider below.
+		{key: "claude_org_id", run: func(t flagTB, env *TestEnv) {
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-orgid-claude"
+			const loginOrg = "11111111-2222-3333-4444-555555555555"
+			const orgID = "99999999-8888-7777-6666-555555555555"
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL(),
+				APIStyle: protocol.APIStyleAnthropic,
+				AuthType: ai.AuthTypeOAuth,
+				OAuthDetail: &ai.OAuthDetail{
+					Issuer:      ai.IssuerClaudeCode,
+					AccessToken: "sk-ant-oat01-virtual",
+					ExtraFields: map[string]interface{}{"organization_id": loginOrg},
+				},
+				Enabled: true,
+				Timeout: int64(constant.DefaultRequestTimeout),
+			})
+
+			providerModel := "virtual-model-" + s.Name
+			addRule := func(reqModel, flagValue string) {
+				rule := newHarnessRule(reqModel, typ.ScenarioClaudeCode, reqModel, providerModel,
+					harnessService(providerName, providerModel))
+				rule.Flags = typ.RuleFlags{ClaudeOrgID: flagValue}
+				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+			}
+			addRule("pv-flag-orgid-default", "")
+			addRule("pv-flag-orgid-auto", typ.ClaudeOrgIDAuto)
+			addRule("pv-flag-orgid", orgID)
+
+			send := func(reqModel string) *CapturedRequest {
+				// Claude Code always sends metadata.user_id; ClaudeClient's
+				// Guard requires it, so mirror the real client here.
+				_, body := flagBaseRequest(protocol.TypeAnthropicV1, reqModel, false)
+				var m map[string]any
+				if err := json.Unmarshal(body, &m); err != nil {
+					t.Fatalf("unmarshal base request: %v", err)
+				}
+				m["metadata"] = map[string]any{
+					"user_id": `{"device_id":"d","account_uuid":"a","session_id":"flag-orgid-session"}`,
+				}
+				body = mustMarshal(m)
+
+				res, err := env.dispatch(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, s.Name,
+					"/tingly/claude_code/v1/messages", body, nil, false)
+				if err != nil {
+					t.Fatalf("dispatch: %v", err)
+				}
+				if res.HTTPStatus != 200 {
+					t.Fatalf("request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 300))
+				}
+				up := env.virtual.LastRequest(EndpointAnthropic)
+				if up == nil {
+					t.Fatal("no upstream request captured")
+				}
+				return up
+			}
+
+			if got := send("pv-flag-orgid-default").Headers.Get("anthropic-organization-id"); got != "" {
+				t.Errorf("unset flag must send no anthropic-organization-id upstream; got %q", got)
+			}
+			if got := send("pv-flag-orgid-auto").Headers.Get("anthropic-organization-id"); got != loginOrg {
+				t.Errorf("auto did not send the login-time organization upstream; got %q, want %q", got, loginOrg)
+			}
+			if got := send("pv-flag-orgid").Headers.Get("anthropic-organization-id"); got != orgID {
+				t.Errorf("custom value did not reach anthropic-organization-id upstream; got %q, want %q", got, orgID)
+			}
+		}},
+
 		// ── context_1m ───────────────────────────────────────────────────────
 		// Asserted on the real claude_code path: (1) a [1m]-suffixed incoming
 		// model still routes to its bare-named rule (suffix-normalized
