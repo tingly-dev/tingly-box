@@ -64,11 +64,10 @@ type Config struct {
 	JWTSecret   string                   `json:"jwt_secret"`
 
 	// Server settings
-	DefaultMaxTokens int    `json:"default_max_tokens"`      // Default max_tokens for anthropic API requests
-	Verbose          bool   `json:"verbose"`                 // Verbose mode for detailed logging
-	Debug            bool   `json:"-"`                       // Debug mode for Gin debug level logging
-	OpenBrowser      bool   `yaml:"-" json:"-"`              // Auto-open browser in web UI mode (default: true)
-	LaunchSource     string `json:"launch_source,omitempty"` // How tingly-box was launched (binary, npx, npx-bundle)
+	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
+	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
+	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
+	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
 
 	// Generic tool configs map for all tool types
 	// Key is tool_type (e.g., "tool_interceptor", "code_execution")
@@ -1375,21 +1374,6 @@ func (c *Config) SetLaunchSource(source string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.LaunchSource = source
-	return c.Save()
-}
-
-// GetErrorLogFilterExpression returns the error log filter expression
-func (c *Config) GetErrorLogFilterExpression() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.ErrorLogFilterExpression
-}
-
-// SetErrorLogFilterExpression updates the error log filter expression
-func (c *Config) SetErrorLogFilterExpression(expr string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.ErrorLogFilterExpression = expr
 	return c.Save()
 }
 
