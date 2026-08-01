@@ -41,7 +41,7 @@ type StartCmdKong struct {
 	PromptRestart        bool   `kong:"flag,name='prompt-restart',help='Prompt to restart if running'"`
 	RecordMode           string `kong:"flag,name='record-mode',help='Record mode'"`
 	RecordDir            string `kong:"flag,name='record-dir',help='Record directory'"`
-	EnableShortcut       bool   `kong:"flag,name='shortcut',default='true',help='Create/refresh a desktop shortcut for next time'"`
+	EnableShortcut       bool   `kong:"flag,name='shortcut',help='Also create/refresh a desktop shortcut for next time'"`
 }
 
 func (s *StartCmdKong) Run(appManager *AppManager, source LaunchSource) error {

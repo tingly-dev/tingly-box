@@ -177,7 +177,7 @@ func windowsShortcutScript(opts Options, spec LaunchSpec) string {
 		Target:         psQuote(spec.WinTarget),
 		Arguments:      psQuote(spec.WinArgs),
 		WorkDir:        psQuote(spec.WorkDir),
-		Name:           psQuote(opts.Name),
+		Name:           psQuote(slugName(opts.Name)),
 		IncludeDesktop: !opts.NoDesktop,
 		IncludeMenu:    !opts.NoMenu,
 	})
@@ -191,31 +191,30 @@ func psQuote(s string) string {
 
 // ---------------- macOS ----------------
 
+// createMacShortcuts only ever writes a Desktop shortcut. There's no macOS
+// equivalent of a Start Menu for a plain .command script: Launchpad and
+// Spotlight's "Applications" category only index real .app bundles (they
+// read the bundle's Info.plist), so dropping a .command file into
+// ~/Applications doesn't make it launchable from either — it would just be
+// an inert, harder-to-find copy of the Desktop one. opts.NoMenu is a no-op
+// here as a result; building a real .app bundle to get that integration is
+// a separate, deliberately-not-taken tradeoff (see the format-choice
+// comment on commandScriptContent's caller in .design/shortcut.md).
 func createMacShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
+	if opts.NoDesktop {
+		return nil, nil
+	}
+
 	content := commandScriptContent(spec.Argv)
-
-	var targets []string
-	if !opts.NoDesktop {
-		if dir, err := userSubdir("Desktop"); err == nil {
-			targets = append(targets, filepath.Join(dir, opts.Name+".command"))
-		}
+	dir, err := userSubdir("Desktop")
+	if err != nil {
+		return nil, nil
 	}
-	if !opts.NoMenu {
-		if dir, err := userSubdir("Applications"); err == nil {
-			if mkErr := os.MkdirAll(dir, 0o755); mkErr == nil {
-				targets = append(targets, filepath.Join(dir, opts.Name+".command"))
-			}
-		}
+	path := filepath.Join(dir, slugName(opts.Name)+".command")
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+		return nil, fmt.Errorf("failed to write shortcut %s: %w", path, err)
 	}
-
-	var created []string
-	for _, path := range targets {
-		if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
-			return created, fmt.Errorf("failed to write shortcut %s: %w", path, err)
-		}
-		created = append(created, path)
-	}
-	return created, nil
+	return []string{path}, nil
 }
 
 // commandScriptContent renders internal/shortcut/templates/macos_command.sh.tmpl,
@@ -234,7 +233,7 @@ func commandScriptContent(argv []string) string {
 
 func createLinuxShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 	content := desktopEntryContent(opts.Name, spec.Argv)
-	fileName := desktopFileName(opts.Name)
+	fileName := slugName(opts.Name) + ".desktop"
 
 	var targets []string
 	if !opts.NoMenu {
@@ -268,12 +267,18 @@ func desktopEntryContent(name string, argv []string) string {
 	return render(linuxDesktopTemplate, struct{ Name, Exec string }{Name: name, Exec: shJoin(argv)})
 }
 
-func desktopFileName(name string) string {
-	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
-	return slug + ".desktop"
-}
-
 // ---------------- shared helpers ----------------
+
+// slugName converts a display name like "Tingly Box" into the space-free
+// base filename every generated shortcut uses ("tingly-box"), regardless of
+// platform. Filenames with spaces need extra quoting wherever they're
+// referenced (shell commands, other generated scripts, path arguments) and
+// are an easy source of subtle bugs; the display "Name" (used inside a
+// .desktop entry's Name= field, or just passed via --name) is free to keep
+// spaces since it's never used as a path component.
+func slugName(name string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "-"))
+}
 
 func userSubdir(name string) (string, error) {
 	home, err := os.UserHomeDir()

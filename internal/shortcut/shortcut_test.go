@@ -1,6 +1,8 @@
 package shortcut
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -96,9 +98,9 @@ func TestResolveLaunchNpxUnknownVersionFallsBackToLatest(t *testing.T) {
 	}
 }
 
-func TestDesktopFileName(t *testing.T) {
-	if got := desktopFileName("Tingly Box"); got != "tingly-box.desktop" {
-		t.Fatalf("unexpected desktop file name: %q", got)
+func TestSlugName(t *testing.T) {
+	if got := slugName("Tingly Box"); got != "tingly-box" {
+		t.Fatalf("unexpected slug: %q", got)
 	}
 }
 
@@ -149,6 +151,37 @@ func TestWindowsShortcutScriptRespectsNoDesktopNoMenu(t *testing.T) {
 	noMenu := windowsShortcutScript(Options{Name: "Tingly Box", NoMenu: true}, spec)
 	if strings.Contains(noMenu, "'Programs'") {
 		t.Errorf("--no-menu should drop the Programs destination:\n%s", noMenu)
+	}
+}
+
+func TestCreateMacShortcuts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "Desktop"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "binary", "1.4.2")
+
+	// NoMenu is a no-op on macOS: there's no Launchpad/Spotlight-indexed
+	// equivalent for a plain .command script, so ~/Applications is never
+	// written to regardless of the flag — only the Desktop copy exists.
+	created, err := createMacShortcuts(Options{Name: "Tingly Box", NoMenu: true}, spec)
+	if err != nil {
+		t.Fatalf("createMacShortcuts: %v", err)
+	}
+	if len(created) != 1 {
+		t.Fatalf("expected exactly one shortcut (Desktop only), got %v", created)
+	}
+	want := filepath.Join(home, "Desktop", "tingly-box.command")
+	if created[0] != want {
+		t.Errorf("expected space-free filename %q, got %q", want, created[0])
+	}
+	if _, err := os.Stat(filepath.Join(home, "Applications")); err == nil {
+		t.Errorf("~/Applications should never be created")
+	}
+
+	if created, err := createMacShortcuts(Options{Name: "Tingly Box", NoDesktop: true}, spec); err != nil || len(created) != 0 {
+		t.Errorf("--no-desktop should produce nothing, got %v (err=%v)", created, err)
 	}
 }
 

@@ -20,11 +20,15 @@ restart --daemon` in a terminal" — which fails the UX bar set by
 So: a shortcut on the desktop / start menu that launches Tingly Box with a
 double-click. Two things create/refresh it:
 
-- `tingly-box shortcut` — explicit, user-triggered
-- `tingly-box start` / `restart --shortcut` (**default on**) — refreshes it
-  every time the server (re)starts, so the shortcut is ready for *next* time
-  without the user having to think about it; `--no-shortcut` opts out (e.g.
-  headless/CI/Docker runs where writing a desktop file makes no sense)
+- `tingly-box shortcut` — explicit, user-triggered; the primary, documented
+  way to get one
+- `tingly-box start --shortcut` / `restart --shortcut` (**default off**) —
+  an opt-in convenience for doing both in one command. It's off by default
+  on purpose: writing files to the user's Desktop/Start Menu on every
+  ordinary `start` — something a user runs constantly, including headless
+  in CI/Docker/scripts — is a surprising side effect for a command whose job
+  is "start the server." Making it explicit means it only happens when
+  someone actually asks for it.
 
 ---
 
@@ -132,26 +136,27 @@ which subcommand is being run. It is bound into `ctx.Run()` as a typed
 
 ---
 
-## 4. Refresh on every start/restart
+## 4. Opt-in refresh on start/restart
 
 `StartCmdKong` (and `RestartCmdKong`, which embeds it) has an `EnableShortcut
-bool` field — `--shortcut`, **default true** — following the same
-opt-out-not-opt-in convention as `--ui`/`--browser`/`--adapter` on the same
-struct. When set, `internal/command/shortcut.go`'s `refreshShortcut(source
-LaunchSource)` runs at the top of `Run()`, before the daemon fork (so it
-always sees the original `--source`, not the re-exec'd child's trimmed
-args). It silently (re)writes the desktop + menu shortcut with the default
-name, matching the current launch method and version. Failures are logged at
-debug level and never block startup — a shortcut write is a nice-to-have,
-not a precondition for serving traffic.
+bool` field — `--shortcut`, **default false**. When passed,
+`internal/command/shortcut.go`'s `refreshShortcut(source LaunchSource)` runs
+at the top of `Run()`, before the daemon fork (so it always sees the
+original `--source`, not the re-exec'd child's trimmed args). It silently
+(re)writes the Desktop/menu shortcut, matching the current launch method and
+version. Failures are logged at debug level and never block startup — a
+shortcut write is a nice-to-have, not a precondition for serving traffic.
 
-This means: the very first time a user starts Tingly Box (any of the three
-ways), a shortcut is already waiting for them by the time they look for one.
-`--no-shortcut` opts out for non-interactive contexts (CI, Docker, headless
-servers) where writing a desktop file is meaningless or could hit a
-read-only/nonexistent home directory. `tingly-box shortcut` still exists for
-re-running explicitly (e.g. after deleting it, or with
-`--no-desktop`/`--no-menu`).
+This is deliberately opt-in rather than the `--ui`/`--browser`/`--adapter`
+default-on convention used elsewhere on the same struct: those flags affect
+things the user is actively doing *right now* (serving the UI, opening a
+browser tab) and are easy to notice and undo. Writing files to the user's
+Desktop on every routine `start` — a command run constantly, including
+headless in CI/Docker/scripts — is a different class of side effect; it
+should only happen when someone asks for it. `tingly-box shortcut` remains
+the primary, explicit way to create/refresh one (also useful after deleting
+it, or with `--no-desktop`/`--no-menu`); `--shortcut` on start/restart is
+just a one-command shortcut *to* the shortcut command.
 
 ---
 
@@ -160,8 +165,20 @@ re-running explicitly (e.g. after deleting it, or with
 | platform | format        | where written                                            | invoked by               |
 |----------|---------------|----------------------------------------------------------|--------------------------|
 | Windows  | `.lnk`        | Desktop, Start Menu Programs                             | WScript.Shell COM        |
-| macOS    | `.command`    | `~/Desktop`, `~/Applications`                            | Terminal.app (double-click) |
+| macOS    | `.command`    | `~/Desktop` only                                         | Terminal.app (double-click) |
 | Linux    | `.desktop`    | `~/Desktop` (if present), `~/.local/share/applications`  | freedesktop launcher     |
+
+Every platform's file uses the same space-free base name — `tingly-box.lnk`
+/ `tingly-box.command` / `tingly-box.desktop` — regardless of the
+human-readable `--name` (default "Tingly Box") passed in. `slugName()`
+lower-cases and hyphenates it once, shared across all three generators.
+Filenames with spaces need extra quoting everywhere they're referenced
+(other generated scripts, shell commands, path arguments) and are a
+recurring, easy-to-miss source of bugs; the display name is free to keep
+its spaces since it's never used as a path component (it only shows up
+inside the Linux `.desktop`'s `Name=` field — Windows/macOS have no
+separate display-name field distinct from the filename, so their shortcut
+is literally captioned "tingly-box" rather than "Tingly Box").
 
 ### Windows: PowerShell/COM, TargetPath set directly — no hidden-launch trick
 
@@ -189,7 +206,7 @@ minimized) console, and on a terminal host configured to never auto-close,
 it can still linger until the user dismisses it — that's an accepted,
 lesser cost, not something we've fully solved on Windows yet.
 
-### macOS: `.command`, closing itself on success
+### macOS: `.command`, Desktop only, closing itself on success
 
 A `.command` is just a shell script with `chmod +x` and the right extension.
 Double-clicking opens Terminal.app and runs it. We could ship a `.app`
@@ -200,10 +217,21 @@ above sidesteps its console), but:
   icon to look passable
 - `.command` works without any of that
 
-So `.command` still wins on UX-vs-cost — but Terminal.app's default behavior
-is to leave the window open after the script exits, showing
-`[Process completed]`, requiring a manual close every single time. The
-generated script now closes that window itself **only on success**:
+So `.command` still wins on UX-vs-cost. But that tradeoff also means macOS
+has no real menu-equivalent location: Launchpad and Spotlight's
+"Applications" category only recognize actual `.app` bundles (they read the
+bundle's `Info.plist`) — dropping a `.command` file into `~/Applications`
+doesn't make it launchable from either, it's just a second, harder-to-find
+copy sitting in a folder Finder already treats as "real apps only".
+`createMacShortcuts` writes **Desktop only**; `--no-menu` is accepted but is
+a no-op there (nothing to turn off). Building a proper `.app` bundle to get
+genuine Launchpad integration is the real fix for that gap, and remains the
+same not-worth-it-yet tradeoff as above.
+
+Separately, Terminal.app's default behavior is to leave the window open
+after the script exits, showing `[Process completed]`, requiring a manual
+close every single time. The generated script now closes that window itself
+**only on success**:
 
 ```sh
 #!/bin/sh
@@ -315,10 +343,10 @@ lives only as long as the process that was actually launched that way.
 
 | principle                            | how this feature satisfies it                                                       |
 |--------------------------------------|--------------------------------------------------------------------------------------|
-| smart defaults over toggles          | `--shortcut` defaults on for start/restart (opt-out, `--no-shortcut`); `--no-desktop`/`--no-menu` are opt-out on the explicit command |
+| smart defaults over toggles          | `--no-desktop`/`--no-menu` are opt-out on the explicit `shortcut` command; `--shortcut` on start/restart is opt-in since it's a side effect on an otherwise-unrelated, frequently-run command |
 | show concrete values not aliases     | success output prints the **real paths** written, not "Created 2 shortcuts"; npx shortcuts pin a real version number, not the `latest` alias |
 | surface the artifact for next action | last line tells the user "Double-click it to start Tingly Box and open the web UI."   |
-| scope side effects to current surface| writes only under user-owned dirs (`~/Desktop`, `~/.local/share`, `%APPDATA%`); never sudo |
+| scope side effects to current surface| writes only under user-owned dirs (`~/Desktop`, `~/.local/share`, `%APPDATA%`); never sudo; nothing (not even `~/Applications`) is written when it wouldn't actually be useful |
 | diagnostics traverse the real path   | source comes from the actual invocation, not a guess                                  |
 | reduce visual noise                  | Windows starts the shortcut minimized; macOS closes its Terminal window on success, only staying open when there's an error to show |
 
