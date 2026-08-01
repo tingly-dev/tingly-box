@@ -17,20 +17,30 @@ import (
 // without persisting it anywhere.
 type LaunchSource string
 
+// resolveShortcutSpec resolves this process's own executable path (following
+// symlinks) and turns it, together with how this invocation was launched,
+// into a LaunchSpec — the one piece shared by refreshShortcut and
+// ShortcutCmdKong.Run.
+func resolveShortcutSpec(source LaunchSource) (shortcut.LaunchSpec, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return shortcut.LaunchSpec{}, fmt.Errorf("failed to resolve executable path: %w", err)
+	}
+	if resolved, rerr := filepath.EvalSymlinks(exePath); rerr == nil {
+		exePath = resolved
+	}
+	return shortcut.ResolveLaunch(exePath, string(source), BuildVersion), nil
+}
+
 // refreshShortcut best-effort (re)writes the desktop/menu shortcut so it
 // keeps launching through whatever way tingly-box is currently being run.
 // Failures are logged, not surfaced — a shortcut write should never block
 // starting the server.
 func refreshShortcut(source LaunchSource) {
-	exePath, err := os.Executable()
+	spec, err := resolveShortcutSpec(source)
 	if err != nil {
 		return
 	}
-	if resolved, rerr := filepath.EvalSymlinks(exePath); rerr == nil {
-		exePath = resolved
-	}
-
-	spec := shortcut.ResolveLaunch(exePath, string(source), BuildVersion)
 	if _, err := shortcut.Create(shortcut.Options{Name: "Tingly Box"}, spec); err != nil {
 		logrus.WithError(err).Debug("failed to refresh shortcut")
 	}
@@ -47,15 +57,11 @@ type ShortcutCmdKong struct {
 }
 
 func (s *ShortcutCmdKong) Run(source LaunchSource) error {
-	exePath, err := os.Executable()
+	spec, err := resolveShortcutSpec(source)
 	if err != nil {
-		return fmt.Errorf("failed to resolve executable path: %w", err)
-	}
-	if resolved, rerr := filepath.EvalSymlinks(exePath); rerr == nil {
-		exePath = resolved
+		return err
 	}
 
-	spec := shortcut.ResolveLaunch(exePath, string(source), BuildVersion)
 	created, err := shortcut.Create(shortcut.Options{
 		Name:      s.Name,
 		NoDesktop: s.NoDesktop,

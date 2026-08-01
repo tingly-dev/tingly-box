@@ -197,9 +197,7 @@ func psQuote(s string) string {
 // read the bundle's Info.plist), so dropping a .command file into
 // ~/Applications doesn't make it launchable from either — it would just be
 // an inert, harder-to-find copy of the Desktop one. opts.NoMenu is a no-op
-// here as a result; building a real .app bundle to get that integration is
-// a separate, deliberately-not-taken tradeoff (see the format-choice
-// comment on commandScriptContent's caller in .design/shortcut.md).
+// here as a result (see .design/shortcut.md for the full writeup).
 func createMacShortcuts(opts Options, spec LaunchSpec) ([]string, error) {
 	if opts.NoDesktop {
 		return nil, nil
