@@ -159,17 +159,21 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                 <CloseIcon />
             </IconButton>
             <DialogContent id="entry-guide-dialog-description" dividers sx={{ p: 0 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', gap: 2 }}>
-                    {/* Left side: Vertical Stepper */}
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, height: '100%' }}>
+                    {/* Left side: step navigation rail */}
                     <Box sx={{
-                        width: { xs: '100%', sm: 220 },
+                        width: { xs: '100%', sm: 240 },
                         py: { xs: 2, sm: 3 },
-                        px: { xs: 2, sm: 1 },
+                        px: { xs: 2, sm: 3 },
                         display: 'flex',
                         flexDirection: { xs: 'row', sm: 'column' },
-                        alignItems: { xs: 'center', sm: 'flex-start' },
+                        alignItems: { xs: 'center', sm: 'stretch' },
                         overflowX: { xs: 'auto', sm: 'visible' },
                         flexShrink: 0,
+                        bgcolor: 'background.default',
+                        borderRight: { xs: 'none', sm: '1px solid' },
+                        borderBottom: { xs: '1px solid', sm: 'none' },
+                        borderColor: { xs: 'divider', sm: 'divider' },
                     }}>
                         <Stepper
                             activeStep={safeActiveStep}
@@ -202,10 +206,10 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                         flexDirection: 'column',
                         minWidth: 0,
                         py: { xs: 2, sm: 3 },
-                        px: { xs: 2, sm: 3 },
+                        px: { xs: 2, sm: 4 },
                     }}>
                         {/* Explanation Text */}
-                        <Box sx={{ mb: 2, p: { xs: 2, sm: 3 }, bgcolor: 'background.default', borderRadius: 1 }}>
+                        <Box sx={{ mb: 2.5 }}>
                             <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
                                 {t(currentStep.content, { defaultValue: currentStep.content })}
                             </Typography>
