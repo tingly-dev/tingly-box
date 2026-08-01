@@ -9,6 +9,7 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, IconButton, Tooltip, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
 import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -16,6 +17,7 @@ import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageI
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 const scenario = "codex";
 const UseCodexPageContent: React.FC = () => {
+    const { t } = useTranslation();
     const {
         isLoading,
         notification,
@@ -67,7 +69,7 @@ const UseCodexPageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Codex</span>
-                            <Tooltip title="OpenAI Codex AI coding assistant with Tingly Box proxy">
+                            <Tooltip title={t('scenarioPage.tooltip.codex')}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
@@ -81,7 +83,7 @@ const UseCodexPageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Auto Config
+                            {t('scenarioPage.autoConfig')}
                         </Button>
                     }
                 >

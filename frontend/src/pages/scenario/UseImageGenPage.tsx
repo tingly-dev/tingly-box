@@ -6,6 +6,7 @@ import ImageGenPlaygroundCard from "./components/ImageGenPlaygroundCard";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -15,6 +16,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 const scenario = "imagegen";
 
 const UseImageGenPageContent: React.FC = () => {
+    const { t } = useTranslation();
     const [quickStartOpen, setQuickStartOpen] = useState(false);
     const {
         isLoading,
@@ -41,7 +43,7 @@ const UseImageGenPageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Image Generation API</span>
-                            <Tooltip title="AI-powered image generation through Tingly Box proxy with multiple model support">
+                            <Tooltip title={t('scenarioPage.tooltip.imagegen')}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
@@ -55,7 +57,7 @@ const UseImageGenPageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Quick Start
+                            {t('scenarioPage.quickStart')}
                         </Button>
                     }
                 >
@@ -74,7 +76,7 @@ const UseImageGenPageContent: React.FC = () => {
                 />
                 <TemplatePage
                     scenario={scenario}
-                    title="Image Generation Model Rules"
+                    title={t('scenarioPage.imageGenModelRules')}
                     collapsible={true}
                     allowDeleteRule={true}
                     rules={rules}

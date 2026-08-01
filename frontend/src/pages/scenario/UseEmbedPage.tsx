@@ -1,4 +1,5 @@
 import CardGrid from "@/components/CardGrid.tsx";
+import { useTranslation } from 'react-i18next';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box } from '@mui/material';
@@ -11,6 +12,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 const scenario = "embed";
 
 const UseEmbedPageContent: React.FC = () => {
+    const { t } = useTranslation();
     const {
         isLoading,
         notification,
@@ -40,7 +42,7 @@ const UseEmbedPageContent: React.FC = () => {
                 </UnifiedCard>
                 <TemplatePage
                     scenario={scenario}
-                    title="Embedding Model Rules"
+                    title={t('scenarioPage.embedModelRules')}
                     collapsible={true}
                     allowDeleteRule={true}
                 />

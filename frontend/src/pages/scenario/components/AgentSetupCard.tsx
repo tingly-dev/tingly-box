@@ -15,6 +15,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { SPOTLIGHT_ADD_MODEL_EVENT } from '@/components/nodes/ActionAddNode';
@@ -109,15 +110,21 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     onApplyWithStatusLine,
     isApplyLoading = false,
     onViewConfig,
-    applyStepLabel = 'Auto Config',
+    applyStepLabel: applyStepLabelProp,
     applyStepDescription,
-    applyButtonLabel = 'Auto Config',
-    applySuccessLabel = 'Config applied!',
-    viewConfigButtonLabel = 'Config',
+    applyButtonLabel: applyButtonLabelProp,
+    applySuccessLabel: applySuccessLabelProp,
+    viewConfigButtonLabel: viewConfigButtonLabelProp,
     hasModelSelected = false,
     onSelectModel,
     onConnectProvider,
 }) => {
+    const { t } = useTranslation();
+    // Pages may override these; otherwise fall back to the translated defaults.
+    const applyStepLabel = applyStepLabelProp ?? t('agentSetup.apply.label');
+    const applyButtonLabel = applyButtonLabelProp ?? t('agentSetup.apply.button');
+    const applySuccessLabel = applySuccessLabelProp ?? t('agentSetup.apply.success');
+    const viewConfigButtonLabel = viewConfigButtonLabelProp ?? t('agentSetup.apply.viewConfig');
     const initialCollapsedPref = useRef<string | null>(localStorage.getItem(COLLAPSED_KEY(agentKey)));
     const [collapsed, setCollapsed] = useState(initialCollapsedPref.current === 'true');
     const [installDone, setInstallDone] = useState(
@@ -222,16 +229,16 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         setCopiedMirror(false);
     };
 
-    const progressLabel = allDone ? 'Done' : `${doneCount}/${TOTAL_STEPS}`;
+    const progressLabel = allDone ? t('agentSetup.done') : `${doneCount}/${TOTAL_STEPS}`;
     const progressColor = allDone ? 'success' : 'default';
 
     const collapsedHint = !providerDone
-        ? 'Connect an AI provider to get started'
+        ? t('agentSetup.hint.connectProvider')
         : !modelDone
-            ? 'Choose a model to continue'
+            ? t('agentSetup.hint.selectModel')
             : !installDone
-                ? `Install ${agentName} on your machine`
-                : `One-click ${applyStepLabel} to finish`;
+                ? t('agentSetup.hint.install', { agent: agentName })
+                : t('agentSetup.hint.apply', { action: applyStepLabel });
 
     // Which step is the first incomplete one (determines which expands)
     const firstIncomplete = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : -1;
@@ -255,7 +262,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     }}>
                     <Typography variant="subtitle1" sx={{
                         fontWeight: 600
-                    }}>Quick Start</Typography>
+                    }}>{t('agentSetup.quickStart')}</Typography>
                     <Chip
                         label={progressLabel}
                         size="small"
@@ -275,7 +282,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                 </Stack>
             }
             rightAction={
-                <Tooltip title={collapsed ? 'Expand' : 'Collapse'}>
+                <Tooltip title={collapsed ? t('agentSetup.expand') : t('agentSetup.collapse')}>
                     <IconButton size="small" onClick={toggleCollapsed}>
                         {collapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
                     </IconButton>
@@ -299,24 +306,26 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     fontWeight: 500,
                                     flex: 1
                                 }}>
-                                Connect AI Provider
+                                {t('agentSetup.provider.label')}
                             </Typography>
                             {providerDone && (
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
                                 }}>
-                                    {providerCount} provider{providerCount !== 1 ? 's' : ''}
+                                    {providerCount === 1
+                                        ? t('agentSetup.provider.countOne')
+                                        : t('agentSetup.provider.count', { count: providerCount })}
                                 </Typography>
                             )}
                             {onConnectProvider && (
-                                <Tooltip title={providerDone ? '' : `Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using ${agentName}.`}>
+                                <Tooltip title={providerDone ? '' : t('agentSetup.provider.tooltip', { agent: agentName })}>
                                     <Button
                                         size="small"
                                         variant={providerDone ? 'text' : 'contained'}
                                         onClick={onConnectProvider}
                                         sx={providerDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
                                     >
-                                        {providerDone ? '+ Connect' : 'Connect AI'}
+                                        {providerDone ? t('agentSetup.provider.addMore') : t('agentSetup.provider.connect')}
                                     </Button>
                                 </Tooltip>
                             )}
@@ -337,15 +346,15 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     fontWeight: 500,
                                     flex: 1
                                 }}>
-                                Select a Model
+                                {t('agentSetup.model.label')}
                             </Typography>
                             {modelDone && (
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
-                                }}>Configured</Typography>
+                                }}>{t('agentSetup.model.configured')}</Typography>
                             )}
                             {onSelectModel && (
-                                <Tooltip title={modelDone ? '' : `Choose which model ${agentName} will use in the Model Rules section below.`}>
+                                <Tooltip title={modelDone ? '' : t('agentSetup.model.tooltip', { agent: agentName })}>
                                     <span>
                                         <Button
                                             size="small"
@@ -354,7 +363,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                             onClick={onSelectModel}
                                             sx={modelDone ? { py: 0, textTransform: 'none', minWidth: 0 } : { py: 0.25 }}
                                         >
-                                            {modelDone ? 'Change' : 'Choose Model'}
+                                            {modelDone ? t('agentSetup.model.change') : t('agentSetup.model.choose')}
                                         </Button>
                                     </span>
                                 </Tooltip>
@@ -381,24 +390,24 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     fontWeight: 500,
                                     flex: 1
                                 }}>
-                                Install {agentName}
+                                {t('agentSetup.install.label', { agent: agentName })}
                             </Typography>
                             {installDone && (
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
-                                }}>Installed</Typography>
+                                }}>{t('agentSetup.install.installed')}</Typography>
                             )}
                             {/* Step-completing action lives in the row's right action
                                 column, same as steps 1 / 2 / 4. */}
                             {!installDone && firstIncomplete === 2 && (
-                                <Tooltip title={`Run the install command below, then confirm here once ${agentName} is installed.`}>
+                                <Tooltip title={t('agentSetup.install.confirmTooltip', { agent: agentName })}>
                                     <Button
                                         variant="contained"
                                         size="small"
                                         onClick={(e) => { e.stopPropagation(); markInstallDone(); }}
                                         sx={{ py: 0.25 }}
                                     >
-                                        I've installed it
+                                        {t('agentSetup.install.confirm')}
                                     </Button>
                                 </Tooltip>
                             )}
@@ -436,7 +445,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         <Typography variant="body2" sx={{
                                             color: "text.secondary"
                                         }}>
-                                            {installStepDescription || `Install ${agentName} on your local machine — copy and run the command below.`}
+                                            {installStepDescription || t('agentSetup.install.description', { agent: agentName })}
                                         </Typography>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
                                             <Typography
@@ -444,9 +453,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                                 sx={{
                                                     color: "text.secondary",
                                                     minWidth: '80px'
-                                                }}>npm official</Typography>
+                                                }}>{t('agentSetup.install.npmOfficial')}</Typography>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
-                                                <Tooltip title={copied ? 'Copied!' : 'Copy'}>
+                                                <Tooltip title={copied ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
                                                     <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
                                                 </Tooltip>
                                                 <Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography>
@@ -459,9 +468,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                                     sx={{
                                                         color: "text.secondary",
                                                         minWidth: '80px'
-                                                    }}>npm mirror</Typography>
+                                                    }}>{t('agentSetup.install.npmMirror')}</Typography>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
-                                                    <Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}>
+                                                    <Tooltip title={copiedMirror ? t('agentSetup.install.copied') : t('agentSetup.install.copy')}>
                                                         <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
                                                     </Tooltip>
                                                     <Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography>
@@ -498,12 +507,12 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             {applyDone && (
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
-                                }}>Applied</Typography>
+                                }}>{t('agentSetup.apply.applied')}</Typography>
                             )}
                             {!applyDone && firstIncomplete === 3 && (
                                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
                                     {onApply && (
-                                        <Tooltip title={applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file.`}>
+                                        <Tooltip title={applyStepDescription ?? t('agentSetup.apply.tooltip', { agent: agentName })}>
                                             <span>
                                                 <Button variant="contained" size="small" disabled={isApplyLoading} onClick={(e) => { e.stopPropagation(); handleApplyWithStatusLine(); }} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined} sx={{ py: 0.25 }}>
                                                     {applyButtonLabel}
@@ -521,7 +530,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
                                         setApplyDone(true);
                                     }} sx={{ py: 0, textTransform: 'none', color: 'text.disabled', minWidth: 0 }}>
-                                        Skip
+                                        {t('agentSetup.apply.skip')}
                                     </Button>
                                 </Stack>
                             )}
@@ -541,7 +550,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         ))}
                                     </Box>
                                 ) : (
-                                    <Typography variant="body2">{applyResult.error ?? 'Apply failed'}</Typography>
+                                    <Typography variant="body2">{applyResult.error ?? t('agentSetup.apply.failed')}</Typography>
                                 )}
                             </Alert>
                         )}
@@ -550,7 +559,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 <Typography variant="body2" sx={{
                                     color: "text.secondary"
                                 }}>
-                                    {applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file.`}
+                                    {applyStepDescription ?? t('agentSetup.apply.tooltip', { agent: agentName })}
                                 </Typography>
                                 <Stack
                                     direction="row"
@@ -566,7 +575,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     )}
                                     {onViewConfig && (
                                         <Button variant="text" size="small" onClick={onViewConfig} sx={{ textTransform: 'none', color: 'text.secondary' }}>
-                                            {viewConfigButtonLabel} (Advanced)
+                                            {t('agentSetup.apply.viewConfigAdvanced', { label: viewConfigButtonLabel })}
                                         </Button>
                                     )}
                                 </Stack>
@@ -578,7 +587,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     {(installDone || applyDone) && (
                         <Box sx={{ pt: 0.5, pl: 1.5 }}>
                             <Button size="small" variant="text" onClick={handleReset} sx={{ py: 0, textTransform: 'none', color: 'text.disabled', fontSize: '0.75rem' }}>
-                                Reset progress
+                                {t('agentSetup.resetProgress')}
                             </Button>
                         </Box>
                     )}

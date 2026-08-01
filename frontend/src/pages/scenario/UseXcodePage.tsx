@@ -4,6 +4,7 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -12,6 +13,7 @@ import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageI
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 const scenario = "xcode";
 const UseXcodePageContent: React.FC = () => {
+    const { t } = useTranslation();
     const {
         isLoading,
         notification,
@@ -30,7 +32,7 @@ const UseXcodePageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Xcode</span>
-                            <Tooltip title="Xcode AI coding assistant through Tingly Box proxy for iOS/macOS development">
+                            <Tooltip title={t('scenarioPage.tooltip.xcode')}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
@@ -44,7 +46,7 @@ const UseXcodePageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Config
+                            {t('scenarioPage.config')}
                         </Button>
                     }
                 >

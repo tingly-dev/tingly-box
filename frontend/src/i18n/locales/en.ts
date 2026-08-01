@@ -1202,11 +1202,113 @@ export default {
     "goToDashboard": "Dashboard",
     "goToHelp": "Help & Docs"
   },
+  "playground": {
+    "imageTitle": "Image Playground",
+    "noImageModels": "Add an image generation model rule below to start generating images.",
+    "model": "Model",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Describe the image you want to generate…",
+    "size": "Size",
+    "quality": "Quality",
+    "count": "N",
+    "generate": "Generate",
+    "generateAnother": "Generate another · {{count}} running",
+    "generatingNew": "Generating new images…",
+    "previewEmpty": "Your generated images will appear here",
+    "previewHint": "Each generation will be kept for this session.",
+    "sessionOutputs": "Session outputs",
+    "runCountOne": "1 generation",
+    "runCount": "{{count}} generations",
+    "openResult": "Open generated image {{number}}",
+    "resultAlt": "Generated image {{number}}",
+    "emptyResult": "No image returned",
+    "closePreview": "Close image preview"
+  },
+  "agentSetup": {
+    "quickStart": "Quick Start",
+    "done": "Done",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "resetProgress": "Reset progress",
+    "hint": {
+      "connectProvider": "Connect an AI provider to get started",
+      "selectModel": "Choose a model to continue",
+      "install": "Install {{agent}} on your machine",
+      "apply": "One-click {{action}} to finish"
+    },
+    "provider": {
+      "label": "Connect AI Provider",
+      "countOne": "1 provider",
+      "count": "{{count}} providers",
+      "connect": "Connect AI",
+      "addMore": "+ Connect",
+      "tooltip": "Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using {{agent}}."
+    },
+    "model": {
+      "label": "Select a Model",
+      "configured": "Configured",
+      "choose": "Choose Model",
+      "change": "Change",
+      "tooltip": "Choose which model {{agent}} will use in the Model Rules section below."
+    },
+    "install": {
+      "label": "Install {{agent}}",
+      "installed": "Installed",
+      "confirm": "I've installed it",
+      "confirmTooltip": "Run the install command below, then confirm here once {{agent}} is installed.",
+      "description": "Install {{agent}} on your local machine — copy and run the command below.",
+      "npmOfficial": "npm official",
+      "npmMirror": "npm mirror",
+      "copy": "Copy",
+      "copied": "Copied!"
+    },
+    "apply": {
+      "label": "Auto Config",
+      "applied": "Applied",
+      "button": "Auto Config",
+      "success": "Config applied!",
+      "viewConfig": "Config",
+      "viewConfigAdvanced": "{{label}} (Advanced)",
+      "skip": "Skip",
+      "tooltip": "One click to write the proxy configuration to {{agent}}'s settings file.",
+      "failed": "Apply failed"
+    }
+  },
+  "scenarioPage": {
+    "config": "Config",
+    "autoConfig": "Auto Config",
+    "quickStart": "Quick Start",
+    "sharingKeys": "Sharing Keys",
+    "modelRules": "Model Rules",
+    "embedModelRules": "Embedding Model Rules",
+    "imageGenModelRules": "Image Generation Model Rules",
+    "tooltip": {
+      "claude_code": "AI-powered CLI development agent for implementation, testing, and git operations",
+      "claude_desktop": "Claude Desktop app API proxy for AI assistance in desktop environment",
+      "codex": "OpenAI Codex AI coding assistant with Tingly Box proxy",
+      "opencode": "OpenCode AI development environment with BYOK support",
+      "xcode": "Xcode AI coding assistant through Tingly Box proxy for iOS/macOS development",
+      "vscode": "Bring Your Own Key: Use your own API keys with VS Code Copilot through Tingly Box proxy",
+      "imagegen": "AI-powered image generation through Tingly Box proxy with multiple model support"
+    },
+    "vscode": {
+      "installDescription": "Install the Tingly Box extension from VS Code or the Marketplace.",
+      "installInVSCode": "Install in VS Code",
+      "viewMarketplace": "View Marketplace",
+      "applyStepLabel": "Follow VS Code Guide",
+      "applyStepDescription": "Open the Tingly Box extension in VS Code and follow its built-in setup guide.",
+      "openGuide": "Open Guide"
+    }
+  },
   "scenarioOverview": {
     "title": "Agents",
     "subtitle": "Pick a scenario to configure. Hide the ones you don't use to keep the sidebar tidy.",
     "showInSidebar": "Show in sidebar",
+    "hideFromSidebar": "Hide from sidebar",
     "hidden": "Hidden",
+    "notConfigured": "Not configured",
+    "ruleCountOne": "1 rule",
+    "ruleCount": "{{count}} rules",
     "editTooltip": "Manage visible agents",
     "descriptions": {
       "claude_code": "Route Claude Code with custom profiles and per-task models.",

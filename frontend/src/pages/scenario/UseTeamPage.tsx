@@ -4,6 +4,7 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button } from '@mui/material';
 import { Key as IconKey } from '@/components/icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -14,6 +15,7 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 const scenario = "team";
 
 const UseTeamPageContent: React.FC = () => {
+    const { t } = useTranslation();
     const {
         isLoading,
         notification,
@@ -41,7 +43,7 @@ const UseTeamPageContent: React.FC = () => {
                             startIcon={<IconKey sx={{ fontSize: 18 }} />}
                             onClick={() => setSharingKeysOpen(true)}
                         >
-                            Sharing Keys
+                            {t('scenarioPage.sharingKeys')}
                         </Button>
                     }
                 >

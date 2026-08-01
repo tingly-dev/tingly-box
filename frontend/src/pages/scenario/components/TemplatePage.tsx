@@ -1,6 +1,7 @@
 import ApiKeyModal from '@/components/ApiKeyModal';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {Alert, Box, Fab, Snackbar} from '@mui/material';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
@@ -45,13 +46,14 @@ let routingGuideAutoOpenedThisSession = false;
  */
 const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     // Get modal state from context (shared with ProviderConfigCard)
+    const { t } = useTranslation();
     const { showTokenModal, setShowTokenModal, token, copyToClipboard } = useScenarioPageModal();
 
     // Internal mode: fetch all data internally (excluding modal - that's from context)
     const internalData = useScenarioPageInternal(props.scenario);
 
     const {
-        title = "Model Rules",
+        title = t('scenarioPage.modelRules'),
         collapsible = false,
         allowDeleteRule = false,
         allowToggleRule = true,

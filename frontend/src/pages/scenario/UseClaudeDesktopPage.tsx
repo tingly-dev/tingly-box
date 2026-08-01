@@ -4,6 +4,7 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import { Box, Button, Tooltip, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
 import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PageLayout from '@/components/PageLayout';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -12,6 +13,7 @@ import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageI
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 const scenario = "claude_desktop";
 const UseClaudeDesktopPageContent: React.FC = () => {
+    const { t } = useTranslation();
     const {
         isLoading,
         notification,
@@ -39,7 +41,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Claude Desktop</span>
-                            <Tooltip title="Claude Desktop app API proxy for AI assistance in desktop environment">
+                            <Tooltip title={t('scenarioPage.tooltip.claude_desktop')}>
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
@@ -53,7 +55,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Config
+                            {t('scenarioPage.config')}
                         </Button>
                     }
                 >

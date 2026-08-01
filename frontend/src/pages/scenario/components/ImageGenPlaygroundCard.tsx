@@ -349,10 +349,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                             whiteSpace: 'nowrap',
                                         }}
                                     >
-                                        {t('playground.runCount', {
-                                            defaultValue: runs.length === 1 ? '1 generation' : '{{count}} generations',
-                                            count: runs.length,
-                                        })}
+                                        {runs.length === 1
+                                            ? t('playground.runCountOne', { defaultValue: '1 generation' })
+                                            : t('playground.runCount', {
+                                                defaultValue: '{{count}} generations',
+                                                count: runs.length,
+                                            })}
                                     </Typography>
                                 </Box>
 
