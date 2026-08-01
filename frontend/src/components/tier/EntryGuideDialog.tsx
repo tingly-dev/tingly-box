@@ -274,7 +274,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                 fontSize: '0.75rem',
                                 opacity: 0.8,
                             }}>
-                                💡 {t('rule.routing.guide.hoverHint', { defaultValue: 'Action buttons shown - try hovering over nodes!' })}
+                                💡 {t('rule.routing.guide.hoverHint', { defaultValue: 'Hover over a node in the diagram to see its actions' })}
                             </Box>
                         </Box>
                     </Box>

@@ -464,7 +464,7 @@ export default {
         "close": "Close",
         "firstRunHint": "💡 You just added your second provider. Configure tiers to set up primary and fallback routing!",
         "dontShowAgain": "Don't show this again",
-        "hoverHint": "Action buttons shown - try hovering over nodes!",
+        "hoverHint": "Hover over a node in the diagram to see its actions",
         "steps": {
           "1": {
             "title": "What is a Tier?",
@@ -526,12 +526,12 @@ export default {
         "next": "Next",
         "gotIt": "Got it!",
         "close": "Close",
-        "hoverHint": "Action buttons shown - try hovering over nodes!",
+        "hoverHint": "Hover over a node in the diagram to see its actions",
         "toolbarLabel": "Page toolbar",
         "clickHere": "Click here",
         "steps": {
           "connectAI": {
-            "title": "1. Connect an AI provider",
+            "title": "Connect an AI provider",
             "content": "Routing needs at least one AI service to forward to. Use Connect AI in the page toolbar to add a provider — paste an API key, sign in with OAuth, or point at a self-hosted server. Until you do, a rule has nothing to route to.",
             "annotation": {
               "toolbar": "Connect AI lives in the page toolbar",
@@ -539,7 +539,7 @@ export default {
             }
           },
           "addModel": {
-            "title": "2. Add your first model",
+            "title": "Add your first model",
             "content": "Each rule maps a request model to one or more models. In an empty rule, click ＋ Add model to pick a connected provider and a model. Need a separate rule for a different request model? Use New Rule in the toolbar.",
             "annotation": {
               "addModel": "＋ Add model — pick provider + model",
@@ -547,7 +547,7 @@ export default {
             }
           },
           "editModel": {
-            "title": "3. Change or remove a model",
+            "title": "Change or remove a model",
             "content": "Click any model card to edit it — swap to a different model, switch the provider, or move it to another tier. Hover the card to reveal its actions; the trash icon removes it from the rule.",
             "annotation": {
               "click": "Click a card to edit / swap the model",
@@ -555,7 +555,7 @@ export default {
             }
           },
           "loadBalance": {
-            "title": "4. Load balancing within a tier",
+            "title": "Load balancing within a tier",
             "content": "When several models share the same tier (T0), incoming traffic is spread evenly across them. This balances load and prevents any single model from being overwhelmed.",
             "annotation": {
               "sameTier": "Same tier = load balanced",
@@ -563,7 +563,7 @@ export default {
             }
           },
           "tierFallback": {
-            "title": "5. Tier-based fallback chain",
+            "title": "Tier-based fallback chain",
             "content": "Lower tiers are tried first: T0 is primary, and if every T0 model fails, traffic cascades to T1, then T2, and so on. Use the up/down actions on a card to move it between tiers and build a failover chain.",
             "annotation": {
               "primary": "T0 — primary (tried first)",
@@ -596,6 +596,31 @@ export default {
             }
           }
         }
+      }
+    },
+    "nodes": {
+      "addModel": "Add model"
+    },
+    "guideDiagrams": {
+      "empty": { "description": "Example rule" },
+      "single-provider": { "description": "Single provider rule" },
+      "two-providers-same-tier": { "description": "Load balancing example" },
+      "two-providers-different-tiers": { "description": "Primary and fallback example" },
+      "three-tiers": { "description": "Multi-tier fallback example" },
+      "runtime-failover": { "description": "Failover scenario" },
+      "direct-single": { "description": "Direct routing with single provider" },
+      "direct-multiple-tiers": { "description": "Direct routing with multiple tiers" },
+      "smart-basic": {
+        "description": "Smart routing with basic conditions",
+        "smart": { "0": "Route Claude requests to Anthropic" }
+      },
+      "smart-conditions": {
+        "description": "Smart routing with multiple conditions",
+        "smart": { "0": "Route Claude requests to Anthropic", "1": "Route large token requests to Azure" }
+      },
+      "smart-complex": {
+        "description": "Smart routing with complex conditions",
+        "smart": { "0": "Route Claude requests to Anthropic", "1": "Route large token requests to Azure", "2": "Route @@@ds commands to DeepSeek" }
       }
     },
     "menu": {

@@ -1,5 +1,6 @@
 import { Box, type SxProps } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { UnifiedRoutingGraph } from '@/components/UnifiedRoutingGraph';
 import type { ConfigRecord } from '@/components/RoutingGraphTypes';
 import type { Provider } from '@/types/provider';
@@ -25,8 +26,26 @@ export const StaticGraphViewer: React.FC<StaticGraphViewerProps> = ({
     sx,
     ...props
 }) => {
+    const { t } = useTranslation();
     const diagramData = TIER_DIAGRAM_DATA[scenario];
-    if (!diagramData) {
+
+    // The demo records carry English descriptions as authoring defaults; look
+    // them up per scenario so the diagrams read localized like the rest of
+    // the guide (falling back to the authored English text).
+    const record = React.useMemo<ConfigRecord | undefined>(() => {
+        if (!diagramData) return undefined;
+        const base = diagramData.record;
+        return {
+            ...base,
+            description: t(`rule.guideDiagrams.${scenario}.description`, { defaultValue: base.description }),
+            smartRouting: base.smartRouting?.map((rule, i) => ({
+                ...rule,
+                description: t(`rule.guideDiagrams.${scenario}.smart.${i}`, { defaultValue: rule.description }),
+            })),
+        };
+    }, [diagramData, scenario, t]);
+
+    if (!diagramData || !record) {
         return (
             <Box sx={{ textAlign: 'center', color: 'text.secondary', ...sx }} {...props}>
                 Diagram not found: {scenario}
@@ -35,7 +54,6 @@ export const StaticGraphViewer: React.FC<StaticGraphViewerProps> = ({
     }
 
     const {
-        record,
         providers,
         active = true,
     } = diagramData;

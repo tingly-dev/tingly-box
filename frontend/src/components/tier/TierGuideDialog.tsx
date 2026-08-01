@@ -253,7 +253,7 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                                 fontSize: '0.75rem',
                                 opacity: 0.8,
                             }}>
-                                💡 {t('rule.tier.guide.hoverHint', { defaultValue: 'Action buttons shown - try hovering over nodes!' })}
+                                💡 {t('rule.tier.guide.hoverHint', { defaultValue: 'Hover over a node in the diagram to see its actions' })}
                             </Box>
                         </Box>
                     </Box>

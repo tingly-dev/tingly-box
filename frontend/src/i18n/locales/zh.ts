@@ -466,7 +466,7 @@ export default {
         "close": "关闭",
         "firstRunHint": "💡 您刚刚添加了第二个提供商。配置层级以设置主备路由！",
         "dontShowAgain": "不再显示",
-        "hoverHint": "操作按钮已显示 - 尝试悬停节点查看！",
+        "hoverHint": "悬停示意图中的节点可查看操作按钮",
         "steps": {
           "1": {
             "title": "什么是层级？",
@@ -528,61 +528,61 @@ export default {
         "next": "下一步",
         "gotIt": "明白了！",
         "close": "关闭",
-        "hoverHint": "操作按钮已显示 - 尝试悬停节点查看！",
+        "hoverHint": "悬停示意图中的节点可查看操作按钮",
         "toolbarLabel": "页面工具栏",
         "clickHere": "点这里",
         "steps": {
           "connectAI": {
-            "title": "1. 连接一个 AI 提供商",
-            "content": "路由需要至少一个可转发的 AI 服务。点击页面工具栏的「Connect AI」添加提供商——粘贴 API 密钥、用 OAuth 登录，或指向自托管服务器。在此之前，规则没有可路由的目标。",
+            "title": "连接 AI 提供商",
+            "content": "路由至少需要一个可转发的 AI 服务。点击页面工具栏的「连接 AI」添加提供商——可粘贴 API 密钥、通过 OAuth 登录，或指向自托管服务器。在此之前，规则没有可路由的目标。",
             "annotation": {
-              "toolbar": "Connect AI 在页面工具栏",
+              "toolbar": "「连接 AI」在页面工具栏中",
               "empty": "空规则还没有模型"
             }
           },
           "addModel": {
-            "title": "2. 添加第一个模型",
-            "content": "每条规则把一个请求模型映射到一个或多个模型。在空规则里点击「＋ 添加模型」，选择已连接的提供商和模型。需要为另一个请求模型单独建一条规则？用工具栏的「New Rule」。",
+            "title": "添加第一个模型",
+            "content": "每条规则将一个请求模型映射到一个或多个模型。在空规则中点击「＋ 添加模型」，选择已连接的提供商和模型。需要为其他请求模型单独建规则？使用工具栏的「新建规则」。",
             "annotation": {
-              "addModel": "＋ 添加模型——选提供商 + 模型",
-              "newRule": "New Rule 新增一条请求模型映射"
+              "addModel": "「＋ 添加模型」——选择提供商和模型",
+              "newRule": "「新建规则」新增一条请求模型映射"
             }
           },
           "editModel": {
-            "title": "3. 更换或移除模型",
-            "content": "点击任意模型卡片即可编辑——换成别的模型、切换提供商，或移动到其他层级。悬停卡片会显示操作按钮；垃圾桶图标可把它从规则中移除。",
+            "title": "更换或移除模型",
+            "content": "点击任意模型卡片即可编辑——换成其他模型、切换提供商，或移动到其他层级。悬停卡片会显示操作按钮；点击垃圾桶图标可将其从规则中移除。",
             "annotation": {
-              "click": "点击卡片编辑 / 换模型",
-              "remove": "悬停 → 垃圾桶图标移除"
+              "click": "点击卡片编辑或更换模型",
+              "remove": "悬停后点垃圾桶图标移除"
             }
           },
           "loadBalance": {
-            "title": "4. 层级内负载均衡",
-            "content": "当多个模型处于同一层级（T0）时，传入流量会在它们之间均匀分配，从而平衡负载、避免任何单个模型过载。",
+            "title": "层级内负载均衡",
+            "content": "当多个模型处于同一层级（如 T0）时，传入流量会在它们之间均匀分配，从而平衡负载、避免单个模型过载。",
             "annotation": {
               "sameTier": "同一层级 = 负载均衡",
-              "services": "多个模型共享流量"
+              "services": "多个模型分摊流量"
             }
           },
           "tierFallback": {
-            "title": "5. 基于层级的故障转移链",
-            "content": "层级越低越先尝试：T0 是主选，若所有 T0 模型都失败，流量会级联到 T1，再到 T2，依此类推。用卡片上的上/下操作在层级间移动它，搭建故障转移链。",
+            "title": "层级故障转移链",
+            "content": "层级编号越小越先尝试：T0 是首选；当 T0 的所有模型都失败时，流量会依次级联到 T1、T2……使用卡片上的 ↑/↓ 按钮在层级间移动模型，即可搭建故障转移链。",
             "annotation": {
               "primary": "T0 — 主模型（首先尝试）",
-              "fallback": "T1 — 备选模型（T0 失败时使用）"
+              "fallback": "T1 — 备选模型（T0 失败时启用）"
             }
           },
           "smartIntro": {
             "title": "什么是智能路由？",
-            "content": "智能路由让你定义自定义条件来控制哪个模型处理每个请求。可按模型名称、令牌数量、用户组或任意请求参数路由——精细控制，无需管理复杂的层级配置。",
+            "content": "智能路由让您通过自定义条件控制每个请求由哪个模型处理。可按模型名称、令牌数量、用户组或任意请求参数路由——无需管理复杂的层级配置即可实现精细控制。",
             "annotation": {
-              "smartButton": "用入口开关切换到 Smart",
+              "smartButton": "通过入口的模式开关切换到智能路由",
               "conditional": "基于规则的条件路由"
             }
           },
           "smartConditions": {
             "title": "智能路由条件",
-            "content": "每个智能规则都有一个决定何时生效的条件——例如模型名称「包含 claude」，或令牌数量「大于 4000」用于大上下文。规则自上而下评估，第一个匹配的获胜。",
+            "content": "每条智能规则都有一个决定其何时生效的条件——例如模型名称「包含 claude」，或令牌数量「大于 4000」（用于大上下文）。规则自上而下依次匹配，命中的第一条生效。",
             "annotation": {
               "modelBased": "按模型名称路由",
               "tokenBased": "按令牌数量路由"
@@ -590,14 +590,39 @@ export default {
           },
           "smartAdvanced": {
             "title": "高级智能路由",
-            "content": "把多个智能规则叠加成更丰富的策略：Claude 请求走一条路、大上下文走另一条、高级用户走第三条。不匹配任何规则的请求会落到默认服务。",
+            "content": "将多条智能规则组合成更丰富的策略：Claude 请求走一条路径、大上下文走另一条、高级用户走第三条。未命中任何规则的请求会落入默认服务。",
             "annotation": {
-              "defaultRoute": "不匹配请求的默认路由",
+              "defaultRoute": "未命中请求的默认路由",
               "claudeRoute": "Claude 模型的路由",
               "largeContext": "大上下文窗口的路由"
             }
           }
         }
+      }
+    },
+    "nodes": {
+      "addModel": "添加模型"
+    },
+    "guideDiagrams": {
+      "empty": { "description": "示例规则" },
+      "single-provider": { "description": "单提供商规则" },
+      "two-providers-same-tier": { "description": "负载均衡示例" },
+      "two-providers-different-tiers": { "description": "主备路由示例" },
+      "three-tiers": { "description": "多层级故障转移示例" },
+      "runtime-failover": { "description": "故障转移场景" },
+      "direct-single": { "description": "单提供商直接路由" },
+      "direct-multiple-tiers": { "description": "多层级直接路由" },
+      "smart-basic": {
+        "description": "基础条件智能路由",
+        "smart": { "0": "将 Claude 请求路由到 Anthropic" }
+      },
+      "smart-conditions": {
+        "description": "多条件智能路由",
+        "smart": { "0": "将 Claude 请求路由到 Anthropic", "1": "将大令牌请求路由到 Azure" }
+      },
+      "smart-complex": {
+        "description": "复杂条件智能路由",
+        "smart": { "0": "将 Claude 请求路由到 Anthropic", "1": "将大令牌请求路由到 Azure", "2": "将 @@@ds 命令路由到 DeepSeek" }
       }
     },
     "menu": {

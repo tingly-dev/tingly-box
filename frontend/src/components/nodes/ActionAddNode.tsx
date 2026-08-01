@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
 import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES } from './styles';
 
@@ -81,13 +82,14 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     active,
     warning = false,
     onAdd,
-    tooltip = 'Add model',
+    tooltip,
 }) => {
+    const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
     const spotlight = useAddModelSpotlight(active);
 
     return (
-        <NodeTooltip title={tooltip} placement="top">
+        <NodeTooltip title={tooltip ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })} placement="top">
             <StyledAddProviderNode
                 active={active}
                 warning={warning}
@@ -103,7 +105,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                         fontSize: '0.6rem',
                         lineHeight: 1.1
                     }}>
-                    Add model
+                    {t('rule.nodes.addModel', { defaultValue: 'Add model' })}
                 </Typography>
             </StyledAddProviderNode>
         </NodeTooltip>
