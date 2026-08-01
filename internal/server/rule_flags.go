@@ -173,18 +173,17 @@ func ResolveRuleFlagsWithScenario(
 	// Messages methods read it and add the context-1m beta per request.
 	applyContext1M(c, flags)
 
-	// Attach the anthropic-organization-id override the same way: the outbound
-	// Anthropic client/transport reads it per request and sends it instead of
-	// the provider's login-time organization.
+	// Attach the claude_org_id hint the same way: NewClaudeClient reads it per
+	// request and decides whether/what anthropic-organization-id to send.
 	applyClaudeOrgID(c, flags)
 
 	return flags
 }
 
-// applyClaudeOrgID attaches the claude_org_id override to the request context
-// so the outbound Anthropic client (generic and Claude Code OAuth) sends it as
-// the anthropic-organization-id header. No-op when the flag is empty, so the
-// provider's login-time organization stays in effect.
+// applyClaudeOrgID attaches the claude_org_id flag to the request context so
+// NewClaudeClient can resolve it when composing the anthropic-organization-id
+// header. No-op when the flag is empty, so no organization header is sent —
+// organization attribution is opt-in (see typ.RuleFlags.ClaudeOrgID).
 func applyClaudeOrgID(c *gin.Context, flags typ.RuleFlags) {
 	if flags.ClaudeOrgID == "" || c == nil || c.Request == nil {
 		return

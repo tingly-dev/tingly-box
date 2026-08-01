@@ -257,12 +257,13 @@ type RuleFlags struct {
 	// only the beta header changes behavior.
 	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
 
-	// ClaudeOrgID overrides the anthropic-organization-id header sent upstream.
-	// By default the Claude OAuth client attributes requests to the organization
-	// captured at login (OAuthDetail.ExtraFields["organization_id"]), which is
-	// immutable. This flag lets a rule attribute its requests to a different
-	// Anthropic organization on demand (e.g. org-bound entitlements). Empty
-	// means no override — the provider's login-time organization is used.
+	// ClaudeOrgID controls the anthropic-organization-id header sent upstream
+	// for Claude OAuth providers. Organization attribution is opt-in: empty
+	// (default) sends no organization header at all. "auto"
+	// (typ.ClaudeOrgIDAuto) sends the organization captured at OAuth login
+	// (OAuthDetail.ExtraFields["organization_id"]), which org-bound
+	// entitlements (e.g. Cyber Verification) rely on. Any other value sends
+	// that organization id verbatim.
 	ClaudeOrgID string `json:"claude_org_id,omitempty" yaml:"claude_org_id,omitempty"`
 }
 
