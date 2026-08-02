@@ -9,6 +9,8 @@ export { default as DashboardHeatmapSection } from './DashboardHeatmapSection';
 export { default as AgentQuickNav } from './AgentQuickNav';
 export { default as RequestsView } from './RequestsView';
 export type { UsageRecord } from './RequestsView';
+export { default as PerformanceSummary } from './PerformanceSummary';
+export type { PerformanceQueryParams } from './PerformanceSummary';
 export {
     UsageMetricHeaderCells,
     UsageMetricValueCells,

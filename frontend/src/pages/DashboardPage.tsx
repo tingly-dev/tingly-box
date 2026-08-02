@@ -18,7 +18,7 @@ import {
     Divider,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff } from '@/components/icons';
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRate, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView, PerformanceSummary, DashboardHeatmapSection, formatNumber, getTotalTokens, getCacheHitRate, getCacheHitRateColor, formatCacheBreakdown, getErrorRateColor } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
@@ -735,11 +735,28 @@ export default function DashboardPage() {
                             refreshKey={heatmapRefresh}
                         />
                     ) : effectiveViewMode === 'summary' ? (
-                        timeRange === 'today' || timeRange === 'yesterday' ? (
-                            <HourlyTokenHistoryChart data={timeSeries} />
-                        ) : (
-                            <DailyTokenHistoryChart data={timeSeries} />
-                        )
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(0, 1fr)',
+                                '@media (min-width: 1280px)': {
+                                    gridTemplateColumns: '320px minmax(0, 1fr)',
+                                },
+                                gap: 2,
+                                alignItems: 'stretch',
+                            }}
+                        >
+                            <Box sx={{ minWidth: 0, display: 'flex' }}>
+                                <PerformanceSummary queryParams={recordsParams} />
+                            </Box>
+                            <Box sx={{ minWidth: 0, display: 'flex' }}>
+                                {timeRange === 'today' || timeRange === 'yesterday' ? (
+                                    <HourlyTokenHistoryChart data={timeSeries} />
+                                ) : (
+                                    <DailyTokenHistoryChart data={timeSeries} />
+                                )}
+                            </Box>
+                        </Box>
                     ) : (
                         <RequestsView
                             records={records}

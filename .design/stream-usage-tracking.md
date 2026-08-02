@@ -364,6 +364,15 @@ func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage)
 
 `MetricsData`：`InputTokens / OutputTokens / LatencyMs / TTFTMs / CacheHit / TPS`。
 
+TPS 只对有首内容 token 时间的流式请求成立，口径是首 token 之后的 decode speed，也就是 TPOT 的倒数：
+
+```text
+TPS = (output_tokens - 1) / (completion_time - first_token_time)
+    = (output_tokens - 1) * 1000 / (latency_ms - ttft_ms)
+```
+
+首 token 已计入 TTFT，因此 N 个输出 token 只有 N−1 个 decode interval。非流式请求、`output_tokens <= 1`、缺少首 token 时间，或 `latency_ms <= ttft_ms` 时 TPS 为 0，不进入 Dashboard TPS 分位数。Dashboard 展示的是逐请求 TPS 的分布，不是并发请求叠加后的服务总吞吐。
+
 ### 5.2 `trackUsageFromContext(c, inputTokens, outputTokens, err)` —— 旧式 2-int 入口
 
 只有 input/output 的简化路径（cache/reasoning/system 会丢）。新代码尽量用 §5.1。

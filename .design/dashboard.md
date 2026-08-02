@@ -36,7 +36,7 @@ Three global filters apply to the stat cards, chart, request view, activity heat
 The main analysis pane has three modes:
 
 - **Summary** — stacked token trend.
-- **By Request** — request sample, breakdown charts, and request table; only available for `today` and `yesterday`.
+- **By Request** — paginated request table for concrete diagnosis; only available for `today` and `yesterday`.
 - **Activity** — fixed 365-day heatmap.
 
 If a stale `requests` selection survives a route change into a daily range, `effectiveViewMode` renders Summary instead.
@@ -102,13 +102,14 @@ Vocabulary is deliberate:
 
 ## API contract
 
-Three gzip-compressed JSON endpoints live under `/api/v1/usage/`:
+Four gzip-compressed JSON endpoints live under `/api/v1/usage/`:
 
 | Endpoint | Main consumers | Important parameters |
 |---|---|---|
 | `/stats` | Dashboard cards/model table; Team user/model tables | `group_by=model\|provider\|scenario\|rule\|user\|daily\|hourly`, time bounds, provider/model/scenario/rule/user/status filters, sort, limit ≤ 1000 |
 | `/timeseries` | Dashboard Summary and Activity | `interval=minute\|hour\|day\|week`, time bounds, provider/model/scenario/user filters |
 | `/records` | Dashboard By Request | time bounds, provider/model/scenario/user/status filters, `limit` ≤ 1000, `offset` |
+| `/performance` | Dashboard Summary | time bounds and provider/model/scenario/user filters; successful requests only |
 
 The stats response is `{ meta, data }`; `data` contains additive counts plus derived rates. The records response uses `meta: { total, limit, offset }` for the real filtered range.
 
@@ -122,7 +123,8 @@ Usage Dashboard:
 
 - `/stats`, `group_by=model`, `limit=1000`.
 - `/timeseries`, with minute or day interval.
-- `/records`, initially limited to the most recent 500.
+- `/records`, initially limited to the most recent 500 when By Request is opened.
+- `/performance`, for the complete filtered range while Summary is visible.
 - `getProviders` and `listAPITokens` for filter metadata.
 
 Team Usage:
@@ -137,7 +139,7 @@ The Team table intentionally starts from registered tokens, then left-joins usag
 
 The frontend transport uses the generated OpenAPI client, while dashboard view components keep small local interfaces (`AggregatedStat`, `TimeSeriesData`, `UsageRecord`) for rendering.
 
-The runtime handlers accept `user_id` for `/timeseries` and `/records`, and the frontend sends it. At the time of writing, those two query parameters are not declared in `TimeSeriesQuery` / `UsageRecordsQuery` and their Swagger route configuration, so `api.ts` uses a cast around the generated query type. If the usage API contract is touched, add the missing Swagger query definitions and run `task codegen`; do not hand-edit `openapi.json` or `frontend/src/client/schema.d.ts`.
+The runtime handlers and Swagger contract accept `user_id` consistently for `/timeseries`, `/records`, and `/performance`. Contract changes start from the backend model and route configuration, followed by `task codegen`; do not hand-edit `openapi.json` or `frontend/src/client/schema.d.ts`.
 
 ## Backend query and aggregation path
 
@@ -218,6 +220,16 @@ Cards show:
 
 The stack order is Cache Read → Input → Output. Cache Write is carried in each data point for tooltips but is never rendered as a fourth series.
 
+Response Performance also lives in Summary because it describes the selected range as a whole rather than an individual request. It comes from `/performance` and excludes failed requests. When the viewport can preserve a readable chart (1280px and wider), it shares one analysis row with the token trend: Response Performance acts as a compact fixed-width index (320px) on the left, while the trend receives the remaining width on the right. Narrower screens stack the two cards in that same order. This keeps percentile summary and time-series detail at the same information level without dedicating a separate full row to either one:
+
+- **TTFT** — P10/P50/P90/P95/P99 over streamed requests with a first content token.
+- **TPS** — per-request output throughput, derived as `(output_tokens - 1) / ((latency_ms - ttft_ms) / 1000)`, the inverse of TPOT. The first token belongs to TTFT, so N output tokens contain N−1 decode intervals. The API returns P10/P50/P90/P95/P99; the UI emphasizes P10 through P95 and intentionally hides TPS P99. This is not aggregate server throughput across concurrent requests.
+- **Latency** — P10/P50/P90/P95/P99 over successful requests with a positive latency.
+
+Percentile rows descend top-to-bottom as P99 → P95 → P90 → P50 → P10; metric columns run left-to-right as TTFT → TPS → Latency. This transposed matrix keeps the performance card narrow while preserving globally aligned comparisons. The backend calculates all five percentiles for every metric, but the frontend intentionally hides TPS P99 because the fastest 1% is easily dominated by short-request timing artifacts and has little operational value; TPS P95 remains the stable upper-tail reference. TTFT and Latency retain P99. All values have equal visual weight and use the same type scale. TPS values omit a repeated unit because the metric name already defines it.
+
+The frontend treats absent or non-finite percentile fields as unavailable (`—`) so a rolling upgrade against an older backend schema does not crash the dashboard while P95 is being introduced.
+
 ### By Request
 
 The dashboard first loads the most recent 500 records plus `meta.total`.
@@ -225,7 +237,7 @@ The dashboard first loads the most recent 500 records plus `meta.total`.
 - If `total ≤ 500`, status filtering and pagination remain client-side.
 - If `total > 500`, the table switches to server paging and pushes status, limit, and offset into SQL.
 
-The charts always describe the 500-record sample. When the range is larger, a caption explicitly says that the charts reflect the most recent N of M requests.
+By Request intentionally contains only the paginated request table. Token Breakdown was removed because its input/output/cache totals duplicate the stat cards, summary trend, and request columns. The request table exposes derived TPS per row for concrete diagnosis.
 
 The page resets request pagination when filters or the range start change, but not when auto-refresh only advances the range end.
 

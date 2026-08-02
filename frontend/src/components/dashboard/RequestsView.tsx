@@ -17,20 +17,8 @@ import {
     CircularProgress,
     useTheme,
 } from '@mui/material';
-import {
-    PieChart,
-    Pie,
-    Cell,
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip as ReTooltip,
-    ResponsiveContainer,
-} from 'recharts';
 import { WaveSine as StreamIcon } from '@/components/icons';
-import { getThemeChartStyles, TOKEN_COLORS, formatNumber, hasCacheWrites } from './chartStyles';
+import { TOKEN_COLORS, formatNumber, hasCacheWrites } from './chartStyles';
 import api from '@/services/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -54,22 +42,14 @@ export interface UsageRecord {
     error_code?: string;
     latency_ms: number;
     ttft_ms?: number;
+    tokens_per_second?: number;
     streamed: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SUCCESS_COLOR = '#10B981';
-const ERROR_COLOR  = '#EF4444';
-
-const LATENCY_BUCKETS = [
-    { label: '<0.2s',   min: 0,    max: 200  },
-    { label: '0.2-0.5', min: 200,  max: 500  },
-    { label: '0.5-1s',  min: 500,  max: 1000 },
-    { label: '1-2s',    min: 1000, max: 2000 },
-    { label: '2-5s',    min: 2000, max: 5000 },
-    { label: '>5s',     min: 5000, max: Infinity },
-];
+const ERROR_COLOR = '#EF4444';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,192 +60,22 @@ const fmtLatency = (ms: number) => {
     return `${ms}ms`;
 };
 
+const getTokensPerSecond = (record: UsageRecord) => {
+    if (!record.streamed) return 0;
+    if ((record.tokens_per_second ?? 0) > 0) return record.tokens_per_second!;
+    const decodeMs = record.latency_ms - (record.ttft_ms ?? 0);
+    if (record.output_tokens <= 1 || (record.ttft_ms ?? 0) <= 0 || decodeMs <= 0) return 0;
+    return (record.output_tokens - 1) * 1000 / decodeMs;
+};
+
+const getTPSFormula = (record: UsageRecord) => {
+    const decodeMs = record.latency_ms - (record.ttft_ms ?? 0);
+    if (getTokensPerSecond(record) <= 0) return '';
+    return `${record.output_tokens - 1} decode intervals / ${decodeMs}ms after TTFT`;
+};
+
 const fmtTime = (ts: string) =>
     new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-// ─── Token Donut ─────────────────────────────────────────────────────────────
-
-function DonutTooltip({ active, payload }: any) {
-    const theme = useTheme();
-    if (!active || !payload?.length) return null;
-    const d = payload[0].payload;
-    return (
-        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25, boxShadow: theme.shadows[4] }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: d.color, flexShrink: 0 }} />
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>{d.name}</Typography>
-            </Box>
-            <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.25 }}>
-                {fmtTokens(d.value)} ({d.pct}%)
-            </Typography>
-        </Box>
-    );
-}
-
-function TokenDonut({ records }: { records: UsageRecord[] }) {
-    const totalInput  = records.reduce((s, r) => s + r.input_tokens, 0);
-    const totalOutput = records.reduce((s, r) => s + r.output_tokens, 0);
-    const totalCache  = records.reduce((s, r) => s + r.cache_read_tokens, 0);
-    // Cache writes live INSIDE input_tokens, so they must not become a fourth
-    // slice — that would inflate the total by counting them twice. They annotate
-    // the Input slice instead.
-    const totalCacheWrite = records.reduce((s, r) => s + (r.cache_write_tokens || 0), 0);
-    const total = totalInput + totalOutput + totalCache;
-
-    const pieData = [
-        { name: 'Input',  value: totalInput,  color: TOKEN_COLORS.input.main,  pct: total > 0 ? ((totalInput  / total) * 100).toFixed(1) : '0',
-          note: totalCacheWrite > 0 ? `incl. ${fmtTokens(totalCacheWrite)} written` : '' },
-        { name: 'Output', value: totalOutput, color: TOKEN_COLORS.output.main, pct: total > 0 ? ((totalOutput / total) * 100).toFixed(1) : '0', note: '' },
-        { name: 'Cache Read', value: totalCache, color: TOKEN_COLORS.cache.main, pct: total > 0 ? ((totalCache / total) * 100).toFixed(1) : '0', note: '' },
-    ].filter(d => d.value > 0);
-
-    return (
-        <Paper elevation={0} sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper', boxShadow: 'none' }}>
-            <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', mb: 2 }}>Token Breakdown</Typography>
-            {total === 0 ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 140 }}>
-                    <Typography variant="caption" sx={{
-                        color: "text.disabled"
-                    }}>No data</Typography>
-                </Box>
-            ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
-                    {/* Donut */}
-                    <Box sx={{ position: 'relative', flexShrink: 0, width: 140, height: 140 }}>
-                        <PieChart width={140} height={140}>
-                            <Pie data={pieData} cx={70} cy={70} innerRadius={42} outerRadius={62} dataKey="value" paddingAngle={2} isAnimationActive={false}>
-                                {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                            </Pie>
-                            <ReTooltip content={<DonutTooltip />} />
-                        </PieChart>
-                        {/* Center label */}
-                        <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                            <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, lineHeight: 1.2 }}>
-                                {fmtTokens(total)}
-                            </Typography>
-                            <Typography sx={{ fontSize: '0.58rem', color: 'text.secondary', lineHeight: 1.2 }}>
-                                total
-                            </Typography>
-                        </Box>
-                    </Box>
-
-                    {/* Legend */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minWidth: 0 }}>
-                        {pieData.map(d => (
-                            <Box key={d.name} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: d.color, flexShrink: 0 }} />
-                                <Box sx={{ minWidth: 0 }}>
-                                    <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.2 }}>{d.name}</Typography>
-                                    <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.3 }}>
-                                        {fmtTokens(d.value)}
-                                        <Typography component="span" sx={{ fontSize: '0.65rem', color: 'text.secondary', ml: 0.5 }}>
-                                            {d.pct}%
-                                        </Typography>
-                                    </Typography>
-                                    {d.note && (
-                                        <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary', lineHeight: 1.2 }}>
-                                            {d.note}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            </Box>
-                        ))}
-                        <Box sx={{ mt: 0.5, pt: 0.75, borderTop: '1px solid', borderColor: 'divider' }}>
-                            <Typography sx={{ fontSize: '0.68rem', color: 'text.secondary' }}>
-                                {records.length} requests
-                            </Typography>
-                        </Box>
-                    </Box>
-                </Box>
-            )}
-        </Paper>
-    );
-}
-
-// ─── Latency Histogram ────────────────────────────────────────────────────────
-
-function HistoTooltip({ active, payload, label }: any) {
-    const theme = useTheme();
-    if (!active || !payload?.length) return null;
-    const success = payload.find((p: any) => p.dataKey === 'success')?.value ?? 0;
-    const error   = payload.find((p: any) => p.dataKey === 'error')?.value   ?? 0;
-    return (
-        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25, boxShadow: theme.shadows[4] }}>
-            <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 0.5 }}>{label}</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                <Typography sx={{ fontSize: '0.7rem', color: SUCCESS_COLOR }}>Success: {success}</Typography>
-                {error > 0 && <Typography sx={{ fontSize: '0.7rem', color: ERROR_COLOR }}>Error: {error}</Typography>}
-                <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontWeight: 600 }}>Total: {success + error}</Typography>
-            </Box>
-        </Box>
-    );
-}
-
-function LatencyHistogram({ records }: { records: UsageRecord[] }) {
-    const theme = useTheme();
-    const chartStyles = getThemeChartStyles(theme);
-    const [metric, setMetric] = useState<'latency' | 'ttft'>('latency');
-
-    const getValue = (r: UsageRecord) => metric === 'latency' ? r.latency_ms : (r.ttft_ms ?? 0);
-    // TTFT is only meaningful for streamed requests
-    const pool = metric === 'ttft' ? records.filter(r => r.streamed && (r.ttft_ms ?? 0) > 0) : records;
-
-    const histData = LATENCY_BUCKETS.map(b => ({
-        label: b.label,
-        success: pool.filter(r => getValue(r) >= b.min && getValue(r) < b.max && r.status === 'success').length,
-        error:   pool.filter(r => getValue(r) >= b.min && getValue(r) < b.max && r.status !== 'success').length,
-    }));
-
-    const hasData = pool.length > 0;
-
-    return (
-        <Paper elevation={0} sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper', boxShadow: 'none' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                    {metric === 'latency' ? 'Latency' : 'TTFT'} Distribution
-                </Typography>
-                <ToggleButtonGroup
-                    value={metric} exclusive size="small"
-                    onChange={(_, v) => v && setMetric(v)}
-                    sx={{ '& .MuiToggleButton-root': { px: 1.25, py: 0.25, fontSize: '0.7rem', textTransform: 'none' } }}
-                >
-                    <ToggleButton value="latency">Latency</ToggleButton>
-                    <ToggleButton value="ttft">TTFT</ToggleButton>
-                </ToggleButtonGroup>
-            </Box>
-            {!hasData ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, gap: 0.5 }}>
-                    <Typography variant="caption" sx={{
-                        color: "text.disabled"
-                    }}>
-                        {metric === 'ttft' ? 'No TTFT data — backend field not yet exposed' : 'No data'}
-                    </Typography>
-                </Box>
-            ) : (
-                <ResponsiveContainer width="100%" height={140}>
-                    <BarChart data={histData} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barCategoryGap="20%">
-                        <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.chart.grid} strokeOpacity={0.6} vertical={false} />
-                        <XAxis
-                            dataKey="label"
-                            tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
-                            tickLine={false}
-                            axisLine={{ stroke: chartStyles.chart.axis }}
-                        />
-                        <YAxis
-                            tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
-                            tickLine={false}
-                            axisLine={false}
-                            allowDecimals={false}
-                        />
-                        <ReTooltip content={<HistoTooltip />} cursor={{ fill: theme.palette.action.hover }} />
-                        <Bar dataKey="success" stackId="a" fill={SUCCESS_COLOR} fillOpacity={0.75} isAnimationActive={false} radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="error"   stackId="a" fill={ERROR_COLOR}   fillOpacity={0.85} isAnimationActive={false} radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
-            )}
-        </Paper>
-    );
-}
 
 // ─── Request Table ────────────────────────────────────────────────────────────
 
@@ -330,6 +140,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                             <TableCell align="right">Output</TableCell>
                             <TableCell align="right">Latency</TableCell>
                             <TableCell align="right">TTFT</TableCell>
+                            <TableCell align="right">TPS</TableCell>
                             <TableCell align="center">Status</TableCell>
                             <TableCell align="center">Stream</TableCell>
                         </TableRow>
@@ -337,7 +148,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                     <TableBody>
                         {records.length === 0 && !loading ? (
                             <TableRow>
-                                <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
+                                <TableCell colSpan={11 + (showCacheWrite ? 1 : 0)} align="center" sx={{ py: 5 }}>
                                     <Typography variant="body2" sx={{
                                         color: "text.secondary"
                                     }}>No requests found</Typography>
@@ -430,6 +241,15 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                     </Typography>
                                 </TableCell>
 
+                                {/* Per-request output TPS after TTFT */}
+                                <TableCell align="right">
+                                    <Tooltip title={getTPSFormula(r)} placement="top">
+                                        <Typography sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: getTokensPerSecond(r) > 0 ? 'text.primary' : 'text.disabled', cursor: getTokensPerSecond(r) > 0 ? 'help' : 'default' }}>
+                                            {getTokensPerSecond(r) > 0 ? getTokensPerSecond(r).toFixed(1) : '-'}
+                                        </Typography>
+                                    </Tooltip>
+                                </TableCell>
+
                                 {/* Status */}
                                 <TableCell align="center">
                                     {r.status === 'success' ? (
@@ -482,8 +302,8 @@ export interface RecordsQueryParams {
 }
 
 interface RequestsViewProps {
-    /** Most recent records in range (capped sample) — feeds the charts, and
-     *  the table too when it covers the whole range. */
+    /** Most recent records in range (capped sample) — feeds the table directly
+     *  when it covers the whole range. */
     records: UsageRecord[];
     loading: boolean;
     /** Real total in range from the server; records may be capped below it. */
@@ -561,20 +381,7 @@ export default function RequestsView({ records, loading, totalCount, queryParams
     const tableLoading = sampleComplete ? loading && records.length === 0 : serverLoading;
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Charts row */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                <TokenDonut records={records} />
-                <LatencyHistogram records={records} />
-            </Box>
-            {!sampleComplete && totalCount != null && (
-                <Typography variant="caption" sx={{ color: 'text.secondary', mt: -1.5 }}>
-                    Charts reflect the most recent {records.length.toLocaleString()} of{' '}
-                    {totalCount.toLocaleString()} requests; the table below pages through all of them.
-                </Typography>
-            )}
-
-            {/* Table */}
+        <Box>
             <RequestTable
                 records={tableRecords}
                 total={tableTotal}

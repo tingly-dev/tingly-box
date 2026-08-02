@@ -2514,6 +2514,7 @@ export const handlers = [
                 : m.model.includes('mini') ? 200 + Math.random() * 600
                 : 600 + Math.random() * 1800
             )
+            const ttft = (m.streamed && !isError) ? Math.round(latency * (0.05 + Math.random() * 0.15)) : 0
             const ts = new Date(dayStart.getTime() + Math.random() * (now - dayStart.getTime()))
             return {
                 id: i + 1,
@@ -2530,7 +2531,10 @@ export const handlers = [
                 status: isError ? 'error' : 'success',
                 error_code: isError ? 'rate_limit_exceeded' : '',
                 latency_ms: latency,
-                ttft_ms: (m.streamed && !isError) ? Math.round(latency * (0.05 + Math.random() * 0.15)) : 0,
+                ttft_ms: ttft,
+                tokens_per_second: (m.streamed && !isError && output > 1)
+                    ? (output - 1) * 1000 / (latency - ttft)
+                    : 0,
                 streamed: m.streamed && !isError,
             }
         }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
@@ -2544,6 +2548,12 @@ export const handlers = [
             data: page,
         })
     }),
+
+    http.get('/api/v1/usage/performance', () => HttpResponse.json({
+        ttft: { sample_count: 842, p10: 118, p50: 386, p90: 1120, p95: 1860, p99: 3480 },
+        tps: { sample_count: 817, p10: 31.4, p50: 52.8, p90: 83.6, p95: 94.8, p99: 104.2 },
+        completion: { sample_count: 910, p10: 2350, p50: 8400, p90: 22100, p95: 35400, p99: 61200 },
+    })),
 
     // ============================================
     // ImBot Settings API (v1)

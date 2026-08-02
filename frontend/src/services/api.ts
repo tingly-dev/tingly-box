@@ -962,6 +962,36 @@ export const api = {
         }
     },
 
+    getUsagePerformance: async (params: {
+        start_time?: string;
+        end_time?: string;
+        provider?: string;
+        model?: string;
+        scenario?: string;
+        user_id?: string;
+    } = {}): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/usage/performance', {
+                headers,
+                params: {
+                    query: {
+                        start_time: params.start_time,
+                        end_time: params.end_time,
+                        provider: params.provider,
+                        model: params.model,
+                        scenario: params.scenario,
+                        user_id: params.user_id,
+                    }
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
     // ============================================
     // OAuth API
     // ============================================
