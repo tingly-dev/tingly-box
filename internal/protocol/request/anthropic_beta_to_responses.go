@@ -71,6 +71,11 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 		params.TopP = ParamOpt(anthropicReq.TopP.Value)
 	}
 
+	// Convert extended thinking to reasoning effort
+	if reasoning, ok := anthropicBetaThinkingToReasoning(anthropicReq.Thinking); ok {
+		params.Reasoning = reasoning
+	}
+
 	// Convert tools from Anthropic format to Responses API format
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicBetaToolsToResponses(anthropicReq.Tools)
@@ -235,6 +240,17 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 	var items []responses.ResponseInputItemUnionParam
 	var textContent string
 	var textBlocks []anthropic.BetaTextBlockParam
+
+	// Thinking blocks precede everything else in the turn — see the v1
+	// converter's identical comment (convertV1AssistantMessageToResponsesInput)
+	// for why ordering matters here.
+	for _, block := range msg.Content {
+		if block.OfThinking != nil {
+			if item := reasoningInputItemFromThinkingText(block.OfThinking.Thinking); item != nil {
+				items = append(items, *item)
+			}
+		}
+	}
 
 	// Process content blocks
 	for _, block := range msg.Content {

@@ -117,6 +117,14 @@ type E2ERequest struct {
 	// Only meaningful for target_type="provider". Use this to isolate whether
 	// a failure is in the upstream provider or in TB's own middleware stack.
 	Direct bool `json:"direct,omitempty"`
+
+	// Endpoint forces which OpenAI endpoint to probe: "chat" or "responses".
+	// Only meaningful for OpenAI-style providers; ignored otherwise. Empty
+	// (default) keeps the existing behavior: Codex OAuth providers probe
+	// Responses, everything else probes Chat. Used to test whether a
+	// provider genuinely supports Responses before a rule starts routing
+	// there (e.g. the Codex-page "enable native Responses" toggle).
+	Endpoint string `json:"endpoint,omitempty" example:"responses"`
 }
 
 // E2EData is an alias to ProbeResult — the canonical SDK-level probe result.

@@ -2,6 +2,7 @@ import {
     Box,
     Typography,
     Chip,
+    CircularProgress,
     IconButton,
     Tooltip,
     TextField,
@@ -85,6 +86,13 @@ export interface ModelRequestHeaderProps {
     // 1M context window props
     context1M?: boolean;
     onContext1MToggle?: () => void;
+    // Native OpenAI Responses API toggle (Codex-scenario rules only). Provided
+    // only when the rule's primary provider is OpenAI-style — same gating
+    // pattern as context1M. responsesProbing shows a spinner while the
+    // pre-flight connectivity check runs before the flag is actually set.
+    responsesEnabled?: boolean;
+    responsesProbing?: boolean;
+    onResponsesToggle?: () => void;
 }
 
 export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
@@ -101,6 +109,9 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onToggleExpanded,
     context1M = false,
     onContext1MToggle,
+    responsesEnabled = false,
+    responsesProbing = false,
+    onResponsesToggle,
 }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
@@ -285,6 +296,52 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                     onContext1MToggle();
                                 }}
                             />
+                        </Box>
+                    </Tooltip>
+                )}
+
+                {/* Native OpenAI Responses API Toggle (Codex scenario) */}
+                {onResponsesToggle && (
+                    <Tooltip title={
+                        responsesProbing
+                            ? "Checking whether the provider supports the Responses API…"
+                            : responsesEnabled
+                                ? "Disable native Responses API"
+                                : "Enable native Responses API (checks provider support first)"
+                    }>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                ml: 0.5,
+                                opacity: active ? 1 : 0.5,
+                                pointerEvents: active && !responsesProbing ? 'auto' : 'none',
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    color: responsesEnabled ? 'primary.main' : 'text.secondary',
+                                    userSelect: 'none'
+                                }}
+                            >
+                                Responses
+                            </Typography>
+                            {responsesProbing ? (
+                                <CircularProgress size={16} thickness={5} sx={{ mx: 0.75 }} />
+                            ) : (
+                                <Switch
+                                    size="small"
+                                    checked={responsesEnabled}
+                                    onChange={(e) => {
+                                        e.stopPropagation();
+                                        onResponsesToggle();
+                                    }}
+                                />
+                            )}
                         </Box>
                     </Tooltip>
                 )}

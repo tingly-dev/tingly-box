@@ -25,6 +25,11 @@ export interface ProbeRequest {
     // Only meaningful for provider targets — used to isolate whether a failure
     // is in the upstream provider or in TB's own middleware stack.
     direct?: boolean;
+
+    // Endpoint: force which OpenAI endpoint to probe ('chat' | 'responses').
+    // OpenAI-style providers only; ignored otherwise. Empty keeps the default
+    // (Codex OAuth providers probe responses, everything else probes chat).
+    endpoint?: 'chat' | 'responses';
 }
 
 export interface ProbeToolCall {

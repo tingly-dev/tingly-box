@@ -24,6 +24,8 @@ import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
+import {runProbe} from '@/components/probe/runProbe';
+import {notify} from '@/utils/notify';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -263,6 +265,53 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return [...list].sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0));
     }, [record.providers]);
 
+    // ── Native OpenAI Responses API toggle (Codex-scenario rules only) ──
+    // Codex is a special-cased page, not a generic capability: this toggle is
+    // deliberately scoped to record.scenario === 'codex' rather than every
+    // OpenAI-style rule, matching how the feature was scoped end to end.
+    const [responsesProbing, setResponsesProbing] = React.useState(false);
+    const primaryService = sortedDefaultProviders.find((p) => p.active !== false) || sortedDefaultProviders[0];
+    const showResponsesToggle = record.scenario === 'codex'
+        && !!primaryService
+        && getApiStyle(primaryService.provider) === 'openai';
+    const responsesEnabled = record.flags?.openaiEndpointOverride === 'responses';
+
+    const handleResponsesToggle = React.useCallback(async () => {
+        if (!primaryService) return;
+
+        // Disabling never needs a probe — it's just reverting to the
+        // conservative default, always safe.
+        if (responsesEnabled) {
+            onUpdateRecord?.('flags', { ...record.flags, openaiEndpointOverride: 'auto' });
+            return;
+        }
+
+        setResponsesProbing(true);
+        try {
+            const result = await runProbe({
+                target_type: 'provider',
+                provider_uuid: primaryService.provider,
+                model: primaryService.model,
+                test_mode: 'simple',
+                direct: true,
+                endpoint: 'responses',
+            });
+            if (result.success) {
+                onUpdateRecord?.('flags', { ...record.flags, openaiEndpointOverride: 'responses' });
+                notify.success('Native Responses API enabled for this rule.');
+            } else {
+                notify.error(
+                    result.error?.message || 'This provider/model does not appear to support the Responses API.',
+                    { title: 'Responses API check failed' },
+                );
+            }
+        } catch (err: any) {
+            notify.error(err?.message || 'Failed to check Responses API support.', { title: 'Responses API check failed' });
+        } finally {
+            setResponsesProbing(false);
+        }
+    }, [primaryService, responsesEnabled, record.flags, onUpdateRecord]);
+
     // Group already-sorted providers into tiers (single pass — order preserved from sortedDefaultProviders)
     const tierGroups = React.useMemo(() => {
         const groups = new Map<number, typeof sortedDefaultProviders>();
@@ -478,6 +527,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     // Notify parent for scenario-specific handling
                     onContext1MToggle?.(newState, record.uuid);
                 }}
+                responsesEnabled={responsesEnabled}
+                responsesProbing={responsesProbing}
+                onResponsesToggle={showResponsesToggle ? handleResponsesToggle : undefined}
             />
 
             {/* Tier Guide Dialog */}

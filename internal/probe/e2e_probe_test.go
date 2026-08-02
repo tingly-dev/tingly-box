@@ -201,3 +201,25 @@ func TestWithProbeHeaders_ContextRoundTrip(t *testing.T) {
 	_, ok = client.GetProbeHeaders(context.Background())
 	assert.False(t, ok)
 }
+
+// ---- endpoint override context plumbing ----
+
+func TestWithEndpointOverride_RoundTrip(t *testing.T) {
+	ctx := withEndpointOverride(context.Background(), "responses")
+	assert.Equal(t, "responses", endpointOverrideFromContext(ctx))
+
+	ctx = withEndpointOverride(context.Background(), "chat")
+	assert.Equal(t, "chat", endpointOverrideFromContext(ctx))
+}
+
+func TestWithEndpointOverride_InvalidValueIsNoop(t *testing.T) {
+	ctx := withEndpointOverride(context.Background(), "bogus")
+	assert.Equal(t, "", endpointOverrideFromContext(ctx))
+
+	ctx = withEndpointOverride(context.Background(), "")
+	assert.Equal(t, "", endpointOverrideFromContext(ctx))
+}
+
+func TestEndpointOverrideFromContext_UnsetReturnsEmpty(t *testing.T) {
+	assert.Equal(t, "", endpointOverrideFromContext(context.Background()))
+}
