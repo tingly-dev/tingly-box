@@ -66,11 +66,6 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 		params.TopP = param.NewOpt(anthropicReq.TopP.Value)
 	}
 
-	// Convert extended thinking to reasoning effort
-	if reasoning, ok := anthropicV1ThinkingToReasoning(anthropicReq.Thinking); ok {
-		params.Reasoning = reasoning
-	}
-
 	// Convert tools
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicV1ToolsToResponses(anthropicReq.Tools)
@@ -251,18 +246,6 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 	var textContent string
 	var textBlocks []anthropic.TextBlockParam
 
-	// Thinking blocks precede everything else in the turn — DeepSeek's own
-	// Responses API emits reasoning items before message/function_call items,
-	// and Responses is stateless, so a replayed turn must preserve that order
-	// for the model to see its own prior reasoning ahead of what it produced.
-	for _, block := range msg.Content {
-		if block.OfThinking != nil {
-			if item := reasoningInputItemFromThinkingText(block.OfThinking.Thinking); item != nil {
-				items = append(items, *item)
-			}
-		}
-	}
-
 	// Process content blocks to collect text and find tool_use blocks
 	for _, block := range msg.Content {
 		if block.OfText != nil {
@@ -315,7 +298,7 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 		})
 	}
 
-	// An assistant message with no thinking, text, or tool_use blocks is empty — skip it.
+	// An assistant message with no text and no tool_use blocks is empty — skip it.
 	return items
 }
 
