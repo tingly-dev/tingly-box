@@ -144,6 +144,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 			Required:    false,
 			Description: "Filter by scenario",
 		}),
+		swagger.WithQueryConfig("user_id", swagger.QueryParamConfig{
+			Name:        "user_id",
+			Type:        "string",
+			Required:    false,
+			Description: "Filter by user ID",
+		}),
 		swagger.WithResponseModel(TimeSeriesResponse{}),
 		swagger.WithErrorResponses(
 			swagger.ErrorResponseConfig{Code: 503, Message: "Usage store not available"},
@@ -191,6 +197,12 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 			Required:    false,
 			Description: "Filter by status",
 		}),
+		swagger.WithQueryConfig("user_id", swagger.QueryParamConfig{
+			Name:        "user_id",
+			Type:        "string",
+			Required:    false,
+			Description: "Filter by user ID",
+		}),
 		swagger.WithQueryConfig("limit", swagger.QueryParamConfig{
 			Name:        "limit",
 			Type:        "integer",
@@ -209,6 +221,35 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 			Minimum:     intPtr(0),
 		}),
 		swagger.WithResponseModel(UsageRecordsResponse{}),
+		swagger.WithErrorResponses(
+			swagger.ErrorResponseConfig{Code: 503, Message: "Usage store not available"},
+		),
+	)
+
+	// GET /api/v1/usage/performance - Get response-performance percentiles
+	router.GET("/usage/performance", handler.GetPerformanceSummary,
+		swagger.WithMiddleware(middleware.Gzip()),
+		swagger.WithTags("usage"),
+		swagger.WithDescription("Returns TTFT, per-request output TPS, and latency percentiles over successful requests"),
+		swagger.WithQueryConfig("start_time", swagger.QueryParamConfig{
+			Name: "start_time", Type: "string", Description: "ISO 8601 start time",
+		}),
+		swagger.WithQueryConfig("end_time", swagger.QueryParamConfig{
+			Name: "end_time", Type: "string", Description: "ISO 8601 end time",
+		}),
+		swagger.WithQueryConfig("provider", swagger.QueryParamConfig{
+			Name: "provider", Type: "string", Description: "Filter by provider UUID",
+		}),
+		swagger.WithQueryConfig("model", swagger.QueryParamConfig{
+			Name: "model", Type: "string", Description: "Filter by model name",
+		}),
+		swagger.WithQueryConfig("scenario", swagger.QueryParamConfig{
+			Name: "scenario", Type: "string", Description: "Filter by scenario",
+		}),
+		swagger.WithQueryConfig("user_id", swagger.QueryParamConfig{
+			Name: "user_id", Type: "string", Description: "Filter by user ID",
+		}),
+		swagger.WithResponseModel(PerformanceSummaryResponse{}),
 		swagger.WithErrorResponses(
 			swagger.ErrorResponseConfig{Code: 503, Message: "Usage store not available"},
 		),

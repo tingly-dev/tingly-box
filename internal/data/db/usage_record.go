@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -124,6 +125,26 @@ type UsageStore struct {
 	// lock (WAL mode supports concurrent readers), so dashboard queries do
 	// not serialize behind proxy usage writes or each other.
 	mu sync.RWMutex
+}
+
+// PerformanceMetricSummary describes the typical and tail values for one
+// request-performance metric. P10 is primarily useful for TPS, where lower is
+// worse; latency-style metrics use P50/P90/P99.
+type PerformanceMetricSummary struct {
+	SampleCount int64
+	P10         float64
+	P50         float64
+	P90         float64
+	P95         float64
+	P99         float64
+}
+
+// PerformanceSummary separates the three questions users ask about a streamed
+// response: when it started, how quickly it generated, and when it completed.
+type PerformanceSummary struct {
+	TTFT       PerformanceMetricSummary
+	TPS        PerformanceMetricSummary
+	Completion PerformanceMetricSummary
 }
 
 // NewUsageStore creates or loads a usage store using SQLite database.
@@ -629,6 +650,102 @@ func (us *UsageStore) GetRecords(startTime, endTime time.Time, filters map[strin
 	}
 
 	return records, total, nil
+}
+
+// TokensPerSecond derives per-request output TPS from persisted timing fields.
+// The first token is accounted for by TTFT, leaving N-1 decode intervals from
+// the first output token to the last.
+func TokensPerSecond(outputTokens, latencyMs, ttftMs int) float64 {
+	decodeMs := latencyMs - ttftMs
+	if outputTokens <= 1 || ttftMs <= 0 || decodeMs <= 0 {
+		return 0
+	}
+	return float64(outputTokens-1) * 1000 / float64(decodeMs)
+}
+
+// GetPerformanceSummary calculates percentiles across the complete filtered
+// range. Only successful requests participate: failures and cancellations have
+// different completion semantics and would distort the user-experience view.
+func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+
+	query := us.db.Model(&UsageRecord{}).
+		Select("latency_ms", "ttft_ms", "output_tokens", "streamed").
+		Where("status = ?", "success")
+	if !startTime.IsZero() {
+		query = query.Where("timestamp >= ?", startTime)
+	}
+	if !endTime.IsZero() {
+		query = query.Where("timestamp <= ?", endTime)
+	}
+	for key, value := range filters {
+		query = query.Where(key+" = ?", value)
+	}
+
+	var records []UsageRecord
+	if err := query.Find(&records).Error; err != nil {
+		return PerformanceSummary{}, err
+	}
+
+	completion := make([]float64, 0, len(records))
+	ttft := make([]float64, 0, len(records))
+	tps := make([]float64, 0, len(records))
+	for _, record := range records {
+		if record.LatencyMs > 0 {
+			completion = append(completion, float64(record.LatencyMs))
+		}
+		if !record.Streamed {
+			continue
+		}
+		if record.TTFTMs > 0 {
+			ttft = append(ttft, float64(record.TTFTMs))
+		}
+		if speed := TokensPerSecond(record.OutputTokens, record.LatencyMs, record.TTFTMs); speed > 0 {
+			tps = append(tps, speed)
+		}
+	}
+
+	return PerformanceSummary{
+		TTFT:       summarizePerformanceMetric(ttft),
+		TPS:        summarizePerformanceMetric(tps),
+		Completion: summarizePerformanceMetric(completion),
+	}, nil
+}
+
+func summarizePerformanceMetric(values []float64) PerformanceMetricSummary {
+	if len(values) == 0 {
+		return PerformanceMetricSummary{}
+	}
+	sort.Float64s(values)
+	return PerformanceMetricSummary{
+		SampleCount: int64(len(values)),
+		P10:         percentileFloat(values, 0.10),
+		P50:         percentileFloat(values, 0.50),
+		P90:         percentileFloat(values, 0.90),
+		P95:         percentileFloat(values, 0.95),
+		P99:         percentileFloat(values, 0.99),
+	}
+}
+
+func percentileFloat(sorted []float64, p float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	if p <= 0 {
+		return sorted[0]
+	}
+	if p >= 1 {
+		return sorted[len(sorted)-1]
+	}
+	index := p * float64(len(sorted)-1)
+	lower := int(index)
+	upper := lower + 1
+	if upper >= len(sorted) {
+		return sorted[lower]
+	}
+	fraction := index - float64(lower)
+	return sorted[lower] + fraction*(sorted[upper]-sorted[lower])
 }
 
 // GetRecordsAfterID returns usage records with id greater than lastID.

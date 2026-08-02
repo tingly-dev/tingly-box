@@ -197,7 +197,7 @@ func (rt *RandomTactic) GetType() loadbalance.TacticType {
 	return loadbalance.TacticRandom
 }
 
-// SpeedBasedTactic implements load balancing based on token generation speed
+// SpeedBasedTactic implements load balancing based on output TPS
 type SpeedBasedTactic struct {
 	MinSamplesRequired int     // Minimum samples before making decisions
 	SpeedThresholdTps  float64 // Minimum acceptable tokens per second
@@ -222,7 +222,7 @@ func NewSpeedBasedTactic(minSamplesRequired int, speedThresholdTps float64, samp
 	}
 }
 
-// SelectService selects service based on token generation speed
+// SelectService selects service based on output TPS
 func (st *SpeedBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Get active services
 	activeServices := rule.GetActiveServices()

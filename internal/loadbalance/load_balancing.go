@@ -74,7 +74,7 @@ type ServiceStats struct {
 	P99LatencyMs      float64   `json:"p99_latency_ms"`      // 99th percentile latency
 	LastLatencyUpdate time.Time `json:"last_latency_update"` // When latency was last updated
 
-	// Token speed tracking fields (tokens per second)
+	// Per-request output TPS tracking fields (decode speed after TTFT)
 	SpeedSamples    []float64 `json:"-"`                 // Rolling window of token speed samples
 	AvgTokenSpeed   float64   `json:"avg_token_speed"`   // Average tokens per second
 	LastSpeedUpdate time.Time `json:"last_speed_update"` // When speed was last updated
@@ -301,7 +301,7 @@ func (ss *ServiceStats) GetLatencyStats() (avg, p50, p95, p99 float64, sampleCou
 	return ss.AvgLatencyMs, ss.P50LatencyMs, ss.P95LatencyMs, ss.P99LatencyMs, len(ss.LatencySamples)
 }
 
-// RecordTokenSpeed records a token speed sample (tokens per second)
+// RecordTokenSpeed records a per-request output TPS sample after TTFT
 func (ss *ServiceStats) RecordTokenSpeed(speedTps float64, maxSamples int) {
 	ss.mutex.Lock()
 	defer ss.mutex.Unlock()
@@ -324,7 +324,7 @@ func (ss *ServiceStats) RecordTokenSpeed(speedTps float64, maxSamples int) {
 	ss.LastSpeedUpdate = time.Now()
 }
 
-// recalculateSpeedStats recalculates token speed statistics
+// recalculateSpeedStats recalculates per-request output TPS statistics
 // Must be called with mutex held
 func (ss *ServiceStats) recalculateSpeedStats() {
 	if len(ss.SpeedSamples) == 0 {

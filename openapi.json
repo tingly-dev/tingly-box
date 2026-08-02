@@ -5714,6 +5714,94 @@
         }
       }
     },
+    "/api/v1/usage/performance": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Returns TTFT, per-request output TPS, and latency percentiles over successful requests",
+        "description": "Returns TTFT, per-request output TPS, and latency percentiles over successful requests",
+        "operationId": "apiV1UsagePerformanceGet",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "ISO 8601 start time",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "ISO 8601 end time",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Filter by provider UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by model name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Filter by scenario",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by user ID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceSummaryResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Usage store not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/usage/records": {
       "get": {
         "tags": [
@@ -5772,6 +5860,15 @@
             "name": "status",
             "in": "query",
             "description": "Filter by status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by user ID",
             "required": false,
             "schema": {
               "type": "string"
@@ -6113,6 +6210,15 @@
             "name": "scenario",
             "in": "query",
             "description": "Filter by scenario",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by user ID",
             "required": false,
             "schema": {
               "type": "string"
@@ -11339,6 +11445,74 @@
           "active"
         ]
       },
+      "PerformanceMetricSummary": {
+        "type": "object",
+        "properties": {
+          "p10": {
+            "type": "number",
+            "format": "double",
+            "description": "Field p10",
+            "example": 31.2
+          },
+          "p50": {
+            "type": "number",
+            "format": "double",
+            "description": "Field p50",
+            "example": 52.4
+          },
+          "p90": {
+            "type": "number",
+            "format": "double",
+            "description": "Field p90",
+            "example": 88.1
+          },
+          "p95": {
+            "type": "number",
+            "format": "double",
+            "description": "Field p95",
+            "example": 96.7
+          },
+          "p99": {
+            "type": "number",
+            "format": "double",
+            "description": "Field p99",
+            "example": 110.5
+          },
+          "sample_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field sample_count",
+            "example": 842
+          }
+        },
+        "required": [
+          "sample_count",
+          "p10",
+          "p50",
+          "p90",
+          "p95",
+          "p99"
+        ]
+      },
+      "PerformanceSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "completion": {
+            "$ref": "#/components/schemas/PerformanceMetricSummary"
+          },
+          "tps": {
+            "$ref": "#/components/schemas/PerformanceMetricSummary"
+          },
+          "ttft": {
+            "$ref": "#/components/schemas/PerformanceMetricSummary"
+          }
+        },
+        "required": [
+          "ttft",
+          "tps",
+          "completion"
+        ]
+      },
       "Permission": {
         "type": "object",
         "properties": {
@@ -14596,6 +14770,12 @@
             "description": "Field timestamp",
             "example": "2025-01-10T12:00:00Z"
           },
+          "tokens_per_second": {
+            "type": "number",
+            "format": "double",
+            "description": "Field tokens_per_second",
+            "example": 52.4
+          },
           "total_tokens": {
             "type": "integer",
             "format": "int64",
@@ -14629,6 +14809,7 @@
           "status",
           "latency_ms",
           "ttft_ms",
+          "tokens_per_second",
           "streamed"
         ]
       },

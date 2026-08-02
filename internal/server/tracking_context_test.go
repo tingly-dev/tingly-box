@@ -134,14 +134,14 @@ func TestExtractScenarioFromPath(t *testing.T) {
 func TestCalculateTPS_Streaming(t *testing.T) {
 	c := &gin.Context{}
 
-	// Set up context: streaming request with first token time 500ms ago
+	// Set up context: first output token arrived 500ms ago.
 	c.Set(ContextKeyStreamed, true)
 	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-500*time.Millisecond))
 
 	// Calculate TPS with 100 output tokens
 	tps := CalculateTPS(c, 100, true)
 
-	// Expected: 100 tokens / 0.5 seconds = 200 TPS
+	// Expected: 99 decode intervals / 0.5 seconds = 198 TPS
 	// Allow tolerance for execution time (180-220)
 	assert.GreaterOrEqual(t, tps, 180.0)
 	assert.LessOrEqual(t, tps, 220.0)
@@ -158,14 +158,14 @@ func TestCalculateTPS_NonStreaming(t *testing.T) {
 	assert.Equal(t, 0.0, tps)
 }
 
-// TestCalculateTPS_NoFirstToken tests TPS calculation without first token time
+// TestCalculateTPS_NoFirstToken tests TPS calculation without TTFT timing.
 func TestCalculateTPS_NoFirstToken(t *testing.T) {
 	c := &gin.Context{}
 
-	// Streaming but no first token time set
+	// Streaming but no first-token time set.
 	tps := CalculateTPS(c, 100, true)
 
-	// Should return 0 when first token time is not available
+	// Should return 0 when decode duration is not available.
 	assert.Equal(t, 0.0, tps)
 }
 

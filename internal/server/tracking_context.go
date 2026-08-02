@@ -164,11 +164,11 @@ func GetCacheHit(c *gin.Context) (bool, bool) {
 	return false, false
 }
 
-// CalculateTPS calculates Tokens Per Second (generation speed) for streaming requests.
+// CalculateTPS calculates Tokens Per Second for streaming requests.
 // For non-streaming requests or when TTFT is not available, returns 0.
 //
-// TPS is calculated as: outputTokens / (currentTime - firstTokenTime)
-// This measures the actual token generation speed after the first token was received.
+// TPS is the inverse of time per output token (TPOT):
+// (outputTokens - 1) / (currentTime - firstTokenTime).
 //
 // Parameters:
 //   - c: Gin context containing timing information
@@ -183,25 +183,22 @@ func CalculateTPS(c *gin.Context, outputTokens int, streamed bool) float64 {
 		return 0
 	}
 
-	// Need output tokens to calculate
-	if outputTokens <= 0 {
+	// At least two tokens are required to form one decode interval.
+	if outputTokens <= 1 {
 		return 0
 	}
 
-	// Get first token time - required for accurate TPS calculation
 	firstTokenTime, hasFirstToken := GetFirstTokenTime(c)
 	if !hasFirstToken {
-		return 0 // Cannot calculate TPS without knowing when first token arrived
+		return 0
 	}
 
-	// Calculate duration from first token to now (in seconds)
 	duration := time.Since(firstTokenTime).Seconds()
 	if duration <= 0 {
 		return 0 // Invalid duration
 	}
 
-	// TPS = tokens / seconds
-	return float64(outputTokens) / duration
+	return float64(outputTokens-1) / duration
 }
 
 // DetectCacheHit determines if a request was served from cache based on TokenUsage.

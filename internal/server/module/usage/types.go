@@ -65,6 +65,7 @@ type TimeSeriesQuery struct {
 	Provider  string `json:"provider" form:"provider" description:"Filter by provider UUID"`
 	Model     string `json:"model" form:"model" description:"Filter by model name"`
 	Scenario  string `json:"scenario" form:"scenario" description:"Filter by scenario"`
+	UserID    string `json:"user_id" form:"user_id" description:"Filter by user ID"`
 }
 
 // TimeSeriesData represents a single time bucket in time series data
@@ -100,6 +101,7 @@ type UsageRecordsQuery struct {
 	Provider  string `json:"provider" form:"provider" description:"Filter by provider UUID"`
 	Model     string `json:"model" form:"model" description:"Filter by model name"`
 	Scenario  string `json:"scenario" form:"scenario" description:"Filter by scenario"`
+	UserID    string `json:"user_id" form:"user_id" description:"Filter by user ID"`
 	Status    string `json:"status" form:"status" description:"Filter by status"`
 	Limit     int    `json:"limit" form:"limit" description:"Max results (max 1000)" example:"50"`
 	Offset    int    `json:"offset" form:"offset" description:"Pagination offset" example:"0"`
@@ -107,25 +109,26 @@ type UsageRecordsQuery struct {
 
 // UsageRecordResponse represents a single usage record
 type UsageRecordResponse struct {
-	ID               uint   `json:"id" example:"1"`
-	ProviderUUID     string `json:"provider_uuid" example:"uuid-123"`
-	ProviderName     string `json:"provider_name" example:"openai"`
-	Model            string `json:"model" example:"gpt-4"`
-	Scenario         string `json:"scenario" example:"openai"`
-	RuleUUID         string `json:"rule_uuid,omitempty" example:"rule-uuid"`
-	UserID           string `json:"user_id,omitempty" example:"usr_123"`
-	RequestModel     string `json:"request_model,omitempty" example:"gpt-4"`
-	Timestamp        string `json:"timestamp" example:"2025-01-10T12:00:00Z"`
-	InputTokens      int    `json:"input_tokens" example:"1000"`
-	OutputTokens     int    `json:"output_tokens" example:"500"`
-	TotalTokens      int    `json:"total_tokens" example:"1500"`
-	CacheReadTokens  int    `json:"cache_read_tokens" example:"2000"`
-	CacheWriteTokens int    `json:"cache_write_tokens" example:"300"`
-	Status           string `json:"status" example:"success"`
-	ErrorCode        string `json:"error_code,omitempty"`
-	LatencyMs        int    `json:"latency_ms" example:"1200"`
-	TTFTMs           int    `json:"ttft_ms" example:"180"`
-	Streamed         bool   `json:"streamed" example:"true"`
+	ID               uint    `json:"id" example:"1"`
+	ProviderUUID     string  `json:"provider_uuid" example:"uuid-123"`
+	ProviderName     string  `json:"provider_name" example:"openai"`
+	Model            string  `json:"model" example:"gpt-4"`
+	Scenario         string  `json:"scenario" example:"openai"`
+	RuleUUID         string  `json:"rule_uuid,omitempty" example:"rule-uuid"`
+	UserID           string  `json:"user_id,omitempty" example:"usr_123"`
+	RequestModel     string  `json:"request_model,omitempty" example:"gpt-4"`
+	Timestamp        string  `json:"timestamp" example:"2025-01-10T12:00:00Z"`
+	InputTokens      int     `json:"input_tokens" example:"1000"`
+	OutputTokens     int     `json:"output_tokens" example:"500"`
+	TotalTokens      int     `json:"total_tokens" example:"1500"`
+	CacheReadTokens  int     `json:"cache_read_tokens" example:"2000"`
+	CacheWriteTokens int     `json:"cache_write_tokens" example:"300"`
+	Status           string  `json:"status" example:"success"`
+	ErrorCode        string  `json:"error_code,omitempty"`
+	LatencyMs        int     `json:"latency_ms" example:"1200"`
+	TTFTMs           int     `json:"ttft_ms" example:"180"`
+	TokensPerSecond  float64 `json:"tokens_per_second" example:"52.4"`
+	Streamed         bool    `json:"streamed" example:"true"`
 }
 
 // UsageRecordsResponse represents the response for usage records
@@ -139,6 +142,25 @@ type UsageRecordsMeta struct {
 	Total  int `json:"total" example:"1000"`
 	Limit  int `json:"limit" example:"50"`
 	Offset int `json:"offset" example:"0"`
+}
+
+// PerformanceMetricSummary contains percentiles and the number of valid
+// samples used. P10 is meaningful for TPS; P90/P99 describe latency tails.
+type PerformanceMetricSummary struct {
+	SampleCount int64   `json:"sample_count" example:"842"`
+	P10         float64 `json:"p10" example:"31.2"`
+	P50         float64 `json:"p50" example:"52.4"`
+	P90         float64 `json:"p90" example:"88.1"`
+	P95         float64 `json:"p95" example:"96.7"`
+	P99         float64 `json:"p99" example:"110.5"`
+}
+
+// PerformanceSummaryResponse summarizes response start, per-request output
+// throughput, and latency over the complete filtered range.
+type PerformanceSummaryResponse struct {
+	TTFT       PerformanceMetricSummary `json:"ttft"`
+	TPS        PerformanceMetricSummary `json:"tps"`
+	Completion PerformanceMetricSummary `json:"completion"`
 }
 
 // DeleteOldRecordsRequest represents the request to delete old usage records

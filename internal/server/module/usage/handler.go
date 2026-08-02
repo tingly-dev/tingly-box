@@ -204,6 +204,10 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	// Convert db.UsageRecord to usage.UsageRecordResponse
 	data := make([]UsageRecordResponse, len(records))
 	for i, r := range records {
+		tokensPerSecond := 0.0
+		if r.Streamed {
+			tokensPerSecond = db.TokensPerSecond(r.OutputTokens, r.LatencyMs, r.TTFTMs)
+		}
 		data[i] = UsageRecordResponse{
 			ID:               r.ID,
 			ProviderUUID:     r.ProviderUUID,
@@ -223,6 +227,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			ErrorCode:        r.ErrorCode,
 			LatencyMs:        r.LatencyMs,
 			TTFTMs:           r.TTFTMs,
+			TokensPerSecond:  tokensPerSecond,
 			Streamed:         r.Streamed,
 		}
 	}
@@ -237,6 +242,52 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// GetPerformanceSummary returns percentiles over the complete selected range.
+func (h *Handler) GetPerformanceSummary(c *gin.Context) {
+	if h.usageStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Usage store not available"})
+		return
+	}
+
+	startTime := parseTimeQuery(c, "start_time", time.Now().Add(-1*time.Hour))
+	endTime := parseTimeQuery(c, "end_time", time.Now())
+	filters := make(map[string]string)
+	if provider := c.Query("provider"); provider != "" {
+		filters["provider_uuid"] = provider
+	}
+	if model := c.Query("model"); model != "" {
+		filters["model"] = model
+	}
+	if scenario := c.Query("scenario"); scenario != "" {
+		filters["scenario"] = scenario
+	}
+	if userID := c.Query("user_id"); userID != "" {
+		filters["user_id"] = userID
+	}
+
+	summary, err := h.usageStore.GetPerformanceSummary(startTime, endTime, filters)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	metric := func(value db.PerformanceMetricSummary) PerformanceMetricSummary {
+		return PerformanceMetricSummary{
+			SampleCount: value.SampleCount,
+			P10:         value.P10,
+			P50:         value.P50,
+			P90:         value.P90,
+			P95:         value.P95,
+			P99:         value.P99,
+		}
+	}
+	c.JSON(http.StatusOK, PerformanceSummaryResponse{
+		TTFT:       metric(summary.TTFT),
+		TPS:        metric(summary.TPS),
+		Completion: metric(summary.Completion),
+	})
 }
 
 // DeleteOldRecords deletes usage records older than the specified date

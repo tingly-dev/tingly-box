@@ -26,7 +26,7 @@ type MetricsData struct {
 	LatencyMs    int64   // Total request latency in milliseconds
 	TTFTMs       int64   // Time To First Token in milliseconds (0 if not available/applicable)
 	CacheHit     bool    // Whether this request hit the cache
-	TPS          float64 // Tokens Per Second - generation speed (0 for non-streaming requests)
+	TPS          float64 // Per-request output TPS after TTFT (0 when unavailable)
 }
 
 // GetUserIDFromContext extracts the user ID from gin context.

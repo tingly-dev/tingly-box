@@ -360,6 +360,60 @@ func TestGetRecordsTotalWithoutFullCount(t *testing.T) {
 	}
 }
 
+func TestGetPerformanceSummary(t *testing.T) {
+	sm, err := NewStoreManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreManager failed: %v", err)
+	}
+	defer sm.Close()
+	store := sm.Usage()
+	now := time.Now()
+
+	records := []UsageRecord{
+		{ProviderUUID: "prov-a", ProviderName: "A", Model: "m", Scenario: "default", UserID: "admin", Timestamp: now.Add(-3 * time.Minute), OutputTokens: 10, Status: "success", Streamed: true, TTFTMs: 100, LatencyMs: 1000}, // 10 TPS
+		{ProviderUUID: "prov-a", ProviderName: "A", Model: "m", Scenario: "default", UserID: "admin", Timestamp: now.Add(-2 * time.Minute), OutputTokens: 17, Status: "success", Streamed: true, TTFTMs: 200, LatencyMs: 1000}, // 20 TPS
+		{ProviderUUID: "prov-a", ProviderName: "A", Model: "m", Scenario: "default", UserID: "admin", Timestamp: now.Add(-time.Minute), OutputTokens: 100, Status: "error", Streamed: true, TTFTMs: 900, LatencyMs: 10000},     // excluded
+		{ProviderUUID: "prov-b", ProviderName: "B", Model: "m", Scenario: "default", UserID: "admin", Timestamp: now, OutputTokens: 30, Status: "success", Streamed: false, LatencyMs: 300},                                    // completion only
+	}
+	for i := range records {
+		if err := store.RecordUsage(&records[i]); err != nil {
+			t.Fatalf("RecordUsage failed: %v", err)
+		}
+	}
+
+	summary, err := store.GetPerformanceSummary(now.Add(-time.Hour), now.Add(time.Minute), map[string]string{"provider_uuid": "prov-a"})
+	if err != nil {
+		t.Fatalf("GetPerformanceSummary failed: %v", err)
+	}
+	if summary.TTFT.SampleCount != 2 || summary.TTFT.P50 != 150 {
+		t.Fatalf("TTFT summary = %+v, want count=2 p50=150", summary.TTFT)
+	}
+	if summary.TPS.SampleCount != 2 || summary.TPS.P50 != 15 || summary.TPS.P95 != 19.5 {
+		t.Fatalf("TPS summary = %+v, want count=2 p50=15 p95=19.5", summary.TPS)
+	}
+	if summary.Completion.SampleCount != 2 || summary.Completion.P50 != 1000 {
+		t.Fatalf("completion summary = %+v, want count=2 p50=1000", summary.Completion)
+	}
+}
+
+func TestTokensPerSecondRejectsInvalidIntervals(t *testing.T) {
+	// Mirrors the dashboard case: 33 output tokens have 32 decode intervals
+	// between TTFT=2.8s and latency=3.0s, yielding 160 TPS.
+	if got := TokensPerSecond(33, 3000, 2800); got != 160 {
+		t.Fatalf("TokensPerSecond = %v, want 160", got)
+	}
+	for _, got := range []float64{
+		TokensPerSecond(0, 1200, 200),
+		TokensPerSecond(1, 1200, 200),
+		TokensPerSecond(50, 1200, 0),
+		TokensPerSecond(50, 200, 200),
+	} {
+		if got != 0 {
+			t.Fatalf("invalid TokensPerSecond = %v, want 0", got)
+		}
+	}
+}
+
 // TestUpgradeAddingSummedColumnKeepsAggregates covers the real upgrade path
 // for cache_write_tokens. usage_daily and usage_records gain the column in the
 // same migration, so every pre-upgrade record contributes 0 and AutoMigrate's
