@@ -8,7 +8,7 @@ import (
 // endpointProbeCacheTTL bounds how long a successful direct-endpoint probe
 // (used by the Codex "native Responses" toggle) is trusted before the next
 // check re-verifies against the real upstream.
-const endpointProbeCacheTTL = 20 * time.Minute
+const endpointProbeCacheTTL = time.Hour
 
 // endpointProbeCache is a lightweight, best-effort cache for direct
 // provider+model+endpoint capability probes (E2ETargetProvider + Direct +
