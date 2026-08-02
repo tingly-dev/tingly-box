@@ -276,6 +276,57 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         && getApiStyle(primaryService.provider) === 'openai';
     const responsesEnabled = record.flags?.openaiEndpointOverride === 'responses';
 
+    // The pre-flight probe only validates the provider+model bound *at toggle
+    // time*. If the user later swaps the rule's provider/model (drag a new
+    // provider in, edit the service, change tier, …), the flag survives
+    // untouched — but the resolver always honors a rule-flag override with no
+    // silent downgrade (see .design/openai-endpoint-routing.md §4.1), so a
+    // now-unsupported provider would hard-fail every request on /responses
+    // while the switch still shows "on". Re-validate whenever the bound
+    // provider/model actually changes mid-session and the flag is currently
+    // set; auto-revert + notify on failure, stay silent on success.
+    const primaryServiceKey = primaryService ? `${primaryService.provider}:${primaryService.model}` : null;
+    const lastCheckedServiceKeyRef = React.useRef(primaryServiceKey);
+    React.useEffect(() => {
+        if (lastCheckedServiceKeyRef.current === primaryServiceKey) return;
+        lastCheckedServiceKeyRef.current = primaryServiceKey;
+
+        if (!responsesEnabled || !primaryService) return;
+
+        let cancelled = false;
+        setResponsesProbing(true);
+        const revertWithNotice = (message: string) => {
+            if (cancelled) return;
+            onUpdateRecord?.('flags', { ...record.flags, openaiEndpointOverride: 'auto' });
+            notify.error(message, { title: 'Responses API disabled' });
+        };
+        runProbe({
+            target_type: 'provider',
+            provider_uuid: primaryService.provider,
+            model: primaryService.model,
+            test_mode: 'simple',
+            direct: true,
+            endpoint: 'responses',
+        }).then((result) => {
+            if (!result.success) {
+                revertWithNotice(
+                    `The provider/model for this rule changed and no longer supports the Responses API — reverted to Chat Completions. (${result.error?.message || 'check failed'})`,
+                );
+            }
+        }).catch(() => {
+            // Fail closed: don't leave a possibly-broken override silently
+            // forcing traffic at a 404 just because the re-check itself failed.
+            revertWithNotice('Could not re-verify Responses API support after the model changed — reverted to Chat Completions.');
+        }).finally(() => {
+            if (!cancelled) setResponsesProbing(false);
+        });
+
+        return () => { cancelled = true; };
+        // Deliberately re-runs only on provider/model change, not on every
+        // record.flags update (including the one this effect itself makes).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [primaryServiceKey]);
+
     const handleResponsesToggle = React.useCallback(async () => {
         if (!primaryService) return;
 
