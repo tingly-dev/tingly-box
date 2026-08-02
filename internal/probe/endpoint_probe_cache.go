@@ -64,10 +64,19 @@ func (c *endpointProbeCache) hit(providerUUID, model, endpoint string) bool {
 	return true
 }
 
-// remember records a successful probe.
+// remember records a successful probe. Also opportunistically sweeps expired
+// entries (the lock is already held, and this is the only other write path
+// besides the lazy per-key eviction in hit) so a key that's checked once and
+// never queried again doesn't sit in the map forever.
 func (c *endpointProbeCache) remember(providerUUID, model, endpoint string) {
 	key := endpointProbeCacheKey(providerUUID, model, endpoint)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries[key] = time.Now()
+	now := time.Now()
+	for k, cachedAt := range c.entries {
+		if now.Sub(cachedAt) > endpointProbeCacheTTL {
+			delete(c.entries, k)
+		}
+	}
+	c.entries[key] = now
 }

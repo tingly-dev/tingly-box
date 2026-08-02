@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -203,26 +204,36 @@ func TestWithProbeHeaders_ContextRoundTrip(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// ---- endpoint override context plumbing ----
+// ---- resolveOpenAIProbeEndpoint ----
 
-func TestWithEndpointOverride_RoundTrip(t *testing.T) {
-	ctx := withEndpointOverride(context.Background(), "responses")
-	assert.Equal(t, "responses", endpointOverrideFromContext(ctx))
+func TestResolveOpenAIProbeEndpoint_OverrideWins(t *testing.T) {
+	chatOnly := &typ.Provider{AuthType: typ.AuthTypeAPIKey}
+	codexOAuth := &typ.Provider{
+		AuthType:    typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerCodex},
+	}
 
-	ctx = withEndpointOverride(context.Background(), "chat")
-	assert.Equal(t, "chat", endpointOverrideFromContext(ctx))
+	assert.Equal(t, "chat", resolveOpenAIProbeEndpoint("chat", chatOnly))
+	assert.Equal(t, "chat", resolveOpenAIProbeEndpoint("chat", codexOAuth),
+		"an explicit override must win even over a Codex OAuth provider")
+	assert.Equal(t, "responses", resolveOpenAIProbeEndpoint("responses", chatOnly))
+	assert.Equal(t, "responses", resolveOpenAIProbeEndpoint("responses", codexOAuth))
 }
 
-func TestWithEndpointOverride_InvalidValueIsNoop(t *testing.T) {
-	ctx := withEndpointOverride(context.Background(), "bogus")
-	assert.Equal(t, "", endpointOverrideFromContext(ctx))
+func TestResolveOpenAIProbeEndpoint_DefaultsWithoutOverride(t *testing.T) {
+	chatOnly := &typ.Provider{AuthType: typ.AuthTypeAPIKey}
+	codexOAuth := &typ.Provider{
+		AuthType:    typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerCodex},
+	}
 
-	ctx = withEndpointOverride(context.Background(), "")
-	assert.Equal(t, "", endpointOverrideFromContext(ctx))
+	assert.Equal(t, "chat", resolveOpenAIProbeEndpoint("", chatOnly))
+	assert.Equal(t, "responses", resolveOpenAIProbeEndpoint("", codexOAuth))
 }
 
-func TestEndpointOverrideFromContext_UnsetReturnsEmpty(t *testing.T) {
-	assert.Equal(t, "", endpointOverrideFromContext(context.Background()))
+func TestResolveOpenAIProbeEndpoint_InvalidOverrideFallsBackToDefault(t *testing.T) {
+	chatOnly := &typ.Provider{AuthType: typ.AuthTypeAPIKey}
+	assert.Equal(t, "chat", resolveOpenAIProbeEndpoint("bogus", chatOnly))
 }
 
 // ---- endpointProbeCache ----

@@ -53,9 +53,8 @@ func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, erro
 	if len(probeHeaders) > 0 {
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
 	}
-	ctx = withEndpointOverride(ctx, req.Endpoint)
 	message := E2EMessage(req.TestMode, req.Message)
-	result, err := e.ProbeProviderWithSDK(ctx, provider, model, message, req.TestMode)
+	result, err := e.ProbeProviderWithSDK(ctx, provider, model, message, req.TestMode, req.Endpoint)
 	if cacheable && err == nil && result != nil && result.Success {
 		e.endpointCache.remember(provider.UUID, model, req.Endpoint)
 	}
@@ -71,9 +70,8 @@ func (e *E2EService) ProbeStream(ctx context.Context, req *E2ERequest) (*E2EData
 	if len(probeHeaders) > 0 {
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
 	}
-	ctx = withEndpointOverride(ctx, req.Endpoint)
 	message := E2EMessage(req.TestMode, req.Message)
-	return e.probeProviderStream(ctx, provider, model, message, req.TestMode)
+	return e.probeProviderStream(ctx, provider, model, message, req.TestMode, req.Endpoint)
 }
 
 // resolveTargetToProviderModel resolves an E2ERequest to a provider, model,
@@ -203,27 +201,21 @@ func (e *E2EService) resolveProviderTarget(ctx context.Context, req *E2ERequest)
 	return loopbackProvider, loopbackModel, probeHeaders, nil
 }
 
-// probeEndpointOverrideKey is the context key carrying E2ERequest.Endpoint
-// through to ProbeProviderWithSDK. A context key (not an extra function
-// parameter) because ProbeProviderWithSDK is also called directly by the
-// provider-onboarding path (testProviderConnectivity) with no need to know
-// about this override — same pattern as client.WithProbeHeaders.
-type probeEndpointOverrideKey struct{}
-
-// withEndpointOverride attaches a forced-endpoint choice ("chat"/"responses")
-// to ctx. Empty/unknown values are a no-op — ProbeProviderWithSDK falls back
-// to its existing Codex-OAuth-aware default.
-func withEndpointOverride(ctx context.Context, endpoint string) context.Context {
-	if endpoint != "chat" && endpoint != "responses" {
-		return ctx
+// resolveOpenAIProbeEndpoint decides which OpenAI endpoint a probe should hit,
+// folding both special cases that previously lived as separate branches in
+// ProbeProviderWithSDK into one place: an explicit override always wins;
+// absent that, Codex OAuth providers only speak Responses, everything else
+// defaults to Chat.
+func resolveOpenAIProbeEndpoint(override string, provider *typ.Provider) string {
+	switch override {
+	case "chat", "responses":
+		return override
+	default:
+		if isCodexOAuth(provider) {
+			return "responses"
+		}
+		return "chat"
 	}
-	return context.WithValue(ctx, probeEndpointOverrideKey{}, endpoint)
-}
-
-// endpointOverrideFromContext reads back the value set by withEndpointOverride.
-func endpointOverrideFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(probeEndpointOverrideKey{}).(string)
-	return v
 }
 
 // loopbackAPIBase returns the TB loopback base URL for the given scenario.
@@ -324,7 +316,10 @@ func (e *E2EService) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*t
 // ProbeProviderWithSDK runs an SDK probe by dispatching a minimal request
 // through the provider's real-traffic client methods. Public because the
 // server's provider onboarding path (testProviderConnectivity) reuses it.
-func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
+// endpointOverride forces which OpenAI endpoint to hit ("chat"/"responses");
+// pass "" for resolveOpenAIProbeEndpoint's default (Codex OAuth -> responses,
+// everything else -> chat).
+func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
 	mode := testMode
 
 	_, wrapProbeHeaders := client.GetProbeHeaders(ctx)
@@ -343,20 +338,11 @@ func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Pro
 			client.ApplyProbeHeadersToClient(oc)
 			routing = client.ApplyRoutingCaptureToClient(oc)
 		}
-		// Codex OAuth providers only speak the Responses API; a caller-forced
-		// endpoint override (see withEndpointOverride) takes precedence over
-		// that default, for callers testing Responses support directly.
-		switch endpointOverrideFromContext(ctx) {
+		switch resolveOpenAIProbeEndpoint(endpointOverride, provider) {
 		case "chat":
 			result, err = probeOpenAIChat(ctx, oc, model, message, mode)
 		case "responses":
 			result, err = probeOpenAIResponses(ctx, oc, model, message, mode)
-		default:
-			if isCodexOAuth(provider) {
-				result, err = probeOpenAIResponses(ctx, oc, model, message, mode)
-			} else {
-				result, err = probeOpenAIChat(ctx, oc, model, message, mode)
-			}
 		}
 		if err == nil && routing != nil {
 			applyRoutingCapture(result, routing)
@@ -419,6 +405,6 @@ func applyRoutingCapture(result *E2EData, cap *client.RoutingCapture) {
 	}
 }
 
-func (e *E2EService) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
-	return e.ProbeProviderWithSDK(ctx, provider, model, message, testMode)
+func (e *E2EService) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
+	return e.ProbeProviderWithSDK(ctx, provider, model, message, testMode, endpointOverride)
 }

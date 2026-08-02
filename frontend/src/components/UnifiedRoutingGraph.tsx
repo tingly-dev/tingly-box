@@ -24,8 +24,7 @@ import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
-import {runProbe} from '@/components/probe/runProbe';
-import {notify} from '@/utils/notify';
+import {useCodexResponsesToggle} from '@/hooks/useCodexResponsesToggle';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -265,103 +264,20 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return [...list].sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0));
     }, [record.providers]);
 
-    // ── Native OpenAI Responses API toggle (Codex-scenario rules only) ──
-    // Codex is a special-cased page, not a generic capability: this toggle is
-    // deliberately scoped to record.scenario === 'codex' rather than every
-    // OpenAI-style rule, matching how the feature was scoped end to end.
-    const [responsesProbing, setResponsesProbing] = React.useState(false);
+    // Native OpenAI Responses API toggle (Codex-scenario rules only). Codex is
+    // a special-cased page, not a generic capability: deliberately scoped to
+    // record.scenario === 'codex' rather than every OpenAI-style rule,
+    // matching how the feature was scoped end to end. Logic lives in
+    // useCodexResponsesToggle (pre-flight probe + mid-session revalidation).
     const primaryService = sortedDefaultProviders.find((p) => p.active !== false) || sortedDefaultProviders[0];
     const showResponsesToggle = record.scenario === 'codex'
         && !!primaryService
         && getApiStyle(primaryService.provider) === 'openai';
-    const responsesEnabled = record.flags?.openaiEndpointOverride === 'responses';
-
-    // The pre-flight probe only validates the provider+model bound *at toggle
-    // time*. If the user later swaps the rule's provider/model (drag a new
-    // provider in, edit the service, change tier, …), the flag survives
-    // untouched — but the resolver always honors a rule-flag override with no
-    // silent downgrade (see .design/openai-endpoint-routing.md §4.1), so a
-    // now-unsupported provider would hard-fail every request on /responses
-    // while the switch still shows "on". Re-validate whenever the bound
-    // provider/model actually changes mid-session and the flag is currently
-    // set; auto-revert + notify on failure, stay silent on success.
-    const primaryServiceKey = primaryService ? `${primaryService.provider}:${primaryService.model}` : null;
-    const lastCheckedServiceKeyRef = React.useRef(primaryServiceKey);
-    React.useEffect(() => {
-        if (lastCheckedServiceKeyRef.current === primaryServiceKey) return;
-        lastCheckedServiceKeyRef.current = primaryServiceKey;
-
-        if (!responsesEnabled || !primaryService) return;
-
-        let cancelled = false;
-        setResponsesProbing(true);
-        const revertWithNotice = (message: string) => {
-            if (cancelled) return;
-            onUpdateRecord?.('flags', { ...record.flags, openaiEndpointOverride: 'auto' });
-            notify.error(message, { title: 'Responses API disabled' });
-        };
-        runProbe({
-            target_type: 'provider',
-            provider_uuid: primaryService.provider,
-            model: primaryService.model,
-            test_mode: 'simple',
-            direct: true,
-            endpoint: 'responses',
-        }).then((result) => {
-            if (!result.success) {
-                revertWithNotice(
-                    `The provider/model for this rule changed and no longer supports the Responses API — reverted to Chat Completions. (${result.error?.message || 'check failed'})`,
-                );
-            }
-        }).catch(() => {
-            // Fail closed: don't leave a possibly-broken override silently
-            // forcing traffic at a 404 just because the re-check itself failed.
-            revertWithNotice('Could not re-verify Responses API support after the model changed — reverted to Chat Completions.');
-        }).finally(() => {
-            if (!cancelled) setResponsesProbing(false);
-        });
-
-        return () => { cancelled = true; };
-        // Deliberately re-runs only on provider/model change, not on every
-        // record.flags update (including the one this effect itself makes).
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [primaryServiceKey]);
-
-    const handleResponsesToggle = React.useCallback(async () => {
-        if (!primaryService) return;
-
-        // Disabling never needs a probe — it's just reverting to the
-        // conservative default, always safe.
-        if (responsesEnabled) {
-            onUpdateRecord?.('flags', { ...record.flags, openaiEndpointOverride: 'auto' });
-            return;
-        }
-
-        setResponsesProbing(true);
-        try {
-            const result = await runProbe({
-                target_type: 'provider',
-                provider_uuid: primaryService.provider,
-                model: primaryService.model,
-                test_mode: 'simple',
-                direct: true,
-                endpoint: 'responses',
-            });
-            if (result.success) {
-                onUpdateRecord?.('flags', { ...record.flags, openaiEndpointOverride: 'responses' });
-                notify.success('Native Responses API enabled for this rule.');
-            } else {
-                notify.error(
-                    result.error?.message || 'This provider/model does not appear to support the Responses API.',
-                    { title: 'Responses API check failed' },
-                );
-            }
-        } catch (err: any) {
-            notify.error(err?.message || 'Failed to check Responses API support.', { title: 'Responses API check failed' });
-        } finally {
-            setResponsesProbing(false);
-        }
-    }, [primaryService, responsesEnabled, record.flags, onUpdateRecord]);
+    const {
+        enabled: responsesEnabled,
+        probing: responsesProbing,
+        onToggle: handleResponsesToggle,
+    } = useCodexResponsesToggle({record, primaryService, onUpdateRecord});
 
     // Group already-sorted providers into tiers (single pass — order preserved from sortedDefaultProviders)
     const tierGroups = React.useMemo(() => {
