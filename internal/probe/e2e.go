@@ -18,15 +18,17 @@ import (
 // provider, or an inline provider config. It is independent of *Server and
 // is wired in NewServer.
 type E2EService struct {
-	config     *config.Config
-	clientPool *client.ClientPool
+	config        *config.Config
+	clientPool    *client.ClientPool
+	endpointCache *endpointProbeCache
 }
 
 // NewE2EService constructs a E2EService.
 func NewE2EService(cfg *config.Config, pool *client.ClientPool) *E2EService {
 	return &E2EService{
-		config:     cfg,
-		clientPool: pool,
+		config:        cfg,
+		clientPool:    pool,
+		endpointCache: newEndpointProbeCache(),
 	}
 }
 
@@ -36,12 +38,28 @@ func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, erro
 	if err != nil {
 		return nil, err
 	}
+
+	// Narrow cache: only the direct provider+model+endpoint capability-check
+	// shape (target_type=provider, direct=true, endpoint forced) is
+	// cacheable — see endpointProbeCache's doc comment for why. Every other
+	// probe shape (rule tests, tool-mode/streaming checks, generic
+	// connectivity) always dispatches for real.
+	cacheable := req.TargetType == E2ETargetProvider && req.Direct &&
+		(req.Endpoint == "chat" || req.Endpoint == "responses")
+	if cacheable && e.endpointCache.hit(provider.UUID, model, req.Endpoint) {
+		return &ProbeResult{Success: true, Message: "Verified recently (cached)"}, nil
+	}
+
 	if len(probeHeaders) > 0 {
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
 	}
 	ctx = withEndpointOverride(ctx, req.Endpoint)
 	message := E2EMessage(req.TestMode, req.Message)
-	return e.ProbeProviderWithSDK(ctx, provider, model, message, req.TestMode)
+	result, err := e.ProbeProviderWithSDK(ctx, provider, model, message, req.TestMode)
+	if cacheable && err == nil && result != nil && result.Success {
+		e.endpointCache.remember(provider.UUID, model, req.Endpoint)
+	}
+	return result, err
 }
 
 // ProbeStream performs a streaming probe against the target described by req.
