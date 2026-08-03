@@ -1,5 +1,6 @@
-// Package protocol provides types for AI protocol conversion and client interfaces.
-// This is the public API for protocol-related types.
+// This file defines protocol/usage types shared across AI provider
+// integrations — API style/type enums, the Client interface, and token usage
+// accounting (including cross-protocol usage-map conversion).
 package ai
 
 import (

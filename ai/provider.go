@@ -350,6 +350,9 @@ const VModelSentinelToken = "EMPTY"
 
 // GetAccessToken returns the access token based on auth type
 func (p *Provider) GetAccessToken() string {
+	if p == nil {
+		return ""
+	}
 	switch p.AuthType {
 	case AuthTypeOAuth:
 		if p.OAuthDetail != nil {
@@ -366,7 +369,7 @@ func (p *Provider) GetAccessToken() string {
 
 // IsOAuth reports whether the provider authenticates via OAuth.
 func (p *Provider) IsOAuth() bool {
-	return p.AuthType == AuthTypeOAuth
+	return p != nil && p.AuthType == AuthTypeOAuth
 }
 
 // IsAPIKey reports whether the provider authenticates with a plain token.
@@ -391,11 +394,14 @@ func (p *Provider) OAuthIssuer() Issuer {
 // in Credential (a CredentialBundle) rather than the Token / OAuthDetail
 // fields.
 func (p *Provider) IsMultiFieldCredential() bool {
-	return p.AuthType.IsMultiFieldCredential()
+	return p != nil && p.AuthType.IsMultiFieldCredential()
 }
 
 // IsOAuthExpired checks if the OAuth token is expired (only valid for oauth auth type)
 func (p *Provider) IsOAuthExpired() bool {
+	if p == nil {
+		return false
+	}
 	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
 		return p.OAuthDetail.IsExpired()
 	}
@@ -406,6 +412,9 @@ func (p *Provider) IsOAuthExpired() bool {
 // by detecting the sk-ant-oat prefix. This provides runtime detection
 // independent of the AuthType field.
 func (p *Provider) IsOAuthToken() bool {
+	if p == nil {
+		return false
+	}
 	token := p.GetAccessToken()
 	if token == "" {
 		return false
@@ -431,6 +440,9 @@ func (p *Provider) IsClaudeCodeProvider() bool {
 
 // IsCodexProvider checks if this provider is using Codex OAuth
 func (p *Provider) IsCodexProvider() bool {
+	if p == nil {
+		return false
+	}
 	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
 		return p.OAuthDetail.GetIssuer() == IssuerCodex
 	}
