@@ -113,6 +113,7 @@ func TestClaudeCodeConfig_Apply_InstallStatusLine(t *testing.T) {
 		BaseURL:           "https://tingly.local",
 		APIKey:            "sk-test",
 		InstallStatusLine: true,
+		StatusLineScript:  []byte("#!/bin/bash\necho stub-statusline\n"),
 	})
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
@@ -122,8 +123,12 @@ func TestClaudeCodeConfig_Apply_InstallStatusLine(t *testing.T) {
 	}
 
 	scriptPath := filepath.Join(home, ".claude", "tingly-statusline.sh")
-	if _, err := os.Stat(scriptPath); err != nil {
+	installed, err := os.ReadFile(scriptPath)
+	if err != nil {
 		t.Fatalf("expected status line script to be installed: %v", err)
+	}
+	if !strings.Contains(string(installed), "stub-statusline") {
+		t.Errorf("expected installed script to contain the caller-supplied content, got %s", installed)
 	}
 
 	data, err := os.ReadFile(claudeSettingsPath(t))

@@ -405,21 +405,20 @@ func ApplyClaudeSettingsFromEnv(env map[string]string, opts ...ApplyOption) (*Ap
 	return ApplyClaudeSettingsToPath(targetPath, env, opts...)
 }
 
-// InstallStatusLineScript installs the tingly-statusline.sh script to ~/.claude/
-// Returns the path to the installed script and whether it was newly created
-func InstallStatusLineScript() (scriptPath string, created bool, err error) {
+// InstallStatusLineScript writes content (the tingly-statusline.sh script
+// bytes) to ~/.claude/tingly-statusline.sh. The caller supplies content —
+// this script talks to the running tingly-box server (TINGLY_API_URL,
+// the /tingly/:scenario/statusline endpoint) and is therefore owned by the
+// parent repo's internal.ScriptAssets, not duplicated here; ai/agent only
+// knows how to place bytes it's handed onto disk.
+// Returns the path to the installed script and whether it was newly created.
+func InstallStatusLineScript(content []byte) (scriptPath string, created bool, err error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", false, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	scriptPath = filepath.Join(homeDir, ".claude", "tingly-statusline.sh")
-
-	// Read script from embedded assets
-	content, err := scriptAssets.ReadFile("script/tingly-statusline.sh")
-	if err != nil {
-		return "", false, fmt.Errorf("failed to read status line script from assets: %w", err)
-	}
 
 	// Ensure directory exists
 	if err := ensureDir(scriptPath); err != nil {

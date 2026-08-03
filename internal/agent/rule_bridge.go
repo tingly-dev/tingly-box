@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+	"github.com/tingly-dev/tingly-box/internal"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -91,11 +92,19 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 		}
 		// Build env vars with business logic
 		modelConfig := BuildClaudeCodeModelConfig(req.Unified)
+		var statusLineScript []byte
+		if req.InstallStatusLine {
+			statusLineScript, err = internal.ScriptAssets.ReadFile("script/tingly-statusline.sh")
+			if err != nil {
+				return nil, fmt.Errorf("failed to read status line script asset: %w", err)
+			}
+		}
 		fileResult, err = config.Apply(&aiagent.ClaudeCodeParams{
 			BaseURL:           baseURL + "/tingly/claude_code",
 			APIKey:            apiKey,
 			ModelConfig:       modelConfig,
 			InstallStatusLine: req.InstallStatusLine,
+			StatusLineScript:  statusLineScript,
 			ExtraEnv:          nil,
 			ExtraConfig:       nil,
 		})

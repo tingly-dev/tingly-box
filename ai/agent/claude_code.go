@@ -23,6 +23,13 @@ type ClaudeCodeParams struct {
 	// InstallStatusLine installs the status line script
 	InstallStatusLine bool
 
+	// StatusLineScript is the tingly-statusline.sh script content to install
+	// when InstallStatusLine is true. The caller supplies this (see
+	// InstallStatusLineScript) because the script talks to the running
+	// tingly-box server and is owned by the parent repo's asset bundle, not
+	// ai/agent. Ignored when InstallStatusLine is false.
+	StatusLineScript []byte
+
 	// ExtraEnv contains additional environment variables beyond the standard ones
 	ExtraEnv map[string]string
 
@@ -89,7 +96,7 @@ func (c *ClaudeCodeConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult
 	env := params.BuildEnv()
 
 	// Apply settings.json
-	settingsResult, err := applyClaudeSettings(env, params.InstallStatusLine, params.ExtraConfig)
+	settingsResult, err := applyClaudeSettings(env, params.InstallStatusLine, params.StatusLineScript, params.ExtraConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply Claude settings: %w", err)
 	}
@@ -124,11 +131,11 @@ func ApplyClaudeCode(params *ClaudeCodeParams) (*ApplyAgentResult, error) {
 }
 
 // applyClaudeSettings applies Claude Code settings.json
-func applyClaudeSettings(env map[string]string, installStatusLine bool, extraConfig map[string]interface{}) (*ApplyResult, error) {
+func applyClaudeSettings(env map[string]string, installStatusLine bool, statusLineScript []byte, extraConfig map[string]interface{}) (*ApplyResult, error) {
 	var opts []ApplyOption
 	if installStatusLine {
 		// Install status line script
-		_, _, err := InstallStatusLineScript()
+		_, _, err := InstallStatusLineScript(statusLineScript)
 		if err != nil {
 			return nil, fmt.Errorf("failed to install status line script: %w", err)
 		}
