@@ -3,6 +3,7 @@ import {api} from '@/services/api';
 import {notify} from '@/utils/notify';
 import {fontMono} from '@/theme/fonts';
 import type {NotifyTarget} from '@/types/bot';
+import {MARKDOWN_STRESS_BODY} from '@/components/notify/markdownStressBody';
 import {
     Autocomplete,
     Button,
@@ -55,12 +56,14 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
     const [sending, setSending] = useState(false);
 
     // Reset the form each time the dialog opens. The chat list is owned by the
-    // parent, so there's no fetch here.
+    // parent, so there's no fetch here. The Body defaults to the markdown
+    // stress document so one click verifies platform rendering; the operator
+    // can still clear or edit it.
     useEffect(() => {
         if (!open) return;
         setTargetID(initialTargetID ?? '');
         setTitle('');
-        setBody('');
+        setBody(MARKDOWN_STRESS_BODY);
         setLevel('info');
     }, [open, initialTargetID]);
 
@@ -149,12 +152,20 @@ const NotifyTestDialog: React.FC<NotifyTestDialogProps> = ({open, botUUID, botNa
                         fullWidth
                         multiline
                         minRows={3}
-                        label={t('notify.test.bodyField', {defaultValue: 'Body'})}
+                        label={t('notify.test.bodyField', {defaultValue: 'Body (markdown)'})}
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
                         disabled={sending}
                         required
                     />
+                    <Button
+                        size="small"
+                        onClick={() => setBody(MARKDOWN_STRESS_BODY)}
+                        disabled={sending}
+                        sx={{alignSelf: 'flex-start'}}
+                    >
+                        {t('notify.test.resetMarkdown', {defaultValue: 'Reset to markdown sample'})}
+                    </Button>
                     <FormControl size="small" fullWidth disabled={sending}>
                         <InputLabel>{t('notify.test.level', {defaultValue: 'Level'})}</InputLabel>
                         <Select
