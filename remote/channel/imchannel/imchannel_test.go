@@ -11,15 +11,17 @@ import (
 )
 
 type fakeSender struct {
-	lastTarget string
-	lastText   string
-	err        error
+	lastTarget   string
+	lastText     string
+	lastParseMode imbot.ParseMode
+	err          error
 }
 
 func (s *fakeSender) SendMessage(ctx context.Context, target string, opts *imbot.SendMessageOptions) (*imbot.SendResult, error) {
 	s.lastTarget = target
 	if opts != nil {
 		s.lastText = opts.Text
+		s.lastParseMode = opts.ParseMode
 	}
 	if s.err != nil {
 		return nil, s.err
@@ -56,6 +58,12 @@ func TestSendComposesTitleAndBody(t *testing.T) {
 	}
 	if s.lastText != "Claude\ntask done" {
 		t.Fatalf("text = %q", s.lastText)
+	}
+	// Send parses the body as markdown so platform renderers exercise it; the
+	// channel advertises Markdown support and the prompter path already does
+	// the same.
+	if s.lastParseMode != imbot.ParseModeMarkdown {
+		t.Fatalf("ParseMode = %q, want %q", s.lastParseMode, imbot.ParseModeMarkdown)
 	}
 }
 

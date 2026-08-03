@@ -73,7 +73,12 @@ func (c *Channel) Capabilities() channel.Capabilities {
 	}
 }
 
-// Send delivers a one-way notification.
+// Send delivers a one-way notification. The body is parsed as markdown so
+// platform renderers actually exercise it — the channel advertises Markdown
+// support (see Capabilities), and the prompter path already sends markdown;
+// notify would otherwise be the only path sending plain text. Markdown that a
+// platform cannot render degrades to its raw text, so a plain-text body still
+// reads correctly.
 func (c *Channel) Send(ctx context.Context, target channel.Target, msg interaction.Notification) error {
 	if c.sender == nil {
 		return fmt.Errorf("imchannel: no sender")
@@ -86,7 +91,10 @@ func (c *Channel) Send(ctx context.Context, target channel.Target, msg interacti
 			text = msg.Title + "\n" + msg.Body
 		}
 	}
-	_, err := c.sender.SendMessage(ctx, target.ChatID, &imbot.SendMessageOptions{Text: text})
+	_, err := c.sender.SendMessage(ctx, target.ChatID, &imbot.SendMessageOptions{
+		Text:      text,
+		ParseMode: imbot.ParseModeMarkdown,
+	})
 	return err
 }
 
