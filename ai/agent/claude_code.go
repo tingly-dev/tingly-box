@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"strings"
-
-	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // ClaudeCodeConfig implements AgentConfig for Claude Code
@@ -126,33 +124,33 @@ func ApplyClaudeCode(params *ClaudeCodeParams) (*ApplyAgentResult, error) {
 }
 
 // applyClaudeSettings applies Claude Code settings.json
-func applyClaudeSettings(env map[string]string, installStatusLine bool, extraConfig map[string]interface{}) (*serverconfig.ApplyResult, error) {
-	var opts []serverconfig.ApplyOption
+func applyClaudeSettings(env map[string]string, installStatusLine bool, extraConfig map[string]interface{}) (*ApplyResult, error) {
+	var opts []ApplyOption
 	if installStatusLine {
 		// Install status line script
-		_, _, err := serverconfig.InstallStatusLineScript()
+		_, _, err := InstallStatusLineScript()
 		if err != nil {
 			return nil, fmt.Errorf("failed to install status line script: %w", err)
 		}
 		statusLineCmd := "~/.claude/tingly-statusline.sh"
 		statusLine := map[string]any{"type": "command", "command": statusLineCmd}
-		opts = append(opts, serverconfig.WithExtra("statusLine", statusLine))
+		opts = append(opts, WithExtra("statusLine", statusLine))
 	}
 
 	// Add extra config entries
 	for key, value := range extraConfig {
-		opts = append(opts, serverconfig.WithExtra(key, value))
+		opts = append(opts, WithExtra(key, value))
 	}
 
-	return serverconfig.ApplyClaudeSettingsFromEnv(env, opts...)
+	return ApplyClaudeSettingsFromEnv(env, opts...)
 }
 
 // applyClaudeOnboarding applies Claude Code .claude.json
-func applyClaudeOnboarding() (*serverconfig.ApplyResult, error) {
+func applyClaudeOnboarding() (*ApplyResult, error) {
 	payload := map[string]interface{}{
 		"hasCompletedOnboarding": true,
 	}
-	return serverconfig.ApplyClaudeOnboarding(payload)
+	return ApplyClaudeOnboarding(payload)
 }
 
 // configFileStatusPrefixes maps the leading words of an ApplyResult.Message
@@ -166,7 +164,7 @@ var configFileStatusPrefixes = []struct {
 }
 
 // collectConfigFiles collects the config file paths from apply results
-func collectConfigFiles(results ...*serverconfig.ApplyResult) []string {
+func collectConfigFiles(results ...*ApplyResult) []string {
 	var files []string
 	for _, r := range results {
 		if r == nil {
@@ -188,7 +186,7 @@ func collectConfigFiles(results ...*serverconfig.ApplyResult) []string {
 }
 
 // collectBackupPaths collects backup paths from apply results
-func collectBackupPaths(results ...*serverconfig.ApplyResult) []string {
+func collectBackupPaths(results ...*ApplyResult) []string {
 	var paths []string
 	for _, r := range results {
 		if r != nil && r.BackupPath != "" {

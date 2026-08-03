@@ -3,8 +3,6 @@ package agent
 import (
 	"fmt"
 	"strings"
-
-	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // RestoreAgent restores all config files for the given agent type from their
@@ -33,7 +31,7 @@ func RestoreAgent(agentType AgentType) (*RestoreAgentResult, error) {
 				fmt.Sprintf("%s: %v", displayPath, err))
 			continue
 		}
-		r, err := serverconfig.RestoreLatestBackup(realPath)
+		r, err := RestoreLatestBackup(realPath)
 		if err != nil {
 			msg := fmt.Sprintf("%s: %v", displayPath, err)
 			if r != nil && r.Message != "" {

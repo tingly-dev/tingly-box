@@ -2,8 +2,6 @@ package agent
 
 import (
 	"fmt"
-
-	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // OpenCodeConfig implements AgentConfig for OpenCode
@@ -24,7 +22,7 @@ func (o *OpenCodeConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult, 
 	}
 
 	// Apply config
-	applyResult, err := serverconfig.ApplyOpenCodeConfig(params.Config)
+	applyResult, err := ApplyOpenCodeConfig(params.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply OpenCode config: %w", err)
 	}

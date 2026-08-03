@@ -123,7 +123,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			CodexBaseURL: codexBaseURL,
 			APIKey:       apiKey,
 			Models:       models,
-			Prefs:        serverconfig.DefaultCodexPrefs(),
+			Prefs:        aiagent.DefaultCodexPrefs(),
 			WriteCatalog: true,
 		})
 	}
