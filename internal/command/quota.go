@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
 
 	"github.com/tingly-dev/tingly-box/ai/quota"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -165,7 +166,7 @@ func findProvider(appManager *AppManager, nameOrUUID string) (*typ.Provider, err
 func createQuotaManager(appManager *AppManager) (*quota.Manager, error) {
 	// Create quota store
 	config := appManager.AppConfig()
-	store, err := quota.NewGormStore(config.ConfigDir(), logrus.StandardLogger())
+	store, err := quota.NewGormStore(constant.GetDBFile(config.ConfigDir()), logrus.StandardLogger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create quota store: %w", err)
 	}

@@ -3,6 +3,7 @@ package quota
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 func TestGormStorePreservesSuccessfulRawResponse(t *testing.T) {
 	t.Parallel()
 
-	store, err := NewGormStore(t.TempDir(), logrus.New())
+	store, err := NewGormStore(filepath.Join(t.TempDir(), "test.db"), logrus.New())
 	if err != nil {
 		t.Fatalf("NewGormStore() error: %v", err)
 	}

@@ -14,8 +14,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
-
-	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 var (
@@ -267,13 +265,12 @@ type GormStore struct {
 	logger *logrus.Logger
 }
 
-// NewGormStore creates a GORM-backed quota store.
-func NewGormStore(baseDir string, logger *logrus.Logger) (*GormStore, error) {
-	if err := os.MkdirAll(baseDir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create quota store directory: %w", err)
-	}
-
-	dbPath := constant.GetDBFile(baseDir)
+// NewGormStore creates a GORM-backed quota store. dbPath is the full path to
+// the SQLite database file (typically shared with the other tingly-box
+// stores); the caller is responsible for deriving it — e.g. via
+// constant.GetDBFile(configDir) — since ai/quota does not depend on the
+// parent repo's internal/constant package.
+func NewGormStore(dbPath string, logger *logrus.Logger) (*GormStore, error) {
 	dbDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dbDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create db directory: %w", err)

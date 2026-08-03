@@ -17,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
@@ -628,7 +629,7 @@ func (s *Server) setupConfigWatcher() {
 // initQuotaManager initializes the provider quota manager
 func initQuotaManager(cfg *config.Config) (*quota.Manager, error) {
 	// Create quota store
-	store, err := quota.NewGormStore(cfg.ConfigDir, logrus.StandardLogger())
+	store, err := quota.NewGormStore(constant.GetDBFile(cfg.ConfigDir), logrus.StandardLogger())
 	if err != nil {
 		return nil, err
 	}
