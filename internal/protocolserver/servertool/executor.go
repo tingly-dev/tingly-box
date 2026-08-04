@@ -3,6 +3,7 @@ package servertool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
@@ -26,6 +27,21 @@ type RuntimeCaller interface {
 // name validation, legacy remapping, callable guard, hooks, and dispatch.
 type Executor interface {
 	Execute(ctx context.Context, call ToolCall) (context.Context, coretool.ToolResult, error)
+}
+
+// DispatchError marks an error returned after the runtime invocation began.
+// Callers use this boundary to prevent failover from replaying a tool whose
+// remote side effects may have happened even though the call returned an error.
+type DispatchError struct {
+	Err error
+}
+
+func (e *DispatchError) Error() string { return e.Err.Error() }
+func (e *DispatchError) Unwrap() error { return e.Err }
+
+func WasDispatched(err error) bool {
+	var dispatched *DispatchError
+	return errors.As(err, &dispatched)
 }
 
 // DefaultExecutor is the standard implementation of Executor.
@@ -73,6 +89,7 @@ func (e *DefaultExecutor) Execute(ctx context.Context, call ToolCall) (context.C
 	result, err := e.runtime.CallTool(ctx, resolvedName, call.Arguments)
 	if err != nil {
 		result = normalizeError(err)
+		err = &DispatchError{Err: err}
 	}
 
 	// 6. Restore depth so it doesn't accumulate across sequential tool calls.
