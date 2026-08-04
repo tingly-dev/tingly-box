@@ -6,9 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	mcpmodule "github.com/tingly-dev/tingly-box/internal/mcpserver"
 	protocolstage "github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	stagetoolloop "github.com/tingly-dev/tingly-box/internal/protocol/stage/toolloop"
-	mcpmodule "github.com/tingly-dev/tingly-box/internal/mcpserver"
 	servertransform "github.com/tingly-dev/tingly-box/internal/protocolserver/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -32,6 +32,9 @@ func (ph *ProtocolHandler) newProtocolStageBetaToolLoop(
 		),
 		Executor:      mcpmodule.NewServerToolExecutor(ph),
 		Continuations: mcpmodule.NewProviderBetaContinuationStore(provider.UUID),
+		// Explicit so production does not silently depend on a package default:
+		// DefaultMaxRounds bounds server-tool executions per attempt.
+		MaxRounds: stagetoolloop.DefaultMaxRounds,
 	})
 }
 

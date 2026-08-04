@@ -28,6 +28,12 @@ type ToolResult struct {
 	ToolCallID string
 	Content    string
 	IsError    bool
+	// Dispatched reports that the executor crossed into the runtime before
+	// failing. An irreversible action may already have happened, so a later
+	// error must still mark the attempt's side effects as committed to stop
+	// failover from replaying it. Leave it false for validation, disabled-tool,
+	// and policy failures that happen before dispatch.
+	Dispatched bool
 }
 
 // ToolCatalog lists the server-visible tools for one request. The returned
@@ -53,6 +59,12 @@ type ToolExecutor interface {
 type AllowAllPolicy struct{}
 
 func (AllowAllPolicy) Authorize(context.Context, ToolCall) error { return nil }
+
+// DefaultMaxRounds bounds server-tool executions per attempt for every native
+// ToolLoop Stage. One final provider round is allowed after the last execution
+// so the model can produce an answer; a further server-tool request fails
+// closed instead of executing beyond the budget.
+const DefaultMaxRounds = 3
 
 var (
 	ErrMaxRounds               = errors.New("tool loop reached the maximum number of rounds")

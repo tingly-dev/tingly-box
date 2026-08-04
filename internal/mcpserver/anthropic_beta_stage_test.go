@@ -464,6 +464,62 @@ func TestAnthropicBetaStageStreamFailsWhenContinuationCannotBeStashed(t *testing
 	_ = stream.Close()
 }
 
+func TestAnthropicBetaStageCompleteAllowsToolExecutionOnLastBudgetRound(t *testing.T) {
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{responses: []*protocolstage.Response{
+		{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-1", Name: "lookup"})},
+		{Value: betaStageTextMessage(t, "final")},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:     staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:  executor,
+		MaxRounds: 1,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	// maxRounds bounds tool executions: the single allowed execution runs, then
+	// the model gets one more round to produce the final answer.
+	response, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Value.(*anthropic.BetaMessage).Content[0].Text != "final" {
+		t.Fatalf("final response = %#v", response.Value)
+	}
+	if len(executor.calls) != 1 {
+		t.Fatalf("executed %d tools, want 1", len(executor.calls))
+	}
+	if len(terminal.calls) != 2 {
+		t.Fatalf("provider calls = %d, want 2 (execution round + final answer round)", len(terminal.calls))
+	}
+}
+
+func TestAnthropicBetaStageCompleteFailsWhenToolExecutionExceedsBudget(t *testing.T) {
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{responses: []*protocolstage.Response{
+		{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-1", Name: "lookup"})},
+		{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-2", Name: "lookup"})},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:     staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:  executor,
+		MaxRounds: 1,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	_, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if !errors.Is(err, stagetoolloop.ErrMaxRounds) || !stagetoolloop.HasCommittedSideEffects(err) {
+		t.Fatalf("error = %v, committed=%v", err, stagetoolloop.HasCommittedSideEffects(err))
+	}
+	if len(executor.calls) != 1 {
+		t.Fatalf("executed %d tools, want 1 (the budget allows exactly one execution)", len(executor.calls))
+	}
+}
+
 func TestAnthropicBetaStageRejectsAmbiguousOwnership(t *testing.T) {
 	request := &anthropic.BetaMessageNewParams{Tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}}
 	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{

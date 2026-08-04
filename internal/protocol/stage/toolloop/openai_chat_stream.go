@@ -125,7 +125,9 @@ func (s *openAIChatToolLoopStream) Next(ctx context.Context) (protocolstage.Even
 			}
 			continue
 		}
-		if s.round >= s.endpoint.stage.maxRounds {
+		// maxRounds bounds server-tool executions; the round after the last
+		// allowed execution must be a final answer or a client-owned round.
+		if s.round > s.endpoint.stage.maxRounds {
 			return protocolstage.Event{}, s.fail(ErrMaxRounds)
 		}
 

@@ -64,7 +64,7 @@ func NewAnthropicBetaStage(config AnthropicBetaStageConfig) (protocolstage.Stage
 	}
 	maxRounds := config.MaxRounds
 	if maxRounds <= 0 {
-		maxRounds = defaultMaxRounds
+		maxRounds = stagetoolloop.DefaultMaxRounds
 	}
 	return &anthropicBetaToolLoopStage{
 		name:          name,
@@ -115,7 +115,9 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 	// the managed results still reach the final answer.
 	var internalMessages []anthropic.BetaMessageParam
 	sideEffectsCommitted := false
-	for round := 1; round <= e.stage.maxRounds; round++ {
+	// maxRounds bounds server-tool executions; one extra provider round is
+	// allowed so the model can produce the final answer after the last one.
+	for round := 1; round <= e.stage.maxRounds+1; round++ {
 		response, callErr := e.next.Complete(runCtx, current)
 		if callErr != nil {
 			return nil, stagetoolloop.WrapError(callErr, sideEffectsCommitted)
@@ -135,6 +137,12 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 			return nil, stagetoolloop.WrapError(extractErr, sideEffectsCommitted)
 		}
 		managed, external, externalIDs := splitBetaStageTools(tools, owned)
+		if len(managed) > 0 && round > e.stage.maxRounds {
+			// The tool-execution budget is exhausted and the model still
+			// requests server-owned tools; fail closed instead of executing
+			// beyond the budget or leaking internal tool definitions.
+			return nil, stagetoolloop.WrapError(stagetoolloop.ErrMaxRounds, sideEffectsCommitted)
+		}
 		if len(managed) == 0 {
 			// A final answer (no tool calls) or a pure-external round with no
 			// internal context needs no continuation.
@@ -197,9 +205,6 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 			response.Usage = totalUsage
 			response.SideEffectsCommitted = sideEffectsCommitted
 			return response, nil
-		}
-		if round == e.stage.maxRounds {
-			return nil, stagetoolloop.WrapError(stagetoolloop.ErrMaxRounds, sideEffectsCommitted)
 		}
 
 		results, nextCtx, committed := e.executeTools(runCtx, current.Request, managed)

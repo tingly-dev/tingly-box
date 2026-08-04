@@ -14,8 +14,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-const defaultMaxRounds = 8
-
 // OpenAIChatConfig constructs a Chat-native ToolLoop Stage. Catalog, policy,
 // and executor are protocol-neutral dependencies; only this adapter understands
 // OpenAI Chat request and response types.
@@ -43,7 +41,7 @@ func NewOpenAIChat(config OpenAIChatConfig) (protocolstage.Stage, error) {
 	}
 	maxRounds := config.MaxRounds
 	if maxRounds <= 0 {
-		maxRounds = defaultMaxRounds
+		maxRounds = DefaultMaxRounds
 	}
 	return &openAIChatStage{
 		name:      name,
@@ -85,7 +83,9 @@ func (e *openAIChatEndpoint) Complete(ctx context.Context, call protocolstage.Ca
 	current := prepared
 	var totalUsage *protocol.TokenUsage
 	sideEffectsCommitted := false
-	for round := 1; round <= e.stage.maxRounds; round++ {
+	// maxRounds bounds server-tool executions; one extra provider round is
+	// allowed so the model can produce the final answer after the last one.
+	for round := 1; round <= e.stage.maxRounds+1; round++ {
 		response, callErr := e.next.Complete(runCtx, current)
 		if callErr != nil {
 			return nil, WrapError(callErr, sideEffectsCommitted)
@@ -105,7 +105,7 @@ func (e *openAIChatEndpoint) Complete(ctx context.Context, call protocolstage.Ca
 			response.SideEffectsCommitted = sideEffectsCommitted
 			return response, nil
 		}
-		if round == e.stage.maxRounds {
+		if round == e.stage.maxRounds+1 {
 			return nil, WrapError(ErrMaxRounds, sideEffectsCommitted)
 		}
 
@@ -197,7 +197,10 @@ func (e *openAIChatEndpoint) executeCalls(ctx context.Context, calls []ToolCall)
 			if result.Content == "" {
 				result.Content = err.Error()
 			}
-		} else {
+		}
+		if err == nil || result.Dispatched {
+			// An executor may dispatch an irreversible action and then lose its
+			// response; only failures before dispatch leave the attempt uncommitted.
 			committed = true
 		}
 		results = append(results, result)

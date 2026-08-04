@@ -105,6 +105,11 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 			return protocolstage.Event{}, s.fail(extractErr)
 		}
 		managed, external, externalIDs := splitBetaStageTools(tools, s.owned)
+		// maxRounds bounds server-tool executions; the round after the last
+		// allowed execution must be a final answer or a client-owned round.
+		if len(managed) > 0 && s.round > s.endpoint.stage.maxRounds {
+			return protocolstage.Event{}, s.fail(stagetoolloop.ErrMaxRounds)
+		}
 		if len(managed) == 0 {
 			// A final answer (no tool calls) or a pure-external round with no
 			// internal context needs no continuation.
@@ -170,9 +175,6 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 			s.buffered = nil
 			s.done = true
 			continue
-		}
-		if s.round >= s.endpoint.stage.maxRounds {
-			return protocolstage.Event{}, s.fail(stagetoolloop.ErrMaxRounds)
 		}
 
 		results, nextCtx, committed := s.endpoint.executeTools(s.runCtx, s.call.Request, managed)

@@ -296,9 +296,14 @@ func TestOpenAIChatStreamPreservesSideEffectBoundaryAfterLaterFailure(t *testing
 	_ = stream.Close()
 }
 
-func TestOpenAIChatStreamEnforcesMaxRoundsBeforeToolExecution(t *testing.T) {
-	executor := &fakeExecutor{}
-	terminal := &scriptedChatEndpoint{streams: []*memoryEventStream{{events: toolCallStreamEvents("call-1", "lookup", `{}`)}}}
+func TestOpenAIChatStreamAllowsToolExecutionThenRequiresFinalAnswer(t *testing.T) {
+	executor := &fakeExecutor{results: map[string]ToolResult{
+		"lookup": {Content: "ok"},
+	}}
+	terminal := &scriptedChatEndpoint{streams: []*memoryEventStream{
+		{events: toolCallStreamEvents("call-1", "lookup", `{}`)},
+		{events: toolCallStreamEvents("call-2", "lookup", `{}`)},
+	}}
 	stage, _ := NewOpenAIChat(OpenAIChatConfig{
 		Catalog:   staticCatalog{{Name: "lookup"}},
 		Executor:  executor,
@@ -310,14 +315,38 @@ func TestOpenAIChatStreamEnforcesMaxRoundsBeforeToolExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// maxRounds bounds tool executions: the single allowed execution happens,
+	// then a further all-owned round fails closed with side effects committed.
 	_, err = stream.Next(context.Background())
-	if !errors.Is(err, ErrMaxRounds) || HasCommittedSideEffects(err) {
+	if !errors.Is(err, ErrMaxRounds) || !HasCommittedSideEffects(err) {
 		t.Fatalf("max-round error = %v, committed=%v", err, HasCommittedSideEffects(err))
 	}
-	if len(executor.calls) != 0 {
-		t.Fatalf("executed %d tools after reaching max rounds", len(executor.calls))
+	if len(executor.calls) != 1 {
+		t.Fatalf("executed %d tools, want 1 (the budget allows one execution)", len(executor.calls))
 	}
 	_ = stream.Close()
+}
+
+func TestOpenAIChatCompleteTreatsPostDispatchToolErrorAsCommitted(t *testing.T) {
+	providerErr := errors.New("second round failed")
+	toolErr := errors.New("tool response was lost after dispatch")
+	terminal := &scriptedChatEndpoint{
+		completeResponses: []*protocolstage.Response{{Value: toolCallCompletion("call-1", "lookup", `{}`)}},
+		completeErrors:    []error{nil, providerErr},
+	}
+	stage, _ := NewOpenAIChat(OpenAIChatConfig{
+		Catalog: staticCatalog{{Name: "lookup"}},
+		Executor: &fakeExecutor{
+			results: map[string]ToolResult{"lookup": {Dispatched: true}},
+			errors:  map[string]error{"lookup": toolErr},
+		},
+	})
+	endpoint, _ := protocolstage.Compose(terminal, stage)
+
+	_, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &openai.ChatCompletionNewParams{}})
+	if !errors.Is(err, providerErr) || !HasCommittedSideEffects(err) {
+		t.Fatalf("later error = %v, committed=%v", err, HasCommittedSideEffects(err))
+	}
 }
 
 func TestOpenAIChatStreamRecordsToolRoundsAsExchangesInOneAttempt(t *testing.T) {
@@ -387,12 +416,13 @@ func (c staticCatalog) ListTools(context.Context) ([]ToolDefinition, error) {
 
 type fakeExecutor struct {
 	results map[string]ToolResult
+	errors  map[string]error
 	calls   []ToolCall
 }
 
 func (e *fakeExecutor) Execute(ctx context.Context, call ToolCall) (context.Context, ToolResult, error) {
 	e.calls = append(e.calls, call)
-	return ctx, e.results[call.Name], nil
+	return ctx, e.results[call.Name], e.errors[call.Name]
 }
 
 type scriptedChatEndpoint struct {
