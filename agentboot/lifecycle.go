@@ -1,4 +1,4 @@
-package session
+package agentboot
 
 // LifecycleStore receives session lifecycle transitions from the agentboot runner.
 // remote/session.Manager implements this interface; the interface lives here
@@ -13,7 +13,3 @@ type LifecycleStore interface {
 	SetCompleted(id, response string) bool
 	SetFailed(id, errMsg string) bool
 }
-
-// Store is retained for source compatibility.
-// Deprecated: use LifecycleStore.
-type Store = LifecycleStore

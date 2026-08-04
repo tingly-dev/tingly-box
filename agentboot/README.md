@@ -230,11 +230,11 @@ agentboot/
 ├── runner_state.go       # Run state and terminal error conversion
 ├── run.go                # High-level Prompter/MessageSink consumer
 ├── service.go            # AgentService — the single public entry point (registry + query + execute)
+├── lifecycle.go          # Runtime LifecycleStore interface
 ├── ask/                  # Ask/permission request-response types + tool handler registry
 ├── common/               # Canonical Event, SessionReader, history types
 ├── process/              # LaunchSpec + process abstraction (OS/fake)
 ├── protocol/             # Stream-JSON encoder / decoder
-├── session/              # Runtime LifecycleStore interface
 └── claude/               # Claude Code agent implementation
     ├── agent.go          # claude.Agent (wraps Runner)
     ├── service.go        # Agent + Claude session-reader composition
@@ -283,7 +283,7 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
 
 If the provider exposes historical sessions, implement `common.SessionReader`
 and inject it with `agentboot.WithSessionReader`. Runtime lifecycle reporting
-is a separate concern implemented through `session.LifecycleStore` in
+is a separate concern implemented through `agentboot.LifecycleStore` in
 `ExecutionOptions.Store`.
 
 For agents that don't fit the process+protocol pipeline (in-process mocks, remote services), use `agentboot.NewControlledHandle` to drive an `ExecutionHandle` directly.

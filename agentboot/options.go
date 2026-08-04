@@ -2,8 +2,6 @@ package agentboot
 
 import (
 	"time"
-
-	agentsession "github.com/tingly-dev/tingly-box/agentboot/session"
 )
 
 // OutputFormat defines agent output format.
@@ -78,5 +76,5 @@ type ExecutionOptions struct {
 	//   SetRunning  — after the process starts successfully
 	//   SetFailed   — if the process fails to start or Wait returns an error
 	//   SetCompleted — if Wait returns without error
-	Store agentsession.LifecycleStore
+	Store LifecycleStore
 }

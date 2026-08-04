@@ -5,7 +5,7 @@ import "context"
 // SessionReader provides read-only access to historical agent sessions.
 //
 // The interface intentionally models history queries rather than runtime
-// lifecycle persistence. See agentboot/session.LifecycleStore for lifecycle
+// lifecycle persistence. See agentboot.LifecycleStore for lifecycle
 // transitions emitted by the Runner.
 type SessionReader interface {
 	// ListProjects returns all project paths that have at least one session

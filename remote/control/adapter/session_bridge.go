@@ -1,7 +1,7 @@
 package adapter
 
 import (
-	agentsession "github.com/tingly-dev/tingly-box/agentboot/session"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	remotesession "github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -11,4 +11,4 @@ import (
 // remote/session stays a pure leaf with no dependency back into agentboot.
 // If a refactor drops or renames any of SetRunning/SetCompleted/SetFailed
 // the build fails here instead of the runner crashing at runtime.
-var _ agentsession.LifecycleStore = (*remotesession.Manager)(nil)
+var _ agentboot.LifecycleStore = (*remotesession.Manager)(nil)
