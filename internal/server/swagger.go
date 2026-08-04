@@ -15,6 +15,7 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
+	subscriptionmodule "github.com/tingly-dev/tingly-box/internal/server/module/subscriptionapi"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/swagger"
@@ -107,6 +108,14 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// channel/interaction registries once the bot middle layer is wired.
 	botAPI := notifymodule.NewBotAPIHandler(nil, nil, nil)
 	notifymodule.RegisterBotRoutes(apiV1, botAPI)
+
+	// Subscription API — same doc-only pattern: handlers are referenced,
+	// never invoked, so the nil runtime is fine. At runtime server_control.go
+	// registers these with the shared SubscriptionRuntime and the data plane
+	// gets its own token middleware.
+	subHandler := subscriptionmodule.NewHandler(nil, nil, nil, nil, nil)
+	subscriptionmodule.RegisterControlRoutes(apiV1, subHandler)
+	subscriptionmodule.RegisterDataRoutes(apiV1, subHandler)
 
 	// Config apply API routes
 	configapplyHandler := configapply.NewHandler(cfg, "")

@@ -5297,6 +5297,569 @@
         }
       }
     },
+    "/api/v1/subscriptions": {
+      "get": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "List subscriptions (no tokens).",
+        "description": "List subscriptions (no tokens).",
+        "operationId": "apiV1SubscriptionsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Create a subscription; the scoped tb-sub- token is returned exactly once.",
+        "description": "Create a subscription; the scoped tb-sub- token is returned exactly once.",
+        "operationId": "apiV1SubscriptionsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name or missing fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}": {
+      "get": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Get one subscription.",
+        "description": "Get one subscription.",
+        "operationId": "apiV1SubscriptionsIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Update name/bot/chat/exclusive/enabled (partial).",
+        "description": "Update name/bot/chat/exclusive/enabled (partial).",
+        "operationId": "apiV1SubscriptionsIdPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Delete the subscription and its queued events.",
+        "description": "Delete the subscription and its queued events.",
+        "operationId": "apiV1SubscriptionsIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/events": {
+      "get": {
+        "tags": [
+          "subscription-data"
+        ],
+        "summary": "Long-poll the inbound mailbox: events past the acked cursor, oldest first. Ack via /events/ack.",
+        "description": "Long-poll the inbound mailbox: events past the acked cursor, oldest first. Ack via /events/ack.",
+        "operationId": "apiV1SubscriptionsIdEventsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/events/ack": {
+      "post": {
+        "tags": [
+          "subscription-data"
+        ],
+        "summary": "Advance the mailbox cursor; acked events are pruned. The cursor never moves backwards.",
+        "description": "Advance the mailbox cursor; acked events are pruned. The cursor never moves backwards.",
+        "operationId": "apiV1SubscriptionsIdEventsAckPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/interact": {
+      "post": {
+        "tags": [
+          "subscription-data"
+        ],
+        "summary": "Start an interactive prompt in the bound chat; long-poll the returned request_id for the reply.",
+        "description": "Start an interactive prompt in the bound chat; long-poll the returned request_id for the reply.",
+        "operationId": "apiV1SubscriptionsIdInteractPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not available or bot not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/interact/{request_id}": {
+      "get": {
+        "tags": [
+          "subscription-data"
+        ],
+        "summary": "Long-poll the reply to an interactive prompt (200 answered/cancelled, 410 timeout, 504 pending, 404 expired).",
+        "description": "Long-poll the reply to an interactive prompt (200 answered/cancelled, 410 timeout, 504 pending, 404 expired).",
+        "operationId": "apiV1SubscriptionsIdInteractRequest_idGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Interaction request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/notify": {
+      "post": {
+        "tags": [
+          "subscription-data"
+        ],
+        "summary": "One-way push into the subscription's bound chat, attributed with its name. Accepts the subscription's tb-sub- token.",
+        "description": "One-way push into the subscription's bound chat, attributed with its name. Accepts the subscription's tb-sub- token.",
+        "operationId": "apiV1SubscriptionsIdNotifyPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not available or bot not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/reply": {
+      "post": {
+        "tags": [
+          "subscription-data"
+        ],
+        "summary": "Send into the bound chat; threads to the referenced inbound event when event_id is given.",
+        "description": "Send into the bound chat; threads to the referenced inbound event when event_id is given.",
+        "operationId": "apiV1SubscriptionsIdReplyPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not available or bot not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/token": {
+      "post": {
+        "tags": [
+          "subscription"
+        ],
+        "summary": "Rotate the scoped token; the old one stops working immediately.",
+        "description": "Rotate the scoped token; the old one stops working immediately.",
+        "operationId": "apiV1SubscriptionsIdTokenPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotateTokenResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/system/logs": {
       "get": {
         "tags": [
@@ -7078,6 +7641,20 @@
           "created_at"
         ]
       },
+      "AckRequest": {
+        "type": "object",
+        "properties": {
+          "up_to": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field up_to",
+            "example": 42
+          }
+        },
+        "required": [
+          "up_to"
+        ]
+      },
       "ActionHistoryEntry": {
         "type": "object",
         "properties": {
@@ -8332,8 +8909,15 @@
           },
           "auth_type": {
             "type": "string",
-            "description": "Auth type: api_key or oauth (default: api_key)",
+            "description": "Auth type: api_key, oauth, aws_sigv4, azure_key, or gcp_sa (default: api_key)",
             "example": "api_key"
+          },
+          "credential": {
+            "type": "object",
+            "description": "Cloud credential fields (aws_sigv4/azure_key/gcp_sa)",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "enabled": {
             "type": "boolean",
@@ -8539,6 +9123,58 @@
           "lb_tactic",
           "active",
           "smart_enabled"
+        ]
+      },
+      "CreateSubscriptionRequest": {
+        "type": "object",
+        "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid",
+            "example": "bot-uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "description": "Field chat_id",
+            "example": "123456789"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled",
+            "example": true
+          },
+          "exclusive": {
+            "type": "boolean",
+            "description": "Field exclusive",
+            "example": false
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "report"
+          }
+        },
+        "required": [
+          "name",
+          "bot_uuid",
+          "chat_id"
+        ]
+      },
+      "CreateSubscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "subscription": {
+            "$ref": "#/components/schemas/SubscriptionView"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token",
+            "example": "tb-sub-…"
+          }
+        },
+        "required": [
+          "subscription",
+          "token"
         ]
       },
       "DecisionFacts": {
@@ -9045,6 +9681,64 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "EventView": {
+        "type": "object",
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "Field chat_id",
+            "example": "123456789"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Field created_at",
+            "example": "2026-08-04T12:00:00Z"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field id",
+            "example": 42
+          },
+          "message_id": {
+            "type": "string",
+            "description": "Field message_id",
+            "example": "1024"
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Field sender_id",
+            "example": "987654321"
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text",
+            "example": "run job 7"
+          }
+        },
+        "required": [
+          "id",
+          "chat_id",
+          "sender_id",
+          "text",
+          "created_at"
+        ]
+      },
+      "EventsResponse": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "description": "Field events",
+            "items": {
+              "$ref": "#/components/schemas/EventView"
+            }
+          }
+        },
+        "required": [
+          "events"
         ]
       },
       "ExecuteToolRequest": {
@@ -9952,6 +10646,68 @@
           "success"
         ]
       },
+      "InteractRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body",
+            "example": "commit a1b2c3"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "example": "confirm"
+          },
+          "options": {
+            "type": "array",
+            "description": "Field options",
+            "items": {
+              "$ref": "#/components/schemas/Option"
+            }
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field timeout_seconds",
+            "example": 120
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title",
+            "example": "Deploy to prod?"
+          }
+        },
+        "required": [
+          "kind",
+          "title"
+        ]
+      },
+      "InteractResponse": {
+        "type": "object",
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "description": "Field expires_at",
+            "example": "2026-08-04T12:05:00Z"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Field request_id",
+            "example": "a1b2…"
+          },
+          "wait_url": {
+            "type": "string",
+            "description": "Field wait_url",
+            "example": "/api/v1/subscriptions/{id}/interact/{request_id}"
+          }
+        },
+        "required": [
+          "request_id",
+          "wait_url",
+          "expires_at"
+        ]
+      },
       "LatestVersionInfo": {
         "type": "object",
         "properties": {
@@ -10849,6 +11605,29 @@
           "requests"
         ]
       },
+      "NotifyRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body",
+            "example": "main branch is red"
+          },
+          "level": {
+            "type": "string",
+            "description": "Field level",
+            "example": "info"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title",
+            "example": "Build #412 failed"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
       "OAuthAuthorizeRequest": {
         "type": "object",
         "properties": {
@@ -11378,7 +12157,8 @@
         "properties": {
           "ok": {
             "type": "boolean",
-            "description": "Field ok"
+            "description": "Field ok",
+            "example": true
           }
         },
         "required": [
@@ -11414,6 +12194,27 @@
           "configJson",
           "scriptWindows",
           "scriptUnix"
+        ]
+      },
+      "Option": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Field label"
+          },
+          "style": {
+            "type": "string",
+            "description": "Field style"
+          },
+          "value": {
+            "type": "string",
+            "description": "Field value"
+          }
+        },
+        "required": [
+          "value",
+          "label"
         ]
       },
       "PairingCodeResponse": {
@@ -12166,6 +12967,13 @@
             "description": "Field auth_type",
             "example": "api_key"
           },
+          "credential": {
+            "type": "object",
+            "description": "Field credential",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "enabled": {
             "type": "boolean",
             "description": "Field enabled",
@@ -12228,6 +13036,10 @@
           "api_doc": {
             "type": "string",
             "description": "Field api_doc"
+          },
+          "api_style": {
+            "type": "string",
+            "description": "Field api_style"
           },
           "auth_type": {
             "type": "string",
@@ -12583,6 +13395,25 @@
           "message"
         ]
       },
+      "ReplyRequest": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field event_id",
+            "example": 42
+          },
+          "text": {
+            "type": "string",
+            "description": "Field text",
+            "example": "job 7 restarted ✅"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
       "ResourceMatcher": {
         "type": "object",
         "properties": {
@@ -12646,6 +13477,19 @@
           "restoredFiles",
           "preRestoreBackups",
           "message"
+        ]
+      },
+      "RotateTokenResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Field token",
+            "example": "tb-sub-…"
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "Route": {
@@ -13765,6 +14609,93 @@
           "data"
         ]
       },
+      "SubscriptionListResponse": {
+        "type": "object",
+        "properties": {
+          "subscriptions": {
+            "type": "array",
+            "description": "Field subscriptions",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionView"
+            }
+          }
+        },
+        "required": [
+          "subscriptions"
+        ]
+      },
+      "SubscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "subscription": {
+            "$ref": "#/components/schemas/SubscriptionView"
+          }
+        },
+        "required": [
+          "subscription"
+        ]
+      },
+      "SubscriptionView": {
+        "type": "object",
+        "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid",
+            "example": "bot-uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "description": "Field chat_id",
+            "example": "123456789"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Field created_at",
+            "example": "2026-08-04T12:00:00Z"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled",
+            "example": true
+          },
+          "exclusive": {
+            "type": "boolean",
+            "description": "Field exclusive",
+            "example": false
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "report"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Field online",
+            "example": false
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Field updated_at",
+            "example": "2026-08-04T12:00:00Z"
+          },
+          "uuid": {
+            "type": "string",
+            "description": "Field uuid",
+            "example": "3d5a…"
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "bot_uuid",
+          "chat_id",
+          "exclusive",
+          "enabled",
+          "online",
+          "created_at",
+          "updated_at"
+        ]
+      },
       "SystemLogEntry": {
         "type": "object",
         "properties": {
@@ -14314,6 +15245,13 @@
             "type": "string",
             "description": "New API style"
           },
+          "credential": {
+            "type": "object",
+            "description": "Replacement cloud credential fields (aws_sigv4/azure_key/gcp_sa)",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "enabled": {
             "type": "boolean",
             "description": "New enabled status"
@@ -14580,6 +15518,36 @@
           "message",
           "data"
         ]
+      },
+      "UpdateSubscriptionRequest": {
+        "type": "object",
+        "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid",
+            "example": "bot-uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "description": "Field chat_id",
+            "example": "123456789"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Field enabled",
+            "example": false
+          },
+          "exclusive": {
+            "type": "boolean",
+            "description": "Field exclusive",
+            "example": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "report"
+          }
+        }
       },
       "UsageAccount": {
         "type": "object",
@@ -15985,6 +16953,14 @@
     {
       "name": "skills",
       "description": "Operations related to skills"
+    },
+    {
+      "name": "subscription",
+      "description": "Operations related to subscription"
+    },
+    {
+      "name": "subscription-data",
+      "description": "Operations related to subscription-data"
     },
     {
       "name": "system-logs",
