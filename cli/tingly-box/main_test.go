@@ -180,6 +180,29 @@ func TestStartCmdDebugFlagSet(t *testing.T) {
 	}
 }
 
+func TestProtocolStageFlagParsesOnServerCommands(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		get  func(*CLI) bool
+	}{
+		{name: "start", args: []string{"start", "--stage"}, get: func(cli *CLI) bool { return cli.Start.EnableProtocolStage }},
+		{name: "restart", args: []string{"restart", "--stage"}, get: func(cli *CLI) bool { return cli.Restart.EnableProtocolStage }},
+		{name: "open", args: []string{"open", "--stage"}, get: func(cli *CLI) bool { return cli.Open.EnableProtocolStage }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cli, parser := newTestParser(t)
+			if _, err := parser.Parse(tt.args); err != nil {
+				t.Fatalf("%v should parse: %v", tt.args, err)
+			}
+			if !tt.get(cli) {
+				t.Fatalf("%v did not enable Protocol Stage", tt.args)
+			}
+		})
+	}
+}
+
 // TestTUICommandAndQuickstartAlias ensures both `tui` (the canonical name) and
 // `quickstart` (the hidden legacy alias) parse without arguments.
 func TestTUICommandAndQuickstartAlias(t *testing.T) {

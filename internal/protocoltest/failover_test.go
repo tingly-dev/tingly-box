@@ -77,6 +77,78 @@ func TestFailover_Stream_PreContent_500_RetriesAndSucceeds(t *testing.T) {
 	assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
 }
 
+func TestProtocolStageFailover_PreContent_RetriesAndSucceeds(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   protocol.APIType
+		target   protocol.APIType
+		endpoint pt.EndpointKind
+	}{
+		{name: "chat_to_beta", source: protocol.TypeOpenAIChat, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
+		{name: "v1_to_v1", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, endpoint: pt.EndpointAnthropic},
+		{name: "v1_to_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
+		{name: "beta_to_beta", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
+		{name: "beta_to_chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, streaming := range []bool{false, true} {
+				name := "nonstream"
+				scenario := pt.TextScenario()
+				if streaming {
+					name = "stream"
+					scenario = pt.StreamingTextScenario()
+				}
+				t.Run(name, func(t *testing.T) {
+					env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
+					defer env.Close()
+
+					route := env.SetupFailoverRoute(t, test.source, test.target, scenario, pt.FailMockPreContent429)
+					result := env.SendWithModel(t, test.source, route.ModelName, streaming)
+
+					require.Equal(t, 200, result.HTTPStatus)
+					assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
+					assert.Equal(t, 1, env.UpstreamEndpointHits(test.endpoint))
+					assert.NotEmpty(t, result.Content)
+				})
+			}
+		})
+	}
+}
+
+func TestProtocolStageFailover_MidStreamDoesNotRetry(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		source   protocol.APIType
+		target   protocol.APIType
+		endpoint pt.EndpointKind
+	}{
+		{name: "v1_to_v1", source: protocol.TypeAnthropicV1, target: protocol.TypeAnthropicV1, endpoint: pt.EndpointAnthropic},
+		{name: "v1_to_chat", source: protocol.TypeAnthropicV1, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
+		{name: "beta_to_beta", source: protocol.TypeAnthropicBeta, target: protocol.TypeAnthropicBeta, endpoint: pt.EndpointAnthropic},
+		{name: "beta_to_chat", source: protocol.TypeAnthropicBeta, target: protocol.TypeOpenAIChat, endpoint: pt.EndpointChat},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := pt.NewTestEnv(t, pt.NewTestEnvOptionWithProtocolStage())
+			defer env.Close()
+
+			route := env.SetupFailoverRoute(
+				t,
+				test.source,
+				test.target,
+				pt.StreamingTextScenario(),
+				pt.FailMockMidStreamCut,
+			)
+			result := env.SendWithModel(t, test.source, route.ModelName, true)
+
+			require.Equal(t, 200, result.HTTPStatus, "first Anthropic event committed the attempt")
+			assert.Equal(t, int64(1), route.PrimaryCallCount.Load())
+			assert.Equal(t, 0, env.UpstreamEndpointHits(test.endpoint), "fallback must not run after a committed Anthropic event")
+			require.NotEmpty(t, result.StreamEvents)
+		})
+	}
+}
+
 // TestFailover_AllTiersFail_ClientSeesLastError — both services return 429.
 // After the loop exhausts the candidate pool, the deferred CommitIfBuffered
 // flushes the last buffered error to the wire. The client must see a non-200,

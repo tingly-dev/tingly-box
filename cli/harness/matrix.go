@@ -21,18 +21,20 @@ import (
 //
 // --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
-	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
-	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
-	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
-	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
-	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,content_shapes,cache_controls',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (every section), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only), content_shapes (request content-shape regression only), cache_controls (single-hop + ABA cache/no-cache requests)'"`
-	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
-	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
-	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
-	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
-	BatchCount int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
-	MCPEnabled bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
+	Scenarios    []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
+	Sources      []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
+	Targets      []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
+	Streaming    bool     `kong:"name='streaming',help='Run only streaming tests'"`
+	NonStream    bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	Mode         string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,content_shapes,cache_controls,bridges',help='Section selection: default (single + idempotent + dormant Bridges; two-hop OFF), all (every section), single (production A→B only), transitive (production A→B→C only), idempotent (production round-trip only), flags (per-rule flags only), content_shapes (request content-shape regression only), cache_controls (single-hop + ABA cache/no-cache requests), bridges (dormant Stage/Bridge topology only)'"`
+	Client       string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
+	JsonOutput   bool     `kong:"name='json',help='Output results as JSON'"`
+	Verbose      int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
+	RecordDir    string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
+	BatchCount   int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
+	MCPEnabled   bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
+	StageEnabled bool     `kong:"name='stage',help='Enable production Protocol Stage selection in the test server'"`
+	Guardrails   bool     `kong:"name='guardrails',help='Enable an active allow-only Guardrails runtime in the test server'"`
 }
 
 // matrixSection describes one runnable section of the validation matrix and
@@ -40,10 +42,11 @@ type MatrixCmd struct {
 // here (plus its ExecuteAll* executor in internal/protocoltest) and extending
 // the --mode enum on MatrixCmd.
 type matrixSection struct {
-	name     string
-	modes    []string // --mode values that include this section
-	httpOnly bool     // drives raw requests directly; requires --client=http
-	exec     func(*protocoltest.Matrix) []protocoltest.TestResult
+	name       string
+	modes      []string // --mode values that include this section
+	httpOnly   bool     // requires --client=http
+	exec       func(*protocoltest.Matrix) []protocoltest.TestResult
+	bridgeExec func(*protocoltest.BridgeMatrix) []protocoltest.TestResult
 }
 
 // matrixSections is the section registry: the single source of truth for what
@@ -55,16 +58,17 @@ var matrixSections = []matrixSection{
 	{name: "flags", modes: []string{"all", "flags"}, httpOnly: true, exec: (*protocoltest.Matrix).ExecuteAllFlags},
 	{name: "content_shapes", modes: []string{"all", "content_shapes"}, httpOnly: true, exec: (*protocoltest.Matrix).ExecuteAllContentShapes},
 	{name: "cache_controls", modes: []string{"all", "cache_controls"}, httpOnly: true, exec: (*protocoltest.Matrix).ExecuteAllCacheControls},
+	{name: "bridges", modes: []string{"default", "all", "bridges"}, httpOnly: true, bridgeExec: (*protocoltest.BridgeMatrix).ExecuteAll},
 }
 
 // Help returns extended help text shown by `harness matrix --help`.
 func (*MatrixCmd) Help() string {
 	return `Examples:
-  # Default: single-hop (A→B) + idempotent round-trips (g(f(A))==A).
+  # Default: production single-hop + idempotent round-trips + dormant Bridges.
   # Two-hop (A→B→C) transitive chains are OFF by default.
   harness matrix
 
-  # Run absolutely everything: single + two-hop + idempotent
+  # Run every section: single + two-hop + idempotent + flags + dormant Bridges
   harness matrix --mode=all
 
   # Run only two-hop (A→B→C) transitive chain tests
@@ -82,8 +86,32 @@ func (*MatrixCmd) Help() string {
   # Run single-hop + ABA prompt-cache request tests
   harness matrix --mode=cache_controls
 
+  # Run only the dormant Stage/Bridge topology (no production dispatch claim)
+  harness matrix --mode=bridges
+  harness matrix --mode=bridges --source=anthropic_v1 --target=anthropic_beta
+
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
+
+  # Exercise production Stage selection (Chat/Beta/V1 routes plus Responses routes)
+  harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta
+  harness matrix --mode=single --stage --source=anthropic_beta --target=openai_chat
+  harness matrix --mode=single --stage --source=openai_responses --target=openai_responses
+  harness matrix --mode=single --stage --source=openai_responses --target=anthropic_beta
+  harness matrix --mode=single --stage --source=openai_responses --target=openai_chat
+  harness matrix --mode=single --stage --source=anthropic_beta --target=openai_responses
+
+  # Exercise every production Stage route with a server-owned MCP tool loop
+  harness matrix --mode=single --stage --mcp --scenario=mcp_owned_tool
+
+  # Persist and automatically validate RequestRecord boundaries for every MCP round
+  harness matrix --mode=single --stage --mcp --scenario=mcp_owned_tool --record-dir=/tmp/tingly-mcp-records
+
+  # Exercise the opt-in Beta identity RequestRecord canary and retain artifacts
+  harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta --record-dir=/tmp/tingly-records
+
+  # Exercise Beta Guardrail as a Stage without changing scenario semantics
+  harness matrix --mode=single --stage --guardrails --source=anthropic_beta
 
   # Drive requests through real client stacks instead of raw HTTP
   harness matrix --mode=single --client=gosdk    # official Go SDKs, in-process
@@ -128,12 +156,30 @@ func (m *MatrixCmd) Run() error {
 	if m.Streaming && m.NonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
 	}
+	if m.Client != "http" && m.Mode == "bridges" {
+		return fmt.Errorf("--mode=bridges only supports --client=http (the Bridge matrix runs in-process and has no client transport)")
+	}
 	if m.Client != "http" {
 		for _, sec := range matrixSections {
 			if sec.httpOnly && m.Mode == sec.name {
 				return fmt.Errorf("--mode=%s only supports --client=http (this suite drives raw requests directly)", m.Mode)
 			}
 		}
+	}
+	if m.Mode == "bridges" && m.MCPEnabled {
+		return fmt.Errorf("--mode=bridges does not support --mcp (the Bridge matrix validates protocol topology only)")
+	}
+	if m.Mode == "bridges" && m.StageEnabled {
+		return fmt.Errorf("--mode=bridges does not support --stage (use --mode=single to exercise the production Stage path)")
+	}
+	if m.Mode == "bridges" && m.Guardrails {
+		return fmt.Errorf("--mode=bridges does not support --guardrails (use --mode=single to exercise the production Guardrail path)")
+	}
+	if m.Mode == "bridges" && m.RecordDir != "" {
+		return fmt.Errorf("--mode=bridges does not support --record-dir (the Bridge matrix runs in-process without HTTP recording)")
+	}
+	if slices.Contains(m.Scenarios, protocoltest.MCPStageOwnedToolScenarioName) && (!m.MCPEnabled || !m.StageEnabled) {
+		return fmt.Errorf("--scenario=%s requires both --stage and --mcp", protocoltest.MCPStageOwnedToolScenarioName)
 	}
 
 	client, err := resolveClient(m.Client)
@@ -143,6 +189,9 @@ func (m *MatrixCmd) Run() error {
 
 	// Build matrix with filters
 	matrix := protocoltest.DefaultMatrix()
+	if m.MCPEnabled && m.StageEnabled {
+		matrix = matrix.WithMCPStageCoverage()
+	}
 	if client != nil {
 		matrix = matrix.WithClient(client)
 	}
@@ -171,6 +220,31 @@ func (m *MatrixCmd) Run() error {
 	if m.MCPEnabled {
 		matrix = matrix.WithMCPEnabled()
 	}
+	if m.StageEnabled {
+		matrix = matrix.WithProtocolStage()
+	}
+	if m.Guardrails {
+		matrix = matrix.WithGuardrails()
+	}
+	bridgeMatrix := protocoltest.DefaultBridgeMatrix()
+	if len(m.Scenarios) > 0 {
+		bridgeMatrix = bridgeMatrix.OnlyScenarios(m.Scenarios...)
+	}
+	if len(m.Sources) > 0 {
+		bridgeMatrix = bridgeMatrix.OnlySources(m.Sources...)
+	}
+	if len(m.Targets) > 0 {
+		bridgeMatrix = bridgeMatrix.OnlyTargets(m.Targets...)
+	}
+	if m.Streaming {
+		bridgeMatrix = bridgeMatrix.OnlyStreaming(true)
+	}
+	if m.NonStream {
+		bridgeMatrix = bridgeMatrix.OnlyStreaming(false)
+	}
+	if m.BatchCount > 1 {
+		bridgeMatrix = bridgeMatrix.WithBatchCount(m.BatchCount)
+	}
 
 	// Collect results for the sections the selected --mode includes (see
 	// matrixSections for the mode → section mapping).
@@ -185,9 +259,22 @@ func (m *MatrixCmd) Run() error {
 			logrus.Warnf("skipping %s section: only supported with --client=http", sec.name)
 			continue
 		}
+		if sec.bridgeExec != nil {
+			combined = append(combined, sec.bridgeExec(bridgeMatrix)...)
+			continue
+		}
 		combined = append(combined, sec.exec(matrix)...)
 	}
 	results := filterResults(combined, m)
+	executed := 0
+	for _, result := range results {
+		if !result.Skipped {
+			executed++
+		}
+	}
+	if executed == 0 {
+		return fmt.Errorf("no executable test cases matched the selected matrix filters")
+	}
 
 	// Output results
 	if m.JsonOutput {
@@ -196,6 +283,9 @@ func (m *MatrixCmd) Run() error {
 		}
 	} else {
 		printTable(results, verbose)
+		if m.RecordDir != "" && m.StageEnabled && m.MCPEnabled && slices.Contains(m.Scenarios, protocoltest.MCPStageOwnedToolScenarioName) {
+			fmt.Printf("\n📼 RequestRecord artifacts verified: %d case(s) in %s\n", executed, m.RecordDir)
+		}
 	}
 
 	// Determine exit code

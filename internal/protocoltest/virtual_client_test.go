@@ -99,6 +99,17 @@ func TestVirtualClient_ToolUse_OpenAI(t *testing.T) {
 	assert.Contains(t, result.ToolCalls[0].Arguments, "location")
 }
 
+func TestVirtualClient_ToolUse_OpenAIResponsesStream(t *testing.T) {
+	vs := protocoltest.NewVirtualServer(t)
+	vc := vs.Client()
+
+	result := vc.SendOpenAIResponses(t, protocoltest.ToolUseScenario(), true)
+	require.Equal(t, 200, result.HTTPStatus)
+	require.Len(t, result.ToolCalls, 1)
+	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
+	assert.Contains(t, result.ToolCalls[0].Arguments, "location")
+}
+
 func TestVirtualClient_ToolUse_Anthropic(t *testing.T) {
 	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
