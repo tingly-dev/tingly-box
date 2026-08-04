@@ -29,7 +29,7 @@ func TestEvaluateDecisionOrder(t *testing.T) {
 		{"target missing", func(f *DecisionFacts) { f.TargetFound = false }, ReasonTargetNotFound, GateTarget},
 		{"target blocked", func(f *DecisionFacts) { f.TargetBlocked = true }, ReasonTargetBlocked, GateTarget},
 		{"target access missing", func(f *DecisionFacts) { f.TargetCapability = "" }, ReasonTargetCapabilityDenied, GateTargetCapability},
-		{"target action denied", func(f *DecisionFacts) { f.TargetAction = EffectDeny }, ReasonTargetCapabilityDenied, GateTargetCapability},
+		{"target action denied", func(f *DecisionFacts) { f.TargetAction = EffectDeny }, ReasonTargetActionDenied, GateTargetCapability},
 		{"peer mismatch", func(f *DecisionFacts) { f.PeerActorID = "bob" }, ReasonActorMismatch, GateActor},
 		{"action denied", func(f *DecisionFacts) { f.ActorAction = EffectDeny }, ReasonActorActionDenied, GateActorAction},
 	}

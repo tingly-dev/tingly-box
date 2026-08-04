@@ -51,7 +51,8 @@ func TestBotAccessStoreExplicitDefaultsAndAuthorization(t *testing.T) {
 	req.ActorID = actor.ID
 	require.True(t, authorizer.Evaluate(ctx, req).Allowed)
 	req.Action = access.ActionRemoteControlPrivileged
-	require.Equal(t, access.ReasonTargetCapabilityDenied, authorizer.Evaluate(ctx, req).Reason)
+	require.Equal(t, access.ReasonTargetActionDenied, authorizer.Evaluate(ctx, req).Reason,
+		"capability access is allowed after pairing; the privileged action row itself is deny")
 }
 
 func TestBotAccessStoreGroupDoesNotImplicitlyTrustMembers(t *testing.T) {
