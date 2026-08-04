@@ -108,13 +108,7 @@ func (e *E2EProber) resolveVModelLoopbackTarget(ctx context.Context, provider *t
 		return nil, "", fmt.Errorf("vmodel probe unsupported for APIStyle %q", provider.APIStyle)
 	}
 	apiBase, apiStyle := loopbackAPIBase(port, scenario)
-	return e.resolveProviderConfigTarget(ctx, &E2ERequest{
-		Name:     provider.Name,
-		APIBase:  apiBase,
-		APIStyle: string(apiStyle),
-		Token:    e.config.GetModelToken(),
-		Model:    model,
-	})
+	return e.loopbackConfigTarget(ctx, provider.Name, apiBase, apiStyle, model)
 }
 
 func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
@@ -176,13 +170,7 @@ func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) 
 	}
 	logrus.Debugf("[probe-e2e] provider %s -> TB loopback %s (service pin=%s:%s)", provider.UUID, apiBase, req.ProviderUUID, model)
 
-	loopbackProvider, loopbackModel, err := e.resolveProviderConfigTarget(ctx, &E2ERequest{
-		Name:     provider.Name,
-		APIBase:  apiBase,
-		APIStyle: string(apiStyle),
-		Token:    e.config.GetModelToken(),
-		Model:    model,
-	})
+	loopbackProvider, loopbackModel, err := e.loopbackConfigTarget(ctx, provider.Name, apiBase, apiStyle, model)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -248,6 +236,20 @@ func (e *E2EProber) resolveProviderConfigTarget(_ context.Context, req *E2EReque
 	return provider, model, nil
 }
 
+// loopbackConfigTarget builds a provider_config target that points at TB's own
+// loopback (using the in-process model token) instead of a real upstream. The
+// three loopback paths — provider, rule, and vmodel — share this construction;
+// only the name, apiStyle, and model differ.
+func (e *E2EProber) loopbackConfigTarget(ctx context.Context, name, apiBase string, apiStyle protocol.APIStyle, model string) (*typ.Provider, string, error) {
+	return e.resolveProviderConfigTarget(ctx, &E2ERequest{
+		Name:     name,
+		APIBase:  apiBase,
+		APIStyle: string(apiStyle),
+		Token:    e.config.GetModelToken(),
+		Model:    model,
+	})
+}
+
 func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
 	rule := e.config.GetRuleByUUID(req.RuleUUID)
 	if rule == nil {
@@ -279,13 +281,7 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 		"X-Tingly-Debug-Routing": "1",
 	}
 
-	provider, model, err := e.resolveProviderConfigTarget(ctx, &E2ERequest{
-		Name:     string(scenario),
-		APIBase:  apiBase,
-		APIStyle: string(apiStyle),
-		Token:    e.config.GetModelToken(),
-		Model:    rule.RequestModel,
-	})
+	provider, model, err := e.loopbackConfigTarget(ctx, string(scenario), apiBase, apiStyle, rule.RequestModel)
 	if err != nil {
 		return nil, "", nil, err
 	}
