@@ -52,7 +52,7 @@ func getProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
 			Name:        "bash",
 			Description: param.NewOpt("Execute bash commands for file system operations. Supports commands like: ls, pwd, cat, grep, find, git status, etc."),
 			Parameters: shared.FunctionParameters{
-				"type:":                "object",
+				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]any{
 					"command": map[string]any{
