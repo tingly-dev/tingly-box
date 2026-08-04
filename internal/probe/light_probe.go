@@ -33,47 +33,32 @@ func (l *LightProber) Probe(ctx context.Context, provider *typ.Provider) *Lightw
 		APIStyle: string(provider.APIStyle),
 	}
 
-	optionsResult := l.probeOptionsEndpoint(ctx, provider)
-	data.OptionsSuccess = optionsResult.Success
-	data.OptionsMessage = optionsResult.Message
-	data.OptionsResponseTime = optionsResult.ResponseTime
-
-	modelsResult := l.probeModelsEndpoint(ctx, provider)
-	data.ModelsSuccess = modelsResult.Success
-	data.ModelsMessage = modelsResult.Message
-	data.ModelsResponseTime = modelsResult.ResponseTime
-	data.ModelsCount = modelsResult.ModelsCount
-	data.Warning = modelsResult.Warning
+	// Each helper writes its outcome directly into data. Track the count of
+	// endpoints actually run so the summary denominator is correct (non-OpenAI
+	// providers skip chat/responses).
+	l.runOptionsEndpoint(ctx, provider,
+		&data.OptionsSuccess, &data.OptionsMessage, &data.OptionsResponseTime)
+	l.runModelsEndpoint(ctx, provider,
+		&data.ModelsSuccess, &data.ModelsMessage, &data.ModelsResponseTime, &data.ModelsCount, &data.Warning)
+	ran := 2
 
 	if provider.APIStyle == protocol.APIStyleOpenAI {
-		chatResult := l.probeChatEndpoint(ctx, provider)
-		data.ChatSuccess = chatResult.Success
-		data.ChatMessage = chatResult.Message
-		data.ChatResponseTime = chatResult.ResponseTime
-
-		responsesResult := l.probeResponsesEndpoint(ctx, provider)
-		data.ResponsesSuccess = responsesResult.Success
-		data.ResponsesMessage = responsesResult.Message
-		data.ResponsesResponseTime = responsesResult.ResponseTime
+		l.runChatEndpoint(ctx, provider,
+			&data.ChatSuccess, &data.ChatMessage, &data.ChatResponseTime)
+		l.runResponsesEndpoint(ctx, provider,
+			&data.ResponsesSuccess, &data.ResponsesMessage, &data.ResponsesResponseTime)
+		ran = 4
 	}
 
-	data.Valid = data.OptionsSuccess || data.ModelsSuccess || data.ChatSuccess || data.ResponsesSuccess
-
+	successes := 0
+	for _, ok := range []bool{data.OptionsSuccess, data.ModelsSuccess, data.ChatSuccess, data.ResponsesSuccess} {
+		if ok {
+			successes++
+		}
+	}
+	data.Valid = successes > 0
 	if data.Valid {
-		successCount := 0
-		if data.OptionsSuccess {
-			successCount++
-		}
-		if data.ModelsSuccess {
-			successCount++
-		}
-		if data.ChatSuccess {
-			successCount++
-		}
-		if data.ResponsesSuccess {
-			successCount++
-		}
-		data.Message = fmt.Sprintf("Connection test completed - %d/%d endpoints accessible", successCount, 4)
+		data.Message = fmt.Sprintf("Connection test completed - %d/%d endpoints accessible", successes, ran)
 	} else {
 		data.Message = "Connection test failed - unable to reach any provider endpoint"
 	}
@@ -81,141 +66,114 @@ func (l *LightProber) Probe(ctx context.Context, provider *typ.Provider) *Lightw
 	return data
 }
 
-type endpointReport struct {
-	Success      bool
-	Message      string
-	ResponseTime int64
-}
-
-type modelsReport struct {
-	Success      bool
-	Message      string
-	ResponseTime int64
-	ModelsCount  int
-	Warning      string
-}
-
-func (l *LightProber) probeOptionsEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
-	startTime := time.Now()
-
+// runOptionsEndpoint issues a bare OPTIONS request (HTTP-level, no SDK) and
+// writes the outcome into the target fields.
+func (l *LightProber) runOptionsEndpoint(ctx context.Context, provider *typ.Provider,
+	success *bool, msg *string, rt *int64) {
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI, protocol.APIStyleAnthropic, protocol.APIStyleGoogle:
 		// supported below
 	default:
-		return endpointReport{false, fmt.Sprintf("Unsupported API style: %s", provider.APIStyle), 0}
+		*success, *msg, *rt = false, fmt.Sprintf("Unsupported API style: %s", provider.APIStyle), 0
+		return
 	}
-
-	result := probeOptions(ctx, provider)
-	responseTime := time.Since(startTime).Milliseconds()
-	if result.Success {
-		return endpointReport{true, "OPTIONS request successful", responseTime}
+	start := time.Now()
+	r := probeOptions(ctx, provider)
+	*rt = time.Since(start).Milliseconds()
+	if r.Success {
+		*success, *msg = true, "OPTIONS request successful"
+	} else {
+		*success, *msg = false, fmt.Sprintf("OPTIONS failed: %s", r.ErrorMessage)
 	}
-	return endpointReport{false, fmt.Sprintf("OPTIONS failed: %s", result.ErrorMessage), responseTime}
 }
 
-func (l *LightProber) probeModelsEndpoint(ctx context.Context, provider *typ.Provider) modelsReport {
-	startTime := time.Now()
+// runChatEndpoint and runResponsesEndpoint run a minimal SDK round-trip against
+// the respective OpenAI endpoint and write the outcome into the target fields.
+// They share the timing/client/timeout boilerplate; only the call differs.
+func (l *LightProber) runChatEndpoint(ctx context.Context, provider *typ.Provider,
+	success *bool, msg *string, rt *int64) {
+	l.runOpenAIEndpoint(ctx, provider, success, msg, rt, "Chat endpoint accessible",
+		func(c client.OpenAIClientInterface, pctx context.Context) (*Result, error) {
+			return probeOpenAIChat(pctx, c, "gpt-3.5-turbo", "Hi", E2EModeSimple)
+		})
+}
+
+func (l *LightProber) runResponsesEndpoint(ctx context.Context, provider *typ.Provider,
+	success *bool, msg *string, rt *int64) {
+	l.runOpenAIEndpoint(ctx, provider, success, msg, rt, "Responses API endpoint accessible",
+		func(c client.OpenAIClientInterface, pctx context.Context) (*Result, error) {
+			return probeOpenAIResponses(pctx, c, "gpt-4o", "Hi", E2EModeSimple)
+		})
+}
+
+// runOpenAIEndpoint is the shared body for chat/responses connectivity checks.
+// okLabel is the success message; call dispatches the actual probe.
+func (l *LightProber) runOpenAIEndpoint(ctx context.Context, provider *typ.Provider,
+	success *bool, msg *string, rt *int64, okLabel string,
+	call func(c client.OpenAIClientInterface, pctx context.Context) (*Result, error)) {
+	start := time.Now()
+	c := l.pool.GetOpenAIClient(context.Background(), provider, "")
+	if c == nil {
+		*success, *msg, *rt = false, "Failed to create OpenAI client", 0
+		return
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	res, err := call(c, probeCtx)
+	*rt = time.Since(start).Milliseconds()
+	switch {
+	case err != nil:
+		*success, *msg = false, fmt.Sprintf("Endpoint failed: %v", err)
+	case res != nil && res.Success:
+		*success, *msg = true, okLabel
+	default:
+		*success, *msg = false, "Endpoint returned no content"
+	}
+}
+
+// runModelsEndpoint runs the /models list probe and writes its outcome (incl.
+// model count and any warning) into the target fields.
+func (l *LightProber) runModelsEndpoint(ctx context.Context, provider *typ.Provider,
+	success *bool, msg *string, rt *int64, count *int, warning *string) {
+	start := time.Now()
+	report := func(ok bool, message string, models int, warn string) {
+		*success, *msg, *rt, *count, *warning = ok, message, time.Since(start).Milliseconds(), models, warn
+	}
 
 	var lister client.ModelLister
-
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
 		c := l.pool.GetOpenAIClient(context.Background(), provider, "")
-		if c == nil {
-			return modelsReport{false, "Failed to create OpenAI client", 0, 0, ""}
-		}
 		lister = c
 	case protocol.APIStyleAnthropic:
 		c := l.pool.GetAnthropicClient(context.Background(), provider, "")
-		if c == nil {
-			return modelsReport{false, "Failed to create Anthropic client", 0, 0, ""}
-		}
 		lister = c
 	case protocol.APIStyleGoogle:
 		c := l.pool.GetGoogleClient(context.Background(), provider, "")
-		if c == nil {
-			return modelsReport{false, "Failed to create Google client", 0, 0, ""}
-		}
 		lister = c
 	default:
-		return modelsReport{false, fmt.Sprintf("Unsupported API style: %s", provider.APIStyle), 0, 0, ""}
+		report(false, fmt.Sprintf("Unsupported API style: %s", provider.APIStyle), 0, "")
+		return
+	}
+	if lister == nil {
+		report(false, fmt.Sprintf("Failed to create %s client", provider.APIStyle), 0, "")
+		return
 	}
 
 	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	models, err := lister.ListModels(probeCtx)
-	responseTime := time.Since(startTime).Milliseconds()
-
-	if client.IsModelsEndpointNotSupported(err) {
-		return modelsReport{
-			false,
-			"Models endpoint not supported for this provider type",
-			responseTime,
-			0,
-			"This provider does not support the models list endpoint (e.g., OAuth-based providers)",
-		}
+	switch {
+	case client.IsModelsEndpointNotSupported(err):
+		report(false, "Models endpoint not supported for this provider type", 0,
+			"This provider does not support the models list endpoint (e.g., OAuth-based providers)")
+	case err != nil:
+		report(false, fmt.Sprintf("Models endpoint failed: %v", err), 0, "")
+	case len(models) == 0:
+		report(false, "Models endpoint returned no models", 0, "")
+	default:
+		report(true, fmt.Sprintf("Models endpoint accessible - %d models found", len(models)), len(models), "")
 	}
-
-	if err != nil {
-		return modelsReport{false, fmt.Sprintf("Models endpoint failed: %v", err), responseTime, 0, ""}
-	}
-
-	if len(models) == 0 {
-		return modelsReport{false, "Models endpoint returned no models", responseTime, 0, ""}
-	}
-
-	return modelsReport{
-		true,
-		fmt.Sprintf("Models endpoint accessible - %d models found", len(models)),
-		responseTime,
-		len(models),
-		"",
-	}
-}
-
-func (l *LightProber) probeChatEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
-	startTime := time.Now()
-
-	c := l.pool.GetOpenAIClient(context.Background(), provider, "")
-	if c == nil {
-		return endpointReport{false, "Failed to create OpenAI client", 0}
-	}
-
-	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	result, err := probeOpenAIChat(probeCtx, c, "gpt-3.5-turbo", "Hi", E2EModeSimple)
-	responseTime := time.Since(startTime).Milliseconds()
-
-	if err != nil {
-		return endpointReport{false, fmt.Sprintf("Chat endpoint failed: %v", err), responseTime}
-	}
-	if result != nil && result.Success {
-		return endpointReport{true, "Chat endpoint accessible", responseTime}
-	}
-	return endpointReport{false, "Chat endpoint returned no content", responseTime}
-}
-
-func (l *LightProber) probeResponsesEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
-	startTime := time.Now()
-
-	c := l.pool.GetOpenAIClient(context.Background(), provider, "")
-	if c == nil {
-		return endpointReport{false, "Failed to create OpenAI client", 0}
-	}
-
-	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	result, err := probeOpenAIResponses(probeCtx, c, "gpt-4o", "Hi", E2EModeSimple)
-	responseTime := time.Since(startTime).Milliseconds()
-
-	if err != nil {
-		return endpointReport{false, fmt.Sprintf("Responses endpoint failed: %v", err), responseTime}
-	}
-	if result != nil && result.Success {
-		return endpointReport{true, "Responses API endpoint accessible", responseTime}
-	}
-	return endpointReport{false, "Responses endpoint returned no content", responseTime}
 }
