@@ -6,6 +6,7 @@ import AILogViewer, {
     type ModelRequestSummary,
     type RequestFilters,
 } from '@/components/AILogViewer.tsx';
+import { type TraceDetail } from '@/components/TraceWaterfall';
 import { getControlApiClient, getControlApiHeaders } from '@/services/openapi';
 
 interface LogExplorerProps {
@@ -46,6 +47,20 @@ const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
         return result.data as ModelRequestDetail;
     }, []);
 
+    const getTrace = useCallback(async (traceId: string): Promise<TraceDetail | null> => {
+        const [client, headers] = await Promise.all([getControlApiClient(), getControlApiHeaders()]);
+        const result = await client.GET('/api/v1/traces/{trace_id}', {
+            headers,
+            params: {path: {trace_id: traceId}},
+        });
+        if (!result.response.ok) {
+            // 404 = evicted from the in-memory ring; render as "no longer buffered".
+            if (result.response.status === 404) return null;
+            throw new Error(`HTTP ${result.response.status}`);
+        }
+        return result.data as TraceDetail;
+    }, []);
+
     const getSystemLogs = useCallback(
         async (params?: { limit?: number; level?: string; since?: string }) => {
             const [client, headers] = await Promise.all([getControlApiClient(), getControlApiHeaders()]);
@@ -71,6 +86,7 @@ const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
                 <AILogViewer
                     getRequests={getRequests}
                     getRequestDetail={getRequestDetail}
+                    getTrace={getTrace}
                     initialScenario={initialScenario}
                 />
             </Box>

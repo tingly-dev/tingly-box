@@ -5767,6 +5767,72 @@
         }
       }
     },
+    "/api/v1/traces": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "List recent request traces from the in-memory span buffer, newest first",
+        "description": "List recent request traces from the in-memory span buffer, newest first",
+        "operationId": "apiV1TracesGet",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of traces to return (default 50, max 200)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/traces/{trace_id}": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "Get the spans of one trace by trace id. 404 means the trace was never sampled or has been evicted from the in-memory buffer.",
+        "description": "Get the spans of one trace by trace id. 404 means the trace was never sampled or has been evicted from the in-memory buffer.",
+        "operationId": "apiV1TracesTrace_idGet",
+        "parameters": [
+          {
+            "name": "trace_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/usage/performance": {
       "get": {
         "tags": [
@@ -10765,6 +10831,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field time"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
           }
         },
         "required": [
@@ -10879,6 +10949,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Field time"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
           }
         },
         "required": [
@@ -13873,6 +13947,65 @@
           "data"
         ]
       },
+      "StoredSpan": {
+        "type": "object",
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "description": "Field attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field end_time"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "parent_span_id": {
+            "type": "string",
+            "description": "Field parent_span_id"
+          },
+          "span_id": {
+            "type": "string",
+            "description": "Field span_id"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field start_time"
+          },
+          "status_code": {
+            "type": "string",
+            "description": "Field status_code"
+          },
+          "status_message": {
+            "type": "string",
+            "description": "Field status_message"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "span_id",
+          "name",
+          "kind",
+          "start_time",
+          "end_time",
+          "status_code"
+        ]
+      },
       "SystemLogEntry": {
         "type": "object",
         "properties": {
@@ -14327,6 +14460,97 @@
         "required": [
           "token",
           "type"
+        ]
+      },
+      "TraceDetailResponse": {
+        "type": "object",
+        "properties": {
+          "dropped_spans": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field dropped_spans"
+          },
+          "spans": {
+            "type": "array",
+            "description": "Field spans",
+            "items": {
+              "$ref": "#/components/schemas/StoredSpan"
+            }
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "spans"
+        ]
+      },
+      "TraceListResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field total"
+          },
+          "traces": {
+            "type": "array",
+            "description": "Field traces",
+            "items": {
+              "$ref": "#/components/schemas/TraceSummary"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "traces"
+        ]
+      },
+      "TraceSummary": {
+        "type": "object",
+        "properties": {
+          "dropped_spans": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field dropped_spans"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field duration_ms"
+          },
+          "has_error": {
+            "type": "boolean",
+            "description": "Field has_error"
+          },
+          "root_name": {
+            "type": "string",
+            "description": "Field root_name"
+          },
+          "span_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field span_count"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field start_time"
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Field trace_id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "root_name",
+          "span_count",
+          "has_error",
+          "start_time",
+          "duration_ms"
         ]
       },
       "UpdateClientRequest": {
@@ -16116,6 +16340,10 @@
     {
       "name": "tokens",
       "description": "Operations related to tokens"
+    },
+    {
+      "name": "traces",
+      "description": "Operations related to traces"
     },
     {
       "name": "usage",

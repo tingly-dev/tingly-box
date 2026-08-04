@@ -33,6 +33,7 @@ const mockModelRequests = [
         has_error: false,
         max_level: 'warning',
         event_count: 5,
+        trace_id: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
     },
     {
         request_id: 'req-openai-fail',
@@ -48,8 +49,22 @@ const mockModelRequests = [
         has_error: true,
         max_level: 'error',
         event_count: 3,
+        trace_id: 'ffee1122334455667788990011223344',
     },
 ]
+
+// Span trees for the in-memory trace viewer, keyed by trace_id. Times are
+// offsets in ms from the trace start, converted at request time.
+const mockTraceSpans: Record<string, Array<{ span_id: string; parent_span_id?: string; name: string; kind: string; start: number; end: number; status_code: string; status_message?: string; attributes?: Record<string, string> }>> = {
+    a1b2c3d4e5f60718293a4b5c6d7e8f90: [
+        { span_id: 'r000000000000001', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 2210, status_code: 'Unset', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic', 'gen_ai.usage.input_tokens': '1204', 'gen_ai.usage.output_tokens': '388', 'tingly.scenario': 'openai', 'http.response.status_code': '200' } },
+        { span_id: 'a000000000000001', parent_span_id: 'r000000000000001', name: 'failover.attempt', kind: 'internal', start: 40, end: 620, status_code: 'Error', status_message: 'upstream status 529', attributes: { 'tingly.failover.attempt': '1', 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'http.response.status_code': '529' } },
+        { span_id: 'a000000000000002', parent_span_id: 'r000000000000001', name: 'failover.attempt', kind: 'internal', start: 640, end: 2180, status_code: 'Ok', attributes: { 'tingly.failover.attempt': '2', 'tingly.lb.service_id': 'anthropic-uuid/claude-sonnet-5' } },
+    ],
+    ffee1122334455667788990011223344: [
+        { span_id: 'r000000000000002', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 740, status_code: 'Error', status_message: 'Bad Gateway', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.provider.name': 'OpenAI', 'error.type': '502', 'http.response.status_code': '502', 'tingly.scenario': 'openai' } },
+    ],
+}
 
 const mockRequestEvents: Record<string, Array<{ source: string; level: string; stage?: string; message: string; fields?: Record<string, any> }>> = {
     'req-anthropic-ok': [
@@ -2926,6 +2941,30 @@ export const handlers = [
             events: (mockRequestEvents[id] || []).map((e, i) => ({
                 ...e,
                 time: new Date(base + i * 120).toISOString(),
+            })),
+        })
+    }),
+
+    http.get('/api/v1/traces/:traceId', ({ params }) => {
+        const traceId = String(params.traceId)
+        const spans = mockTraceSpans[traceId]
+        if (!spans) {
+            return HttpResponse.json({ error: 'trace not found (never sampled, or evicted from the in-memory buffer)' }, { status: 404 })
+        }
+        const base = Date.now() - 6000
+        return HttpResponse.json({
+            trace_id: traceId,
+            spans: spans.map((s) => ({
+                trace_id: traceId,
+                span_id: s.span_id,
+                parent_span_id: s.parent_span_id,
+                name: s.name,
+                kind: s.kind,
+                start_time: new Date(base + s.start).toISOString(),
+                end_time: new Date(base + s.end).toISOString(),
+                status_code: s.status_code,
+                status_message: s.status_message,
+                attributes: s.attributes,
             })),
         })
     }),

@@ -7,9 +7,11 @@
 // the source by internal/server/usage_tracking.go and the recording
 // pipeline, never reconstructed from aggregated metric data points.
 //
-// When OTLP is not configured, no providers are constructed at all:
-// Tracker() returns nil (callers already nil-guard) and Tracer() wraps an
-// explicit no-op provider, so telemetry costs nothing per request.
+// Traces additionally have a default in-process egress: a bounded in-memory
+// SpanStore consumed by the WebUI logs page (.design/otel.md §7.4), so a
+// trace provider exists even without OTLP. Metrics keep the stricter rule:
+// when OTLP is not configured Tracker() returns nil (callers nil-guard) and
+// no meter provider is constructed.
 package otel
 
 import (
@@ -35,6 +37,7 @@ type Setup struct {
 	tracerProvider *sdktrace.TracerProvider
 	tracker        *tracker.TokenTracker
 	tracer         *Tracer
+	spanStore      *SpanStore
 }
 
 // NewSetup initializes OTel metrics and tracing with the provided config.
@@ -49,15 +52,6 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 		return nil, nil
 	}
 
-	// Without an OTLP endpoint there is deliberately no pipeline at all: a
-	// nil Tracker skips all per-request attribute work (callers nil-guard),
-	// and the no-op Tracer never records spans. The previous stdout
-	// fallback — which would have printed metrics to the server console
-	// every interval — is intentionally gone.
-	if !cfg.OTLP.Enabled || cfg.OTLP.Endpoint == "" {
-		return &Setup{tracer: NewTracer(tracenoop.NewTracerProvider())}, nil
-	}
-
 	// Create resource with service info
 	resAttrs := []attribute.KeyValue{semconv.ServiceName("tingly-box")}
 	if cfg.ServiceVersion != "" {
@@ -66,6 +60,34 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	res, err := resource.New(ctx, resource.WithAttributes(resAttrs...))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	// Traces always have at least the in-memory egress: the bounded SpanStore
+	// backing the WebUI trace view (.design/otel.md §7.4). Metrics keep the
+	// stricter no-OTLP-no-pipeline rule: a nil Tracker skips all per-request
+	// attribute work, and no stdout fallback exists (it would print to the
+	// server console every interval).
+	spanStore := NewSpanStore()
+
+	if !cfg.OTLP.Enabled || cfg.OTLP.Endpoint == "" {
+		tracerProvider := sdktrace.NewTracerProvider(
+			sdktrace.WithResource(res),
+			sdktrace.WithSpanProcessor(spanStore),
+			sdktrace.WithSampler(traceSampler(cfg.OTLP.TraceSampleRatio)),
+		)
+		// Memory-only construction cannot fail past this point — install the
+		// globals now. The propagator must be global: the gateway middleware
+		// and the outbound transports resolve it via otel.GetTextMapPropagator.
+		otel.SetTracerProvider(tracerProvider)
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+		return &Setup{
+			tracerProvider: tracerProvider,
+			tracer:         NewTracer(tracerProvider),
+			spanStore:      spanStore,
+		}, nil
 	}
 
 	otlpCfg := exporter.OTLPConfig{
@@ -99,6 +121,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
 		sdktrace.WithBatcher(traceExp),
+		sdktrace.WithSpanProcessor(spanStore),
 		sdktrace.WithSampler(traceSampler(cfg.OTLP.TraceSampleRatio)),
 	)
 
@@ -125,6 +148,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 		tracerProvider: tracerProvider,
 		tracker:        tokenTracker,
 		tracer:         NewTracer(tracerProvider),
+		spanStore:      spanStore,
 	}, nil
 }
 
@@ -150,13 +174,23 @@ func (s *Setup) Tracker() *tracker.TokenTracker {
 }
 
 // Tracer returns the tracing helper. It is safe to call on a nil Setup and
-// always returns a usable Tracer; spans are no-ops unless OTLP is
-// configured.
+// always returns a usable Tracer; spans are no-ops only when the whole
+// setup is disabled (nil Setup) — otherwise they feed at least the
+// in-memory SpanStore.
 func (s *Setup) Tracer() *Tracer {
 	if s == nil || s.tracer == nil {
 		return NewTracer(tracenoop.NewTracerProvider())
 	}
 	return s.tracer
+}
+
+// SpanStore returns the bounded in-memory trace store backing the WebUI
+// trace view, or nil on a nil/disabled Setup — callers must nil-check.
+func (s *Setup) SpanStore() *SpanStore {
+	if s == nil {
+		return nil
+	}
+	return s.spanStore
 }
 
 // Shutdown flushes pending exports and shuts down the providers.

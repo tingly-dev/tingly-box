@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { KeyboardArrowDown as KeyboardArrowDownIcon, KeyboardArrowUp as KeyboardArrowUpIcon, Refresh as RefreshIcon, ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
+import TraceWaterfall, { type TraceDetail } from '@/components/TraceWaterfall';
 
 export interface ModelRequestSummary {
     request_id: string;
@@ -32,6 +33,7 @@ export interface ModelRequestSummary {
     has_error: boolean;
     max_level?: string;
     event_count: number;
+    trace_id?: string;
 }
 
 export interface ModelRequestEvent {
@@ -60,6 +62,9 @@ type SortOrder = 'asc' | 'desc';
 interface RequestsViewerProps {
     getRequests: (params?: RequestFilters) => Promise<{ total: number; requests: ModelRequestSummary[] }>;
     getRequestDetail: (id: string) => Promise<ModelRequestDetail | null>;
+    // Fetches one trace from the in-memory span buffer; null when evicted.
+    // Optional so embedders without the trace API keep working unchanged.
+    getTrace?: (traceId: string) => Promise<TraceDetail | null>;
     // When set, the scenario filter is initialized to this value but can be changed/cleared.
     // Used by the per-scenario quick-open dialog to provide context without locking the view.
     initialScenario?: string;
@@ -128,7 +133,7 @@ const SUPPRESSED_FIELDS = new Set([
     'request',
 ]);
 
-const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: RequestsViewerProps) => {
+const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario }: RequestsViewerProps) => {
     const [requests, setRequests] = useState<ModelRequestSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
@@ -565,6 +570,16 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                                                 <TableCell colSpan={7} sx={{ pb: 0, pt: 0, border: 'none' }}>
                                                     <Collapse in={expanded} timeout="auto" unmountOnExit>
                                                         <Box sx={{ p: 1.5, backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                                                            {getTrace && detail?.trace_id && (
+                                                                <Box sx={{ mb: 1.5 }}>
+                                                                    <Typography variant="caption" sx={{ fontWeight: 'bold', textTransform: 'uppercase', color: 'text.secondary' }}>
+                                                                        Trace · {detail.trace_id}
+                                                                    </Typography>
+                                                                    <Box sx={{ mt: 0.75, p: 1, borderRadius: 1, backgroundColor: 'background.paper', border: 1, borderColor: 'divider' }}>
+                                                                        <TraceWaterfall traceId={detail.trace_id} getTrace={getTrace} />
+                                                                    </Box>
+                                                                </Box>
+                                                            )}
                                                             <Typography variant="caption" sx={{ fontWeight: 'bold', textTransform: 'uppercase', color: 'text.secondary' }}>
                                                                 Timeline ({detail?.events.length ?? req.event_count} events) · {req.request_id}
                                                             </Typography>

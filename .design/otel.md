@@ -144,7 +144,27 @@ root span sampled 且 valid 时，middleware 把 trace id 写入
 
 未启用 tracing 时 key 不设置、列为空串，零行为变化。
 
-### 7.4 仍然悬置
+### 7.4 内存 trace 查看器（默认渠道，2026-08 实施）
+
+不配 OTLP 的用户（绝大多数）也必须能看到 trace——否则打点的价值对他们不存在，
+且 UsageRecord / access log 上的 `trace_id` 指向一个不存在的地方。
+
+**规则修正**：§2"没有出口就不装管道"中的"出口"从"仅 OTLP"扩展为
+"OTLP **或内存查看器**"。内存查看器是真实出口：数据从源头正向记录、有界、
+有真实消费方（logs 页 UI）。它**不是**被删的 SinkExporter 反模式——那个错在
+从聚合指标反向合成记录且无人消费；方向和消费方都不同。
+
+- `pkg/otel` 的 ring-buffer SpanProcessor **常驻注册**：trace provider 在无 OTLP 时
+  也构建（仅挂内存 processor）；OTLP 配置后二者并存（sdktrace 多 processor）。
+  metrics 侧不变（无 OTLP 时 `Tracker()` 仍为 nil）。W3C propagator 随之常装。
+- **硬性有界**（#1255 战线）：按 trace 数 + 估算字节双重封顶，超限逐最旧 trace 整体
+  淘汰。默认值写死（smart defaults over toggles），暂不暴露配置。
+- **不碰请求/响应内容**：span 属性维持现状；内容回放归 recording 管道。
+- **重启即清空**：与 memory log 同语义。要持久 trace 走 OTLP 接真后端，两路不混。
+- **前端入口只在 logs 页**：日志条目的 trace_id 可点击，展开 span 瀑布视图；
+  被淘汰的 trace 给明确提示。不做 usage 页入口、不做独立 traces 页（首版）。
+
+### 7.5 仍然悬置
 
 1. 内容捕获（prompt/completion 上 span）：等规范稳定 + 产品决策，必须默认关闭。
 2. OTLP 配置目前只有代码内 `DefaultConfig()`（默认关）——暴露到用户配置文件/UI 时记得走 swagger codegen 流程。
