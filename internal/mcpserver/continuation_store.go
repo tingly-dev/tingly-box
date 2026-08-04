@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -274,10 +275,30 @@ func (s *ProviderBetaContinuationStore) Pop(ctx context.Context, request *anthro
 	return messages, true
 }
 
-func (s *ProviderBetaContinuationStore) Put(ctx context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) {
+// CanStash reports whether a continuation can be persisted for this context.
+// IP addresses are not a conversation identity, so requests without an explicit
+// session cannot store continuation state. The Stage checks this before it
+// executes server-owned tools so it never commits side effects it cannot carry
+// to the client's next turn.
+func (s *ProviderBetaContinuationStore) CanStash(ctx context.Context) bool {
+	if s == nil || s.providerUUID == "" {
+		return false
+	}
+	sessionID := typ.GetSessionID(ctx)
+	return !sessionID.IsEmpty() && !sessionID.IsIPFallback()
+}
+
+func (s *ProviderBetaContinuationStore) Put(ctx context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) error {
 	if s == nil || len(segment) == 0 {
-		return
+		return errors.New("store Anthropic Beta continuation: nil store or empty segment")
 	}
 	key := continuationKey(typ.GetSessionID(ctx), s.providerUUID, "anthropic-beta")
+	if key == "" {
+		return errors.New("store Anthropic Beta continuation: requires an explicit session")
+	}
+	if len(stringSet(externalIDs)) == 0 {
+		return errors.New("store Anthropic Beta continuation: no external tool IDs to correlate")
+	}
 	mixedContinuationStore.put(key, append([]anthropic.BetaMessageParam(nil), segment...), externalIDs)
+	return nil
 }

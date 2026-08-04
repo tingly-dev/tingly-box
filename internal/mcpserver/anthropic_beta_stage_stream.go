@@ -31,6 +31,9 @@ type anthropicBetaToolLoopStream struct {
 	assembler assembler.StreamAssembler
 	buffered  []protocolstage.Event
 	pending   []protocolstage.Event
+	// internalMessages accumulates the assistant/tool-result turns of internal
+	// (server-owned) rounds the client never saw, mirroring the Complete path.
+	internalMessages []anthropic.BetaMessageParam
 
 	usage       *protocol.TokenUsage
 	model       string
@@ -103,6 +106,26 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 		}
 		managed, external, externalIDs := splitBetaStageTools(tools, s.owned)
 		if len(managed) == 0 {
+			// A final answer (no tool calls) or a pure-external round with no
+			// internal context needs no continuation.
+			if len(external) == 0 || len(s.internalMessages) == 0 {
+				s.pending = s.buffered
+				s.buffered = nil
+				s.done = true
+				continue
+			}
+			// An external-only round after internal rounds: carry the internal
+			// context to the client's next turn when the continuation can be
+			// persisted. Without an explicit session the store cannot bind the
+			// segment safely (IP addresses are not a conversation identity), so
+			// deliver the external round as-is; guardrail blocking and terminal
+			// responses still work, and no new side effects are committed here.
+			if s.endpoint.canPersistContinuation(s.runCtx) {
+				segment := append(s.internalMessages, betaMessageToParamPreservingThinking(message))
+				if stashErr := s.endpoint.stashContinuation(s.runCtx, segment, externalIDs); stashErr != nil {
+					return protocolstage.Event{}, s.fail(stashErr)
+				}
+			}
 			s.pending = s.buffered
 			s.buffered = nil
 			s.done = true
@@ -114,6 +137,9 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 				s.buffered = nil
 				s.done = true
 				continue
+			}
+			if !s.endpoint.stage.continuations.CanStash(s.runCtx) {
+				return protocolstage.Event{}, s.fail(stagetoolloop.ErrContinuationUnavailable)
 			}
 			results, nextCtx, committed := s.endpoint.executeTools(s.runCtx, s.call.Request, managed)
 			s.sideEffects = s.sideEffects || committed
@@ -130,7 +156,12 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 			if !ok || len(segment) == 0 {
 				return protocolstage.Event{}, s.fail(errors.New("Anthropic Beta ToolLoop built an empty mixed continuation"))
 			}
-			s.endpoint.stage.continuations.Put(s.runCtx, segment, externalIDs)
+			// Prepend earlier internal rounds so results from previous managed
+			// rounds survive the client's next turn alongside this round's.
+			segment = append(s.internalMessages, segment...)
+			if stashErr := s.endpoint.stashContinuation(s.runCtx, segment, externalIDs); stashErr != nil {
+				return protocolstage.Event{}, s.fail(stashErr)
+			}
 			filtered, filterErr := filterBetaStageStreamEvents(s.buffered, s.owned)
 			if filterErr != nil {
 				return protocolstage.Event{}, s.fail(filterErr)
@@ -151,6 +182,7 @@ func (s *anthropicBetaToolLoopStream) Next(ctx context.Context) (protocolstage.E
 		for i := range results {
 			resultValues[i] = results[i]
 		}
+		s.internalMessages = appendBetaStageInternalRound(s.internalMessages, message, resultValues)
 		nextRequest, appendErr := s.endpoint.stage.adapter.AppendToolResults(s.call.Request, message, resultValues)
 		if appendErr != nil {
 			return protocolstage.Event{}, s.fail(appendErr)

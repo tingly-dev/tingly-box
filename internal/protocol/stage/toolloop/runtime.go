@@ -55,8 +55,9 @@ type AllowAllPolicy struct{}
 func (AllowAllPolicy) Authorize(context.Context, ToolCall) error { return nil }
 
 var (
-	ErrMaxRounds         = errors.New("tool loop reached the maximum number of rounds")
-	ErrToolNameCollision = errors.New("server tool name collides with request tool")
+	ErrMaxRounds               = errors.New("tool loop reached the maximum number of rounds")
+	ErrToolNameCollision       = errors.New("server tool name collides with request tool")
+	ErrContinuationUnavailable = errors.New("tool loop continuation requires an explicit session")
 )
 
 // ExecutionError preserves the irreversible-side-effect boundary when a later

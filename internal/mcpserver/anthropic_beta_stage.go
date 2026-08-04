@@ -33,7 +33,14 @@ type AnthropicBetaStageExecutor interface {
 // the session key from ctx; the Stage never knows that storage key.
 type AnthropicBetaContinuationStore interface {
 	Pop(ctx context.Context, request *anthropic.BetaMessageNewParams) ([]anthropic.BetaMessageParam, bool)
-	Put(ctx context.Context, segment []anthropic.BetaMessageParam, externalIDs []string)
+	// Put stores a continuation segment that the next request may pop once its
+	// external tool results are present. It reports failure so the Stage never
+	// silently drops the internal tool context.
+	Put(ctx context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) error
+	// CanStash reports whether a continuation can be persisted for ctx. The
+	// Stage checks it before committing server-tool side effects for a round
+	// that must be stashed.
+	CanStash(ctx context.Context) bool
 }
 
 type AnthropicBetaStageConfig struct {
@@ -102,6 +109,11 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 	runCtx := ctx
 	current := prepared
 	var totalUsage *protocol.TokenUsage
+	// internalMessages accumulates the assistant/tool-result turns of internal
+	// (server-owned) rounds the client never saw. When the model later asks for
+	// a client-owned tool, these messages are carried into the continuation so
+	// the managed results still reach the final answer.
+	var internalMessages []anthropic.BetaMessageParam
 	sideEffectsCommitted := false
 	for round := 1; round <= e.stage.maxRounds; round++ {
 		response, callErr := e.next.Complete(runCtx, current)
@@ -124,6 +136,25 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 		}
 		managed, external, externalIDs := splitBetaStageTools(tools, owned)
 		if len(managed) == 0 {
+			// A final answer (no tool calls) or a pure-external round with no
+			// internal context needs no continuation.
+			if len(external) == 0 || len(internalMessages) == 0 {
+				response.Usage = totalUsage
+				response.SideEffectsCommitted = sideEffectsCommitted
+				return response, nil
+			}
+			// An external-only round after internal rounds: carry the internal
+			// context to the client's next turn when the continuation can be
+			// persisted. Without an explicit session the store cannot bind the
+			// segment safely (IP addresses are not a conversation identity), so
+			// deliver the external round as-is; guardrail blocking and terminal
+			// responses still work, and no new side effects are committed here.
+			if e.canPersistContinuation(runCtx) {
+				segment := append(internalMessages, betaMessageToParamPreservingThinking(message))
+				if stashErr := e.stashContinuation(runCtx, segment, externalIDs); stashErr != nil {
+					return nil, stagetoolloop.WrapError(stashErr, sideEffectsCommitted)
+				}
+			}
 			response.Usage = totalUsage
 			response.SideEffectsCommitted = sideEffectsCommitted
 			return response, nil
@@ -133,6 +164,9 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 				response.Usage = totalUsage
 				response.SideEffectsCommitted = sideEffectsCommitted
 				return response, nil
+			}
+			if !e.stage.continuations.CanStash(runCtx) {
+				return nil, stagetoolloop.WrapError(stagetoolloop.ErrContinuationUnavailable, sideEffectsCommitted)
 			}
 			results, nextCtx, committed := e.executeTools(runCtx, current.Request, managed)
 			sideEffectsCommitted = sideEffectsCommitted || committed
@@ -149,7 +183,12 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 			if !ok || len(segment) == 0 {
 				return nil, stagetoolloop.WrapError(errors.New("Anthropic Beta ToolLoop built an empty mixed continuation"), sideEffectsCommitted)
 			}
-			e.stage.continuations.Put(runCtx, segment, externalIDs)
+			// Prepend earlier internal rounds so results from previous managed
+			// rounds survive the client's next turn alongside this round's.
+			segment = append(internalMessages, segment...)
+			if stashErr := e.stashContinuation(runCtx, segment, externalIDs); stashErr != nil {
+				return nil, stagetoolloop.WrapError(stashErr, sideEffectsCommitted)
+			}
 			filtered, filterErr := e.stage.adapter.FilterVirtualTools(message, external)
 			if filterErr != nil {
 				return nil, stagetoolloop.WrapError(filterErr, sideEffectsCommitted)
@@ -170,6 +209,7 @@ func (e *anthropicBetaToolLoopEndpoint) Complete(ctx context.Context, call proto
 		for i := range results {
 			resultValues[i] = results[i]
 		}
+		internalMessages = appendBetaStageInternalRound(internalMessages, message, resultValues)
 		nextRequest, appendErr := e.stage.adapter.AppendToolResults(current.Request, message, resultValues)
 		if appendErr != nil {
 			return nil, stagetoolloop.WrapError(appendErr, sideEffectsCommitted)
@@ -264,6 +304,53 @@ func (e *anthropicBetaToolLoopEndpoint) executeTools(
 		results = append(results, result)
 	}
 	return results, runCtx, committed
+}
+
+// canPersistContinuation reports whether a continuation segment can be stored
+// for this context. A nil store (test-only fallback) or a store that cannot
+// bind to the current session cannot persist one.
+func (e *anthropicBetaToolLoopEndpoint) canPersistContinuation(ctx context.Context) bool {
+	return e.stage.continuations != nil && e.stage.continuations.CanStash(ctx)
+}
+
+// stashContinuation stores a continuation segment and surfaces persistence
+// failure as a Stage error so the internal tool context is never silently lost.
+func (e *anthropicBetaToolLoopEndpoint) stashContinuation(ctx context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) error {
+	if e.stage.continuations == nil {
+		return nil
+	}
+	if err := e.stage.continuations.Put(ctx, segment, externalIDs); err != nil {
+		return fmt.Errorf("store Anthropic Beta ToolLoop continuation: %w", err)
+	}
+	return nil
+}
+
+// appendBetaStageInternalRound records one server-owned round in the messages
+// the client has not seen, mirroring AppendToolResults so the in-loop request
+// and any later continuation segment stay in sync.
+func appendBetaStageInternalRound(messages []anthropic.BetaMessageParam, message *anthropic.BetaMessage, results []any) []anthropic.BetaMessageParam {
+	messages = append(messages, betaMessageToParamPreservingThinking(message))
+	return append(messages, anthropic.NewBetaUserMessage(betaStageToolResultBlocks(results)...))
+}
+
+// betaStageToolResultBlocks converts execution results into Beta tool_result
+// content blocks shared by the adapter's append and continuation builders.
+func betaStageToolResultBlocks(results []any) []anthropic.BetaContentBlockParamUnion {
+	blocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
+	for _, r := range results {
+		tr, ok := r.(ToolExecutionResult)
+		if !ok {
+			continue
+		}
+		blocks = append(blocks, anthropic.BetaContentBlockParamUnion{
+			OfToolResult: &anthropic.BetaToolResultBlockParam{
+				ToolUseID: tr.ToolUseID,
+				Content:   toolContentsToAnthropicBeta(tr.Contents),
+				IsError:   anthropic.Bool(tr.IsError),
+			},
+		})
+	}
+	return blocks
 }
 
 func betaStageMessage(value any) (*anthropic.BetaMessage, error) {

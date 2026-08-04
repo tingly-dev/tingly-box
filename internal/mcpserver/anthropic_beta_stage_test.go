@@ -291,6 +291,179 @@ func TestAnthropicBetaStageCompleteStoresAndAppliesMixedContinuation(t *testing.
 	}
 }
 
+func TestAnthropicBetaStageCompleteCarriesManagedRoundAcrossExternalRound(t *testing.T) {
+	continuations := &memoryBetaStageContinuations{}
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("internal result").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{responses: []*protocolstage.Response{
+		// round 1: pure server-owned tool
+		{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup"})},
+		// round 2: pure client-owned tool
+		{Value: betaStageToolMessage(t, betaStageToolCallSpec{ID: "toolu-external", Name: "client_tool"})},
+		// round 3: final answer after the client's follow-up
+		{Value: betaStageTextMessage(t, "combined")},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:         staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:      executor,
+		Continuations: continuations,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	first, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := first.Value.(*anthropic.BetaMessage)
+	filteredTools, err := NewAnthropicBetaAdapter().ExtractTools(filtered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filteredTools) != 1 || filteredTools[0].Name() != "client_tool" {
+		t.Fatalf("outward tools = %#v", filteredTools)
+	}
+	if continuations.puts != 1 || len(executor.calls) != 1 {
+		t.Fatalf("continuation puts=%d executions=%d", continuations.puts, len(executor.calls))
+	}
+
+	// The client replies with the external tool result only; the managed round
+	// must be carried by the continuation.
+	externalResult := anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu-external", "external result", false))
+	second, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{
+		Messages: []anthropic.BetaMessageParam{externalResult},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Value.(*anthropic.BetaMessage).Content[0].Text != "combined" {
+		t.Fatalf("second response = %#v", second.Value)
+	}
+	continued := terminal.calls[2].Request.(*anthropic.BetaMessageNewParams)
+	if len(continued.Messages) != 4 {
+		t.Fatalf("continued messages = %d, want assistant(owned)+user(owned result)+assistant(external)+user(external result)", len(continued.Messages))
+	}
+	if got := betaStageToolResultIDs(continued.Messages[1]); len(got) != 1 || got[0] != "toolu-owned" {
+		t.Fatalf("managed result IDs = %#v", got)
+	}
+	if got := betaStageToolResultIDs(continued.Messages[3]); len(got) != 1 || got[0] != "toolu-external" {
+		t.Fatalf("external result IDs = %#v", got)
+	}
+}
+
+func TestAnthropicBetaStageCompleteFailsWhenContinuationCannotBeStashed(t *testing.T) {
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("internal result").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{responses: []*protocolstage.Response{
+		{Value: betaStageToolMessage(t,
+			betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup"},
+			betaStageToolCallSpec{ID: "toolu-external", Name: "client_tool"},
+		)},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:         staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:      executor,
+		Continuations: &memoryBetaStageContinuations{failStash: true},
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	_, err := endpoint.Complete(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if !errors.Is(err, stagetoolloop.ErrContinuationUnavailable) {
+		t.Fatalf("error = %v, want ErrContinuationUnavailable", err)
+	}
+	// No server tool may run when the mixed round cannot be persisted.
+	if len(executor.calls) != 0 {
+		t.Fatalf("executor calls = %d, want 0", len(executor.calls))
+	}
+}
+
+func TestAnthropicBetaStageStreamCarriesManagedRoundAcrossExternalRound(t *testing.T) {
+	continuations := &memoryBetaStageContinuations{}
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{streams: []*betaStageMemoryStream{
+		{events: betaStageToolStreamEvents(betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup"})},
+		{events: betaStageToolStreamEvents(betaStageToolCallSpec{ID: "toolu-external", Name: "client_tool"})},
+		{events: betaStageTextStreamEvents("combined")},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:         staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:      executor,
+		Continuations: continuations,
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	first, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstEvents := collectBetaStageEvents(t, first)
+	if body := betaStageEventBodies(t, firstEvents); !strings.Contains(body, "client_tool") || strings.Contains(body, "lookup") {
+		t.Fatalf("outward first stream = %s", body)
+	}
+	if continuations.puts != 1 || len(executor.calls) != 1 {
+		t.Fatalf("continuation puts=%d executions=%d", continuations.puts, len(executor.calls))
+	}
+
+	// Client replies with the external tool result; the managed round must be
+	// carried by the continuation into the follow-up provider request.
+	externalResult := anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu-external", "external result", false))
+	second, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{
+		Messages: []anthropic.BetaMessageParam{externalResult},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondEvents := collectBetaStageEvents(t, second)
+	if body := betaStageEventBodies(t, secondEvents); !strings.Contains(body, "combined") {
+		t.Fatalf("outward second stream = %s", body)
+	}
+	continued := terminal.streamCalls[2].Request.(*anthropic.BetaMessageNewParams)
+	if len(continued.Messages) != 4 {
+		t.Fatalf("continued messages = %d, want assistant(owned)+user(owned result)+assistant(external)+user(external result)", len(continued.Messages))
+	}
+	if got := betaStageToolResultIDs(continued.Messages[1]); len(got) != 1 || got[0] != "toolu-owned" {
+		t.Fatalf("managed result IDs = %#v", got)
+	}
+	if got := betaStageToolResultIDs(continued.Messages[3]); len(got) != 1 || got[0] != "toolu-external" {
+		t.Fatalf("external result IDs = %#v", got)
+	}
+}
+
+func TestAnthropicBetaStageStreamFailsWhenContinuationCannotBeStashed(t *testing.T) {
+	executor := &fakeBetaStageExecutor{results: map[string]ToolExecutionResult{
+		"lookup": {Contents: coretool.TextToolResult("ok").Contents},
+	}}
+	terminal := &betaStageScriptedEndpoint{streams: []*betaStageMemoryStream{
+		{events: betaStageToolStreamEvents(
+			betaStageToolCallSpec{ID: "toolu-owned", Name: "lookup"},
+			betaStageToolCallSpec{ID: "toolu-external", Name: "client_tool"},
+		)},
+	}}
+	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
+		Tools:         staticBetaStageTools{tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}},
+		Executor:      executor,
+		Continuations: &memoryBetaStageContinuations{failStash: true},
+	})
+	endpoint, _ := protocolstage.Compose(terminal, toolStage)
+
+	stream, err := endpoint.Stream(context.Background(), protocolstage.Call{Request: &anthropic.BetaMessageNewParams{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stream.Next(context.Background())
+	if !errors.Is(err, stagetoolloop.ErrContinuationUnavailable) {
+		t.Fatalf("stream error = %v, want ErrContinuationUnavailable", err)
+	}
+	// No server tool may run when the mixed round cannot be persisted.
+	if len(executor.calls) != 0 {
+		t.Fatalf("executor calls = %d, want 0", len(executor.calls))
+	}
+	_ = stream.Close()
+}
+
 func TestAnthropicBetaStageRejectsAmbiguousOwnership(t *testing.T) {
 	request := &anthropic.BetaMessageNewParams{Tools: []anthropic.BetaToolUnionParam{betaStageToolDefinition("lookup")}}
 	toolStage, _ := NewAnthropicBetaStage(AnthropicBetaStageConfig{
@@ -507,6 +680,11 @@ type memoryBetaStageContinuations struct {
 	expectedIDs []string
 	puts        int
 	pops        int
+	failStash   bool
+}
+
+func (s *memoryBetaStageContinuations) CanStash(context.Context) bool {
+	return !s.failStash
 }
 
 func (s *memoryBetaStageContinuations) Pop(_ context.Context, request *anthropic.BetaMessageNewParams) ([]anthropic.BetaMessageParam, bool) {
@@ -519,10 +697,11 @@ func (s *memoryBetaStageContinuations) Pop(_ context.Context, request *anthropic
 	return segment, true
 }
 
-func (s *memoryBetaStageContinuations) Put(_ context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) {
+func (s *memoryBetaStageContinuations) Put(_ context.Context, segment []anthropic.BetaMessageParam, externalIDs []string) error {
 	s.puts++
 	s.segment = append([]anthropic.BetaMessageParam(nil), segment...)
 	s.expectedIDs = append([]string(nil), externalIDs...)
+	return nil
 }
 
 func (e *fakeBetaStageExecutor) ExecuteToolWithContext(ctx context.Context, tool Tool, _ []map[string]any) (context.Context, ToolExecutionResult, error) {
