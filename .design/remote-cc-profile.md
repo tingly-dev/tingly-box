@@ -113,6 +113,35 @@ before layering the profile's deltas on top — nothing else backs it.
 The status line ("⏳ CC: Processing new session... (profile: p1)") and the
 execution log both carry the profile ID so runs are attributable.
 
+### 2.2 Interactive prompts under Claude Code ≥ 2.1 (ask-rule injection)
+
+Claude Code ≥ 2.1 evaluates its local permission rules **before** consulting
+`--permission-prompt-tool stdio`: only a tool call whose local outcome is
+"ask" produces a `can_use_tool` control request on stdout. Two consequences
+for the bot:
+
+- Commands the CLI's classifier deems safe are auto-allowed silently (fewer
+  IM permission cards — accepted as the product behavior). Riskier commands
+  still resolve to "ask" and reach the IM prompter unchanged.
+- `AskUserQuestion` would never reach the user: without a matching ask rule
+  the CLI executes the tool directly and answers the question itself in
+  non-interactive mode.
+
+The fix is non-invasive and lives entirely in the agentboot Claude driver
+(`claude/settings_ask.go`): whenever the stdio prompter is attached, the
+driver takes the active settings source (per-run `SettingsPath`, config, or
+none), merges `{"permissions":{"ask":["AskUserQuestion"]}}` **in memory**,
+and passes the merged document inline via `--settings <json>` (the flag
+accepts a JSON string). No user- or profile-owned settings file is ever
+written; the rule exists only in the argv of the spawned process. A profile
+that already carries the rule, and any unreadable/malformed settings source,
+is passed through unchanged. An explicit `deny` on AskUserQuestion still wins
+inside the CLI.
+
+Verified E2E against CLI 2.1.221: the injected rule restores the
+`can_use_tool` round-trip for AskUserQuestion (question delivered, answer in
+`answers` as `question text → label` accepted by the tool).
+
 ## 3. Frontend surface
 
 The Remote page's per-bot graph carries a node on the @cc branch:
