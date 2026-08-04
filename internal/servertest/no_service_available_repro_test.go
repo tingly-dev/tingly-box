@@ -8,7 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	server "github.com/tingly-dev/tingly-box/internal/protocolserver"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/routing"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
