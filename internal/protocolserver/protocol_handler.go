@@ -23,7 +23,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver/affinity"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/routing"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
@@ -88,7 +87,7 @@ type ProtocolHandlerDeps struct {
 	// AffinityStore holds session→service affinity entries (sticky routing).
 	// Owned by the host server (constructed and GC-started there); the
 	// gateway updates message IDs on it after each response.
-	AffinityStore *affinity.AffinityStore
+	AffinityStore *AffinityStore
 
 	// GuardrailsState holds the mutex-guarded guardrails runtime pointer and
 	// its lifecycle operations. Owned by this package; the host server's

@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver"
-	affinity2 "github.com/tingly-dev/tingly-box/internal/protocolserver/affinity"
-
 	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -33,7 +31,7 @@ type LBSimulator struct {
 	mu       sync.Mutex
 	server   *Server
 	selector *routing.ServiceSelector
-	affinity *affinity2.AffinityStore
+	affinity *protocolserver.AffinityStore
 	health   *loadbalance.HealthMonitor
 	rule     *typ.Rule
 	scripts  map[string]*vmodel.Sequence
@@ -161,7 +159,7 @@ func NewLBSimulatorWithSequences(rule *typ.Rule, faults map[string]vmodel.Sequen
 	})
 	hf := typ.NewHealthFilter(hm)
 	lb := protocolserver.NewLoadBalancer(cfg, hf)
-	affinity := affinity2.NewAffinityStore(0)
+	affinity := protocolserver.NewAffinityStore(0)
 
 	scripts := make(map[string]*vmodel.Sequence, len(faults))
 	for id, cfg := range faults {

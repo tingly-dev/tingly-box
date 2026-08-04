@@ -1,4 +1,4 @@
-package affinity
+package protocolserver
 
 import (
 	"sync"
