@@ -17,9 +17,6 @@ const (
 	EnvBunVersions = "BUN_VERSIONS"
 	EnvBunInstall  = "BUN_INSTALL"
 
-	// EnvBunEnv is retained for source compatibility.
-	// Deprecated: use EnvBunInstall.
-	EnvBunEnv = EnvBunInstall
 )
 
 // GetCleanEnv returns a clean environment for running Claude CLI.

@@ -29,10 +29,6 @@ type SessionReader interface {
 	GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*SessionSummary, error)
 }
 
-// SessionStore is retained for source compatibility.
-// Deprecated: use SessionReader.
-type SessionStore = SessionReader
-
 // SessionSummary contains head and tail events
 type SessionSummary struct {
 	Metadata SessionMetadata `json:"metadata"`

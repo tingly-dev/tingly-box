@@ -19,16 +19,6 @@ const (
 	claudeCLIProbeTimeout = 5 * time.Second
 )
 
-// Deprecated bundled fallback constants retained so existing agentboot
-// consumers continue to compile. Packaged Claude Code paths are installation
-// relative and are now discovered dynamically; no fixed path/version is safe.
-const (
-	DefaultBundledPathLinux   = ""
-	DefaultBundledPathDarwin  = ""
-	DefaultBundledPathWindows = ""
-	DefaultBundledVersion     = ""
-)
-
 // CLIVariant represents a discovered Claude CLI installation
 type CLIVariant struct {
 	Path    string

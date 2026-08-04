@@ -105,7 +105,7 @@ func (a *MessageAccumulator) AddEvent(event common.Event) ([]Message, bool, bool
 		SDKStatusMessage, SDKLocalCommandOutputMessage,
 		SDKToolProgressMessage, SDKAuthStatusMessage,
 		SDKFilesPersistedMessage, SDKToolUseSummaryMessage,
-		SDKPromptSuggestionMessage, SDKTaskProgressMessage,
+		SDKPromptSuggestionMessage, SystemSubtypeTaskProgress,
 		SDKUserMessageReplayMessage:
 		// Infrastructure / housekeeping events emitted by the CLI that carry no
 		// user-facing content. Consume them here so they don't fall through to

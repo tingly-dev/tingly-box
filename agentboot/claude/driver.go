@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/process"
 )
 
 // Driver implements agentboot.AgentDriver for Claude Code CLI.
@@ -96,7 +97,7 @@ func (d *Driver) SetCLIPath(path string) {
 }
 
 // Prepare builds a LaunchSpec for the given prompt and execution options.
-func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.LaunchSpec, error) {
+func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*process.LaunchSpec, error) {
 	d.mu.RLock()
 	config := d.config
 	skipPerms := d.skipPerms
@@ -164,7 +165,7 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 		workDir = opts.ProjectPath
 	}
 
-	return &agentboot.LaunchSpec{
+	return &process.LaunchSpec{
 		Command:      command,
 		Env:          env,
 		WorkDir:      workDir,

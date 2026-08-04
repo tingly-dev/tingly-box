@@ -83,14 +83,6 @@ const (
 	SystemSubtypeRateLimit = "rate_limit"
 )
 
-// Deprecated task names retained as aliases for callers that used them before
-// these wire values were correctly classified as system-message subtypes.
-const (
-	SDKTaskStartedMessage      = SystemSubtypeTaskStarted
-	SDKTaskProgressMessage     = SystemSubtypeTaskProgress
-	SDKTaskNotificationMessage = SystemSubtypeTaskNotification
-)
-
 // assistant message error
 // ref: https://platform.claude.com/docs/en/agent-sdk/python#assistant-message-error
 const (
@@ -127,11 +119,6 @@ const (
 	ResultSubtypeErrorDuringExecution            = "error_during_execution"
 	ResultSubtypeErrorMaxBudgetUSD               = "error_max_budget_usd"
 	ResultSubtypeErrorMaxStructuredOutputRetries = "error_max_structured_output_retries"
-
-	// ResultSubtypeError was historically used for control responses. Terminal
-	// result errors use the error_* constants above.
-	// Deprecated: use ControlResponseSubtypeError.
-	ResultSubtypeError = ControlResponseSubtypeError
 )
 
 // Content block types
