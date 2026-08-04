@@ -116,10 +116,6 @@ func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, model
 		params.Tools = getProbeToolsOpenAI()
 		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{OfAuto: openai.Opt("auto")}
 	}
-	// Ask for stream usage so the streaming branch can report real token counts.
-	// Harmless on the non-streaming path (the provider ignores stream_options).
-	params.StreamOptions.IncludeUsage = openai.Opt(true)
-
 	url := oc.GetProvider().APIBase + "/chat/completions"
 	if mode == E2EModeSimple {
 		resp, err := oc.ChatCompletionsNew(ctx, params)
@@ -136,6 +132,9 @@ func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, model
 		return toProbeResult(string(b), time.Since(start).Milliseconds(), url, false, usage.FromOpenAIChatCompletion(resp.Usage), toolCalls), nil
 	}
 
+	// stream_options is valid only for streaming requests. Ask for the final
+	// aggregate usage block immediately before taking the streaming path.
+	params.StreamOptions.IncludeUsage = openai.Opt(true)
 	stream := oc.ChatCompletionsNewStreaming(ctx, params)
 	if stream == nil {
 		return nil, fmt.Errorf("chat streaming not supported by provider")
