@@ -114,12 +114,18 @@ type Server struct {
 	mcpRuntime *mcpruntime.Runtime
 
 	// servertool pipeline — owns virtual tool providers and hook list
-	servertoolPipeline *servertool.Pipeline
+	servertoolPipeline   *servertool.Pipeline
+	servertoolProviders  []servertool.ToolProvider
 
 	// guardrails runtime state (owned by protocolserver; constructed in
 	// NewServer before anything reads it)
 	guardrailsState    *protocolserver.GuardrailsState
 	guardrailsConfigMu sync.Mutex
+
+	// protocolStageEnabled is an immutable process-start choice gating the
+	// additive Protocol Stage request pipeline. Unsupported protocol paths
+	// remain on the legacy pipeline regardless of this flag.
+	protocolStageEnabled bool
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -501,6 +507,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		GetOrCreateScenarioSink: server.GetOrCreateScenarioSink,
 		GuardrailsState:         server.guardrailsState,
 		GetScenarioRecordMode:   server.GetScenarioRecordMode,
+		ProtocolStageEnabled:    server.protocolStageEnabled,
 	})
 
 	// Setup middleware
