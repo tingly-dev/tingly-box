@@ -142,6 +142,35 @@ func (ph *ProtocolHandler) setTokenUsageOnSpan(c *gin.Context, inputTokens, outp
 	ph.deps.Tracer.SetTokenUsage(c.Request.Context(), inputTokens, outputTokens)
 }
 
+// startRoutingSpan opens a child span covering service selection (the
+// health → smart → affinity → strategy pipeline) and returns the function
+// that closes it. The selection outcome is read back from the tracking
+// context at close time, so the span answers "which upstream was picked and
+// by which tactic" without the call sites passing anything.
+//
+// Like the failover attempt span it is not swapped into c.Request's context:
+// nothing nests under routing, and the ambient span must stay the root one
+// so token usage lands there.
+func (ph *ProtocolHandler) startRoutingSpan(c *gin.Context) func(error) {
+	if ph.deps.Tracer == nil {
+		return func(error) {}
+	}
+	_, span := ph.deps.Tracer.StartSpan(c.Request.Context(), "routing")
+	return func(err error) {
+		if svcID := c.GetString(ContextKeyLBServiceID); svcID != "" {
+			span.SetAttributes(pkgotel.AttrTinglyLBServiceID.String(svcID))
+		}
+		if tactic := c.GetString(ContextKeyLBTactic); tactic != "" {
+			span.SetAttributes(pkgotel.AttrTinglyLBTactic.String(tactic))
+		}
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}
+}
+
 // startFailoverAttemptSpan opens a child span recording one failover attempt.
 // It deliberately does NOT replace c.Request's context: token usage written
 // via the ambient context must always land on the root span, and the

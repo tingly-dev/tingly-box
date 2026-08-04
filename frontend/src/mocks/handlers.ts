@@ -53,37 +53,48 @@ const mockModelRequests = [
     },
 ]
 
+// Shared time anchor for the request-detail and trace handlers. It is
+// captured once rather than per call: the two endpoints are fetched a few
+// hundred ms apart, and a moving anchor would shift the spans relative to
+// the events, which the journey view attaches to stages by time containment.
+const MOCK_TRACE_BASE = Date.now() - 6000
+
 // Span trees for the in-memory trace viewer, keyed by trace_id. Times are
 // offsets in ms from the trace start, converted at request time.
 const mockTraceSpans: Record<string, Array<{ span_id: string; parent_span_id?: string; name: string; kind: string; start: number; end: number; status_code: string; status_message?: string; attributes?: Record<string, string> }>> = {
     a1b2c3d4e5f60718293a4b5c6d7e8f90: [
         { span_id: 'r000000000000001', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 2210, status_code: 'Unset', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic', 'gen_ai.usage.input_tokens': '1204', 'gen_ai.usage.output_tokens': '388', 'tingly.scenario': 'openai', 'http.response.status_code': '200' } },
+        { span_id: 's000000000000001', parent_span_id: 'r000000000000001', name: 'routing', kind: 'internal', start: 2, end: 14, status_code: 'Unset', attributes: { 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'tingly.lb.tactic': 'tier' } },
         { span_id: 'a000000000000001', parent_span_id: 'r000000000000001', name: 'failover.attempt', kind: 'internal', start: 40, end: 620, status_code: 'Error', status_message: 'upstream status 529', attributes: { 'tingly.failover.attempt': '1', 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'http.response.status_code': '529' } },
+        { span_id: 'u000000000000001', parent_span_id: 'r000000000000001', name: 'upstream', kind: 'client', start: 55, end: 610, status_code: 'Error', attributes: { 'server.address': 'api.openai.com', 'http.request.method': 'POST', 'http.response.status_code': '529' } },
         { span_id: 'a000000000000002', parent_span_id: 'r000000000000001', name: 'failover.attempt', kind: 'internal', start: 640, end: 2180, status_code: 'Ok', attributes: { 'tingly.failover.attempt': '2', 'tingly.lb.service_id': 'anthropic-uuid/claude-sonnet-5' } },
+        { span_id: 'u000000000000002', parent_span_id: 'r000000000000001', name: 'upstream', kind: 'client', start: 660, end: 2175, status_code: 'Unset', attributes: { 'server.address': 'api.anthropic.com', 'http.request.method': 'POST', 'http.response.status_code': '200' } },
     ],
     ffee1122334455667788990011223344: [
         { span_id: 'r000000000000002', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 740, status_code: 'Error', status_message: 'Bad Gateway', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.provider.name': 'OpenAI', 'error.type': '502', 'http.response.status_code': '502', 'tingly.scenario': 'openai' } },
+        { span_id: 's000000000000002', parent_span_id: 'r000000000000002', name: 'routing', kind: 'internal', start: 1, end: 9, status_code: 'Unset', attributes: { 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'tingly.lb.tactic': 'random' } },
+        { span_id: 'u000000000000003', parent_span_id: 'r000000000000002', name: 'upstream', kind: 'client', start: 20, end: 730, status_code: 'Error', attributes: { 'server.address': 'api.openai.com', 'http.request.method': 'POST', 'http.response.status_code': '502' } },
     ],
 }
 
-const mockRequestEvents: Record<string, Array<{ source: string; level: string; stage?: string; message: string; fields?: Record<string, any> }>> = {
+const mockRequestEvents: Record<string, Array<{ offset: number; source: string; level: string; stage?: string; message: string; fields?: Record<string, any> }>> = {
     'req-anthropic-ok': [
-        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-5', trace: [{ rule_index: 0, description: 'route sonnet', matched: true, ops: [{ position: 'model', operation: 'equals', matched: true, reason: 'model == claude-sonnet-5' }] }] } },
-        { source: 'model_request', level: 'info', stage: 'transform', message: 'anthropic passthrough (no conversion)' },
-        { source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
-        { source: 'http', level: 'info', message: 'POST /anthropic/v1/messages 200', fields: { status: 200, latency: 1840000000, method: 'POST', path: '/anthropic/v1/messages' } },
+        { offset: 8, source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-5', trace: [{ rule_index: 0, description: 'route sonnet', matched: true, ops: [{ position: 'model', operation: 'equals', matched: true, reason: 'model == claude-sonnet-5' }] }] } },
+        { offset: 20, source: 'model_request', level: 'info', stage: 'transform', message: 'anthropic passthrough (no conversion)' },
+        { offset: 1800, source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
+        { offset: 1840, source: 'http', level: 'info', message: 'POST /anthropic/v1/messages 200', fields: { status: 200, latency: 1840000000, method: 'POST', path: '/anthropic/v1/messages' } },
     ],
     'req-openai-routed': [
-        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 1, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-5', trace: [{ rule_index: 0, description: 'keep gpt', matched: false, ops: [{ position: 'model', operation: 'equals', matched: false, reason: 'model != gpt-5.6-terra' }] }, { rule_index: 1, description: 'upgrade to sonnet', matched: true, ops: [{ position: 'model', operation: 'prefix', matched: true, reason: 'model startswith gpt-5.6' }] }] } },
-        { source: 'model_request', level: 'warning', stage: 'transform', message: 'dropped unsupported field: logprobs' },
-        { source: 'model_request', level: 'info', stage: 'transform', message: 'openai chat -> anthropic messages' },
-        { source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
-        { source: 'http', level: 'info', message: 'POST /openai/v1/chat/completions 200', fields: { status: 200, latency: 2210000000, method: 'POST', path: '/openai/v1/chat/completions' } },
+        { offset: 10, source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 1, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-5', trace: [{ rule_index: 0, description: 'keep gpt', matched: false, ops: [{ position: 'model', operation: 'equals', matched: false, reason: 'model != gpt-5.6-terra' }] }, { rule_index: 1, description: 'upgrade to sonnet', matched: true, ops: [{ position: 'model', operation: 'prefix', matched: true, reason: 'model startswith gpt-5.6' }] }] } },
+        { offset: 25, source: 'model_request', level: 'warning', stage: 'transform', message: 'dropped unsupported field: logprobs' },
+        { offset: 30, source: 'model_request', level: 'info', stage: 'transform', message: 'openai chat -> anthropic messages' },
+        { offset: 2170, source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
+        { offset: 2210, source: 'http', level: 'info', message: 'POST /openai/v1/chat/completions 200', fields: { status: 200, latency: 2210000000, method: 'POST', path: '/openai/v1/chat/completions' } },
     ],
     'req-openai-fail': [
-        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'OpenAI', selected_model: 'gpt-5.6-sol' } },
-        { source: 'model_request', level: 'error', stage: 'upstream', message: 'upstream call failed: 502 Bad Gateway', fields: { status: 502, provider: 'OpenAI', error: 'bad gateway' } },
-        { source: 'http', level: 'error', message: 'POST /openai/v1/chat/completions 502', fields: { status: 502, latency: 740000000, method: 'POST', path: '/openai/v1/chat/completions', error: 'upstream error' } },
+        { offset: 5, source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'OpenAI', selected_model: 'gpt-5.6-sol' } },
+        { offset: 700, source: 'model_request', level: 'error', stage: 'upstream', message: 'upstream call failed: 502 Bad Gateway', fields: { status: 502, provider: 'OpenAI', error: 'bad gateway' } },
+        { offset: 740, source: 'http', level: 'error', message: 'POST /openai/v1/chat/completions 502', fields: { status: 502, latency: 740000000, method: 'POST', path: '/openai/v1/chat/completions', error: 'upstream error' } },
     ],
 }
 
@@ -2934,13 +2945,13 @@ export const handlers = [
         if (!summary) {
             return HttpResponse.json({ error: 'request not found' }, { status: 404 })
         }
-        const base = Date.now() - 4000
+        const base = MOCK_TRACE_BASE
         return HttpResponse.json({
             ...summary,
             time: new Date(base).toISOString(),
-            events: (mockRequestEvents[id] || []).map((e, i) => ({
+            events: (mockRequestEvents[id] || []).map((e) => ({
                 ...e,
-                time: new Date(base + i * 120).toISOString(),
+                time: new Date(base + e.offset).toISOString(),
             })),
         })
     }),
@@ -2951,7 +2962,7 @@ export const handlers = [
         if (!spans) {
             return HttpResponse.json({ error: 'trace not found (never sampled, or evicted from the in-memory buffer)' }, { status: 404 })
         }
-        const base = Date.now() - 6000
+        const base = MOCK_TRACE_BASE
         return HttpResponse.json({
             trace_id: traceId,
             spans: spans.map((s) => ({

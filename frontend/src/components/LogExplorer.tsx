@@ -6,7 +6,7 @@ import AILogViewer, {
     type ModelRequestSummary,
     type RequestFilters,
 } from '@/components/AILogViewer.tsx';
-import { type TraceDetail } from '@/components/TraceWaterfall';
+import { type TraceDetail } from '@/components/RequestJourney';
 import { getControlApiClient, getControlApiHeaders } from '@/services/openapi';
 
 interface LogExplorerProps {

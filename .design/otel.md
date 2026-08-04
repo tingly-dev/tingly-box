@@ -109,13 +109,21 @@ import 环。追踪元数据簇已被 `SetTrackingContext`/`GetTrackingContext` 
 ### 7.2 Span 拓扑
 
 ```
-tingly.request  (root, kind CLIENT, 每 HTTP 请求一个, middleware 拥有)
+{operation} {request model}   (root, kind CLIENT, 每 HTTP 请求一个, middleware 拥有)
  ├─ gen_ai.* 请求属性 + tingly.* 维度 + token usage 属性（trackUsage 回写）
- ├─ failover.attempt (child, 仅多服务 failover 循环产生, 每次尝试一个)
- │    attrs: tingly.failover.attempt / tingly.lb.service_id / provider uuid / model
+ ├─ routing            (child) 选路 pipeline；attrs: tingly.lb.service_id / tingly.lb.tactic
+ ├─ failover.attempt   (child, 仅多服务 failover 循环产生, 每次尝试一个)
+ │    attrs: tingly.failover.attempt / tingly.lb.service_id / provider uuid
  │    outcome: committed → OK；retryable/terminal 失败 → error status + http status attr
- └─ (上游 HTTP 调用不单独建 span；出站 inject root ctx 的 traceparent)
+ └─ upstream           (child, 每次真实上游 HTTP 调用一个)
+      attrs: server.address / http.request.method / http.response.status_code
 ```
+
+**为什么 routing / upstream 也要打点**：只有 root + attempt 时，**单服务请求（最常见）整条 trace 只有一个 span**——没有骨架，旅程视图无从渲染。routing 回答"选了谁、用什么 tactic"，upstream 吃掉 95% 的延迟，两者是诊断的最小可用集。transform 不单独建 span（亚毫秒级），它的日志事件在视图里作为注解挂到相邻阶段。
+
+**upstream span 建在 transport 层**（`internal/client/otel_transport.go`，位于所有 vendor round tripper 之下）：一处覆盖全部 provider，且天然只圈住真实上游调用。它**在响应体关闭/读尽时才结束**，不是 RoundTrip 返回时——流式补全在响应头到达后还会吐几秒钟的 token，否则记录的是 TTFB 而非上游总时长。
+
+**attempt / routing span 不换入 `c.Request` 的 context**：ambient span 必须始终是 root，token usage 才会落在 root 上（GenAI 约定要求）。代价是 upstream span 与 attempt span 是兄弟而非父子——视图侧按**时间包含关系**做嵌套展示，比改动语义更便宜且更稳。
 
 - **root span**：`tracingMiddleware`（`contextMiddleware` 之后）创建。入口 Extract 入站
   `traceparent`（propagator 未启用时是全局 no-op，零成本）；`c.Next()` 之后从 tracking
@@ -161,8 +169,25 @@ root span sampled 且 valid 时，middleware 把 trace id 写入
   淘汰。默认值写死（smart defaults over toggles），暂不暴露配置。
 - **不碰请求/响应内容**：span 属性维持现状；内容回放归 recording 管道。
 - **重启即清空**：与 memory log 同语义。要持久 trace 走 OTLP 接真后端，两路不混。
-- **前端入口只在 logs 页**：日志条目的 trace_id 可点击，展开 span 瀑布视图；
-  被淘汰的 trace 给明确提示。不做 usage 页入口、不做独立 traces 页（首版）。
+- **前端入口只在 logs 页**：不做 usage 页入口、不做独立 traces 页（首版）。
+
+### 7.4.1 展开态是一个"请求旅程"，不是两个视图
+
+首版把 span 瀑布和原有的事件 timeline 并排放在展开态里——同一个故事讲两遍，
+读者要在脑子里做 join，是 ux-principles §1（信息架构围绕用户问题组织）的反例。
+现在合并成单一叙事（`RequestJourney.tsx`）：
+
+- **trace span 是主干**：一个阶段一行，按时间排序，右侧时长条；
+- **日志事件是注解**：按时间包含关系挂到所属阶段行下，smart routing 的规则评估
+  作为 routing 行的富展开保留；
+- **access log envelope 整条丢弃**：status / latency / path 已在表格行头，重复一次是纯噪音
+  （唯一例外：它是仅有的事件时保留，覆盖"请求在任何阶段之前就失败"）；
+- **字段人性化**：logrus 的 ns 时长转 ms，摘要已展示的字段不再 dump；
+- **ID 降级**：request id / trace id 移到展开态底部的小字——报 bug 时才需要，读旅程时不需要。
+
+**无 trace 时同一形状降级**：阶段改由事件的 `stage` 字段派生（无时长条），
+所以关掉 tracing 或 trace 被淘汰时，logs 页的结构不变、不退化成裸日志流。
+不做 "Trace / Timeline" tab 切换——那是 §2 反对的 mode picker，等于把 join 成本还给用户。
 
 ### 7.5 仍然悬置
 

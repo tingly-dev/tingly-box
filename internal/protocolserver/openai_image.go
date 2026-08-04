@@ -110,7 +110,9 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
+	endRouting := ph.startRoutingSpan(c)
 	provider, selectedService, err := ph.deps.RoutingSelector.SelectServiceForImageGeneration(c, scenarioType, rule)
+	endRouting(err)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
