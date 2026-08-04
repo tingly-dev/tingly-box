@@ -39,14 +39,25 @@ export interface ProbeToolCall {
 }
 
 // Result payload of POST /api/v2/probe (backend probe.ProbeResult).
+export interface ProbeTokenUsage {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens?: number;
+    cache_write_tokens?: number;
+    reasoning_tokens?: number;
+}
+
 export interface ProbeResultData {
     content?: string;
     latency_ms: number;
     request_url?: string;
     stream?: boolean;
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
+    // Canonical token usage (same shape as protocol.TokenUsage on the backend):
+    // input_tokens / output_tokens / cache_read_tokens / cache_write_tokens /
+    // reasoning_tokens. Present for OpenAI Chat/Responses and Anthropic probes
+    // (non-stream always; stream when the provider emits a final usage block);
+    // absent for Google and cache hits.
+    usage?: ProbeTokenUsage;
     tool_calls?: ProbeToolCall[];
     // Routing trace — populated for TB-loopback probes.
     selected_provider?: string;
@@ -83,10 +94,8 @@ export interface ProbeResponse {
         request_url?: string;
         stream?: boolean;
 
-        // Token usage (flattened)
-        prompt_tokens?: number;
-        completion_tokens?: number;
-        total_tokens?: number;
+        // Canonical token usage (protocol.TokenUsage shape).
+        usage?: ProbeTokenUsage;
 
         // Tool calls
         tool_calls?: ProbeToolCall[];

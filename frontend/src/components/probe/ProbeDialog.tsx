@@ -246,21 +246,28 @@ const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                         }}
                     />
                 ) : null}
-                {d?.total_tokens ? (
-                    <Chip
-                        icon={<TokenIcon sx={{ fontSize: 16 }} />}
-                        label={`${d.total_tokens} tokens`}
-                        size="medium"
-                        sx={{
-                            height: 28,
-                            bgcolor: ok ? 'success.main' : 'error.main',
-                            color: 'common.white',
-                            '& .MuiChip-icon': {
+                {(() => {
+                    // Canonical TokenUsage total = input + output (cache tracked
+                    // separately, not added). Mirrors protocol.TokenUsage.TotalTokens().
+                    const total =
+                        (d?.usage?.input_tokens || 0) + (d?.usage?.output_tokens || 0);
+                    if (!total) return null;
+                    return (
+                        <Chip
+                            icon={<TokenIcon sx={{ fontSize: 16 }} />}
+                            label={`${total} tokens`}
+                            size="medium"
+                            sx={{
+                                height: 28,
+                                bgcolor: ok ? 'success.main' : 'error.main',
                                 color: 'common.white',
-                            },
-                        }}
-                    />
-                ) : null}
+                                '& .MuiChip-icon': {
+                                    color: 'common.white',
+                                },
+                            }}
+                        />
+                    );
+                })()}
             </Box>
             {!ok && result.error && (
                 <Typography
@@ -443,9 +450,10 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                                                 latency_ms: 450,
                                                 request_url: 'https://api.example.com/v1/chat',
                                                 stream: mode === 'streaming',
-                                                prompt_tokens: 25,
-                                                completion_tokens: 18,
-                                                total_tokens: 43,
+                                                usage: {
+                                                    input_tokens: 25,
+                                                    output_tokens: 18,
+                                                },
                                                 selected_provider: targetName,
                                                 selected_model: model || 'claude-sonnet-4-20250514',
                                                 routing_source: 'smart_routing',
