@@ -1,32 +1,42 @@
-// Package middleware provides Gin middleware for the tingly-box server.
+// Package middleware provides the Gin middleware used by the tingly-box
+// server: HTTP access logging, CORS, authentication, response compression,
+// per-route rate limiting, and IO-deadline management for streaming routes.
 //
-// # Middleware Stack
+// # Global vs per-route
 //
-// Middleware is applied globally in server.setupMiddleware() in the order below.
-// Every inbound request passes through all layers before reaching a handler.
+// Only a thin stack runs globally on every request (server.setupMiddleware in
+// internal/server/server_routes.go):
 //
 //	Request
 //	  │
-//	  ├─ gin.Recovery          — panic → 500, prevents process crash
-//	  ├─ MultiModeMemoryLog    — structured HTTP log + in-memory ring buffer
-//	  ├─ CORS                  — Access-Control-* headers
-//	  └─ Auth (per-route)      — UserAuth or ModelAuth, applied at route level
+//	  ├─ gin.Recovery   — panic → 500, prevents process crash
+//	  ├─ MemoryLog      — structured HTTP access log + in-memory ring buffer
+//	  └─ CORS           — Access-Control-* headers
+//
+// Auth, rate limiting, gzip, and IO-timeout clearing are NOT global — each is
+// applied to the specific route group that needs it at registration time.
 //
 // # Components
 //
 // MemoryLog (memory_log.go)
 //
-// Logs every HTTP request to both a persistent multi-mode logger (text + JSON
-// file via pkg/obs.MultiLogger) and an in-memory circular buffer (500 entries).
+// Logs one structured entry per request — method, path, status, latency,
+// error — to the multi-mode logger (text + JSON files via pkg/obs.MultiLogger)
+// and an in-memory ring buffer (50 entries per source, pkg/obs.defaultMemorySinkEntries).
 //
-// For AI-routed requests, the log entry is enriched with routing metadata after
-// the handler returns — these fields are written into the gin context by
-// SetTrackingContext (internal/protocolserver/tracking_context.go):
+// For AI-routed requests, the entry is enriched with routing metadata after
+// the handler returns. These fields are written into the gin context by
+// SetTrackingContext (internal/protocolserver/tracking_context.go) and read
+// back here:
 //
 //   - request_model   — model name the client requested
 //   - routed_model    — model name actually forwarded to the provider
 //   - routed_provider — provider name selected by the routing pipeline
+//   - api_style       — provider API style (e.g. openai, anthropic)
+//   - base_url        — provider API base URL
 //   - scenario        — agent scenario (e.g. "claude_code", "openai")
+//   - lb_service_id   — load-balancer service id chosen for this request
+//   - lb_tactic       — load-balancer tactic name
 //
 // Non-AI routes (system/management APIs) produce no routing fields.
 //
@@ -39,16 +49,19 @@
 //
 // AuthMiddleware (auth.go)
 //
-// Two distinct auth modes are applied at route registration time:
+// Two distinct auth modes, each applied to its route group at registration:
 //
-//   - UserAuthMiddleware — web-UI routes; validates a static bearer token from
-//     config; sets client_id="user_authenticated".
+//   - UserAuthMiddleware — web-UI / management routes; validates a static
+//     bearer token from config; on success sets user_id to the default admin
+//     (db.DefaultAdminUserID) so usage records have a stable owner.
 //
 //   - ModelAuthMiddleware — AI-endpoint routes; supports three methods in
 //     priority order:
 //     1. JWT API tokens (multi-tenant, "tb-share-*" prefix, validated from DB)
-//     2. Global config token ("tingly-box-*" prefix)
+//     2. Global config model token ("tingly-box-*" prefix)
 //     3. Enterprise context JWT (X-TBE-Context-JWT header, HS256/RS256)
+//     A token carrying the "sk-tbe-" virtual-key prefix is rejected here with
+//     a pointer to the dedicated /tbe/* endpoints.
 //
 // CORS (cors.go)
 //
@@ -56,14 +69,24 @@
 // single-page web UI.  Preflight OPTIONS requests are handled and short-
 // circuited before auth runs.
 //
+// Gzip (gzip.go)
+//
+// Per-route response compression for endpoints that can return large JSON
+// (usage stats, time series, records). Registered via
+// swagger.WithMiddleware(middleware.Gzip()); never on streaming/SSE routes.
+//
 // RateLimit (ratelimit.go)
 //
-// Token-bucket rate limiter keyed by client IP.  Limits are configurable
-// per scenario and fall back to a global default.
+// A fixed-window failed-attempt blocker keyed by client IP: after maxAttempts
+// POSTs within windowSize the IP is blocked for blockDuration. It is scoped to
+// specific auth paths passed to RateLimitMiddleware. Note: it is a failed-
+// attempt limiter, not a token bucket, and it is not wired into the default
+// route stack today.
 //
 // ClearServerIOTimeouts (io_timeout.go)
 //
-// Applied to the AI protocol route groups (/tingly/:scenario[/v1]) only.
+// Applied to the AI protocol route groups (/tingly/:scenario and
+// /tingly/:scenario/v1, see internal/protocolserver/routes.go) only.
 // Clears the per-connection read/write deadlines armed by http.Server's
 // ReadTimeout/WriteTimeout so long-running SSE streams and large request
 // bodies are bounded by the upstream provider timeout and client disconnect,
