@@ -5,12 +5,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
 // Transport implements [agentboot.AgentTransport] for the Claude Code CLI.
 //
-// It is pure: it parses common.Event values into classifications and
+// It is pure: it parses protocol.Event values into classifications and
 // accumulated messages, and encodes control responses into the wire shape
 // Claude expects on stdin. It performs no IO and owns no goroutines; the
 // runner drives the lifecycle.
@@ -48,7 +48,7 @@ func (t *Transport) SetExecutionContext(context agentboot.ExecutionContext) {
 
 // Classify reports the kind of event and, for control events, the parsed
 // StreamEvent ready to emit on the handle. Implements [agentboot.AgentTransport].
-func (t *Transport) Classify(ev common.Event) (agentboot.EventKind, agentboot.StreamEvent) {
+func (t *Transport) Classify(ev protocol.Event) (agentboot.EventKind, agentboot.StreamEvent) {
 	if strings.HasPrefix(ev.Type, SDKControlPrefix) {
 		parsed, err := t.parseControlRequest(ev)
 		if err != nil {
@@ -74,7 +74,7 @@ func (t *Transport) Classify(ev common.Event) (agentboot.EventKind, agentboot.St
 // AccumulateMessage feeds the event to the per-agent accumulator and returns
 // 0+ rich claude.Message values for the runner to wrap as MessageEvents.
 // Implements [agentboot.AgentTransport].
-func (t *Transport) AccumulateMessage(ev common.Event) []any {
+func (t *Transport) AccumulateMessage(ev protocol.Event) []any {
 	msgs, _, _ := t.accumulator.AddEvent(ev)
 	if len(msgs) == 0 {
 		return nil
@@ -105,7 +105,7 @@ func (t *Transport) EncodeControlResponse(reqID string, resp agentboot.ControlRe
 // parseControlRequest dispatches on the request subtype to produce either an
 // ApprovalRequestEvent or AskRequestEvent. Returns (nil, nil) for subtypes
 // the transport does not understand.
-func (t *Transport) parseControlRequest(ev common.Event) (agentboot.StreamEvent, error) {
+func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEvent, error) {
 	controlData, ok := ev.Data["request"].(map[string]interface{})
 	if !ok {
 		return nil, nil

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
 // runState is the shared accumulator driven by the pump goroutine.
@@ -14,7 +14,7 @@ type runState struct {
 
 	opts         ExecutionOptions
 	startTime    time.Time
-	events       []common.Event
+	events       []protocol.Event
 	pendingInput map[string]map[string]any
 	terminalSeen bool
 	terminalErr  *ResultError
@@ -39,7 +39,7 @@ func newProcessError(agentType AgentType, err error) *ProcessError {
 	}
 }
 
-func resultErrorFromEvent(agentType AgentType, event common.Event) *ResultError {
+func resultErrorFromEvent(agentType AgentType, event protocol.Event) *ResultError {
 	resultErr := &ResultError{
 		AgentType: agentType,
 		Subtype:   stringValue(event.Data["subtype"]),

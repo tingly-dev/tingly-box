@@ -3,19 +3,19 @@ package session
 import (
 	"strings"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 // SessionFilter defines a function to filter sessions
 // Returns true if the session should be included, false to exclude
-type SessionFilter func(metadata common.SessionMetadata) bool
+type SessionFilter func(metadata history.SessionMetadata) bool
 
 // DefaultSessionFilter returns the default filter that excludes:
 // - Meta messages (isMeta=true)
 // - Empty or very short content (< 5 chars)
 // - Sessions with no meaningful content
 func DefaultSessionFilter() SessionFilter {
-	return func(metadata common.SessionMetadata) bool {
+	return func(metadata history.SessionMetadata) bool {
 		// Check if empty first message
 		trimmedFirst := strings.TrimSpace(metadata.FirstMessage)
 		trimmedLastUser := strings.TrimSpace(metadata.LastUserMessage)
@@ -51,12 +51,12 @@ func DefaultSessionFilter() SessionFilter {
 }
 
 // WithFilter creates a new slice with only sessions that pass the filter
-func WithFilter(sessions []common.SessionMetadata, filter SessionFilter) []common.SessionMetadata {
+func WithFilter(sessions []history.SessionMetadata, filter SessionFilter) []history.SessionMetadata {
 	if filter == nil {
 		return sessions
 	}
 
-	var filtered []common.SessionMetadata
+	var filtered []history.SessionMetadata
 	for _, sess := range sessions {
 		if filter(sess) {
 			filtered = append(filtered, sess)
@@ -67,7 +67,7 @@ func WithFilter(sessions []common.SessionMetadata, filter SessionFilter) []commo
 
 // ExcludeShortContent returns a filter that excludes sessions with very short content
 func ExcludeShortContent(minLength int) SessionFilter {
-	return func(metadata common.SessionMetadata) bool {
+	return func(metadata history.SessionMetadata) bool {
 		trimmedFirst := strings.TrimSpace(metadata.FirstMessage)
 		trimmedLastUser := strings.TrimSpace(metadata.LastUserMessage)
 
@@ -85,7 +85,7 @@ func ExcludeShortContent(minLength int) SessionFilter {
 
 // ExcludePatterns returns a filter that excludes sessions containing specific patterns
 func ExcludePatterns(patterns []string) SessionFilter {
-	return func(metadata common.SessionMetadata) bool {
+	return func(metadata history.SessionMetadata) bool {
 		content := strings.TrimSpace(metadata.FirstMessage)
 		if content == "" {
 			content = strings.TrimSpace(metadata.LastUserMessage)
@@ -103,7 +103,7 @@ func ExcludePatterns(patterns []string) SessionFilter {
 
 // CombineFilters returns a filter that only passes if all filters pass
 func CombineFilters(filters ...SessionFilter) SessionFilter {
-	return func(metadata common.SessionMetadata) bool {
+	return func(metadata history.SessionMetadata) bool {
 		for _, filter := range filters {
 			if !filter(metadata) {
 				return false

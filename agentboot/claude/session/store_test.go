@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 func TestNewStore(t *testing.T) {
@@ -108,8 +108,8 @@ func TestParseSessionFile(t *testing.T) {
 	if metadata.FirstMessage != "test message" {
 		t.Errorf("FirstMessage = %q, want %q", metadata.FirstMessage, "test message")
 	}
-	if metadata.Status != common.SessionStatusComplete {
-		t.Errorf("Status = %q, want %q", metadata.Status, common.SessionStatusComplete)
+	if metadata.Status != history.SessionStatusComplete {
+		t.Errorf("Status = %q, want %q", metadata.Status, history.SessionStatusComplete)
 	}
 	if metadata.TotalCostUSD != 0.05 {
 		t.Errorf("TotalCostUSD = %f, want %f", metadata.TotalCostUSD, 0.05)
@@ -135,8 +135,8 @@ func TestParseSessionFileWithError(t *testing.T) {
 		t.Fatalf("parseSessionFile() error = %v", err)
 	}
 
-	if metadata.Status != common.SessionStatusError {
-		t.Errorf("Status = %q, want %q", metadata.Status, common.SessionStatusError)
+	if metadata.Status != history.SessionStatusError {
+		t.Errorf("Status = %q, want %q", metadata.Status, history.SessionStatusError)
 	}
 	if metadata.Error != "something went wrong" {
 		t.Errorf("Error = %q, want %q", metadata.Error, "something went wrong")

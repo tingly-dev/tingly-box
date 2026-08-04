@@ -1,6 +1,6 @@
 package agentboot
 
-import "github.com/tingly-dev/tingly-box/agentboot/common"
+import "github.com/tingly-dev/tingly-box/agentboot/protocol"
 
 // AgentTransportFactory creates the protocol state for one execution.
 //
@@ -38,7 +38,7 @@ const (
 )
 
 // AgentTransport is the per-agent protocol parser. It is pure: it consumes
-// [common.Event] values and produces classifications and encoded responses,
+// [protocol.Event] values and produces classifications and encoded responses,
 // but performs no IO and owns no goroutines.
 //
 // Each agent type (Claude, Codex, …) provides its own AgentTransport.
@@ -49,13 +49,13 @@ type AgentTransport interface {
 	//
 	// Execution context metadata can be stamped onto the StreamEvent during
 	// Classify.
-	Classify(ev common.Event) (kind EventKind, parsed StreamEvent)
+	Classify(ev protocol.Event) (kind EventKind, parsed StreamEvent)
 
 	// AccumulateMessage feeds the event to the per-agent message accumulator
 	// and returns 0+ rich message values to emit as [MessageEvent.Raw]. The
 	// concrete type of each value is agent-specific (e.g.
 	// *claude.AssistantMessage). The runner does not introspect them.
-	AccumulateMessage(ev common.Event) []any
+	AccumulateMessage(ev protocol.Event) []any
 
 	// EncodeControlResponse converts a [ControlResponse] into the wire value
 	// sent to the agent process's stdin via [protocol.Encoder].

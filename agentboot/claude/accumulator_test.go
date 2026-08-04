@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -20,7 +20,7 @@ func TestMessageAccumulator_APIRetryPreservesRaw(t *testing.T) {
 	accumulator := NewMessageAccumulator()
 
 	raw := `{"type":"system","subtype":"api_retry","session_id":"s-1","attempt":2,"delayMs":1200,"error":"Overloaded"}`
-	ev := common.Event{
+	ev := protocol.Event{
 		Type:      SDKSystemMessage,
 		Raw:       raw,
 		Timestamp: time.Now(),
@@ -50,7 +50,7 @@ func TestMessageAccumulator(t *testing.T) {
 
 	// Test system message
 	systemEventJSON := `{"type":"system","subtype":"init","session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
-	systemEvent := common.Event{
+	systemEvent := protocol.Event{
 		Type:      SDKSystemMessage,
 		Data:      map[string]interface{}{"subtype": "init", "session_id": "test-session-123"},
 		Raw:       systemEventJSON,
@@ -63,7 +63,7 @@ func TestMessageAccumulator(t *testing.T) {
 
 	// Test assistant message with text content
 	assistantEventJSON := `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg-123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"session_id":"test-session-123","uuid":"msg-uuid-456","timestamp":"2024-01-01T12:00:00Z"}`
-	assistantEvent := common.Event{
+	assistantEvent := protocol.Event{
 		Type:      SDKAssistantMessage,
 		Raw:       assistantEventJSON,
 		Timestamp: time.Now(),
@@ -79,7 +79,7 @@ func TestMessageAccumulator(t *testing.T) {
 
 	// Test result message
 	resultEventJSON := `{"type":"result","subtype":"success","result":"Done!","total_cost_usd":0.001,"duration_ms":1000,"session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
-	resultEvent := common.Event{
+	resultEvent := protocol.Event{
 		Type:      SDKResultMessage,
 		Raw:       resultEventJSON,
 		Timestamp: time.Now(),

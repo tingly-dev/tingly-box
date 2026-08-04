@@ -231,10 +231,9 @@ agentboot/
 ├── run.go                # High-level Prompter/MessageSink consumer
 ├── service.go            # AgentService — the single public entry point (registry + query + execute)
 ├── lifecycle.go          # Runtime LifecycleStore interface
-├── ask/                  # Ask/permission request-response types + tool handler registry
-├── common/               # Canonical Event, SessionReader, history types
+├── history/              # SessionReader + historical session types
 ├── process/              # LaunchSpec + process abstraction (OS/fake)
-├── protocol/             # Stream-JSON encoder / decoder
+├── protocol/             # Stream-JSON encoder / decoder + canonical Event
 └── claude/               # Claude Code agent implementation
     ├── agent.go          # claude.Agent (wraps Runner)
     ├── service.go        # Agent + Claude session-reader composition
@@ -259,7 +258,7 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
 
 1. Create `agentboot/youragent/` with:
    - `Driver` — implements `agentboot.AgentDriver` (binary discovery, CLI flag construction, `LaunchSpec` assembly).
-   - `Transport` — implements `agentboot.AgentTransport` (parse the agent's stdout into `common.Event`s and emit `StreamEvent`s).
+   - `Transport` — implements `agentboot.AgentTransport` (parse the agent's stdout into `protocol.Event`s and emit `StreamEvent`s).
 2. Wrap them in an `Agent` type that satisfies `agentboot.Agent`:
    ```go
    func NewAgent(cfg agentboot.Config) *Agent {
@@ -281,7 +280,7 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
 3. Define the `AgentType` constant next to your implementation and register
    the agent on an `AgentService` with `RegisterAgent`.
 
-If the provider exposes historical sessions, implement `common.SessionReader`
+If the provider exposes historical sessions, implement `history.SessionReader`
 and inject it with `agentboot.WithSessionReader`. Runtime lifecycle reporting
 is a separate concern implemented through `agentboot.LifecycleStore` in
 `ExecutionOptions.Store`.

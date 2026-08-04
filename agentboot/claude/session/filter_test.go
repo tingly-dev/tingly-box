@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 func TestDefaultSessionFilter(t *testing.T) {
@@ -12,12 +12,12 @@ func TestDefaultSessionFilter(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		metadata common.SessionMetadata
+		metadata history.SessionMetadata
 		want     bool
 	}{
 		{
 			name: "valid session with normal content",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-1",
 				FirstMessage: "Help me write a function",
 			},
@@ -25,7 +25,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with too short content",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-2",
 				FirstMessage: "hi",
 			},
@@ -33,7 +33,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with empty content",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-3",
 				FirstMessage: "",
 			},
@@ -41,7 +41,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with whitespace only",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-4",
 				FirstMessage: "   ",
 			},
@@ -49,7 +49,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with local-command-caveat pattern",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-5",
 				FirstMessage: "<local-command-caveat>Some content",
 			},
@@ -57,7 +57,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with ide_opened_file pattern",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-6",
 				FirstMessage: "<ide_opened_file>/path/to/file",
 			},
@@ -65,7 +65,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with local-command pattern",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "test-7",
 				FirstMessage: "<local-command-test> command",
 			},
@@ -73,7 +73,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with last user message only (valid)",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:       "test-8",
 				FirstMessage:    "",
 				LastUserMessage: "This is a longer message that should pass",
@@ -82,7 +82,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with both short messages",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:       "test-9",
 				FirstMessage:    "abc",
 				LastUserMessage: "xyz",
@@ -91,7 +91,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 		},
 		{
 			name: "session with short first but valid last message",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:       "test-10",
 				FirstMessage:    "hi",
 				LastUserMessage: "This is a substantial follow-up question",
@@ -111,7 +111,7 @@ func TestDefaultSessionFilter(t *testing.T) {
 }
 
 func TestWithFilter(t *testing.T) {
-	sessions := []common.SessionMetadata{
+	sessions := []history.SessionMetadata{
 		{SessionID: "1", FirstMessage: "Valid session"},
 		{SessionID: "2", FirstMessage: "hi"},
 		{SessionID: "3", FirstMessage: "Another valid session"},
@@ -134,7 +134,7 @@ func TestWithFilter(t *testing.T) {
 }
 
 func TestWithFilterNil(t *testing.T) {
-	sessions := []common.SessionMetadata{
+	sessions := []history.SessionMetadata{
 		{SessionID: "1", FirstMessage: "Valid session"},
 		{SessionID: "2", FirstMessage: "hi"},
 	}
@@ -151,12 +151,12 @@ func TestExcludeShortContent(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		metadata common.SessionMetadata
+		metadata history.SessionMetadata
 		want     bool
 	}{
 		{
 			name: "content longer than min length",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "1",
 				FirstMessage: "This is a long message",
 			},
@@ -164,7 +164,7 @@ func TestExcludeShortContent(t *testing.T) {
 		},
 		{
 			name: "content shorter than min length",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "2",
 				FirstMessage: "Short",
 			},
@@ -172,7 +172,7 @@ func TestExcludeShortContent(t *testing.T) {
 		},
 		{
 			name: "last user message passes",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:       "3",
 				FirstMessage:    "Short",
 				LastUserMessage: "This is a long follow-up",
@@ -197,12 +197,12 @@ func TestExcludePatterns(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		metadata common.SessionMetadata
+		metadata history.SessionMetadata
 		want     bool
 	}{
 		{
 			name: "contains first pattern",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "1",
 				FirstMessage: "<test> command",
 			},
@@ -210,7 +210,7 @@ func TestExcludePatterns(t *testing.T) {
 		},
 		{
 			name: "contains second pattern",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "2",
 				FirstMessage: "[internal] system event",
 			},
@@ -218,7 +218,7 @@ func TestExcludePatterns(t *testing.T) {
 		},
 		{
 			name: "no pattern match",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "3",
 				FirstMessage: "Normal user message",
 			},
@@ -226,7 +226,7 @@ func TestExcludePatterns(t *testing.T) {
 		},
 		{
 			name: "checks last user message",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:       "4",
 				FirstMessage:    "",
 				LastUserMessage: "/system/path command",
@@ -253,12 +253,12 @@ func TestCombineFilters(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		metadata common.SessionMetadata
+		metadata history.SessionMetadata
 		want     bool
 	}{
 		{
 			name: "passes both filters",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "1",
 				FirstMessage: "Valid long message",
 			},
@@ -266,7 +266,7 @@ func TestCombineFilters(t *testing.T) {
 		},
 		{
 			name: "fails short filter",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "2",
 				FirstMessage: "Short msg",
 			},
@@ -274,7 +274,7 @@ func TestCombineFilters(t *testing.T) {
 		},
 		{
 			name: "fails pattern filter",
-			metadata: common.SessionMetadata{
+			metadata: history.SessionMetadata{
 				SessionID:    "3",
 				FirstMessage: "This is long but <test> pattern",
 			},
@@ -294,7 +294,7 @@ func TestCombineFilters(t *testing.T) {
 
 func TestStoreFilteredIntegration(t *testing.T) {
 	// Create test sessions
-	sessions := []common.SessionMetadata{
+	sessions := []history.SessionMetadata{
 		{
 			SessionID:    "valid-1",
 			FirstMessage: "Help me write code",

@@ -3,7 +3,7 @@ package session
 import (
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 func TestExtractString(t *testing.T) {
@@ -184,11 +184,11 @@ func TestParseEventData(t *testing.T) {
 }
 
 // Mock session metadata for testing
-func createTestSessionMetadata(id string) common.SessionMetadata {
-	return common.SessionMetadata{
+func createTestSessionMetadata(id string) history.SessionMetadata {
+	return history.SessionMetadata{
 		SessionID:    id,
 		ProjectPath:  "/test/project",
-		Status:       common.SessionStatusComplete,
+		Status:       history.SessionStatusComplete,
 		FirstMessage: "test message",
 		NumTurns:     2,
 	}

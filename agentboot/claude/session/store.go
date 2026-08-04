@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
-// Store implements common.SessionReader for Claude Code history.
+// Store implements history.SessionReader for Claude Code history.
 type Store struct {
 	projectsDir string // Default: ~/.claude/projects
 }
@@ -33,21 +33,21 @@ func NewStore(projectsDir string) (*Store, error) {
 }
 
 // ListSessions returns all sessions for a project, ordered by start time (newest first)
-func (s *Store) ListSessions(ctx context.Context, projectPath string) ([]common.SessionMetadata, error) {
+func (s *Store) ListSessions(ctx context.Context, projectPath string) ([]history.SessionMetadata, error) {
 	projectDir := s.resolveProjectPath(projectPath)
 	if projectDir == "" {
-		return nil, common.ErrInvalidPath{Path: projectPath}
+		return nil, history.ErrInvalidPath{Path: projectPath}
 	}
 
 	entries, err := os.ReadDir(projectDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []common.SessionMetadata{}, nil
+			return []history.SessionMetadata{}, nil
 		}
 		return nil, err
 	}
 
-	var sessions []common.SessionMetadata
+	var sessions []history.SessionMetadata
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -77,17 +77,17 @@ func (s *Store) ListSessions(ctx context.Context, projectPath string) ([]common.
 }
 
 // GetSession retrieves a specific session's metadata
-func (s *Store) GetSession(ctx context.Context, sessionID string) (*common.SessionMetadata, error) {
+func (s *Store) GetSession(ctx context.Context, sessionID string) (*history.SessionMetadata, error) {
 	sessionPath := s.findSessionPath(sessionID)
 	if sessionPath == "" {
-		return nil, common.ErrSessionNotFound{SessionID: sessionID}
+		return nil, history.ErrSessionNotFound{SessionID: sessionID}
 	}
 
 	return s.parseSessionFile(sessionPath)
 }
 
 // GetRecentSessions returns the N most recent sessions
-func (s *Store) GetRecentSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
+func (s *Store) GetRecentSessions(ctx context.Context, projectPath string, limit int) ([]history.SessionMetadata, error) {
 	sessions, err := s.ListSessions(ctx, projectPath)
 	if err != nil {
 		return nil, err
@@ -101,21 +101,21 @@ func (s *Store) GetRecentSessions(ctx context.Context, projectPath string, limit
 }
 
 // ListSessionsFiltered returns sessions that pass the filter, ordered by start time (newest first)
-func (s *Store) ListSessionsFiltered(ctx context.Context, projectPath string, filter SessionFilter) ([]common.SessionMetadata, error) {
+func (s *Store) ListSessionsFiltered(ctx context.Context, projectPath string, filter SessionFilter) ([]history.SessionMetadata, error) {
 	projectDir := s.resolveProjectPath(projectPath)
 	if projectDir == "" {
-		return nil, common.ErrInvalidPath{Path: projectPath}
+		return nil, history.ErrInvalidPath{Path: projectPath}
 	}
 
 	entries, err := os.ReadDir(projectDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []common.SessionMetadata{}, nil
+			return []history.SessionMetadata{}, nil
 		}
 		return nil, err
 	}
 
-	var sessions []common.SessionMetadata
+	var sessions []history.SessionMetadata
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -150,7 +150,7 @@ func (s *Store) ListSessionsFiltered(ctx context.Context, projectPath string, fi
 }
 
 // GetRecentSessionsFiltered returns the N most recent sessions that pass the filter
-func (s *Store) GetRecentSessionsFiltered(ctx context.Context, projectPath string, limit int, filter SessionFilter) ([]common.SessionMetadata, error) {
+func (s *Store) GetRecentSessionsFiltered(ctx context.Context, projectPath string, limit int, filter SessionFilter) ([]history.SessionMetadata, error) {
 	sessions, err := s.ListSessionsFiltered(ctx, projectPath, filter)
 	if err != nil {
 		return nil, err
@@ -164,20 +164,20 @@ func (s *Store) GetRecentSessionsFiltered(ctx context.Context, projectPath strin
 }
 
 // GetSessionEvents retrieves events from a session
-func (s *Store) GetSessionEvents(ctx context.Context, sessionID string, offset, limit int) ([]common.SessionEvent, error) {
+func (s *Store) GetSessionEvents(ctx context.Context, sessionID string, offset, limit int) ([]history.SessionEvent, error) {
 	sessionPath := s.findSessionPath(sessionID)
 	if sessionPath == "" {
-		return nil, common.ErrSessionNotFound{SessionID: sessionID}
+		return nil, history.ErrSessionNotFound{SessionID: sessionID}
 	}
 
 	return s.parseSessionEvents(sessionPath, offset, limit)
 }
 
 // GetSessionSummary returns a summary (first N and last M events)
-func (s *Store) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
+func (s *Store) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*history.SessionSummary, error) {
 	sessionPath := s.findSessionPath(sessionID)
 	if sessionPath == "" {
-		return nil, common.ErrSessionNotFound{SessionID: sessionID}
+		return nil, history.ErrSessionNotFound{SessionID: sessionID}
 	}
 
 	metadata, err := s.parseSessionFile(sessionPath)
@@ -195,7 +195,7 @@ func (s *Store) GetSessionSummary(ctx context.Context, sessionID string, firstN,
 		return nil, err
 	}
 
-	return &common.SessionSummary{
+	return &history.SessionSummary{
 		Metadata: *metadata,
 		Head:     head,
 		Tail:     tail,
@@ -443,11 +443,11 @@ func (s *Store) GetProjectStats(ctx context.Context, projectPath string) (*Proje
 
 	for _, sess := range sessions {
 		switch sess.Status {
-		case common.SessionStatusActive:
+		case history.SessionStatusActive:
 			stats.ActiveSessions++
-		case common.SessionStatusComplete:
+		case history.SessionStatusComplete:
 			stats.CompletedSessions++
-		case common.SessionStatusError:
+		case history.SessionStatusError:
 			stats.ErrorSessions++
 		}
 

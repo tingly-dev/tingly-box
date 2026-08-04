@@ -576,3 +576,33 @@ What shipped under that bar:
 Verified: `go build ./... && go vet ./... && go test ./...` green in the
 agentboot module; root module builds and `remote/control/...`,
 `remote/channel/...`, `internal/server/module/imbot/...` tests green.
+
+---
+
+## 9. Directory-tree round (2026-08-04, follow-up to §8)
+
+Applied as sequential commits on one branch, each independently green:
+
+1. **Deprecated aliases deleted** (root `LaunchSpec`, `common.SessionStore`,
+   `session.Store`, `claude.SDKTask*`, `ResultSubtypeError`, `EnvBunEnv`,
+   `DefaultBundled*`). `AgentDriver.Prepare` and `claude.Driver` now speak
+   `process.LaunchSpec` directly.
+2. **`session/` micro-package folded into the root package** — the 19-line
+   `LifecycleStore` interface now lives in `agentboot/lifecycle.go` next to
+   `ExecutionOptions.Store`.
+3. **`ask/` moved to `remote/control/ask`** (done manually): agentboot itself
+   never consumed it, and its content is IM permission-UX vocabulary. The
+   engine's ApprovalRequestEvent/AskRequestEvent control routing stays in
+   agentboot; only the IM request/response presentation types moved.
+4. **`common/` dissolved**: the wire `Event` (+ constructors) moved into
+   `protocol/` — the decoder's product type now lives with the decoder and
+   `protocol` has zero intra-module dependencies; the remainder (SessionReader,
+   SessionMetadata, SessionEvent tree, errors) renamed to `history/`, which
+   says what it is instead of "common".
+
+Resulting tree: root engine+service, `history/`, `process/`, `protocol/`,
+`claude/` (+`claude/session`, `claude/fixture`). Still open from the §9 plan:
+the optional move of `claude/formatter.go` + `tool_renderer.go` (IM text
+rendering, only consumer is `remoteagent/stream.go`) out of the claude
+adapter — deliberately deferred pending a decision on where rendering should
+live (`remote/control/render` vs a `claude/render` subpackage).

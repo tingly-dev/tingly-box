@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 // errSessionReaderNotConfigured is returned when history APIs are used without
@@ -23,14 +23,14 @@ type AgentService struct {
 	mu            sync.RWMutex
 	config        Config
 	agents        map[AgentType]Agent
-	sessionReader common.SessionReader
+	sessionReader history.SessionReader
 }
 
 // ServiceOption configures an [AgentService] integration.
 type ServiceOption func(*AgentService) error
 
 // WithSessionReader injects read-only historical session access.
-func WithSessionReader(reader common.SessionReader) ServiceOption {
+func WithSessionReader(reader history.SessionReader) ServiceOption {
 	return func(service *AgentService) error {
 		if reader == nil {
 			return fmt.Errorf("agentservice: session reader is nil")
@@ -119,7 +119,7 @@ func (s *AgentService) ListProjects(ctx context.Context) ([]string, error) {
 
 // ListSessions returns up to limit sessions for the given project, newest first.
 // Pass limit <= 0 to return all sessions.
-func (s *AgentService) ListSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
+func (s *AgentService) ListSessions(ctx context.Context, projectPath string, limit int) ([]history.SessionMetadata, error) {
 	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}
@@ -130,7 +130,7 @@ func (s *AgentService) ListSessions(ctx context.Context, projectPath string, lim
 }
 
 // GetSession returns metadata for a specific session by ID.
-func (s *AgentService) GetSession(ctx context.Context, sessionID string) (*common.SessionMetadata, error) {
+func (s *AgentService) GetSession(ctx context.Context, sessionID string) (*history.SessionMetadata, error) {
 	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}
@@ -138,7 +138,7 @@ func (s *AgentService) GetSession(ctx context.Context, sessionID string) (*commo
 }
 
 // GetSessionSummary returns head and tail events of a session.
-func (s *AgentService) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
+func (s *AgentService) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*history.SessionSummary, error) {
 	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}

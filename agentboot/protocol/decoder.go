@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
 // Decoder reads a stream of JSON-encoded values from an io.Reader and emits
@@ -40,8 +39,8 @@ func NewDecoder(r io.Reader) *Decoder { return &Decoder{src: r} }
 //     pass a non-closer reader must close it themselves to abort decoding.
 //
 // If decoding succeeds and the source ends cleanly with EOF, Err returns nil.
-func (d *Decoder) Stream(ctx context.Context) (events <-chan common.Event, errFn func() error) {
-	out := make(chan common.Event)
+func (d *Decoder) Stream(ctx context.Context) (events <-chan Event, errFn func() error) {
+	out := make(chan Event)
 	var termErr error
 
 	go func() {
@@ -74,7 +73,7 @@ func (d *Decoder) Stream(ctx context.Context) (events <-chan common.Event, errFn
 				return
 			}
 
-			ev := common.NewEventFromMap(raw)
+			ev := NewEventFromMap(raw)
 			select {
 			case out <- ev:
 			case <-ctx.Done():

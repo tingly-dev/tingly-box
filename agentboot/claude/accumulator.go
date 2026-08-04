@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
 // MessageAccumulator collects related events into complete messages
@@ -33,7 +33,7 @@ func NewMessageAccumulator() *MessageAccumulator {
 
 // AddEvent adds a parsed event and returns any newly complete messages
 // Returns: (newMessages, hasResult, resultSuccess)
-func (a *MessageAccumulator) AddEvent(event common.Event) ([]Message, bool, bool) {
+func (a *MessageAccumulator) AddEvent(event protocol.Event) ([]Message, bool, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -194,12 +194,12 @@ func (a *MessageAccumulator) Reset() {
 }
 
 // unmarshalEvent unmarshals event raw JSON into a target struct
-func unmarshalEvent(event common.Event, target interface{}) error {
+func unmarshalEvent(event protocol.Event, target interface{}) error {
 	return json.Unmarshal([]byte(event.Raw), target)
 }
 
 // parseSystemMessage parses a system message from an event
-func (a *MessageAccumulator) parseSystemMessage(event common.Event) *SystemMessage {
+func (a *MessageAccumulator) parseSystemMessage(event protocol.Event) *SystemMessage {
 	var msg SystemMessage
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil
@@ -218,7 +218,7 @@ func (a *MessageAccumulator) parseSystemMessage(event common.Event) *SystemMessa
 }
 
 // parseAssistantMessage parses an assistant message from an event
-func (a *MessageAccumulator) parseAssistantMessage(event common.Event) *AssistantMessage {
+func (a *MessageAccumulator) parseAssistantMessage(event protocol.Event) *AssistantMessage {
 	// Unmarshal raw JSON into the struct
 	var msg AssistantMessage
 	if err := json.Unmarshal([]byte(event.Raw), &msg); err != nil {
@@ -239,7 +239,7 @@ func (a *MessageAccumulator) parseAssistantMessage(event common.Event) *Assistan
 }
 
 // parseUserMessage parses a user message from an event
-func (a *MessageAccumulator) parseUserMessage(event common.Event) *UserMessage {
+func (a *MessageAccumulator) parseUserMessage(event protocol.Event) *UserMessage {
 	var msg UserMessage
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil
@@ -251,7 +251,7 @@ func (a *MessageAccumulator) parseUserMessage(event common.Event) *UserMessage {
 }
 
 // parseToolUseMessage parses a tool_use message from an event
-func (a *MessageAccumulator) parseToolUseMessage(event common.Event) *ToolUseMessage {
+func (a *MessageAccumulator) parseToolUseMessage(event protocol.Event) *ToolUseMessage {
 	var msg ToolUseMessage
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil
@@ -260,7 +260,7 @@ func (a *MessageAccumulator) parseToolUseMessage(event common.Event) *ToolUseMes
 }
 
 // parseToolResultMessage parses a tool_result message from an event
-func (a *MessageAccumulator) parseToolResultMessage(event common.Event) *ToolResultMessage {
+func (a *MessageAccumulator) parseToolResultMessage(event protocol.Event) *ToolResultMessage {
 	var msg ToolResultMessage
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil
@@ -269,7 +269,7 @@ func (a *MessageAccumulator) parseToolResultMessage(event common.Event) *ToolRes
 }
 
 // parseResultMessage parses a result message from an event
-func (a *MessageAccumulator) parseResultMessage(event common.Event) *ResultMessage {
+func (a *MessageAccumulator) parseResultMessage(event protocol.Event) *ResultMessage {
 	var msg ResultMessage
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil
@@ -278,7 +278,7 @@ func (a *MessageAccumulator) parseResultMessage(event common.Event) *ResultMessa
 }
 
 // parseStreamEventMessage parses a stream_event message from an event
-func (a *MessageAccumulator) parseStreamEventMessage(event common.Event) *StreamEventMessage {
+func (a *MessageAccumulator) parseStreamEventMessage(event protocol.Event) *StreamEventMessage {
 	var msg StreamEventMessage
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 // readNonEmptyLines reads a file and returns non-empty lines
@@ -38,13 +38,13 @@ func unmarshalAs[T any](baseEvent map[string]interface{}) T {
 
 // parseSessionFile extracts metadata from a .jsonl file
 // Strategy: read first line (init/user) and last line (result/error)
-func (s *Store) parseSessionFile(filePath string) (*common.SessionMetadata, error) {
+func (s *Store) parseSessionFile(filePath string) (*history.SessionMetadata, error) {
 	nonEmptyLines, err := readNonEmptyLines(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	var metadata common.SessionMetadata
+	var metadata history.SessionMetadata
 	metadata.ProjectPath = s.decodeProjectPath(filePath)
 
 	if len(nonEmptyLines) == 0 {
@@ -137,10 +137,10 @@ func (s *Store) parseSessionFile(filePath string) (*common.SessionMetadata, erro
 			if eventType == "result" {
 				subtype := extractString(lastEvent, "subtype")
 				if subtype == "error" {
-					metadata.Status = common.SessionStatusError
+					metadata.Status = history.SessionStatusError
 					metadata.Error = extractString(lastEvent, "error")
 				} else {
-					metadata.Status = common.SessionStatusComplete
+					metadata.Status = history.SessionStatusComplete
 					metadata.LastResult = extractString(lastEvent, "result")
 				}
 
@@ -170,13 +170,13 @@ func (s *Store) parseSessionFile(filePath string) (*common.SessionMetadata, erro
 }
 
 // parseSessionEvents parses events from file with offset/limit
-func (s *Store) parseSessionEvents(filePath string, offset, limit int) ([]common.SessionEvent, error) {
+func (s *Store) parseSessionEvents(filePath string, offset, limit int) ([]history.SessionEvent, error) {
 	nonEmptyLines, err := readNonEmptyLines(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	var events []common.SessionEvent
+	var events []history.SessionEvent
 	skipped := 0
 
 	for _, line := range nonEmptyLines {
@@ -191,7 +191,7 @@ func (s *Store) parseSessionEvents(filePath string, offset, limit int) ([]common
 			break
 		}
 
-		var event common.SessionEvent
+		var event history.SessionEvent
 
 		// First, parse as base event
 		var baseEvent map[string]interface{}
@@ -219,9 +219,9 @@ func (s *Store) parseSessionEvents(filePath string, offset, limit int) ([]common
 }
 
 // parseSessionEventsFromEnd parses last N events from file
-func (s *Store) parseSessionEventsFromEnd(filePath string, n int) ([]common.SessionEvent, error) {
+func (s *Store) parseSessionEventsFromEnd(filePath string, n int) ([]history.SessionEvent, error) {
 	if n <= 0 {
-		return []common.SessionEvent{}, nil
+		return []history.SessionEvent{}, nil
 	}
 
 	nonEmptyLines, err := readNonEmptyLines(filePath)
@@ -239,7 +239,7 @@ func (s *Store) parseSessionEventsFromEnd(filePath string, n int) ([]common.Sess
 }
 
 // parseEventData parses event-specific data based on event type
-func (s *Store) parseEventData(baseEvent map[string]interface{}) common.EventData {
+func (s *Store) parseEventData(baseEvent map[string]interface{}) history.EventData {
 	eventType := extractString(baseEvent, "type")
 
 	switch eventType {
@@ -262,32 +262,32 @@ func (s *Store) parseEventData(baseEvent map[string]interface{}) common.EventDat
 	}
 }
 
-func (s *Store) parseUserEvent(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.UserMessageEvent](baseEvent)
+func (s *Store) parseUserEvent(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.UserMessageEvent](baseEvent)
 }
 
-func (s *Store) parseAssistantEvent(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.AssistantMessageEvent](baseEvent)
+func (s *Store) parseAssistantEvent(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.AssistantMessageEvent](baseEvent)
 }
 
-func (s *Store) parseToolUseEvent(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.ToolUseEvent](baseEvent)
+func (s *Store) parseToolUseEvent(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.ToolUseEvent](baseEvent)
 }
 
-func (s *Store) parseToolResultEvent(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.ToolResultEvent](baseEvent)
+func (s *Store) parseToolResultEvent(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.ToolResultEvent](baseEvent)
 }
 
-func (s *Store) parseResultEvent(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.ResultEvent](baseEvent)
+func (s *Store) parseResultEvent(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.ResultEvent](baseEvent)
 }
 
-func (s *Store) parseSystemEvent(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.SystemEvent](baseEvent)
+func (s *Store) parseSystemEvent(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.SystemEvent](baseEvent)
 }
 
-func (s *Store) parseFileHistorySnapshot(baseEvent map[string]interface{}) common.EventData {
-	return unmarshalAs[common.FileHistorySnapshotEvent](baseEvent)
+func (s *Store) parseFileHistorySnapshot(baseEvent map[string]interface{}) history.EventData {
+	return unmarshalAs[history.FileHistorySnapshotEvent](baseEvent)
 }
 
 // Helper functions for extracting values from maps

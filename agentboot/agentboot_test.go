@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/history"
 )
 
 // --- NewAgentService() ---
@@ -36,39 +36,39 @@ func TestListSessions_WithoutReaderReturnsConfigurationError(t *testing.T) {
 }
 
 type testSessionReader struct {
-	recent []common.SessionMetadata
+	recent []history.SessionMetadata
 }
 
 func (r *testSessionReader) ListProjects(context.Context) ([]string, error) {
 	return []string{"/project"}, nil
 }
 
-func (r *testSessionReader) ListSessions(context.Context, string) ([]common.SessionMetadata, error) {
+func (r *testSessionReader) ListSessions(context.Context, string) ([]history.SessionMetadata, error) {
 	return r.recent, nil
 }
 
-func (r *testSessionReader) GetSession(context.Context, string) (*common.SessionMetadata, error) {
+func (r *testSessionReader) GetSession(context.Context, string) (*history.SessionMetadata, error) {
 	if len(r.recent) == 0 {
-		return nil, common.ErrSessionNotFound{}
+		return nil, history.ErrSessionNotFound{}
 	}
 	return &r.recent[0], nil
 }
 
-func (r *testSessionReader) GetRecentSessions(context.Context, string, int) ([]common.SessionMetadata, error) {
+func (r *testSessionReader) GetRecentSessions(context.Context, string, int) ([]history.SessionMetadata, error) {
 	return r.recent, nil
 }
 
-func (r *testSessionReader) GetSessionEvents(context.Context, string, int, int) ([]common.SessionEvent, error) {
+func (r *testSessionReader) GetSessionEvents(context.Context, string, int, int) ([]history.SessionEvent, error) {
 	return nil, nil
 }
 
-func (r *testSessionReader) GetSessionSummary(context.Context, string, int, int) (*common.SessionSummary, error) {
-	return &common.SessionSummary{}, nil
+func (r *testSessionReader) GetSessionSummary(context.Context, string, int, int) (*history.SessionSummary, error) {
+	return &history.SessionSummary{}, nil
 }
 
 func TestListSessions_WithReaderDelegates(t *testing.T) {
 	reader := &testSessionReader{
-		recent: []common.SessionMetadata{{SessionID: "session-1"}},
+		recent: []history.SessionMetadata{{SessionID: "session-1"}},
 	}
 	svc, err := NewAgentService(Config{}, WithSessionReader(reader))
 	require.NoError(t, err)

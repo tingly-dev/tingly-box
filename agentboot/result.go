@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
 // Result represents the result of an agent execution.
@@ -14,7 +14,7 @@ type Result struct {
 	Error    string // Error message if failed
 	Duration time.Duration
 	Format   OutputFormat           // Output format used
-	Events   []common.Event         // Raw events (stream-json mode)
+	Events   []protocol.Event         // Raw events (stream-json mode)
 	Metadata map[string]interface{} // Additional metadata
 }
 

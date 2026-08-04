@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/agentboot/common"
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
@@ -309,7 +308,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 				waitResult = &Result{
 					ExitCode: state.exitCode,
 					Format:   opts.OutputFormat,
-					Events:   append([]common.Event(nil), state.events...),
+					Events:   append([]protocol.Event(nil), state.events...),
 					Duration: time.Since(state.startTime),
 					Metadata: map[string]any{},
 				}

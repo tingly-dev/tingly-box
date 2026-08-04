@@ -6,13 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
 // assistantEvent builds an assistant event in the real CLI shape:
 // {"message":{"content":[{"type":"text","text":...}]}}.
-func assistantEvent(text string) common.Event {
-	return common.Event{Type: "assistant", Data: map[string]any{
+func assistantEvent(text string) protocol.Event {
+	return protocol.Event{Type: "assistant", Data: map[string]any{
 		"message": map[string]any{
 			"content": []any{
 				map[string]any{"type": "text", "text": text},
@@ -24,7 +24,7 @@ func assistantEvent(text string) common.Event {
 func streamResult() *agentboot.Result {
 	return &agentboot.Result{
 		Format: agentboot.OutputFormatStreamJSON,
-		Events: []common.Event{
+		Events: []protocol.Event{
 			{Type: "system", Data: map[string]any{"session_id": "sess-1"}},
 			assistantEvent("hello "),
 			{Type: "tool_use", Data: map[string]any{"name": "bash"}},
@@ -43,7 +43,7 @@ func TestResult_TextOutput_ConcatenatesAssistantMessages(t *testing.T) {
 	// Legacy/simple shape where message is already a string.
 	legacy := &agentboot.Result{
 		Format: agentboot.OutputFormatStreamJSON,
-		Events: []common.Event{{Type: "assistant", Data: map[string]any{"message": "hi"}}},
+		Events: []protocol.Event{{Type: "assistant", Data: map[string]any{"message": "hi"}}},
 	}
 	assert.Equal(t, "hi", legacy.TextOutput())
 
