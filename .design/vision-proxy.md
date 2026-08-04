@@ -288,7 +288,7 @@ vision proxy 早期版本带了 `source=vision_proxy`,走分支 1,于是 ctx 里
 `ProcessorContext.Ctx`,processor 再传给 `describe(ctx, ...)`,最终到
 `logrus.WithContext(ctx)`。这条链路无任何 `context.Background()` 截断,
 所以中间件早期注入的 `request_id`(见
-`../internal/middleware/multi_mode_memory_log.go`)自然贯穿。
+`../internal/middleware/memory_log.go`)自然贯穿。
 
 如果未来要拆协程 / 异步执行 describe,**务必显式 propagate ctx**,否则
 日志会脱离同请求聚合。

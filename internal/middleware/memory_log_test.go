@@ -17,7 +17,7 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-func setupTestMiddleware() (*MultiModeMemoryLogMiddleware, *obs.MultiLogger) {
+func setupTestMiddleware() (*MemoryLog, *obs.MultiLogger) {
 	config := &obs.MultiLoggerConfig{
 		TextLogPath: "", // Disable text logging for tests
 		JSONLogPath: "", // Disable JSON logging for tests
@@ -31,11 +31,11 @@ func setupTestMiddleware() (*MultiModeMemoryLogMiddleware, *obs.MultiLogger) {
 	if err != nil {
 		panic(err)
 	}
-	middleware := NewMultiModeMemoryLogMiddleware(multiLogger)
+	middleware := NewMemoryLogMiddleware(multiLogger)
 	return middleware, multiLogger
 }
 
-func TestNewMultiModeMemoryLogMiddleware(t *testing.T) {
+func TestNewMemoryLogMiddleware(t *testing.T) {
 	middleware, multiLogger := setupTestMiddleware()
 
 	assert.NotNil(t, middleware)
@@ -283,7 +283,7 @@ func TestCompatibilityAliases(t *testing.T) {
 
 func TestMiddleware_WithNilMultiLogger(t *testing.T) {
 	// This test verifies the middleware handles edge cases gracefully
-	// In production, multiLogger should never be nil after NewMultiModeMemoryLogMiddleware
+	// In production, multiLogger should never be nil after NewMemoryLogMiddleware
 	config := &obs.MultiLoggerConfig{
 		TextLogPath: "",
 		JSONLogPath: "",
@@ -295,7 +295,7 @@ func TestMiddleware_WithNilMultiLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create multiLogger: %v", err)
 	}
-	middleware := NewMultiModeMemoryLogMiddleware(multiLogger)
+	middleware := NewMemoryLogMiddleware(multiLogger)
 
 	assert.NotNil(t, middleware, "Middleware should be created successfully")
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
-// MultiModeMemoryLogMiddleware is the HTTP access log for the whole request
+// MemoryLog is the HTTP access log for the whole request
 // chain. It records one structured entry per request — method, path, status,
 // latency, error, and (for AI routes) routing metadata — correlated across
 // stages by a request_id. Entries go to the multi-mode logger (text + JSON
@@ -25,13 +25,13 @@ import (
 // it interferes with streaming, Flush/Hijack, and large/Expect-100-continue
 // uploads — for little gain: the bodies that matter for diagnosis are recorded
 // where they are understood (the handler and the model_request client stage).
-type MultiModeMemoryLogMiddleware struct {
+type MemoryLog struct {
 	logger      *logrus.Logger
 	multiLogger *obs.MultiLogger
 }
 
-// NewMultiModeMemoryLogMiddleware creates the HTTP access log middleware.
-func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMemoryLogMiddleware {
+// NewMemoryLogMiddleware creates the HTTP access log middleware.
+func NewMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MemoryLog {
 	if multiLogger == nil {
 		// Fallback for test/harness environments where no multi-logger is
 		// configured. Follow the process-global logrus level so embedding
@@ -42,7 +42,7 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 		if gin.Mode() == gin.TestMode {
 			l.SetOutput(io.Discard)
 		}
-		return &MultiModeMemoryLogMiddleware{
+		return &MemoryLog{
 			logger:      l,
 			multiLogger: nil,
 		}
@@ -50,7 +50,7 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 	// Get a logger scoped to HTTP source
 	httpLogger := multiLogger.GetLogrusLogger(obs.LogSourceHTTP)
 
-	return &MultiModeMemoryLogMiddleware{
+	return &MemoryLog{
 		logger:      httpLogger,
 		multiLogger: multiLogger,
 	}
@@ -58,7 +58,7 @@ func NewMultiModeMemoryLogMiddleware(multiLogger *obs.MultiLogger) *MultiModeMem
 
 // Middleware returns a Gin middleware compatible with gin.Logger()
 // It logs all HTTP requests to both the multi-mode logger and memory
-func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
+func (m *MemoryLog) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		path := c.Request.URL.Path
@@ -186,7 +186,7 @@ func getLogLevel(statusCode int) logrus.Level {
 }
 
 // GetEntries returns all log entries from memory in chronological order
-func (m *MultiModeMemoryLogMiddleware) GetEntries() []*logrus.Entry {
+func (m *MemoryLog) GetEntries() []*logrus.Entry {
 	if m.multiLogger == nil {
 		return []*logrus.Entry{}
 	}
@@ -195,7 +195,7 @@ func (m *MultiModeMemoryLogMiddleware) GetEntries() []*logrus.Entry {
 }
 
 // GetLatestEntries returns the newest N log entries from memory
-func (m *MultiModeMemoryLogMiddleware) GetLatestEntries(n int) []*logrus.Entry {
+func (m *MemoryLog) GetLatestEntries(n int) []*logrus.Entry {
 	if m.multiLogger == nil {
 		return []*logrus.Entry{}
 	}
@@ -204,7 +204,7 @@ func (m *MultiModeMemoryLogMiddleware) GetLatestEntries(n int) []*logrus.Entry {
 }
 
 // GetEntriesSince returns log entries from memory after the specified time
-func (m *MultiModeMemoryLogMiddleware) GetEntriesSince(since time.Time) []*logrus.Entry {
+func (m *MemoryLog) GetEntriesSince(since time.Time) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
 	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
 	if memorySink == nil {
@@ -214,7 +214,7 @@ func (m *MultiModeMemoryLogMiddleware) GetEntriesSince(since time.Time) []*logru
 }
 
 // GetEntriesByLevel returns log entries from memory matching the specified level
-func (m *MultiModeMemoryLogMiddleware) GetEntriesByLevel(level logrus.Level) []*logrus.Entry {
+func (m *MemoryLog) GetEntriesByLevel(level logrus.Level) []*logrus.Entry {
 	// Get the HTTP scoped memory sink from MultiLogger
 	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
 	if memorySink == nil {
@@ -224,7 +224,7 @@ func (m *MultiModeMemoryLogMiddleware) GetEntriesByLevel(level logrus.Level) []*
 }
 
 // Clear removes all log entries from memory
-func (m *MultiModeMemoryLogMiddleware) Clear() {
+func (m *MemoryLog) Clear() {
 	if m.multiLogger == nil {
 		return
 	}
@@ -233,7 +233,7 @@ func (m *MultiModeMemoryLogMiddleware) Clear() {
 }
 
 // Size returns the current number of stored log entries in memory
-func (m *MultiModeMemoryLogMiddleware) Size() int {
+func (m *MemoryLog) Size() int {
 	// Get the HTTP scoped memory sink from MultiLogger and return its size
 	memorySink := m.multiLogger.GetMemorySink(obs.LogSourceHTTP)
 	if memorySink == nil {

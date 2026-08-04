@@ -14,7 +14,7 @@
 //
 // # Components
 //
-// MultiModeMemoryLogMiddleware (multi_mode_memory_log.go)
+// MemoryLog (memory_log.go)
 //
 // Logs every HTTP request to both a persistent multi-mode logger (text + JSON
 // file via pkg/obs.MultiLogger) and an in-memory circular buffer (500 entries).

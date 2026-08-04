@@ -64,7 +64,7 @@ type Server struct {
 
 	// middleware
 	authMW          *middleware.AuthMiddleware
-	memoryLogMW     *middleware.MultiModeMemoryLogMiddleware
+	memoryLogMW     *middleware.MemoryLog
 	loadBalancer    *protocolserver.LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	healthMonitor   *loadbalance.HealthMonitor
@@ -291,7 +291,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize multi-mode memory log middleware for HTTP request logging
 	// Logs are written to both multi-mode logger (persistence) and memory (quick access)
-	memoryLogMW := middleware.NewMultiModeMemoryLogMiddleware(server.multiLogger)
+	memoryLogMW := middleware.NewMemoryLogMiddleware(server.multiLogger)
 
 	// Initialize API token manager (for multi-tenant authentication)
 	var apiTokenManager *auth.APITokenManager
