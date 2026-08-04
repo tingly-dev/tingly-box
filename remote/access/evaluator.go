@@ -31,7 +31,10 @@ func Evaluate(req AuthorizationRequest, facts DecisionFacts) AuthorizationDecisi
 		return deny(GateTargetCapability, ReasonTargetCapabilityDenied)
 	}
 	if facts.TargetAction != EffectAllow {
-		return deny(GateTargetCapability, ReasonTargetCapabilityDenied)
+		// Distinct reason: the capability-level access row allowed the chat,
+		// but the row for this specific action is missing or deny. Sharing
+		// one reason here made "which row is wrong" undiagnosable from logs.
+		return deny(GateTargetCapability, ReasonTargetActionDenied)
 	}
 
 	if req.RouteID != "" {

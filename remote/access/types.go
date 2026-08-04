@@ -92,6 +92,7 @@ const (
 	ReasonTargetNotFound            DecisionReason = "target_not_found"
 	ReasonTargetBlocked             DecisionReason = "target_blocked"
 	ReasonTargetCapabilityDenied    DecisionReason = "target_capability_denied"
+	ReasonTargetActionDenied        DecisionReason = "target_action_denied"
 	ReasonActorRequired             DecisionReason = "actor_required"
 	ReasonActorMismatch             DecisionReason = "actor_mismatch"
 	ReasonActorNotRegistered        DecisionReason = "actor_not_registered"

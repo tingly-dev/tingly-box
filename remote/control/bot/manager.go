@@ -107,6 +107,16 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 				action = access.ActionName(value)
 			}
 			return capability, action
+		}, func(msg imbot.Message, platform imbot.Platform, botUUID string) {
+			b := manager.GetBot(botUUID, platform)
+			if b == nil {
+				return
+			}
+			opts := &imbot.SendMessageOptions{
+				Text: "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat.",
+			}
+			ForwardReplyContext(opts, msg)
+			_, _ = b.SendMessage(ctx, msg.GetReplyTarget(), opts)
 		}))
 	}
 	handlers = append(handlers, promptReplyRouter(manager, prompter))

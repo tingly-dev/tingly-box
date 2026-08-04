@@ -52,7 +52,13 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 
 // authorizationGate is the one production inbound seam for text, callbacks,
 // and files. A denied message is claimed here and cannot reach a Capability.
-func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName)) OnMessage {
+// AuthorizationGate builds the inbound authorization seam. notifyDeniedPromptReply,
+// when non-nil, is invoked for a denied message that was answering this bot's
+// own pending prompt (pendingForChat reported a pending action for the chat).
+// Such a denial must not be silent: the bot itself posted the prompt into the
+// chat, so telling the sender they cannot answer it leaks nothing and prevents
+// a dead-end where the prompt hangs until timeout with no explanation.
+func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDeniedPromptReply func(msg imbot.Message, platform imbot.Platform, botUUID string)) OnMessage {
 	return func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
 		if store == nil || authorizer == nil {
 			return false
@@ -108,7 +114,19 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 		}
 		capability, action := inboundAction(msg, pendingCapability, pendingAction)
 		decision := authorizer.Evaluate(ctx, access.AuthorizationRequest{BotUUID: botUUID, Target: target, ActorID: actor.ID, Capability: capability, Action: action})
-		logrus.WithFields(logrus.Fields{"event": "bot.authorization.decision", "bot_uuid": botUUID, "capability": capability, "action": action, "target_kind": target.Kind, "target_id": target.ID, "actor_id": actor.ID, "allowed": decision.Allowed, "failed_gate": decision.FailedGate, "reason": decision.Reason}).Debug("bot authorization decision")
-		return !decision.Allowed
+		fields := logrus.Fields{"event": "bot.authorization.decision", "bot_uuid": botUUID, "capability": capability, "action": action, "target_kind": target.Kind, "target_id": target.ID, "actor_id": actor.ID, "allowed": decision.Allowed, "failed_gate": decision.FailedGate, "reason": decision.Reason}
+		if decision.Allowed {
+			logrus.WithFields(fields).Debug("bot authorization decision")
+			return false
+		}
+		if pendingAction != "" {
+			logrus.WithFields(fields).Warn("bot authorization denied a reply to this bot's pending prompt")
+			if notifyDeniedPromptReply != nil {
+				notifyDeniedPromptReply(msg, platform, botUUID)
+			}
+		} else {
+			logrus.WithFields(fields).Debug("bot authorization decision")
+		}
+		return true
 	}
 }
