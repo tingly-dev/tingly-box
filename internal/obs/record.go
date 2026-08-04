@@ -1,6 +1,10 @@
 package obs
 
-import "time"
+import (
+	"time"
+
+	requestrecord "github.com/tingly-dev/tingly-box/internal/record"
+)
 
 // Record is the canonical data model for one LLM request/response cycle.
 // Construct it on the hot path and pass to Sink.Emit; the only cost is a
@@ -22,6 +26,11 @@ type Record struct {
 	TransformedRequest *RecordRequest
 	ProviderResponse   *RecordResponse
 	FinalResponse      *RecordResponse
+
+	// RequestRecord is the additive Protocol Stage recording envelope. Legacy
+	// request/response fields remain unchanged while the new recorder is
+	// canaried behind the Stage and scenario recording switches.
+	RequestRecord *requestrecord.RequestRecord
 
 	Duration time.Duration
 	Err      string
