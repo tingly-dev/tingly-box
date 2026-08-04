@@ -19,6 +19,7 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
+	subscriptionmodule "github.com/tingly-dev/tingly-box/internal/server/module/subscriptionapi"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/remote/access"
@@ -216,6 +217,27 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		}
 		botAPI := notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, chatManager, s.config.StoreManager().BotAccess())
 		notifymodule.RegisterBotRoutes(apiV1, botAPI)
+	}
+
+	// Subscription API — custom remote for external tools (.design/subscription.md).
+	// Control plane (CRUD + token rotation) rides the operator apiV1 group;
+	// the data plane gets its own /api/v1 group whose middleware also accepts
+	// the subscription's scoped tb-sub- token. The runtime (store + mailbox +
+	// recent-sends) comes from the bot manager so the HTTP module and the
+	// inbound consumer share one state.
+	if s.channelRegistry != nil && s.interactionRegistry != nil && imbotHandler != nil {
+		if subRuntime := imbotHandler.SubscriptionRuntime(); subRuntime != nil {
+			subHandler := subscriptionmodule.NewHandler(
+				subRuntime.Store, subRuntime.Mailbox, subRuntime.Sends,
+				s.channelRegistry, s.interactionRegistry)
+			subscriptionmodule.RegisterControlRoutes(apiV1, subHandler)
+
+			subDataV1 := manager.NewGroup("api", "v1", "")
+			subDataV1.Router.Use(subscriptionmodule.DataAuthMiddleware(subRuntime.Store, func(token string) bool {
+				return s.config != nil && s.config.HasUserToken() && token == s.config.GetUserToken()
+			}))
+			subscriptionmodule.RegisterDataRoutes(subDataV1, subHandler)
+		}
 	}
 
 	// Config apply API routes

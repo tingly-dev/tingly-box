@@ -281,6 +281,28 @@ func (s *SubscriptionStore) EventsAfter(subscriptionUUID string, afterID int64, 
 	return out, nil
 }
 
+func (s *SubscriptionStore) GetEvent(subscriptionUUID string, id int64) (subscription.Event, error) {
+	var rec subscriptionEventRecord
+	err := s.db.Where("subscription_uuid = ? AND id = ?", subscriptionUUID, id).First(&rec).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return subscription.Event{}, subscription.ErrNotFound
+	}
+	if err != nil {
+		return subscription.Event{}, err
+	}
+	return subscription.Event{
+		ID:               rec.ID,
+		SubscriptionUUID: rec.SubscriptionUUID,
+		BotUUID:          rec.BotUUID,
+		ChatID:           rec.ChatID,
+		SenderID:         rec.SenderID,
+		MessageID:        rec.MessageID,
+		Text:             rec.Text,
+		ContextToken:     rec.ContextToken,
+		CreatedAt:        rec.CreatedAt,
+	}, nil
+}
+
 func (s *SubscriptionStore) AckEvents(subscriptionUUID string, upTo int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Never move the cursor backwards.

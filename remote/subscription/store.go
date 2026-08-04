@@ -43,6 +43,9 @@ type Store interface {
 	// EventsAfter returns up to limit events with ID > afterID for the
 	// subscription, oldest first.
 	EventsAfter(subscriptionUUID string, afterID int64, limit int) ([]Event, error)
+	// GetEvent returns one event by id (ErrNotFound when missing or already
+	// pruned). Used by reply threading.
+	GetEvent(subscriptionUUID string, id int64) (Event, error)
 	// AckEvents advances the subscription's cursor to upTo (never backwards)
 	// and prunes acked events.
 	AckEvents(subscriptionUUID string, upTo int64) error

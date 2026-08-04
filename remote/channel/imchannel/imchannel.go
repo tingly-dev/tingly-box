@@ -80,8 +80,19 @@ func (c *Channel) Capabilities() channel.Capabilities {
 // platform cannot render degrades to its raw text, so a plain-text body still
 // reads correctly.
 func (c *Channel) Send(ctx context.Context, target channel.Target, msg interaction.Notification) error {
+	_, err := c.SendTracked(ctx, target, msg)
+	return err
+}
+
+// SendTracked delivers like Send and additionally returns the platform
+// message id of the sent message, so callers (the subscription module) can
+// correlate later replies to it. Two Meta keys are honored when present:
+// "reply_to" threads the outgoing message to a platform message id, and
+// "context_token" forwards the reply-context token platforms like Weixin /
+// WeCom require (see bot.ForwardReplyContext).
+func (c *Channel) SendTracked(ctx context.Context, target channel.Target, msg interaction.Notification) (string, error) {
 	if c.sender == nil {
-		return fmt.Errorf("imchannel: no sender")
+		return "", fmt.Errorf("imchannel: no sender")
 	}
 	text := msg.Body
 	if msg.Title != "" {
@@ -91,11 +102,26 @@ func (c *Channel) Send(ctx context.Context, target channel.Target, msg interacti
 			text = msg.Title + "\n" + msg.Body
 		}
 	}
-	_, err := c.sender.SendMessage(ctx, target.ChatID, &imbot.SendMessageOptions{
+	opts := &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-	})
-	return err
+	}
+	if msg.Meta != nil {
+		if replyTo, ok := msg.Meta["reply_to"].(string); ok && replyTo != "" {
+			opts.ReplyTo = replyTo
+		}
+		if token, ok := msg.Meta["context_token"].(string); ok && token != "" {
+			opts.Metadata = map[string]interface{}{"context_token": token}
+		}
+	}
+	res, err := c.sender.SendMessage(ctx, target.ChatID, opts)
+	if err != nil {
+		return "", err
+	}
+	if res == nil {
+		return "", nil
+	}
+	return res.MessageID, nil
 }
 
 // Prompt blocks until the human answers the interaction or ctx /

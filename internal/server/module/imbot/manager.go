@@ -11,6 +11,9 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/adapter"
 	"github.com/tingly-dev/tingly-box/remote/control/bot"
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/control/subconsumer"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
+	"github.com/tingly-dev/tingly-box/remote/subscription"
 
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/session"
@@ -32,6 +35,18 @@ type BotManager struct {
 	agentService *agentboot.AgentService
 	tbClient     tbclient.TBClient
 	config       *config.Config
+	subRuntime   *SubscriptionRuntime
+}
+
+// SubscriptionRuntime bundles the subscription state shared between the
+// inbound consumer (built here, so it rides every bot's dispatch chain) and
+// the HTTP module (wired in server_control.go). One mailbox and one
+// recent-sends tracker per process — outbound sends and inbound claims must
+// see the same state. See .design/subscription.md.
+type SubscriptionRuntime struct {
+	Store   subscription.Store
+	Mailbox *subscription.Mailbox
+	Sends   *subscription.RecentSends
 }
 
 // BotStatus represents the runtime status of a bot.
@@ -105,8 +120,39 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 	settingsStore := adapter.NewSettingsStore(store)
 	remoteAgentConsumer := remoteagent.NewConsumer(sessionMgr, agentService, tbClient, settingsStore)
 
+	// Subscription runtime + consumer: the subscription purpose claims
+	// inbound messages addressed to a Subscription and keeps a bot alive
+	// whose only user is an external tool. It dispatches between notify and
+	// the remote_agent catch-all (see .design/subscription.md §6). The
+	// mailbox's offline notice goes out through the bot's own channel.
+	var subRuntime *SubscriptionRuntime
+	consumers := []bot.Consumer{notifyConsumer}
+	if subStore := sm.Subscriptions(); subStore != nil {
+		subRuntime = &SubscriptionRuntime{
+			Store:   subStore,
+			Mailbox: subscription.NewMailbox(subStore),
+			Sends:   subscription.NewRecentSends(512),
+		}
+		if channelRegistry != nil {
+			registry := channelRegistry
+			subRuntime.Mailbox.SetOfflineNotifier(func(sub subscription.Subscription, _ subscription.Event) {
+				ch, ok := registry.Get(sub.BotUUID)
+				if !ok {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = ch.Send(ctx, channel.Target{ChatID: sub.ChatID}, interaction.Notification{
+					Body: fmt.Sprintf("📥 @%s is not connected; your message is queued and will be delivered when it next connects.", sub.Name),
+				})
+			})
+		}
+		consumers = append(consumers, subconsumer.New(subRuntime.Store, subRuntime.Mailbox, subRuntime.Sends))
+	}
+	consumers = append(consumers, remoteAgentConsumer)
+
 	// Create internal bot manager
-	internalMgr := bot.NewManager(settingsStore, notifyConsumer, remoteAgentConsumer)
+	internalMgr := bot.NewManager(settingsStore, consumers...)
 	internalMgr.SetChatStore(chatStore)
 	internalMgr.SetAccessStore(sm.BotAccess())
 	// Wire the channel registry BEFORE periodicBotSync's goroutine gets a
@@ -120,12 +166,24 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 		agentService: agentService,
 		tbClient:     tbClient,
 		config:       cfg,
+		subRuntime:   subRuntime,
 	}
 
 	go bm.periodicBotSync(ctx)
 
 	logrus.Info("BotManager initialized successfully")
 	return bm, nil
+}
+
+// SubscriptionRuntime returns the shared subscription state (nil when the
+// subscription store is unavailable). The subscription HTTP module must use
+// exactly this instance so outbound sends and inbound claims share one
+// mailbox and one recent-sends tracker.
+func (bm *BotManager) SubscriptionRuntime() *SubscriptionRuntime {
+	if bm == nil {
+		return nil
+	}
+	return bm.subRuntime
 }
 
 // StartBot starts a single bot by UUID.

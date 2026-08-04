@@ -68,6 +68,16 @@ func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channe
 	return h, nil
 }
 
+// SubscriptionRuntime exposes the bot manager's shared subscription state so
+// server wiring can hand it to the subscription HTTP module. Nil when the
+// subscription store is unavailable.
+func (h *Handler) SubscriptionRuntime() *SubscriptionRuntime {
+	if h == nil {
+		return nil
+	}
+	return h.botMgr.SubscriptionRuntime()
+}
+
 // ListSettings returns all ImBot configurations
 func (h *Handler) ListSettings(c *gin.Context) {
 	if h.store == nil {

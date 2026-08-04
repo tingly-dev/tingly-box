@@ -153,6 +153,17 @@ func (s *MemStore) EventsAfter(subscriptionUUID string, afterID int64, limit int
 	return out, nil
 }
 
+func (s *MemStore) GetEvent(subscriptionUUID string, id int64) (Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ev := range s.events[subscriptionUUID] {
+		if ev.ID == id {
+			return ev, nil
+		}
+	}
+	return Event{}, ErrNotFound
+}
+
 func (s *MemStore) AckEvents(subscriptionUUID string, upTo int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
