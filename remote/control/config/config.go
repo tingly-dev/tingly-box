@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	"github.com/tingly-dev/tingly-box/internal/middleware"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"

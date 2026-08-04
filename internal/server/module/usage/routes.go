@@ -1,7 +1,7 @@
 package usage
 
 import (
-	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	"github.com/tingly-dev/tingly-box/internal/middleware"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 

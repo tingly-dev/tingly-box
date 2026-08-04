@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	"github.com/tingly-dev/tingly-box/internal/middleware"
 )
 
 // RegisterRoutes mounts the LLM gateway surface (/tingly/:scenario[/v1]/...)

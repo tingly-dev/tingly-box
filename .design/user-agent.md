@@ -194,7 +194,7 @@ UA,`none` 依旧 strip 掉——显式 strip 是通用链里最高优先的意�
 | vendor 特种 RT（B）| `claude_round_tripper.go` / `kimi_round_tripper.go` / `gemini_client.go` / `antigravity_client.go` / `codex_round_tripper.go` |
 | 解析合并 + 挂 ctx（唯一合并点） | `internal/server/rule_flags.go`（`ResolveRuleFlagsWithScenario` → `applyCustomUserAgent` / `applyClientUserAgent`）|
 | UA 预设快选(通用链 flag) | `internal/typ/flag_registry.go`（`DefaultUserAgents`）|
-| 入站 UA 仅做检测的地方 | `internal/server/user_agent.go`（Cursor 检测）；`internal/server/middleware/multi_mode_memory_log.go`（审计日志）|
+| 入站 UA 仅做检测的地方 | `internal/server/user_agent.go`（Cursor 检测）；`../internal/middleware/multi_mode_memory_log.go`（审计日志）|
 | 测试 | `internal/client/custom_ua_transport_test.go`；`internal/server/rule_flags_test.go` |
 
 ---
