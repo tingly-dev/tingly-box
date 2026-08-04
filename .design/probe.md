@@ -137,24 +137,53 @@ Neither round tripper is installed on production clients. `ProbeProviderWithSDK`
 
 ```
 internal/probe/
-  types.go        — E2ERequest (incl. Direct field) / E2EData / E2EMode / E2ETarget, ScenarioEndpoint()
-  result.go       — ProbeResult (incl. routing trace fields)
-  e2e.go          — E2EService: resolveTargetToProviderModel, loopbackAPIBase,
-                    ProbeProviderWithSDK, applyRoutingCapture
-  sdkprobe.go     — SDK dispatch helpers: probeOpenAIChat, probeAnthropicMessages, probeGoogleGenerate, …
-  lightweight.go  — LightweightProbeService (HTTP-level, no SDK)
-  probetools.go   — Tool definitions used by E2EModeTool
+  types.go          — Result (= E2EData): Success/Content/Usage/ToolCalls + routing trace;
+                      E2ERequest (incl. Direct field) / E2EMode / E2ETarget,
+                      ScenarioEndpoint(), toProbeResult
+  e2e_probe.go      — E2EProber: resolveTargetToProviderModel, loopbackAPIBase,
+                      probeProviderWithSDK, applyRoutingCapture
+  sdk.go            — SDK dispatch helpers (probeOpenAIChat, probeOpenAIResponses,
+                      probeAnthropicMessages, probeGoogleGenerate, probeOptions) and
+                      the per-provider usage (via internal/protocol/usage) + tool-call
+                      extractors
+  light_probe.go    — LightProber (HTTP-level connectivity matrix, no SDK usage)
+  probetools.go     — Tool definitions used by E2EModeTool
+  endpoint_probe_cache.go — narrow direct-endpoint capability cache
+
+internal/protocol/usage/
+  extract.go        — FromOpenAIChatCompletion / FromOpenAIResponses / FromAnthropicMessage:
+                      the canonical TokenUsage extractors reused by the SDK probes
 
 internal/client/
-  http.go         — probeHeadersKey, WithProbeHeaders, GetProbeHeaders,
-                    probeHeaderRoundTripper, ApplyProbeHeadersToClient
-                    RoutingCapture, captureRoutingRoundTripper, ApplyRoutingCaptureToClient
+  http.go           — probeHeadersKey, WithProbeHeaders, GetProbeHeaders,
+                      probeHeaderRoundTripper, ApplyProbeHeadersToClient
+                      RoutingCapture, captureRoutingRoundTripper, ApplyRoutingCaptureToClient
 
 internal/server/
-  handlers.go     — determineRuleWithScenario: X-Tingly-Probe-Rule / X-Tingly-Probe-Service handling
+  handlers.go       — determineRuleWithScenario: X-Tingly-Probe-Rule / X-Tingly-Probe-Service handling
   routing/
-    simple.go     — SelectService: X-Tingly-Probe-Service pin + X-Tingly-Debug-Routing response headers
+    simple.go       — SelectService: X-Tingly-Probe-Service pin + X-Tingly-Debug-Routing response headers
 ```
+
+## Result fields
+
+`Result` (returned as `E2EData`) carries, for one SDK round-trip:
+
+- `success`, `content` (raw marshaled upstream response — object for non-stream,
+  chunk array for stream), `latency_ms` (pure upstream call time, measured by the
+  SDK probe — the HTTP handler does not overwrite it), `error_message`.
+- `stream` — true for streaming probes (explicit; the caller's `test_mode` is the
+  other source of truth).
+- `usage` — normalized `*protocol.TokenUsage` parsed via `internal/protocol/usage`
+  for OpenAI Chat / Responses and Anthropic (non-stream always; stream when the
+  provider emits a final usage block). Uses the canonical `protocol.TokenUsage`
+  shape (`input_tokens` / `output_tokens` / `cache_read_tokens` /
+  `cache_write_tokens` / `reasoning_tokens`) — the same vocabulary the rest of
+  TB emits and the frontend renders; there are no parallel flat token fields.
+  `nil` for Google (out of scope) and cache hits.
+- `tool_calls` — tool calls lifted out of the response (tool mode), one entry per
+  function call with `{id, name, input}`.
+- Routing trace fields (see below) — populated for TB-loopback probes only.
 
 ## Trade-offs and constraints
 
