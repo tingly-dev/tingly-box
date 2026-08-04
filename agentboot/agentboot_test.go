@@ -9,20 +9,20 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
-// --- New() ---
+// --- NewAgentService() ---
 
-func TestNew_DefaultsApplied(t *testing.T) {
-	ab, err := New(Config{})
+func TestNewAgentService_DefaultsApplied(t *testing.T) {
+	svc, err := NewAgentService(Config{})
 	require.NoError(t, err)
-	assert.Equal(t, AgentTypeClaude, ab.config.DefaultAgent)
-	assert.Equal(t, OutputFormatStreamJSON, ab.config.DefaultFormat)
-	assert.Equal(t, 100, ab.config.StreamBufferSize)
+	assert.Equal(t, AgentTypeClaude, svc.config.DefaultAgent)
+	assert.Equal(t, OutputFormatStreamJSON, svc.config.DefaultFormat)
+	assert.Equal(t, 100, svc.config.StreamBufferSize)
 }
 
-func TestNew_DoesNotAssumeProviderSessionReader(t *testing.T) {
-	ab, err := New(Config{})
+func TestNewAgentService_DoesNotAssumeProviderSessionReader(t *testing.T) {
+	svc, err := NewAgentService(Config{})
 	require.NoError(t, err)
-	assert.Nil(t, ab.sessionReader)
+	assert.Nil(t, svc.sessionReader)
 }
 
 // --- Session API (AgentService) ---
@@ -82,15 +82,4 @@ func TestListSessions_WithReaderDelegates(t *testing.T) {
 func TestWithSessionReader_RejectsNil(t *testing.T) {
 	_, err := NewAgentService(Config{}, WithSessionReader(nil))
 	assert.Error(t, err)
-}
-
-// --- ResumeSession ---
-
-func TestResumeSession_ReturnsOptionsWithSessionID(t *testing.T) {
-	ab, err := New(Config{})
-	require.NoError(t, err)
-
-	opts := ab.ResumeSession("my-session-123")
-	assert.Equal(t, "my-session-123", opts.SessionID)
-	assert.True(t, opts.Resume)
 }

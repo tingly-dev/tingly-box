@@ -5,7 +5,7 @@ import (
 )
 
 // Prompter handles the actual user interaction
-// Implementations: StdinPrompter, IMPrompter, NoOpPrompter
+// (production implementation: imchannel.IMPrompter).
 type Prompter interface {
 	// Prompt sends a prompt to the user and returns the response
 	Prompt(ctx context.Context, req Request) (Result, error)

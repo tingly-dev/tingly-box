@@ -183,7 +183,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 
 		for ev := range decoderEvents {
 			// Always append the raw event to result.Events for back-compat
-			// helpers (TextOutput, GetAssistantMessages, GetSessionID, …).
+			// helpers (TextOutput, GetSessionID, …).
 			state.mu.Lock()
 			state.events = append(state.events, ev)
 			state.mu.Unlock()

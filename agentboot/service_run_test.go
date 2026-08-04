@@ -43,12 +43,8 @@ func (a *fakeAgent) Execute(_ context.Context, prompt string, opts agentboot.Exe
 	return h, nil
 }
 
-func (a *fakeAgent) IsAvailable() bool                         { return true }
-func (a *fakeAgent) Type() agentboot.AgentType                 { return fakeAgentType }
-func (a *fakeAgent) SetDefaultFormat(_ agentboot.OutputFormat) {}
-func (a *fakeAgent) GetDefaultFormat() agentboot.OutputFormat {
-	return agentboot.OutputFormatStreamJSON
-}
+func (a *fakeAgent) IsAvailable() bool         { return true }
+func (a *fakeAgent) Type() agentboot.AgentType { return fakeAgentType }
 
 func newFakeService(t *testing.T, agent agentboot.Agent) *agentboot.AgentService {
 	t.Helper()

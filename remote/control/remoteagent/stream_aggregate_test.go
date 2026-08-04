@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	imbot "github.com/tingly-dev/tingly-box/imbot/core"
 )
@@ -217,12 +216,12 @@ func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 
 	// Buffer two tool events (mix top-level fields and nested data) ...
 	require.NoError(t, h.OnMessage(map[string]interface{}{
-		"type":      agentboot.EventTypeToolUse,
+		"type":      eventTypeToolUse,
 		"tool_name": "Read",
 		"input":     map[string]interface{}{"file_path": "/a.go"},
 	}))
 	require.NoError(t, h.OnMessage(map[string]interface{}{
-		"type": agentboot.EventTypeToolResult,
+		"type": eventTypeToolResult,
 		"data": map[string]interface{}{
 			"tool_name": "Read",
 			"is_error":  true,
@@ -232,7 +231,7 @@ func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 
 	// ... and confirm an assistant map flushes them.
 	require.NoError(t, h.OnMessage(map[string]interface{}{
-		"type":    agentboot.EventTypeAssistant,
+		"type":    eventTypeAssistant,
 		"message": "ok",
 	}))
 
@@ -257,10 +256,10 @@ func TestBufferToolEvent_Dispatcher(t *testing.T) {
 	})
 
 	h.mu.Lock()
-	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, nestedFields))
-	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, nestedFields))
+	require.True(t, h.bufferToolEvent(eventTypeToolUse, nestedFields))
+	require.True(t, h.bufferToolEvent(eventTypeToolUse, nestedFields))
 	// Non-tool types are not handled by the dispatcher.
-	require.False(t, h.bufferToolEvent(agentboot.EventTypeAssistant, nestedFields))
+	require.False(t, h.bufferToolEvent(eventTypeAssistant, nestedFields))
 	h.mu.Unlock()
 	assert.Empty(t, bot.snapshot(), "buffered tool events must not send yet")
 

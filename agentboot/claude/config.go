@@ -27,8 +27,7 @@ const (
 // Config holds Claude-specific configuration
 type Config struct {
 	// Stream Options
-	EnableStreamJSON bool `json:"enable_stream_json"`
-	StreamBufferSize int  `json:"stream_buffer_size"`
+	StreamBufferSize int `json:"stream_buffer_size"`
 
 	// Execution Timeout
 	// DefaultExecutionTimeout is the default timeout for agent execution
@@ -85,7 +84,6 @@ type Config struct {
 // DefaultConfig returns a config with sensible defaults
 func DefaultConfig() Config {
 	return Config{
-		EnableStreamJSON: true,
 		StreamBufferSize: 100,
 		Model:            "", // Empty means use Claude default
 		PermissionMode:   PermissionModeDefault,

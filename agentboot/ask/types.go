@@ -1,7 +1,6 @@
 package ask
 
 import (
-	"strings"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -15,42 +14,7 @@ const (
 	TypePermission Type = "permission"
 	// TypeQuestion is for multi-choice questions (AskUserQuestion tool)
 	TypeQuestion Type = "question"
-	// TypeConfirmation is for simple yes/no confirmations
-	TypeConfirmation Type = "confirmation"
-	// TypeTextInput is for free text input requests
-	TypeTextInput Type = "text_input"
 )
-
-// Mode defines how ask requests are handled
-type Mode string
-
-const (
-	// ModeAuto auto-approves/accepts all requests
-	ModeAuto Mode = "auto"
-	// ModeManual requires user interaction for each request
-	ModeManual Mode = "manual"
-	// ModeSkip skips prompts with default response
-	ModeSkip Mode = "skip"
-)
-
-// ParseMode parses a mode from string
-func ParseMode(s string) (Mode, bool) {
-	switch strings.ToLower(s) {
-	case "auto":
-		return ModeAuto, true
-	case "manual":
-		return ModeManual, true
-	case "skip":
-		return ModeSkip, true
-	default:
-		return "", false
-	}
-}
-
-// String returns the string representation
-func (m Mode) String() string {
-	return string(m)
-}
 
 // Request represents a request to ask the user something
 type Request struct {
@@ -126,76 +90,6 @@ type Response struct {
 
 	// Selections contains structured selections for multi-select scenarios
 	Selections map[string]interface{} `json:"selections,omitempty"`
-}
-
-// Config holds handler configuration
-type Config struct {
-	// DefaultMode is the default mode for new sessions
-	DefaultMode Mode `json:"default_mode"`
-
-	// Timeout is the default timeout for requests
-	Timeout time.Duration `json:"timeout"`
-
-	// EnableWhitelist enables tool whitelisting
-	EnableWhitelist bool `json:"enable_whitelist"`
-
-	// Whitelist contains auto-approved tools
-	Whitelist []string `json:"whitelist"`
-
-	// Blacklist contains auto-denied tools
-	Blacklist []string `json:"blacklist"`
-
-	// RememberDecisions enables decision caching
-	RememberDecisions bool `json:"remember_decisions"`
-
-	// DecisionDuration is how long to cache decisions
-	DecisionDuration time.Duration `json:"decision_duration"`
-}
-
-// DefaultConfig returns a Config with sensible defaults
-func DefaultConfig() Config {
-	return Config{
-		DefaultMode:       ModeAuto,
-		Timeout:           5 * time.Minute,
-		EnableWhitelist:   true,
-		Whitelist:         []string{},
-		Blacklist:         []string{},
-		RememberDecisions: true,
-		DecisionDuration:  24 * time.Hour,
-	}
-}
-
-// IsPermissionRequest returns true if this is a permission request
-func (r *Request) IsPermissionRequest() bool {
-	return r.Type == TypePermission
-}
-
-// IsQuestionRequest returns true if this is a question request
-func (r *Request) IsQuestionRequest() bool {
-	return r.Type == TypeQuestion
-}
-
-// GetChatContext extracts chat context from metadata
-func (r *Request) GetChatContext() (chatID string, platform string) {
-	if r.Metadata == nil {
-		return "", ""
-	}
-	if cid, ok := r.Metadata["_chat_id"].(string); ok {
-		chatID = cid
-	}
-	if p, ok := r.Metadata["_platform"].(string); ok {
-		platform = p
-	}
-	return
-}
-
-// SetChatContext sets chat context in metadata
-func (r *Request) SetChatContext(chatID, platform string) {
-	if r.Metadata == nil {
-		r.Metadata = make(map[string]interface{})
-	}
-	r.Metadata["_chat_id"] = chatID
-	r.Metadata["_platform"] = platform
 }
 
 // FromApprovalEvent builds an ask.Request from an [agentboot.ApprovalRequestEvent].

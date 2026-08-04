@@ -51,22 +51,6 @@ func TestResult_TextOutput_ConcatenatesAssistantMessages(t *testing.T) {
 	assert.Equal(t, "raw text", text.TextOutput())
 }
 
-func TestResult_MessageQueries(t *testing.T) {
-	r := streamResult()
-
-	assert.Len(t, r.GetMessagesByType("assistant"), 2)
-	assert.Len(t, r.GetAssistantMessages(), 2)
-	assert.Len(t, r.GetUserMessages(), 1)
-
-	// GetMessageChain excludes system, result, and control_* events.
-	chain := r.GetMessageChain()
-	for _, ev := range chain {
-		assert.NotContains(t, []string{"system", "result"}, ev.Type)
-		assert.NotEqual(t, "control_request", ev.Type)
-	}
-	assert.Len(t, chain, 4) // 2 assistant + tool_use + user
-}
-
 func TestResult_SessionIDAndCost(t *testing.T) {
 	// From events.
 	r := streamResult()
@@ -90,6 +74,4 @@ func TestResult_NilReceiverSafe(t *testing.T) {
 	assert.Equal(t, "", r.GetSessionID())
 	assert.Zero(t, r.GetCostUSD())
 	assert.False(t, r.IsSuccess())
-	assert.Nil(t, r.GetMessagesByType("assistant"))
-	assert.Nil(t, r.GetMessageChain())
 }

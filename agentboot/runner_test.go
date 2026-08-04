@@ -13,7 +13,7 @@ import (
 )
 
 // stubAgent is a minimal Agent implementation for tests that exercise the
-// AgentBoot registry. It never actually runs.
+// AgentService registry. It never actually runs.
 type stubAgent struct {
 	t agentboot.AgentType
 }
@@ -22,76 +22,60 @@ func (s *stubAgent) Execute(_ context.Context, _ string, _ agentboot.ExecutionOp
 	return nil, errors.New("stubAgent: Execute not supported")
 }
 
-func (s *stubAgent) IsAvailable() bool                         { return true }
-func (s *stubAgent) Type() agentboot.AgentType                 { return s.t }
-func (s *stubAgent) SetDefaultFormat(_ agentboot.OutputFormat) {}
-func (s *stubAgent) GetDefaultFormat() agentboot.OutputFormat {
-	return agentboot.OutputFormatStreamJSON
-}
+func (s *stubAgent) IsAvailable() bool         { return true }
+func (s *stubAgent) Type() agentboot.AgentType { return s.t }
 
 const stubAgentType agentboot.AgentType = "stub"
 
 func newStubAgent() *stubAgent { return &stubAgent{t: stubAgentType} }
 
-// --- AgentBoot registry tests ----------------------------------------------
+// --- AgentService registry tests -------------------------------------------
 
-func TestAgentBoot_RegisterAndGet(t *testing.T) {
-	ab, err := agentboot.New(agentboot.Config{})
+func newRegistryService(t *testing.T) *agentboot.AgentService {
+	t.Helper()
+	svc, err := agentboot.NewAgentService(agentboot.Config{})
 	require.NoError(t, err)
-
-	ab.RegisterAgent(stubAgentType, newStubAgent())
-
-	got, err := ab.GetAgent(stubAgentType)
-	require.NoError(t, err)
-	assert.Equal(t, stubAgentType, got.Type())
+	return svc
 }
 
-func TestAgentBoot_GetUnregistered(t *testing.T) {
-	ab, err := agentboot.New(agentboot.Config{})
-	require.NoError(t, err)
+func TestAgentService_RegisterAndList(t *testing.T) {
+	svc := newRegistryService(t)
 
-	_, err = ab.GetAgent("nonexistent")
+	svc.RegisterAgent(stubAgentType, newStubAgent())
+
+	assert.Contains(t, svc.RegisteredAgents(), stubAgentType)
+}
+
+func TestAgentService_ExecuteUnregistered(t *testing.T) {
+	svc := newRegistryService(t)
+
+	_, err := svc.Execute(context.Background(), "nonexistent", "/tmp", "hi", agentboot.ExecutionOptions{})
 	assert.Error(t, err)
 }
 
-func TestAgentBoot_ResumeSession(t *testing.T) {
-	ab, err := agentboot.New(agentboot.Config{})
-	require.NoError(t, err)
+func TestAgentService_SetDefaultAgent(t *testing.T) {
+	svc := newRegistryService(t)
 
-	opts := ab.ResumeSession("sess-abc")
-	assert.Equal(t, "sess-abc", opts.SessionID)
-	assert.True(t, opts.Resume)
+	svc.RegisterAgent(stubAgentType, newStubAgent())
+
+	require.NoError(t, svc.SetDefaultAgent(stubAgentType))
+	assert.Equal(t, stubAgentType, svc.Config().DefaultAgent)
 }
 
-func TestAgentBoot_SetDefaultAgent(t *testing.T) {
-	ab, err := agentboot.New(agentboot.Config{})
-	require.NoError(t, err)
+func TestAgentService_SetDefaultAgent_Unregistered(t *testing.T) {
+	svc := newRegistryService(t)
 
-	ab.RegisterAgent(stubAgentType, newStubAgent())
-
-	require.NoError(t, ab.SetDefaultAgent(stubAgentType))
-
-	got, err := ab.GetDefaultAgent()
-	require.NoError(t, err)
-	assert.Equal(t, stubAgentType, got.Type())
-}
-
-func TestAgentBoot_SetDefaultAgent_Unregistered(t *testing.T) {
-	ab, err := agentboot.New(agentboot.Config{})
-	require.NoError(t, err)
-
-	err = ab.SetDefaultAgent("ghost")
+	err := svc.SetDefaultAgent("ghost")
 	assert.Error(t, err)
 }
 
-func TestAgentBoot_GetDefaultAgent_ConcurrentWithSetter(t *testing.T) {
-	ab, err := agentboot.New(agentboot.Config{})
-	require.NoError(t, err)
+func TestAgentService_DefaultAgent_ConcurrentWithSetter(t *testing.T) {
+	svc := newRegistryService(t)
 
 	const alternateType agentboot.AgentType = "alternate"
-	ab.RegisterAgent(stubAgentType, newStubAgent())
-	ab.RegisterAgent(alternateType, &stubAgent{t: alternateType})
-	require.NoError(t, ab.SetDefaultAgent(stubAgentType))
+	svc.RegisterAgent(stubAgentType, newStubAgent())
+	svc.RegisterAgent(alternateType, &stubAgent{t: alternateType})
+	require.NoError(t, svc.SetDefaultAgent(stubAgentType))
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -103,7 +87,7 @@ func TestAgentBoot_GetDefaultAgent_ConcurrentWithSetter(t *testing.T) {
 			if i%2 == 0 {
 				next = alternateType
 			}
-			if setErr := ab.SetDefaultAgent(next); setErr != nil {
+			if setErr := svc.SetDefaultAgent(next); setErr != nil {
 				errs <- setErr
 				return
 			}
@@ -112,12 +96,8 @@ func TestAgentBoot_GetDefaultAgent_ConcurrentWithSetter(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 1000; i++ {
-			got, getErr := ab.GetDefaultAgent()
-			if getErr != nil {
-				errs <- getErr
-				return
-			}
-			if got.Type() != stubAgentType && got.Type() != alternateType {
+			got := svc.Config().DefaultAgent
+			if got != stubAgentType && got != alternateType {
 				errs <- errors.New("unexpected default agent")
 				return
 			}

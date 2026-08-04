@@ -5,11 +5,11 @@ import "context"
 // AgentType defines the supported agent types.
 type AgentType string
 
+// AgentTypeClaude is the only production agent type. New backends define
+// their own constant next to their AgentDriver/AgentTransport implementation
+// and register it via AgentService.RegisterAgent.
 const (
 	AgentTypeClaude AgentType = "claude"
-	// AgentTypeCodex  AgentType = "codex"  // Future
-	// AgentTypeGemini AgentType = "gemini" // Future
-	// AgentTypeCursor AgentType = "cursor" // Future
 )
 
 // String returns the string representation of AgentType.
@@ -27,6 +27,4 @@ type Agent interface {
 	Execute(ctx context.Context, prompt string, opts ExecutionOptions) (ExecutionHandle, error)
 	IsAvailable() bool
 	Type() AgentType
-	SetDefaultFormat(format OutputFormat)
-	GetDefaultFormat() OutputFormat
 }

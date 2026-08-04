@@ -15,7 +15,6 @@ import (
 func TestConfigDefaults(t *testing.T) {
 	config := DefaultConfig()
 
-	assert.True(t, config.EnableStreamJSON)
 	assert.Equal(t, 100, config.StreamBufferSize)
 	assert.Equal(t, PermissionModeDefault, config.PermissionMode)
 	assert.Empty(t, config.Model)

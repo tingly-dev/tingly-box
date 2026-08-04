@@ -3,6 +3,7 @@ package agentboot
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
@@ -11,16 +12,18 @@ import (
 // an injected provider-specific reader.
 var errSessionReaderNotConfigured = fmt.Errorf("agentservice: session reader not configured")
 
-// AgentService is the primary entry point for external callers that need to:
+// AgentService is the single entry point for callers that need to:
 //   - Query projects and sessions associated with an agent
 //   - Execute a prompt against a new or existing session, either as a raw
 //     [ExecutionHandle] (Execute*) or driven to completion (Run)
 //
-// It owns the agent registry and the session store. The underlying
-// Runner/Driver/Transport/ExecutionHandle pipeline is unchanged; AgentService
-// is the façade that callers should depend on rather than [AgentBoot].
+// It owns the agent registry and the optional session reader. The underlying
+// Runner/Driver/Transport/ExecutionHandle pipeline is unchanged.
 type AgentService struct {
-	boot *AgentBoot
+	mu            sync.RWMutex
+	config        Config
+	agents        map[AgentType]Agent
+	sessionReader common.SessionReader
 }
 
 // ServiceOption configures an [AgentService] integration.
@@ -32,7 +35,7 @@ func WithSessionReader(reader common.SessionReader) ServiceOption {
 		if reader == nil {
 			return fmt.Errorf("agentservice: session reader is nil")
 		}
-		service.boot.sessionReader = reader
+		service.sessionReader = reader
 		return nil
 	}
 }
@@ -42,11 +45,20 @@ func WithSessionReader(reader common.SessionReader) ServiceOption {
 // executing. Provider history is optional and can be injected with
 // [WithSessionReader].
 func NewAgentService(config Config, options ...ServiceOption) (*AgentService, error) {
-	boot, err := New(config)
-	if err != nil {
-		return nil, err
+	if config.DefaultAgent == "" {
+		config.DefaultAgent = AgentTypeClaude
 	}
-	service := &AgentService{boot: boot}
+	if config.DefaultFormat == "" {
+		config.DefaultFormat = OutputFormatStreamJSON
+	}
+	if config.StreamBufferSize == 0 {
+		config.StreamBufferSize = 100
+	}
+
+	service := &AgentService{
+		config: config,
+		agents: make(map[AgentType]Agent),
+	}
 	for _, option := range options {
 		if option == nil {
 			continue
@@ -60,69 +72,77 @@ func NewAgentService(config Config, options ...ServiceOption) (*AgentService, er
 
 // RegisterAgent registers an agent implementation for the given type.
 func (s *AgentService) RegisterAgent(agentType AgentType, agent Agent) {
-	s.boot.RegisterAgent(agentType, agent)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.agents[agentType] = agent
 }
 
 // SetDefaultAgent selects the registered agent used when execution APIs receive
 // an empty AgentType.
 func (s *AgentService) SetDefaultAgent(agentType AgentType) error {
-	return s.boot.SetDefaultAgent(agentType)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.agents[agentType]; !exists {
+		return fmt.Errorf("agent type not registered: %s", agentType)
+	}
+	s.config.DefaultAgent = agentType
+	return nil
 }
 
 // RegisteredAgents returns the currently registered agent types.
 func (s *AgentService) RegisteredAgents() []AgentType {
-	return s.boot.ListAgents()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	types := make([]AgentType, 0, len(s.agents))
+	for agentType := range s.agents {
+		types = append(types, agentType)
+	}
+	return types
 }
 
 // Config returns a snapshot of the service configuration.
 func (s *AgentService) Config() Config {
-	return s.boot.GetConfig()
-}
-
-// Boot returns the underlying compatibility registry.
-//
-// Deprecated: use AgentService methods such as RegisterAgent,
-// SetDefaultAgent, RegisteredAgents, and Config.
-func (s *AgentService) Boot() *AgentBoot {
-	return s.boot
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.config
 }
 
 // --- Query API ---
 
 // ListProjects returns all project paths that have at least one recorded session.
 func (s *AgentService) ListProjects(ctx context.Context) ([]string, error) {
-	if s.boot.sessionReader == nil {
+	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}
-	return s.boot.sessionReader.ListProjects(ctx)
+	return s.sessionReader.ListProjects(ctx)
 }
 
 // ListSessions returns up to limit sessions for the given project, newest first.
 // Pass limit <= 0 to return all sessions.
 func (s *AgentService) ListSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
-	if s.boot.sessionReader == nil {
+	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}
 	if limit <= 0 {
-		return s.boot.sessionReader.ListSessions(ctx, projectPath)
+		return s.sessionReader.ListSessions(ctx, projectPath)
 	}
-	return s.boot.sessionReader.GetRecentSessions(ctx, projectPath, limit)
+	return s.sessionReader.GetRecentSessions(ctx, projectPath, limit)
 }
 
 // GetSession returns metadata for a specific session by ID.
 func (s *AgentService) GetSession(ctx context.Context, sessionID string) (*common.SessionMetadata, error) {
-	if s.boot.sessionReader == nil {
+	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}
-	return s.boot.sessionReader.GetSession(ctx, sessionID)
+	return s.sessionReader.GetSession(ctx, sessionID)
 }
 
 // GetSessionSummary returns head and tail events of a session.
 func (s *AgentService) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
-	if s.boot.sessionReader == nil {
+	if s.sessionReader == nil {
 		return nil, errSessionReaderNotConfigured
 	}
-	return s.boot.sessionReader.GetSessionSummary(ctx, sessionID, firstN, lastM)
+	return s.sessionReader.GetSessionSummary(ctx, sessionID, firstN, lastM)
 }
 
 // --- Execution API ---
@@ -130,10 +150,16 @@ func (s *AgentService) GetSessionSummary(ctx context.Context, sessionID string, 
 // resolveAgent returns the agent for agentType, or the default agent when
 // agentType is empty.
 func (s *AgentService) resolveAgent(agentType AgentType) (Agent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if agentType == "" {
-		return s.boot.GetDefaultAgent()
+		agentType = s.config.DefaultAgent
 	}
-	return s.boot.GetAgent(agentType)
+	agent, exists := s.agents[agentType]
+	if !exists {
+		return nil, fmt.Errorf("agent type not supported: %s", agentType)
+	}
+	return agent, nil
 }
 
 // Execute runs a prompt against the specified agent type and project path and

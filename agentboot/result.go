@@ -73,47 +73,6 @@ func (r *Result) IsSuccess() bool {
 	return r != nil && r.ExitCode == 0 && r.Error == ""
 }
 
-// GetMessagesByType returns all events of a specific type.
-func (r *Result) GetMessagesByType(messageType string) []common.Event {
-	if r == nil {
-		return nil
-	}
-
-	var result []common.Event
-	for _, event := range r.Events {
-		if event.Type == messageType {
-			result = append(result, event)
-		}
-	}
-	return result
-}
-
-// GetMessageChain returns all events in order, excluding result/system events.
-func (r *Result) GetMessageChain() []common.Event {
-	if r == nil {
-		return nil
-	}
-
-	var result []common.Event
-	for _, event := range r.Events {
-		// Skip system and result types for message chain
-		if event.Type != "system" && event.Type != "result" && !strings.HasPrefix(event.Type, "control_") {
-			result = append(result, event)
-		}
-	}
-	return result
-}
-
-// GetAssistantMessages returns all assistant message events.
-func (r *Result) GetAssistantMessages() []common.Event {
-	return r.GetMessagesByType("assistant")
-}
-
-// GetUserMessages returns all user message events.
-func (r *Result) GetUserMessages() []common.Event {
-	return r.GetMessagesByType("user")
-}
-
 // GetSessionID extracts the session ID from metadata or events.
 func (r *Result) GetSessionID() string {
 	if r == nil {

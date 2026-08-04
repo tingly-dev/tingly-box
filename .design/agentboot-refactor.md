@@ -515,3 +515,64 @@ The refactor continued through the remaining structural boundaries:
 
 Validation includes the agentboot module suite, core race tests, production
 composition consumers, and a real Claude Code CLI E2E.
+
+---
+
+## 8. Positioning addendum (2026-08-04): internal-first, Claude-honest
+
+A follow-up review asked what remains of the original "generic multi-agent
+platform" ambition and settled the module's positioning:
+
+1. **AgentBoot is an internal library**, not a public one. It keeps its own Go
+   module (the dependency-direction boundary — agentboot never imports
+   tingly-box internals — is real value), but API existence is now judged by
+   "used by tingly-box or by tests", not "coherent for hypothetical external
+   consumers".
+2. **The provider-neutral façade is honest only at the execution layer.** The
+   Runner/Driver/Transport/process/protocol pipeline is genuinely agent-neutral
+   and pays rent through the test infrastructure (fake process factory,
+   fixtures). The message layer is not neutral and stops pretending:
+   `MessageEvent.Raw` carries Claude concrete types and consumers type-switch
+   on them. That is accepted, not hidden.
+3. **The extension seam stays; the ceremony goes.** A future agent still plugs
+   in by implementing `AgentDriver` + `AgentTransport` and registering via
+   `AgentService.RegisterAgent` — no vocabulary is pre-reserved for it.
+
+What shipped under that bar:
+
+- **Compat window closed.** The deprecated `AgentBoot` registry
+  (`agentboot.go`) was merged into `AgentService` — one type owns config,
+  registry, and session reader. Deleted: `agentboot.New`, `Service.Boot()`,
+  `MustGetAgent`, `GetAgent`/`GetDefaultAgent` (internalized as
+  `resolveAgent`), `ListAgents`, `ResumeSession`, `GetConfig`. Zero external
+  callers existed.
+- **`Agent` interface slimmed** to `Execute` / `IsAvailable` / `Type`.
+  `SetDefaultFormat`/`GetDefaultFormat` had no production callers and forced
+  no-op stubs on `smart_guide.TinglyBoxAgent` (which is not even an
+  agentboot Agent — it only shares the `AgentType` routing vocabulary). The
+  default format still flows through `RunnerConfig`/`ExecutionOptions`.
+- **`ask/` halved.** Deleted the never-used `DefaultHandler` state machine
+  (`handler.go`), `StdinPrompter`/`NoOpPrompter`/`DenyAllPrompter`
+  (`stdin_prompter.go`), and `Mode`/`Config`/`TypeConfirmation`/
+  `TypeTextInput` plus orphan helpers from `types.go`. The surviving surface —
+  `Request`/`Result`/`Response`, `FromApprovalEvent`/`ToApprovalResponse`,
+  `ToolHandlerRegistry` + normalize/format/parse helpers — gained its first
+  unit tests (`ask_test.go`; the package previously had zero).
+- **`eventtype.go` moved out.** The string constants were the bot's
+  smart-guide map-frame vocabulary, produced by `smart_guide` literals and
+  consumed only by `remoteagent/stream.go`; they now live as unexported
+  constants next to that consumer.
+- **Config single-sourced.** `EnableStreamJSON` never branched behavior and
+  was deleted from both `agentboot.Config` and `claude.Config`.
+- **`Result` trimmed to the used surface**: `TextOutput`, `GetSessionID`,
+  `GetCostUSD`, `IsSuccess`, and raw `Events`. The generic event-query
+  getters (`GetMessagesByType`, `GetMessageChain`, `GetAssistantMessages`,
+  `GetUserMessages`) kept in §P2 under the library posture had zero callers
+  under the internal-first posture and were removed.
+- **README repositioned**: Claude-first with a neutral execution core kept
+  for testability and as the extension seam, instead of "unified layer for
+  AI coding agents".
+
+Verified: `go build ./... && go vet ./... && go test ./...` green in the
+agentboot module; root module builds and `remote/control/...`,
+`remote/channel/...`, `internal/server/module/imbot/...` tests green.

@@ -473,15 +473,7 @@ func (a *TinglyBoxAgent) IsAvailable() bool {
 	return a.IsEnabled()
 }
 
-// Type returns the agent type for the agentboot.Agent interface.
+// Type returns the agent type used by the executor routing layer.
 func (a *TinglyBoxAgent) Type() agentboot.AgentType {
 	return AgentTypeTinglyBox
-}
-
-// SetDefaultFormat is a no-op (SmartGuide always uses text format).
-func (a *TinglyBoxAgent) SetDefaultFormat(format agentboot.OutputFormat) {}
-
-// GetDefaultFormat returns the current default format.
-func (a *TinglyBoxAgent) GetDefaultFormat() agentboot.OutputFormat {
-	return agentboot.OutputFormatText
 }

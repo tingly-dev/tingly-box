@@ -1,13 +1,17 @@
 # AgentBoot Package
 
-AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It
-hides per-agent process management, protocol parsing, and permission/ask
-routing behind a small, agent-agnostic API.
+AgentBoot runs the **Claude Code CLI** as a subprocess and speaks its
+stream-JSON/control protocol: process management, protocol parsing, and
+permission/ask routing behind one `AgentService` entry point.
 
-The production adapter launches the **Claude Code CLI** as a subprocess and
-communicates with its stream-JSON/control protocol. AgentBoot does not embed the
-Python `claude-agent-sdk` and does not use Claude Desktop as an execution
-backend.
+It is an internal library of tingly-box, kept as its own Go module so the
+dependency direction stays clean (agentboot never imports tingly-box
+internals). The execution core (`Runner` + `AgentDriver` + `AgentTransport` +
+`process`/`protocol`) is agent-neutral — that seam exists for testability
+(scripted fake processes) and as the extension point if another CLI agent is
+ever added — but Claude Code is the only implemented backend, and the message
+types consumers see are Claude's. AgentBoot does not embed the Python
+`claude-agent-sdk` and does not use Claude Desktop as an execution backend.
 
 ## Features
 
@@ -80,9 +84,8 @@ func main() {
 
 ```go
 config := agentboot.Config{
-    DefaultAgent:     agentboot.AgentTypeClaude,
-    DefaultFormat:    agentboot.OutputFormatStreamJSON,
-    EnableStreamJSON: true,
+    DefaultAgent:  agentboot.AgentTypeClaude,
+    DefaultFormat: agentboot.OutputFormatStreamJSON,
 }
 service, err := claude.NewService(config)
 if err != nil {
@@ -186,7 +189,6 @@ Root configuration is plain Go and its defaults are provided by
 |-----------------------------|----------------------------------|
 | `DefaultAgent`              | `AgentTypeClaude`                |
 | `DefaultFormat`             | `OutputFormatStreamJSON`         |
-| `EnableStreamJSON`          | `true`                           |
 | `StreamBufferSize`          | `100`                            |
 | `DefaultExecutionTimeout`   | `0` (no timeout)                 |
 
@@ -214,11 +216,10 @@ packaged Claude Code executable, never Claude Desktop.
 
 ```
 agentboot/
-├── agentboot.go          # Agent registry and root Config
 ├── agent.go              # AgentType and Agent interface
 ├── options.go            # OutputFormat and ExecutionOptions
 ├── result.go             # Aggregated Result read API
-├── config.go             # Root defaults
+├── config.go             # Config + defaults
 ├── errors.go             # Structured result/process/protocol errors
 ├── handle.go             # ExecutionHandle + ControlResponse types
 ├── events.go             # Typed StreamEvent sum
@@ -228,8 +229,8 @@ agentboot/
 ├── runner_execute.go     # Generic per-execution lifecycle
 ├── runner_state.go       # Run state and terminal error conversion
 ├── run.go                # High-level Prompter/MessageSink consumer
-├── service.go            # Public AgentService façade
-├── ask/                  # Ask/permission prompter implementations
+├── service.go            # AgentService — the single public entry point (registry + query + execute)
+├── ask/                  # Ask/permission request-response types + tool handler registry
 ├── common/               # Canonical Event, SessionReader, history types
 ├── process/              # LaunchSpec + process abstraction (OS/fake)
 ├── protocol/             # Stream-JSON encoder / decoder
@@ -272,15 +273,13 @@ The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` 
    func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
        return a.runner.Execute(ctx, prompt, opts)
    }
-   func (a *Agent) IsAvailable() bool                              { return a.driver.IsAvailable() }
-   func (a *Agent) Type() agentboot.AgentType                      { return agentboot.AgentTypeYourAgent }
-   func (a *Agent) SetDefaultFormat(f agentboot.OutputFormat)      { a.runner.SetDefaultFormat(f) }
-   func (a *Agent) GetDefaultFormat() agentboot.OutputFormat       { return a.runner.GetDefaultFormat() }
+   func (a *Agent) IsAvailable() bool         { return a.driver.IsAvailable() }
+   func (a *Agent) Type() agentboot.AgentType { return AgentTypeYourAgent }
    ```
    The factory must return a fresh transport; transports may own mutable
    per-run state.
-3. Add the constant to `agent.go` and register the agent on an `AgentService`
-   with `RegisterAgent`.
+3. Define the `AgentType` constant next to your implementation and register
+   the agent on an `AgentService` with `RegisterAgent`.
 
 If the provider exposes historical sessions, implement `common.SessionReader`
 and inject it with `agentboot.WithSessionReader`. Runtime lifecycle reporting

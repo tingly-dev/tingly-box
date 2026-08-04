@@ -10,7 +10,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
@@ -45,11 +44,20 @@ const toolBufferFlushThreshold = 20
 // an "(+N more)" suffix.
 const quietToolPreviewCount = 3
 
-// eventTypeThinking is the map-message type Smart Guide emits for a turn's
-// reasoning. It is not an agentboot event type: agentboot's stream carries
-// thinking inside the Claude message types, so this exists only on the
-// smart-guide map path.
-const eventTypeThinking = "thinking"
+// Map-message type vocabulary for the smart-guide stream frames handled by
+// handleMapMessage. These are the bot's own frame types — agentboot's stream
+// carries rich Claude message types instead, so the constants live here with
+// their only consumer.
+const (
+	eventTypeAssistant         = "assistant"
+	eventTypeToolUse           = "tool_use"
+	eventTypeToolResult        = "tool_result"
+	eventTypePermissionRequest = "permission_request"
+	eventTypeResult            = "result"
+	// eventTypeThinking is the map-message type Smart Guide emits for a
+	// turn's reasoning.
+	eventTypeThinking = "thinking"
+)
 
 // newStreamingMessageHandler creates a new streaming message handler
 func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool) *streamingMessageHandler {
@@ -191,10 +199,10 @@ func assistantTextFromMap(m map[string]interface{}) string {
 // handled, so callers can early-return. The caller must hold h.mu.
 func (h *streamingMessageHandler) bufferToolEvent(eventType string, f toolEventFields) bool {
 	switch eventType {
-	case agentboot.EventTypeToolUse:
+	case eventTypeToolUse:
 		h.appendToolBuffer(renderToolUseSummary(f.Name, f.Input))
 		return true
-	case agentboot.EventTypeToolResult:
+	case eventTypeToolResult:
 		h.appendToolBuffer(renderToolResultSummary(f.Name, f.IsError))
 		return true
 	}
@@ -372,7 +380,7 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 	}
 
 	switch msgType {
-	case agentboot.EventTypePermissionRequest:
+	case eventTypePermissionRequest:
 		// Permission requests come from mock agent before going through IMPrompter
 		data, _ := m["data"].(map[string]interface{})
 		if data != nil {
@@ -381,7 +389,7 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 				"tool_name":  data["tool_name"],
 			}).Info("Permission request received (will be handled by IMPrompter)")
 		}
-	case agentboot.EventTypeAssistant:
+	case eventTypeAssistant:
 		h.sendText(assistantTextFromMap(m))
 	case eventTypeThinking:
 		// Reasoning is marked, never rendered as the assistant's reply: a turn
@@ -393,7 +401,7 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 				h.sendText(IconThinking + " " + text)
 			}
 		}
-	case agentboot.EventTypeResult:
+	case eventTypeResult:
 		// Flush trailing tool renders before OnComplete's banner.
 		h.flushToolBufferLocked()
 	default:

@@ -17,13 +17,12 @@ type Agent struct {
 // NewAgent creates a new Claude agent.
 func NewAgent(config agentboot.Config) *Agent {
 	claudeConfig := Config{
-		EnableStreamJSON:        config.EnableStreamJSON,
 		StreamBufferSize:        config.StreamBufferSize,
 		DefaultExecutionTimeout: config.DefaultExecutionTimeout,
 	}
 	agent := NewAgentWithConfig(claudeConfig)
 	if config.DefaultFormat != "" {
-		agent.SetDefaultFormat(config.DefaultFormat)
+		agent.runner.SetDefaultFormat(config.DefaultFormat)
 	}
 	return agent
 }
@@ -87,16 +86,6 @@ func (a *Agent) IsAvailable() bool { return a.driver.IsAvailable() }
 
 // Type returns the agent type.
 func (a *Agent) Type() agentboot.AgentType { return agentboot.AgentTypeClaude }
-
-// SetDefaultFormat sets the default output format.
-func (a *Agent) SetDefaultFormat(format agentboot.OutputFormat) {
-	a.runner.SetDefaultFormat(format)
-}
-
-// GetDefaultFormat returns the current default format.
-func (a *Agent) GetDefaultFormat() agentboot.OutputFormat {
-	return a.runner.GetDefaultFormat()
-}
 
 // SetSkipPermissions enables or disables skip permissions mode.
 func (a *Agent) SetSkipPermissions(enabled bool) {

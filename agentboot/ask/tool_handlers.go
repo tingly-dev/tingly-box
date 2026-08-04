@@ -332,25 +332,3 @@ func normalizeText(text string) string {
 	text = strings.ToLower(text)
 	return text
 }
-
-// truncateText truncates text to maxLen with ellipsis
-func truncateText(text string, maxLen int) string {
-	if len(text) <= maxLen {
-		return text
-	}
-	return text[:maxLen-3] + "..."
-}
-
-// escapeMarkdown escapes special characters for Telegram Markdown format
-// Based on practical escaping scheme that covers common cases
-func escapeMarkdown(text string) string {
-	// Order matters for some replacements
-	text = strings.ReplaceAll(text, "_", "\\_")
-	text = strings.ReplaceAll(text, "-", "\\-")
-	text = strings.ReplaceAll(text, "~", "\\~")
-	text = strings.ReplaceAll(text, "`", "\\`")
-	text = strings.ReplaceAll(text, ".", "\\.")
-	text = strings.ReplaceAll(text, "<", "\\<")
-	text = strings.ReplaceAll(text, ">", "\\>")
-	return text
-}
