@@ -17,7 +17,7 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/ask"
+	"github.com/tingly-dev/tingly-box/remote/control/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/agentboot/ask"
+	"github.com/tingly-dev/tingly-box/remote/control/ask"
 )
 
 // Test_AskUserQuestionKeyboard_AcceptsHeterogeneousShapes verifies that the
