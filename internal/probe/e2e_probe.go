@@ -14,18 +14,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// E2EService runs SDK-level end-to-end probes against a rule, a saved
+// E2EProber runs SDK-level end-to-end probes against a rule, a saved
 // provider, or an inline provider config. It is independent of *Server and
 // is wired in NewServer.
-type E2EService struct {
+type E2EProber struct {
 	config        *config.Config
 	clientPool    *client.ClientPool
 	endpointCache *endpointProbeCache
 }
 
-// NewE2EService constructs a E2EService.
-func NewE2EService(cfg *config.Config, pool *client.ClientPool) *E2EService {
-	return &E2EService{
+// NewE2EProber constructs a E2EProber.
+func NewE2EProber(cfg *config.Config, pool *client.ClientPool) *E2EProber {
+	return &E2EProber{
 		config:        cfg,
 		clientPool:    pool,
 		endpointCache: newEndpointProbeCache(),
@@ -33,7 +33,7 @@ func NewE2EService(cfg *config.Config, pool *client.ClientPool) *E2EService {
 }
 
 // Probe performs a non-streaming probe against the target described by req.
-func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error) {
+func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error) {
 	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, erro
 	cacheable := req.TargetType == E2ETargetProvider && req.Direct &&
 		(req.Endpoint == "chat" || req.Endpoint == "responses")
 	if cacheable && e.endpointCache.hit(provider.UUID, model, req.Endpoint) {
-		return &ProbeResult{Success: true, Message: "Verified recently (cached)"}, nil
+		return &Result{Success: true, Message: "Verified recently (cached)"}, nil
 	}
 
 	if len(probeHeaders) > 0 {
@@ -62,7 +62,7 @@ func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, erro
 }
 
 // ProbeStream performs a streaming probe against the target described by req.
-func (e *E2EService) ProbeStream(ctx context.Context, req *E2ERequest) (*E2EData, error) {
+func (e *E2EProber) ProbeStream(ctx context.Context, req *E2ERequest) (*E2EData, error) {
 	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (e *E2EService) ProbeStream(ctx context.Context, req *E2ERequest) (*E2EData
 // resolveTargetToProviderModel resolves an E2ERequest to a provider, model,
 // and optional probe headers. Probe headers are injected into SDK HTTP calls
 // via probeHeaderRoundTripper so that TB's own loopback endpoint can read them.
-func (e *E2EService) resolveTargetToProviderModel(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
+func (e *E2EProber) resolveTargetToProviderModel(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
 	var (
 		provider     *typ.Provider
 		model        string
@@ -107,7 +107,7 @@ func (e *E2EService) resolveTargetToProviderModel(ctx context.Context, req *E2ER
 	return provider, model, probeHeaders, nil
 }
 
-func (e *E2EService) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.Provider, model string) (*typ.Provider, string, error) {
+func (e *E2EProber) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.Provider, model string) (*typ.Provider, string, error) {
 	port := e.config.GetServerPort()
 	if port == 0 {
 		return nil, "", fmt.Errorf("server port unknown; cannot probe vmodel provider %q", provider.Name)
@@ -127,7 +127,7 @@ func (e *E2EService) resolveVModelLoopbackTarget(ctx context.Context, provider *
 	})
 }
 
-func (e *E2EService) resolveProviderTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
+func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
 	provider, err := e.config.GetProviderByUUID(req.ProviderUUID)
 	if err != nil || provider == nil {
 		return nil, "", nil, fmt.Errorf("provider not found: %s", req.ProviderUUID)
@@ -211,7 +211,7 @@ func resolveOpenAIProbeEndpoint(override string, provider *typ.Provider) string 
 	case "chat", "responses":
 		return override
 	default:
-		if isCodexOAuth(provider) {
+		if provider.IsCodexProvider() {
 			return "responses"
 		}
 		return "chat"
@@ -241,7 +241,7 @@ func defaultScenarioForAPIStyle(style protocol.APIStyle) (typ.RuleScenario, bool
 	}
 }
 
-func (e *E2EService) resolveProviderConfigTarget(_ context.Context, req *E2ERequest) (*typ.Provider, string, error) {
+func (e *E2EProber) resolveProviderConfigTarget(_ context.Context, req *E2ERequest) (*typ.Provider, string, error) {
 	if req.APIBase == "" || req.APIStyle == "" || req.Token == "" {
 		return nil, "", fmt.Errorf("provider_config target requires api_base, api_style, and token")
 	}
@@ -269,7 +269,7 @@ func (e *E2EService) resolveProviderConfigTarget(_ context.Context, req *E2ERequ
 	return provider, model, nil
 }
 
-func (e *E2EService) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
+func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
 	rule := e.config.GetRuleByUUID(req.RuleUUID)
 	if rule == nil {
 		return nil, "", nil, fmt.Errorf("rule not found: %s", req.RuleUUID)
@@ -319,7 +319,7 @@ func (e *E2EService) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*t
 // endpointOverride forces which OpenAI endpoint to hit ("chat"/"responses");
 // pass "" for resolveOpenAIProbeEndpoint's default (Codex OAuth -> responses,
 // everything else -> chat).
-func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
+func (e *E2EProber) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
 	mode := testMode
 
 	_, wrapProbeHeaders := client.GetProbeHeaders(ctx)
@@ -405,6 +405,6 @@ func applyRoutingCapture(result *E2EData, cap *client.RoutingCapture) {
 	}
 }
 
-func (e *E2EService) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
+func (e *E2EProber) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
 	return e.ProbeProviderWithSDK(ctx, provider, model, message, testMode, endpointOverride)
 }

@@ -209,7 +209,7 @@ verified against AWS/Google/Anthropic/Microsoft docs (Jul 2026): Bedrock
   generic form; responses return credentials in full).
 - **Test Connection** through the signed client path.
 - `GetAccessToken()` returns `""` for cloud types; the manual-header call sites
-  outside the client constructors (`internal/probe/sdkprobe.go` lightweight
+  outside the client constructors (`../internal/probe/sdk.go` lightweight
   probe, `internal/tbclient`) send unauthenticated requests for cloud providers.
   A central "apply credential" seam would fix all of them at once.
 - Backend derivation of `api_base` from the bundle (today the frontend computes

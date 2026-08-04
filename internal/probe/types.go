@@ -12,14 +12,75 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ProbeRequest represents the request to probe/test a provider and model.
-type ProbeRequest struct {
+// Result is the canonical SDK-level probe result, shared by the E2E and
+// lightweight probe strategies. It doubles as the JSON payload returned by the
+// probe HTTP endpoints (exposed under the E2EData alias).
+type Result struct {
+	// Basic fields
+	Success      bool   `json:"success"`
+	Message      string `json:"message,omitempty"`
+	Content      string `json:"content,omitempty"`
+	LatencyMs    int64  `json:"latency_ms"`
+	ModelsCount  int    `json:"models_count,omitempty"`
+	ErrorMessage string `json:"error_message,omitempty"`
+
+	// Streaming mode indicator
+	Stream bool `json:"stream,omitempty"`
+
+	// Token usage
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
+
+	// Tool calls (for tool mode)
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+
+	// Request URL (for debugging)
+	RequestURL string `json:"request_url,omitempty"`
+
+	// Routing trace — populated for TB-loopback probes (provider and rule targets).
+	// Empty for direct probes and provider_config probes.
+	SelectedProvider     string `json:"selected_provider,omitempty"`
+	SelectedProviderUUID string `json:"selected_provider_uuid,omitempty"`
+	SelectedModel        string `json:"selected_model,omitempty"`
+	RoutingSource        string `json:"routing_source,omitempty"`
+	MatchedSmartRule     *int   `json:"matched_smart_rule,omitempty"` // nil = none, ≥0 = index
+
+	// Execution-level facts — the real upstream endpoint TB used, the matched
+	// rule, and the flags it applied. Populated for TB-loopback probes.
+	UpstreamAPI     string `json:"upstream_api,omitempty"`
+	UpstreamURL     string `json:"upstream_url,omitempty"`
+	MatchedRule     string `json:"matched_rule,omitempty"`
+	MatchedRuleDesc string `json:"matched_rule_desc,omitempty"`
+	AppliedFlags    string `json:"applied_flags,omitempty"`
+}
+
+// ToolCall represents a tool call in a probe response.
+type ToolCall struct {
+	ID    string         `json:"id"`
+	Name  string         `json:"name"`
+	Input map[string]any `json:"input"`
+}
+
+// toProbeResult builds a Result carrying the raw (JSON-marshaled)
+// upstream response for a successful probe.
+func toProbeResult(content string, latencyMs int64, requestURL string, isStreaming bool) *Result {
+	return &Result{
+		Content:    content,
+		LatencyMs:  latencyMs,
+		RequestURL: requestURL,
+		Stream:     isStreaming,
+	}
+}
+
+// Request represents the request to probe/test a provider and model.
+type Request struct {
 	Provider string `json:"provider" binding:"required" description:"Provider UUID to test against" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Model    string `json:"model" binding:"required" description:"Model name to test against" example:"gpt-4-latest"`
 }
 
-// ProbeProviderRequest represents the request to probe/test a provider's API key and connectivity.
-type ProbeProviderRequest struct {
+// ProviderRequest represents the request to probe/test a provider's API key and connectivity.
+type ProviderRequest struct {
 	Name     string `json:"name" binding:"required" description:"Provider name" example:"openai"`
 	APIBase  string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
 	APIStyle string `json:"api_style" binding:"required,oneof=openai anthropic" description:"API style" example:"openai"`
@@ -127,10 +188,10 @@ type E2ERequest struct {
 	Endpoint string `json:"endpoint,omitempty" example:"responses"`
 }
 
-// E2EData is an alias to ProbeResult — the canonical SDK-level probe result.
+// E2EData is an alias to Result — the canonical SDK-level probe result.
 // Aliased so service-layer Response wrappers and swagger registrations can
 // keep referring to the historical E2EData name.
-type E2EData = ProbeResult
+type E2EData = Result
 
 // E2EResponseChunk represents a streaming response chunk.
 type E2EResponseChunk struct {

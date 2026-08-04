@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -119,7 +120,8 @@ func TestValidateE2ERequest(t *testing.T) {
 			if err == nil {
 				t.Fatalf("ValidateE2ERequest expected error for field %q, got nil", tt.wantErr)
 			}
-			ve, ok := err.(*ValidationError)
+			var ve *ValidationError
+			ok := errors.As(err, &ve)
 			if !ok {
 				t.Fatalf("ValidateE2ERequest returned %T, want *ValidationError", err)
 			}

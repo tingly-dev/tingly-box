@@ -4,8 +4,8 @@
 
 The probe subsystem performs SDK-level end-to-end connectivity tests for providers and rules. There are two probe strategies:
 
-- **Lightweight** (`internal/probe/lightweight.go`): HTTP-level checks (OPTIONS, `/models`, `/chat/completions`) with no SDK. Used during provider onboarding to validate credentials quickly.
-- **E2E** (`internal/probe/e2e.go`): Full SDK round-trip using the same client methods as production traffic (ChatCompletionsNew, ResponsesNew, MessagesNew, GenerateContent). This catches provider quirks that only show up under the real code path.
+- **Lightweight** (`../internal/probe/light_probe.go`): HTTP-level checks (OPTIONS, `/models`, `/chat/completions`) with no SDK. Used during provider onboarding to validate credentials quickly.
+- **E2E** (`../internal/probe/e2e_probe.go`): Full SDK round-trip using the same client methods as production traffic (ChatCompletionsNew, ResponsesNew, MessagesNew, GenerateContent). This catches provider quirks that only show up under the real code path.
 
 ## E2E Target Types
 

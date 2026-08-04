@@ -15,13 +15,13 @@ import (
 // lightweight services; adaptive can be hung off the same struct when that
 // strategy is decoupled from *Server.
 type Handler struct {
-	e2e         *probe.E2EService
-	lightweight *probe.LightweightService
+	e2e   *probe.E2EProber
+	light *probe.LightProber
 }
 
 // NewHandler builds a Handler around the given probe services.
-func NewHandler(e2e *probe.E2EService, lightweight *probe.LightweightService) *Handler {
-	return &Handler{e2e: e2e, lightweight: lightweight}
+func NewHandler(e2e *probe.E2EProber, light *probe.LightProber) *Handler {
+	return &Handler{e2e: e2e, light: light}
 }
 
 // errorDetail mirrors the JSON shape of the server's global ErrorDetail so
@@ -141,6 +141,6 @@ func (h *Handler) HandleLightweightProbe(c *gin.Context) {
 		provider.AuthType = typ.AuthType(req.AuthType)
 	}
 
-	data := h.lightweight.Probe(c.Request.Context(), provider)
+	data := h.light.Probe(c.Request.Context(), provider)
 	c.JSON(http.StatusOK, LightweightResponse{Success: true, Data: data})
 }

@@ -10,23 +10,23 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// LightweightService runs the optional "Test Connection" probe used when a
+// LightProber runs the optional "Test Connection" probe used when a
 // user adds an API key. It pokes OPTIONS, /models, /chat/completions, and
 // /responses and returns a per-endpoint report; results are advisory only
 // and do not block onboarding. Independent of *Server.
-type LightweightService struct {
+type LightProber struct {
 	pool *client.ClientPool
 }
 
-// NewLightweightService constructs a LightweightService backed by the given client pool.
-func NewLightweightService(pool *client.ClientPool) *LightweightService {
-	return &LightweightService{pool: pool}
+// NewLightProber constructs a LightProber backed by the given client pool.
+func NewLightProber(pool *client.ClientPool) *LightProber {
+	return &LightProber{pool: pool}
 }
 
 // Probe runs every applicable sub-probe for the provider and returns a
 // populated LightweightProbeResponseData. Never returns an error — partial
 // failure is encoded in the per-endpoint fields and the Valid summary.
-func (l *LightweightService) Probe(ctx context.Context, provider *typ.Provider) *LightweightProbeResponseData {
+func (l *LightProber) Probe(ctx context.Context, provider *typ.Provider) *LightweightProbeResponseData {
 	data := &LightweightProbeResponseData{
 		Provider: provider.Name,
 		APIBase:  provider.APIBase,
@@ -95,7 +95,7 @@ type modelsReport struct {
 	Warning      string
 }
 
-func (l *LightweightService) probeOptionsEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
+func (l *LightProber) probeOptionsEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
 	startTime := time.Now()
 
 	switch provider.APIStyle {
@@ -113,7 +113,7 @@ func (l *LightweightService) probeOptionsEndpoint(ctx context.Context, provider 
 	return endpointReport{false, fmt.Sprintf("OPTIONS failed: %s", result.ErrorMessage), responseTime}
 }
 
-func (l *LightweightService) probeModelsEndpoint(ctx context.Context, provider *typ.Provider) modelsReport {
+func (l *LightProber) probeModelsEndpoint(ctx context.Context, provider *typ.Provider) modelsReport {
 	startTime := time.Now()
 
 	var lister client.ModelLister
@@ -174,7 +174,7 @@ func (l *LightweightService) probeModelsEndpoint(ctx context.Context, provider *
 	}
 }
 
-func (l *LightweightService) probeChatEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
+func (l *LightProber) probeChatEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
 	startTime := time.Now()
 
 	c := l.pool.GetOpenAIClient(context.Background(), provider, "")
@@ -197,7 +197,7 @@ func (l *LightweightService) probeChatEndpoint(ctx context.Context, provider *ty
 	return endpointReport{false, "Chat endpoint returned no content", responseTime}
 }
 
-func (l *LightweightService) probeResponsesEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
+func (l *LightProber) probeResponsesEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
 	startTime := time.Now()
 
 	c := l.pool.GetOpenAIClient(context.Background(), provider, "")

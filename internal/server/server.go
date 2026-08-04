@@ -104,11 +104,11 @@ type Server struct {
 	// template manager for provider templates
 	templateManager *data.TemplateManager
 
-	// probeE2EService runs SDK-level end-to-end probes for the /api/v2/probe endpoint.
-	probeE2EService *probe.E2EService
+	// probeE2e runs SDK-level end-to-end probes for the /api/v2/probe endpoint.
+	probeE2e *probe.E2EProber
 
-	// probeLightweight powers /api/v2/probe/lightweight — optional key validation.
-	probeLightweight *probe.LightweightService
+	// probeLight powers /api/v2/probe/lightweight — optional key validation.
+	probeLight *probe.LightProber
 
 	// mcp runtime for external MCP tools
 	mcpRuntime *mcpruntime.Runtime
@@ -402,8 +402,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.registerAdviserFromConfig()
 
 	// E2E probe service handles /api/v2/probe end-to-end without touching *Server.
-	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
-	server.probeLightweight = probe.NewLightweightService(server.clientPool)
+	server.probeE2e = probe.NewE2EProber(cfg, server.clientPool)
+	server.probeLight = probe.NewLightProber(server.clientPool)
 
 	// Initialize OTel for token metrics and tracing. Telemetry is export-only
 	// (optional OTLP); persistent usage records are written directly by the
@@ -536,7 +536,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			return server.probeLightweight.Probe(ctx, provider).Valid
+			return server.probeLight.Probe(ctx, provider).Valid
 		})
 	}
 
