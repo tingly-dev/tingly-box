@@ -162,3 +162,53 @@ func TestBotAccessMigrationEnablesRemoteControlForLegacyBot(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, remoteControl.Enabled, "legacy Bot must default to Remote Control enabled")
 }
+
+// TestBotAccessStoreSetDirectChatPermissionsAtomic verifies the batch write
+// is all-or-nothing: a valid batch lands completely, and a batch containing
+// one invalid row changes nothing.
+func TestBotAccessStoreSetDirectChatPermissionsAtomic(t *testing.T) {
+	sm, err := NewStoreManager(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sm.Close() })
+	store := sm.BotAccess()
+	ctx := context.Background()
+
+	bot, err := sm.ImBotSettings().CreateSettings(Settings{Name: "batch", Platform: "telegram", Enabled: true})
+	require.NoError(t, err)
+	chat, err := store.DiscoverDirectChat(ctx, bot.UUID, "telegram", "chat-1")
+	require.NoError(t, err)
+
+	effectOf := func(action access.ActionName) access.AccessEffect {
+		perms, err := store.ListDirectChatPermissions(ctx, bot.UUID, chat.ID)
+		require.NoError(t, err)
+		for _, p := range perms {
+			if p.Capability == access.CapabilityRemoteControl && p.Action == action {
+				return p.Effect
+			}
+		}
+		return ""
+	}
+
+	// Valid batch: the preset trio lands together.
+	batch := []access.Permission{
+		{Capability: access.CapabilityRemoteControl, Action: access.ActionAccess, Effect: access.EffectAllow},
+		{Capability: access.CapabilityRemoteControl, Action: access.ActionRemoteControlStart, Effect: access.EffectAllow},
+		{Capability: access.CapabilityRemoteControl, Action: access.ActionRemoteControlApprove, Effect: access.EffectAllow},
+	}
+	require.NoError(t, store.SetDirectChatPermissions(ctx, bot.UUID, chat.ID, batch))
+	require.Equal(t, access.EffectAllow, effectOf(access.ActionRemoteControlStart))
+	require.Equal(t, access.EffectAllow, effectOf(access.ActionRemoteControlApprove))
+
+	// Invalid row anywhere in the batch: nothing changes.
+	bad := []access.Permission{
+		{Capability: access.CapabilityRemoteControl, Action: access.ActionRemoteControlStart, Effect: access.EffectDeny},
+		{Capability: access.CapabilityRemoteControl, Action: access.ActionRemoteControlApprove, Effect: access.AccessEffect("bogus")},
+	}
+	require.Error(t, store.SetDirectChatPermissions(ctx, bot.UUID, chat.ID, bad))
+	require.Equal(t, access.EffectAllow, effectOf(access.ActionRemoteControlStart), "failed batch must not half-apply")
+	require.Equal(t, access.EffectAllow, effectOf(access.ActionRemoteControlApprove))
+
+	// Unknown chat and empty batch are rejected.
+	require.ErrorIs(t, store.SetDirectChatPermissions(ctx, bot.UUID, "ghost", batch), ErrAccessTargetNotFound)
+	require.ErrorIs(t, store.SetDirectChatPermissions(ctx, bot.UUID, chat.ID, nil), ErrInvalidPermission)
+}

@@ -46,6 +46,20 @@ type BlockedUpdateRequest struct {
 type PermissionUpdateRequest struct {
 	Effect access.AccessEffect `json:"effect"`
 }
+
+// PermissionWrite is one explicit capability/action/effect row in a batch
+// permission update.
+type PermissionWrite struct {
+	Capability access.CapabilityName `json:"capability"`
+	Action     access.ActionName     `json:"action"`
+	Effect     access.AccessEffect   `json:"effect"`
+}
+
+// PermissionsUpdateRequest carries a batch of permission rows that must be
+// applied atomically.
+type PermissionsUpdateRequest struct {
+	Permissions []PermissionWrite `json:"permissions"`
+}
 type DirectChatDetailResponse struct {
 	Chat        access.DirectChat   `json:"chat"`
 	Permissions []access.Permission `json:"permissions"`
@@ -265,6 +279,28 @@ func (h *Handler) PutDirectChatBlocked(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, OKResponse{OK: true})
 }
+// PutDirectChatPermissions applies a batch of explicit Direct Chat permission
+// rows in one store transaction, so a preset can never half-apply.
+func (h *Handler) PutDirectChatPermissions(c *gin.Context) {
+	if !h.requireAccess(c) {
+		return
+	}
+	var req PermissionsUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Permissions) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "permissions is required"})
+		return
+	}
+	perms := make([]access.Permission, 0, len(req.Permissions))
+	for _, p := range req.Permissions {
+		perms = append(perms, access.Permission{Capability: p.Capability, Action: p.Action, Effect: p.Effect})
+	}
+	if err := h.accessStore.SetDirectChatPermissions(c.Request.Context(), c.Param("bot"), c.Param("chat"), perms); err != nil {
+		accessError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, OKResponse{OK: true})
+}
+
 func (h *Handler) PutDirectChatPermission(c *gin.Context) {
 	if !h.requireAccess(c) {
 		return

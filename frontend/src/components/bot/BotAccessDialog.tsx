@@ -40,12 +40,14 @@ const BotAccessDialog = ({open, bot, onClose, onChanged}:Props) => {
     const mutate=async(action:()=>Promise<unknown>)=>{setSaving(true);setError('');try{await action();await load();onChanged()}catch(e){setError((e as Error).message)}finally{setSaving(false)}};
     const capabilityOn=(name:CapabilityName)=>capabilities.find((item)=>item.capability===name)?.enabled===true;
     const setPreset=(chat:DirectChatDetail,preset:'full'|'notify')=>mutate(async()=>{
-        const id=chat.chat.id;const botID=bot!.uuid!;
-        const writes:Array<Promise<unknown>>=[];
-        const put=(cap:string,action:string,allow:boolean)=>writes.push(api.setBotDirectChatPermission(botID,id,cap,action,allow?'allow':'deny'));
+        // One atomic batch write: a partial network failure must never leave
+        // mixed rows (e.g. start=allow with approve=deny silently breaking
+        // permission replies).
+        const rows:Array<{capability:string;action:string;effect:'allow'|'deny'}>=[];
+        const put=(capability:string,action:string,allow:boolean)=>rows.push({capability,action,effect:allow?'allow':'deny'});
         put('notify','access',true);put('notify','notify.receive',true);put('notify','notify.reply',true);
         put('remote_control','access',preset==='full');put('remote_control','remote_control.start',preset==='full');put('remote_control','remote_control.approve',preset==='full');put('remote_control','remote_control.privileged',false);
-        await Promise.all(writes);
+        await api.setBotDirectChatPermissions(bot!.uuid!,chat.chat.id,rows);
     });
 
     return <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -73,7 +75,18 @@ const BotAccessDialog = ({open, bot, onClose, onChanged}:Props) => {
                         {chats.length===0?<Alert severity="info">No Direct Chats yet. Send the Bot <code>/bind &lt;pairing code&gt;</code> in a direct message, then return here.</Alert>:<Stack spacing={1.5}>{chats.map((chat)=><Box key={chat.chat.id} sx={{p:1.5,border:1,borderColor:'divider',borderRadius:1.5}}>
                             <Stack direction={{xs:'column',sm:'row'}} sx={{justifyContent:'space-between',gap:1}}>
                                 <Box><Typography sx={{fontWeight:600}}>{chat.chat.peer_actor_id?'Paired person':'Unpaired chat'}</Typography><Typography variant="caption" sx={{fontFamily:'monospace',color:'text.primary'}}>{chat.chat.external_chat_id}</Typography></Box>
-                                <Stack direction="row" spacing={1} sx={{flexWrap:'wrap'}}><Chip size="small" label={permissionAllowed(chat,'remote_control.start')?'Remote Control':'No Remote Control'} color={permissionAllowed(chat,'remote_control.start')?'primary':'default'}/><Chip size="small" label={permissionAllowed(chat,'notify.receive')?'Notify':'No Notify'}/><FormControlLabel sx={{m:0}} control={<Switch size="small" checked={chat.chat.blocked} onChange={(_,blocked)=>void mutate(()=>api.setBotDirectChatBlocked(bot!.uuid!,chat.chat.id,blocked))}/>} label="Blocked"/></Stack>
+                                <Stack direction="row" spacing={1} sx={{flexWrap:'wrap'}}>{(()=>{
+                                    // Show the real state of both actions the remote-control
+                                    // flow depends on: start (launch runs) AND approve (answer
+                                    // permission/question prompts). A mixed state silently
+                                    // breaks prompt replies, so it must be loud here, with the
+                                    // concrete per-action values in the tooltip.
+                                    const start=permissionAllowed(chat,'remote_control.start');
+                                    const approve=permissionAllowed(chat,'remote_control.approve');
+                                    if(start&&approve)return <Chip size="small" label="Remote Control" color="primary"/>;
+                                    if(!start&&!approve)return <Chip size="small" label="No Remote Control"/>;
+                                    return <Chip size="small" color="warning" label={`Remote Control broken: ${start?'approve denied':'start denied'}`} title="start launches runs; approve answers permission/question prompts. Re-apply the Full preset to repair."/>;
+                                })()}<Chip size="small" label={permissionAllowed(chat,'notify.receive')?'Notify':'No Notify'}/><FormControlLabel sx={{m:0}} control={<Switch size="small" checked={chat.chat.blocked} onChange={(_,blocked)=>void mutate(()=>api.setBotDirectChatBlocked(bot!.uuid!,chat.chat.id,blocked))}/>} label="Blocked"/></Stack>
                             </Stack>
                             <Stack direction="row" spacing={1} sx={{mt:1}}><Button size="small" disabled={saving||!chat.chat.peer_actor_id} onClick={()=>void setPreset(chat,'full')}>Full access</Button><Button size="small" disabled={saving} onClick={()=>void setPreset(chat,'notify')}>Notify only</Button></Stack>
                         </Box>)}</Stack>}

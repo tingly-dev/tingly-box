@@ -1597,6 +1597,10 @@ export const api = {
         botAccessAPI(`/api/v1/bots/${encodeURIComponent(botUUID)}/chats/${encodeURIComponent(chatID)}/permissions/${capability}/${action}`, {
             method: 'PUT', body: JSON.stringify({effect}),
         }),
+    setBotDirectChatPermissions: (botUUID: string, chatID: string, permissions: Array<{capability: string; action: string; effect: 'allow' | 'deny'}>) =>
+        botAccessAPI(`/api/v1/bots/${encodeURIComponent(botUUID)}/chats/${encodeURIComponent(chatID)}/permissions`, {
+            method: 'PUT', body: JSON.stringify({permissions}),
+        }),
     listBotGroups: (botUUID: string) =>
         botAccessAPI(`/api/v1/bots/${encodeURIComponent(botUUID)}/groups`),
     getBotGroup: (botUUID: string, groupID: string) =>

@@ -413,6 +413,31 @@ func (s *BotAccessStore) SetDirectChatBlocked(ctx context.Context, botUUID, id s
 	}
 	return nil
 }
+// SetDirectChatPermissions writes a set of explicit permission rows for one
+// Direct Chat in a single transaction. Presets use it so a partial network
+// failure can never leave a half-applied permission state (e.g. start=allow
+// with approve=deny).
+func (s *BotAccessStore) SetDirectChatPermissions(ctx context.Context, botUUID, id string, perms []access.Permission) error {
+	if len(perms) == 0 {
+		return ErrInvalidPermission
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var n int64
+		if err := tx.Model(&remoteDirectChatRecord{}).Where("id = ? AND bot_uuid = ?", id, botUUID).Count(&n).Error; err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrAccessTargetNotFound
+		}
+		for _, p := range perms {
+			if err := putDirectPermission(tx, id, p.Capability, p.Action, p.Effect); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (s *BotAccessStore) SetDirectChatPermission(ctx context.Context, botUUID, id string, capability access.CapabilityName, action access.ActionName, effect access.AccessEffect) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var n int64
