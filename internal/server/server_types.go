@@ -4,8 +4,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"strings"
 	"time"
-
-	"github.com/tingly-dev/tingly-box/internal/probe"
 )
 
 // =============================================
@@ -45,15 +43,6 @@ type OpenAIChatCompletionResponse struct {
 // =============================================
 // Web UI API Models — probe request/data types live in internal/probe
 // =============================================
-
-// ProbeProviderResponse represents the response from provider probing.
-// The wrapper stays here because it embeds *protocolserver.ErrorDetail (server's global
-// error model). The Data shape lives in internal/probe.
-type ProbeProviderResponse struct {
-	Success bool                             `json:"success" example:"true"`
-	Error   *protocolserver.ErrorDetail      `json:"error,omitempty"`
-	Data    *probe.ProbeProviderResponseData `json:"data,omitempty"`
-}
 
 // RequestConfig represents a request configuration in defaults response
 type RequestConfig struct {

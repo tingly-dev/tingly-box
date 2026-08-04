@@ -2,7 +2,6 @@ package probe
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -74,18 +73,10 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	startTime := time.Now()
 
-	var (
-		data *probe.E2EData
-		err  error
-	)
-	switch req.TestMode {
-	case probe.E2EModeSimple:
-		data, err = h.e2e.Probe(ctx, &req)
-	case probe.E2EModeStreaming, probe.E2EModeTool:
-		data, err = h.e2e.ProbeStream(ctx, &req)
-	}
+	// Probe handles all test modes (simple/streaming/tool); the stream-vs-
+	// non-stream decision is made inside the SDK helpers from req.TestMode.
+	data, err := h.e2e.Probe(ctx, &req)
 
 	if err != nil {
 		c.JSON(http.StatusOK, E2EResponse{
@@ -98,7 +89,8 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 		return
 	}
 
-	data.LatencyMs = time.Since(startTime).Milliseconds()
+	// LatencyMs is owned by the SDK probe (pure upstream round-trip time) — do
+	// not overwrite it here.
 	c.JSON(http.StatusOK, E2EResponse{Success: true, Data: data})
 }
 

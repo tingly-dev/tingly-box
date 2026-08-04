@@ -32,7 +32,10 @@ func NewE2EProber(cfg *config.Config, pool *client.ClientPool) *E2EProber {
 	}
 }
 
-// Probe performs a non-streaming probe against the target described by req.
+// Probe performs an SDK probe against the target described by req. It serves
+// all test modes — simple/streaming/tool — the stream decision is made inside
+// the SDK helpers from req.TestMode. Only the narrow direct-endpoint
+// capability-check shape is cached; everything else dispatches for real.
 func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error) {
 	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
@@ -54,24 +57,11 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
 	}
 	message := E2EMessage(req.TestMode, req.Message)
-	result, err := e.ProbeProviderWithSDK(ctx, provider, model, message, req.TestMode, req.Endpoint)
+	result, err := e.probeProviderWithSDK(ctx, provider, model, message, req.TestMode, req.Endpoint)
 	if cacheable && err == nil && result != nil && result.Success {
 		e.endpointCache.remember(provider.UUID, model, req.Endpoint)
 	}
 	return result, err
-}
-
-// ProbeStream performs a streaming probe against the target described by req.
-func (e *E2EProber) ProbeStream(ctx context.Context, req *E2ERequest) (*E2EData, error) {
-	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if len(probeHeaders) > 0 {
-		ctx = client.WithProbeHeaders(ctx, probeHeaders)
-	}
-	message := E2EMessage(req.TestMode, req.Message)
-	return e.probeProviderStream(ctx, provider, model, message, req.TestMode, req.Endpoint)
 }
 
 // resolveTargetToProviderModel resolves an E2ERequest to a provider, model,
@@ -141,10 +131,8 @@ func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) 
 	if model == "" {
 		if len(provider.Models) > 0 {
 			model = provider.Models[0]
-		} else if provider.APIStyle == protocol.APIStyleAnthropic {
-			model = "claude-3-haiku-20240307"
 		} else {
-			model = "gpt-3.5-turbo"
+			return nil, "", nil, fmt.Errorf("no model specified and provider %q has no models to default to", provider.Name)
 		}
 	}
 
@@ -201,11 +189,9 @@ func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) 
 	return loopbackProvider, loopbackModel, probeHeaders, nil
 }
 
-// resolveOpenAIProbeEndpoint decides which OpenAI endpoint a probe should hit,
-// folding both special cases that previously lived as separate branches in
-// ProbeProviderWithSDK into one place: an explicit override always wins;
-// absent that, Codex OAuth providers only speak Responses, everything else
-// defaults to Chat.
+// resolveOpenAIProbeEndpoint decides which OpenAI endpoint a probe should hit:
+// an explicit override always wins; absent that, Codex OAuth providers only
+// speak Responses, everything else defaults to Chat.
 func resolveOpenAIProbeEndpoint(override string, provider *typ.Provider) string {
 	switch override {
 	case "chat", "responses":
@@ -256,14 +242,7 @@ func (e *E2EProber) resolveProviderConfigTarget(_ context.Context, req *E2EReque
 
 	model := req.Model
 	if model == "" {
-		switch provider.APIStyle {
-		case protocol.APIStyleAnthropic:
-			model = "claude-3-haiku-20240307"
-		case protocol.APIStyleGoogle:
-			model = "gemini-2.0-flash-exp"
-		default:
-			model = "gpt-3.5-turbo"
-		}
+		return nil, "", fmt.Errorf("no model specified for provider_config probe")
 	}
 
 	return provider, model, nil
@@ -313,19 +292,35 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 	return provider, model, probeHeaders, nil
 }
 
-// ProbeProviderWithSDK runs an SDK probe by dispatching a minimal request
-// through the provider's real-traffic client methods. Public because the
-// server's provider onboarding path (testProviderConnectivity) reuses it.
+// probeProviderWithSDK dispatches a minimal request through the provider's
+// real-traffic client methods (the same methods production uses, so provider
+// quirks cannot drift from the real path). The stream-vs-non-stream decision
+// is made inside each per-provider helper from testMode.
+//
 // endpointOverride forces which OpenAI endpoint to hit ("chat"/"responses");
 // pass "" for resolveOpenAIProbeEndpoint's default (Codex OAuth -> responses,
 // everything else -> chat).
-func (e *E2EProber) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
-	mode := testMode
-
+func (e *E2EProber) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
 	_, wrapProbeHeaders := client.GetProbeHeaders(ctx)
 
 	var result *E2EData
 	var err error
+	// maybeCapture wires probe-header + routing-capture round trippers onto a
+	// client when this is a loopback probe, and returns a func that folds the
+	// captured routing trace into the result once the call completes. For direct
+	// probes (no probe headers) it returns a no-op.
+	maybeCapture := func(c any) func(*E2EData) {
+		if !wrapProbeHeaders {
+			return func(*E2EData) {}
+		}
+		client.ApplyProbeHeadersToClient(c)
+		routing := client.ApplyRoutingCaptureToClient(c)
+		return func(r *E2EData) {
+			if r != nil {
+				applyRoutingCapture(r, routing)
+			}
+		}
+	}
 
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
@@ -333,19 +328,15 @@ func (e *E2EProber) ProbeProviderWithSDK(ctx context.Context, provider *typ.Prov
 		if oc == nil {
 			return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", provider.Name)
 		}
-		var routing *client.RoutingCapture
-		if wrapProbeHeaders {
-			client.ApplyProbeHeadersToClient(oc)
-			routing = client.ApplyRoutingCaptureToClient(oc)
-		}
+		apply := maybeCapture(oc)
 		switch resolveOpenAIProbeEndpoint(endpointOverride, provider) {
 		case "chat":
-			result, err = probeOpenAIChat(ctx, oc, model, message, mode)
+			result, err = probeOpenAIChat(ctx, oc, model, message, testMode)
 		case "responses":
-			result, err = probeOpenAIResponses(ctx, oc, model, message, mode)
+			result, err = probeOpenAIResponses(ctx, oc, model, message, testMode)
 		}
-		if err == nil && routing != nil {
-			applyRoutingCapture(result, routing)
+		if err == nil {
+			apply(result)
 		}
 
 	case protocol.APIStyleAnthropic:
@@ -353,14 +344,10 @@ func (e *E2EProber) ProbeProviderWithSDK(ctx context.Context, provider *typ.Prov
 		if ac == nil {
 			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
 		}
-		var routing *client.RoutingCapture
-		if wrapProbeHeaders {
-			client.ApplyProbeHeadersToClient(ac)
-			routing = client.ApplyRoutingCaptureToClient(ac)
-		}
-		result, err = probeAnthropicMessages(ctx, ac, model, message, mode)
-		if err == nil && routing != nil {
-			applyRoutingCapture(result, routing)
+		apply := maybeCapture(ac)
+		result, err = probeAnthropicMessages(ctx, ac, model, message, testMode)
+		if err == nil {
+			apply(result)
 		}
 
 	case protocol.APIStyleGoogle:
@@ -368,7 +355,8 @@ func (e *E2EProber) ProbeProviderWithSDK(ctx context.Context, provider *typ.Prov
 		if gc == nil {
 			return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
 		}
-		result, err = probeGoogleGenerate(ctx, gc, model, message, mode)
+		// Google probes are always direct (no loopback route) — no routing capture.
+		result, err = probeGoogleGenerate(ctx, gc, model, message, testMode)
 
 	default:
 		return nil, fmt.Errorf("unsupported API style: %s", provider.APIStyle)
@@ -403,8 +391,4 @@ func applyRoutingCapture(result *E2EData, cap *client.RoutingCapture) {
 	} else {
 		result.MatchedRuleDesc = cap.MatchedRuleDesc
 	}
-}
-
-func (e *E2EProber) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode, endpointOverride string) (*E2EData, error) {
-	return e.ProbeProviderWithSDK(ctx, provider, model, message, testMode, endpointOverride)
 }

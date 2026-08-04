@@ -191,7 +191,7 @@ func (l *LightProber) probeChatEndpoint(ctx context.Context, provider *typ.Provi
 	if err != nil {
 		return endpointReport{false, fmt.Sprintf("Chat endpoint failed: %v", err), responseTime}
 	}
-	if result != nil && result.Content != "" {
+	if result != nil && result.Success {
 		return endpointReport{true, "Chat endpoint accessible", responseTime}
 	}
 	return endpointReport{false, "Chat endpoint returned no content", responseTime}
@@ -214,7 +214,7 @@ func (l *LightProber) probeResponsesEndpoint(ctx context.Context, provider *typ.
 	if err != nil {
 		return endpointReport{false, fmt.Sprintf("Responses endpoint failed: %v", err), responseTime}
 	}
-	if result != nil && result.Content != "" {
+	if result != nil && result.Success {
 		return endpointReport{true, "Responses API endpoint accessible", responseTime}
 	}
 	return endpointReport{false, "Responses endpoint returned no content", responseTime}
