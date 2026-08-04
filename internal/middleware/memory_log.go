@@ -162,6 +162,11 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		if tactic := c.GetString(constant.CtxKeyLBTactic); tactic != "" {
 			fields["lb_tactic"] = tactic
 		}
+		// OTel correlation: present only when tracing is enabled and the
+		// request span was sampled — lets the access log jump to the trace.
+		if traceID := c.GetString(constant.CtxKeyTraceID); traceID != "" {
+			fields["trace_id"] = traceID
+		}
 
 		// Log with structured fields including error details
 		m.logger.WithFields(fields).Log(getLogLevel(statusCode), fmt.Sprintf("%s %s %d %v %s %d",

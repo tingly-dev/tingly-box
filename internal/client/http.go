@@ -261,11 +261,11 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.ProxyURL)
 	}
 
-	return &SessionBoundTransport{
+	return newPropagatingTransport(&SessionBoundTransport{
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
 		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
-	}
+	})
 }

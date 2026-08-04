@@ -393,7 +393,14 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 			rec.SetActiveService(provider, model)
 		}
 
+		// One child span per attempt: the tracking context only keeps the
+		// final winner (UpdateTrackingForFailover overwrites), so the span
+		// is the structured record of the retry history.
+		attemptSpan := ph.startFailoverAttemptSpan(c.Request.Context(), i+1, serviceID, provider.UUID)
+
 		attempt(provider, model)
+
+		endFailoverAttemptSpan(attemptSpan, gate.Committed(), gate.Status())
 
 		// A committed gate means the stream's first real chunk reached
 		// the wire — bytes have left the process, retry is impossible.

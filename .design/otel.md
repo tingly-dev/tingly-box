@@ -89,13 +89,67 @@ cumulative 指标的每个不同属性组合都是一条**进程生命周期内�
 - 厂商原生支持 gen_ai：Datadog（v1.37+）、New Relic、Dynatrace、Honeycomb。Claude Code / Copilot / Codex 已在发这套遥测。
 - **跟踪点**：内容捕获属性（`gen_ai.input.messages` 等，默认必须 opt-in，含敏感数据）、agent/MCP 约定、cache token type 是否被规范收编。
 
-## 7. 未来工作（接入打点时）
+## 7. 请求链路打点接线（2026-08 实施）
 
-1. 在请求管道（protocol handler / client 层）用 `server.otelSetup.Tracer()` 打 span：入口处 `StartRequestSpan`，上游调用一个子 span，出口 `SetTokenUsage` + `EndSpan`。
-2. 从入站 HTTP 头 Extract 上游 trace context（propagator 已装好），出站注入 `traceparent`。
-3. 非 chat 操作（embeddings 等）把 `UsageOptions.Operation` / span operation 传对。
-4. 内容捕获（prompt/completion 上 span）：等规范稳定 + 产品决策，必须默认关闭。
-5. OTLP 配置目前只有代码内 `DefaultConfig()`（默认关）——暴露到用户配置文件/UI 时记得走 swagger codegen 流程。
+### 7.1 为什么 span 生命周期归中间件，不归 trackUsage
+
+`trackUsage*` 有 30+ 个调用点（dispatch / cross / passthrough / mcp loop / error_response），
+且 failover 每次失败尝试也会经 `failAttemptSetup` 调一次——它**不是每请求恰好一次**的终点，
+不能承载 EndSpan。root span 的唯一正确 owner 是 gin middleware（一进一出各恰好一次）。
+
+同理，gin context 的 tracking 键值包**不改造成 span**：OTel span 是只写导出型，UsageStore
+计费 / health monitor / LB stats 需要在请求末端读回这些值；把 span 当内存态数据载体正是
+§1 删掉的 SinkExporter 反模式。context 键值包的定位是**进程内参数载体**，span 是它在
+观测通路上的**投影之一**（与 UsageRecord、metrics、memory log 平行）。曾考虑把 ~20 个
+ctx key 合并为单一 struct（"B 方案"）——被否决：这些 key 分属身份（auth 写入）、能力句柄
+（recorder/guardrails state）、追踪元数据三个领域，写入方横跨 middleware/routing/
+protocolserver/protocol 四个包，`constant` 包的松散 key 正是为了避免跨域 god-struct 与
+import 环。追踪元数据簇已被 `SetTrackingContext`/`GetTrackingContext` 单点收口，够用。
+
+### 7.2 Span 拓扑
+
+```
+tingly.request  (root, kind CLIENT, 每 HTTP 请求一个, middleware 拥有)
+ ├─ gen_ai.* 请求属性 + tingly.* 维度 + token usage 属性（trackUsage 回写）
+ ├─ failover.attempt (child, 仅多服务 failover 循环产生, 每次尝试一个)
+ │    attrs: tingly.failover.attempt / tingly.lb.service_id / provider uuid / model
+ │    outcome: committed → OK；retryable/terminal 失败 → error status + http status attr
+ └─ (上游 HTTP 调用不单独建 span；出站 inject root ctx 的 traceparent)
+```
+
+- **root span**：`tracingMiddleware`（`contextMiddleware` 之后）创建。入口 Extract 入站
+  `traceparent`（propagator 未启用时是全局 no-op，零成本）；`c.Next()` 之后从 tracking
+  context 读回 provider/model/rule/LB 决策，`span.SetName("{operation} {request model}")`
+  （operation 从路径推导：/embeddings → embeddings，其余 chat，与 UsageOptions.Operation
+  同轴同默认）并补全属性，按 HTTP 状态置 error（**canceled ≠ error 规则同 §3**：
+  `c.Request.Context().Err() == Canceled` 时不置 error status）。
+- **失败尝试不再丢失**：`UpdateTrackingForFailover` 覆盖 ctx 只留最终赢家（UsageRecord
+  的既定语义，不变）；尝试历史的结构化归宿是 per-attempt child span。不在内存里平行
+  维护 attempts 列表，也不塞进 UsageRecord——那违反 §1 三通路边界。
+- **attempt span 不换入 c.Request context**：token usage 回写（`Tracer.SetTokenUsage`）
+  走 ambient ctx，必须始终落在 root span 上；attempt span 是纯结果记录，做 root 的
+  子节点即可。
+- **出站注入**：`propagatingTransport`（internal/client）在两个 transport 汇聚点包一层
+  （`createSessionBoundTransport` + 直连 `GetGlobalTransportPool().GetTransport` 的
+  openai/anthropic/google 三处），Inject 前按 RoundTripper 契约 clone request + header。
+  未启用 tracing 时 propagator 为 no-op、ctx 无 span——注入零头。
+
+### 7.3 trace_id 关联（三通路互跳）
+
+root span sampled 且 valid 时，middleware 把 trace id 写入
+`constant.CtxKeyTraceID`；两个消费方：
+
+1. **UsageRecord.TraceID**（新列 `trace_id`，AutoMigrate 增列）——从精确账单跳到 trace。
+2. **memory access log 的 `trace_id` 字段**（middleware/memory_log.go）——从请求日志跳到 trace。
+
+未启用 tracing 时 key 不设置、列为空串，零行为变化。
+
+### 7.4 仍然悬置
+
+1. 内容捕获（prompt/completion 上 span）：等规范稳定 + 产品决策，必须默认关闭。
+2. OTLP 配置目前只有代码内 `DefaultConfig()`（默认关）——暴露到用户配置文件/UI 时记得走 swagger codegen 流程。
+3. MCP loop 每次迭代的独立 gen_ai span（当前 token usage 回写 root，last-write-wins；
+   精确值在 UsageStore）。
 
 ## 8. 决策记录索引
 

@@ -489,6 +489,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.aiHandler = protocolserver.NewHandler(protocolserver.ProtocolHandlerDeps{
 		Config:                  server.config,
 		TokenTracker:            server.tokenTracker,
+		Tracer:                  server.otelSetup.Tracer(),
 		HealthMonitor:           server.healthMonitor,
 		ClientPool:              server.clientPool,
 		LoadBalancer:            server.loadBalancer,

@@ -30,6 +30,7 @@ const (
 	CtxKeyAffinityKey    = "tracking_affinity_key"     // string (scoped affinity store key: session + matched smart partition)
 	CtxKeyLBServiceID    = "tracking_lb_service_id"    // string (selected upstream, e.g. "provider-uuid:model")
 	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "random")
+	CtxKeyTraceID        = "tracking_trace_id"         // string (OTel trace id, set only when the request span is sampled)
 
 	// Protocol recording metadata.
 	CtxKeyProtocolRecorder    = "protocol_recorder"     // *recording.ProtocolRecorder

@@ -1,6 +1,7 @@
 package otel
 
 import (
+	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
@@ -28,4 +29,16 @@ var (
 	AttrTinglyRuleUUID     = tracker.AttrRuleUUID
 	AttrTinglyStreaming    = tracker.AttrStreaming
 	AttrTinglyUserTier     = tracker.AttrUserTier
+)
+
+// Span-only gateway attributes. These carry per-request (near-unique) values
+// and therefore MUST NOT be used as metric attributes — spans are released
+// after export, cumulative metric series are not (see the cardinality rules
+// in .design/otel.md §4).
+var (
+	AttrTinglyRequestID       = attribute.Key("tingly.request_id")
+	AttrTinglyLBServiceID     = attribute.Key("tingly.lb.service_id")
+	AttrTinglyLBTactic        = attribute.Key("tingly.lb.tactic")
+	AttrTinglyFailoverAttempt = attribute.Key("tingly.failover.attempt")
+	AttrHTTPResponseStatus    = semconv.HTTPResponseStatusCodeKey
 )

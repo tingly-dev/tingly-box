@@ -29,6 +29,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/visionproxy"
+	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
 )
 
@@ -44,6 +45,12 @@ type ProtocolHandlerDeps struct {
 	// TokenTracker records usage to the OTel meter pipeline (may be nil if
 	// OTel setup failed at startup — callers must nil-check).
 	TokenTracker *tracker.TokenTracker
+
+	// Tracer emits the per-request root span and failover attempt spans to
+	// the OTel trace pipeline. The host passes Setup.Tracer(), which is a
+	// guaranteed-usable no-op when OTLP is unconfigured; may still be nil in
+	// bare test handlers — callers must nil-check.
+	Tracer *pkgotel.Tracer
 
 	// HealthMonitor reports per-service health outcomes (success / rate
 	// limit / auth error / general error) back into the load-balance health
