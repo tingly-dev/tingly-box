@@ -1,6 +1,6 @@
 # ProtocolServer — 模型服务面从 internal/server 独立
 
-Status: steps 1–4 done (branch `refactor/protocolserver`, commits ae8dbfa9 → 4658b900)
+Status: steps 1–5 done + 后续进一步提升（middleware / routing 到 top-level，affinity 并入根）
 Date: 2026-08-04
 
 ## 动机
@@ -29,14 +29,27 @@ internal/protocolserver/
 ├── failover_dispatch / load_balance（选路引擎）
 ├── guardrails_runtime* / recording_transform / usage_tracking / tracking_context
 ├── routes.go             # RegisterRoutes(...) ← 原 UseAIEndpoints
-└── 子包整体迁入: routing/ affinity/ forwarding/ recording/ transform/ servertool/ advisortool/
+└── 子包整体迁入: forwarding/ recording/ transform/ servertool/ advisortool/
 ```
+
+**后续进一步提升**（steps 1–5 之后，2026-08-04）：
+
+- **middleware**：`internal/server/middleware` → top-level `internal/middleware`（#1494）。原本
+  protocolserver 与其它非 server 包要用中间件只能反向依赖 server；提升后三方（server /
+  protocolserver / handler）作为 peer 引用，依赖方向理顺。顺带订正了 `doc.go`（ring-buffer 500→50、
+  补 routing 字段、修正 `UserAuthMiddleware` / `RateLimit` 描述、补 Gzip）。
+- **routing**：`internal/protocolserver/routing` → top-level `internal/routing`（5f1ef829）。选路引擎
+  pipeline（selector / 各 stage）独立成包，server 与 protocolserver 共用。
+- **affinity**：`internal/protocolserver/affinity/affinity.go` → `internal/protocolserver/affinity.go`
+  并入根（`package protocolserver`，5fe2ab7a）。它本就只服务 serving 侧、且依赖 protocolserver
+  内部状态，没必要单独成包，故直接并回。
 
 ### 依赖方向（拆完后必须单向）
 
 ```
 server → protocolserver
 server → module/*
+server, protocolserver → middleware / routing   （共享底座，top-level peer）
 module/* → protocolserver   （仅接口 / helper，如 forwarding、rule flags）
 protocolserver ✗ server / module/*   （禁止反向引用）
 ```
@@ -51,7 +64,7 @@ handler 类型 — **拆分对外部 API 零破坏**。
 |---|---|---|
 | `routingSelector`、affinity store、recording sinks、`servertoolPipeline`、`tokenTracker`、usage tracking | protocolserver 拥有 | serving-only，管理面不碰 |
 | `config`、`clientPool`、`templateManager`、`mcpRuntime`、`healthMonitor` | server 拥有，构造时注入 | 双方共用，server 是装配根 |
-| `LoadBalancer` | protocolserver 拥有，暴露 getter | 选路引擎在 serving 侧；管理面 `LoadBalancerAPI` 已用窄接口 `LoadBalancerEngine`，消费方向正好反转 |
+| `LoadBalancer` | protocolserver 拥有，暴露 getter | 选路引擎在 serving 侧；管理面 `LoadBalancerAPI` 已用窄接口 `LoadBalancerEngine`，消费方向正好反转。选路 pipeline 本身已下沉为 top-level `internal/routing`，server 与 protocolserver 共用 |
 | `guardrailsRuntime` | protocolserver 拥有 | 请求时求值在 serving 侧；`guardrails_handler.go` 已只通过 4 个 adapter 方法访问（`GuardrailsRuntime` 接口），实现者从 `*Server` 换成 protocolserver 侧即可 |
 
 ## 四个耦合点及处理
@@ -72,8 +85,9 @@ handler 类型 — **拆分对外部 API 零破坏**。
 重构原则：**先 mv 再改**，不重写。用 `tingly-go refactor move`（自动更新引用）做 package/file
 级迁移，逻辑变更单独成步。
 
-1. **迁纯 serving 子包**：`forwarding/ recording/ transform/ routing/ affinity/ servertool/
+1. **迁纯 serving 子包**：`forwarding/ recording/ transform/ servertool/
    advisortool/` → `internal/protocolserver/...`。纯 import 路径变更，零逻辑改动。
+   （`routing/` 后来进一步提到 top-level `internal/routing`；`affinity/` 并回 protocolserver 根。）
 2. **迁根文件**：protocol_* / openai_* / anthropic_* / mcp_* / failover_dispatch /
    load_balance（引擎与 simulator）/ guardrails_runtime* / recording_transform /
    usage_tracking / tracking_context / server_affinity + 共享 helper。
@@ -98,7 +112,8 @@ handler 类型 — **拆分对外部 API 零破坏**。
   ForwardContext 下沉。
 - LB 模拟器（`load_balance_simulator.go`）与 serving 侧测试中若干仍构造 `&Server{}`
   的用例留在 server 包（它们需要 unexported failover 入口经 aiHandler 走通）。
-- 拆完后可为依赖方向加 lint 规则（depguard / go vet 自定义）。
+- 拆完后可为依赖方向加 lint 规则（depguard / go vet 自定义）。middleware / routing 已提升为
+  top-level peer，方向已天然单向，depguard 主要用来守住 `protocolserver ✗ server/module/*` 这条线。
 - `swagger.go` 的 `GenerateOpenAPI` 只走管理面路由，不涉及 `/tingly`，不受影响。
 - 热重载：`servertoolPipeline` 仍经 `GetServertoolPipeline` 回调（config reload 原地重建
   pipeline 的逻辑仍在 server 的 `registerAdviserFromConfig`）；如需彻底消掉，可把 adviser
