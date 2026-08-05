@@ -213,28 +213,29 @@ go test -tags e2e ./internal/protocoltest/... -run TestContentShapes
 executor (`ExecuteAll*`) so the CLI can run it directly — including idempotence
 and the rule-flag suite, which would otherwise be go-test-only.
 
-| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§10.1) | cache_controls (§10.2) |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|
-| `default` *(no flag)* | ✅ | — | ✅ | — | — | — |
-| `all` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `single` | ✅ | — | — | — | — | — |
-| `transitive` | — | ✅ | — | — | — | — |
-| `idempotent` | — | — | ✅ | — | — | — |
-| `flags` | — | — | — | ✅ | — | — |
-| `content_shapes` | — | — | — | — | ✅ | — |
-| `cache_controls` | — | — | — | — | — | ✅ |
+| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) | content_shapes (§10.1) | cache_controls (§10.2) | dormant Bridges |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `default` *(no flag)* | ✅ | — | ✅ | — | — | — | ✅ |
+| `all` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `single` | ✅ | — | — | — | — | — | — |
+| `transitive` | — | ✅ | — | — | — | — | — |
+| `idempotent` | — | — | ✅ | — | — | — | — |
+| `flags` | — | — | — | ✅ | — | — | — |
+| `content_shapes` | — | — | — | — | ✅ | — | — |
+| `cache_controls` | — | — | — | — | — | ✅ | — |
+| `bridges` | — | — | — | — | — | — | ✅ |
 
 This mode → section mapping is declared in one place: the `matrixSections`
 registry in `cli/harness/matrix.go`. Each entry names the section, lists the
 `--mode` values that include it, marks whether it is http-only (`flags`,
-`content_shapes`, and `cache_controls` drive raw requests directly), and points
-at its `ExecuteAll*` executor. Adding a section = one registry entry + extending
-the `--mode` enum (see §8 for why this replaced a hand-maintained if-chain).
+`content_shapes`, and `cache_controls` drive raw requests directly, while
+`bridges` runs in-process), and points at its `ExecuteAll*` executor. Adding a
+section = one registry entry + extending the `--mode` enum (see §8 for why this
+replaced a hand-maintained if-chain).
 
 ```bash
-# Default: single-hop + idempotent round-trips. Two-hop and flags are OFF by
-# default (two-hop is the slowest and overlaps single-hop; flags are an
-# orthogonal axis).
+# Default: production single-hop + idempotent round-trips + the cheap dormant
+# Bridge matrix. Two-hop and flags are OFF by default.
 go run ./cli/harness matrix
 
 # Everything
@@ -247,6 +248,26 @@ go run ./cli/harness matrix --mode=idempotent
 go run ./cli/harness matrix --mode=flags     # per-rule flag behavior
 go run ./cli/harness matrix --mode=content_shapes  # request content-shape regression
 go run ./cli/harness matrix --mode=cache_controls  # single-hop + ABA cache/no-cache
+go run ./cli/harness matrix --mode=bridges   # in-process Stage/Bridge topology
+go run ./cli/harness matrix --mode=bridges \
+  --source=anthropic_v1 --target=anthropic_beta
+
+# Real HTTP/server path with production Stage selection enabled
+go run ./cli/harness matrix --mode=single --stage \
+  --source=openai_chat --target=anthropic_beta
+go run ./cli/harness matrix --mode=single --stage \
+  --source=anthropic_beta --target=anthropic_beta
+go run ./cli/harness matrix --mode=single --stage \
+  --source=anthropic_beta --target=openai_chat
+go run ./cli/harness matrix --mode=single --stage \
+  --source=anthropic_v1 --target=anthropic_v1
+go run ./cli/harness matrix --mode=single --stage \
+  --source=anthropic_v1 --target=openai_chat
+
+# Enable an active allow-only Guardrails runtime while exercising the
+# production Beta Stage routes. Scenario outputs remain unchanged.
+go run ./cli/harness matrix --mode=single --stage --guardrails \
+  --source=anthropic_beta
 
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
@@ -271,6 +292,34 @@ Other CLI flags (`--batch`, `--record-dir`, `--mcp`, `-v`) are documented in
 [`cli/harness/README.md`](../cli/harness/README.md); `--batch` and
 `--record-dir` additionally force the sections above to run sequentially
 (§3.1).
+
+The `bridges` section is deliberately separate from single-hop. Single-hop
+traverses the production gateway over HTTP. It validates legacy by default;
+`--stage` enables the server's twelve explicitly registered production routes:
+three provider targets for each Beta, V1, Chat, and Responses source. V1
+remains a separate concrete protocol with its own HTTP response and SSE
+adapters; the V1 → Beta matrix compatibility label resolves to V1 identity at
+runtime and is not a production V1/Beta Bridge. The separate dormant
+`--mode=bridges` matrix does contain the real V1→Beta Bridge. `--record-dir`
+enables `recording_v2` and persists RequestRecord envelopes for supported
+single-service Stage cases.
+`--guardrails` injects an active allow-only test runtime. Combined
+with `--stage`, it verifies that Beta → Beta and Beta → Chat remain on the
+production Stage path while Guardrails evaluates complete and stream
+lifecycles; dedicated real HTTP tests cover blocking mutations. It is a harness
+fixture, not a production Guardrails configuration shortcut. Bridges runs the
+dormant `stage.BuildTopology`/`stage.Adapt` path in-process and labels every
+direct result `bridges/<scenario>/...`; concrete multi-level results use
+`bridges/chain/<name>/<scenario>/...`. It must not be cited as production-path
+proof. The matrix covers exact Anthropic v1/beta/OpenAI Chat identity,
+Anthropic V1→Beta, Anthropic v1/beta → OpenAI Chat, OpenAI Chat → Anthropic
+Beta, and the concrete V1 → Beta-native Stage → Chat plus Chat → Beta-native
+Stage → Chat chains. Every route runs text, tool use, tool result, stream, and
+non-stream (54 cells total).
+Because it has no client transport, `--mode=bridges` only accepts
+`--client=http`; it reuses scenario/source/target/streaming/batch filters but
+does not claim support for `--mcp`, `--stage`, `--guardrails`, or
+`--record-dir`.
 
 ### Client drivers (`--client`)
 

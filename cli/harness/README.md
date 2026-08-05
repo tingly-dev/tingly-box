@@ -69,6 +69,13 @@ go build -o harness ./cli/harness
 # Tier A — exhaustive protocol-transform matrix
 ./harness matrix
 ./harness matrix --scenario text --source anthropic_v1 --target openai_chat
+./harness matrix --mode=bridges  # dormant Stage/Bridge topology, in-process
+./harness matrix --mode=single --stage --source=openai_chat --target=anthropic_beta  # real server Stage path
+./harness matrix --mode=single --stage --source=openai_chat --target=openai_responses  # Chat→Responses Stage path
+./harness matrix --mode=single --stage --source=openai_chat --target=openai_chat  # native Chat Stage path
+./harness matrix --mode=single --stage --source=anthropic_v1 --target=openai_responses  # V1→Responses Stage path
+./harness matrix --mode=single --stage --source=anthropic_beta --target=anthropic_beta  # native Beta Stage path
+./harness matrix --mode=single --stage --mcp --source=anthropic_v1 --target=anthropic_v1  # real V1→Beta Tool Loop path
 
 # Tier A through real client stacks (--client; see .design/harness-matrix.md
 # "Client drivers"): official Go SDKs in-process, or real Python/Node SDKs
@@ -120,9 +127,33 @@ functions.
 - Known-broken cells are centralized in
   `protocoltest.skipSourceScenarios` (e.g. `openai_responses|tool_use`).
 - `--json` for CI; `-v` / `-vv` to raise log verbosity; `--record-dir` to dump
-  request/response pairs; `--batch N` for stability runs.
+  request/response pairs; `--batch N` for stability runs. In the ephemeral
+  harness environment, `--record-dir` enables `recording_v2` for the Anthropic
+  and OpenAI scenarios and flushes every sink before shutdown, so the returned
+  files are complete test artifacts.
 
 **Use it for:** catching transform regressions exhaustively and instantly.
+
+### Dormant Stage/Bridge section
+
+`./harness matrix --mode=bridges` validates the additive protocol Stage path
+without routing production gateway traffic through it. Results are visibly
+prefixed with `bridges/`; concrete multi-level results use `bridges/chain/`.
+The 42-cell section covers Anthropic v1/beta/OpenAI Chat identity,
+Anthropic v1/beta → OpenAI Chat, OpenAI Chat → Anthropic Beta, and a real
+OpenAI Chat → Anthropic Beta-native Stage → OpenAI Chat topology for text,
+tool-use, and tool-result requests in both execution modes. It reuses the
+normal matrix filters and batch option.
+The standalone mode rejects external client drivers, MCP, and HTTP recording,
+because none of those surfaces are traversed by the in-process topology.
+
+This is converter/topology evidence, not a substitute for the production HTTP
+single-hop section. Use `matrix --mode=single --stage` to enable the real server
+selector; the current production Stage routes are OpenAI Chat → OpenAI Chat/Anthropic Beta/OpenAI Responses,
+Anthropic Beta → Anthropic Beta/OpenAI Chat/OpenAI Responses, Anthropic V1 →
+Anthropic V1/OpenAI Chat/OpenAI Responses, and OpenAI Responses → OpenAI
+Responses/Anthropic Beta/OpenAI Chat. V1 remains a distinct protocol with
+separate Bridges. This planned protocol-pair surface is now complete.
 
 ---
 
