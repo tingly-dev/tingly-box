@@ -205,6 +205,9 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 	case "response.failed":
 		a.status = "failed"
 		a.finished = true
+		if responseHasPayload(&event.Response) {
+			a.response = &event.Response
+		}
 		return true
 
 	case "response.incomplete":
@@ -374,7 +377,15 @@ func responseHasPayload(resp *responses.Response) bool {
 	if resp == nil {
 		return false
 	}
-	return resp.ID != "" || len(resp.Output) > 0 || resp.Usage.InputTokens != 0 || resp.Usage.OutputTokens != 0 || resp.Usage.TotalTokens != 0
+	return resp.ID != "" ||
+		resp.Status != "" ||
+		resp.Model != "" ||
+		resp.Error.Code != "" ||
+		resp.Error.Message != "" ||
+		len(resp.Output) > 0 ||
+		resp.Usage.InputTokens != 0 ||
+		resp.Usage.OutputTokens != 0 ||
+		resp.Usage.TotalTokens != 0
 }
 
 func (a *ResponsesAssembler) ensureResponseHasAccumulatedOutput(resp *responses.Response) {
