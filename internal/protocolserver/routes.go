@@ -57,13 +57,13 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	group.POST("/messages/count_tokens", modelAuth, ph.AnthropicCountTokens)
 
 	// Embeddings endpoint (OpenAI compatible)
-	group.POST("/embeddings", modelAuth, ph.HandleOpenAIEmbeddings)
+	group.POST("/embeddings", modelAuth, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)
 
 	// Image generation endpoint (OpenAI compatible).
 	// Routed directly to upstream POST /v1/images/generations; the Responses API
 	// (POST /responses with the image_generation tool) is exposed in parallel via
 	// the same scenario, with the caller choosing which surface to use.
-	group.POST("/images/generations", modelAuth, ph.HandleOpenAIImageGeneration)
+	group.POST("/images/generations", modelAuth, DeclareOperation("image_generation"), ph.HandleOpenAIImageGeneration)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", modelAuth, ph.ListModelsByScenario)

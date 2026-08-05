@@ -8,8 +8,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/semconv/v1.37.0/genaiconv"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -33,16 +35,15 @@ func (ph *ProtocolHandler) tracingMiddleware(c *gin.Context) {
 		return
 	}
 
-	operation := operationFromPath(c.Request.URL.Path)
 	scenario := ExtractScenarioFromPath(c.Request.URL.Path)
 
+	// The span is named at the end, once the operation (declared by the
+	// route, which has not run yet) and the request model (parsed from the
+	// body) are both known — hence the placeholder name here.
 	ctx := otel.GetTextMapPropagator().Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
-	ctx, span := tr.StartSpan(ctx, operation,
+	ctx, span := tr.StartSpan(ctx, "gen_ai.request",
 		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(
-			pkgotel.AttrGenAIOperationName.String(operation),
-			pkgotel.AttrTinglyScenario.String(scenario),
-		),
+		trace.WithAttributes(pkgotel.AttrTinglyScenario.String(scenario)),
 	)
 	c.Request = c.Request.WithContext(ctx)
 
@@ -58,60 +59,94 @@ func (ph *ProtocolHandler) tracingMiddleware(c *gin.Context) {
 	// losing the trace of exactly the request worth inspecting. The recorded
 	// status may then predate Recovery's 500, since our defer runs first;
 	// the value of the span in that case is the stage breakdown, not the code.
-	defer finishRequestSpan(c, span, operation)
+	defer finishRequestSpan(c, span)
 
 	c.Next()
 }
 
+// DeclareOperation records the gen_ai.operation.name of a route. Registered
+// on the routes whose operation is not the default "chat", it gives the
+// metrics and trace pipelines one shared source for that axis — deriving it
+// separately is how they came to disagree (spans said "embeddings" while
+// every metric reported the "chat" default).
+func DeclareOperation(operation string) gin.HandlerFunc {
+	return func(c *gin.Context) { c.Set(constant.CtxKeyOperation, operation) }
+}
+
+// OperationFromContext returns the route's declared gen_ai operation, or the
+// convention's default when the route did not declare one.
+func OperationFromContext(c *gin.Context) string {
+	if op := c.GetString(constant.CtxKeyOperation); op != "" {
+		return op
+	}
+	return string(genaiconv.OperationNameChat)
+}
+
 // finishRequestSpan renames and enriches the root span from the tracking
 // context populated during the request, sets the final status, and ends it.
-func finishRequestSpan(c *gin.Context, span trace.Span, operation string) {
+func finishRequestSpan(c *gin.Context, span trace.Span) {
 	rule, provider, model, requestModel, _, streamed, _ := GetTrackingContext(c)
+	operation := OperationFromContext(c)
+	attrs := make([]attribute.KeyValue, 0, 10)
+	attrs = append(attrs, pkgotel.AttrGenAIOperationName.String(operation))
 
 	// Per the GenAI convention the span is named "{operation} {request
 	// model}". The request model is parsed from the body, so the name can
 	// only be completed after the handler ran. strings.Clone detaches the
 	// value from the request buffer (cardinality rule 3, .design/otel.md §4).
+	name := operation
 	if requestModel != "" {
 		requestModel = strings.Clone(requestModel)
-		span.SetName(operation + " " + requestModel)
-		span.SetAttributes(pkgotel.AttrGenAIRequestModel.String(requestModel))
+		name += " " + requestModel
+		attrs = append(attrs, pkgotel.AttrGenAIRequestModel.String(requestModel))
 	}
+	span.SetName(name)
 	if model != "" {
-		span.SetAttributes(pkgotel.AttrGenAIResponseModel.String(strings.Clone(model)))
+		attrs = append(attrs, pkgotel.AttrGenAIResponseModel.String(strings.Clone(model)))
 	}
 	if provider != nil {
-		span.SetAttributes(
+		attrs = append(attrs,
 			pkgotel.AttrGenAIProviderName.String(provider.Name),
 			pkgotel.AttrTinglyProviderUUID.String(provider.UUID),
 		)
 	}
 	if rule != nil {
-		span.SetAttributes(pkgotel.AttrTinglyRuleUUID.String(rule.UUID))
+		attrs = append(attrs, pkgotel.AttrTinglyRuleUUID.String(rule.UUID))
 	}
-	span.SetAttributes(pkgotel.AttrTinglyStreaming.Bool(streamed))
-	if svcID := c.GetString(ContextKeyLBServiceID); svcID != "" {
-		span.SetAttributes(pkgotel.AttrTinglyLBServiceID.String(svcID))
-	}
-	if tactic := c.GetString(ContextKeyLBTactic); tactic != "" {
-		span.SetAttributes(pkgotel.AttrTinglyLBTactic.String(tactic))
-	}
+	attrs = append(attrs, pkgotel.AttrTinglyStreaming.Bool(streamed))
+	attrs = append(attrs, lbAttributes(c)...)
 	if requestID := c.GetString(constant.CtxKeyRequestID); requestID != "" {
-		span.SetAttributes(pkgotel.AttrTinglyRequestID.String(requestID))
+		attrs = append(attrs, pkgotel.AttrTinglyRequestID.String(requestID))
 	}
 
 	status := c.Writer.Status()
-	span.SetAttributes(pkgotel.AttrHTTPResponseStatus.Int(status))
+	attrs = append(attrs, pkgotel.AttrHTTPResponseStatus.Int(status))
 
 	// canceled ≠ error (same rule as the metrics path, .design/otel.md §3):
 	// a client hanging up mid-stream is routine LLM UI behavior, not a
 	// gateway failure — leave the span status unset in that case.
 	if status >= http.StatusBadRequest && c.Request.Context().Err() == nil {
 		span.SetStatus(codes.Error, http.StatusText(status))
-		span.SetAttributes(pkgotel.AttrErrorType.String(httpStatusErrorType(status)))
+		attrs = append(attrs, pkgotel.AttrErrorType.String(httpStatusErrorType(status)))
 	}
 
+	// One call rather than eight: each SetAttributes takes the span lock and
+	// runs the SDK's limit/dedup pass.
+	span.SetAttributes(attrs...)
 	span.End()
+}
+
+// lbAttributes returns the load-balance decision recorded on the gin context,
+// shared by the request span and the failover attempt spans.
+func lbAttributes(c *gin.Context) []attribute.KeyValue {
+	var attrs []attribute.KeyValue
+	if svcID := c.GetString(ContextKeyLBServiceID); svcID != "" {
+		attrs = append(attrs, pkgotel.AttrTinglyLBServiceID.String(svcID))
+	}
+	if tactic := c.GetString(ContextKeyLBTactic); tactic != "" {
+		attrs = append(attrs, pkgotel.AttrTinglyLBTactic.String(tactic))
+	}
+	return attrs
 }
 
 // httpStatusErrorType renders an HTTP status as a low-cardinality error.type
@@ -119,23 +154,9 @@ func finishRequestSpan(c *gin.Context, span trace.Span, operation string) {
 // status code when no more specific error class is known.
 func httpStatusErrorType(status int) string {
 	if status < 100 || status > 999 {
-		return "other"
+		return string(genaiconv.ErrorTypeOther)
 	}
 	return strconv.Itoa(status)
-}
-
-// operationFromPath derives the gen_ai.operation.name for the endpoint. The
-// default mirrors tracker.UsageOptions.Operation ("chat") so metrics and
-// spans always agree on the operation axis.
-func operationFromPath(path string) string {
-	switch {
-	case strings.HasSuffix(path, "/embeddings"):
-		return "embeddings"
-	case strings.HasSuffix(path, "/images/generations"):
-		return "image_generation"
-	default:
-		return "chat"
-	}
 }
 
 // setTokenUsageOnSpan mirrors the recorded token usage onto the ambient
@@ -163,12 +184,7 @@ func (ph *ProtocolHandler) startRoutingSpan(c *gin.Context) func(error) {
 	}
 	_, span := ph.deps.Tracer.StartSpan(c.Request.Context(), "routing")
 	return func(err error) {
-		if svcID := c.GetString(ContextKeyLBServiceID); svcID != "" {
-			span.SetAttributes(pkgotel.AttrTinglyLBServiceID.String(svcID))
-		}
-		if tactic := c.GetString(ContextKeyLBTactic); tactic != "" {
-			span.SetAttributes(pkgotel.AttrTinglyLBTactic.String(tactic))
-		}
+		span.SetAttributes(lbAttributes(c)...)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
@@ -205,9 +221,12 @@ func endFailoverAttemptSpan(span trace.Span, committed bool, status int) {
 	if committed {
 		span.SetStatus(codes.Ok, "")
 	} else {
-		span.SetAttributes(pkgotel.AttrHTTPResponseStatus.Int(status))
-		span.SetStatus(codes.Error, "upstream status "+httpStatusErrorType(status))
-		span.SetAttributes(pkgotel.AttrErrorType.String(httpStatusErrorType(status)))
+		errType := httpStatusErrorType(status)
+		span.SetStatus(codes.Error, "upstream status "+errType)
+		span.SetAttributes(
+			pkgotel.AttrHTTPResponseStatus.Int(status),
+			pkgotel.AttrErrorType.String(errType),
+		)
 	}
 	span.End()
 }

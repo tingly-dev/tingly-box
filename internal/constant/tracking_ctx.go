@@ -31,6 +31,11 @@ const (
 	CtxKeyLBServiceID    = "tracking_lb_service_id"    // string (selected upstream, e.g. "provider-uuid:model")
 	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "random")
 	CtxKeyTraceID        = "tracking_trace_id"         // string (OTel trace id, set only when the request span is sampled)
+	// CtxKeyOperation is the gen_ai.operation.name for the endpoint, declared
+	// once where the route is registered so the metrics and trace pipelines
+	// report the same operation instead of each deriving its own. Unset means
+	// the default, "chat".
+	CtxKeyOperation = "tracking_operation" // string
 
 	// Protocol recording metadata.
 	CtxKeyProtocolRecorder    = "protocol_recorder"     // *recording.ProtocolRecorder

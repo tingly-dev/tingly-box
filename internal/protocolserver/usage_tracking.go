@@ -122,6 +122,7 @@ func (ph *ProtocolHandler) trackUsageFromContext(c *gin.Context, inputTokens, ou
 		// Metric attributes must stay low-cardinality: pass the bounded error
 		// class, never the raw error message (see classifyErrorCode).
 		ph.deps.TokenTracker.RecordUsage(c.Request.Context(), tracker.UsageOptions{
+			Operation:    OperationFromContext(c),
 			Provider:     provider.Name,
 			ProviderUUID: provider.UUID,
 			Model:        model,
@@ -239,6 +240,7 @@ func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *proto
 		// Metric attributes must stay low-cardinality: pass the bounded error
 		// class, never the raw error message (see classifyErrorCode).
 		ph.deps.TokenTracker.RecordUsage(c.Request.Context(), tracker.UsageOptions{
+			Operation:        OperationFromContext(c),
 			Provider:         provider.Name,
 			ProviderUUID:     provider.UUID,
 			Model:            model,

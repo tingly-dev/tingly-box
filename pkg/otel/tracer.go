@@ -11,6 +11,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// ScopeName is the OTel instrumentation scope every span in this process is
+// recorded under. Exported so out-of-package instrumentation (the upstream
+// transport in internal/client) lands in the same scope instead of spelling
+// the name again — a rename here must not silently split the view.
+const ScopeName = "tingly-box"
+
 // Tracer provides distributed tracing capabilities for LLM requests.
 type Tracer struct {
 	tracer trace.Tracer
@@ -22,7 +28,7 @@ func NewTracer(tp trace.TracerProvider) *Tracer {
 		tp = otel.GetTracerProvider()
 	}
 	return &Tracer{
-		tracer: tp.Tracer("tingly-box"),
+		tracer: tp.Tracer(ScopeName),
 	}
 }
 

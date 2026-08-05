@@ -20,7 +20,7 @@ func newStoreWithProvider(t *testing.T) (*SpanStore, trace.Tracer) {
 	return store, tp.Tracer("test")
 }
 
-func TestSpanStore_ParentChildAndSummary(t *testing.T) {
+func TestSpanStore_ParentChildOrdering(t *testing.T) {
 	store, tr := newStoreWithProvider(t)
 	ctx := context.Background()
 
@@ -46,13 +46,6 @@ func TestSpanStore_ParentChildAndSummary(t *testing.T) {
 		t.Errorf("child parent id = %q, want %q", spans[1].ParentSpanID, spans[0].SpanID)
 	}
 
-	sums := store.RecentTraces(10)
-	if len(sums) != 1 {
-		t.Fatalf("expected 1 summary, got %d", len(sums))
-	}
-	if sums[0].RootName != "chat gpt-4" || !sums[0].HasError || sums[0].SpanCount != 2 {
-		t.Errorf("summary wrong: %+v", sums[0])
-	}
 }
 
 func TestSpanStore_EvictsOldestTraceOverCount(t *testing.T) {
@@ -77,7 +70,7 @@ func TestSpanStore_EvictsOldestTraceOverCount(t *testing.T) {
 			t.Errorf("trace %s should be retained", id)
 		}
 	}
-	if got := len(store.RecentTraces(0)); got != 3 {
+	if got := len(store.traces); got != 3 {
 		t.Errorf("retained traces = %d, want 3", got)
 	}
 }

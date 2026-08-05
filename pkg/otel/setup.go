@@ -53,7 +53,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	}
 
 	// Create resource with service info
-	resAttrs := []attribute.KeyValue{semconv.ServiceName("tingly-box")}
+	resAttrs := []attribute.KeyValue{semconv.ServiceName(ScopeName)}
 	if cfg.ServiceVersion != "" {
 		resAttrs = append(resAttrs, semconv.ServiceVersion(cfg.ServiceVersion))
 	}
@@ -79,10 +79,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 		// globals now. The propagator must be global: the gateway middleware
 		// and the outbound transports resolve it via otel.GetTextMapPropagator.
 		otel.SetTracerProvider(tracerProvider)
-		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		))
+		installGlobalPropagator()
 		return &Setup{
 			tracerProvider: tracerProvider,
 			tracer:         NewTracer(tracerProvider),
@@ -126,7 +123,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	)
 
 	// Token tracker
-	tokenTracker, err := tracker.NewTokenTracker(meterProvider.Meter("tingly-box"))
+	tokenTracker, err := tracker.NewTokenTracker(meterProvider.Meter(ScopeName))
 	if err != nil {
 		_ = meterProvider.Shutdown(ctx)
 		_ = tracerProvider.Shutdown(ctx)
@@ -138,10 +135,7 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 	// handlers/clients are instrumented.
 	otel.SetMeterProvider(meterProvider)
 	otel.SetTracerProvider(tracerProvider)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	installGlobalPropagator()
 
 	return &Setup{
 		meterProvider:  meterProvider,
@@ -150,6 +144,16 @@ func NewSetup(ctx context.Context, cfg *Config) (*Setup, error) {
 		tracer:         NewTracer(tracerProvider),
 		spanStore:      spanStore,
 	}, nil
+}
+
+// installGlobalPropagator enables W3C context propagation, which is what
+// lets a trace id survive the gateway hop in both directions (downstream
+// agent → tingly-box → upstream provider).
+func installGlobalPropagator() {
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
 }
 
 // traceSampler maps the configured ratio to a parent-based sampler: an

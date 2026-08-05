@@ -42,7 +42,10 @@ func (t *propagatingTransport) RoundTrip(req *http.Request) (*http.Response, err
 		return t.base.RoundTrip(req)
 	}
 
-	ctx, span := otel.Tracer("tingly-box").Start(req.Context(), "upstream",
+	// Resolved per call, not hoisted to a package var: the global delegate
+	// binds to a provider exactly once, so a var captured at init would pin
+	// whichever provider happened to be installed first.
+	ctx, span := otel.Tracer(pkgotel.ScopeName).Start(req.Context(), "upstream",
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			pkgotel.AttrHTTPRequestMethod.String(req.Method),

@@ -200,16 +200,46 @@ func TestTracingMiddleware_SpanSurvivesPanic(t *testing.T) {
 	}
 }
 
-func TestOperationFromPath(t *testing.T) {
-	cases := map[string]string{
-		"/tingly/openai/v1/chat/completions":   "chat",
-		"/tingly/openai/v1/messages":           "chat",
-		"/tingly/openai/v1/embeddings":         "embeddings",
-		"/tingly/openai/v1/images/generations": "image_generation",
+func TestDeclaredOperationDrivesSpanAndMetrics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ph, exporter := newTestTracerHandler()
+
+	var metricsOperation string
+	engine := gin.New()
+	engine.POST("/tingly/:scenario/v1/embeddings", ph.tracingMiddleware,
+		DeclareOperation("embeddings"),
+		func(c *gin.Context) {
+			rule := &typ.Rule{UUID: "rule-1"}
+			provider := &typ.Provider{UUID: "prov-1", Name: "acme"}
+			SetTrackingContext(c, rule, provider, "text-embed-3", "text-embed-3", false)
+			// Both pipelines read the operation from the same declaration;
+			// deriving it separately is how they came to disagree.
+			metricsOperation = OperationFromContext(c)
+			c.Status(http.StatusOK)
+		})
+
+	req := httptest.NewRequest(http.MethodPost, "/tingly/openai/v1/embeddings", nil)
+	engine.ServeHTTP(httptest.NewRecorder(), req)
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(spans))
 	}
-	for path, want := range cases {
-		if got := operationFromPath(path); got != want {
-			t.Errorf("operationFromPath(%q) = %q, want %q", path, got, want)
-		}
+	if spans[0].Name != "embeddings text-embed-3" {
+		t.Errorf("span name = %q, want %q", spans[0].Name, "embeddings text-embed-3")
+	}
+	if got := attrMap(spans[0])["gen_ai.operation.name"]; got != "embeddings" {
+		t.Errorf("span operation = %v, want embeddings", got)
+	}
+	if metricsOperation != "embeddings" {
+		t.Errorf("metrics operation = %q, want embeddings", metricsOperation)
+	}
+}
+
+func TestOperationDefaultsToChat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	if got := OperationFromContext(c); got != "chat" {
+		t.Errorf("undeclared operation = %q, want chat", got)
 	}
 }
