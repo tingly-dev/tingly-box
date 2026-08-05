@@ -173,6 +173,33 @@ func TestFailoverAttemptSpans(t *testing.T) {
 	}
 }
 
+func TestTracingMiddleware_SpanSurvivesPanic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ph, exporter := newTestTracerHandler()
+
+	engine := gin.New()
+	engine.Use(gin.Recovery())
+	engine.POST("/tingly/:scenario/v1/messages", ph.tracingMiddleware, func(c *gin.Context) {
+		rule := &typ.Rule{UUID: "rule-1"}
+		provider := &typ.Provider{UUID: "prov-1", Name: "acme"}
+		SetTrackingContext(c, rule, provider, "claude-sonnet-4-6", "tingly/cc", false)
+		panic("handler exploded")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/tingly/claude_code/v1/messages", nil)
+	engine.ServeHTTP(httptest.NewRecorder(), req)
+
+	// A panicking request is the one most worth inspecting: its span must
+	// still be ended (and therefore exported), with the stages it reached.
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("expected the request span to be exported despite the panic, got %d", len(spans))
+	}
+	if got := attrMap(spans[0])["gen_ai.request.model"]; got != "tingly/cc" {
+		t.Errorf("span should carry what the handler set before panicking, got %v", got)
+	}
+}
+
 func TestOperationFromPath(t *testing.T) {
 	cases := map[string]string{
 		"/tingly/openai/v1/chat/completions":   "chat",

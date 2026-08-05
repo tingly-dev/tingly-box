@@ -93,44 +93,48 @@ const isErrorLevel = (level: string) => level === 'error' || level === 'fatal' |
 
 const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
-// A failover attempt and the upstream call inside it are the same event
-// described twice — same status, near-identical duration, one named by
-// service id and the other by host. Fold the upstream into its attempt so
-// the journey states it once, keeping both sets of facts.
-const foldUpstreamIntoAttempts = (spans: TraceSpan[]): TraceSpan[] => {
+const contains = (outer: TraceSpan, inner: TraceSpan): boolean =>
+    new Date(outer.start_time).getTime() <= new Date(inner.start_time).getTime() &&
+    new Date(outer.end_time).getTime() >= new Date(inner.end_time).getTime();
+
+// A failover attempt and the single upstream call inside it are the same
+// event described twice — same status, near-identical duration, one named by
+// service id and the other by host. Fold that pair so the journey states it
+// once, keeping both sets of facts.
+//
+// An attempt that made *several* upstream calls keeps them as their own
+// lines: an MCP tool loop turns one attempt into a call per iteration, and
+// folding would silently drop all but one of them.
+const foldUpstreamIntoAttempts = (spans: TraceSpan[]): (TraceSpan & { upstreamHost?: string })[] => {
     const attempts = spans.filter((s) => s.name === 'failover.attempt');
     if (attempts.length === 0) return spans;
 
-    const absorbed = new Set<string>();
-    const hostOf = new Map<string, string>();
-    const extraAttrs = new Map<string, Record<string, string>>();
-
+    const insideAttempt = new Map<string, TraceSpan[]>();
     for (const span of spans) {
         if (span.name !== 'upstream') continue;
-        const start = new Date(span.start_time).getTime();
-        const end = new Date(span.end_time).getTime();
-        const parent = attempts.find(
-            (a) => new Date(a.start_time).getTime() <= start && new Date(a.end_time).getTime() >= end,
-        );
+        const parent = attempts.find((a) => contains(a, span));
         if (!parent) continue;
-        absorbed.add(span.span_id);
-        const host = span.attributes?.['server.address'];
-        if (host) hostOf.set(parent.span_id, host);
-        extraAttrs.set(parent.span_id, { ...(span.attributes || {}) });
+        insideAttempt.set(parent.span_id, [...(insideAttempt.get(parent.span_id) || []), span]);
     }
+
+    const foldedInto = new Map<string, TraceSpan>();
+    for (const [attemptID, upstreams] of insideAttempt) {
+        if (upstreams.length === 1) foldedInto.set(attemptID, upstreams[0]);
+    }
+    const absorbed = new Set([...foldedInto.values()].map((s) => s.span_id));
 
     return spans
         .filter((s) => !absorbed.has(s.span_id))
-        .map((s) =>
-            hostOf.has(s.span_id) || extraAttrs.has(s.span_id)
-                ? {
-                    ...s,
-                    attributes: { ...(s.attributes || {}), ...(extraAttrs.get(s.span_id) || {}) },
-                    // Carried separately so describeSpan can show it as a fact.
-                    upstreamHost: hostOf.get(s.span_id),
-                } as TraceSpan & { upstreamHost?: string }
-                : s,
-        );
+        .map((s) => {
+            const upstream = foldedInto.get(s.span_id);
+            if (!upstream) return s;
+            return {
+                ...s,
+                attributes: { ...(s.attributes || {}), ...(upstream.attributes || {}) },
+                // Carried separately so describeSpan can show it as a fact.
+                upstreamHost: upstream.attributes?.['server.address'],
+            };
+        });
 };
 
 // Presentation for the span names the gateway emits. Anything unrecognized

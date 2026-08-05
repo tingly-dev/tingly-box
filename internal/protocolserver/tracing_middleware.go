@@ -52,9 +52,15 @@ func (ph *ProtocolHandler) tracingMiddleware(c *gin.Context) {
 		c.Set(constant.CtxKeyTraceID, sc.TraceID().String())
 	}
 
-	c.Next()
+	// Deferred, not called after c.Next(): a panicking handler unwinds
+	// straight through c.Next() to gin.Recovery (registered on the engine,
+	// outside this group), and a span that never ends is never exported —
+	// losing the trace of exactly the request worth inspecting. The recorded
+	// status may then predate Recovery's 500, since our defer runs first;
+	// the value of the span in that case is the stage breakdown, not the code.
+	defer finishRequestSpan(c, span, operation)
 
-	finishRequestSpan(c, span, operation)
+	c.Next()
 }
 
 // finishRequestSpan renames and enriches the root span from the tracking
