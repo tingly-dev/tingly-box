@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	internalobs "github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
@@ -96,7 +97,7 @@ func TestFailoverLogging_RetryAndGiveUp(t *testing.T) {
 	}
 
 	hm := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
-	hf := typ.NewHealthFilter(hm)
+	hf := routing.NewHealthFilter(hm)
 	h := NewHandler(ProtocolHandlerDeps{
 		Config:        cfg,
 		LoadBalancer:  NewLoadBalancer(cfg, hf),
@@ -241,7 +242,7 @@ func TestFailoverRecordsBreakerFailureIndependentlyOfRecorder(t *testing.T) {
 	}
 
 	hm := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
-	hf := typ.NewHealthFilter(hm)
+	hf := routing.NewHealthFilter(hm)
 	h := NewHandler(ProtocolHandlerDeps{
 		Config:        cfg,
 		LoadBalancer:  NewLoadBalancer(cfg, hf),

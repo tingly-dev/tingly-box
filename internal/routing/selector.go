@@ -54,7 +54,7 @@ type ServiceSelector struct {
 }
 
 type healthFilterProvider interface {
-	HealthFilter() *typ.HealthFilter
+	HealthFilter() *HealthFilter
 }
 
 type selectionState struct {
@@ -126,7 +126,7 @@ func NewServiceSelectorWithLogger(
 		loadBalancer:  lb,
 	}
 
-	var healthFilter *typ.HealthFilter
+	var healthFilter *HealthFilter
 	if p, ok := lb.(healthFilterProvider); ok {
 		healthFilter = p.HealthFilter()
 	}

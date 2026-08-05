@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -32,7 +33,7 @@ type LoadBalancerEngine interface {
 	ClearServiceStats(provider, model string)
 	ClearAllStats()
 	GetRuleSummary(rule *typ.Rule) map[string]interface{}
-	HealthFilter() *typ.HealthFilter
+	HealthFilter() *routing.HealthFilter
 }
 
 // LoadBalancerAPI provides REST endpoints for load balancer management

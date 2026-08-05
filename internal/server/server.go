@@ -313,7 +313,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	healthMonitor := loadbalance.NewHealthMonitor(cfg.HealthMonitor)
 
 	// Initialize health filter
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	// Initialize template manager first (needed for capacity config)
 	var templateURL string

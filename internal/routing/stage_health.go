@@ -4,18 +4,16 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // HealthStage filters unhealthy services from the context.
 // It runs first and narrows ctx.CandidateServices.
 type HealthStage struct {
-	filter *typ.HealthFilter
+	filter *HealthFilter
 }
 
 // NewHealthStage creates a new health stage with the given health filter
-func NewHealthStage(filter *typ.HealthFilter) *HealthStage {
+func NewHealthStage(filter *HealthFilter) *HealthStage {
 	return &HealthStage{filter: filter}
 }
 

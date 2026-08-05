@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestHealthStage_FiltersUnhealthy(t *testing.T) {
@@ -16,7 +15,7 @@ func TestHealthStage_FiltersUnhealthy(t *testing.T) {
 	monitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
 	monitor.ReportRateLimit("provider-b/gpt-4")
 
-	filter := typ.NewHealthFilter(monitor)
+	filter := NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)
 
 	svcA := testService("provider-a", "gpt-4", true)
@@ -38,7 +37,7 @@ func TestHealthStage_FiltersUnhealthy(t *testing.T) {
 
 func TestHealthStage_AllHealthy_NoFilter(t *testing.T) {
 	monitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
-	filter := typ.NewHealthFilter(monitor)
+	filter := NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)
 
 	svcA := testService("provider-a", "gpt-4", true)
@@ -60,7 +59,7 @@ func TestHealthStage_AllUnhealthy(t *testing.T) {
 	monitor.ReportRateLimit("provider-a/gpt-4")
 	monitor.ReportRateLimit("provider-b/gpt-4")
 
-	filter := typ.NewHealthFilter(monitor)
+	filter := NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)
 
 	svcA := testService("provider-a", "gpt-4", true)
@@ -80,7 +79,7 @@ func TestHealthStage_AllUnhealthy(t *testing.T) {
 }
 
 func TestHealthStage_NilServices(t *testing.T) {
-	filter := typ.NewHealthFilter(nil)
+	filter := NewHealthFilter(nil)
 	stage := NewHealthStage(filter)
 
 	rule := testRule("rule-1", "gpt-4", nil)
@@ -114,7 +113,7 @@ func TestHealthStage_NilFilter(t *testing.T) {
 
 func TestHealthStage_ContinuesPipeline(t *testing.T) {
 	// Test that health stage returns (nil, false) so pipeline continues
-	filter := typ.NewHealthFilter(nil)
+	filter := NewHealthFilter(nil)
 	stage := NewHealthStage(filter)
 
 	svc := testService("provider-a", "gpt-4", true)

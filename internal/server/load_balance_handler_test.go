@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 
 	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -40,7 +41,7 @@ func TestGetServicesHealth_ExposesBreakerState(t *testing.T) {
 	}
 	require.NoError(t, cfg.AddOrUpdateRequestConfigByRequestModel(rule))
 
-	api := NewLoadBalancerAPI(protocolserver.NewLoadBalancer(cfg, typ.NewHealthFilter(nil)), cfg)
+	api := NewLoadBalancerAPI(protocolserver.NewLoadBalancer(cfg, routing.NewHealthFilter(nil)), cfg)
 
 	// Trip the primary's breaker exactly as the failover loop does.
 	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
@@ -88,7 +89,7 @@ func TestPreviewService_DoesNotClaimProbe(t *testing.T) {
 
 	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
-	lb := protocolserver.NewLoadBalancer(cfg, typ.NewHealthFilter(nil))
+	lb := protocolserver.NewLoadBalancer(cfg, routing.NewHealthFilter(nil))
 
 	a := &loadbalance.Service{Provider: "prev-a", Model: "m", Active: true}
 	b := &loadbalance.Service{Provider: "prev-b", Model: "m", Active: true}
@@ -141,7 +142,7 @@ func TestUpdateRuleTactic_CanonicalParsing(t *testing.T) {
 	}
 	require.NoError(t, cfg.AddOrUpdateRequestConfigByRequestModel(rule))
 
-	api := NewLoadBalancerAPI(protocolserver.NewLoadBalancer(cfg, typ.NewHealthFilter(nil)), cfg)
+	api := NewLoadBalancerAPI(protocolserver.NewLoadBalancer(cfg, routing.NewHealthFilter(nil)), cfg)
 
 	do := func(body string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()

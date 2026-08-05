@@ -157,7 +157,7 @@ func NewLBSimulatorWithSequences(rule *typ.Rule, faults map[string]vmodel.Sequen
 		RecoveryTimeoutSeconds: int(loadbalance.DefaultBreakerOpenDuration.Seconds()),
 		ProbeEnabled:           false,
 	})
-	hf := typ.NewHealthFilter(hm)
+	hf := routing.NewHealthFilter(hm)
 	lb := protocolserver.NewLoadBalancer(cfg, hf)
 	affinity := protocolserver.NewAffinityStore(0)
 

@@ -1,4 +1,4 @@
-package typ
+package routing
 
 import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"

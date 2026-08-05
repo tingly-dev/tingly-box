@@ -15,12 +15,12 @@ import (
 // conflicts with upstream stages: without the expected narrowing or affinity
 // short-circuit, a different service wins.
 type pipelineScenarioLB struct {
-	health *typ.HealthFilter
+	health *HealthFilter
 	calls  int
 	seen   []string
 }
 
-func (l *pipelineScenarioLB) HealthFilter() *typ.HealthFilter { return l.health }
+func (l *pipelineScenarioLB) HealthFilter() *HealthFilter { return l.health }
 
 func (l *pipelineScenarioLB) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
 	l.calls++
@@ -62,7 +62,7 @@ func TestServiceSelectorPipelineScenarios(t *testing.T) {
 
 		monitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
 		monitor.ReportRateLimit(unhealthy.ServiceID())
-		lb := &pipelineScenarioLB{health: typ.NewHealthFilter(monitor)}
+		lb := &pipelineScenarioLB{health: NewHealthFilter(monitor)}
 		sel := NewServiceSelector(pipelineScenarioConfig(base, unhealthy, healthy), newMockAffinityStore(), lb)
 		ctx := testContext(rule, "")
 		ctx.Request = testOpenAIRequest("smart-request")

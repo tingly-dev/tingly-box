@@ -6,6 +6,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -45,7 +46,7 @@ func TestSelectFallbackService_SpansAPIStyles(t *testing.T) {
 	}
 
 	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{ProbeEnabled: false})
-	hf := typ.NewHealthFilter(hm)
+	hf := routing.NewHealthFilter(hm)
 	lb := NewLoadBalancer(cfg, hf)
 	h := NewHandler(ProtocolHandlerDeps{Config: cfg, LoadBalancer: lb, HealthMonitor: hm})
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -17,11 +18,11 @@ import (
 // stats/admin surface consumed by LoadBalancerAPI.
 type LoadBalancer struct {
 	config       *config.Config
-	healthFilter *typ.HealthFilter
+	healthFilter *routing.HealthFilter
 }
 
 // NewLoadBalancer creates a new load balancer
-func NewLoadBalancer(cfg *config.Config, healthFilter *typ.HealthFilter) *LoadBalancer {
+func NewLoadBalancer(cfg *config.Config, healthFilter *routing.HealthFilter) *LoadBalancer {
 	return &LoadBalancer{
 		config:       cfg,
 		healthFilter: healthFilter,
@@ -366,6 +367,6 @@ func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 }
 
 // HealthFilter returns the health filter for the load balancer
-func (lb *LoadBalancer) HealthFilter() *typ.HealthFilter {
+func (lb *LoadBalancer) HealthFilter() *routing.HealthFilter {
 	return lb.healthFilter
 }

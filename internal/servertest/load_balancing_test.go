@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -31,7 +31,7 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
+	healthFilter := routing.NewHealthFilter(nil)
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
@@ -129,7 +129,7 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
+	healthFilter := routing.NewHealthFilter(nil)
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
@@ -643,7 +643,7 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
+	healthFilter := routing.NewHealthFilter(nil)
 
 	// Create load balancer - it already has all default tactics
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
@@ -763,7 +763,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	}
 
 	// Create health filter (nil for tests - all services healthy)
-	healthFilter := typ.NewHealthFilter(nil)
+	healthFilter := routing.NewHealthFilter(nil)
 
 	// Create load balancer
 	lb := server.NewLoadBalancer(ts.appConfig.GetGlobalConfig(), healthFilter)

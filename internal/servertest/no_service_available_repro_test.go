@@ -43,7 +43,7 @@ func TestRepro_NoServiceAvailable_SingleServiceRateLimited(t *testing.T) {
 
 	// Build the real selection stack exactly as server.go wires it.
 	healthMonitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 	lb := server.NewLoadBalancer(cfg, healthFilter)
 	affinityStore := server.NewAffinityStore(0)
 	selector := routing.NewServiceSelector(cfg, affinityStore, lb)

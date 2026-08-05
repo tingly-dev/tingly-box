@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	server "github.com/tingly-dev/tingly-box/internal/protocolserver"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -22,7 +23,7 @@ func TestHealthFilter_BasicFiltering(t *testing.T) {
 	// Create health monitor with default config
 	healthConfig := loadbalance.DefaultHealthMonitorConfig()
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	// Create load balancer with health filter
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
@@ -79,7 +80,7 @@ func TestHealthFilter_AllUnhealthy(t *testing.T) {
 
 	healthConfig := loadbalance.DefaultHealthMonitorConfig()
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 
@@ -133,7 +134,7 @@ func TestHealthFilter_Recovery(t *testing.T) {
 		RecoveryTimeoutSeconds: 1, // 1 second for testing
 	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 
@@ -190,7 +191,7 @@ func TestHealthFilter_SuccessRecovery(t *testing.T) {
 		RecoveryTimeoutSeconds: 300,
 	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 
@@ -242,7 +243,7 @@ func TestHealthFilter_GenericErrorsDoNotAffectHealth(t *testing.T) {
 		RecoveryTimeoutSeconds: 300,
 	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 
@@ -283,7 +284,7 @@ func TestHealthFilter_InactiveServices(t *testing.T) {
 	require.NoError(t, err)
 
 	healthMonitor := loadbalance.NewHealthMonitor(loadbalance.DefaultHealthMonitorConfig())
-	healthFilter := typ.NewHealthFilter(healthMonitor)
+	healthFilter := routing.NewHealthFilter(healthMonitor)
 
 	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 

@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -68,7 +68,7 @@ func report(t *testing.T, name string, counts map[string]int, total int) {
 func TestLB_VirtualValidation_EqualProviders(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
-	healthFilter := typ.NewHealthFilter(nil)
+	healthFilter := routing.NewHealthFilter(nil)
 
 	const total = 1000
 

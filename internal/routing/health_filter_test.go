@@ -1,4 +1,4 @@
-package typ
+package routing
 
 import (
 	"testing"

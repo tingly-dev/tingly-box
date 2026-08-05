@@ -7,6 +7,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/clock"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -57,7 +58,7 @@ func TestTierRouting_EndToEnd(t *testing.T) {
 
 	// Build a load balancer with a no-op health filter so the only
 	// thing that can hide a service from the tactic is its breaker.
-	hf := typ.NewHealthFilter(nil)
+	hf := routing.NewHealthFilter(nil)
 	lb := &LoadBalancer{healthFilter: hf}
 
 	primaryID := "e2e-primary/gpt-4"
