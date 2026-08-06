@@ -118,10 +118,14 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 	var skipped []string
 	for _, entry := range entries {
 		if wanted != nil {
-			if _, ok := wanted[strings.ToLower(strings.TrimSpace(entry.Name))]; !ok {
+			// --filter matches by provider name (case-insensitive), so one filter
+			// value selects every model under that provider regardless of how many
+			// models it has (entry.Name would force provider-shortmodel for
+			// multi-model providers, which is unintuitive).
+			if _, ok := wanted[strings.ToLower(strings.TrimSpace(entry.Provider))]; !ok {
 				continue
 			}
-			matched[strings.ToLower(strings.TrimSpace(entry.Name))] = struct{}{}
+			matched[strings.ToLower(strings.TrimSpace(entry.Provider))] = struct{}{}
 		}
 		miss := missingFields(entry)
 		if len(miss) > 0 {

@@ -29,7 +29,7 @@ type AgentCmd struct {
 	OutputDir string        `kong:"name='output-dir',help='Directory for full output files (default: harness-output/)'"`
 	Resume    string        `kong:"name='resume',help='Resume — skip every (agent,entry) already recorded in the summary file'"`
 	OnlyFailing bool        `kong:"name='only-failing',help='Only re-run (agent,entry) pairs whose latest summary row is FAIL/TIMEOUT. Real-provider mode only; mutually exclusive with --resume.'"`
-	Filter    []string      `kong:"name='filter',sep=',',help='Only run entries whose name matches (case-insensitive). Real-provider mode only.'"`
+	Filter    []string      `kong:"name='filter',sep=',',help='Only run providers whose name matches (case-insensitive, comma-separated). Real-provider mode only.'"`
 	Timeout   time.Duration `kong:"name='timeout',short='t',default='2m',help='Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.'"`
 	AgentType string        `kong:"arg,optional,name='agent',help='Agent type: claude | codex | opencode | batch'"`
 	Args      []string      `kong:"arg,optional,name='prompt-args',help='Optional positional prompt parts (joined with spaces)'"`

@@ -151,7 +151,8 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 ./harness agent batch  --config providers.yaml                  # 全部 agent × 全部 provider×model
 ./harness agent claude --config providers.yaml                   # 单 agent
 ./harness agent claude --config providers.yaml "你的 prompt"     # + CLI prompt（覆盖 yaml）
-./harness agent batch  --config providers.yaml --filter anthropic,openai  # 只跑指定 provider
+./harness agent claude --config providers.yaml --filter anthropic  # 指定 agent 只跑指定 provider（按 name，含其全部 model）
+./harness agent batch  --config providers.yaml --filter anthropic,openai  # 全部 agent 只跑指定 provider
 ./harness agent batch  --config providers.yaml --timeout 5m      # 放宽每条超时（默认 2m）
 ```
 

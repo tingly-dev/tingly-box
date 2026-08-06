@@ -172,6 +172,32 @@ providers:
 	}
 }
 
+// All entries expanded from one provider share that provider's name in
+// RealModelEntry.Provider — which is what harness --filter matches on, so a
+// multi-model provider is selected with a single filter value.
+func TestExpandPreservesProviderNameForFilter(t *testing.T) {
+	p := writeProvidersYAML(t, `
+providers:
+  - name: "anthropic"
+    baseurl: "https://a.test"
+    apikey: "sk-a"
+    api_style: "anthropic"
+    models: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]
+`)
+	entries, err := LoadProvidersConfig(p)
+	if err != nil {
+		t.Fatalf("LoadProvidersConfig: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("want 2 entries, got %d", len(entries))
+	}
+	for _, e := range entries {
+		if e.Provider != "anthropic" {
+			t.Errorf("entry %q Provider: got %q, want %q (--filter matches this)", e.Name, e.Provider, "anthropic")
+		}
+	}
+}
+
 // enable: false skips a provider entirely; unset (nil) and enable: true keep it.
 func TestLoadProvidersConfigEnableSkip(t *testing.T) {
 	p := writeProvidersYAML(t, `
