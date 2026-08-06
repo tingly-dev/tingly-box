@@ -120,36 +120,63 @@ func convertResponsesSystemInputToAnthropicBeta(inputItems responses.ResponseInp
 	return system
 }
 
-// convertResponsesInputToAnthropicBetaMessages converts Responses API input items to Anthropic Beta messages
+// convertResponsesInputToAnthropicBetaMessages converts Responses API input items to Anthropic Beta messages.
+//
+// The Responses API models a tool round-trip as consecutive function_call items
+// (the assistant's turn) followed by consecutive function_call_output items.
+// Anthropic requires every tool_use block to be answered by its tool_result in
+// the very next message, so parallel calls are folded into a single assistant
+// message (all tool_use) and a single user message (all tool_result); otherwise
+// back-to-back tool_use messages get rejected upstream with "tool_use ids were
+// found without tool_result blocks immediately after".
 func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseInputParam) []anthropic.BetaMessageParam {
 	var messages []anthropic.BetaMessageParam
 
 	for _, item := range inputItems {
-		// Handle message items
-		if !param.IsOmitted(item.OfMessage) {
+		switch {
+		case !param.IsOmitted(item.OfMessage):
 			msg := item.OfMessage
-			if string(msg.Role) == "user" {
+			switch string(msg.Role) {
+			case "user":
 				messages = append(messages, convertResponsesUserMessageToAnthropicBeta(msg))
-			} else if string(msg.Role) == "assistant" {
-				messages = append(messages, convertResponsesAssistantMessageToAnthropicBeta(msg))
+			case "assistant":
+				converted := convertResponsesAssistantMessageToAnthropicBeta(msg)
+				// Codex emits a blank message item for tool-only turns; drop it.
+				converted.Content = dropEmptyTextBlocks(converted.Content)
+				if len(converted.Content) > 0 {
+					messages = append(messages, converted)
+				}
 			}
-			continue
-		}
-
-		// Handle function call items (tool_use)
-		if !param.IsOmitted(item.OfFunctionCall) {
-			messages = append(messages, convertResponsesFunctionCallToAnthropicBeta(item.OfFunctionCall))
-			continue
-		}
-
-		// Handle function call output items (tool_result)
-		if !param.IsOmitted(item.OfFunctionCallOutput) {
-			messages = append(messages, convertResponsesFunctionCallOutputToAnthropicBeta(item.OfFunctionCallOutput))
-			continue
+		case !param.IsOmitted(item.OfFunctionCall):
+			appendBetaMessage(&messages, convertResponsesFunctionCallToAnthropicBeta(item.OfFunctionCall))
+		case !param.IsOmitted(item.OfFunctionCallOutput):
+			appendBetaMessage(&messages, convertResponsesFunctionCallOutputToAnthropicBeta(item.OfFunctionCallOutput))
 		}
 	}
 
 	return messages
+}
+
+// appendBetaMessage merges consecutive same-role messages into one, so parallel
+// tool calls and their results each collapse into a single assistant/user message.
+func appendBetaMessage(messages *[]anthropic.BetaMessageParam, msg anthropic.BetaMessageParam) {
+	if n := len(*messages); n > 0 && (*messages)[n-1].Role == msg.Role {
+		(*messages)[n-1].Content = append((*messages)[n-1].Content, msg.Content...)
+		return
+	}
+	*messages = append(*messages, msg)
+}
+
+// dropEmptyTextBlocks removes empty text blocks, which carry no content.
+func dropEmptyTextBlocks(blocks []anthropic.BetaContentBlockParamUnion) []anthropic.BetaContentBlockParamUnion {
+	out := blocks[:0:0]
+	for _, b := range blocks {
+		if b.OfText != nil && b.OfText.Text == "" {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 // convertResponsesUserMessageToAnthropicBeta converts Responses API user message to Anthropic Beta format

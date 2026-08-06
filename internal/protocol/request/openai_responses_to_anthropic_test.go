@@ -136,6 +136,118 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_FunctionCall(t *testing.T)
 	}
 }
 
+func TestConvertOpenAIResponsesToAnthropicBetaRequest_ParallelToolCalls(t *testing.T) {
+	// Regression: codex re-sends parallel tool calls as consecutive function_call
+	// items followed by consecutive function_call_output items; they must fold
+	// into one assistant message and one user message so every tool_use is
+	// answered by its tool_result in the very next message. Before the fix the
+	// output was back-to-back assistant tool_use messages, rejected upstream.
+	params := responses.ResponseNewParams{
+		Model: "cc",
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam{
+				{
+					OfMessage: &responses.EasyInputMessageParam{
+						Role:    responses.EasyInputMessageRole("user"),
+						Content: responses.EasyInputMessageContentUnionParam{OfString: param.NewOpt("do two things")},
+					},
+				},
+				{
+					OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+						CallID: "call_00_AAAA", Name: "exec", Arguments: `{"cmd":"echo hello"}`,
+					},
+				},
+				{
+					OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+						CallID: "call_00_BBBB", Name: "exec", Arguments: `{"cmd":"ls"}`,
+					},
+				},
+				{
+					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+						CallID: "call_00_AAAA",
+						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: param.NewOpt("hello")},
+					},
+				},
+				{
+					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+						CallID: "call_00_BBBB",
+						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: param.NewOpt("AGENTS.md\nCLAUDE.md")},
+					},
+				},
+			},
+		},
+	}
+
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+
+	// user, assistant[tool_use A, tool_use B], user[tool_result A, tool_result B]
+	if len(result.Messages) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(result.Messages))
+	}
+	assistant := result.Messages[1]
+	if string(assistant.Role) != "assistant" || len(assistant.Content) != 2 ||
+		assistant.Content[0].OfToolUse == nil || assistant.Content[1].OfToolUse == nil {
+		t.Fatalf("expected messages[1] to hold 2 tool_use blocks, got %v", assistant)
+	}
+	user := result.Messages[2]
+	if string(user.Role) != "user" || len(user.Content) != 2 ||
+		user.Content[0].OfToolResult == nil || user.Content[1].OfToolResult == nil {
+		t.Fatalf("expected messages[2] to hold 2 tool_result blocks, got %v", user)
+	}
+}
+
+func TestConvertOpenAIResponsesToAnthropicBetaRequest_SequentialToolCalls(t *testing.T) {
+	// Sequential calls (call → result, then call → result) must stay separate:
+	// each assistant tool_use message is followed by its own user tool_result.
+	params := responses.ResponseNewParams{
+		Model: "cc",
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam{
+				{
+					OfMessage: &responses.EasyInputMessageParam{
+						Role:    responses.EasyInputMessageRole("user"),
+						Content: responses.EasyInputMessageContentUnionParam{OfString: param.NewOpt("run tools one at a time")},
+					},
+				},
+				{
+					OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+						CallID: "call_00_AAAA", Name: "exec", Arguments: `{"cmd":"echo hello"}`,
+					},
+				},
+				{
+					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+						CallID: "call_00_AAAA",
+						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: param.NewOpt("hello")},
+					},
+				},
+				{
+					OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+						CallID: "call_00_BBBB", Name: "exec", Arguments: `{"cmd":"ls"}`,
+					},
+				},
+				{
+					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+						CallID: "call_00_BBBB",
+						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: param.NewOpt("AGENTS.md\nCLAUDE.md")},
+					},
+				},
+			},
+		},
+	}
+
+	result := ConvertOpenAIResponsesToAnthropicBetaRequest(params, 4096)
+
+	// user, assistant[tool_use A], user[tool_result A], assistant[tool_use B], user[tool_result B]
+	if len(result.Messages) != 5 {
+		t.Fatalf("expected 5 messages for sequential calls, got %d", len(result.Messages))
+	}
+	for _, i := range []int{1, 3} {
+		if string(result.Messages[i].Role) != "assistant" || len(result.Messages[i].Content) != 1 {
+			t.Fatalf("expected messages[%d] to be a single assistant tool_use, got %v", i, result.Messages[i])
+		}
+	}
+}
+
 func TestConvertResponsesToolChoiceToAnthropicBeta(t *testing.T) {
 	tests := []struct {
 		name     string
