@@ -15,37 +15,6 @@ func writeProvidersYAML(t *testing.T, body string) string {
 	return p
 }
 
-func TestExpandEnvRefs(t *testing.T) {
-	t.Setenv("TB_TEST_KEY", "sk-shared-123")
-	t.Setenv("TB_TEST_URL", "https://example.test")
-
-	cases := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"braced", "${TB_TEST_KEY}", "sk-shared-123"},
-		{"bare", "$TB_TEST_KEY", "sk-shared-123"},
-		{"embedded braced", "bearer ${TB_TEST_KEY}", "bearer sk-shared-123"},
-		{"embedded bare", "key=$TB_TEST_KEY end", "key=sk-shared-123 end"},
-		{"multiple", "${TB_TEST_KEY}@${TB_TEST_URL}", "sk-shared-123@https://example.test"},
-		{"ref plus literal suffix (baseurl style)", "${TB_TEST_URL}/v1/", "https://example.test/v1/"},
-		{"literal host plus ref port", "https://host.test:${TB_TEST_PORT}", "https://host.test:${TB_TEST_PORT}"},
-		{"no dollar", "plain-literal", "plain-literal"},
-		{"unset leaves as-is braced", "${TB_TEST_UNSET}", "${TB_TEST_UNSET}"},
-		{"unset leaves as-is bare", "$TB_TEST_UNSET", "$TB_TEST_UNSET"},
-		{"dollar not a ref", "cost is $5 and $10", "cost is $5 and $10"},
-		{"empty var", "$", "$"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := expandEnvRefs(c.in); got != c.want {
-				t.Fatalf("expandEnvRefs(%q) = %q, want %q", c.in, got, c.want)
-			}
-		})
-	}
-}
-
 func TestLoadProvidersConfigExpandsEnv(t *testing.T) {
 	t.Setenv("TB_SHARED_KEY", "sk-shared-xyz")
 	t.Setenv("TB_OPENAI_BASE", "https://api.openai.com")

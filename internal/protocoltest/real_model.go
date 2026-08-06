@@ -3,10 +3,10 @@ package protocoltest
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"github.com/tingly-dev/tingly-box/pkg/envsubst"
 )
 
 // ProviderConfig is one provider entry in the config YAML file.
@@ -177,50 +177,14 @@ func loadProvidersConfigYAML(path string) (*ProvidersConfig, error) {
 	return &cfg, nil
 }
 
-// envRefPatterns match ${VAR} and $VAR (VAR = [A-Za-z_][A-Za-z0-9_]*).
-// ${VAR} is matched first so "$" inside "${...}" isn't double-processed.
-var (
-	envRefBraced = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
-	envRefBare   = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
-)
-
 // expandProvidersConfigEnv resolves ${VAR}/$VAR references against the process
-// environment in every provider's apikey and baseurl. Missing vars are left
-// untouched (so an unset key flows into missingFields and the entry is skipped,
-// not silently sent upstream as a literal token).
+// environment in every provider's apikey and baseurl, so multiple providers can
+// share one key (e.g. apikey: ${ANTHROPIC_API_KEY}). Unset vars are left as the
+// literal reference (envsubst.ExpandOS), so an unset key flows into
+// missingFields and the entry is skipped — not silently sent upstream.
 func expandProvidersConfigEnv(cfg *ProvidersConfig) {
 	for i := range cfg.Providers {
-		cfg.Providers[i].APIKey = expandEnvRefs(cfg.Providers[i].APIKey)
-		cfg.Providers[i].BaseURL = expandEnvRefs(cfg.Providers[i].BaseURL)
+		cfg.Providers[i].APIKey = envsubst.ExpandOS(cfg.Providers[i].APIKey)
+		cfg.Providers[i].BaseURL = envsubst.ExpandOS(cfg.Providers[i].BaseURL)
 	}
-}
-
-func expandEnvRefs(s string) string {
-	if !strings.Contains(s, "$") {
-		return s
-	}
-	resolve := func(name string) (string, bool) {
-		return os.LookupEnv(name)
-	}
-	s = envRefBraced.ReplaceAllStringFunc(s, func(m string) string {
-		sub := envRefBraced.FindStringSubmatch(m)
-		if len(sub) < 2 {
-			return m
-		}
-		if v, ok := resolve(sub[1]); ok {
-			return v
-		}
-		return m // leave as-is when unset
-	})
-	s = envRefBare.ReplaceAllStringFunc(s, func(m string) string {
-		sub := envRefBare.FindStringSubmatch(m)
-		if len(sub) < 2 {
-			return m
-		}
-		if v, ok := resolve(sub[1]); ok {
-			return v
-		}
-		return m
-	})
-	return s
 }
