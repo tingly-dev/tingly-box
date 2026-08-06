@@ -62,7 +62,27 @@ providers:
       - "gpt-4o"
 ```
 
-> `apikey` 空 / 占位符的条目会被自动 skip 并打印原因，不会失败。
+> `apikey` 空 / 占位符 / 未展开的 `${VAR}` 的条目会被自动 skip 并打印原因，不会失败。
+
+**用环境变量共享 key / 注入值**：`apikey` 和 `baseurl` 都支持 `${VAR}` 和 `$VAR` 引用
+（在加载时从进程环境解析），所以多个 provider 可以共用一个 key，或把敏感值挪出文件：
+
+```yaml
+providers:
+  - name: "anthropic"
+    baseurl: "${TB_ANTHROPIC_BASE}/v1/"   # 引用 + 字面后缀也行
+    apikey: "${ANTHROPIC_API_KEY}"        # 多个 provider 可引用同一个 env
+    api_style: "anthropic"
+    models: ["claude-3-5-sonnet-20241022"]
+  - name: "anthropic-gateway"
+    baseurl: "${TB_ANTHROPIC_BASE}/v1/"
+    apikey: "${ANTHROPIC_API_KEY}"        # 共享同一个 env
+    api_style: "anthropic"
+    models: ["claude-3-5-haiku-20241022"]
+```
+
+> 引用的 env 未设置时，值保持字面 `${VAR}` 不变 → apikey 会被当缺失自动 skip（不会把
+> 字面 token 发给上游）。baseurl 没设则只是地址错、上游连不上，不会误用凭证。
 
 然后跑（mock 冒烟 + 真实扫描）：
 

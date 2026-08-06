@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // writeSummary writes a CSV with the given header + rows to a temp file and
@@ -111,5 +113,41 @@ func TestOnlyFailingFlagParses(t *testing.T) {
 	}
 	if !cli.Agent.OnlyFailing {
 		t.Error("OnlyFailing not set")
+	}
+}
+
+// An unexpanded env ref (${VAR}/$VAR whose var was unset) must be treated as a
+// missing apikey so the entry is skipped, not sent upstream with a literal.
+func TestMissingFieldsFlagsUnexpandedEnvRef(t *testing.T) {
+	base := protocoltest.RealModelEntry{
+		BaseURL: "https://api.example.com", Model: "m", APIStyle: "openai",
+	}
+	cases := []struct {
+		name string
+		key  string
+		want bool // true = apikey flagged missing
+	}{
+		{"braced unset", "${DEFINITELY_UNSET}", true},
+		{"bare unset", "$DEFINITELY_UNSET", true},
+		{"empty", "", true},
+		{"placeholder", "YOUR_API_KEY", true},
+		{"real key", "sk-real", false},
+		{"key with embedded ref value", "sk-${SOME_VAR}", false}, // partial — not a pure ref
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := base
+			e.APIKey = c.key
+			miss := missingFields(e)
+			got := false
+			for _, f := range miss {
+				if f == "apikey" {
+					got = true
+				}
+			}
+			if got != c.want {
+				t.Fatalf("apikey-missing for %q: got %v want %v (miss=%v)", c.key, got, c.want, miss)
+			}
+		})
 	}
 }

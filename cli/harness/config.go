@@ -117,6 +117,11 @@ func buildProvidersYAML(entries []providerEntry) string {
 	sb.WriteString("# Configure the 'models' array with the models you want to test.\n")
 	sb.WriteString("# Providers with empty apikey or empty models array are skipped.\n")
 	sb.WriteString("#\n")
+	sb.WriteString("# apikey and baseurl support environment references: ${VAR} or $VAR are\n")
+	sb.WriteString("# resolved from the process environment at load time, so multiple providers\n")
+	sb.WriteString("# can share one key (e.g. apikey: \"${ANTHROPIC_API_KEY}\"). Unset vars are\n")
+	sb.WriteString("# left as-is; an apikey that stays a literal ${VAR} is treated as missing.\n")
+	sb.WriteString("#\n")
 	sb.WriteString("providers:\n")
 	for _, e := range entries {
 		sb.WriteString(fmt.Sprintf("  - name: %q\n", e.ID))

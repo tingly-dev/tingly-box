@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -34,7 +35,7 @@ func missingFields(entry protocoltest.RealModelEntry) []string {
 		miss = append(miss, "baseurl")
 	}
 	apiKey := strings.TrimSpace(entry.APIKey)
-	if apiKey == "" || apiKey == "YOUR_API_KEY" {
+	if apiKey == "" || apiKey == "YOUR_API_KEY" || looksLikeUnexpandedEnvRef(apiKey) {
 		miss = append(miss, "apikey")
 	}
 	model := strings.TrimSpace(entry.Model)
@@ -46,6 +47,19 @@ func missingFields(entry protocoltest.RealModelEntry) []string {
 		miss = append(miss, "api_style")
 	}
 	return miss
+}
+
+// looksLikeUnexpandedEnvRef reports whether s is a leftover ${VAR} or $VAR
+// reference whose environment variable was unset at config-load time (the
+// loader leaves such refs as-is). We treat these as missing so the entry is
+// skipped rather than sent upstream with a literal "${...}" token.
+var (
+	unexpandedBraced = regexp.MustCompile(`^\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)
+	unexpandedBare   = regexp.MustCompile(`^\$[A-Za-z_][A-Za-z0-9_]*$`)
+)
+
+func looksLikeUnexpandedEnvRef(s string) bool {
+	return unexpandedBraced.MatchString(s) || unexpandedBare.MatchString(s)
 }
 
 // loadProvidersConfig reads and parses a providers config file (YAML).

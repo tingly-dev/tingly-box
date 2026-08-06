@@ -3,6 +3,7 @@ package protocoltest
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -168,5 +169,58 @@ func loadProvidersConfigYAML(path string) (*ProvidersConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse providers config %q: %w", path, err)
 	}
+	// Expand environment references in string fields (apikey, baseurl) so
+	// multiple providers can share one key via e.g. apikey: ${ANTHROPIC_API_KEY}.
+	// Unset vars are left as-is; the existing missingFields skip then drops the
+	// entry with a clear "missing apikey" reason — no new error path.
+	expandProvidersConfigEnv(&cfg)
 	return &cfg, nil
+}
+
+// envRefPatterns match ${VAR} and $VAR (VAR = [A-Za-z_][A-Za-z0-9_]*).
+// ${VAR} is matched first so "$" inside "${...}" isn't double-processed.
+var (
+	envRefBraced = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+	envRefBare   = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
+)
+
+// expandProvidersConfigEnv resolves ${VAR}/$VAR references against the process
+// environment in every provider's apikey and baseurl. Missing vars are left
+// untouched (so an unset key flows into missingFields and the entry is skipped,
+// not silently sent upstream as a literal token).
+func expandProvidersConfigEnv(cfg *ProvidersConfig) {
+	for i := range cfg.Providers {
+		cfg.Providers[i].APIKey = expandEnvRefs(cfg.Providers[i].APIKey)
+		cfg.Providers[i].BaseURL = expandEnvRefs(cfg.Providers[i].BaseURL)
+	}
+}
+
+func expandEnvRefs(s string) string {
+	if !strings.Contains(s, "$") {
+		return s
+	}
+	resolve := func(name string) (string, bool) {
+		return os.LookupEnv(name)
+	}
+	s = envRefBraced.ReplaceAllStringFunc(s, func(m string) string {
+		sub := envRefBraced.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return m
+		}
+		if v, ok := resolve(sub[1]); ok {
+			return v
+		}
+		return m // leave as-is when unset
+	})
+	s = envRefBare.ReplaceAllStringFunc(s, func(m string) string {
+		sub := envRefBare.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return m
+		}
+		if v, ok := resolve(sub[1]); ok {
+			return v
+		}
+		return m
+	})
+	return s
 }
