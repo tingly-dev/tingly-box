@@ -67,3 +67,139 @@ providers:
 		}
 	}
 }
+
+// The top-level `env:` table is the first lookup source for ${VAR}/$VAR refs,
+// falling back to the process env. Env values may themselves be references.
+func TestLoadProvidersConfigEnvTable(t *testing.T) {
+	t.Setenv("TB_PROC_KEY", "from-process-env")
+
+	p := writeProvidersYAML(t, `
+env:
+  SHARED_KEY: "sk-shared-from-table"        # literal value in the table
+  DERIVED: "${SHARED_KEY}-suffix"            # env value referencing another env entry
+  PROC_OVERRIDE: "from-table"                # table wins over process env
+providers:
+  - name: "uses-shared"
+    baseurl: "https://a.test"
+    apikey: "${SHARED_KEY}"                   # resolves from env table
+    api_style: "anthropic"
+    models: ["m"]
+  - name: "uses-derived"
+    baseurl: "https://b.test"
+    apikey: "${DERIVED}"                      # resolves via env table self-expansion
+    api_style: "anthropic"
+    models: ["m"]
+  - name: "uses-proc"
+    baseurl: "https://c.test"
+    apikey: "${TB_PROC_KEY}"                  # not in table -> falls back to process env
+    api_style: "anthropic"
+    models: ["m"]
+  - name: "table-overrides-proc"
+    baseurl: "https://d.test"
+    apikey: "${PROC_OVERRIDE}"                # table value wins over process env
+    api_style: "anthropic"
+    models: ["m"]
+  - name: "unset"
+    baseurl: "https://e.test"
+    apikey: "${NEITHER_TABLE_NOR_PROC}"       # unset everywhere -> stays literal
+    api_style: "anthropic"
+    models: ["m"]
+`)
+	// TB_PROC_KEY is set in process env; PROC_OVERRIDE is set in BOTH -> table wins.
+	t.Setenv("PROC_OVERRIDE", "from-process-should-lose")
+
+	entries, err := LoadProvidersConfig(p)
+	if err != nil {
+		t.Fatalf("LoadProvidersConfig: %v", err)
+	}
+	got := map[string]RealModelEntry{}
+	for _, e := range entries {
+		got[e.Provider] = e
+	}
+	want := map[string]string{ // provider -> expected apikey
+		"uses-shared":          "sk-shared-from-table",
+		"uses-derived":         "sk-shared-from-table-suffix",
+		"uses-proc":            "from-process-env",
+		"table-overrides-proc": "from-table",
+		"unset":                "${NEITHER_TABLE_NOR_PROC}",
+	}
+	for name, w := range want {
+		e, ok := got[name]
+		if !ok {
+			t.Fatalf("entry %q missing", name)
+		}
+		if e.APIKey != w {
+			t.Errorf("entry %q apikey: got %q want %q", name, e.APIKey, w)
+		}
+	}
+}
+
+// A provider's optional `prompt` field is propagated to each expanded entry and
+// env-expanded like apikey/baseurl. Providers without `prompt` get an empty
+// entry.Prompt (caller falls back to the agent default).
+func TestLoadProvidersConfigPromptField(t *testing.T) {
+	t.Setenv("TB_PROMPT_VAR", "injected")
+	p := writeProvidersYAML(t, `
+providers:
+  - name: "with-prompt"
+    baseurl: "https://a.test"
+    apikey: "sk-a"
+    api_style: "anthropic"
+    models: ["m1", "m2"]
+    prompt: "summarize this: ${TB_PROMPT_VAR}"   # env-expanded
+  - name: "no-prompt"
+    baseurl: "https://b.test"
+    apikey: "sk-b"
+    api_style: "anthropic"
+    models: ["m1"]
+`)
+	entries, err := LoadProvidersConfig(p)
+	if err != nil {
+		t.Fatalf("LoadProvidersConfig: %v", err)
+	}
+	got := map[string]string{} // entry name -> prompt
+	for _, e := range entries {
+		got[e.Name] = e.Prompt
+	}
+	if got["with-prompt-m1"] != "summarize this: injected" {
+		t.Errorf("with-prompt-m1 prompt: got %q", got["with-prompt-m1"])
+	}
+	if got["with-prompt-m2"] != "summarize this: injected" {
+		t.Errorf("with-prompt-m2 prompt: got %q", got["with-prompt-m2"])
+	}
+	if got["no-prompt"] != "" {
+		t.Errorf("no-prompt should be empty, got %q", got["no-prompt"])
+	}
+}
+
+// A top-level `prompt` is "locked": when set, every entry uses it and
+// provider-level prompts are ignored. Only a CLI --prompt can override it
+// (that override happens in the harness, not here). Without a top-level
+// prompt, provider-level prompts still apply.
+func TestLoadProvidersConfigTopLevelPromptLocks(t *testing.T) {
+	p := writeProvidersYAML(t, `
+prompt: "TOP_LEVEL_PROMPT"        # locks the prompt for every entry
+providers:
+  - name: "prov-override"
+    baseurl: "https://a.test"
+    apikey: "sk-a"
+    api_style: "anthropic"
+    models: ["m1"]
+    prompt: "provider-level-ignored"   # ignored because top-level is set
+  - name: "prov-none"
+    baseurl: "https://b.test"
+    apikey: "sk-b"
+    api_style: "anthropic"
+    models: ["m1"]
+    # no provider prompt -> still gets the locked top-level value
+`)
+	entries, err := LoadProvidersConfig(p)
+	if err != nil {
+		t.Fatalf("LoadProvidersConfig: %v", err)
+	}
+	for _, e := range entries {
+		if e.Prompt != "TOP_LEVEL_PROMPT" {
+			t.Errorf("entry %q prompt: got %q, want %q (top-level should lock)", e.Name, e.Prompt, "TOP_LEVEL_PROMPT")
+		}
+	}
+}

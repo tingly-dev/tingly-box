@@ -18,11 +18,23 @@ type ProviderConfig struct {
 	APIStyle string   `yaml:"api_style"` // required: "openai" | "anthropic" | "google"
 	APIType  string   `yaml:"api_type"`  // optional: "openai_chat" | "openai_responses" | "anthropic_v1" | "anthropic_beta" | "google"
 	Models   []string `yaml:"models"`    // list of model names to test
+	Prompt   string   `yaml:"prompt"`    // optional per-provider prompt override; empty -> agent default
 }
 
 // ProvidersConfig is the top-level structure of the config YAML file.
 type ProvidersConfig struct {
 	Providers []ProviderConfig `yaml:"providers"`
+	// Env is an optional shared variable table. Values defined here are resolved
+	// first when expanding ${VAR}/$VAR references in provider fields, falling
+	// back to the process environment. Env values may themselves be references
+	// (e.g. OPENAI_KEY: "${MY_SECRET}"). This lets one key be shared across
+	// providers without scattering it across the shell, and keeps the file
+	// self-contained.
+	Env map[string]string `yaml:"env"`
+	// Prompt is an optional top-level default prompt applied to every provider
+	// that doesn't set its own `prompt`. Env-expanded like provider fields.
+	// A provider-level `prompt` overrides this; a CLI prompt overrides both.
+	Prompt string `yaml:"prompt"`
 }
 
 // RealModelEntry is an expanded entry for testing.
@@ -35,6 +47,7 @@ type RealModelEntry struct {
 	Model    string
 	APIStyle string
 	APIType  string
+	Prompt   string // per-provider prompt override (already env-expanded); empty -> agent default
 }
 
 // ExpandProvidersConfig expands a ProvidersConfig into individual test entries.
@@ -48,6 +61,14 @@ func ExpandProvidersConfig(cfg *ProvidersConfig) []RealModelEntry {
 		}
 
 		for _, model := range provider.Models {
+			// Per-entry prompt resolution. A top-level `prompt` is "locked": once
+			// set, every entry uses it and provider-level prompts are ignored
+			// (only a CLI --prompt can override it). Without a top-level prompt,
+			// a provider-level `prompt` applies; else empty (agent default).
+			entryPrompt := provider.Prompt
+			if cfg.Prompt != "" {
+				entryPrompt = cfg.Prompt
+			}
 			entry := RealModelEntry{
 				Provider: provider.Name,
 				BaseURL:  provider.BaseURL,
@@ -55,6 +76,7 @@ func ExpandProvidersConfig(cfg *ProvidersConfig) []RealModelEntry {
 				Model:    model,
 				APIStyle: provider.APIStyle,
 				APIType:  provider.APIType,
+				Prompt:   entryPrompt,
 			}
 
 			// Generate entry name
@@ -177,14 +199,66 @@ func loadProvidersConfigYAML(path string) (*ProvidersConfig, error) {
 	return &cfg, nil
 }
 
-// expandProvidersConfigEnv resolves ${VAR}/$VAR references against the process
-// environment in every provider's apikey and baseurl, so multiple providers can
-// share one key (e.g. apikey: ${ANTHROPIC_API_KEY}). Unset vars are left as the
-// literal reference (envsubst.ExpandOS), so an unset key flows into
-// missingFields and the entry is skipped — not silently sent upstream.
+// expandProvidersConfigEnv resolves ${VAR}/$VAR references in every provider's
+// apikey and baseurl, so multiple providers can share one key (e.g.
+// apikey: ${ANTHROPIC_API_KEY}) without scattering it across the shell.
+//
+// Resolution order: the top-level `env:` table first, then the process
+// environment, then left as the literal reference. Env-table values may
+// themselves be references (resolved once up front, with self-referential
+// entries like FOO: "${FOO}" left literal to avoid loops). An apikey that stays
+// a literal ${VAR} flows into missingFields and the entry is skipped — not
+// silently sent upstream.
 func expandProvidersConfigEnv(cfg *ProvidersConfig) {
-	for i := range cfg.Providers {
-		cfg.Providers[i].APIKey = envsubst.ExpandOS(cfg.Providers[i].APIKey)
-		cfg.Providers[i].BaseURL = envsubst.ExpandOS(cfg.Providers[i].BaseURL)
+	// Resolve the env table against itself + the process env. Self-references
+	// (FOO: "${FOO}") are protected by isSelfRef in the lookup.
+	envTable := make(map[string]string, len(cfg.Env))
+	for k, v := range cfg.Env {
+		envTable[k] = resolveProviderEnvValue(v, envTable)
 	}
+	// Second pass now that the table is fully populated, so an env entry can
+	// reference another env entry defined later in the file.
+	for k, v := range cfg.Env {
+		envTable[k] = resolveProviderEnvValue(v, envTable)
+	}
+
+	lookup := func(name string) (string, bool) {
+		if v, ok := envTable[name]; ok && !isProvidersEnvSelfRef(v, name) {
+			return v, true
+		}
+		return os.LookupEnv(name)
+	}
+
+	for i := range cfg.Providers {
+		cfg.Providers[i].APIKey = expandProviderField(cfg.Providers[i].APIKey, lookup)
+		cfg.Providers[i].BaseURL = expandProviderField(cfg.Providers[i].BaseURL, lookup)
+		cfg.Providers[i].Prompt = expandProviderField(cfg.Providers[i].Prompt, lookup)
+	}
+	// Top-level default prompt is env-expanded too.
+	cfg.Prompt = expandProviderField(cfg.Prompt, lookup)
+}
+
+// resolveProviderEnvValue expands a single env-table value against the table
+// itself + the process env (table first). Used to resolve env: entries that are
+// themselves references.
+func resolveProviderEnvValue(v string, envTable map[string]string) string {
+	lookup := func(name string) (string, bool) {
+		if val, ok := envTable[name]; ok && !isProvidersEnvSelfRef(val, name) {
+			return val, true
+		}
+		return os.LookupEnv(name)
+	}
+	out, _ := envsubst.Expand(v, lookup)
+	return out
+}
+
+func expandProviderField(s string, lookup func(string) (string, bool)) string {
+	out, _ := envsubst.Expand(s, lookup)
+	return out
+}
+
+// isProvidersEnvSelfRef reports whether val is a ${name}/$name reference to name
+// itself, which must not be expanded (would loop / no-op).
+func isProvidersEnvSelfRef(val, name string) bool {
+	return val == "${"+name+"}" || val == "$"+name
 }

@@ -85,12 +85,14 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
 	}
 
-	if prompt == "" {
-		if p, ok := defaultPrompts[agentName]; ok {
-			prompt = p
-		} else {
-			prompt = "What is the capital of France?"
-		}
+	// Prompt priority: a non-empty CLI/positional `prompt` overrides everything
+	// (applies to all entries). Otherwise each entry's yaml `prompt` field is
+	// used, falling back to the agent default. The CLI override is captured here;
+	// the per-entry fallback is resolved in the loop.
+	cliPrompt := prompt
+	defaultPrompt := "What is the capital of France?"
+	if p, ok := defaultPrompts[agentName]; ok {
+		defaultPrompt = p
 	}
 
 	entries, err := loadProvidersConfig(modelsFile)
@@ -158,7 +160,11 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 	}
 
 	fmt.Printf("🧪 Real Agent test: %s\n", agentName)
-	fmt.Printf("📝 Prompt: %s\n", prompt)
+	if cliPrompt != "" {
+		fmt.Printf("📝 Prompt: %s  (CLI override — applies to all entries)\n", cliPrompt)
+	} else {
+		fmt.Printf("📝 Prompt: <per-entry from yaml `prompt`, else default %q>\n", defaultPrompt)
+	}
 	fmt.Printf("📋 Models: %d runnable entries from %s\n\n", len(runnable), modelsFile)
 
 	results := make([]*RealAgentTestResult, 0, len(runnable))
@@ -174,8 +180,17 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 				continue
 			}
 		}
+		// Resolve this entry's prompt: CLI override > yaml `prompt` > agent default.
+		entryPrompt := cliPrompt
+		if entryPrompt == "" {
+			if entry.Prompt != "" {
+				entryPrompt = entry.Prompt
+			} else {
+				entryPrompt = defaultPrompt
+			}
+		}
 		fmt.Printf("── [%d/%d] %s ──\n", i+1, len(runnable), entry.Name)
-		r := runOneRealAgentTest(profileType, entry, prompt)
+		r := runOneRealAgentTest(profileType, entry, entryPrompt)
 		results = append(results, r)
 		printRealAgentTestResult(r)
 		if writer != nil {
