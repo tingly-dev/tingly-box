@@ -213,25 +213,37 @@ func (env *AgentTestEnv) SetupAgent(AgentType AgentType, providerName string, mo
 		return fmt.Errorf("virtual server not initialized")
 	}
 
+	// API style per agent type. OpenAI-style providers (codex) must include the
+	// /v1 suffix in APIBase — the gateway appends the endpoint path (e.g.
+	// /chat/completions) to APIBase, and the VirtualServer mock serves those
+	// endpoints under /v1 (see scenario_responder.go). Without /v1 the upstream
+	// call lands on /chat/completions instead of /v1/chat/completions and the
+	// VirtualServer returns 404. This mirrors TestEnv.SetupRoute (testenv.go),
+	// which the passing matrix path relies on.
+	var apiStyle protocol.APIStyle
+	switch AgentType {
+	case AgentTypeClaudeCode, AgentTypeOpenCode:
+		apiStyle = protocol.APIStyleAnthropic
+	case AgentTypeCodex:
+		apiStyle = protocol.APIStyleOpenAI
+	default:
+		return fmt.Errorf("unknown Agent type: %s", AgentType)
+	}
+
+	providerAPIBase := virtualURL
+	if apiStyle == protocol.APIStyleOpenAI {
+		providerAPIBase = virtualURL + "/v1"
+	}
+
 	// Create provider pointing to virtual server
 	provider := &typ.Provider{
 		UUID:     providerName,
 		Name:     providerName,
-		APIBase:  virtualURL,
-		APIStyle: "openai", // Default, will be adjusted per Agent
+		APIBase:  providerAPIBase,
+		APIStyle: apiStyle,
 		Token:    "test-virtual-token",
 		Enabled:  true,
 		Timeout:  30000,
-	}
-
-	// Adjust API style based on Agent type
-	switch AgentType {
-	case AgentTypeClaudeCode:
-		provider.APIStyle = "anthropic"
-	case AgentTypeCodex:
-		provider.APIStyle = "openai"
-	case AgentTypeOpenCode:
-		provider.APIStyle = "anthropic"
 	}
 
 	// Add provider to config
