@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,6 +28,7 @@ type AgentCmd struct {
 	Summary   string        `kong:"name='summary',default='harness-summary.csv',help='Path to CSV summary file (per-row results, written durably)'"`
 	OutputDir string        `kong:"name='output-dir',help='Directory for full output files (default: harness-output/)'"`
 	Resume    string        `kong:"name='resume',help='Resume — skip every (agent,entry) already recorded in the summary file'"`
+	OnlyFailing bool        `kong:"name='only-failing',help='Only re-run (agent,entry) pairs whose latest summary row is FAIL/TIMEOUT. Real-provider mode only; mutually exclusive with --resume.'"`
 	Filter    []string      `kong:"name='filter',sep=',',help='Only run entries whose name matches (case-insensitive). Real-provider mode only.'"`
 	Timeout   time.Duration `kong:"name='timeout',short='t',default='2m',help='Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.'"`
 	AgentType string        `kong:"arg,optional,name='agent',help='Agent type: claude | codex | opencode | batch'"`
@@ -123,6 +125,13 @@ func (a *AgentCmd) Run() error {
 		return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
 	}
 
+	if a.OnlyFailing && a.Resume != "" {
+		return fmt.Errorf("--only-failing and --resume are mutually exclusive")
+	}
+	if a.OnlyFailing && a.Mock {
+		fmt.Printf("⚠️  --only-failing is ignored in --mock mode (no named entries)\n\n")
+	}
+
 	// Make the per-entry timeout visible to the executors (they read
 	// the package-level variable before launching the agent CLI).
 	agentRunTimeout = a.Timeout
@@ -151,16 +160,35 @@ func (a *AgentCmd) Run() error {
 		}
 		fmt.Printf("⏭  Resume: skipping %d previously-recorded (agent,entry) rows\n", len(skip))
 	}
+
+	// --only-failing: re-run just the red items from the prior summary. Computed
+	// here (not in runRealAgentTests) so the "no prior summary" error surfaces
+	// before any work runs.
+	var only map[resumeKey]struct{}
+	if a.OnlyFailing && a.Config != "" {
+		only, err = loadFailedKeys(a.Summary)
+		if err != nil {
+			if errors.Is(err, errNoPriorSummary) {
+				return fmt.Errorf("--only-failing: %w", err)
+			}
+			return err
+		}
+		if len(only) == 0 {
+			fmt.Printf("✅ No FAIL/TIMEOUT rows in %s — nothing to re-run\n", a.Summary)
+		} else {
+			fmt.Printf("🔁 Only-failing: re-running %d red (agent,entry) rows\n", len(only))
+		}
+	}
 	fmt.Println()
 
 	if strings.EqualFold(agentName, "batch") {
-		return runBatchAgentTests(a.Mock, a.Config, prompt, writer, skip, a.Filter)
+		return runBatchAgentTests(a.Mock, a.Config, prompt, writer, skip, only, a.Filter)
 	}
 
 	var results []*RealAgentTestResult
 	var runErr error
 	if a.Config != "" {
-		results, runErr = runRealAgentTests(agentName, a.Config, prompt, writer, skip, a.Filter)
+		results, runErr = runRealAgentTests(agentName, a.Config, prompt, writer, skip, only, a.Filter)
 	} else {
 		if len(a.Filter) > 0 {
 			fmt.Printf("⚠️  --filter is ignored in --mock mode (no named entries)\n\n")
@@ -326,7 +354,7 @@ func runAgentCmdWithTimeout(cmd *exec.Cmd) ([]byte, bool, error) {
 // `prompt` is non-empty. In real mode the same config file is reused across
 // agents. If filter is non-empty, only config entries whose name matches (case-
 // insensitive) are run; ignored in virtual mode.
-func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, filter []string) error {
+func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, only map[resumeKey]struct{}, filter []string) error {
 	fmt.Printf("🧪 Batch agent test: %v\n", batchAgents)
 	if configFile != "" {
 		fmt.Printf("📋 Config: %s\n", configFile)
@@ -356,7 +384,7 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *
 		var err error
 		switch {
 		case configFile != "":
-			results, err = runRealAgentTests(agentName, configFile, prompt, writer, skip, filter)
+			results, err = runRealAgentTests(agentName, configFile, prompt, writer, skip, only, filter)
 		case useMock:
 			results, err = runVirtualAgentTest(agentName, prompt, writer, skip)
 		default:

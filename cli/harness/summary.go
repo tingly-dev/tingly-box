@@ -207,6 +207,70 @@ func loadResumeKeys(path string) (map[resumeKey]struct{}, error) {
 	return keys, nil
 }
 
+// loadFailedKeys reads the summary CSV and returns the set of (agent, entry)
+// pairs whose latest recorded row is a failure or timeout. Used by
+// --only-failing to re-run just the red items. A missing file returns an empty
+// (non-nil) set and a sentinel error so callers can distinguish "no prior run".
+//
+// Only the last row per (agent, entry) counts — a row that failed once then
+// later passed is not red.
+func loadFailedKeys(path string) (map[resumeKey]struct{}, error) {
+	keys := make(map[resumeKey]struct{})
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return keys, errNoPriorSummary
+		}
+		return nil, fmt.Errorf("open summary file %s: %w", path, err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1 // tolerate older rows with different column counts
+
+	header, err := r.Read()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return keys, errNoPriorSummary
+		}
+		return nil, fmt.Errorf("read summary header: %w", err)
+	}
+	agentIdx, entryIdx, statusIdx := indexOf(header, "agent"), indexOf(header, "entry"), indexOf(header, "status")
+	if agentIdx < 0 || entryIdx < 0 || statusIdx < 0 {
+		return nil, fmt.Errorf("summary file %s missing required columns 'agent', 'entry', 'status'", path)
+	}
+
+	// Track the latest status per key, then collect red ones in a second pass.
+	latest := make(map[resumeKey]string)
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read summary row: %w", err)
+		}
+		if agentIdx >= len(row) || entryIdx >= len(row) || statusIdx >= len(row) {
+			continue
+		}
+		k := resumeKey{
+			Agent: strings.TrimSpace(row[agentIdx]),
+			Entry: strings.TrimSpace(row[entryIdx]),
+		}
+		latest[k] = strings.TrimSpace(row[statusIdx])
+	}
+	for k, st := range latest {
+		if st == "FAIL" || st == "TIMEOUT" {
+			keys[k] = struct{}{}
+		}
+	}
+	return keys, nil
+}
+
+// errNoPriorSummary signals that --only-failing was requested but no usable
+// summary file exists yet (nothing to re-run).
+var errNoPriorSummary = errors.New("no prior summary file; run without --only-failing first")
+
 func indexOf(header []string, name string) int {
 	for i, h := range header {
 		if strings.EqualFold(strings.TrimSpace(h), name) {

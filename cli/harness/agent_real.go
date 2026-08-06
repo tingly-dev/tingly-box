@@ -65,7 +65,7 @@ func loadProvidersConfig(path string) ([]protocoltest.RealModelEntry, error) {
 // --resume can pick up where a previous run left off. If filter is non-empty,
 // only entries whose name matches (case-insensitive) are considered; unknown
 // filter names are warned about but do not fail the run.
-func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, filter []string) ([]*RealAgentTestResult, error) {
+func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, only map[resumeKey]struct{}, filter []string) ([]*RealAgentTestResult, error) {
 	profileType := parseAgentType(agentName)
 	if profileType == "" {
 		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
@@ -152,6 +152,13 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 		if _, ok := skip[resumeKey{Agent: agentName, Entry: entry.Name}]; ok {
 			fmt.Printf("⏭  [%d/%d] %s — skip (resume)\n\n", i+1, len(runnable), entry.Name)
 			continue
+		}
+		// --only-failing: skip anything that isn't in the red set.
+		if only != nil {
+			if _, ok := only[resumeKey{Agent: agentName, Entry: entry.Name}]; !ok {
+				fmt.Printf("⏭  [%d/%d] %s — skip (only-failing)\n\n", i+1, len(runnable), entry.Name)
+				continue
+			}
 		}
 		fmt.Printf("── [%d/%d] %s ──\n", i+1, len(runnable), entry.Name)
 		r := runOneRealAgentTest(profileType, entry, prompt)
@@ -247,6 +254,22 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 	result.Output = agentResult.Output
 	result.Error = agentResult.Error
 	result.ExitCode = agentResult.ExitCode
+
+	// Real upstreams aren't test-controlled, so exit 0 alone is a "fake green":
+	// a CLI may print an upstream error yet exit cleanly. Apply the content
+	// assertion on top of exit status — mirroring the mock path's
+	// VirtualMockAnswerMarker check. Timeouts skip this (their error is the
+	// timeout, already recorded).
+	if result.Success && !result.TimedOut {
+		if ok, rule := assertRealAgentContent(result.Output); !ok {
+			result.Success = false
+			if result.Error != "" {
+				result.Error = fmt.Sprintf("content assertion (%s); prior error: %s", rule, result.Error)
+			} else {
+				result.Error = fmt.Sprintf("content assertion: %s", rule)
+			}
+		}
+	}
 	return result
 }
 
