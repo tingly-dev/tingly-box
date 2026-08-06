@@ -8,7 +8,7 @@ import "strings"
 // shared slice so every agent executor honors the same vocabulary.
 //
 // Bias toward catching failures over false alarms: a stray marker in otherwise
-// valid model output is a manual-override (see .design/runbook.md §"断言误报"),
+// valid model output is a manual-override (see .design/harness-agent-testing.md §"断言误报"),
 // whereas an exit-0 failure that ships silently is the regression we want to
 // block. English markers only by default to avoid false-positives on legitimate
 // Chinese model answers; extend this list from runbook feedback.
