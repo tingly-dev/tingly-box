@@ -15,6 +15,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
 )
 
@@ -167,6 +169,32 @@ func (ph *ProtocolHandler) setTokenUsageOnSpan(c *gin.Context, inputTokens, outp
 		return
 	}
 	ph.deps.Tracer.SetTokenUsage(c.Request.Context(), inputTokens, outputTokens)
+}
+
+// selectService, selectServiceForEmbeddings and selectServiceForImageGeneration
+// are the traced entry points to the routing pipeline. Handlers call these
+// instead of ph.deps.RoutingSelector directly, so the span lives here once
+// rather than as a bracket pair copied into every handler — instrumentation
+// nobody has to remember to add when an endpoint is written.
+func (ph *ProtocolHandler) selectService(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error) {
+	end := ph.startRoutingSpan(c)
+	provider, service, err := ph.deps.RoutingSelector.SelectService(c, scenario, rule, req)
+	end(err)
+	return provider, service, err
+}
+
+func (ph *ProtocolHandler) selectServiceForEmbeddings(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule) (*typ.Provider, *loadbalance.Service, error) {
+	end := ph.startRoutingSpan(c)
+	provider, service, err := ph.deps.RoutingSelector.SelectServiceForEmbeddings(c, scenario, rule)
+	end(err)
+	return provider, service, err
+}
+
+func (ph *ProtocolHandler) selectServiceForImageGeneration(c *gin.Context, scenario typ.RuleScenario, rule *typ.Rule) (*typ.Provider, *loadbalance.Service, error) {
+	end := ph.startRoutingSpan(c)
+	provider, service, err := ph.deps.RoutingSelector.SelectServiceForImageGeneration(c, scenario, rule)
+	end(err)
+	return provider, service, err
 }
 
 // startRoutingSpan opens a child span covering service selection (the

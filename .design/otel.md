@@ -123,6 +123,13 @@ import 环。追踪元数据簇已被 `SetTrackingContext`/`GetTrackingContext` 
 
 **upstream span 建在 transport 层**（`internal/client/otel_transport.go`，位于所有 vendor round tripper 之下）：一处覆盖全部 provider，且天然只圈住真实上游调用。它**在响应体关闭/读尽时才结束**，不是 RoundTrip 返回时——流式补全在响应头到达后还会吐几秒钟的 token，否则记录的是 TTFB 而非上游总时长。
 
+**打点集中在一处,不散落到 handler**:routing span 一度是 6 个 handler 里各一对手工括号
+（`endRouting := ph.startRoutingSpan(c)` … `endRouting(err)`）——新增端点就得有人记得补,
+是典型的"细碎"型可维护性债。现在 handler 调用 `ph.selectService` / `selectServiceForEmbeddings`
+/ `selectServiceForImageGeneration` 这三个带打点的包装方法,span 只在 `tracing_middleware.go`
+出现一次。业务文件里剩余的 span 接触点只有两处不可再收的:failover 循环内的 attempt span
+（本就一处）、`usage_tracking.go` 的 token 用量镜像（与其余记账步骤并列）。
+
 **attempt / routing span 不换入 `c.Request` 的 context**：ambient span 必须始终是 root，token usage 才会落在 root 上（GenAI 约定要求）。代价是 upstream span 与 attempt span 是兄弟而非父子——视图侧按**时间包含关系**做嵌套展示，比改动语义更便宜且更稳。
 
 - **root span**：`tracingMiddleware`（`contextMiddleware` 之后）创建。入口 Extract 入站

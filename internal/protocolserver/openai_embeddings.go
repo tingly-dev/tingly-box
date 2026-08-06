@@ -102,9 +102,7 @@ func (ph *ProtocolHandler) HandleOpenAIEmbeddings(c *gin.Context) {
 		return
 	}
 
-	endRouting := ph.startRoutingSpan(c)
-	provider, selectedService, err := ph.deps.RoutingSelector.SelectServiceForEmbeddings(c, scenarioType, rule)
-	endRouting(err)
+	provider, selectedService, err := ph.selectServiceForEmbeddings(c, scenarioType, rule)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

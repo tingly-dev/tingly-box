@@ -122,9 +122,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	ph.applyVisionProxy(c, scenarioType, rule, reqParams)
 
 	// Select service using routing pipeline
-	endRouting := ph.startRoutingSpan(c)
-	provider, selectedService, err = ph.deps.RoutingSelector.SelectService(c, scenarioType, rule, reqParams)
-	endRouting(err)
+	provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqParams)
 	if err != nil {
 		logrus.WithError(err).Errorf("Select service error")
 		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
