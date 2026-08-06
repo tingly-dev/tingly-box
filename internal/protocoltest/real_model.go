@@ -19,6 +19,9 @@ type ProviderConfig struct {
 	APIType  string   `yaml:"api_type"`  // optional: "openai_chat" | "openai_responses" | "anthropic_v1" | "anthropic_beta" | "google"
 	Models   []string `yaml:"models"`    // list of model names to test
 	Prompt   string   `yaml:"prompt"`    // optional per-provider prompt override; empty -> agent default
+	// Disabled, when explicitly false, skips this provider entirely. Nil (unset)
+	// or true means enabled — so omitting the field stays backward-compatible.
+	Disabled *bool `yaml:"enable"`
 }
 
 // ProvidersConfig is the top-level structure of the config YAML file.
@@ -55,6 +58,11 @@ type RealModelEntry struct {
 func ExpandProvidersConfig(cfg *ProvidersConfig) []RealModelEntry {
 	var entries []RealModelEntry
 	for _, provider := range cfg.Providers {
+		// enable: false (explicitly) skips the provider entirely. Unset (nil)
+		// or enable: true keeps it — so omitting the field is backward-compatible.
+		if provider.Disabled != nil && !*provider.Disabled {
+			continue
+		}
 		// Skip providers with no models defined
 		if len(provider.Models) == 0 {
 			continue

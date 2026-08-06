@@ -77,6 +77,7 @@ providers:
 | `api_style` | provider | 是 | `anthropic` / `openai` / `google` |
 | `models` | provider | 是 | 要测的模型列表；每个 `provider×model` 展开成一条独立测试 |
 | `prompt` | provider | 否 | 该 provider 的测试 prompt（见 §2.3） |
+| `enable` | provider | 否 | `false` 跳过该 provider；不填或 `true` 启用（默认启用）|
 | `api_type` | provider | 否 | 显式指定 `openai_chat` / `openai_responses` / `anthropic_v1` / `anthropic_beta` / `google`，不填按 `api_style` 推断 |
 | `env` | 顶层 | 否 | 共享变量表（见 §2.2） |
 | `prompt` | 顶层 | 否 | 锁定所有条目的 prompt（见 §2.3） |

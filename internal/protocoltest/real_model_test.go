@@ -172,7 +172,46 @@ providers:
 	}
 }
 
-// A top-level `prompt` is "locked": when set, every entry uses it and
+// enable: false skips a provider entirely; unset (nil) and enable: true keep it.
+func TestLoadProvidersConfigEnableSkip(t *testing.T) {
+	p := writeProvidersYAML(t, `
+providers:
+  - name: "on-default"
+    baseurl: "https://a.test"
+    apikey: "sk-a"
+    api_style: "anthropic"
+    models: ["m1"]
+  - name: "explicit-on"
+    baseurl: "https://b.test"
+    apikey: "sk-b"
+    api_style: "anthropic"
+    models: ["m1"]
+    enable: true
+  - name: "off"
+    baseurl: "https://c.test"
+    apikey: "sk-c"
+    api_style: "anthropic"
+    models: ["m1"]
+    enable: false
+`)
+	entries, err := LoadProvidersConfig(p)
+	if err != nil {
+		t.Fatalf("LoadProvidersConfig: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, e := range entries {
+		seen[e.Provider] = true
+	}
+	if !seen["on-default"] {
+		t.Error("on-default (unset) should be included")
+	}
+	if !seen["explicit-on"] {
+		t.Error("explicit-on (enable: true) should be included")
+	}
+	if seen["off"] {
+		t.Error("off (enable: false) should be skipped")
+	}
+}
 // provider-level prompts are ignored. Only a CLI --prompt can override it
 // (that override happens in the harness, not here). Without a top-level
 // prompt, provider-level prompts still apply.

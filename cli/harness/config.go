@@ -137,6 +137,7 @@ func buildProvidersYAML(entries []providerEntry) string {
 	sb.WriteString("# prompt (env-expanded like apikey). Empty -> the agent's default prompt.\n")
 	sb.WriteString("# A top-level `prompt` (sibling of `providers`) locks the prompt for every\n")
 	sb.WriteString("# entry; provider-level prompts are then ignored, only CLI --prompt wins.\n")
+	sb.WriteString("# Set `enable: false` on a provider to skip it (unset/true = enabled).\n")
 	sb.WriteString("#\n")
 	sb.WriteString("providers:\n")
 	for _, e := range entries {
