@@ -3,15 +3,12 @@ package runtime
 import (
 	"os"
 	"reflect"
-	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/envsubst"
 )
-
-var envRefPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // EnvRefIssue describes a missing environment reference in MCP runtime config.
 type EnvRefIssue struct {
@@ -151,37 +148,28 @@ func walkExpandValue(v reflect.Value, path, sourceID string, sourceEnv map[strin
 }
 
 func expandStringEnvRefs(input string, sourceEnv map[string]string, allowProcessEnv bool) (string, []string) {
-	if input == "" || !strings.Contains(input, "${") {
+	if input == "" || !strings.ContainsRune(input, '$') {
 		return input, nil
 	}
-	missing := make(map[string]struct{})
-	expanded := envRefPattern.ReplaceAllStringFunc(input, func(match string) string {
-		sub := envRefPattern.FindStringSubmatch(match)
-		if len(sub) < 2 {
-			return match
-		}
-		name := sub[1]
-		if val, ok := sourceEnv[name]; ok && val != "" {
-			// Avoid self-referential expansion loops like FOO=${FOO}.
-			if val != match {
-				return val
-			}
+	// Lookup closure preserving MCP's resolution order:
+	//  1. sourceEnv[name], when set, non-empty, and not a self-reference
+	//     (e.g. FOO=${FOO} would otherwise expand to itself);
+	//  2. the process environment, when allowProcessEnv;
+	//  3. otherwise unset — envsubst leaves the literal and reports it missing.
+	lookup := func(name string) (string, bool) {
+		if val, ok := sourceEnv[name]; ok && val != "" && !isSelfRef(val, name) {
+			return val, true
 		}
 		if allowProcessEnv {
-			if val, ok := os.LookupEnv(name); ok {
-				return val
-			}
+			return os.LookupEnv(name)
 		}
-		missing[name] = struct{}{}
-		return match
-	})
-	if len(missing) == 0 {
-		return expanded, nil
+		return "", false
 	}
-	out := make([]string, 0, len(missing))
-	for name := range missing {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return expanded, out
+	return envsubst.Expand(input, lookup)
+}
+
+// isSelfRef reports whether val is a ${name}/$name reference to name itself
+// (e.g. name="FOO", val="${FOO}"), which must not be expanded to avoid a loop.
+func isSelfRef(val, name string) bool {
+	return val == "${"+name+"}" || val == "$"+name
 }
