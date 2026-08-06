@@ -27,6 +27,7 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 ## Key Features
 
 - **Agent-First Model Gateway** – Unified endpoint for agents — seamlessly bridge OpenAI, Anthropic, Google Gemini, and more with automatic protocol translation and native agent compatibility
+- **Availability First** – Prioritize reliable AI application access with local deployment, multi-provider routing, and automatic failover — keeping agents running through provider, model, or network disruptions
 - **Agent Integration** – One-click config for Claude Code, OpenCode, Codex, Xcode, and more — transparent proxying for SDKs and CLI tools
 - **Agent Profiles** - Run agent like Claude Code with individual profiles, each profile can work with different model and agent config
 - **Remote Control via IM Bots** – Control AI agents remotely through Telegram, DingTalk, Feishu, Lark, Weixin, WeCom, Slack, and Discord
