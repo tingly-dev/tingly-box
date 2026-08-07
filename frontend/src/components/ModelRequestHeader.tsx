@@ -26,6 +26,12 @@ import { fontMono } from '@/theme/fonts';
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
 const HEADER_PADDING_Y = 6;
+// Reserves a consistent slot for "name + edit icon" so the toggles that
+// follow (1M, Responses, …) line up at the same x-position across every
+// rule card, regardless of how long each rule's model name happens to be.
+// Names longer than this simply overflow it — no truncation — so it never
+// hides information, it only stops short names from misaligning the row.
+const NAME_SLOT_MIN_WIDTH = 200;
 
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
@@ -86,10 +92,11 @@ export interface ModelRequestHeaderProps {
     // 1M context window props
     context1M?: boolean;
     onContext1MToggle?: () => void;
-    // Native OpenAI Responses API toggle (Codex-scenario rules only). Provided
-    // only when the rule's primary provider is OpenAI-style — same gating
-    // pattern as context1M. responsesProbing shows a spinner while the
-    // pre-flight connectivity check runs before the flag is actually set.
+    // Native OpenAI Responses API toggle. Provided only when the rule's
+    // primary provider is OpenAI-style — same gating pattern as context1M.
+    // Not Codex-specific: any OpenAI-style rule can opt in, the pre-flight
+    // probe is what actually gates support. responsesProbing shows a spinner
+    // while that check runs before the flag is actually set.
     responsesEnabled?: boolean;
     responsesProbing?: boolean;
     onResponsesToggle?: () => void;
@@ -206,63 +213,65 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
 
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
-                <Tooltip
-                    title={modelName
-                        ? `The model name that clients use to make requests. This will be matched against incoming API calls. Supports wildcards (* or [any]) for matching any model. (click to copy)`
-                        : 'No model specified'}
-                    placement="top"
-                >
-                    {isWildcard ? (
-                        <Chip
-                            label={
-                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
-                                    {modelName}
-                                </Typography>
-                            }
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: NAME_SLOT_MIN_WIDTH, flexShrink: 0 }}>
+                    <Tooltip
+                        title={modelName
+                            ? `The model name that clients use to make requests. This will be matched against incoming API calls. Supports wildcards (* or [any]) for matching any model. (click to copy)`
+                            : 'No model specified'}
+                        placement="top"
+                    >
+                        {isWildcard ? (
+                            <Chip
+                                label={
+                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                                        {modelName}
+                                    </Typography>
+                                }
+                                size="small"
+                                variant="outlined"
+                                onClick={(e) => { e.stopPropagation(); handleCopy(); }}
+                                sx={{
+                                    '& .MuiChip-label': { fontWeight: 600 },
+                                    height: 22,
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        backgroundColor: 'action.hover',
+                                    },
+                                }}
+                            />
+                        ) : (
+                            <ModelNameText
+                                onClick={(e) => { e.stopPropagation(); handleCopy(); }}
+                                sx={{
+                                    cursor: modelName ? 'pointer' : 'default',
+                                    '&:hover': modelName ? {
+                                        textDecoration: 'underline',
+                                        textDecorationStyle: 'dotted',
+                                        textDecorationColor: 'text.secondary',
+                                        color: 'primary.main',
+                                    } : {},
+                                }}
+                            >
+                                {modelName}
+                            </ModelNameText>
+                        )}
+                    </Tooltip>
+                    <Tooltip title="Edit model name">
+                        <IconButton
                             size="small"
-                            variant="outlined"
-                            onClick={(e) => { e.stopPropagation(); handleCopy(); }}
+                            onClick={(e) => { e.stopPropagation(); setEditMode(true); }}
                             sx={{
-                                '& .MuiChip-label': { fontWeight: 600 },
-                                height: 22,
-                                cursor: 'pointer',
-                                '&:hover': {
-                                    backgroundColor: 'action.hover',
-                                },
-                            }}
-                        />
-                    ) : (
-                        <ModelNameText
-                            onClick={(e) => { e.stopPropagation(); handleCopy(); }}
-                            sx={{
-                                cursor: modelName ? 'pointer' : 'default',
-                                '&:hover': modelName ? {
-                                    textDecoration: 'underline',
-                                    textDecorationStyle: 'dotted',
-                                    textDecorationColor: 'text.secondary',
-                                    color: 'primary.main',
-                                } : {},
+                                opacity: editable ? 0.6 : 0,
+                                p: 0.5,
+                                ml: 0.25,
+                                pointerEvents: editable ? 'auto' : 'none',
+                                '&:hover': { opacity: 1 }
                             }}
                         >
-                            {modelName}
-                        </ModelNameText>
-                    )}
-                </Tooltip>
-                <Tooltip title="Edit model name">
-                    <IconButton
-                        size="small"
-                        onClick={(e) => { e.stopPropagation(); setEditMode(true); }}
-                        sx={{
-                            opacity: editable ? 0.6 : 0,
-                            p: 0.5,
-                            ml: 0.25,
-                            pointerEvents: editable ? 'auto' : 'none',
-                            '&:hover': { opacity: 1 }
-                        }}
-                    >
-                        <EditIcon sx={{ fontSize: '0.95rem' }} />
-                    </IconButton>
-                </Tooltip>
+                            <EditIcon sx={{ fontSize: '0.95rem' }} />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
 
                 {/* 1M Context Toggle */}
                 {onContext1MToggle && (
@@ -300,7 +309,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     </Tooltip>
                 )}
 
-                {/* Native OpenAI Responses API Toggle (Codex scenario) */}
+                {/* Native OpenAI Responses API Toggle */}
                 {onResponsesToggle && (
                     <Tooltip title={
                         responsesProbing

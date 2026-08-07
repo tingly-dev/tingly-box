@@ -1,7 +1,7 @@
 import {act, renderHook, waitFor} from '@testing-library/react';
 import {vi} from 'vitest';
 import type {Mock} from 'vitest';
-import {useCodexResponsesToggle} from './useCodexResponsesToggle';
+import {useResponsesToggle} from './useResponsesToggle';
 import {runProbe} from '@/components/probe/runProbe';
 import {notify} from '@/utils/notify';
 import type {ConfigProvider, ConfigRecord} from '@/components/RoutingGraphTypes';
@@ -30,14 +30,14 @@ beforeEach(() => {
     (notify.error as Mock).mockReset();
 });
 
-describe('useCodexResponsesToggle', () => {
+describe('useResponsesToggle', () => {
     it('enables the flag after a successful probe', async () => {
         mockRunProbe.mockResolvedValue({success: true});
         const onUpdateRecord = vi.fn();
         const record = makeRecord();
         const service = makeService();
 
-        const {result} = renderHook(() => useCodexResponsesToggle({record, primaryService: service, onUpdateRecord}));
+        const {result} = renderHook(() => useResponsesToggle({record, primaryService: service, onUpdateRecord}));
         expect(result.current.enabled).toBe(false);
 
         await act(async () => {
@@ -60,7 +60,7 @@ describe('useCodexResponsesToggle', () => {
         const onUpdateRecord = vi.fn();
         const record = makeRecord();
 
-        const {result} = renderHook(() => useCodexResponsesToggle({record, primaryService: makeService(), onUpdateRecord}));
+        const {result} = renderHook(() => useResponsesToggle({record, primaryService: makeService(), onUpdateRecord}));
 
         await act(async () => {
             await result.current.onToggle();
@@ -74,7 +74,7 @@ describe('useCodexResponsesToggle', () => {
         const onUpdateRecord = vi.fn();
         const record = makeRecord({openaiEndpointOverride: 'responses'});
 
-        const {result} = renderHook(() => useCodexResponsesToggle({record, primaryService: makeService(), onUpdateRecord}));
+        const {result} = renderHook(() => useResponsesToggle({record, primaryService: makeService(), onUpdateRecord}));
         expect(result.current.enabled).toBe(true);
 
         await act(async () => {
@@ -91,7 +91,7 @@ describe('useCodexResponsesToggle', () => {
         const record = makeRecord({openaiEndpointOverride: 'responses'});
 
         const {result, rerender} = renderHook(
-            ({service}) => useCodexResponsesToggle({record, primaryService: service, onUpdateRecord}),
+            ({service}) => useResponsesToggle({record, primaryService: service, onUpdateRecord}),
             {initialProps: {service: makeService({model: 'gpt-5'})}},
         );
 
@@ -112,7 +112,7 @@ describe('useCodexResponsesToggle', () => {
         const record = makeRecord(); // openaiEndpointOverride unset
 
         const {rerender} = renderHook(
-            ({service}) => useCodexResponsesToggle({record, primaryService: service, onUpdateRecord}),
+            ({service}) => useResponsesToggle({record, primaryService: service, onUpdateRecord}),
             {initialProps: {service: makeService({model: 'gpt-5'})}},
         );
 

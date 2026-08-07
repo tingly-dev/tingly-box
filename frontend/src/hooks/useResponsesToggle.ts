@@ -3,14 +3,14 @@ import {runProbe} from '@/components/probe/runProbe';
 import {notify} from '@/utils/notify';
 import type {ConfigProvider, ConfigRecord} from '@/components/RoutingGraphTypes';
 
-export interface UseCodexResponsesToggleOptions {
+export interface UseResponsesToggleOptions {
     record: ConfigRecord;
     /** The rule's highest-priority active service, or undefined if it has none. */
     primaryService: ConfigProvider | undefined;
     onUpdateRecord?: (field: keyof ConfigRecord, value: any) => void;
 }
 
-export interface UseCodexResponsesToggleResult {
+export interface UseResponsesToggleResult {
     enabled: boolean;
     probing: boolean;
     onToggle: () => void;
@@ -31,15 +31,18 @@ async function probeResponsesSupport(service: ConfigProvider) {
     });
 }
 
-// useCodexResponsesToggle owns the "native OpenAI Responses API" switch shown
-// on Codex-scenario rule cards: a pre-flight probe against the real upstream
-// before the flag is set, and automatic re-validation if the rule's bound
+// useResponsesToggle owns the "native OpenAI Responses API" switch shown on
+// any rule card whose primary provider is OpenAI-style — it's the rule-level
+// `openaiEndpointOverride` flag (see .design/openai-endpoint-routing.md §3,
+// Layer 2), which is per-rule and provider-agnostic by design, not a
+// Codex-only feature. A pre-flight probe against the real upstream gates the
+// flag before it's set, and the hook auto-revalidates if the rule's bound
 // provider/model changes mid-session.
-export function useCodexResponsesToggle({
+export function useResponsesToggle({
     record,
     primaryService,
     onUpdateRecord,
-}: UseCodexResponsesToggleOptions): UseCodexResponsesToggleResult {
+}: UseResponsesToggleOptions): UseResponsesToggleResult {
     const [probing, setProbing] = useState(false);
     const enabled = record.flags?.openaiEndpointOverride === 'responses';
 
