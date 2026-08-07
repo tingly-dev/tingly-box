@@ -174,11 +174,13 @@ func TestDelayProvider_TPSCaptured(t *testing.T) {
 }
 
 func TestDelayProvider_LatencyPercentiles(t *testing.T) {
+	// Small but spread-out delays: the assertions only need populated,
+	// ordered percentiles, so keep the range tight to bound wall time.
 	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
-		MinFirstTokenDelayMs: 20,
-		MaxFirstTokenDelayMs: 200,
-		MinEndDelayMs:        20,
-		MaxEndDelayMs:        200,
+		MinFirstTokenDelayMs: 5,
+		MaxFirstTokenDelayMs: 40,
+		MinEndDelayMs:        5,
+		MaxEndDelayMs:        40,
 	})
 	defer dp.Close()
 

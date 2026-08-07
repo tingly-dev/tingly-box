@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
+	"github.com/tingly-dev/tingly-box/internal/testsupport/advisortest"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -90,7 +91,7 @@ func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testin
 
 	cfg := &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
+			advisortest.Source(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
 		},
 	}
 
@@ -151,7 +152,7 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 
 	cfg := &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
+			advisortest.Source(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
 		},
 	}
 
@@ -205,7 +206,7 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 
 	cfg := &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 3),
+			advisortest.Source(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 3),
 		},
 	}
 

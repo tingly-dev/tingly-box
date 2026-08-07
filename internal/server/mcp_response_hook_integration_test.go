@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/testsupport/advisortest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -45,7 +46,7 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 		if source.Advisor == nil {
 			continue
 		}
-		provider, err := testAdvisorResolvedProvider(source)
+		provider, err := advisortest.ResolvedProvider(source)
 		if err != nil {
 			continue
 		}
@@ -196,7 +197,7 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
+			advisortest.Source(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
 		},
 	})
 
@@ -315,7 +316,7 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
+			advisortest.Source(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
 		},
 	})
 
@@ -424,7 +425,7 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
+			advisortest.Source(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
 		},
 	})
 
@@ -532,7 +533,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSourceWithEnabled(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2, false),
+			advisortest.SourceWithEnabled(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2, false),
 		},
 	})
 
@@ -666,7 +667,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			testAdvisorSource(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
+			advisortest.Source(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
 		},
 	})
 

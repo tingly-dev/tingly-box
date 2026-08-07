@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -89,21 +91,20 @@ func TestHTTPToolSource_Configuration(t *testing.T) {
 		t.Errorf("Expected initial state %s, got %s", StateDisconnected, status.State)
 	}
 
-	// 	// Test that HTTP source implements ReconnectableSource
-	// 	if _, ok := source.(ReconnectableSource); !ok {
-	// 		t.Error("HTTP source should implement ReconnectableSource")
-	// 	}
-
 	// Test disconnect before connect (should be safe)
 	if err := source.Disconnect(ctx); err != nil {
 		t.Errorf("Disconnect before connect should be safe, got error: %v", err)
 	}
 }
 
+// Compile-time checks: reconnect-capable sources implement ReconnectableSource.
+var (
+	_ ReconnectableSource = (*HTTPToolSource)(nil)
+	_ ReconnectableSource = (*SSEToolSource)(nil)
+)
+
 // TestSSEToolSource_Configuration tests SSE source configuration
 func TestSSEToolSource_Configuration(t *testing.T) {
-	// 	ctx := context.Background()
-
 	// Test SSE source creation
 	cfg := typ.MCPSourceConfig{
 		ID:        "test-sse",
@@ -128,12 +129,6 @@ func TestSSEToolSource_Configuration(t *testing.T) {
 	if source.GetType() != TransportSSE {
 		t.Errorf("Expected transport type 'sse', got '%s'", source.GetType())
 	}
-
-	// // Test that SSE source implements ReconnectableSource
-	//
-	//	if _, ok := source.(ReconnectableSource); !ok {
-	//		t.Error("SSE source should implement ReconnectableSource")
-	//	}
 }
 
 // TestRuntime_EndToEndToolCall tests complete tool call flow
@@ -485,39 +480,26 @@ func TestHealthMonitor_Strategy(t *testing.T) {
 		minDelay   time.Duration // Base delay - 25% jitter
 		maxDelay   time.Duration // Base delay + 25% jitter (or max)
 	}{
-		{0, 5 * time.Second, 5 * time.Second},    // No jitter for first attempt
-		{1, 7 * time.Second, 12 * time.Second},   // 10s ± 25%
-		{2, 15 * time.Second, 25 * time.Second},  // 20s ± 25%
-		{3, 30 * time.Second, 50 * time.Second},  // 40s ± 25%
-		{4, 45 * time.Second, 60 * time.Second},  // 60s ± 25% (capped at max)
-		{5, 45 * time.Second, 60 * time.Second},  // Still max
-		{10, 45 * time.Second, 60 * time.Second}, // Still max
+		{0, 5 * time.Second, 5 * time.Second},                  // No jitter for first attempt
+		{1, 7500 * time.Millisecond, 12500 * time.Millisecond}, // 10s ± 25%
+		{2, 15 * time.Second, 25 * time.Second},                // 20s ± 25%
+		{3, 30 * time.Second, 50 * time.Second},                // 40s ± 25%
+		{4, 45 * time.Second, 60 * time.Second},                // 60s ± 25% (capped at max)
+		{5, 45 * time.Second, 60 * time.Second},                // Still max
+		{10, 45 * time.Second, 60 * time.Second},               // Still max
 	}
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("retry_%d", tc.retryCount), func(t *testing.T) {
-			delay := strategy.NextRetry(tc.retryCount)
+			// Jitter is random, so sample repeatedly to exercise the bounds.
+			for i := 0; i < 100; i++ {
+				delay := strategy.NextRetry(tc.retryCount)
 
-			if delay < tc.minDelay {
-				t.Errorf("Delay %v is less than minimum %v", delay, tc.minDelay)
-			}
-			if delay > tc.maxDelay {
-				t.Errorf("Delay %v exceeds maximum %v", delay, tc.maxDelay)
-			}
-
-			// Check that delay follows exponential pattern (approximately)
-			if tc.retryCount > 0 && tc.retryCount <= 4 {
-				baseDelay := 5 * time.Second
-				multiplier := 1 << uint(tc.retryCount-1)
-				expectedDelay := time.Duration(float64(baseDelay) * float64(multiplier) * 2.0)
-				// Allow some tolerance for jitter
-				tolerance := time.Duration(float64(expectedDelay) * 0.5)
-				minExpected := expectedDelay - tolerance
-				maxExpected := expectedDelay + tolerance
-
-				if delay < minExpected || delay > maxExpected {
-					t.Logf("Warning: delay %v outside expected range [%v, %v] for retry %d",
-						delay, minExpected, maxExpected, tc.retryCount)
+				if delay < tc.minDelay {
+					t.Fatalf("Delay %v is less than minimum %v", delay, tc.minDelay)
+				}
+				if delay > tc.maxDelay {
+					t.Fatalf("Delay %v exceeds maximum %v", delay, tc.maxDelay)
 				}
 			}
 		})
@@ -527,31 +509,47 @@ func TestHealthMonitor_Strategy(t *testing.T) {
 // TestErrorClassifier tests error classification
 func TestErrorClassifier(t *testing.T) {
 	classifier := &DefaultErrorClassifier{}
-	_ = classifier // TODO: Implement actual error classification tests
 
-	t.Run("Transient errors", func(t *testing.T) {
-		// Note: We can't easily create real network errors in tests,
-		// but we can test the classification logic conceptually
-		t.Log("Network errors should be classified as transient")
-		t.Log("HTTP 5xx errors should be classified as transient")
-		t.Log("Timeout errors should be classified as transient")
-	})
+	cases := []struct {
+		name      string
+		err       error
+		transient bool
+		permanent bool
+	}{
+		{"nil error", nil, false, false},
+		{"HTTP 500", &HTTPError{StatusCode: 500, Message: "internal"}, true, false},
+		{"HTTP 503", &HTTPError{StatusCode: 503, Message: "unavailable"}, true, false},
+		{"HTTP 401", &HTTPError{StatusCode: 401, Message: "unauthorized"}, false, true},
+		{"HTTP 404", &HTTPError{StatusCode: 404, Message: "not found"}, false, true},
+		{"HTTP 429 is neither", &HTTPError{StatusCode: 429, Message: "rate limited"}, false, false},
+		{"wrapped HTTP 502", fmt.Errorf("call failed: %w", &HTTPError{StatusCode: 502, Message: "bad gateway"}), true, false},
+		{"context deadline", context.DeadlineExceeded, true, false},
+		{"context canceled", context.Canceled, true, false},
+		{"net timeout", &net.DNSError{IsTimeout: true}, true, false},
+		{"net non-timeout", &net.DNSError{IsNotFound: true}, false, false},
+		{"plain error", fmt.Errorf("something odd"), false, false},
+	}
 
-	t.Run("Permanent errors", func(t *testing.T) {
-		t.Log("HTTP 401 errors should be classified as permanent")
-		t.Log("HTTP 404 errors should be classified as permanent")
-		t.Log("Authentication failures should be classified as permanent")
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := classifier.IsTransient(tc.err); got != tc.transient {
+				t.Errorf("IsTransient(%v) = %v, want %v", tc.err, got, tc.transient)
+			}
+			if got := classifier.IsPermanent(tc.err); got != tc.permanent {
+				t.Errorf("IsPermanent(%v) = %v, want %v", tc.err, got, tc.permanent)
+			}
+		})
+	}
 }
 
-// TestRuntime_ConcurrentAccess tests thread safety of runtime operations
+// TestRuntime_ConcurrentAccess exercises Runtime methods from concurrent
+// goroutines so the race detector can catch unsynchronized state access.
 func TestRuntime_ConcurrentAccess(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping concurrent test in short mode")
 	}
 
 	ctx := context.Background()
-	_ = ctx // TODO: Use ctx in actual tool calls when testing full flow
 
 	cfg := &typ.MCPRuntimeConfig{
 		RequestTimeout: 30,
@@ -569,49 +567,35 @@ func TestRuntime_ConcurrentAccess(t *testing.T) {
 	}
 
 	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	defer r.Close()
 
-	// Test concurrent tool calls
 	const numGoroutines = 10
-	done := make(chan bool, numGoroutines)
-
+	var wg sync.WaitGroup
 	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
 		go func(id int) {
-			defer func() { done <- true }()
+			defer wg.Done()
 
-			// Simulate tool calls
-			normalizedTool := NormalizeToolName("test-concurrent", "test_tool")
-			_, toolName, ok := ParseNormalizedToolName(normalizedTool)
-			if !ok {
-				t.Errorf("Goroutine %d: failed to parse tool name", id)
-				return
+			// Mix of read paths that share runtime state.
+			_ = r.GetConfig()
+			_ = r.HasServerTools()
+			_ = r.ListServerToolsForInjection(ctx)
+
+			// CallTool with an unknown tool must fail gracefully, not race.
+			normalizedTool := NormalizeToolName("no-such-source", "test_tool")
+			if _, err := r.CallTool(ctx, normalizedTool, `{}`); err == nil {
+				t.Errorf("Goroutine %d: expected error calling tool on unknown source", id)
 			}
-
-			if toolName != "test_tool" {
-				t.Errorf("Goroutine %d: unexpected tool name: %s", id, toolName)
-				return
-			}
-
-			// In real scenario, we would call r.CallTool() here
-			// For this test, we just verify the parsing works
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	for i := 0; i < numGoroutines; i++ {
-		select {
-		case <-done:
-			// Goroutine completed
-		case <-timeout.C:
-			t.Fatalf("Timeout waiting for goroutines to complete (%d/%d completed)",
-				i, numGoroutines)
-		}
+	waited := make(chan struct{})
+	go func() { wg.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Timeout waiting for goroutines to complete")
 	}
-
-	// Cleanup
-	r.Close()
 }
 
 // BenchmarkToolSourceFactory_Creation benchmarks tool source creation

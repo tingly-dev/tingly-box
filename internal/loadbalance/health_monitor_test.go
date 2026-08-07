@@ -77,6 +77,9 @@ func TestHealthMonitor_ReportAuthError(t *testing.T) {
 // TestHealthMonitor_ReportSuccess_AfterRateLimitWindow verifies ReportSuccess
 // recovers a rate-limited service only after its window has elapsed.
 func TestHealthMonitor_ReportSuccess_AfterRateLimitWindow(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
 	config := DefaultHealthMonitorConfig()
 	config.RecoveryTimeoutSeconds = 1
 	hm := NewHealthMonitor(config)
@@ -89,14 +92,17 @@ func TestHealthMonitor_ReportSuccess_AfterRateLimitWindow(t *testing.T) {
 	hm.ReportSuccess(serviceID)
 	assert.False(t, hm.IsHealthy(serviceID), "success inside the rate-limit window must not recover")
 
-	time.Sleep(1100 * time.Millisecond)
+	fc.advance(1100 * time.Millisecond)
 	hm.ReportSuccess(serviceID)
 	assert.True(t, hm.IsHealthy(serviceID))
 }
 
 func TestHealthMonitor_TimeBasedRecovery(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
 	config := DefaultHealthMonitorConfig()
-	config.RecoveryTimeoutSeconds = 1 // 1 second for testing
+	config.RecoveryTimeoutSeconds = 1
 	hm := NewHealthMonitor(config)
 
 	serviceID := "provider-a:gpt-4o"
@@ -105,8 +111,8 @@ func TestHealthMonitor_TimeBasedRecovery(t *testing.T) {
 	hm.ReportRateLimit(serviceID)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Wait for recovery timeout
-	time.Sleep(1100 * time.Millisecond)
+	// Advance past the recovery timeout
+	fc.advance(1100 * time.Millisecond)
 
 	// Should be healthy again due to time-based recovery
 	assert.True(t, hm.IsHealthy(serviceID))
@@ -223,46 +229,44 @@ func TestHealthStatus_String(t *testing.T) {
 	assert.Equal(t, "unknown", HealthStatus(999).String())
 }
 
-// Test probe function that returns true (healthy) by default
-var testProbeResult = true
-
 func TestHealthMonitor_ProbeBeforeRecovery(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
 	config := DefaultHealthMonitorConfig()
 	config.ProbeEnabled = true
-	config.RecoveryTimeoutSeconds = 1 // 1 second for testing
+	config.RecoveryTimeoutSeconds = 1
 	hm := NewHealthMonitor(config)
 
 	serviceID := "provider-a:gpt-4o"
 
-	// Set probe function that checks testProbeResult
+	probeResult := false
 	hm.SetProbeFunc(func(sid string) bool {
-		return testProbeResult
+		return probeResult
 	})
 
 	// Make service unhealthy
 	hm.ReportRateLimit(serviceID)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Set probe to fail (service still unhealthy)
-	testProbeResult = false
-
-	// Wait for recovery timeout
-	time.Sleep(1100 * time.Millisecond)
+	// Advance past the recovery timeout with the probe failing
+	fc.advance(1100 * time.Millisecond)
 
 	// Should still be unhealthy because probe failed (and timeout extended)
 	assert.False(t, hm.IsHealthy(serviceID), "Service should remain unhealthy when probe fails")
 
-	// Set probe to succeed
-	testProbeResult = true
-
-	// Wait for recovery timeout again (since it was extended)
-	time.Sleep(1100 * time.Millisecond)
+	// Set probe to succeed and advance past the extended timeout
+	probeResult = true
+	fc.advance(1100 * time.Millisecond)
 
 	// Should now be healthy because probe succeeded
 	assert.True(t, hm.IsHealthy(serviceID), "Service should become healthy when probe succeeds")
 }
 
 func TestHealthMonitor_ProbeDisabled(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
 	config := DefaultHealthMonitorConfig()
 	config.ProbeEnabled = false // Probing disabled
 	config.RecoveryTimeoutSeconds = 1
@@ -279,14 +283,17 @@ func TestHealthMonitor_ProbeDisabled(t *testing.T) {
 	hm.ReportRateLimit(serviceID)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Wait for recovery timeout
-	time.Sleep(1100 * time.Millisecond)
+	// Advance past the recovery timeout
+	fc.advance(1100 * time.Millisecond)
 
 	// Should auto-recover because probing is disabled
 	assert.True(t, hm.IsHealthy(serviceID), "Service should auto-recover when probing is disabled")
 }
 
 func TestHealthMonitor_ProbeExtendsTimeout(t *testing.T) {
+	fc, restore := withFakeClock(t)
+	defer restore()
+
 	config := DefaultHealthMonitorConfig()
 	config.ProbeEnabled = true
 	config.RecoveryTimeoutSeconds = 1
@@ -294,38 +301,26 @@ func TestHealthMonitor_ProbeExtendsTimeout(t *testing.T) {
 
 	serviceID := "provider-a:gpt-4o"
 
-	// Set probe function
+	probeResult := false
 	hm.SetProbeFunc(func(sid string) bool {
-		return testProbeResult
+		return probeResult
 	})
 
 	// Make service unhealthy
 	hm.ReportRateLimit(serviceID)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Set probe to fail
-	testProbeResult = false
-
-	// Wait for initial recovery timeout
-	time.Sleep(1100 * time.Millisecond)
-
-	// Probe fails, timeout should be extended
+	// Advance past the initial recovery timeout; probe fails and extends it
+	fc.advance(1100 * time.Millisecond)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Wait another second for the extended timeout
-	time.Sleep(1100 * time.Millisecond)
-
-	// Probe still fails, should extend timeout again
+	// Advance past the extended timeout; probe still fails, extends again
+	fc.advance(1100 * time.Millisecond)
 	assert.False(t, hm.IsHealthy(serviceID))
 
-	// Wait another second and now make probe succeed
-	time.Sleep(1100 * time.Millisecond)
-
-	// Now make probe succeed
-	testProbeResult = true
-
-	// Wait for timeout and probe to succeed
-	time.Sleep(1100 * time.Millisecond)
+	// Make probe succeed and advance past the latest extension
+	probeResult = true
+	fc.advance(1100 * time.Millisecond)
 
 	// Should now recover
 	assert.True(t, hm.IsHealthy(serviceID))

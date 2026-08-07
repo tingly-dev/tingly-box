@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/testsupport/advisortest"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -74,7 +75,7 @@ func TestAdvisorToolLoop(t *testing.T) {
 	cp := client.NewClientPool()
 	cfg := typ.AdvisorConfig{
 		ProviderUUID:      "test",
-		ProviderResolver:  testAdvisorProvider(mockServer.URL, "test-key", protocol.APIStyleOpenAI),
+		ProviderResolver:  advisortest.Provider(mockServer.URL, "test-key", protocol.APIStyleOpenAI),
 		Model:             "gpt-4",
 		MaxUsesPerRequest: 3,
 	}
@@ -223,7 +224,7 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	cp := client.NewClientPool()
 	cfg := typ.AdvisorConfig{
 		ProviderUUID:      "test",
-		ProviderResolver:  testAdvisorProvider(mockServer.URL+"/v1", "test-key", protocol.APIStyleAnthropic),
+		ProviderResolver:  advisortest.Provider(mockServer.URL+"/v1", "test-key", protocol.APIStyleAnthropic),
 		Model:             "claude-opus-4-6",
 		MaxUsesPerRequest: 2,
 		MaxTokens:         2048,
@@ -337,7 +338,7 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	cp := client.NewClientPool()
 	cfg := typ.AdvisorConfig{
 		ProviderUUID:      "test",
-		ProviderResolver:  testAdvisorProvider(mockServer.URL, "test-key", protocol.APIStyleOpenAI),
+		ProviderResolver:  advisortest.Provider(mockServer.URL, "test-key", protocol.APIStyleOpenAI),
 		Model:             "gpt-4",
 		MaxUsesPerRequest: 1,
 	}
