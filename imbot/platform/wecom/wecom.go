@@ -206,7 +206,6 @@ func (h *sdkEventHandler) OnEvent(ctx context.Context, event *types.Event) {
 }
 
 func (h *sdkEventHandler) OnError(ctx context.Context, err error) {
-	defer h.bot.RecoverCallback("wecom error event")
 	h.bot.Logger().Error("WeCom SDK error: %v", err)
 	h.bot.EmitError(err)
 }

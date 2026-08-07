@@ -32,14 +32,11 @@ import (
 //
 // chatStore is injected into the Manager and shared by every bot it runs —
 // see Manager.SetChatStore. This function must not close it.
-// selfStop closes this bot with a recorded reason: it cancels the bot's own
-// lifecycle context, so the function unwinds through its defers (channel
-// unregister, consumer cleanup) and the imbot manager tears down the platform
-// connections. It is how a fatal in-bot condition (contained receive-loop
-// panic) converges into the one shutdown path instead of growing a second,
-// in-place recovery path. May be nil (standalone callers without a
-// supervisor), in which case fatal panics only mark the bot disconnected.
-func runBotWithSettings(ctx context.Context, selfStop func(reason string), setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry, accessStore AccessStore, authorizer access.Authorizer) error {
+//
+// Returns nil when stopped via ctx, or the fatal error when a contained
+// receive-loop panic (imbot ErrPanic) forced the bot to close — the
+// supervisor's deferred cancel then unwinds everything exactly like a stop.
+func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry, accessStore AccessStore, authorizer access.Authorizer) error {
 	// Create platform-specific auth config
 	authConfig := buildAuthConfig(setting)
 	platform := imbot.Platform(setting.Platform)
@@ -67,20 +64,18 @@ func runBotWithSettings(ctx context.Context, selfStop func(reason string), setti
 	for k, v := range imbot.AuthOptions(setting.Platform, setting.Auth) {
 		options[k] = v
 	}
-	// A contained receive-loop panic (imbot ErrPanic) means the bot's state is
-	// suspect: close the whole bot through the normal shutdown path rather
-	// than reconnecting in place. The manager's reconcile loop restarts it as
-	// a fresh instance; the reconcile interval doubles as crash backoff.
-	manager.OnError(func(err error, _ imbot.Platform, botUUID string) {
-		if !imbot.IsPanicError(err) || selfStop == nil {
+	// A contained receive-loop panic (imbot ErrPanic — see that const) must
+	// close the whole bot, never reconnect it in place. Surface it as this
+	// function's return value; buffered so the emit goroutine never blocks.
+	fatal := make(chan error, 1)
+	manager.OnError(func(err error, _ imbot.Platform, _ string) {
+		if !imbot.IsPanicError(err) {
 			return
 		}
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"uuid":     setting.UUID,
-			"bot":      botUUID,
-			"platform": setting.Platform,
-		}).Error("Bot receive loop panicked; closing bot for clean restart")
-		selfStop(err.Error())
+		select {
+		case fatal <- err:
+		default:
+		}
 	})
 
 	err := manager.AddBot(&imbot.Config{
@@ -222,11 +217,18 @@ func runBotWithSettings(ctx context.Context, selfStop func(reason string), setti
 		}
 	}
 
-	// Wait for context cancellation
-	// The manager will automatically clean up when context is cancelled
-	<-ctx.Done()
-
-	return nil
+	// Wait for context cancellation (normal stop) or a fatal in-bot condition.
+	// The manager will automatically clean up when context is cancelled.
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-fatal:
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"uuid":     setting.UUID,
+			"platform": setting.Platform,
+		}).Error("Bot receive loop panicked; closing bot for clean restart")
+		return err
+	}
 }
 
 // buildAuthConfig creates the platform auth config from a bot's stored auth
@@ -253,7 +255,6 @@ const (
 type ExitInfo struct {
 	Reason ExitReason
 	Detail string
-	At     time.Time
 }
 
 // Manager manages the lifecycle of running bot instances
@@ -516,17 +517,13 @@ func (m *Manager) runBotSupervised(
 		}
 	}()
 
-	// selfStop is how a fatal in-bot condition (contained receive-loop panic)
-	// closes the bot through the one shutdown path: record why, then cancel —
-	// the bot unwinds exactly as if it had been stopped.
-	selfStop := func(reason string) {
-		m.recordExit(uuid, ExitPanic, reason)
-		cancel()
-	}
-
-	if err := runBotWithSettings(ctx, selfStop, s, chatStore, consumers, pairing, channels, accessStore, authorizer); err != nil {
+	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, channels, accessStore, authorizer); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
-		m.recordExit(uuid, ExitError, err.Error())
+		reason := ExitError
+		if imbot.IsPanicError(err) {
+			reason = ExitPanic
+		}
+		m.recordExit(uuid, reason, err.Error())
 	}
 	logrus.WithField("uuid", uuid).Info("Bot stopped")
 }
@@ -644,6 +641,18 @@ func (m *Manager) Sync(ctx context.Context) error {
 
 	// Stop bots that are running but should not be (disabled or mount off).
 	m.mu.Lock()
+	// Crash records are only meaningful for bots that could still be
+	// restarted; drop them for bots no longer enabled so a deleted or
+	// disabled bot doesn't pin its record for the process lifetime.
+	enabled := make(map[string]bool, len(settings))
+	for _, setting := range settings {
+		enabled[setting.UUID] = true
+	}
+	for uuid := range m.lastExit {
+		if !enabled[uuid] {
+			delete(m.lastExit, uuid)
+		}
+	}
 	for uuid := range m.running {
 		if !shouldRun[uuid] {
 			logrus.WithField("uuid", uuid).Info("Stopping bot during sync (disabled or no active mount)")
@@ -666,17 +675,11 @@ func (m *Manager) removeRunning(uuid string) {
 	delete(m.running, uuid)
 }
 
-// recordExit stores why a bot's goroutine exited abnormally. First writer
-// wins until the next successful Start clears the record: for a panic-closed
-// bot the selfStop reason (the actual panic) is more precise than the generic
-// "stopped" that follows it.
+// recordExit stores why a bot's goroutine exited abnormally.
 func (m *Manager) recordExit(uuid string, reason ExitReason, detail string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.lastExit[uuid]; exists {
-		return
-	}
-	m.lastExit[uuid] = ExitInfo{Reason: reason, Detail: detail, At: time.Now()}
+	m.lastExit[uuid] = ExitInfo{Reason: reason, Detail: detail}
 }
 
 // LastExit reports a bot's last abnormal exit, if any, since its last

@@ -46,19 +46,20 @@ well-defined lifecycle seam that a future subprocess boundary can cut along.
  receive-loop panic (L3 RecoverLoop)
         │  EmitError(ErrPanic)                imbot/core/safego.go
         ▼
- host OnError handler                          runBotWithSettings
-        │  IsPanicError → selfStop(reason)
+ host OnError handler → fatal chan             runBotWithSettings
+        │  the run's select returns the error; defers unwind:
+        │    channel.Registry.Unregister · consumer Cleanups
         ▼
- selfStop = recordExit(uuid, panic) + cancel   runBotSupervised
-        │  ctx cancels → runBotWithSettings unwinds its defers:
-        │    channel.Registry.Unregister · consumer Cleanups ·
-        │    imbot.Manager stops platform connections
+ supervisor classifies the returned error      runBotSupervised
+        │  recordExit(uuid, panic|error); deferred cancel() stops
+        │  the imbot manager and its platform connections
         ▼
  bot fully closed, removed from running map    (NOT reconnected in place)
         │
         ▼
  periodic reconcile (module/imbot Sync)        restarts a FRESH instance;
-        interval doubles as crash backoff      Start clears LastExit
+        interval doubles as crash backoff      Start clears LastExit,
+                                               Sync prunes disabled bots'
 ```
 
 Key properties:
@@ -72,13 +73,18 @@ Key properties:
   platform connections. Before this, a panic exit removed the bot from the
   running map while its connections kept running as orphans, and the next
   restart doubled them up.
-- **Crashes are visible.** `bot.Manager.LastExit(uuid)` records the last
-  abnormal exit (panic/error + detail + time), cleared on the next
-  successful start; `GetStatus` surfaces it in the existing `error` field
-  so a crashed-awaiting-restart bot reads differently from a stopped one.
-- **Standalone callers** (no supervisor wiring) pass a nil selfStop; a loop
-  panic then just leaves the bot disconnected in status — visible, never
-  falsely healthy.
+- **Crashes are visible.** A fatal exit is the run function's *return
+  value*, classified once by the supervisor into
+  `bot.Manager.LastExit(uuid)` (cleared on the next successful start,
+  pruned by Sync for disabled bots); `GetStatus` surfaces it in the
+  existing `error` field, and `RecoverLoop` also sets the imbot-level
+  status error, so a crashed-awaiting-restart bot never reads as healthy.
+- **Known gap:** the CLI standalone runner
+  (`internal/command/remote.go` `runBotWithSettingsInternal`) is a
+  parallel copy of the run lifecycle and gets none of this convergence —
+  a loop panic there leaves the bot disconnected until process restart.
+  Converging it onto `runBotWithSettings` is recorded debt, out of scope
+  here.
 
 Goroutines that run only our own code (session cleanup loops, prompt
 drivers, sync workers, shutdown plumbing) are **deliberately not wrapped**:
@@ -99,15 +105,21 @@ failure mode. This scope was an explicit decision, not an omission.
 
 ## Boundary coverage (imbot/core/safego.go)
 
+All registered platforms are enumerated — this table IS the mechanism, so
+a new platform must add its row (review checklist item 6):
+
 | Platform | RecoverLoop | RecoverCallback |
 |---|---|---|
 | telegram | polling goroutine (`api.Start`) | message + callback-query handlers |
 | slack | RTM event loop | — (messages flow through the loop) |
 | weixin | long-poll loop | — (same) |
 | feishu | websocket goroutine (`wsClient.Start`) | P2 message + card action handlers |
-| wecom | — (lifecycle goroutine is trivial) | OnMessage / OnEvent / OnError |
+| lark | = feishu (alias package) | = feishu |
+| wecom | — (lifecycle goroutine is trivial) | OnMessage / OnEvent |
 | dingtalk | — (SDK owns the loop; see rule 3) | chatbot callback router |
+| discord | — (SDK owns the loop) | message handler |
 | whatsapp | — (webhook mode, no loop body) | — |
+| tingly | — (in-process test transport, our code) | — |
 
 ## Review checklist
 
@@ -123,6 +135,8 @@ failure mode. This scope was an explicit decision, not an omission.
 4. Never recover to *continue* the panicking operation — contain, log,
    drop or reconnect. Recover-and-retry hides real bugs.
 5. Goroutines running only our own code: don't wrap them; fix bugs.
+6. New platform package? → add its row to the coverage table above; the
+   enumeration is the mechanism, an unlisted platform is an unaudited one.
 
 ## Considered and rejected
 

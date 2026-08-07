@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -62,11 +61,7 @@ func NewPanicError(platform Platform, message string) *BotError {
 
 // IsPanicError reports whether err is a contained-panic error (ErrPanic).
 func IsPanicError(err error) bool {
-	var botErr *BotError
-	if !errors.As(err, &botErr) {
-		return false
-	}
-	return botErr.Code == ErrPanic
+	return GetErrorCode(err) == ErrPanic
 }
 
 // NewAuthFailedError creates a new authentication failed error

@@ -233,6 +233,7 @@ func (b *Bot) onReady(s *discordgo.Session, event *discordgo.Ready) {
 
 // onMessageCreate handles incoming messages
 func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	defer b.RecoverCallback("discord message")
 	// Ignore messages from bots
 	if m.Message.Author.Bot {
 		return

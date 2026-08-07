@@ -3,6 +3,7 @@ package imbot
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -449,7 +450,7 @@ func (m *Manager) emitPlatformHandlers(handlers []func(Platform), platform Platf
 
 func (m *Manager) recoverHandler(event string) {
 	if r := recover(); r != nil {
-		m.logger.Error("panic in %s handler: %v", event, r)
+		m.logger.Error("panic in %s handler (contained, event dropped): %v\n%s", event, r, debug.Stack())
 	}
 }
 
