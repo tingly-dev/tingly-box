@@ -388,7 +388,11 @@ export default {
     "connectAI": "连接 AI",
     "newRule": "新建规则",
     "createNewRule": "创建新的路由规则",
-    "howRoutingWorks": "路由原理"
+    "howRoutingWorks": "路由原理",
+    "sortOriginal": "原始顺序",
+    "sortByName": "按名称（A→Z）",
+    "sortTooltipToName": "当前按原始顺序显示 — 点击按名称排序",
+    "sortTooltipToOriginal": "当前按名称排序 — 点击恢复原始顺序"
   },
   "probe": {
     "quickTest": "快速测试（流式）",
@@ -960,8 +964,8 @@ export default {
     "profile": {
       "renameProfile": "重命名配置文件",
       "deleteProfile": "删除配置文件",
-      "quickStart": "快速开始",
-      "settingsFile": "设置文件",
+      "quickStart": "启动",
+      "settingsFile": "设置",
       "settingsFileWarning": "这是生成的运行配置；手动修改会被 Profile 覆盖和模型规则重新生成。",
       "resolvingSettingsFile": "正在计算生成文件位置…",
       "settingsGenerated": "已生成",

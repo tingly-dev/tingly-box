@@ -144,6 +144,8 @@ import {
     IconBell,
     IconZoomIn,
     IconCloud,
+    IconArrowsSort,
+    IconSortAZ,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -190,6 +192,8 @@ export const Link = tablerMui(IconLink);
 export const PlayArrow = tablerMui(IconPlayerPlay);
 export const Filter = tablerMui(IconFilter);
 export const FilterOff = tablerMui(IconFilterOff);
+export const Sort = tablerMui(IconArrowsSort);
+export const SortByAlpha = tablerMui(IconSortAZ);
 
 // --- Status / feedback -------------------------------------------------------
 export const Info = tablerMui(IconInfoCircle);

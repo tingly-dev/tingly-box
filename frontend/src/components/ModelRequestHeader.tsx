@@ -26,12 +26,13 @@ import { fontMono } from '@/theme/fonts';
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
 const HEADER_PADDING_Y = 6;
-// Reserves a consistent slot for "name + edit icon" so the toggles that
-// follow (1M, Responses, …) line up at the same x-position across every
-// rule card, regardless of how long each rule's model name happens to be.
-// Names longer than this simply overflow it — no truncation — so it never
-// hides information, it only stops short names from misaligning the row.
-const NAME_SLOT_MIN_WIDTH = 200;
+// Fixed (not just minimum) width for the "name + edit icon" slot, so the
+// toggles that follow (1M, Responses, …) line up at the same x-position
+// across every rule card. Names that don't fit truncate with an ellipsis —
+// the existing hover tooltip still shows the full name, and click-to-copy
+// still copies it in full — so a long name never re-breaks the alignment
+// this exists to guarantee.
+const NAME_SLOT_WIDTH = 170;
 
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
@@ -213,7 +214,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
 
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: NAME_SLOT_MIN_WIDTH, flexShrink: 0 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: NAME_SLOT_WIDTH, flexShrink: 0 }}>
                     <Tooltip
                         title={modelName
                             ? `The model name that clients use to make requests. This will be matched against incoming API calls. Supports wildcards (* or [any]) for matching any model. (click to copy)`
@@ -231,8 +232,10 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 variant="outlined"
                                 onClick={(e) => { e.stopPropagation(); handleCopy(); }}
                                 sx={{
-                                    '& .MuiChip-label': { fontWeight: 600 },
+                                    '& .MuiChip-label': { fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' },
                                     height: 22,
+                                    minWidth: 0,
+                                    flex: '0 1 auto',
                                     cursor: 'pointer',
                                     '&:hover': {
                                         backgroundColor: 'action.hover',
@@ -243,6 +246,11 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                             <ModelNameText
                                 onClick={(e) => { e.stopPropagation(); handleCopy(); }}
                                 sx={{
+                                    minWidth: 0,
+                                    flex: '0 1 auto',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
                                     cursor: modelName ? 'pointer' : 'default',
                                     '&:hover': modelName ? {
                                         textDecoration: 'underline',
@@ -264,6 +272,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 opacity: editable ? 0.6 : 0,
                                 p: 0.5,
                                 ml: 0.25,
+                                flexShrink: 0,
                                 pointerEvents: editable ? 'auto' : 'none',
                                 '&:hover': { opacity: 1 }
                             }}

@@ -71,6 +71,10 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     // global command available as an explicit alternative for those who have.
     const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
     const [settingsArtifact, setSettingsArtifact] = useState<ClaudeCodeProfileSettingsArtifact | null>(null);
+    // Quick Start / Settings File share one ConfigRow (like Base URL | API Key
+    // elsewhere) instead of two separate always-expanded rows — same info,
+    // less vertical space, one at a time.
+    const [profileConfigTab, setProfileConfigTab] = useState<'quickstart' | 'settings-file'>('quickstart');
 
     // Update unified mode when profile changes
     useEffect(() => {
@@ -185,7 +189,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         </Stack>
                     }
                 >
-                    <Box sx={{ px: 2, pb: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    <Box sx={{ px: 2, pb: 0.5 }}>
                         <ConfigRow
                             tabs={[
                                 {
@@ -264,12 +268,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                         </>
                                     ),
                                 },
-                            ]}
-                            activeTab="quickstart"
-                            onTabChange={() => {}}
-                        />
-                        <ConfigRow
-                            tabs={[
                                 {
                                     key: 'settings-file',
                                     label: t('claudeCode.profile.settingsFile'),
@@ -336,8 +334,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                     ),
                                 },
                             ]}
-                            activeTab="settings-file"
-                            onTabChange={() => {}}
+                            activeTab={profileConfigTab}
+                            onTabChange={(key) => setProfileConfigTab(key as 'quickstart' | 'settings-file')}
                         />
                     </Box>
                     <ProviderConfigCard

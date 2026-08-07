@@ -14,6 +14,7 @@ import type {TemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
 import {TitleIconButtons} from './TitleIconButtons';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
+import {useRuleSort} from '@/pages/scenario/hooks/useRuleSort';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
@@ -125,6 +126,11 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         newRuleUuid,
         setNewRuleUuid,
     } = useScrollToNewRule({rules});
+
+    // Display-only ordering for the Model Rules list — doesn't touch `rules`
+    // itself, so match priority (if any) and the scroll-to-new-rule logic
+    // above stay anchored to the real, backend-ordered array.
+    const {sortMode, toggleSortMode, sortedRules} = useRuleSort(rules);
 
     // Routed through a ref so onCreateFromModel doesn't capture a stale createRule.
     const createRuleRef = useRef(createRule);
@@ -349,6 +355,8 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         onToggleExpandAll={handleToggleExpandAll}
                         showExpandCollapseButton={showExpandCollapseButton}
                         onShowGuide={() => setShowGuide(true)}
+                        sortMode={rules.length > 1 ? sortMode : undefined}
+                        onToggleSort={rules.length > 1 ? toggleSortMode : undefined}
                     />
                 }
                 rightAction={rightAction}
@@ -365,9 +373,13 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             {t('templatePage.noRules')}
                         </Box>
                     ) : (
-                        rules.map((rule, index) => {
+                        sortedRules.map((rule, index) => {
                             const isNewRule = rule.uuid === newRuleUuid;
-                            const isLastRule = index === rules.length - 1;
+                            // "Last rule" for the auto-scroll-to-new-rule anchor is
+                            // meaningless once the list is name-sorted — that ref is
+                            // only a fallback for the initial mount scroll position,
+                            // so only attach it in the original, insertion-ordered view.
+                            const isLastRule = sortMode === 'original' && index === sortedRules.length - 1;
                             const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
 
                             return (

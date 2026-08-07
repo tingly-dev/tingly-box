@@ -386,7 +386,11 @@ export default {
     "connectAI": "Connect AI",
     "newRule": "New Rule",
     "createNewRule": "Create new routing rule",
-    "howRoutingWorks": "How routing works"
+    "howRoutingWorks": "How routing works",
+    "sortOriginal": "Original order",
+    "sortByName": "Name (A→Z)",
+    "sortTooltipToName": "Showing original order — click to sort by name",
+    "sortTooltipToOriginal": "Showing by name — click to restore original order"
   },
   "probe": {
     "quickTest": "Quick test (stream)",
@@ -958,8 +962,8 @@ export default {
     "profile": {
       "renameProfile": "Rename profile",
       "deleteProfile": "Delete profile",
-      "quickStart": "Quick Start",
-      "settingsFile": "Settings File",
+      "quickStart": "Start",
+      "settingsFile": "Settings",
       "settingsFileWarning": "Generated runtime settings. Manual edits are overwritten by Profile Overrides and Model Rules.",
       "resolvingSettingsFile": "Resolving generated settings path…",
       "settingsGenerated": "Generated",
