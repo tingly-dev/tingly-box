@@ -20,16 +20,65 @@ SDK code runs or third-party payloads are parsed — and nowhere else:
    first line is `defer b.RecoverCallback("...")` — contain, drop the one
    message, keep the connection.
 2. **Our receive loops** (they run SDK code and adapters):
-   `defer b.RecoverLoop("...")` — contain, flip to disconnected, emit the
-   disconnect event so the manager's auto-reconnect rebuilds the connection.
-   Contained must never mean zombie: a swallowed panic that leaves a
-   deaf-but-"running" bot is worse than a crash, because nobody notices.
+   `defer b.RecoverLoop("...")` — contain, flip to disconnected, emit an
+   **ErrPanic error event** (`core.NewPanicError`). Deliberately not a
+   disconnect event: disconnect means "network dropped, reconnect in
+   place", but after a panic the bot's state is suspect. See "the
+   convergent failure path" below for what the lifecycle owner does with
+   the signal. Contained must never mean zombie: a swallowed panic that
+   leaves a deaf-but-"running" bot is worse than a crash, because nobody
+   notices.
 3. **SDK-internal goroutines** are NOT containable in-process. Policy: pin a
    fixed version, audit its goroutine spawn points when adopting/bumping an
    IM SDK, upgrade or patch on any panic report. The trigger case was fixed
    by upgrading dingtalk-stream-sdk-go to v0.9.2-beta.1 — the upstream fix
    for exactly that race (issues #27/#28/#32), which also adds a read-loop
    recover and reconnect backoff.
+
+## The convergent failure path — crash → close → reconcile
+
+All fatal failures converge into the ONE existing shutdown path instead of
+growing per-failure recovery paths. This is also the incremental step toward
+process-level isolation: it narrows the main↔remote linkage to a single,
+well-defined lifecycle seam that a future subprocess boundary can cut along.
+
+```
+ receive-loop panic (L3 RecoverLoop)
+        │  EmitError(ErrPanic)                imbot/core/safego.go
+        ▼
+ host OnError handler                          runBotWithSettings
+        │  IsPanicError → selfStop(reason)
+        ▼
+ selfStop = recordExit(uuid, panic) + cancel   runBotSupervised
+        │  ctx cancels → runBotWithSettings unwinds its defers:
+        │    channel.Registry.Unregister · consumer Cleanups ·
+        │    imbot.Manager stops platform connections
+        ▼
+ bot fully closed, removed from running map    (NOT reconnected in place)
+        │
+        ▼
+ periodic reconcile (module/imbot Sync)        restarts a FRESH instance;
+        interval doubles as crash backoff      Start clears LastExit
+```
+
+Key properties:
+
+- **No second lifecycle.** A crashed bot is closed exactly like a stopped
+  bot; the only additions are the reason record and the reconcile restart.
+  In-place reconnect remains reserved for genuine network disconnects.
+- **`cancel` is owned by the supervisor.** `runBotSupervised` defers
+  `cancel()` so every exit path — including a panic that bypasses the
+  normal `<-ctx.Done()` return — tears down the imbot manager and its
+  platform connections. Before this, a panic exit removed the bot from the
+  running map while its connections kept running as orphans, and the next
+  restart doubled them up.
+- **Crashes are visible.** `bot.Manager.LastExit(uuid)` records the last
+  abnormal exit (panic/error + detail + time), cleared on the next
+  successful start; `GetStatus` surfaces it in the existing `error` field
+  so a crashed-awaiting-restart bot reads differently from a stopped one.
+- **Standalone callers** (no supervisor wiring) pass a nil selfStop; a loop
+  panic then just leaves the bot disconnected in status — visible, never
+  falsely healthy.
 
 Goroutines that run only our own code (session cleanup loops, prompt
 drivers, sync workers, shutdown plumbing) are **deliberately not wrapped**:
@@ -88,9 +137,24 @@ failure mode. This scope was an explicit decision, not an omission.
 - **A global panic hook** — Go has none; `recover` in `main` covers only
   main's goroutine.
 
+## Roadmap
+
+Process-level isolation (a supervised `remote-host` subprocess owning the
+whole bot stack, main service keeping gateway + HTTP + scenario plugins,
+linked over a small localhost RPC surface) is the agreed next stage if
+SDK-internal crashes recur — it is the only cure for failures recover
+cannot reach (SDK-internal goroutine panics, leaks, deadlocks). The
+convergent failure path above deliberately narrows the main↔remote linkage
+to the lifecycle seam + channel registry, which is exactly where that
+subprocess boundary would cut.
+
 ## Tests
 
 - `imbot/core/safego_test.go` — RecoverCallback containment; RecoverLoop
-  flips connection state and emits disconnect.
+  emits ErrPanic (not disconnect) and flips connection state.
+- `remote/control/bot/manager_lifecycle_test.go`
+  (`TestManager_LoopPanicClosesBotAndReconcileRestarts`) — the convergent
+  path end-to-end: injected ErrPanic closes the bot fully, records
+  LastExit, Sync restarts a fresh instance and clears the record.
 - Supervision layers covered by the existing manager tests
   (`remote/control/bot/manager_*_test.go`).

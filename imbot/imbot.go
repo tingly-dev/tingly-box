@@ -237,6 +237,13 @@ func IsBotError(err error) bool {
 	return core.IsBotError(err)
 }
 
+// IsPanicError checks if an error is a contained receive-loop panic
+// (ErrPanic). The bot's lifecycle owner reacts by closing and rebuilding the
+// bot instead of reconnecting it in place.
+func IsPanicError(err error) bool {
+	return core.IsPanicError(err)
+}
+
 // IsRecoverable checks if an error is recoverable
 func IsRecoverable(err error) bool {
 	return core.IsRecoverable(err)

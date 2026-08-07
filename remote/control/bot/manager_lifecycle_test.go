@@ -13,8 +13,11 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
@@ -278,4 +281,89 @@ func TestManager_MountGate_Tingly(t *testing.T) {
 	require.NoError(t, m.Sync(ctx))
 	require.True(t, m.WaitForStop(uuid, 5*time.Second), "bot should stop when its mount turns off")
 	require.False(t, m.IsRunning(uuid))
+}
+
+// captureConsumer is a minimal always-mounted Consumer that captures the
+// bot's imbot.Manager on Attach, so a test can reach the underlying bot
+// instance and inject events as if a platform receive loop had produced them.
+type captureConsumer struct {
+	mu  sync.Mutex
+	mgr *imbot.Manager
+}
+
+func (c *captureConsumer) Name() string                { return "remote_agent" }
+func (c *captureConsumer) Mounted(bot.BotSetting) bool { return true }
+func (c *captureConsumer) Attach(_ context.Context, _ bot.BotSetting, mgr *imbot.Manager, _ *imchannel.IMPrompter, _ bot.ChatStoreInterface, _ *bot.PairingManager) (*bot.Attached, error) {
+	c.mu.Lock()
+	c.mgr = mgr
+	c.mu.Unlock()
+	return &bot.Attached{}, nil
+}
+
+func (c *captureConsumer) manager() *imbot.Manager {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.mgr
+}
+
+// TestManager_LoopPanicClosesBotAndReconcileRestarts exercises the convergent
+// failure path: a contained receive-loop panic (surfaced as an imbot ErrPanic
+// error event) must close the whole bot through the normal shutdown path —
+// not reconnect it in place — record the crash in LastExit, and let Sync
+// bring up a fresh instance, which clears the record.
+func TestManager_LoopPanicClosesBotAndReconcileRestarts(t *testing.T) {
+	uuid := fmt.Sprintf("panic-bot-%d", time.Now().UnixNano())
+
+	tr := tingly.NewInProcessTransport()
+	tingly.Register(uuid, tr)
+	t.Cleanup(func() { tingly.Unregister(uuid) })
+
+	store := &fakeSettingsStore{
+		settings: map[string]bot.BotSetting{
+			uuid: {UUID: uuid, Name: "panic-test", Platform: "tingly", AuthType: "none", Auth: map[string]string{}, Enabled: true},
+		},
+	}
+
+	capture := &captureConsumer{}
+	m := bot.NewManager(store, capture)
+	sm, err := db.NewStoreManager(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sm.Close() })
+	m.SetChatStore(sm.RemoteChats())
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, m.Start(parentCtx, uuid))
+	require.True(t, m.IsRunning(uuid))
+	require.Eventually(t, func() bool { return capture.manager() != nil }, 2*time.Second, 10*time.Millisecond)
+
+	imMgr := capture.manager()
+	b := imMgr.GetBotByUUID(uuid)
+	require.NotNil(t, b)
+
+	// Inject the exact signal core.RecoverLoop emits after containing a
+	// receive-loop panic.
+	emitter, ok := b.(interface{ EmitError(error) })
+	require.True(t, ok, "bot does not expose EmitError")
+	emitter.EmitError(core.NewPanicError("tingly", "panic in test loop: boom"))
+
+	// The bot must close fully — not linger reconnecting.
+	require.Eventually(t, func() bool { return !m.IsRunning(uuid) }, 5*time.Second, 20*time.Millisecond,
+		"bot still running after contained loop panic")
+
+	exit, found := m.LastExit(uuid)
+	require.True(t, found, "crash not recorded in LastExit")
+	require.Equal(t, bot.ExitPanic, exit.Reason)
+
+	// Reconcile restarts the crashed bot as a fresh instance and clears the
+	// crash record.
+	require.NoError(t, m.Sync(parentCtx))
+	require.Eventually(t, func() bool { return m.IsRunning(uuid) }, 5*time.Second, 20*time.Millisecond,
+		"Sync did not restart the crashed bot")
+	_, found = m.LastExit(uuid)
+	require.False(t, found, "LastExit not cleared by restart")
+
+	m.Stop(uuid)
+	require.True(t, m.WaitForStop(uuid, 5*time.Second))
 }

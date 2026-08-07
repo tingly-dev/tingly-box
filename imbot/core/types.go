@@ -57,6 +57,12 @@ const (
 	ErrPlatformError ErrorCode = "PLATFORM_ERROR"
 	ErrTimeout       ErrorCode = "TIMEOUT"
 	ErrUnknown       ErrorCode = "UNKNOWN"
+	// ErrPanic marks a contained panic in a platform receive loop. It is the
+	// bot's "I crashed" signal to whoever owns its lifecycle: unlike a network
+	// disconnect it must NOT be answered with an in-place reconnect — the
+	// bot's state is suspect and the whole instance should be closed and
+	// rebuilt (see core/safego.go and the host's fatal-panic handling).
+	ErrPanic ErrorCode = "PANIC"
 )
 
 // Sender represents the message sender

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"runtime/debug"
 )
 
@@ -31,13 +32,21 @@ func (b *BaseBot) RecoverCallback(name string) {
 // RecoverLoop contains a panic in a platform receive loop. Unlike a
 // per-message callback, a dead receive loop means the bot silently stops
 // hearing anything, so besides logging it flips the bot to disconnected and
-// emits the disconnect event — the manager's auto-reconnect then rebuilds
-// the connection instead of leaving a zombie bot.
+// emits an ErrPanic error event. Deliberately NOT a disconnect event: a
+// disconnect means "network dropped, reconnect in place", but after a panic
+// the bot's state is suspect — the lifecycle owner listening for ErrPanic
+// (remote/control/bot.Manager) closes the whole bot cleanly and lets its
+// reconcile loop rebuild a fresh instance. Either way no zombie: without an
+// owner the bot at least reads as disconnected in status, never as healthy.
 func (b *BaseBot) RecoverLoop(name string) {
 	if r := recover(); r != nil {
-		b.Logger().Error("panic in %s (contained, reconnecting): %v\n%s", name, r, debug.Stack())
+		b.Logger().Error("panic in %s (contained, closing bot): %v\n%s", name, r, debug.Stack())
 		b.UpdateReady(false)
 		b.UpdateConnected(false)
-		b.EmitDisconnected()
+		var platform Platform
+		if b.config != nil {
+			platform = b.config.Platform
+		}
+		b.EmitError(NewPanicError(platform, fmt.Sprintf("panic in %s: %v", name, r)))
 	}
 }

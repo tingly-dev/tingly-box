@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -45,6 +46,27 @@ func NewPlatformError(platform Platform, message string, cause error, recoverabl
 		Recoverable: recoverable,
 		Cause:       cause,
 	}
+}
+
+// NewPanicError creates the error a bot emits after containing a panic in
+// one of its receive loops. Never recoverable: the owner must close and
+// rebuild the bot rather than reconnect it in place.
+func NewPanicError(platform Platform, message string) *BotError {
+	return &BotError{
+		Code:        ErrPanic,
+		Message:     message,
+		Platform:    platform,
+		Recoverable: false,
+	}
+}
+
+// IsPanicError reports whether err is a contained-panic error (ErrPanic).
+func IsPanicError(err error) bool {
+	var botErr *BotError
+	if !errors.As(err, &botErr) {
+		return false
+	}
+	return botErr.Code == ErrPanic
 }
 
 // NewAuthFailedError creates a new authentication failed error

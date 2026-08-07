@@ -32,7 +32,14 @@ import (
 //
 // chatStore is injected into the Manager and shared by every bot it runs —
 // see Manager.SetChatStore. This function must not close it.
-func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry, accessStore AccessStore, authorizer access.Authorizer) error {
+// selfStop closes this bot with a recorded reason: it cancels the bot's own
+// lifecycle context, so the function unwinds through its defers (channel
+// unregister, consumer cleanup) and the imbot manager tears down the platform
+// connections. It is how a fatal in-bot condition (contained receive-loop
+// panic) converges into the one shutdown path instead of growing a second,
+// in-place recovery path. May be nil (standalone callers without a
+// supervisor), in which case fatal panics only mark the bot disconnected.
+func runBotWithSettings(ctx context.Context, selfStop func(reason string), setting BotSetting, chatStore ChatStoreInterface, consumers []Consumer, pairing *PairingManager, channels *channel.Registry, accessStore AccessStore, authorizer access.Authorizer) error {
 	// Create platform-specific auth config
 	authConfig := buildAuthConfig(setting)
 	platform := imbot.Platform(setting.Platform)
@@ -60,6 +67,22 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	for k, v := range imbot.AuthOptions(setting.Platform, setting.Auth) {
 		options[k] = v
 	}
+	// A contained receive-loop panic (imbot ErrPanic) means the bot's state is
+	// suspect: close the whole bot through the normal shutdown path rather
+	// than reconnecting in place. The manager's reconcile loop restarts it as
+	// a fresh instance; the reconcile interval doubles as crash backoff.
+	manager.OnError(func(err error, _ imbot.Platform, botUUID string) {
+		if !imbot.IsPanicError(err) || selfStop == nil {
+			return
+		}
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"uuid":     setting.UUID,
+			"bot":      botUUID,
+			"platform": setting.Platform,
+		}).Error("Bot receive loop panicked; closing bot for clean restart")
+		selfStop(err.Error())
+	})
+
 	err := manager.AddBot(&imbot.Config{
 		UUID:     setting.UUID,
 		Platform: platform,
@@ -217,10 +240,27 @@ func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
 	return imbot.BuildAuthConfig(setting.Platform, setting.Auth)
 }
 
+// ExitReason classifies why a bot's goroutine last exited.
+type ExitReason string
+
+const (
+	ExitError ExitReason = "error" // runBotWithSettings returned an error
+	ExitPanic ExitReason = "panic" // contained panic (goroutine or receive loop)
+)
+
+// ExitInfo records a bot's last abnormal exit so the host can tell a crashed
+// bot from one that was never started. Cleared on the next successful Start.
+type ExitInfo struct {
+	Reason ExitReason
+	Detail string
+	At     time.Time
+}
+
 // Manager manages the lifecycle of running bot instances
 type Manager struct {
 	mu        sync.RWMutex
 	running   map[string]*runningBot // uuid -> runningBot
+	lastExit  map[string]ExitInfo    // uuid -> last abnormal exit (crash visibility)
 	store     SettingsStore
 	consumers []Consumer        // Supply each bot's inbound behavior, in dispatch order (the decoupling seam)
 	pairing   *PairingManager   // Pairing-code (TOFU) manager
@@ -251,6 +291,7 @@ type Manager struct {
 func NewManager(store SettingsStore, consumers ...Consumer) *Manager {
 	return &Manager{
 		running:   make(map[string]*runningBot),
+		lastExit:  make(map[string]ExitInfo),
 		store:     store,
 		consumers: consumers,
 		pairing:   NewPairingManager(NewLogAuditor()),
@@ -421,12 +462,13 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	doneChan := make(chan struct{})
 	m.running[uuid] = &runningBot{cancel: cancel, doneChan: doneChan}
+	delete(m.lastExit, uuid)
 
 	// Start bot in goroutine
 	pairing := m.pairing
 	channels := m.channels
 	accessStore, authorizer := m.accessStore, m.authorizer
-	go m.runBotSupervised(ctx, uuid, s, chatStore, mounted, pairing, channels, accessStore, authorizer, doneChan)
+	go m.runBotSupervised(ctx, cancel, uuid, s, chatStore, mounted, pairing, channels, accessStore, authorizer, doneChan)
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
@@ -437,8 +479,15 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 // propagating to the runtime and taking down the whole tingly-box process.
 // Always closes doneChan and removes the bot from the running map, regardless
 // of whether the bot exited normally, with error, or via panic.
+//
+// cancel is deferred here so that EVERY exit path — including a panic that
+// bypasses runBotWithSettings' normal `<-ctx.Done()` return — tears down the
+// bot's imbot manager and its platform connections. Without it a panic exit
+// removed the bot from the running map while the underlying connections kept
+// running as orphans, and a later restart doubled them up.
 func (m *Manager) runBotSupervised(
 	ctx context.Context,
+	cancel context.CancelFunc,
 	uuid string,
 	s BotSetting,
 	chatStore ChatStoreInterface,
@@ -451,6 +500,7 @@ func (m *Manager) runBotSupervised(
 ) {
 	defer close(doneChan)
 	defer m.removeRunning(uuid)
+	defer cancel()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -462,11 +512,21 @@ func (m *Manager) runBotSupervised(
 				"panic":    fmt.Sprintf("%v", r),
 				"stack":    stack,
 			}).Error("Bot goroutine panicked; isolated from main process")
+			m.recordExit(uuid, ExitPanic, fmt.Sprintf("%v", r))
 		}
 	}()
 
-	if err := runBotWithSettings(ctx, s, chatStore, consumers, pairing, channels, accessStore, authorizer); err != nil {
+	// selfStop is how a fatal in-bot condition (contained receive-loop panic)
+	// closes the bot through the one shutdown path: record why, then cancel —
+	// the bot unwinds exactly as if it had been stopped.
+	selfStop := func(reason string) {
+		m.recordExit(uuid, ExitPanic, reason)
+		cancel()
+	}
+
+	if err := runBotWithSettings(ctx, selfStop, s, chatStore, consumers, pairing, channels, accessStore, authorizer); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
+		m.recordExit(uuid, ExitError, err.Error())
 	}
 	logrus.WithField("uuid", uuid).Info("Bot stopped")
 }
@@ -604,4 +664,27 @@ func (m *Manager) removeRunning(uuid string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.running, uuid)
+}
+
+// recordExit stores why a bot's goroutine exited abnormally. First writer
+// wins until the next successful Start clears the record: for a panic-closed
+// bot the selfStop reason (the actual panic) is more precise than the generic
+// "stopped" that follows it.
+func (m *Manager) recordExit(uuid string, reason ExitReason, detail string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.lastExit[uuid]; exists {
+		return
+	}
+	m.lastExit[uuid] = ExitInfo{Reason: reason, Detail: detail, At: time.Now()}
+}
+
+// LastExit reports a bot's last abnormal exit, if any, since its last
+// successful Start. Lets the host and status surfaces distinguish "crashed,
+// waiting for reconcile restart" from "never started / stopped on purpose".
+func (m *Manager) LastExit(uuid string) (ExitInfo, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	info, ok := m.lastExit[uuid]
+	return info, ok
 }
