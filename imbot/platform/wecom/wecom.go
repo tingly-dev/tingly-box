@@ -76,7 +76,6 @@ func (b *Bot) Connect(ctx context.Context) error {
 // runUntilDone waits for context cancellation then marks the bot as disconnected.
 func (b *Bot) runUntilDone() {
 	defer b.wg.Done()
-	defer b.RecoverLoop("wecom lifecycle loop")
 
 	b.MarkReady()
 	b.Logger().Info("WeCom bot ready: botID=%s", b.botID)

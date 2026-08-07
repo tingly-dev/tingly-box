@@ -4,38 +4,20 @@ import (
 	"runtime/debug"
 )
 
-// Panic containment for the bot stack.
+// Panic containment at the platform SDK boundary.
 //
-// Layered model (see tingly-box .design/bot-panic-isolation.md):
-// every goroutine we spawn and every entry point a third-party SDK calls
-// back into must recover panics itself — a panic that escapes any goroutine
-// kills the whole process, and recover() cannot cross goroutine boundaries.
-// Panics inside goroutines the SDK itself spawns are NOT catchable here;
-// those are fixed at the SDK (upgrade/patch), never papered over in callers.
-
-// SafeGo runs fn in a new goroutine, containing any panic to a log line.
-// Use it for every `go` statement whose body is not already guarded by
-// RecoverPanic / a platform Recover* helper.
-func SafeGo(logger Logger, name string, fn func()) {
-	go func() {
-		defer RecoverPanic(logger, name)
-		fn()
-	}()
-}
-
-// RecoverPanic is the deferred half of SafeGo, for goroutines that need
-// their own defer ordering (e.g. wg.Done):
+// A panic that escapes any goroutine kills the whole process, and recover()
+// cannot cross goroutine boundaries. Rather than wrapping every goroutine,
+// containment is applied where the actual risk lives — the trust boundary
+// where third-party SDK code runs or third-party payloads are parsed:
 //
-//	defer b.wg.Done()
-//	defer core.RecoverPanic(b.Logger(), "x loop")
-func RecoverPanic(logger Logger, name string) {
-	if r := recover(); r != nil {
-		if logger == nil {
-			logger = NewLogger(nil)
-		}
-		logger.Error("panic in %s (contained): %v\n%s", name, r, debug.Stack())
-	}
-}
+//   - RecoverCallback: entry points an SDK invokes on its own goroutine
+//   - RecoverLoop: receive loops of ours that run SDK code / adapters
+//
+// Goroutines running only our own code rely on the existing per-bot
+// supervision and recovered handler dispatch instead. Panics inside
+// goroutines an SDK spawns for itself are not catchable here at all; those
+// are fixed at the SDK (see tingly-box .design/bot-panic-isolation.md).
 
 // RecoverCallback contains a panic in a callback invoked by a third-party
 // SDK on one of its own goroutines. The message is dropped, the connection

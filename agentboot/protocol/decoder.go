@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tingly-dev/tingly-box/agentboot/internal/safego"
 	"io"
 )
 
@@ -45,13 +44,11 @@ func (d *Decoder) Stream(ctx context.Context) (events <-chan Event, errFn func()
 
 	go func() {
 		defer close(out)
-		defer safego.Recover("protocol decode loop")
 
 		if closer, ok := d.src.(io.Closer); ok {
 			watcherDone := make(chan struct{})
 			defer close(watcherDone)
 			go func() {
-				defer safego.Recover("protocol close watcher")
 				select {
 				case <-ctx.Done():
 					_ = closer.Close()

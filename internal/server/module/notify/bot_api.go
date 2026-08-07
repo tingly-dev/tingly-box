@@ -35,7 +35,6 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
-	"github.com/tingly-dev/tingly-box/remote/safego"
 )
 
 // DefaultInteractTimeout bounds a single interactive prompt when the caller
@@ -306,9 +305,7 @@ func (h *BotAPIHandler) Interact(c *gin.Context) {
 	// Drive the prompt in the background and resolve the registry entry with
 	// the final reply (or a timeout/error). Mirrors the Claude Code plugin's
 	// run() — see remote/scenario/builtin/claudecode/plugin.go.
-	safego.Go("bot interact prompt", func() {
-		h.runPrompt(botUUID, ch, target, ix, budget)
-	})
+	go h.runPrompt(botUUID, ch, target, ix, budget)
 
 	h.auditLog(botUUID, "bot.interact.start", map[string]any{
 		"interaction_id": id,

@@ -218,7 +218,6 @@ func (m *Manager) Start(ctx context.Context) error {
 	// Watch for external context cancellation (e.g. OS signal).
 	// Shutdown is owned by Stop(); this goroutine only triggers it once.
 	go func() {
-		defer core.RecoverPanic(m.logger, "manager shutdown watcher")
 		<-ctx.Done()
 		m.logger.Info("Context cancelled, shutting down manager...")
 		if !m.stopping.Load() {
@@ -264,9 +263,8 @@ func (m *Manager) Stop(ctx context.Context) error {
 
 	shutdownDone := make(chan struct{})
 	go func() {
-		defer close(shutdownDone)
-		defer core.RecoverPanic(m.logger, "manager shutdown")
 		m.shutdown()
+		close(shutdownDone)
 	}()
 
 	// Wait for shutdown to complete (with timeout)
@@ -463,7 +461,6 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 	}
 	go func() {
 		defer m.wg.Done()
-		defer core.RecoverPanic(m.logger, "reconnect worker")
 
 		attempts := 0
 		delay := time.Duration(m.config.ReconnectDelayMs) * time.Millisecond

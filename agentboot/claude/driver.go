@@ -3,7 +3,6 @@ package claude
 import (
 	"context"
 	"fmt"
-	"github.com/tingly-dev/tingly-box/agentboot/internal/safego"
 	"os"
 	"strings"
 	"sync"
@@ -148,7 +147,6 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 		anyC := make(chan any, 100)
 		go func() {
 			defer close(anyC)
-			defer safego.Recover("prompt channel bridge")
 			for m := range ch {
 				anyC <- m
 			}

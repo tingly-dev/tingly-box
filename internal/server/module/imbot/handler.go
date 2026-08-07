@@ -16,7 +16,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
-	"github.com/tingly-dev/tingly-box/remote/safego"
 )
 
 // LifecycleController is the narrow surface the server uses to drive the
@@ -393,7 +392,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 			hasCapability, _ = h.accessStore.AnyCapabilityEnabled(ctx, uuid)
 		}
 		shouldRun := settings.Enabled && hasCapability
-		safego.Go("bot reconcile after settings update", func() {
+		go func() {
 			if shouldRun {
 				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
 					logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after settings update")
@@ -403,7 +402,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after settings update")
 				}
 			}
-		})
+		}()
 	}
 
 	// Fetch updated settings
@@ -437,11 +436,11 @@ func (h *Handler) DeleteSettings(c *gin.Context) {
 	// Stop the bot if it's running (async for fast delete)
 	// The bot will be stopped in the background while we delete from database
 	if h.botMgr != nil {
-		safego.Go("bot stop during delete", func() {
+		go func() {
 			if err := h.botMgr.StopBot(uuid); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot during delete (continuing anyway)")
 			}
-		})
+		}()
 	}
 
 	if err := h.store.DeleteSettings(uuid); err != nil {

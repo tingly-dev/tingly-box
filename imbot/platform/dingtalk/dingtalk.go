@@ -134,7 +134,6 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 // waitForReady waits for the bot to be ready
 func (b *Bot) waitForReady() {
 	defer b.wg.Done()
-	defer b.RecoverLoop("dingtalk ready wait")
 	time.Sleep(2 * time.Second)
 	b.MarkReady()
 }

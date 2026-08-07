@@ -5,20 +5,6 @@ import (
 	"time"
 )
 
-func TestSafeGoContainsPanic(t *testing.T) {
-	done := make(chan struct{})
-	SafeGo(NewLogger(nil), "test worker", func() {
-		defer close(done)
-		panic("boom")
-	})
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("SafeGo goroutine did not finish")
-	}
-	// Reaching here at all means the panic did not escape the goroutine.
-}
-
 func TestRecoverCallbackContainsPanic(t *testing.T) {
 	b := NewBaseBot(&Config{UUID: "u", Platform: PlatformTelegram})
 	func() {
