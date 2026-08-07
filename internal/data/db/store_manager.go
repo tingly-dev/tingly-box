@@ -27,6 +27,7 @@ type StoreManager struct {
 	statsStore         *StatsStore
 	usageStore         *UsageStore
 	providerStore      *ProviderStore
+	ruleStore          *RuleStore
 	toolConfigStore    *ToolConfigStore
 	imbotSettingsStore *ImBotSettingsStore
 	modelStore         *ModelStore
@@ -145,6 +146,9 @@ func (sm *StoreManager) initStores() error {
 	if err := sm.initProviderStore(); err != nil {
 		errs = append(errs, fmt.Errorf("provider store: %w", err))
 	}
+	if err := sm.initRuleStore(); err != nil {
+		errs = append(errs, fmt.Errorf("rule store: %w", err))
+	}
 	if err := sm.initToolConfigStore(); err != nil {
 		errs = append(errs, fmt.Errorf("tool config store: %w", err))
 	}
@@ -207,6 +211,16 @@ func (sm *StoreManager) initProviderStore() error {
 		db:     sm.db,
 		dbPath: constant.GetDBFile(sm.baseDir),
 	}
+	return nil
+}
+
+// initRuleStore initializes the RuleStore.
+func (sm *StoreManager) initRuleStore() error {
+	store, err := NewRuleStore(sm.db, constant.GetDBFile(sm.baseDir))
+	if err != nil {
+		return err
+	}
+	sm.ruleStore = store
 	return nil
 }
 
@@ -360,6 +374,14 @@ func (sm *StoreManager) Provider() *ProviderStore {
 	return sm.providerStore
 }
 
+// Rules returns the RuleStore (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) Rules() *RuleStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.ruleStore
+}
+
 // ToolConfig returns the ToolConfigStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.
 func (sm *StoreManager) ToolConfig() *ToolConfigStore {
@@ -431,6 +453,7 @@ func (sm *StoreManager) Close() error {
 	sm.statsStore = nil
 	sm.usageStore = nil
 	sm.providerStore = nil
+	sm.ruleStore = nil
 	sm.toolConfigStore = nil
 	sm.imbotSettingsStore = nil
 	sm.modelStore = nil
@@ -457,6 +480,7 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 		"stats":          sm.statsStore,
 		"usage":          sm.usageStore,
 		"provider":       sm.providerStore,
+		"rule":           sm.ruleStore,
 		"toolConfig":     sm.toolConfigStore,
 		"imbotSettings":  sm.imbotSettingsStore,
 		"model":          sm.modelStore,
