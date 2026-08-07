@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import {
     Box,
     Stack,
@@ -11,6 +12,7 @@ import {
     DialogContent,
     DialogActions,
     CircularProgress,
+    Divider,
     Tooltip,
 } from '@mui/material';
 import {
@@ -32,6 +34,125 @@ interface TokenInfo {
     token: string;
     is_default: boolean;
 }
+
+// Shared shape for both the User Token and Model Token rows: masked value,
+// show/hide toggle, copy button. Behavior (what's shown, what copy does)
+// stays in the parent — this is purely the display chrome the two tokens
+// share.
+const MaskedTokenRow = ({
+    displayValue,
+    revealed,
+    onToggleReveal,
+    onCopy,
+    copiedTooltip,
+}: {
+    displayValue: string;
+    revealed: boolean;
+    onToggleReveal: () => void;
+    onCopy: () => void;
+    copiedTooltip: boolean;
+}) => (
+    <Box
+        sx={{
+            p: 2,
+            bgcolor: 'action.hover',
+            borderRadius: 1,
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+        }}
+    >
+        <Typography
+            variant="body2"
+            sx={{
+                fontFamily: 'monospace',
+                wordBreak: 'break-all',
+                flex: 1,
+            }}
+        >
+            {displayValue}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title={revealed ? 'Hide token' : 'Show token'}>
+                <IconButton size="small" onClick={onToggleReveal} disabled={!displayValue}>
+                    {revealed ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                </IconButton>
+            </Tooltip>
+            <Tooltip title={copiedTooltip ? 'Copied!' : 'Copy token'}>
+                <IconButton size="small" onClick={onCopy} disabled={!displayValue}>
+                    <ContentCopyIcon fontSize="small" />
+                </IconButton>
+            </Tooltip>
+        </Box>
+    </Box>
+);
+
+// Shared shape for the "just reset — here's your one-time full value" banner,
+// shown for either token after a successful reset.
+const TokenResetSuccessAlert = ({
+    title,
+    message,
+    token,
+    copiedTooltip,
+    onCopy,
+    acknowledgeLabel,
+    onAcknowledge,
+    copyLabel,
+    copiedLabel,
+}: {
+    title: ReactNode;
+    message: ReactNode;
+    token: string;
+    copiedTooltip: boolean;
+    onCopy: () => void;
+    acknowledgeLabel: ReactNode;
+    onAcknowledge: () => void;
+    copyLabel: ReactNode;
+    copiedLabel: ReactNode;
+}) => (
+    <Alert severity="success" icon={<CheckCircleIcon />}>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            {title}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+            {message}
+        </Typography>
+        <Box
+            sx={{
+                mt: 1.5,
+                p: 1,
+                bgcolor: 'action.hover',
+                borderRadius: 1,
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+            }}
+        >
+            <Typography
+                variant="body2"
+                sx={{
+                    fontFamily: 'monospace',
+                    wordBreak: 'break-all',
+                    flex: 1,
+                }}
+            >
+                {token}
+            </Typography>
+            <Button size="small" startIcon={<ContentCopyIcon />} onClick={onCopy}>
+                {copiedTooltip ? copiedLabel : copyLabel}
+            </Button>
+        </Box>
+        <Button size="small" variant="contained" onClick={onAcknowledge} sx={{ mt: 1.5 }}>
+            {acknowledgeLabel}
+        </Button>
+    </Alert>
+);
 
 const AccessControl = () => {
     const { t } = useTranslation();
@@ -220,268 +341,116 @@ const AccessControl = () => {
 
                 {/* Success Banner after User Token Reset */}
                 {userSuccessToken && (
-                    <Alert severity="success" icon={<CheckCircleIcon />}>
-                        <Typography variant="body2" sx={{
-                            fontWeight: 500
-                        }}>
-                            {t('accessControl.userToken.resetSuccess')}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {t('accessControl.userToken.resetSuccessMessage')}
-                        </Typography>
-                        <Box
-                            sx={{
-                                mt: 1.5,
-                                p: 1,
-                                bgcolor: 'action.hover',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 1,
-                            }}
-                        >
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    fontFamily: 'monospace',
-                                    wordBreak: 'break-all',
-                                    flex: 1,
-                                }}
-                            >
-                                {userSuccessToken}
-                            </Typography>
-                            <Button
-                                size="small"
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => handleCopyToken(userSuccessToken)}
-                            >
-                                {copied ? t('accessControl.copied') : t('accessControl.copy')}
-                            </Button>
-                        </Box>
-                        <Button
-                            size="small"
-                            variant="contained"
-                            onClick={handleUserSuccessAcknowledge}
-                            sx={{ mt: 1.5 }}
-                        >
-                            {t('accessControl.userToken.saved')}
-                        </Button>
-                    </Alert>
+                    <TokenResetSuccessAlert
+                        title={t('accessControl.userToken.resetSuccess')}
+                        message={t('accessControl.userToken.resetSuccessMessage')}
+                        token={userSuccessToken}
+                        copiedTooltip={copied}
+                        onCopy={() => handleCopyToken(userSuccessToken)}
+                        copyLabel={t('accessControl.copy')}
+                        copiedLabel={t('accessControl.copied')}
+                        acknowledgeLabel={t('accessControl.userToken.saved')}
+                        onAcknowledge={handleUserSuccessAcknowledge}
+                    />
                 )}
-
-                {/* User Token Card */}
-                <UnifiedCard
-                    title={t('accessControl.userToken.title')}
-                    size="full"
-                    rightAction={
-                        !isUsingDefaultToken && !userSuccessToken && (
-                            <Button
-                                size="small"
-                                variant="text"
-                                color="warning"
-                                onClick={handleUserResetClick}
-                                disabled={resettingUser}
-                                startIcon={resettingUser ? <CircularProgress size={16} /> : <SyncIcon />}
-                            >
-                                {resettingUser ? t('accessControl.resetting') : t('accessControl.userToken.resetToken')}
-                            </Button>
-                        )
-                    }
-                >
-                    <Stack spacing={2}>
-                        <Typography variant="body2" sx={{
-                            color: "text.secondary"
-                        }}>
-                            {t('accessControl.userToken.description')}
-                        </Typography>
-
-                        <Box
-                            sx={{
-                                p: 2,
-                                bgcolor: 'action.hover',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 1,
-                            }}
-                        >
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    fontFamily: 'monospace',
-                                    wordBreak: 'break-all',
-                                    flex: 1,
-                                }}
-                            >
-                                {showUserToken ? displayUserToken : maskToken(displayUserToken)}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                <Tooltip title={showUserToken ? 'Hide token' : 'Show token'}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => setShowUserToken(!showUserToken)}
-                                        disabled={!displayUserToken}
-                                    >
-                                        {showUserToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={copied ? 'Copied!' : 'Copy token'}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => handleCopyToken(displayUserToken)}
-                                        disabled={!displayUserToken}
-                                    >
-                                        <ContentCopyIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        </Box>
-
-                        {!isUsingDefaultToken && !userSuccessToken && (
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: "success.main",
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5
-                                }}>
-                                <CheckCircleIcon fontSize="inherit" />
-                                {t('accessControl.secure')}
-                            </Typography>
-                        )}
-                    </Stack>
-                </UnifiedCard>
 
                 {/* Success Banner after Model Token Reset */}
                 {modelSuccessToken && (
-                    <Alert severity="success" icon={<CheckCircleIcon />}>
-                        <Typography variant="body2" sx={{
-                            fontWeight: 500
-                        }}>
-                            {t('accessControl.modelToken.resetSuccess')}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {t('accessControl.modelToken.resetSuccessMessage')}
-                        </Typography>
-                        <Box
-                            sx={{
-                                mt: 1.5,
-                                p: 1,
-                                bgcolor: 'action.hover',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 1,
-                            }}
-                        >
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    fontFamily: 'monospace',
-                                    wordBreak: 'break-all',
-                                    flex: 1,
-                                }}
-                            >
-                                {modelSuccessToken}
-                            </Typography>
-                            <Button
-                                size="small"
-                                startIcon={<ContentCopyIcon />}
-                                onClick={() => handleCopyToken(modelSuccessToken)}
-                            >
-                                {copied ? t('accessControl.copied') : t('accessControl.copy')}
-                            </Button>
-                        </Box>
-                        <Button
-                            size="small"
-                            variant="contained"
-                            onClick={handleModelSuccessAcknowledge}
-                            sx={{ mt: 1.5 }}
-                        >
-                            {t('accessControl.modelToken.saved')}
-                        </Button>
-                    </Alert>
+                    <TokenResetSuccessAlert
+                        title={t('accessControl.modelToken.resetSuccess')}
+                        message={t('accessControl.modelToken.resetSuccessMessage')}
+                        token={modelSuccessToken}
+                        copiedTooltip={copied}
+                        onCopy={() => handleCopyToken(modelSuccessToken)}
+                        copyLabel={t('accessControl.copy')}
+                        copiedLabel={t('accessControl.copied')}
+                        acknowledgeLabel={t('accessControl.modelToken.saved')}
+                        onAcknowledge={handleModelSuccessAcknowledge}
+                    />
                 )}
 
-                {/* Model Token Card */}
-                <UnifiedCard
-                    title={t('accessControl.modelToken.title')}
-                    size="full"
-                    rightAction={
-                        <Button
-                            size="small"
-                            variant="text"
-                            color="warning"
-                            onClick={handleModelResetClick}
-                            disabled={resettingModel}
-                            startIcon={resettingModel ? <CircularProgress size={16} /> : <SyncIcon />}
-                        >
-                            {resettingModel ? t('accessControl.resetting') : t('accessControl.modelToken.resetToken')}
-                        </Button>
-                    }
-                >
-                    <Stack spacing={2}>
-                        <Typography variant="body2" sx={{
-                            color: "text.secondary"
-                        }}>
-                            {t('accessControl.modelToken.description')}
-                        </Typography>
-
-                        <Box
-                            sx={{
-                                p: 2,
-                                bgcolor: 'action.hover',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 1,
-                            }}
-                        >
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    fontFamily: 'monospace',
-                                    wordBreak: 'break-all',
-                                    flex: 1,
-                                }}
-                            >
-                                {showModelToken ? displayModelToken : maskToken(displayModelToken)}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                <Tooltip title={showModelToken ? 'Hide token' : 'Show token'}>
-                                    <IconButton
+                {/* Both tokens are one "Access Tokens" surface — they're the same
+                    kind of thing (a bearer credential you can view/copy/reset),
+                    just scoped to different audiences (control panel vs API
+                    clients), so they share one card instead of two. */}
+                <UnifiedCard size="full">
+                    <Stack spacing={3}>
+                        <Box>
+                            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1.5 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 500, flex: 1 }}>
+                                    {t('accessControl.userToken.title')}
+                                </Typography>
+                                {!isUsingDefaultToken && !userSuccessToken && (
+                                    <Button
                                         size="small"
-                                        onClick={() => setShowModelToken(!showModelToken)}
-                                        disabled={!displayModelToken}
+                                        variant="text"
+                                        color="warning"
+                                        onClick={handleUserResetClick}
+                                        disabled={resettingUser}
+                                        startIcon={resettingUser ? <CircularProgress size={16} /> : <SyncIcon />}
                                     >
-                                        {showModelToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={copied ? 'Copied!' : 'Copy token'}>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => handleCopyToken(displayModelToken)}
-                                        disabled={!displayModelToken}
-                                    >
-                                        <ContentCopyIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
+                                        {resettingUser ? t('accessControl.resetting') : t('accessControl.userToken.resetToken')}
+                                    </Button>
+                                )}
+                            </Stack>
+                            <Stack spacing={2}>
+                                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                    {t('accessControl.userToken.description')}
+                                </Typography>
+                                <MaskedTokenRow
+                                    displayValue={showUserToken ? displayUserToken : maskToken(displayUserToken)}
+                                    revealed={showUserToken}
+                                    onToggleReveal={() => setShowUserToken(!showUserToken)}
+                                    onCopy={() => handleCopyToken(displayUserToken)}
+                                    copiedTooltip={copied}
+                                />
+                                {!isUsingDefaultToken && !userSuccessToken && (
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: "success.main",
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.5
+                                        }}>
+                                        <CheckCircleIcon fontSize="inherit" />
+                                        {t('accessControl.secure')}
+                                    </Typography>
+                                )}
+                            </Stack>
                         </Box>
 
+                        <Divider />
+
+                        <Box>
+                            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1.5 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 500, flex: 1 }}>
+                                    {t('accessControl.modelToken.title')}
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    variant="text"
+                                    color="warning"
+                                    onClick={handleModelResetClick}
+                                    disabled={resettingModel}
+                                    startIcon={resettingModel ? <CircularProgress size={16} /> : <SyncIcon />}
+                                >
+                                    {resettingModel ? t('accessControl.resetting') : t('accessControl.modelToken.resetToken')}
+                                </Button>
+                            </Stack>
+                            <Stack spacing={2}>
+                                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                    {t('accessControl.modelToken.description')}
+                                </Typography>
+                                <MaskedTokenRow
+                                    displayValue={showModelToken ? displayModelToken : maskToken(displayModelToken)}
+                                    revealed={showModelToken}
+                                    onToggleReveal={() => setShowModelToken(!showModelToken)}
+                                    onCopy={() => handleCopyToken(displayModelToken)}
+                                    copiedTooltip={copied}
+                                />
+                            </Stack>
+                        </Box>
                     </Stack>
                 </UnifiedCard>
             </Stack>
