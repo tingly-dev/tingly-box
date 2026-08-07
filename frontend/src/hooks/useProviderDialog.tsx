@@ -221,24 +221,24 @@ export const useProviderDialog = (
         onProviderAdded?.();
     }, [onProviderAdded]);
 
+    const buildProviderData = (fd: EnhancedProviderFormData) => ({
+        name: fd.name,
+        api_base: fd.apiBase,
+        api_style: fd.apiStyle,
+        api_base_openai: fd.apiBaseOpenAI || undefined,
+        api_base_anthropic: fd.apiBaseAnthropic || undefined,
+        token: fd.token,
+        no_key_required: fd.noKeyRequired,
+        proxy_url: fd.proxyUrl,
+    });
+
     const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();
 
         // Merge dialog-resolved fields over form state; they arrive via async
         // onChange and may not be in state yet at submit time.
         const fd = { ...providerFormData, ...(resolved || {}) };
-        const providerData = {
-            name: fd.name,
-            api_base: fd.apiBase,
-            api_style: fd.apiStyle,
-            api_base_openai: fd.apiBaseOpenAI || undefined,
-            api_base_anthropic: fd.apiBaseAnthropic || undefined,
-            token: fd.token,
-            no_key_required: fd.noKeyRequired,
-            proxy_url: fd.proxyUrl,
-        };
-
-        const result = await api.addProvider(providerData);
+        const result = await api.addProvider(buildProviderData(fd));
 
         if (result.success) {
             showNotification('Provider connected successfully!', 'success');
@@ -251,18 +251,7 @@ export const useProviderDialog = (
 
     // Handle force-add: skip probe and submit directly
     const handleProviderForceAdd = async () => {
-        const providerData = {
-            name: providerFormData.name,
-            api_base: providerFormData.apiBase,
-            api_style: providerFormData.apiStyle,
-            api_base_openai: providerFormData.apiBaseOpenAI || undefined,
-            api_base_anthropic: providerFormData.apiBaseAnthropic || undefined,
-            token: providerFormData.token,
-            no_key_required: providerFormData.noKeyRequired,
-            proxy_url: providerFormData.proxyUrl,
-        };
-
-        const result = await api.addProvider(providerData, true);
+        const result = await api.addProvider(buildProviderData(providerFormData), true);
 
         if (result.success) {
             showNotification('Provider connected successfully!', 'success');
