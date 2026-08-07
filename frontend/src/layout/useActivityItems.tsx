@@ -227,7 +227,10 @@ export function useActivityItems(): ActivityItem[] {
                     },
                     {
                         path: '/credentials/virtual-models',
-                        label: t('layout.virtualModels', { defaultValue: 'Virtual Models' }),
+                        // Abbreviated here only — the sidebar is the tight spot;
+                        // the page itself (VirtualModelsPage) keeps the full
+                        // "Virtual Models" title via the shared layout.virtualModels key.
+                        label: t('layout.virtualModelsNavLabel', { defaultValue: 'VModel' }),
                         icon: <IconFlask sx={{ fontSize: 20 }} />,
                         tooltip: t('layout.virtualModelsTooltip', {
                             defaultValue: 'Built-in synthetic model providers for onboarding and dry-runs.',

@@ -28,11 +28,12 @@ const HEADER_PADDING_X = 40;
 const HEADER_PADDING_Y = 6;
 // Fixed (not just minimum) width for the "name + edit icon" slot, so the
 // toggles that follow (1M, Responses, …) line up at the same x-position
-// across every rule card. Names that don't fit truncate with an ellipsis —
-// the existing hover tooltip still shows the full name, and click-to-copy
-// still copies it in full — so a long name never re-breaks the alignment
-// this exists to guarantee.
-const NAME_SLOT_WIDTH = 170;
+// across every rule card. Sized to fit common model names in full (e.g.
+// "deepseek-v4-flash" measures ~140px in this font) with some headroom;
+// names that still don't fit truncate with an ellipsis — the hover tooltip
+// shows the full name and click-to-copy still copies it in full, so an
+// outlier-long name never re-breaks the alignment this exists to guarantee.
+const NAME_SLOT_WIDTH = 190;
 
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
@@ -216,9 +217,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: NAME_SLOT_WIDTH, flexShrink: 0 }}>
                     <Tooltip
-                        title={modelName
-                            ? `The model name that clients use to make requests. This will be matched against incoming API calls. Supports wildcards (* or [any]) for matching any model. (click to copy)`
-                            : 'No model specified'}
+                        title={modelName ? `${modelName} (click to copy)` : 'No model specified'}
                         placement="top"
                     >
                         {isWildcard ? (
@@ -264,7 +263,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                             </ModelNameText>
                         )}
                     </Tooltip>
-                    <Tooltip title="Edit model name">
+                    <Tooltip title="Edit model name — this is what's matched against incoming API calls. Supports wildcards (* or [any]) to match any model.">
                         <IconButton
                             size="small"
                             onClick={(e) => { e.stopPropagation(); setEditMode(true); }}
