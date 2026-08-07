@@ -6,7 +6,7 @@ require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-telegram/bot v1.23.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.9.10
-	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
+	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.2-beta.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/slack-go/slack v0.27.0
 	github.com/stretchr/testify v1.11.1

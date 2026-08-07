@@ -76,6 +76,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 // runUntilDone waits for context cancellation then marks the bot as disconnected.
 func (b *Bot) runUntilDone() {
 	defer b.wg.Done()
+	defer b.RecoverLoop("wecom lifecycle loop")
 
 	b.MarkReady()
 	b.Logger().Info("WeCom bot ready: botID=%s", b.botID)
@@ -176,6 +177,7 @@ type sdkEventHandler struct {
 }
 
 func (h *sdkEventHandler) OnMessage(ctx context.Context, msg *types.Message) error {
+	defer h.bot.RecoverCallback("wecom message")
 	h.bot.handleIncomingMessage(ctx, msg)
 	return nil
 }
@@ -189,6 +191,7 @@ func (h *sdkEventHandler) OnEdit(ctx context.Context, msg *types.Message) error 
 }
 
 func (h *sdkEventHandler) OnEvent(ctx context.Context, event *types.Event) {
+	defer h.bot.RecoverCallback("wecom event")
 	if event == nil {
 		return
 	}
@@ -204,6 +207,7 @@ func (h *sdkEventHandler) OnEvent(ctx context.Context, event *types.Event) {
 }
 
 func (h *sdkEventHandler) OnError(ctx context.Context, err error) {
+	defer h.bot.RecoverCallback("wecom error event")
 	h.bot.Logger().Error("WeCom SDK error: %v", err)
 	h.bot.EmitError(err)
 }

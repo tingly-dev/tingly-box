@@ -24,6 +24,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
+	"github.com/tingly-dev/tingly-box/remote/safego"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
 )
 
@@ -94,14 +95,14 @@ func (p *Plugin) Trigger(ctx context.Context, ev scenario.Event, rt scenario.Run
 
 	if !isInteractive(input) {
 		text := buildPushText(input)
-		go func() {
+		safego.Go("claudecode push notify", func() {
 			pCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = rt.Notify(pCtx, ch, target, interaction.Notification{
 				Title: "Claude Code · " + shortenPath(input.Cwd, 2),
 				Body:  text,
 			})
-		}()
+		})
 		rt.Audit("claude_code.push", map[string]any{
 			"event":    input.HookEventName,
 			"channel":  ch.ID(),
@@ -125,7 +126,9 @@ func (p *Plugin) Trigger(ctx context.Context, ev scenario.Event, rt scenario.Run
 
 	ix := buildInteraction(id, input, budget)
 
-	go p.run(ch, target, ix, input, policy, budget, rt)
+	safego.Go("claudecode interactive prompt", func() {
+		p.run(ch, target, ix, input, policy, budget, rt)
+	})
 
 	rt.Audit("claude_code.interactive.start", map[string]any{
 		"interaction_id": id,

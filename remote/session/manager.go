@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/remote/safego"
 )
 
 // Status represents the current state of a session
@@ -415,6 +417,7 @@ func (m *Manager) GetMessages(id string) ([]Message, bool) {
 // cleanupLoop periodically removes expired sessions
 func (m *Manager) cleanupLoop() {
 	defer m.wg.Done()
+	defer safego.Recover("session cleanup loop")
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -538,6 +541,7 @@ func (m *Manager) Clear() int {
 
 func (m *Manager) retentionLoop() {
 	defer m.wg.Done()
+	defer safego.Recover("session retention loop")
 
 	if m.config.MessageRetention <= 0 {
 		return

@@ -224,6 +224,7 @@ func (b *Bot) startRTM() error {
 func (b *Bot) handleRTMEvents(rtm *slack.RTM) {
 	b.wg.Add(1)
 	defer b.wg.Done()
+	defer b.RecoverLoop("slack RTM loop")
 
 	b.MarkReady()
 

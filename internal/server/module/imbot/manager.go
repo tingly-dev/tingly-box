@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
 
 	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/safego"
 	"github.com/tingly-dev/tingly-box/remote/session"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -122,7 +123,9 @@ func NewBotManager(ctx context.Context, cfg *config.Config, channelRegistry *cha
 		config:       cfg,
 	}
 
-	go bm.periodicBotSync(ctx)
+	safego.Go("periodic bot sync", func() {
+		bm.periodicBotSync(ctx)
+	})
 
 	logrus.Info("BotManager initialized successfully")
 	return bm, nil

@@ -184,6 +184,7 @@ func (b *Bot) StartReceiving(ctx context.Context) error {
 	b.eventCtx, b.eventCancel = context.WithCancel(ctx)
 
 	go func() {
+		defer b.RecoverLoop("feishu websocket loop")
 		b.Logger().Info("%s WebSocket connecting...", b.domain)
 		if err := wsClient.Start(b.eventCtx); err != nil {
 			b.Logger().Error("%s WebSocket error: %v", b.domain, err)
@@ -218,6 +219,7 @@ func (b *Bot) StopReceiving(ctx context.Context) error {
 
 // handleP2MessageReceiveV1 handles P2 message events (v2.0)
 func (b *Bot) handleP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
+	defer b.RecoverCallback("feishu message")
 	b.Logger().Info("%s received P2 message: %+v", b.domain, event)
 
 	// Convert Lark event to core.Message

@@ -396,6 +396,7 @@ func isAudioFile(path string) bool {
 // receiveMessages receives messages via long-polling.
 func (b *Bot) receiveMessages() {
 	defer b.wg.Done()
+	defer b.RecoverLoop("weixin poll loop")
 
 	// Mark as ready
 	b.MarkReady()

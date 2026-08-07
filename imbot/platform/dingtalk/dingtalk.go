@@ -134,12 +134,14 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 // waitForReady waits for the bot to be ready
 func (b *Bot) waitForReady() {
 	defer b.wg.Done()
+	defer b.RecoverLoop("dingtalk ready wait")
 	time.Sleep(2 * time.Second)
 	b.MarkReady()
 }
 
 // onChatBotMessage handles chat bot callback messages
 func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDataModel) ([]byte, error) {
+	defer b.RecoverCallback("dingtalk chatbot message")
 	// Store webhook URL for this conversation
 	b.mu.Lock()
 	if data.SessionWebhook != "" {

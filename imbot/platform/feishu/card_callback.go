@@ -31,6 +31,7 @@ import (
 // still reads as non-nil and gets marshalled — sending Feishu a literal
 // "null" body instead of no body at all.
 func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
+	defer b.RecoverCallback("feishu card action")
 	noReply := &callback.CardActionTriggerResponse{}
 
 	if event == nil || event.Event == nil || event.Event.Action == nil {

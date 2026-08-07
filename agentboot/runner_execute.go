@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/agentboot/internal/safego"
 	"sync"
 	"time"
 
@@ -83,6 +84,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 	// process.Factory implementations must observe cancellation consistently,
 	// including test/custom factories that do not use exec.CommandContext.
 	go func() {
+		defer safego.Recover("runner kill watcher")
 		select {
 		case <-runCtx.Done():
 			_ = proc.Kill()
@@ -102,10 +104,12 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 			shutdownWG.Add(2)
 			go func() {
 				defer shutdownWG.Done()
+				defer safego.Recover("runner encoder close")
 				_ = encoder.Close()
 			}()
 			go func() {
 				defer shutdownWG.Done()
+				defer safego.Recover("runner shutdown escalation")
 				timer := time.NewTimer(shutdownGracePeriod)
 				defer timer.Stop()
 				select {
@@ -156,6 +160,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		feederWG.Add(1)
 		go func() {
 			defer feederWG.Done()
+			defer safego.Recover("runner input feeder")
 			for {
 				select {
 				case m, ok := <-spec.InitialInput:
@@ -179,6 +184,7 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 	go func() {
 		defer pumpWG.Done()
 		defer handle.closeStream()
+		defer safego.Recover("runner event pump")
 
 		for ev := range decoderEvents {
 			// Always append the raw event to result.Events for back-compat

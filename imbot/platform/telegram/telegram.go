@@ -145,6 +145,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
+		defer b.RecoverLoop("telegram update loop")
 		b.api.Start(b.ctx)
 	}()
 
@@ -153,6 +154,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 
 // handleMessageUpdate handles incoming message updates
 func (b *Bot) handleMessageUpdate(ctx context.Context, api *tgbot.Bot, update *models.Update) {
+	defer b.RecoverCallback("telegram message")
 	if update.Message == nil {
 		return
 	}
@@ -173,6 +175,7 @@ func (b *Bot) handleMessageUpdate(ctx context.Context, api *tgbot.Bot, update *m
 
 // handleCallbackQueryUpdate handles incoming callback query updates
 func (b *Bot) handleCallbackQueryUpdate(ctx context.Context, api *tgbot.Bot, update *models.Update) {
+	defer b.RecoverCallback("telegram callback query")
 	if update.CallbackQuery == nil {
 		return
 	}

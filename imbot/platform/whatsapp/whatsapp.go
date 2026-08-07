@@ -273,6 +273,7 @@ func (b *Bot) authenticate() error {
 // receiveEvents receives events from WhatsApp
 func (b *Bot) receiveEvents() {
 	defer b.wg.Done()
+	defer b.RecoverLoop("whatsapp event loop")
 
 	b.MarkReady()
 

@@ -3,6 +3,7 @@ package process
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/agentboot/internal/safego"
 	"io"
 	"os"
 	"os/exec"
@@ -54,8 +55,9 @@ func (f *OSExecFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, err
 		done:   make(chan struct{}),
 	}
 	go func() {
+		defer close(h.done)
+		defer safego.Recover("process wait")
 		h.waitErr = cmd.Wait()
-		close(h.done)
 	}()
 	return h, nil
 }

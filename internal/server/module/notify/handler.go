@@ -25,6 +25,7 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/notify"
 	systemnotify "github.com/tingly-dev/tingly-box/pkg/notify/provider/system"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
+	"github.com/tingly-dev/tingly-box/remote/safego"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
 )
 
@@ -186,7 +187,7 @@ func (h *Handler) fallbackPush(payload map[string]any) {
 		return
 	}
 	title, message := summarize(payload)
-	go func() {
+	safego.Go("desktop fallback push", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = h.notifier.Send(ctx, &notify.Notification{
@@ -194,7 +195,7 @@ func (h *Handler) fallbackPush(payload map[string]any) {
 			Message: message,
 			Level:   notify.LevelInfo,
 		})
-	}()
+	})
 }
 
 // summarize is a generic title/body extractor for desktop fallback. It

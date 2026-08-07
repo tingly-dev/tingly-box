@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/remote/safego"
 )
 
 // FeishuRegHandler drives the Feishu/Lark one-click app registration flow
@@ -130,7 +131,7 @@ func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 		},
 	}
 
-	go func() {
+	safego.Go("feishu one-click registration", func() {
 		defer cancel()
 		outcome, result, err := feishu.RegisterApp(ctx, opts)
 		sess.mu.Lock()
@@ -151,7 +152,7 @@ func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 			sess.errMsg = err.Error()
 			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration failed")
 		}
-	}()
+	})
 
 	select {
 	case <-qrReady:
