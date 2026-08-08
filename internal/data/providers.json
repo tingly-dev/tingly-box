@@ -2841,6 +2841,23 @@
       "no_key_required": true,
       "supports_models_endpoint": true,
       "icon": "sglang"
+    },
+    "tingly-python": {
+      "id": "tingly-python",
+      "name": "Python Server (tingly)",
+      "status": "active",
+      "valid": true,
+      "vendor_family": "tingly",
+      "region": "self-hosted",
+      "plan": "standard",
+      "type": "self-hosted",
+      "description": "A model server you wrote yourself in Python with the tingly SDK — it can call back into this box for its own LLM work",
+      "website": "https://github.com/tingly-dev/tingly-box/tree/main/sdk/python",
+      "base_url_openai": "http://localhost:8765/v1",
+      "base_url_anthropic": "http://localhost:8765",
+      "no_key_required": true,
+      "supports_models_endpoint": true,
+      "icon": "tingly"
     }
   }
 }

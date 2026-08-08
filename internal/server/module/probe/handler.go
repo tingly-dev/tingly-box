@@ -24,10 +24,19 @@ func NewHandler(e2e *probe.E2EService, lightweight *probe.LightweightService) *H
 	return &Handler{e2e: e2e, lightweight: lightweight}
 }
 
-// errorDetail mirrors the JSON shape of the server's global ErrorDetail so
-// the API contract is unchanged. Defined locally to keep this package free
+// ProbeErrorDetail mirrors the JSON shape of the server's global ErrorDetail
+// so the API contract is unchanged. Defined locally to keep this package free
 // of any internal/server import.
-type errorDetail struct {
+//
+// The name is module-qualified on purpose. Schema keys in openapi.json are the
+// Go type names, and client generators for other languages normalize them: a
+// bare `errorDetail` here collided case-insensitively with
+// onboarding.ErrorDetail, and openapi-python-client responded by silently
+// dropping every schema that referenced it — E2EResponse and
+// LightweightResponse, i.e. both of this module's response envelopes. Keep
+// local envelope types distinct across modules, and prefer exported names so
+// a future collision shows up in review rather than in a generator's warnings.
+type ProbeErrorDetail struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code,omitempty"`
@@ -35,15 +44,15 @@ type errorDetail struct {
 
 // E2EResponse is the JSON envelope returned by POST /probe.
 type E2EResponse struct {
-	Success bool           `json:"success"`
-	Error   *errorDetail   `json:"error,omitempty"`
-	Data    *probe.E2EData `json:"data,omitempty"`
+	Success bool              `json:"success"`
+	Error   *ProbeErrorDetail `json:"error,omitempty"`
+	Data    *probe.E2EData    `json:"data,omitempty"`
 }
 
 // LightweightResponse is the JSON envelope returned by POST /probe/lightweight.
 type LightweightResponse struct {
 	Success bool                                `json:"success"`
-	Error   *errorDetail                        `json:"error,omitempty"`
+	Error   *ProbeErrorDetail                   `json:"error,omitempty"`
 	Data    *probe.LightweightProbeResponseData `json:"data,omitempty"`
 }
 
@@ -54,7 +63,7 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, E2EResponse{
 			Success: false,
-			Error: &errorDetail{
+			Error: &ProbeErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
 				Type:    "invalid_request_error",
 			},
@@ -65,7 +74,7 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	if err := probe.ValidateE2ERequest(&req); err != nil {
 		c.JSON(http.StatusBadRequest, E2EResponse{
 			Success: false,
-			Error: &errorDetail{
+			Error: &ProbeErrorDetail{
 				Message: err.Error(),
 				Type:    "validation_error",
 			},
@@ -90,7 +99,7 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, E2EResponse{
 			Success: false,
-			Error: &errorDetail{
+			Error: &ProbeErrorDetail{
 				Message: err.Error(),
 				Type:    "probe_error",
 			},
@@ -111,7 +120,7 @@ func (h *Handler) HandleLightweightProbe(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, LightweightResponse{
 			Success: false,
-			Error: &errorDetail{
+			Error: &ProbeErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
 				Type:    "invalid_request_error",
 			},
@@ -122,7 +131,7 @@ func (h *Handler) HandleLightweightProbe(c *gin.Context) {
 	if req.APIBase == "" || req.APIStyle == "" || req.Token == "" {
 		c.JSON(http.StatusBadRequest, LightweightResponse{
 			Success: false,
-			Error: &errorDetail{
+			Error: &ProbeErrorDetail{
 				Message: "api_base, api_style, and token are required",
 				Type:    "validation_error",
 			},

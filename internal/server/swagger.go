@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
@@ -13,6 +15,7 @@ import (
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/providerquota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/sharing"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
@@ -123,6 +126,10 @@ func registerAllAPIRoutes(engine *gin.Engine, manager *swagger.RouteManager, s *
 	// is required here.
 	sharing.RegisterRoutes(apiV1, sharing.NewHandler(nil))
 
-	// Provider quota API routes
-	// Note: skipped for OpenAPI generation as quotaManager is not available
+	// Provider quota API routes. These used to be skipped here because no
+	// quota manager exists during schema generation, which is why six live
+	// endpoints were missing from openapi.json and unreachable from every
+	// generated client. The handler now tolerates a nil manager (answering
+	// 503), so the routes can be declared unconditionally.
+	providerQuotaModule.RegisterRoutes(apiV1, providerQuotaModule.NewHandler(nil, logrus.StandardLogger()))
 }

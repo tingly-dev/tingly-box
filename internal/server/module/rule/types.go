@@ -9,10 +9,15 @@ import (
 // Rule API Types
 // =============================================
 
-// RulesResponse represents the response for getting all rules
+// RulesResponse represents the response for getting all rules.
+//
+// Data is []typ.Rule, not interface{}: the handler only ever puts that in it,
+// and the loose type made openapi.json declare `data` as an untyped Any — so
+// generated clients got no model for the rule list at all, while the sibling
+// RuleResponse below (already *typ.Rule) generated correctly.
 type RulesResponse struct {
-	Success bool        `json:"success" example:"true"`
-	Data    interface{} `json:"data"`
+	Success bool       `json:"success" example:"true"`
+	Data    []typ.Rule `json:"data"`
 }
 
 // RuleResponse represents a rule configuration response
