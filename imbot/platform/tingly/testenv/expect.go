@@ -168,6 +168,62 @@ func (c *Chat) ExpectInOrderLoose(d time.Duration, matchers ...Matcher) []OutEve
 	return got
 }
 
+// ExpectUnordered waits until every matcher has been satisfied, in any
+// order. Each event can satisfy at most one still-unmet matcher; events
+// matching no unmet matcher are silently consumed. Returned events are in
+// matcher order, not arrival order.
+//
+// Use this when the listed events are produced by independent goroutines
+// with no ordering guarantee between them (e.g. an ack sent by a callback
+// handler racing an executor's failure message).
+func (c *Chat) ExpectUnordered(d time.Duration, matchers ...Matcher) []OutEvent {
+	c.env.t.Helper()
+	deadline := time.Now().Add(d)
+	matched := make([]OutEvent, len(matchers))
+	met := make([]bool, len(matchers))
+	unmet := len(matchers)
+	for unmet > 0 {
+		firstUnmet := 0
+		for firstUnmet < len(met) && met[firstUnmet] {
+			firstUnmet++
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			c.failExpect(matchers, compactMatched(matched, met), firstUnmet, "deadline reached before matcher", "")
+			return matched
+		}
+		e, ok := c.tryReceive(remaining, func(tingly.Event) bool { return true })
+		if !ok {
+			c.failExpect(matchers, compactMatched(matched, met), firstUnmet, "no more events", "")
+			return matched
+		}
+		out := toOutEvent(c, e)
+		for i, m := range matchers {
+			if met[i] {
+				continue
+			}
+			if ok, _ := m.match(out); ok {
+				matched[i] = out
+				met[i] = true
+				unmet--
+				break
+			}
+		}
+	}
+	return matched
+}
+
+// compactMatched returns the already-matched events for failure reporting.
+func compactMatched(matched []OutEvent, met []bool) []OutEvent {
+	var out []OutEvent
+	for i, ok := range met {
+		if ok {
+			out = append(out, matched[i])
+		}
+	}
+	return out
+}
+
 // ExpectIdle fails the test if any outbound event arrives within d.
 // Equivalent to ExpectNoEvent with all kinds.
 func (c *Chat) ExpectIdle(d time.Duration) {

@@ -156,10 +156,12 @@ func Test_AgentE2E_PermissionDeny(t *testing.T) {
 	prompt.Deny()
 
 	// Wait for both the immediate denial ack AND the failure message that
-	// the executor sends after handle.Wait() returns. The runner calls
-	// store.SetFailed inside Wait(), before SendTextWithReply, so by the
-	// time the failure message arrives the session status is guaranteed set.
-	chat.ExpectInOrderLoose(3*time.Second,
+	// the executor sends after handle.Wait() returns. The two sends come
+	// from independent goroutines (callback handler vs executor), so their
+	// relative order is not guaranteed — only that both arrive. The runner
+	// calls store.SetFailed inside Wait(), before SendTextWithReply, so by
+	// the time the failure message arrives the session status is set.
+	chat.ExpectUnordered(3*time.Second,
 		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Deny for tool", Name: "deny-ack"},
 		testenv.Matcher{Kind: tingly.EventSend, TextContains: "Execution failed", Name: "failure-msg"},
 	)
