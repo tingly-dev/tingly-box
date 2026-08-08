@@ -109,7 +109,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 	ph.applyVisionProxy(c, scenarioType, rule, &req.ChatCompletionNewParams)
 
 	// Select service using routing pipeline
-	provider, selectedService, err = ph.deps.RoutingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
+	provider, selectedService, err = ph.selectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

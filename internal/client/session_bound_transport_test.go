@@ -507,8 +507,9 @@ func TestCreateSessionBoundTransport(t *testing.T) {
 	// createSessionBoundTransport returns a generic SessionBoundTransport for
 	// every OAuth provider — Claude Code OAuth transformations (headers, tool
 	// rename, thinking) live in ClaudeClient via SDK options/middleware, not
-	// in the transport.
-	if _, ok := transport.(*SessionBoundTransport); !ok {
+	// in the transport. Only the protocol-neutral trace-propagation wrapper
+	// sits above it.
+	if _, ok := unwrapPropagating(t, transport).(*SessionBoundTransport); !ok {
 		t.Errorf("Expected SessionBoundTransport for Claude Code OAuth provider (SDK middleware handles transformations), got %T", transport)
 	}
 
@@ -542,7 +543,7 @@ func TestCreateSessionBoundTransport_Antigravity(t *testing.T) {
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-	if _, ok := transport.(*SessionBoundTransport); !ok {
+	if _, ok := unwrapPropagating(t, transport).(*SessionBoundTransport); !ok {
 		t.Errorf("Expected bare SessionBoundTransport (Code Assist envelope is applied by AntigravityClient), got %T", transport)
 	}
 }
@@ -568,7 +569,7 @@ func TestCreateSessionBoundTransport_Gemini(t *testing.T) {
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-	if _, ok := transport.(*SessionBoundTransport); !ok {
+	if _, ok := unwrapPropagating(t, transport).(*SessionBoundTransport); !ok {
 		t.Errorf("Expected bare SessionBoundTransport (Code Assist envelope is applied by GeminiClient), got %T", transport)
 	}
 }
@@ -593,7 +594,7 @@ func TestCreateSessionBoundTransport_Codex(t *testing.T) {
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-	if _, ok := transport.(*SessionBoundTransport); !ok {
+	if _, ok := unwrapPropagating(t, transport).(*SessionBoundTransport); !ok {
 		t.Errorf("Expected bare SessionBoundTransport (codex envelope is applied by CodexClient), got %T", transport)
 	}
 }
@@ -618,9 +619,20 @@ func TestCreateSessionBoundTransport_NonOAuth(t *testing.T) {
 	}
 
 	// Should be SessionBoundTransport directly (no provider wrapper)
-	if _, ok := transport.(*SessionBoundTransport); !ok {
+	if _, ok := unwrapPropagating(t, transport).(*SessionBoundTransport); !ok {
 		t.Error("Expected SessionBoundTransport for non-OAuth provider")
 	}
+}
+
+// unwrapPropagating strips the protocol-neutral trace-propagation wrapper so
+// the assertions above can check the provider-specific shape of the chain.
+func unwrapPropagating(t *testing.T, rt http.RoundTripper) http.RoundTripper {
+	t.Helper()
+	pt, ok := rt.(*propagatingTransport)
+	if !ok {
+		t.Fatalf("Expected propagatingTransport at the top of the chain, got %T", rt)
+	}
+	return pt.Unwrap()
 }
 
 // TestTransportPoolWithSessionBound tests integration between

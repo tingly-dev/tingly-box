@@ -89,13 +89,133 @@ cumulative 指标的每个不同属性组合都是一条**进程生命周期内�
 - 厂商原生支持 gen_ai：Datadog（v1.37+）、New Relic、Dynatrace、Honeycomb。Claude Code / Copilot / Codex 已在发这套遥测。
 - **跟踪点**：内容捕获属性（`gen_ai.input.messages` 等，默认必须 opt-in，含敏感数据）、agent/MCP 约定、cache token type 是否被规范收编。
 
-## 7. 未来工作（接入打点时）
+## 7. 请求链路打点接线（2026-08 实施）
 
-1. 在请求管道（protocol handler / client 层）用 `server.otelSetup.Tracer()` 打 span：入口处 `StartRequestSpan`，上游调用一个子 span，出口 `SetTokenUsage` + `EndSpan`。
-2. 从入站 HTTP 头 Extract 上游 trace context（propagator 已装好），出站注入 `traceparent`。
-3. 非 chat 操作（embeddings 等）把 `UsageOptions.Operation` / span operation 传对。
-4. 内容捕获（prompt/completion 上 span）：等规范稳定 + 产品决策，必须默认关闭。
-5. OTLP 配置目前只有代码内 `DefaultConfig()`（默认关）——暴露到用户配置文件/UI 时记得走 swagger codegen 流程。
+### 7.1 为什么 span 生命周期归中间件，不归 trackUsage
+
+`trackUsage*` 有 30+ 个调用点（dispatch / cross / passthrough / mcp loop / error_response），
+且 failover 每次失败尝试也会经 `failAttemptSetup` 调一次——它**不是每请求恰好一次**的终点，
+不能承载 EndSpan。root span 的唯一正确 owner 是 gin middleware（一进一出各恰好一次）。
+
+同理，gin context 的 tracking 键值包**不改造成 span**：OTel span 是只写导出型，UsageStore
+计费 / health monitor / LB stats 需要在请求末端读回这些值；把 span 当内存态数据载体正是
+§1 删掉的 SinkExporter 反模式。context 键值包的定位是**进程内参数载体**，span 是它在
+观测通路上的**投影之一**（与 UsageRecord、metrics、memory log 平行）。曾考虑把 ~20 个
+ctx key 合并为单一 struct（"B 方案"）——被否决：这些 key 分属身份（auth 写入）、能力句柄
+（recorder/guardrails state）、追踪元数据三个领域，写入方横跨 middleware/routing/
+protocolserver/protocol 四个包，`constant` 包的松散 key 正是为了避免跨域 god-struct 与
+import 环。追踪元数据簇已被 `SetTrackingContext`/`GetTrackingContext` 单点收口，够用。
+
+### 7.2 Span 拓扑
+
+```
+{operation} {request model}   (root, kind CLIENT, 每 HTTP 请求一个, middleware 拥有)
+ ├─ gen_ai.* 请求属性 + tingly.* 维度 + token usage 属性（trackUsage 回写）
+ ├─ routing            (child) 选路 pipeline；attrs: tingly.lb.service_id / tingly.lb.tactic
+ ├─ failover.attempt   (child, 仅多服务 failover 循环产生, 每次尝试一个)
+ │    attrs: tingly.failover.attempt / tingly.lb.service_id / provider uuid
+ │    outcome: committed → OK；retryable/terminal 失败 → error status + http status attr
+ └─ upstream           (child, 每次真实上游 HTTP 调用一个)
+      attrs: server.address / http.request.method / http.response.status_code
+```
+
+**为什么 routing / upstream 也要打点**：只有 root + attempt 时，**单服务请求（最常见）整条 trace 只有一个 span**——没有骨架，旅程视图无从渲染。routing 回答"选了谁、用什么 tactic"，upstream 吃掉 95% 的延迟，两者是诊断的最小可用集。transform 不单独建 span（亚毫秒级），它的日志事件在视图里作为注解挂到相邻阶段。
+
+**upstream span 建在 transport 层**（`internal/client/otel_transport.go`，位于所有 vendor round tripper 之下）：一处覆盖全部 provider，且天然只圈住真实上游调用。它**在响应体关闭/读尽时才结束**，不是 RoundTrip 返回时——流式补全在响应头到达后还会吐几秒钟的 token，否则记录的是 TTFB 而非上游总时长。
+
+**打点集中在一处,不散落到 handler**:routing span 一度是 6 个 handler 里各一对手工括号
+（`endRouting := ph.startRoutingSpan(c)` … `endRouting(err)`）——新增端点就得有人记得补,
+是典型的"细碎"型可维护性债。现在 handler 调用 `ph.selectService` / `selectServiceForEmbeddings`
+/ `selectServiceForImageGeneration` 这三个带打点的包装方法,span 只在 `tracing_middleware.go`
+出现一次。业务文件里剩余的 span 接触点只有两处不可再收的:failover 循环内的 attempt span
+（本就一处）、`usage_tracking.go` 的 token 用量镜像（与其余记账步骤并列）。
+
+**attempt / routing span 不换入 `c.Request` 的 context**：ambient span 必须始终是 root，token usage 才会落在 root 上（GenAI 约定要求）。代价是 upstream span 与 attempt span 是兄弟而非父子——视图侧按**时间包含关系**做嵌套展示，比改动语义更便宜且更稳。
+
+- **root span**：`tracingMiddleware`（`contextMiddleware` 之后）创建。入口 Extract 入站
+  `traceparent`（propagator 未启用时是全局 no-op，零成本）；`c.Next()` 之后从 tracking
+  context 读回 provider/model/rule/LB 决策，`span.SetName("{operation} {request model}")`
+  （operation 从路径推导：/embeddings → embeddings，其余 chat，与 UsageOptions.Operation
+  同轴同默认）并补全属性，按 HTTP 状态置 error（**canceled ≠ error 规则同 §3**：
+  `c.Request.Context().Err() == Canceled` 时不置 error status）。
+- **失败尝试不再丢失**：`UpdateTrackingForFailover` 覆盖 ctx 只留最终赢家（UsageRecord
+  的既定语义，不变）；尝试历史的结构化归宿是 per-attempt child span。不在内存里平行
+  维护 attempts 列表，也不塞进 UsageRecord——那违反 §1 三通路边界。
+- **attempt span 不换入 c.Request context**：token usage 回写（`Tracer.SetTokenUsage`）
+  走 ambient ctx，必须始终落在 root span 上；attempt span 是纯结果记录，做 root 的
+  子节点即可。
+- **出站注入**：`propagatingTransport`（internal/client）在两个 transport 汇聚点包一层
+  （`createSessionBoundTransport` + 直连 `GetGlobalTransportPool().GetTransport` 的
+  openai/anthropic/google 三处），Inject 前按 RoundTripper 契约 clone request + header。
+  未启用 tracing 时 propagator 为 no-op、ctx 无 span——注入零头。
+
+### 7.3 trace_id 关联（三通路互跳）
+
+root span sampled 且 valid 时，middleware 把 trace id 写入
+`constant.CtxKeyTraceID`；两个消费方：
+
+1. **UsageRecord.TraceID**（新列 `trace_id`，AutoMigrate 增列）——从精确账单跳到 trace。
+2. **memory access log 的 `trace_id` 字段**（middleware/memory_log.go）——从请求日志跳到 trace。
+
+未启用 tracing 时 key 不设置、列为空串，零行为变化。
+
+### 7.4 内存 trace 查看器（默认渠道，2026-08 实施）
+
+不配 OTLP 的用户（绝大多数）也必须能看到 trace——否则打点的价值对他们不存在，
+且 UsageRecord / access log 上的 `trace_id` 指向一个不存在的地方。
+
+**规则修正**：§2"没有出口就不装管道"中的"出口"从"仅 OTLP"扩展为
+"OTLP **或内存查看器**"。内存查看器是真实出口：数据从源头正向记录、有界、
+有真实消费方（logs 页 UI）。它**不是**被删的 SinkExporter 反模式——那个错在
+从聚合指标反向合成记录且无人消费；方向和消费方都不同。
+
+- `pkg/otel` 的 ring-buffer SpanProcessor **常驻注册**：trace provider 在无 OTLP 时
+  也构建（仅挂内存 processor）；OTLP 配置后二者并存（sdktrace 多 processor）。
+  metrics 侧不变（无 OTLP 时 `Tracker()` 仍为 nil）。W3C propagator 随之常装。
+- **硬性有界**（#1255 战线）：按 trace 数 + 估算字节双重封顶，超限逐最旧 trace 整体
+  淘汰。默认值写死（smart defaults over toggles），暂不暴露配置。
+- **不碰请求/响应内容**：span 属性维持现状；内容回放归 recording 管道。
+- **重启即清空**：与 memory log 同语义。要持久 trace 走 OTLP 接真后端，两路不混。
+- **前端入口只在 logs 页**：不做 usage 页入口、不做独立 traces 页（首版）。
+
+### 7.4.1 展开态是一个"请求旅程"，不是两个视图
+
+首版把 span 瀑布和原有的事件 timeline 并排放在展开态里——同一个故事讲两遍，
+读者要在脑子里做 join，是 ux-principles §1（信息架构围绕用户问题组织）的反例。
+现在合并成单一叙事（`RequestJourney.tsx`）：
+
+- **trace span 是主干**：一个阶段一行，按时间排序；
+- **是列表，不是图表**：时长条只有在需要看**重叠/并发**时才值那块空间，而这些阶段
+  严格串行——右对齐的等宽时长列比条形更好比较。首版画了条形图，代价是 600px 横向
+  空间、12ms 的 routing 缩成一个看不见的点、两条近似等长的条互相干扰。整个展开态是
+  **一个 CSS grid**（图标 / 阶段 / 事实 / 状态 / 时长），注解也落在同一套列上，
+  避免每层缩进各自起一条参差的左边缘；
+- **attempt 与其 upstream 合并为一行**：一次 failover 尝试和它内部的上游调用是
+  同一件事说两遍（同一个状态码、几乎相同的时长，只是一个用 service id 命名、
+  一个用 host 命名）。视图按时间包含把 upstream 折进 attempt，两边的事实都保留
+  （`service_id · host`）——这是"两套叙事"在更小尺度上的复发；
+- **日志事件是注解**：按时间包含关系挂到所属阶段行下；阶段本身没有事实可陈述时
+  （派生阶段、或关闭 tracing 时的全部阶段），首条注解上提到事实列，
+  否则会渲染成"标签 + 两个空格子 + 下一行吊着的文字"这种稀疏阶梯；
+- **smart routing 注解陈述评估规模而非结果**："rule matched" 没有说出任何
+  阶段行未说的事；改为 "2 routing rules evaluated · #1 matched"，同时充当
+  "点开有规则明细"的可见提示。规则明细本身收进展开态（每条规则四行，
+  而多数时候读这个视图不是为了看路由）；
+- **access log envelope 整条丢弃**：status / latency / path 已在表格行头，重复一次是纯噪音
+  （唯一例外：它是仅有的事件时保留，覆盖"请求在任何阶段之前就失败"）；
+- **字段人性化**：logrus 的 ns 时长转 ms，摘要已展示的字段不再 dump；
+- **ID 降级**：request id / trace id 移到展开态底部的小字——报 bug 时才需要，读旅程时不需要。
+
+**无 trace 时同一形状降级**：阶段改由事件的 `stage` 字段派生（无时长条），
+所以关掉 tracing 或 trace 被淘汰时，logs 页的结构不变、不退化成裸日志流。
+不做 "Trace / Timeline" tab 切换——那是 §2 反对的 mode picker，等于把 join 成本还给用户。
+
+### 7.5 仍然悬置
+
+1. 内容捕获（prompt/completion 上 span）：等规范稳定 + 产品决策，必须默认关闭。
+2. OTLP 配置目前只有代码内 `DefaultConfig()`（默认关）——暴露到用户配置文件/UI 时记得走 swagger codegen 流程。
+3. MCP loop 每次迭代的独立 gen_ai span（当前 token usage 回写 root，last-write-wins；
+   精确值在 UsageStore）。
 
 ## 8. 决策记录索引
 

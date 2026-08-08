@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { KeyboardArrowDown as KeyboardArrowDownIcon, KeyboardArrowUp as KeyboardArrowUpIcon, Refresh as RefreshIcon, ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
+import RequestJourney, { type TraceDetail } from '@/components/RequestJourney';
 
 export interface ModelRequestSummary {
     request_id: string;
@@ -32,6 +33,7 @@ export interface ModelRequestSummary {
     has_error: boolean;
     max_level?: string;
     event_count: number;
+    trace_id?: string;
 }
 
 export interface ModelRequestEvent {
@@ -60,6 +62,8 @@ type SortOrder = 'asc' | 'desc';
 interface RequestsViewerProps {
     getRequests: (params?: RequestFilters) => Promise<{ total: number; requests: ModelRequestSummary[] }>;
     getRequestDetail: (id: string) => Promise<ModelRequestDetail | null>;
+    // Fetches one trace from the in-memory span buffer; null when evicted.
+    getTrace: (traceId: string) => Promise<TraceDetail | null>;
     // When set, the scenario filter is initialized to this value but can be changed/cleared.
     // Used by the per-scenario quick-open dialog to provide context without locking the view.
     initialScenario?: string;
@@ -73,32 +77,6 @@ const statusColor = (status?: number): 'default' | 'success' | 'warning' | 'erro
     return 'default';
 };
 
-const sourceColor = (source: string): 'default' | 'primary' | 'secondary' | 'info' => {
-    switch (source) {
-        case 'http':
-            return 'primary';
-        case 'model_request':
-            return 'secondary';
-        case 'smart_routing':
-            return 'info';
-        default:
-            return 'default';
-    }
-};
-
-const levelColor = (level: string): 'default' | 'warning' | 'error' => {
-    switch (level) {
-        case 'error':
-        case 'fatal':
-        case 'panic':
-            return 'error';
-        case 'warning':
-            return 'warning';
-        default:
-            return 'default';
-    }
-};
-
 const formatTime = (s: string): string => {
     try {
         return new Date(s).toLocaleString();
@@ -107,28 +85,7 @@ const formatTime = (s: string): string => {
     }
 };
 
-const formatTimeShort = (s: string): string => {
-    try {
-        return new Date(s).toLocaleTimeString();
-    } catch {
-        return s;
-    }
-};
-
-// Fields surfaced as the row summary / handled specially — hidden from the raw dump.
-const SUPPRESSED_FIELDS = new Set([
-    'request_id',
-    'source',
-    'stage',
-    'type',
-    'time',
-    'level',
-    'msg',
-    'trace',
-    'request',
-]);
-
-const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: RequestsViewerProps) => {
+const AILogViewer = ({ getRequests, getRequestDetail, getTrace, initialScenario }: RequestsViewerProps) => {
     const [requests, setRequests] = useState<ModelRequestSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
@@ -227,134 +184,6 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
             }
         }
     };
-
-    const renderRoutingTrace = (fields?: Record<string, any>) => {
-        if (!fields) return null;
-        const trace: any[] = Array.isArray(fields.trace) ? fields.trace : [];
-        const matchedIdx = typeof fields.matched_rule_index === 'number' ? fields.matched_rule_index : -1;
-        return (
-            <Stack spacing={0.75} sx={{ mt: 0.5 }}>
-                <Stack
-                    direction="row"
-                    spacing={1}
-                    useFlexGap
-                    sx={{
-                        alignItems: "center",
-                        flexWrap: "wrap"
-                    }}>
-                    {fields.outcome && (
-                        <Chip size="small" label={`outcome: ${fields.outcome}`} sx={{ fontSize: '0.65rem', height: 18 }} />
-                    )}
-                    {fields.selected_provider && (
-                        <Typography sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
-                            {fields.selected_provider} → {fields.selected_model}
-                        </Typography>
-                    )}
-                </Stack>
-                {trace.map((rule: any) => {
-                    const isWinner = matchedIdx === rule.rule_index;
-                    return (
-                        <Box
-                            key={rule.rule_index}
-                            sx={{
-                                p: 0.75,
-                                borderRadius: 1,
-                                border: 1,
-                                borderColor: isWinner ? 'success.main' : 'divider',
-                                backgroundColor: isWinner ? 'rgba(16,185,129,0.05)' : 'transparent',
-                            }}
-                        >
-                            <Stack direction="row" spacing={1} sx={{
-                                alignItems: "center"
-                            }}>
-                                <Chip size="small" label={`#${rule.rule_index}`} sx={{ fontSize: '0.65rem', height: 18 }} />
-                                <Typography sx={{ fontSize: '0.75rem', flex: 1 }}>
-                                    {rule.description || '(no description)'}
-                                </Typography>
-                                <Chip
-                                    size="small"
-                                    label={rule.matched ? 'MATCH' : 'SKIP'}
-                                    color={rule.matched ? 'success' : 'default'}
-                                    sx={{ fontSize: '0.6rem', height: 16 }}
-                                />
-                            </Stack>
-                            {Array.isArray(rule.ops) &&
-                                rule.ops.map((op: any, i: number) => (
-                                    <Stack
-                                        key={i}
-                                        direction="row"
-                                        spacing={1}
-                                        sx={{
-                                            pl: 1,
-                                            mt: 0.25,
-                                            borderLeft: 2,
-                                            borderColor: op.matched ? 'success.main' : 'error.main',
-                                        }}
-                                    >
-                                        <Typography sx={{ fontFamily: 'monospace', fontSize: '0.7rem', minWidth: 120 }}>
-                                            {op.position}.{op.operation}
-                                        </Typography>
-                                        <Typography sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary' }}>
-                                            {op.reason}
-                                        </Typography>
-                                    </Stack>
-                                ))}
-                        </Box>
-                    );
-                })}
-            </Stack>
-        );
-    };
-
-    const renderFields = (fields?: Record<string, any>) => {
-        if (!fields) return null;
-        const keys = Object.keys(fields).filter((k) => !SUPPRESSED_FIELDS.has(k));
-        if (keys.length === 0) return null;
-        return (
-            <Stack spacing={0.1} sx={{ mt: 0.25 }}>
-                {keys.map((k) => (
-                    <Typography key={k} sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary', wordBreak: 'break-all' }}>
-                        {k}={typeof fields[k] === 'object' ? JSON.stringify(fields[k]) : String(fields[k])}
-                    </Typography>
-                ))}
-            </Stack>
-        );
-    };
-
-    const renderEvent = (ev: ModelRequestEvent, i: number) => (
-        <Box
-            key={i}
-            sx={{
-                p: 0.75,
-                borderRadius: 1,
-                backgroundColor: 'background.paper',
-                border: 1,
-                borderColor: 'divider',
-            }}
-        >
-            <Stack
-                direction="row"
-                spacing={1}
-                useFlexGap
-                sx={{
-                    alignItems: "center",
-                    flexWrap: "wrap"
-                }}>
-                <Typography sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary', minWidth: 90 }}>
-                    {formatTimeShort(ev.time)}
-                </Typography>
-                <Chip size="small" label={ev.source} color={sourceColor(ev.source)} sx={{ fontSize: '0.6rem', height: 18 }} />
-                {ev.level && ev.level !== 'info' && (
-                    <Chip size="small" label={ev.level} color={levelColor(ev.level)} sx={{ fontSize: '0.6rem', height: 18 }} />
-                )}
-                {ev.stage && (
-                    <Chip size="small" variant="outlined" label={ev.stage} sx={{ fontSize: '0.6rem', height: 18 }} />
-                )}
-                <Typography sx={{ fontSize: '0.75rem', wordBreak: 'break-word' }}>{ev.message}</Typography>
-            </Stack>
-            {ev.source === 'smart_routing' ? renderRoutingTrace(ev.fields) : renderFields(ev.fields)}
-        </Box>
-    );
 
     return (
         <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -565,28 +394,30 @@ const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: Request
                                                 <TableCell colSpan={7} sx={{ pb: 0, pt: 0, border: 'none' }}>
                                                     <Collapse in={expanded} timeout="auto" unmountOnExit>
                                                         <Box sx={{ p: 1.5, backgroundColor: 'rgba(0,0,0,0.02)' }}>
-                                                            <Typography variant="caption" sx={{ fontWeight: 'bold', textTransform: 'uppercase', color: 'text.secondary' }}>
-                                                                Timeline ({detail?.events.length ?? req.event_count} events) · {req.request_id}
-                                                            </Typography>
-                                                            <Stack spacing={0.75} sx={{ mt: 0.75 }}>
-                                                                {detail ? (
-                                                                    detail.events.length > 0 ? (
-                                                                        detail.events.map(renderEvent)
-                                                                    ) : (
-                                                                        <Typography
-                                                                            variant="body2"
-                                                                            sx={{
-                                                                                color: "text.secondary",
-                                                                                fontStyle: 'italic'
-                                                                            }}>
-                                                                            No events recorded.
-                                                                        </Typography>
-                                                                    )
-                                                                ) : (
-                                                                    <Typography variant="body2" sx={{
-                                                                        color: "text.secondary"
-                                                                    }}>
-                                                                        Loading timeline...
+                                                            {detail ? (
+                                                                <RequestJourney
+                                                                    events={detail.events}
+                                                                    traceId={detail.trace_id}
+                                                                    getTrace={getTrace}
+                                                                />
+                                                            ) : (
+                                                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                                                    Loading journey...
+                                                                </Typography>
+                                                            )}
+                                                            <Stack
+                                                                direction="row"
+                                                                spacing={1.5}
+                                                                sx={{ mt: 1, pt: 0.75, borderTop: 1, borderColor: 'divider', flexWrap: 'wrap' }}
+                                                            >
+                                                                {/* Correlation ids live at the bottom: needed when filing a
+                                                                    bug or grepping server logs, never when reading the journey. */}
+                                                                <Typography sx={{ fontFamily: 'monospace', fontSize: '0.65rem', color: 'text.disabled' }}>
+                                                                    request {req.request_id}
+                                                                </Typography>
+                                                                {detail?.trace_id && (
+                                                                    <Typography sx={{ fontFamily: 'monospace', fontSize: '0.65rem', color: 'text.disabled' }}>
+                                                                        trace {detail.trace_id}
                                                                     </Typography>
                                                                 )}
                                                             </Stack>

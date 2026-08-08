@@ -78,7 +78,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 		return
 	}
 
-	provider, selectedService, err := ph.deps.RoutingSelector.SelectService(c, scenarioType, rule, nil)
+	provider, selectedService, err := ph.selectService(c, scenarioType, rule, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

@@ -106,6 +106,14 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("logs"),
 	)
 
+	// Trace API routes (in-memory span store — default trace egress, see
+	// .design/otel.md §7.4; log entries link here via their trace_id field)
+	apiV1.GET("/traces/:trace_id", s.GetTrace,
+		swagger.WithDescription("Get the spans of one trace by trace id. 404 means the trace was never sampled or has been evicted from the in-memory buffer."),
+		swagger.WithTags("traces"),
+		swagger.WithResponseModel(TraceDetailResponse{}),
+	)
+
 	// System Log API routes (application logs from JSON file)
 	apiV1.GET("/system/logs", s.webHandler.GetSystemLogs,
 		swagger.WithDescription("Get recent system logs with optional filtering (from JSON log file). Use 'limit' parameter to control how many recent entries to return."),

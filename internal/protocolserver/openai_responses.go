@@ -107,7 +107,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	// Select service using routing pipeline
-	provider, selectedService, err = ph.deps.RoutingSelector.SelectService(c, scenarioType, rule, req)
+	provider, selectedService, err = ph.selectService(c, scenarioType, rule, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

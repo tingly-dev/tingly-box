@@ -22,6 +22,9 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 	scenario.Use(middleware.ClearServerIOTimeouts())
 	scenario.Use(ph.profileAliasMiddleware)
 	scenario.Use(ph.contextMiddleware)
+	// tracingMiddleware runs after profileAliasMiddleware so the span's
+	// scenario reflects the canonical "base:pN" form, matching usage records.
+	scenario.Use(ph.tracingMiddleware)
 	ph.SetupMixinEndpoints(scenario, modelAuth)
 	// Claude Code v2.1+ sends HEAD <ANTHROPIC_BASE_URL> as a connectivity
 	// check before making any API call. Respond 200 so CC doesn't treat the
@@ -33,6 +36,7 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 	scenarioV1.Use(middleware.ClearServerIOTimeouts())
 	scenarioV1.Use(ph.profileAliasMiddleware)
 	scenarioV1.Use(ph.contextMiddleware)
+	scenarioV1.Use(ph.tracingMiddleware)
 	ph.SetupMixinEndpoints(scenarioV1, modelAuth)
 	scenarioV1.HEAD("", func(c *gin.Context) { c.Status(http.StatusOK) })
 }
@@ -53,13 +57,13 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	group.POST("/messages/count_tokens", modelAuth, ph.AnthropicCountTokens)
 
 	// Embeddings endpoint (OpenAI compatible)
-	group.POST("/embeddings", modelAuth, ph.HandleOpenAIEmbeddings)
+	group.POST("/embeddings", modelAuth, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)
 
 	// Image generation endpoint (OpenAI compatible).
 	// Routed directly to upstream POST /v1/images/generations; the Responses API
 	// (POST /responses with the image_generation tool) is exposed in parallel via
 	// the same scenario, with the caller choosing which surface to use.
-	group.POST("/images/generations", modelAuth, ph.HandleOpenAIImageGeneration)
+	group.POST("/images/generations", modelAuth, DeclareOperation("image_generation"), ph.HandleOpenAIImageGeneration)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", modelAuth, ph.ListModelsByScenario)

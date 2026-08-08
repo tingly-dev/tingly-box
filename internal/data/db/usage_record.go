@@ -48,6 +48,10 @@ type UsageRecord struct {
 	LatencyMs    int    `gorm:"column:latency_ms"`
 	TTFTMs       int    `gorm:"column:ttft_ms;default:0"`
 	Streamed     bool   `gorm:"column:streamed;type:integer"`
+	// TraceID correlates this record with the OTel trace of the same request
+	// so billing/audit rows can jump to the distributed trace and back.
+	// Empty when tracing is disabled or the request span was not sampled.
+	TraceID string `gorm:"column:trace_id;index:idx_trace_id"`
 }
 
 const (

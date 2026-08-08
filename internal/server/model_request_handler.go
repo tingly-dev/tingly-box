@@ -38,7 +38,11 @@ type ModelRequestSummary struct {
 	LatencyMs    int64     `json:"latency_ms,omitempty"`
 	HasError     bool      `json:"has_error"`
 	MaxLevel     string    `json:"max_level,omitempty"`
-	EventCount   int       `json:"event_count"`
+	// TraceID links the request to its span tree in the in-memory trace
+	// buffer (GET /api/v1/traces/{trace_id}); empty when the span was not
+	// sampled or tracing is disabled.
+	TraceID    string `json:"trace_id,omitempty"`
+	EventCount int    `json:"event_count"`
 
 	// Failover visibility: how many failover hops this request took and the
 	// service path it walked ("prov-a/model-a → prov-b/model-b"). Zero/empty
@@ -256,6 +260,9 @@ func applyToSummary(g *requestGroup, source obs.LogSource, entry *logrus.Entry) 
 		if v := stringField(data, "routed_provider"); v != "" {
 			g.summary.Provider = v
 			g.hasModel = true
+		}
+		if v := stringField(data, "trace_id"); v != "" {
+			g.summary.TraceID = v
 		}
 		return
 	}

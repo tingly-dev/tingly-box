@@ -86,9 +86,9 @@ func TestNewSetup_Disabled(t *testing.T) {
 }
 
 func TestNewSetup_NoOTLP(t *testing.T) {
-	// Without OTLP the meter provider has no reader and no tracer provider
-	// is installed; instruments and the tracer helper must still be usable
-	// and Shutdown must succeed.
+	// Without OTLP, metrics keep the no-pipeline rule (nil Tracker), but
+	// traces have the in-memory SpanStore as their default egress
+	// (.design/otel.md §7.4): spans record and land in the store.
 	ctx := context.Background()
 	setup, err := NewSetup(ctx, &Config{
 		Enabled:        true,
@@ -107,14 +107,27 @@ func TestNewSetup_NoOTLP(t *testing.T) {
 	if setup.Tracer() == nil {
 		t.Error("Tracer should not be nil - it must be safe to instrument unconditionally")
 	}
-
-	// Spans must be no-ops (not sampled) rather than recorded-and-dropped.
-	sctx, span := setup.Tracer().StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
-	if span.IsRecording() {
-		t.Error("spans must not record when no OTLP endpoint is configured")
+	if setup.SpanStore() == nil {
+		t.Fatal("SpanStore should exist without OTLP - it is the default trace egress")
 	}
+
+	// Spans record into the in-memory store: a consumer (the WebUI trace
+	// view) exists, so this is not the recorded-and-dropped middle state.
+	sctx, span := setup.Tracer().StartRequestSpan(ctx, "chat", "openai", "gpt-4", "openai")
+	if !span.IsRecording() {
+		t.Error("spans must record: the in-memory SpanStore is a real egress")
+	}
+	traceID := span.SpanContext().TraceID().String()
 	setup.Tracer().EndSpan(span, nil)
 	_ = sctx
+
+	spans, dropped, ok := setup.SpanStore().GetTrace(traceID)
+	if !ok || len(spans) != 1 || dropped != 0 {
+		t.Fatalf("expected the finished span in the store, got ok=%v spans=%d dropped=%d", ok, len(spans), dropped)
+	}
+	if spans[0].Name != "chat gpt-4" {
+		t.Errorf("stored span name = %q, want %q", spans[0].Name, "chat gpt-4")
+	}
 
 	if err := setup.Shutdown(ctx); err != nil {
 		t.Errorf("Shutdown failed: %v", err)
