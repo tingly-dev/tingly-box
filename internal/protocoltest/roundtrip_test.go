@@ -1,7 +1,9 @@
-//go:build e2e
-// +build e2e
-
 package protocoltest_test
+
+// Focused round-trip tests. Broad (pair × scenario × streaming) coverage
+// lives in the harness matrix (cli/harness matrix, CI: harness-matrix.yml);
+// this file keeps only cases the matrix does NOT cover: pairs outside
+// DefaultPairs, error-status semantics, and the Codex assembly branch.
 
 import (
 	"testing"
@@ -13,35 +15,8 @@ import (
 	pt "github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
-func TestRoundTrip_AnthropicV1_To_OpenAIChat_Text(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.TextScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.TextScenario(), false)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	assert.Equal(t, "assistant", result.Role)
-	assert.NotEmpty(t, result.Content)
-	assert.Equal(t, "end_turn", result.FinishReason)
-	assert.Greater(t, result.Usage.InputTokens, 0)
-	assert.Greater(t, result.Usage.OutputTokens, 0)
-}
-
-func TestRoundTrip_AnthropicBeta_To_OpenAIResponses_Text(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.TextScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.TextScenario(), false)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	assert.Equal(t, "assistant", result.Role)
-	assert.NotEmpty(t, result.Content)
-}
-
+// OpenAIChat → AnthropicV1 is not in DefaultPairs (the matrix routes Chat to
+// the Anthropic *beta* endpoint), so the v1-target conversion is guarded here.
 func TestRoundTrip_OpenAIChat_To_AnthropicV1_Text(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -56,34 +31,9 @@ func TestRoundTrip_OpenAIChat_To_AnthropicV1_Text(t *testing.T) {
 	assert.Equal(t, "stop", result.FinishReason)
 }
 
-func TestRoundTrip_AnthropicV1_To_OpenAIChat_ToolUse(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ToolUseScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ToolUseScenario(), false)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	require.Len(t, result.ToolCalls, 1)
-	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
-	assert.NotEmpty(t, result.ToolCalls[0].ID)
-	assert.Contains(t, result.ToolCalls[0].Arguments, "location")
-}
-
-func TestRoundTrip_AnthropicBeta_To_OpenAIChat_ToolUse(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.ToolUseScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.ToolUseScenario(), false)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	require.Len(t, result.ToolCalls, 1)
-	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
-}
-
+// AnthropicV1 → AnthropicV1 is not in DefaultPairs (the matrix's V1
+// passthrough targets the beta endpoint), so v1-to-v1 thinking passthrough
+// is guarded here.
 func TestRoundTrip_AnthropicV1_To_AnthropicV1_Thinking(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -95,58 +45,6 @@ func TestRoundTrip_AnthropicV1_To_AnthropicV1_Thinking(t *testing.T) {
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.ThinkingContent)
 	assert.NotEmpty(t, result.Content)
-}
-
-func TestRoundTrip_AnthropicV1_To_OpenAIChat_Thinking(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ThinkingScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ThinkingScenario(), false)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	assert.NotEmpty(t, result.Content)
-}
-
-func TestRoundTrip_AnthropicV1_To_OpenAIChat_MultiTurn(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.MultiTurnScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.MultiTurnScenario(), false)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	assert.Equal(t, "assistant", result.Role)
-	assert.NotEmpty(t, result.Content)
-}
-
-func TestRoundTrip_AnthropicV1_To_OpenAIChat_Streaming(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.StreamingTextScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), true)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	assert.NotEmpty(t, result.StreamEvents)
-	assert.NotEmpty(t, result.Content)
-}
-
-func TestRoundTrip_AnthropicBeta_To_OpenAIChat_StreamingToolUse(t *testing.T) {
-	env := pt.NewTestEnv(t)
-	defer env.Close()
-
-	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.StreamingToolUseScenario())
-
-	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.StreamingToolUseScenario(), true)
-
-	require.Equal(t, 200, result.HTTPStatus)
-	assert.NotEmpty(t, result.StreamEvents)
-	require.Len(t, result.ToolCalls, 1)
-	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
 }
 
 func TestRoundTrip_ErrorPassthrough(t *testing.T) {
@@ -166,6 +64,8 @@ func TestRoundTrip_ErrorPassthrough(t *testing.T) {
 // the gateway forces the upstream's first SSE event, hands a wrapped
 // iterator off to the handler, and the handler converts the rest of
 // the Responses-API events into Anthropic Messages SSE frames.
+// (The matrix also covers this cell; it stays here as the documented
+// anchor for the prime-failure pair below.)
 func TestRoundTrip_AnthropicBeta_To_OpenAIResponses_Streaming(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -185,7 +85,7 @@ func TestRoundTrip_AnthropicBeta_To_OpenAIResponses_Streaming(t *testing.T) {
 // surfaces that as a non-2xx — the buffered failover writer
 // captures it, and since there's only one service in the rule the
 // captured error commits as the terminal reply. The client sees a
-// real 500 with a JSON error body, not a 200 with a malformed SSE
+// real error status with a JSON body, not a 200 with a malformed SSE
 // stream that includes an upstream error event.
 func TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses(t *testing.T) {
 	env := pt.NewTestEnv(t)
@@ -291,28 +191,4 @@ func TestRoundTrip_CodexAssembly_NoContentBlocks(t *testing.T) {
 
 	assert.GreaterOrEqual(t, result.HTTPStatus, 400,
 		"a stream cut before any content block completes must fail, not return 200 with content:null")
-}
-
-func TestRoundTrip_AllSources_TextScenario_NonStreaming(t *testing.T) {
-	sources := []protocol.APIType{
-		protocol.TypeAnthropicV1,
-		protocol.TypeAnthropicBeta,
-		protocol.TypeOpenAIChat,
-		protocol.TypeOpenAIResponses,
-	}
-
-	for _, src := range sources {
-		src := src
-		t.Run(string(src), func(t *testing.T) {
-			t.Parallel()
-			env := pt.NewTestEnv(t)
-			defer env.Close()
-
-			env.SetupRoute(src, protocol.TypeOpenAIChat, pt.TextScenario())
-
-			result := env.SendAs(t, src, protocol.TypeOpenAIChat, pt.TextScenario(), false)
-			require.Equal(t, 200, result.HTTPStatus)
-			assert.NotEmpty(t, result.Content)
-		})
-	}
 }
