@@ -12,19 +12,19 @@
 //    export FEISHU_APP_ID="cli-your-app-id"
 //    export FEISHU_APP_SECRET="your-app-secret"
 //    export FEISHU_TEST_CHAT_ID="your-chat-id"  # Optional
-//    go test -tags=e2e -v -run TestE2E_FeishuBot_RealBot ./imbot/internal/platform/feishu/
+//    go test -tags=e2e -v -run TestE2E_FeishuBot_RealBot ./platform/feishu/
 //
 // 2. For Lark:
 //    export LARK_APP_ID="cli-your-app-id"
 //    export LARK_APP_SECRET="your-app-secret"
 //    export LARK_TEST_CHAT_ID="your-chat-id"  # Optional
-//    go test -tags=e2e -v -run TestE2E_LarkBot_RealBot ./imbot/internal/platform/feishu/
+//    go test -tags=e2e -v -run TestE2E_LarkBot_RealBot ./platform/feishu/
 //
 // Or use FEISHU_DOMAIN to specify domain:
 //    export FEISHU_APP_ID="cli-your-app-id"
 //    export FEISHU_APP_SECRET="your-app-secret"
 //    export FEISHU_DOMAIN="lark"
-//    go test -tags=e2e -v -run TestE2E_FeishuBot_RealBot ./imbot/internal/platform/feishu/
+//    go test -tags=e2e -v -run TestE2E_FeishuBot_RealBot ./platform/feishu/
 //
 // Getting Credentials:
 //
