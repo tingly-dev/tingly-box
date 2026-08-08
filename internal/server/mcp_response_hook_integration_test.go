@@ -23,7 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/testsupport/advisortest"
+	"github.com/tingly-dev/tingly-box/internal/advisortest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
