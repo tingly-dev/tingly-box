@@ -944,3 +944,61 @@ func TestVendorTransform_AnthropicV1_ThinkingBlocksFiltered(t *testing.T) {
 	}
 	assert.True(t, foundText, "text block should be preserved")
 }
+
+func newBetaRequestWithForeignServerToolUseID(model string) *anthropic.BetaMessageNewParams {
+	return &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model(model),
+		MaxTokens: 1024,
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					anthropic.NewBetaServerToolUseBlock("call_foreign-1", map[string]any{"query": "q"}, "web_search"),
+				},
+			},
+			anthropic.NewBetaUserMessage(
+				anthropic.BetaContentBlockParamUnion{
+					OfWebSearchToolResult: &anthropic.BetaWebSearchToolResultBlockParam{ToolUseID: "call_foreign-1"},
+				},
+			),
+		},
+	}
+}
+
+func TestVendorTransform_AnthropicBeta_SanitizesServerToolUseIDs(t *testing.T) {
+	vt := NewVendorTransform()
+
+	ctx := &TransformContext{
+		Provider: &typ.Provider{APIBase: "https://api.anthropic.com"},
+		Request:  newBetaRequestWithForeignServerToolUseID("claude-sonnet-5"),
+		Extra:    map[string]interface{}{},
+	}
+
+	require.NoError(t, vt.Apply(ctx))
+
+	req, ok := ctx.Request.(*anthropic.BetaMessageNewParams)
+	require.True(t, ok)
+
+	stu := req.Messages[0].Content[0].OfServerToolUse
+	require.NotNil(t, stu)
+	assert.Regexp(t, `^srvtoolu_[a-zA-Z0-9_]+$`, stu.ID)
+	assert.Equal(t, stu.ID, req.Messages[1].Content[0].OfWebSearchToolResult.ToolUseID,
+		"web_search_tool_result must keep pointing at the rewritten server_tool_use id")
+}
+
+func TestVendorTransform_NonAnthropicTarget_LeavesServerToolUseIDs(t *testing.T) {
+	vt := NewVendorTransform()
+
+	ctx := &TransformContext{
+		Provider: &typ.Provider{APIBase: "https://api.deepseek.com"},
+		Request:  newBetaRequestWithForeignServerToolUseID("deepseek-chat"),
+		Extra:    map[string]interface{}{},
+	}
+
+	require.NoError(t, vt.Apply(ctx))
+
+	req, ok := ctx.Request.(*anthropic.BetaMessageNewParams)
+	require.True(t, ok)
+	assert.Equal(t, "call_foreign-1", req.Messages[0].Content[0].OfServerToolUse.ID,
+		"non-Anthropic targets must not have their ids rewritten")
+}
