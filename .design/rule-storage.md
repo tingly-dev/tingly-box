@@ -89,8 +89,10 @@ rules
   JSON 胖字段让 flag 演进完全停留在 `typ.RuleFlags` 一处。
 - **lb_tactic**：带 `Params interface{}` 的和类型，天然 JSON。
 
-序列化格式与 config.json 时代逐字段一致（同一套 json tag），所以迁移是
-无损重编码；`Service.Stats` 带 `json:"-"`，运行时统计不会渗入持久化。
+序列化格式与 config.json 时代逐字段一致（同一套 json tag、无条件编码），
+所以迁移是无损重编码，零值的归一行为也与旧文件存储逐字节相同（如未设置的
+tactic 序列化为 "random"——文档化的默认值）；`Service.Stats` 带
+`json:"-"`，运行时统计不会渗入持久化。
 
 ## 4. 写路径收口：Save() 即同步
 
@@ -177,8 +179,9 @@ Save() 时内存里的顺序"，与 config.json 时代逐字节等价。
 
 ## 7. 不变量与边界情况
 
-- **UUID 是主键**：空 UUID / 重复 UUID 的 rule 在 SyncAll 中跳过并告警
-  （防御性；正常路径在迁移时和 normalizeRuleBasics 中已补齐 UUID）。
+- **UUID 是主键**：修复策略只有一处——`ensureRuleUUIDs`（补空 UUID、
+  给重复 UUID 重新赋值），`normalizeRuleBasics` 每次启动执行、一次性迁移
+  在首次落库前执行。SyncAll 里的跳过+告警是纯防御，正常情况下永不触发。
 - **腐坏的胖字段不阻断启动**：单字段解码失败记 warning、字段取零值，
   rule 仍可从 UI 修复。拒绝启动的服务器比缺了 tactic 的 rule 伤害大。
 - **轻量 Config（测试直接构造，无 store）**：`ruleStore == nil` 时

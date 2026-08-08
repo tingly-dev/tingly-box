@@ -69,6 +69,30 @@ func findRule(rules []typ.Rule, uuid string) *typ.Rule {
 	return nil
 }
 
+func findRuleByModel(rules []typ.Rule, requestModel string) *typ.Rule {
+	for i := range rules {
+		if rules[i].RequestModel == requestModel {
+			return &rules[i]
+		}
+	}
+	return nil
+}
+
+// seedLegacyProvider registers the provider that legacyTestRule services
+// reference; AddRule/UpdateRule validate that referenced providers exist and
+// are enabled.
+func seedLegacyProvider(t *testing.T, cfg *Config) {
+	t.Helper()
+	if err := cfg.StoreManager().Provider().Save(&typ.Provider{
+		UUID:    "prov-legacy",
+		Name:    "legacy-provider",
+		APIBase: "https://example.invalid/v1",
+		Enabled: true,
+	}); err != nil {
+		t.Fatalf("failed to seed provider: %v", err)
+	}
+}
+
 func TestRulesMigrateFromLegacyJSONToStore(t *testing.T) {
 	dir := t.TempDir()
 	writeLegacyConfig(t, dir, []typ.Rule{
@@ -88,8 +112,12 @@ func TestRulesMigrateFromLegacyJSONToStore(t *testing.T) {
 	}
 
 	// The store must now hold every in-memory rule (legacy + built-ins).
-	if got, want := cfg.RuleStoreCount(), int64(len(cfg.Rules)); got != want {
-		t.Errorf("store has %d rules, want %d", got, want)
+	count, err := cfg.StoreManager().Rules().Count()
+	if err != nil {
+		t.Fatalf("failed to count stored rules: %v", err)
+	}
+	if want := int64(len(cfg.Rules)); count != want {
+		t.Errorf("store has %d rules, want %d", count, want)
 	}
 
 	// Round-trip a fat field through the store.
@@ -116,15 +144,7 @@ func TestRulesReloadFromStoreOnRestart(t *testing.T) {
 		t.Fatalf("first NewConfigWithDir failed: %v", err)
 	}
 
-	// UpdateRule validates that referenced providers exist and are enabled.
-	if err := cfg.StoreManager().Provider().Save(&typ.Provider{
-		UUID:    "prov-legacy",
-		Name:    "legacy-provider",
-		APIBase: "https://example.invalid/v1",
-		Enabled: true,
-	}); err != nil {
-		t.Fatalf("failed to seed provider: %v", err)
-	}
+	seedLegacyProvider(t, cfg)
 
 	// Mutate through the normal API so the change flows through Save().
 	updated := *findRule(cfg.Rules, "legacy-1")
@@ -206,16 +226,7 @@ func TestRuleCRUDWritesThroughToStore(t *testing.T) {
 	defer cfg.CloseStores()
 
 	store := cfg.StoreManager().Rules()
-
-	// AddRule validates that referenced providers exist and are enabled.
-	if err := cfg.StoreManager().Provider().Save(&typ.Provider{
-		UUID:    "prov-legacy",
-		Name:    "legacy-provider",
-		APIBase: "https://example.invalid/v1",
-		Enabled: true,
-	}); err != nil {
-		t.Fatalf("failed to seed provider: %v", err)
-	}
+	seedLegacyProvider(t, cfg)
 
 	rule := legacyTestRule("crud-1", "crud-model")
 	if err := cfg.AddRule(rule); err != nil {
@@ -245,6 +256,55 @@ func TestRuleCRUDWritesThroughToStore(t *testing.T) {
 	}
 }
 
+func TestRulesDuplicateUUIDsSurviveLegacyMigration(t *testing.T) {
+	dir := t.TempDir()
+	first := legacyTestRule("dup-uuid", "model-first")
+	second := legacyTestRule("dup-uuid", "model-second")
+	writeLegacyConfig(t, dir, []typ.Rule{first, second})
+
+	cfg, err := NewConfigWithDir(dir)
+	if err != nil {
+		t.Fatalf("NewConfigWithDir failed: %v", err)
+	}
+	defer cfg.CloseStores()
+
+	gotFirst := findRuleByModel(cfg.Rules, "model-first")
+	gotSecond := findRuleByModel(cfg.Rules, "model-second")
+	if gotFirst == nil || gotSecond == nil {
+		t.Fatalf("a duplicate-UUID rule was dropped during migration (first=%v second=%v)", gotFirst != nil, gotSecond != nil)
+	}
+	if gotFirst.UUID == gotSecond.UUID {
+		t.Fatalf("duplicate UUIDs were not disambiguated: both %q", gotFirst.UUID)
+	}
+
+	store := cfg.StoreManager().Rules()
+	for _, r := range []*typ.Rule{gotFirst, gotSecond} {
+		if _, err := store.GetByUUID(r.UUID); err != nil {
+			t.Errorf("rule %s (%s) missing from store: %v", r.RequestModel, r.UUID, err)
+		}
+	}
+}
+
+func TestSaveAfterCloseStoresStillWritesFile(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := NewConfigWithDir(dir)
+	if err != nil {
+		t.Fatalf("NewConfigWithDir failed: %v", err)
+	}
+	if err := cfg.CloseStores(); err != nil {
+		t.Fatalf("CloseStores failed: %v", err)
+	}
+
+	// Unrelated config edits must still reach config.json after the stores
+	// are gone; the rule sync silently detaches instead of erroring.
+	if err := cfg.SetVerbose(true); err != nil {
+		t.Fatalf("Save after CloseStores failed: %v", err)
+	}
+	if got, _ := readConfigJSON(t, dir)["verbose"].(bool); !got {
+		t.Error("verbose=true did not reach config.json after CloseStores")
+	}
+}
+
 func TestRulesUUIDAssignedDuringLegacyMigration(t *testing.T) {
 	dir := t.TempDir()
 	noUUID := legacyTestRule("", "uuidless-model")
@@ -256,12 +316,7 @@ func TestRulesUUIDAssignedDuringLegacyMigration(t *testing.T) {
 	}
 	defer cfg.CloseStores()
 
-	var migrated *typ.Rule
-	for i := range cfg.Rules {
-		if cfg.Rules[i].RequestModel == "uuidless-model" {
-			migrated = &cfg.Rules[i]
-		}
-	}
+	migrated := findRuleByModel(cfg.Rules, "uuidless-model")
 	if migrated == nil {
 		t.Fatal("uuidless rule lost during migration")
 	}

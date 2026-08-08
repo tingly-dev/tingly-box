@@ -49,8 +49,8 @@ type Config struct {
 	// by hydrateRulesFromStore. The non-omitempty tag ensures that clearing it
 	// results in a JSON null that overrides any stale value in the existing
 	// file (Save() merges unknown keys from the previous file content).
-	LegacyRules      []typ.Rule `yaml:"-" json:"rules"`
-	DefaultRequestID int        `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
+	LegacyRules        []typ.Rule           `yaml:"-" json:"rules"`
+	DefaultRequestID   int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
 	UserToken          string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
 	ModelToken         string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
 	InternalAPIToken   string               `json:"-"`                                            // Internal API token for probe testing (generated at startup, not persisted)
@@ -126,7 +126,6 @@ type Config struct {
 	statsStore         *db.StatsStore
 	usageStore         *db.UsageStore
 	providerStore      *db.ProviderStore
-	ruleStore          *db.RuleStore
 	toolConfigStore    *db.ToolConfigStore
 	imbotSettingsStore *db.ImBotSettingsStore
 	templateManager    *data.TemplateManager
@@ -137,8 +136,11 @@ type Config struct {
 	rulesHydrated bool
 	// lastSyncedRules caches the JSON snapshot of Rules from the last
 	// successful store sync so Save() calls that didn't touch rules skip the
-	// database write entirely.
+	// database write entirely. Guarded by ruleSyncMu, not mu: several Save()
+	// call sites run without holding mu, so the sync bookkeeping needs its
+	// own lock to serialize concurrent Save() calls.
 	lastSyncedRules []byte
+	ruleSyncMu      sync.Mutex
 
 	// Provider lifecycle hooks
 	providerUpdateHooks []ProviderUpdateHook
@@ -323,7 +325,6 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	cfg.statsStore = storeManager.Stats()
 	cfg.usageStore = storeManager.Usage()
 	cfg.providerStore = storeManager.Provider()
-	cfg.ruleStore = storeManager.Rules()
 	cfg.toolConfigStore = storeManager.ToolConfig()
 	cfg.imbotSettingsStore = storeManager.ImBotSettings()
 
@@ -354,7 +355,9 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		logrus.Warnf("migration disabled")
 	} else {
 		Migrate(cfg)
-		cfg.Save()
+		if err := cfg.Save(); err != nil {
+			logrus.WithError(err).Warn("Failed to persist config after migration; in-memory state may diverge until the next successful save")
+		}
 	}
 
 	// Built-in rules setup

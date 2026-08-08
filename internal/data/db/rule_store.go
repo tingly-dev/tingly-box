@@ -67,26 +67,10 @@ func (r *RuleRecord) toRule() typ.Rule {
 		SmartEnabled:  r.SmartEnabled,
 	}
 
-	if r.Services != "" {
-		if err := json.Unmarshal([]byte(r.Services), &rule.Services); err != nil {
-			logrus.WithError(err).Warnf("rule %s: failed to decode services JSON", r.UUID)
-		}
-	}
-	if r.Flags != "" {
-		if err := json.Unmarshal([]byte(r.Flags), &rule.Flags); err != nil {
-			logrus.WithError(err).Warnf("rule %s: failed to decode flags JSON", r.UUID)
-		}
-	}
-	if r.LBTactic != "" {
-		if err := json.Unmarshal([]byte(r.LBTactic), &rule.LBTactic); err != nil {
-			logrus.WithError(err).Warnf("rule %s: failed to decode lb_tactic JSON", r.UUID)
-		}
-	}
-	if r.SmartRouting != "" {
-		if err := json.Unmarshal([]byte(r.SmartRouting), &rule.SmartRouting); err != nil {
-			logrus.WithError(err).Warnf("rule %s: failed to decode smart_routing JSON", r.UUID)
-		}
-	}
+	unmarshalRuleField(r.UUID, "services", r.Services, &rule.Services)
+	unmarshalRuleField(r.UUID, "flags", r.Flags, &rule.Flags)
+	unmarshalRuleField(r.UUID, "lb_tactic", r.LBTactic, &rule.LBTactic)
+	unmarshalRuleField(r.UUID, "smart_routing", r.SmartRouting, &rule.SmartRouting)
 
 	return rule
 }
@@ -105,20 +89,19 @@ func newRuleRecord(rule *typ.Rule, position int) *RuleRecord {
 		SmartEnabled:  rule.SmartEnabled,
 	}
 
-	record.Services = marshalRuleField(rule.UUID, "services", rule.Services, len(rule.Services) > 0)
-	record.Flags = marshalRuleField(rule.UUID, "flags", rule.Flags, rule.Flags != (typ.RuleFlags{}))
-	record.LBTactic = marshalRuleField(rule.UUID, "lb_tactic", rule.LBTactic, rule.LBTactic.Type != 0 || rule.LBTactic.Params != nil)
-	record.SmartRouting = marshalRuleField(rule.UUID, "smart_routing", rule.SmartRouting, len(rule.SmartRouting) > 0)
+	record.Services = marshalRuleField(rule.UUID, "services", rule.Services)
+	record.Flags = marshalRuleField(rule.UUID, "flags", rule.Flags)
+	record.LBTactic = marshalRuleField(rule.UUID, "lb_tactic", rule.LBTactic)
+	record.SmartRouting = marshalRuleField(rule.UUID, "smart_routing", rule.SmartRouting)
 
 	return record
 }
 
-// marshalRuleField JSON-encodes one fat field, storing "" for empty values so
-// unset stays distinguishable from explicit zero.
-func marshalRuleField(uuid, name string, value interface{}, present bool) string {
-	if !present {
-		return ""
-	}
+// marshalRuleField JSON-encodes one fat field. This is the same encoding the
+// legacy config.json applied to these structures, so zero values normalize
+// identically (e.g. an unset tactic serializes as "random", the documented
+// default) and migration round-trips are lossless.
+func marshalRuleField(uuid, name string, value interface{}) string {
 	data, err := json.Marshal(value)
 	if err != nil {
 		logrus.WithError(err).Warnf("rule %s: failed to encode %s JSON", uuid, name)
@@ -127,22 +110,27 @@ func marshalRuleField(uuid, name string, value interface{}, present bool) string
 	return string(data)
 }
 
+// unmarshalRuleField decodes one fat field, tolerating both "" (rows written
+// before the field existed) and corrupted JSON — a rule with a defaulted
+// field is repairable from the UI, a server that refuses to start is not.
+func unmarshalRuleField(uuid, name, data string, dst interface{}) {
+	if data == "" {
+		return
+	}
+	if err := json.Unmarshal([]byte(data), dst); err != nil {
+		logrus.WithError(err).Warnf("rule %s: failed to decode %s JSON", uuid, name)
+	}
+}
+
 // payloadEqual reports whether two records carry the same persisted rule
 // content (everything except timestamps). Used to skip no-op writes so
-// updated_at only moves when the rule actually changed.
-func (r *RuleRecord) payloadEqual(other *RuleRecord) bool {
-	return r.UUID == other.UUID &&
-		r.Position == other.Position &&
-		r.Scenario == other.Scenario &&
-		r.RequestModel == other.RequestModel &&
-		r.ResponseModel == other.ResponseModel &&
-		r.Description == other.Description &&
-		r.Active == other.Active &&
-		r.SmartEnabled == other.SmartEnabled &&
-		r.Services == other.Services &&
-		r.Flags == other.Flags &&
-		r.LBTactic == other.LBTactic &&
-		r.SmartRouting == other.SmartRouting
+// updated_at only moves when the rule actually changed. Value receivers give
+// throwaway copies, so zeroing the timestamps and comparing the whole struct
+// keeps any future column automatically included in the comparison.
+func (r RuleRecord) payloadEqual(other RuleRecord) bool {
+	r.CreatedAt, r.UpdatedAt = time.Time{}, time.Time{}
+	other.CreatedAt, other.UpdatedAt = time.Time{}, time.Time{}
+	return r == other
 }
 
 // RuleStore persists routing rules in SQLite. It is the durability layer
@@ -150,18 +138,17 @@ func (r *RuleRecord) payloadEqual(other *RuleRecord) bool {
 // (rules carry hydrated runtime stats), the store is the source of truth
 // across restarts.
 type RuleStore struct {
-	db     *gorm.DB
-	dbPath string
-	mu     sync.Mutex
+	db *gorm.DB
+	mu sync.Mutex
 }
 
 // NewRuleStore creates a RuleStore on an existing GORM DB, running schema
 // migration. Used by StoreManager (shared connection) and tests.
-func NewRuleStore(db *gorm.DB, dbPath string) (*RuleStore, error) {
+func NewRuleStore(db *gorm.DB) (*RuleStore, error) {
 	if err := db.AutoMigrate(&RuleRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate rules table: %w", err)
 	}
-	return &RuleStore{db: db, dbPath: dbPath}, nil
+	return &RuleStore{db: db}, nil
 }
 
 // List returns all rules ordered by their list position.
@@ -245,7 +232,7 @@ func (rs *RuleStore) SyncAll(rules []typ.Rule) error {
 
 			record := newRuleRecord(rule, i)
 			if old, ok := existingByUUID[rule.UUID]; ok {
-				if record.payloadEqual(old) {
+				if record.payloadEqual(*old) {
 					continue
 				}
 				record.CreatedAt = old.CreatedAt

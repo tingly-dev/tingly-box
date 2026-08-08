@@ -1,38 +1,25 @@
 package db
 
 import (
-	"path/filepath"
 	"testing"
 	"time"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// newTestRuleStore follows the newTestStatsStore pattern: build the store
+// through NewStoreManager so tests run under the exact production connection
+// settings (DSN pragmas included).
 func newTestRuleStore(t *testing.T) *RuleStore {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "rules_test.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath+"?_busy_timeout=5000&_journal_mode=WAL"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	sm, err := NewStoreManager(t.TempDir())
 	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
+		t.Fatalf("failed to create store manager: %v", err)
 	}
-	t.Cleanup(func() {
-		if sqlDB, err := gdb.DB(); err == nil {
-			sqlDB.Close()
-		}
-	})
-	store, err := NewRuleStore(gdb, dbPath)
-	if err != nil {
-		t.Fatalf("failed to create rule store: %v", err)
-	}
-	return store
+	t.Cleanup(func() { sm.Close() })
+	return sm.Rules()
 }
 
 func testRule(uuid, requestModel string) typ.Rule {

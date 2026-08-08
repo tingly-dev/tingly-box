@@ -216,7 +216,7 @@ func (sm *StoreManager) initProviderStore() error {
 
 // initRuleStore initializes the RuleStore.
 func (sm *StoreManager) initRuleStore() error {
-	store, err := NewRuleStore(sm.db, constant.GetDBFile(sm.baseDir))
+	store, err := NewRuleStore(sm.db)
 	if err != nil {
 		return err
 	}
