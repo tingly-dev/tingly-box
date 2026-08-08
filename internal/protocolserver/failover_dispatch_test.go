@@ -1,14 +1,38 @@
 package protocolserver
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+func TestProtocolStageClientCancellationClassification(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	requestContext, cancel := context.WithCancel(context.Background())
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil).WithContext(requestContext)
+	cancel()
+
+	if !isProtocolStageClientCancellation(c, context.Canceled) {
+		t.Fatal("context cancellation was not classified as client cancellation")
+	}
+	deadlineContext, deadlineCancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer deadlineCancel()
+	c.Request = c.Request.WithContext(deadlineContext)
+	if !isProtocolStageClientCancellation(c, context.DeadlineExceeded) {
+		t.Fatal("request context terminal error was not classified as client cancellation")
+	}
+	if isProtocolStageClientCancellation(c, errors.New("provider failed")) {
+		t.Fatal("provider failure was classified as client cancellation")
+	}
+}
 
 func init() {
 	gin.SetMode(gin.TestMode)
@@ -38,6 +62,22 @@ func TestFirstChunkGate_BufferCaptureBeforeCommit(t *testing.T) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Fatalf("real recorder body should be empty before commit, got %q", rec.Body.String())
+	}
+}
+
+func TestProtocolStageAttemptTrackingRequiresActiveRecording(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+
+	setProtocolStageAttempt(c, 2)
+	if _, exists := c.Get(protocolStageAttemptKey); exists {
+		t.Fatal("attempt context was created while recording was disabled")
+	}
+
+	enableProtocolStageAttemptTracking(c)
+	setProtocolStageAttempt(c, 2)
+	if got := currentProtocolStageAttempt(c); got != 2 {
+		t.Fatalf("current attempt = %d, want 2", got)
 	}
 }
 
@@ -139,6 +179,7 @@ func TestFirstChunkGate_DiscardResetsThenRetry(t *testing.T) {
 	g.Header().Set("X-Try-1", "yes")
 	g.WriteHeader(429)
 	_, _ = g.WriteString("rate limited")
+	g.MarkAttemptFailed(errors.New("first attempt failed"))
 	g.Discard()
 
 	if g.Status() != 0 {
@@ -149,6 +190,9 @@ func TestFirstChunkGate_DiscardResetsThenRetry(t *testing.T) {
 	}
 	if got := g.Header().Get("X-Try-1"); got != "" {
 		t.Fatalf("after Discard header still present: %q", got)
+	}
+	if g.AttemptError() != nil {
+		t.Fatalf("after Discard attempt error = %v, want nil", g.AttemptError())
 	}
 
 	// Next attempt succeeds and commits a fresh response.
@@ -163,6 +207,22 @@ func TestFirstChunkGate_DiscardResetsThenRetry(t *testing.T) {
 	}
 	if rec.Header().Get("X-Try-1") != "" {
 		t.Fatalf("stale header leaked through Discard")
+	}
+}
+
+func TestFirstChunkGatePreservesCommittedAttemptFailure(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	g := newFirstChunkGate(c.Writer)
+	c.Writer = g
+	_, _ = g.WriteString("event: response.failed\n\n")
+	g.CommitFirstChunk()
+
+	attemptErr := errors.New("response.failed")
+	markProtocolStageAttemptFailed(c, attemptErr)
+
+	if !errors.Is(g.AttemptError(), attemptErr) {
+		t.Fatalf("attempt error = %v, want %v", g.AttemptError(), attemptErr)
 	}
 }
 
@@ -220,6 +280,29 @@ func TestFirstChunkGate_FlushNoopUntilCommitted(t *testing.T) {
 	g.CommitFirstChunk()
 	if rec.Body.String() != "buffered" {
 		t.Fatalf("post-commit body = %q", rec.Body.String())
+	}
+}
+
+func TestFirstChunkGate_SideEffectsStopRetryWithoutFlushing(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	gate := newFirstChunkGate(c.Writer)
+
+	gate.WriteHeader(http.StatusInternalServerError)
+	_, _ = gate.Write([]byte("later provider round failed"))
+	if !MarkSideEffectsCommittedIfGate(gate) {
+		t.Fatal("MarkSideEffectsCommittedIfGate() = false")
+	}
+	if !gate.SideEffectsCommitted() {
+		t.Fatal("side effects were not recorded")
+	}
+	if gate.Committed() || recorder.Body.Len() != 0 {
+		t.Fatalf("marking side effects flushed output: committed=%v body=%q", gate.Committed(), recorder.Body.String())
+	}
+
+	gate.CommitIfBuffered()
+	if recorder.Code != http.StatusInternalServerError || recorder.Body.String() != "later provider round failed" {
+		t.Fatalf("committed response = %d %q", recorder.Code, recorder.Body.String())
 	}
 }
 

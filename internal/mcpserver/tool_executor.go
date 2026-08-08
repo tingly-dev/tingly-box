@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
@@ -14,7 +15,6 @@ type ServerToolExecutor struct {
 // ToolExecutorServer defines the server methods needed for tool execution
 type ToolExecutorServer interface {
 	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error)
-	CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error)
 }
 
 func NewServerToolExecutor(s ToolExecutorServer) *ServerToolExecutor {
@@ -48,9 +48,10 @@ func (e *ServerToolExecutor) ExecuteToolWithContext(
 	}
 
 	result := ToolExecutionResult{
-		ToolUseID: tool.ID(),
-		Contents:  toolResult.Contents,
-		IsError:   err != nil || toolResult.IsError,
+		ToolUseID:  tool.ID(),
+		Contents:   toolResult.Contents,
+		IsError:    err != nil || toolResult.IsError,
+		Dispatched: err == nil || servertool.WasDispatched(err),
 	}
 	return nextCtx, result, err
 }

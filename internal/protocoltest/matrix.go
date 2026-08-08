@@ -30,13 +30,16 @@ func (p ProtocolPair) String() string {
 // Matrix defines the set of (source, target) pairs, scenarios, and
 // streaming modes to validate.
 type Matrix struct {
-	Pairs      []ProtocolPair
-	Scenarios  []Scenario
-	Streaming  []bool
-	RecordDir  string // Optional directory for recording requests/responses
-	BatchCount int    // Number of times to run each test
-	MCPEnabled bool   // Enable MCP feature flag in test env
-	Client     Client // Client driver (nil = raw HTTP default)
+	Pairs                []ProtocolPair
+	Scenarios            []Scenario
+	Streaming            []bool
+	RecordDir            string // Optional directory for recording requests/responses
+	BatchCount           int    // Number of times to run each test
+	MCPEnabled           bool   // Enable MCP feature flag in test env
+	ProtocolStageEnabled bool   // Enable the production Protocol Stage selector
+	MCPStageCoverage     bool   // Install the owned-tool fixture and servertool provider
+	GuardrailsEnabled    bool   // Enable an allow-only Guardrails runtime in the test env
+	Client               Client // Client driver (nil = raw HTTP default)
 }
 
 // DefaultPairs is the canonical list of (source → target) conversion
@@ -44,12 +47,9 @@ type Matrix struct {
 // to this list.
 //
 // Notes:
-//   - target=anthropic_v1 is intentionally absent. The harness picks
-//     providers by APIStyle and both Anthropic types map to the same
-//     style, so anthropic_beta as the target already exercises both
-//     Anthropic V1 passthrough (when source is V1) and the Beta
-//     conversions (when source is non-Anthropic). See
-//     internal/protocol/README.md.
+//   - V1 identity is explicit even though V1 and Beta providers share the
+//     Anthropic APIStyle. Protocol Stage selection is based on concrete API
+//     types, so the harness must preserve that distinction.
 //   - Anthropic↔Anthropic cross-version (v1↔beta) is rejected by the
 //     transform layer and not represented here.
 //   - Google targets and the google→google passthrough are not yet
@@ -57,6 +57,7 @@ type Matrix struct {
 func DefaultPairs() []ProtocolPair {
 	return []ProtocolPair{
 		// Anthropic V1 source
+		{protocol.TypeAnthropicV1, protocol.TypeAnthropicV1},     // V1 passthrough
 		{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta},   // V1 passthrough (provider APIStyle=Anthropic)
 		{protocol.TypeAnthropicV1, protocol.TypeOpenAIChat},      // V1 → OpenAI Chat
 		{protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses}, // V1 → OpenAI Responses
@@ -184,6 +185,37 @@ func (m *Matrix) WithMCPEnabled() *Matrix {
 	return out
 }
 
+// WithProtocolStage returns a copy that starts the real gateway with Stage
+// selection enabled. This is production-path validation, unlike BridgeMatrix.
+func (m *Matrix) WithProtocolStage() *Matrix {
+	out := m.clone()
+	out.ProtocolStageEnabled = true
+	return out
+}
+
+// WithMCPStageCoverage adds the stateful owned-tool scenario and its local
+// servertool provider. It is intentionally opt-in because ordinary protocol
+// scenarios should not silently gain an executable server-owned tool.
+func (m *Matrix) WithMCPStageCoverage() *Matrix {
+	out := m.clone()
+	out.MCPStageCoverage = true
+	for _, scenario := range out.Scenarios {
+		if scenario.Name == MCPStageOwnedToolScenarioName {
+			return out
+		}
+	}
+	out.Scenarios = append(out.Scenarios, newMCPStageOwnedToolScenario())
+	return out
+}
+
+// WithGuardrails enables an active allow-only Guardrails runtime. Matrix
+// scenarios retain their normal semantics while exercising feature topology.
+func (m *Matrix) WithGuardrails() *Matrix {
+	out := m.clone()
+	out.GuardrailsEnabled = true
+	return out
+}
+
 // WithClient returns a copy of the Matrix that drives requests through the
 // given client driver (official SDKs, subprocess drivers) instead of the
 // default raw HTTP client.
@@ -200,6 +232,15 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 	if m.MCPEnabled {
 		opts = append(opts, NewTestEnvOptionWithMCP())
 	}
+	if m.ProtocolStageEnabled {
+		opts = append(opts, NewTestEnvOptionWithProtocolStage())
+	}
+	if m.MCPStageCoverage {
+		opts = append(opts, NewTestEnvOptionWithServertoolProviders(newMatrixEchoServertoolProvider()))
+	}
+	if m.GuardrailsEnabled {
+		opts = append(opts, NewTestEnvOptionWithGuardrails(NewAllowGuardrailsRuntime()))
+	}
 	if m.Client != nil {
 		opts = append(opts, NewTestEnvOptionWithClient(m.Client))
 	}
@@ -211,11 +252,7 @@ func (m *Matrix) testEnvOpts() []TestEnvOption {
 // test artifact; remove it when the defect is fixed. All tiers derive their
 // skips from this map (the matrix directly, replay via KnownDefectReason), so
 // closing a defect is a one-line deletion.
-var skipSourceScenarios = map[string]string{
-	// openai_responses source: tool_call conversion from provider back to Responses format loses tool calls
-	"openai_responses|tool_use":           "Responses API source: tool_use conversion incomplete",
-	"openai_responses|streaming_tool_use": "Responses API source: streaming tool_use conversion incomplete",
-}
+var skipSourceScenarios = map[string]string{}
 
 // KnownDefectReason reports whether a (source protocol, scenario) combination
 // is in the known-defect registry, and why. Consumers outside the matrix
@@ -439,6 +476,28 @@ func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target prot
 	base := m.newBaseResult(s.Name, source, target, streaming)
 
 	env.SetupRoute(source, target, s)
+	requestModel := env.findRouteModel(source, target, s.Name)
+	verifyPersistedRecord := m.MCPStageCoverage && m.RecordDir != "" && s.Name == MCPStageOwnedToolScenarioName
+	var existingRecordIDs map[string]struct{}
+	if verifyPersistedRecord {
+		var snapshotErr error
+		existingRecordIDs, snapshotErr = persistedRequestRecordIDs(m.RecordDir)
+		if snapshotErr != nil {
+			return TestResult{
+				Name:      m.buildTestName(s.Name, source, target, streaming),
+				Scenario:  s.Name,
+				Source:    source,
+				Target:    target,
+				Streaming: streaming,
+				Passed:    false,
+				Errors: []AssertionError{{
+					Assertion: "request_record_snapshot",
+					Error:     snapshotErr.Error(),
+				}},
+				Duration: time.Since(start),
+			}
+		}
+	}
 	result, err := env.SendAsCLI(source, target, s, streaming)
 	if err != nil {
 		base.Errors = []AssertionError{{
@@ -460,6 +519,13 @@ func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target prot
 				Error:     err.Error(),
 				Context:   truncate(string(result.RawBody), 300),
 			})
+		}
+	}
+	if verifyPersistedRecord {
+		recordErrors := verifyMCPStagePersistedRecord(env, m.RecordDir, requestModel, source, target, existingRecordIDs)
+		if len(recordErrors) > 0 {
+			passed = false
+			errors = append(errors, recordErrors...)
 		}
 	}
 

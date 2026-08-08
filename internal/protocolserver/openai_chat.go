@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // HandleOpenAIChatCompletions handles OpenAI v1 chat completion requests
@@ -30,6 +31,7 @@ func (ph *ProtocolHandler) HandleOpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
+	ph.rememberProtocolStageOriginalInput(c, typ.RuleScenario(scenario), bodyBytes)
 
 	// Parse OpenAI-style request
 	var req = &protocol.OpenAIChatCompletionRequest{}
@@ -150,6 +152,21 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 	// attempt by the failover loop (UpdateTrackingForFailover).
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
+	var stageRecording *protocolStageRequestRecording
+	if scenarioConfig.IsRecordingEnable() && ph.protocolStageRecordingSupportsRule(rule) {
+		stageRecording = ph.newProtocolStageRequestRecording(
+			scenarioType,
+			protocol.TypeOpenAIChat,
+			protocolStageOriginalInput(c, req.ChatCompletionNewParams),
+			sessionID,
+			pkgobs.RequestIDFromContext(c.Request.Context()),
+		)
+	}
+	if stageRecording != nil {
+		enableProtocolStageAttemptTracking(c, stageRecording)
+		defer stageRecording.finishFromHTTP(c)
+	}
+
 	// Snapshot a pristine template only when failover is possible.
 	multi := len(rule.GetActiveServices()) > 1
 	var template []byte
@@ -176,14 +193,14 @@ func (ph *ProtocolHandler) OpenAIChatCompletion(c *gin.Context, req *protocol.Op
 				}
 				areq = cloned
 			}
-			ph.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig)
+			ph.runOpenAIChatAttempt(c, areq, responseModel, p, retryModel, rule, isStreaming, scenarioType, scenarioConfig, stageRecording)
 		})
 }
 
 // runOpenAIChatAttempt executes the provider-dependent half of an OpenAI chat
 // request for one failover attempt. Setup failures route through
 // failAttemptSetup so the orchestrator can advance to the next candidate.
-func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig) {
+func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, actualModel string, rule *typ.Rule, isStreaming bool, scenarioType typ.RuleScenario, scenarioConfig *typ.ScenarioConfig, stageRecording *protocolStageRequestRecording) {
 	// Resolve dual endpoint: when the provider has an OpenAI-compatible
 	// dual URL configured, route there natively to avoid a transform.
 	provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
@@ -228,6 +245,21 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
 	// request context, so no separate call is needed here.)
 	ruleFlags := ResolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
+	if ph.tryProtocolStageOpenAIChat(
+		c,
+		req,
+		responseModel,
+		target,
+		provider,
+		actualModel,
+		rule,
+		isStreaming,
+		scenarioConfig,
+		ruleFlags,
+		stageRecording,
+	) {
+		return
+	}
 
 	// === Transform via pipeline ===
 	reqCtx, err := ph.TransformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, RulePreBaseTransforms(ruleFlags), RulePreVendorTransforms(ruleFlags))

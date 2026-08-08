@@ -2,6 +2,7 @@ package protocoltest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,14 +11,17 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -37,6 +41,7 @@ import (
 // native APIs (/v1/chat/completions, /v1/messages, etc.).
 type TestEnv struct {
 	appConfig     *config.AppConfig
+	rootServer    *server.Server
 	gatewayServer *httptest.Server // real HTTP server; every request traverses it
 	virtual       *VirtualServer
 	modelToken    string
@@ -52,9 +57,12 @@ type TestEnv struct {
 type TestEnvOption func(*testEnvConfig)
 
 type testEnvConfig struct {
-	recordDir  string
-	mcpEnabled bool
-	client     Client
+	recordDir            string
+	mcpEnabled           bool
+	protocolStageEnabled bool
+	guardrailsRuntime    *guardrails.Guardrails
+	client               Client
+	servertoolProviders  []servertool.ToolProvider
 }
 
 // NewTestEnvOptionWithRecordDir creates an option to set the record directory.
@@ -69,6 +77,21 @@ func NewTestEnvOptionWithRecordDir(dir string) TestEnvOption {
 func NewTestEnvOptionWithMCP() TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.mcpEnabled = true
+	}
+}
+
+// NewTestEnvOptionWithProtocolStage enables the real server Stage selector.
+func NewTestEnvOptionWithProtocolStage() TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.protocolStageEnabled = true
+	}
+}
+
+// NewTestEnvOptionWithGuardrails enables Guardrails for the global scenario
+// and injects the supplied runtime into the real gateway server.
+func NewTestEnvOptionWithGuardrails(runtime *guardrails.Guardrails) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.guardrailsRuntime = runtime
 	}
 }
 
@@ -127,6 +150,14 @@ func preseedEnterpriseContextKeys(configDir string) error {
 	return serverconfig.WriteEnterpriseContextKeys(privatePath, publicPath, keys.private, keys.public)
 }
 
+// NewTestEnvOptionWithServertoolProviders injects server-owned tools through
+// the same Server option and startup path used by production embedders.
+func NewTestEnvOptionWithServertoolProviders(providers ...servertool.ToolProvider) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.servertoolProviders = append(cfg.servertoolProviders, providers...)
+	}
+}
+
 // gatewayCore is the shared skeleton every single-process harness env builds
 // on: a temp config dir, an app config, a real gateway httptest.Server, and a
 // VirtualServer mock provider. TestEnv (matrix/flags) and AgentTestEnv
@@ -134,6 +165,7 @@ func preseedEnterpriseContextKeys(configDir string) error {
 type gatewayCore struct {
 	configDir  string
 	appConfig  *config.AppConfig
+	rootServer *server.Server
 	gateway    *httptest.Server
 	virtual    *VirtualServer
 	modelToken string
@@ -166,12 +198,13 @@ func newGatewayCore(dirPattern string, configure func(*config.AppConfig), server
 		configure(appConfig)
 	}
 
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)
-	ts := httptest.NewServer(gatewayServer.GetRouter())
+	rootServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)
+	ts := httptest.NewServer(rootServer.GetRouter())
 
 	return &gatewayCore{
 		configDir:  configDir,
 		appConfig:  appConfig,
+		rootServer: rootServer,
 		gateway:    ts,
 		virtual:    NewVirtualServerForCLI(),
 		modelToken: appConfig.GetGlobalConfig().GetModelToken(),
@@ -209,6 +242,11 @@ func (env *TestEnv) Close() {
 	if env.gatewayServer != nil {
 		env.gatewayServer.Close()
 	}
+	if env.rootServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = env.rootServer.ForceFlushRecordings(ctx)
+		cancel()
+	}
 	if env.virtual != nil {
 		env.virtual.Close()
 	}
@@ -232,10 +270,31 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	if cfg.recordDir != "" {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
 	}
+	if cfg.protocolStageEnabled {
+		serverOpts = append(serverOpts, server.WithProtocolStage(true))
+	}
+	if cfg.guardrailsRuntime != nil {
+		serverOpts = append(serverOpts, server.WithGuardrails(cfg.guardrailsRuntime))
+	}
+	if len(cfg.servertoolProviders) > 0 {
+		serverOpts = append(serverOpts, server.WithServertoolProviders(cfg.servertoolProviders...))
+	}
 
 	core, err := newGatewayCore("pv-env-*", func(ac *config.AppConfig) {
+		if cfg.recordDir != "" {
+			for _, scenario := range []typ.RuleScenario{typ.ScenarioAnthropic, typ.ScenarioOpenAI} {
+				_ = ac.GetGlobalConfig().SetScenarioStringFlag(
+					scenario,
+					serverconfig.FlagRecordingV2,
+					string(typ.RecordingModeStagedRequestResponse),
+				)
+			}
+		}
 		if cfg.mcpEnabled {
 			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionMCP, true)
+		}
+		if cfg.guardrailsRuntime != nil {
+			_ = ac.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionGuardrails, true)
 		}
 	}, serverOpts...)
 	if err != nil {
@@ -244,6 +303,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 
 	return &TestEnv{
 		appConfig:     core.appConfig,
+		rootServer:    core.rootServer,
 		gatewayServer: core.gateway,
 		virtual:       core.virtual,
 		modelToken:    core.modelToken,
@@ -266,6 +326,16 @@ func (env *TestEnv) VirtualURL() string { return env.virtual.URL() }
 
 // VirtualCallCount returns the number of requests received by the virtual server.
 func (env *TestEnv) VirtualCallCount() int { return env.virtual.CallCount() }
+
+// ForceFlushRecordings waits until the real gateway has exported every queued
+// recording artifact. It is safe to call repeatedly while the harness server
+// remains active, allowing each matrix case to verify its own persisted record.
+func (env *TestEnv) ForceFlushRecordings(ctx context.Context) error {
+	if env == nil || env.rootServer == nil {
+		return nil
+	}
+	return env.rootServer.ForceFlushRecordings(ctx)
+}
 
 // SetupRoute configures a gateway rule that routes source protocol requests
 // to the virtual server acting as a target protocol provider.
@@ -631,7 +701,7 @@ func assembleFromEvents(events []string, style protocol.APIStyle) sse.ParsedResu
 		// Try to assemble as Responses API first
 		r = sse.AssembleOpenAIResponsesStream(events)
 		// If that failed, try Chat Completions
-		if r == nil || len(r.Content) == 0 {
+		if r == nil || (len(r.Content) == 0 && len(r.ToolCalls) == 0) {
 			r = sse.AssembleOpenAIStream(events)
 		}
 	case protocol.APIStyleAnthropic:

@@ -116,6 +116,79 @@ func TestMatrixCmdNonStreamingFlag(t *testing.T) {
 	}
 }
 
+func TestMatrixCmdStageGuardrailsFlags(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"matrix", "--mode=single", "--stage", "--guardrails"}); err != nil {
+		t.Fatalf("Stage Guardrails flags should parse: %v", err)
+	}
+	if !cli.Matrix.StageEnabled || !cli.Matrix.Guardrails {
+		t.Fatalf("parsed matrix = %+v", cli.Matrix)
+	}
+}
+
+func TestMatrixCmdBridgeMode(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"matrix", "--mode=bridges", "--scenario=tool_result", "--streaming"}); err != nil {
+		t.Fatalf("bridge mode should parse: %v", err)
+	}
+	if cli.Matrix.Mode != "bridges" || len(cli.Matrix.Scenarios) != 1 || cli.Matrix.Scenarios[0] != "tool_result" || !cli.Matrix.Streaming {
+		t.Fatalf("parsed bridge matrix = %+v", cli.Matrix)
+	}
+}
+
+func TestMatrixCmdBridgeModeRejectsExternalClient(t *testing.T) {
+	cmd := &MatrixCmd{Mode: "bridges", Client: "gosdk"}
+	err := cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "only supports --client=http") {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
+func TestMatrixCmdBridgeModeRejectsUnsupportedFeatures(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  MatrixCmd
+		want string
+	}{
+		{name: "mcp", cmd: MatrixCmd{Mode: "bridges", Client: "http", MCPEnabled: true}, want: "does not support --mcp"},
+		{name: "stage", cmd: MatrixCmd{Mode: "bridges", Client: "http", StageEnabled: true}, want: "does not support --stage"},
+		{name: "guardrails", cmd: MatrixCmd{Mode: "bridges", Client: "http", Guardrails: true}, want: "does not support --guardrails"},
+		{name: "recording", cmd: MatrixCmd{Mode: "bridges", Client: "http", RecordDir: t.TempDir()}, want: "does not support --record-dir"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cmd.Run()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Run() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatrixCmdRejectsFiltersWithNoExecutableCases(t *testing.T) {
+	cmd := &MatrixCmd{
+		Mode:      "single",
+		Client:    "http",
+		Scenarios: []string{"does_not_exist"},
+	}
+	err := cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "no executable test cases") {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
+func TestMatrixCmdOwnedToolScenarioRequiresStageAndMCP(t *testing.T) {
+	cmd := &MatrixCmd{
+		Mode:      "single",
+		Client:    "http",
+		Scenarios: []string{"mcp_owned_tool"},
+	}
+	err := cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "requires both --stage and --mcp") {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
 func TestProviderTestCmdReturnsNotImplemented(t *testing.T) {
 	var p ProviderTestCmd
 	err := p.Run()

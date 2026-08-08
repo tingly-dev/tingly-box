@@ -23,6 +23,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/recording"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/routing"
@@ -40,6 +41,11 @@ import (
 // the fields/methods it actually touches on *Server today.
 type ProtocolHandlerDeps struct {
 	Config *config.Config
+
+	// ProtocolStageEnabled is an immutable process-start choice. When true,
+	// registered and capability-complete protocol paths may use Protocol Stage;
+	// unsupported paths remain on the legacy pipeline.
+	ProtocolStageEnabled bool
 
 	// TokenTracker records usage to the OTel meter pipeline (may be nil if
 	// OTel setup failed at startup — callers must nil-check).
@@ -109,7 +115,8 @@ type ProtocolHandlerDeps struct {
 // files (openai_*.go, anthropic_*.go, protocol_*.go, etc.) will be moved
 // here in later steps and become methods on *ProtocolHandler.
 type ProtocolHandler struct {
-	deps ProtocolHandlerDeps
+	deps                  ProtocolHandlerDeps
+	protocolStageSelector *ProtocolStageSelector
 
 	// mcpTC caches the stateless MCP chain transforms (see
 	// protocol_transform.go); they depend only on construction-time deps.
@@ -118,7 +125,19 @@ type ProtocolHandler struct {
 
 // NewHandler constructs the AI Model API handler from its dependencies.
 func NewHandler(deps ProtocolHandlerDeps) *ProtocolHandler {
-	return &ProtocolHandler{deps: deps}
+	handler := &ProtocolHandler{
+		deps:                  deps,
+		protocolStageSelector: NewProtocolStageSelector(deps.ProtocolStageEnabled),
+	}
+	if deps.ProtocolStageEnabled {
+		logrus.WithFields(logrus.Fields{
+			"protocol_pipeline": "stage",
+			"stage_routes":      "anthropic_v1->anthropic_v1,anthropic_v1->anthropic_beta,anthropic_v1->openai_chat,anthropic_v1->openai_responses,anthropic_beta->anthropic_beta,anthropic_beta->openai_chat,anthropic_beta->openai_responses,openai_chat->openai_chat,openai_chat->anthropic_beta,openai_chat->openai_responses,openai_responses->openai_responses,openai_responses->anthropic_beta,openai_responses->openai_chat",
+			"tool_loop":         "tool_loop_anthropic_beta",
+			"other_routes":      "legacy",
+		}).Info("Protocol Stage mode enabled")
+	}
+	return handler
 }
 
 // The methods below are thin wrappers wiring the Deps callbacks to the
@@ -133,6 +152,18 @@ func (ph *ProtocolHandler) currentGuardrailsRuntime() *guardrails.Guardrails {
 
 func (ph *ProtocolHandler) guardrailsEnabledForScenario(scenario string) bool {
 	return GuardrailsEnabledForScenario(ph.deps.Config, ph.currentGuardrailsRuntime(), scenario)
+}
+
+// guardrailsEnabledForProtocolStage keeps new ingress support behind --stage
+// without broadening legacy scenario behavior. OpenAI Chat and Responses use
+// this opt-in gate; legacy OpenAI paths retain their existing behavior.
+func (ph *ProtocolHandler) guardrailsEnabledForProtocolStage(scenario string, source protocol.APIType) bool {
+	switch source {
+	case protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses:
+		return GuardrailsConfiguredForScenario(ph.deps.Config, ph.currentGuardrailsRuntime(), scenario)
+	default:
+		return ph.guardrailsEnabledForScenario(scenario)
+	}
 }
 
 func (ph *ProtocolHandler) mcpEnabled() bool {

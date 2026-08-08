@@ -114,12 +114,18 @@ type Server struct {
 	mcpRuntime *mcpruntime.Runtime
 
 	// servertool pipeline — owns virtual tool providers and hook list
-	servertoolPipeline *servertool.Pipeline
+	servertoolPipeline  *servertool.Pipeline
+	servertoolProviders []servertool.ToolProvider
 
 	// guardrails runtime state (owned by protocolserver; constructed in
 	// NewServer before anything reads it)
 	guardrailsState    *protocolserver.GuardrailsState
 	guardrailsConfigMu sync.Mutex
+
+	// protocolStageEnabled is an immutable process-start choice gating the
+	// additive Protocol Stage request pipeline. Unsupported protocol paths
+	// remain on the legacy pipeline regardless of this flag.
+	protocolStageEnabled bool
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -391,12 +397,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
-	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
-	server.mcpRuntime.SetClientPool(server.clientPool)
 	// Auto-register built-in tools (e.g., webtools) if not already present
 	if err := mcpruntime.RegisterBuiltinTools(cfg.GetMCPRuntimeConfig, cfg.SetToolConfig); err != nil {
 		logrus.WithError(err).Warn("mcp: failed to register builtin tools")
 	}
+	// Construct the runtime after registration so a first-run config has the
+	// same usable MCP dependency graph as subsequent restarts.
+	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	server.mcpRuntime.SetClientPool(server.clientPool)
 
 	// Register adviser as virtual tool if configured
 	server.registerAdviserFromConfig()
@@ -501,6 +509,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		GetOrCreateScenarioSink: server.GetOrCreateScenarioSink,
 		GuardrailsState:         server.guardrailsState,
 		GetScenarioRecordMode:   server.GetScenarioRecordMode,
+		ProtocolStageEnabled:    server.protocolStageEnabled,
 	})
 
 	// Setup middleware
@@ -564,34 +573,40 @@ func (s *Server) Cancel() context.CancelFunc {
 }
 
 // registerAdviserFromConfig reads the MCP config and registers the adviser
-// virtual tool if an enabled advisor source is found.
+// virtual tool if an enabled advisor source is found, plus any in-process
+// server tools supplied through ServerOptions.
 func (s *Server) registerAdviserFromConfig() {
-	mcpCfg := s.mcpRuntime.GetConfig()
-	if mcpCfg == nil {
-		s.servertoolPipeline = servertool.NewPipeline()
-		return
-	}
-	for _, source := range mcpCfg.Sources {
-		if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
-			continue
+	pipeline := servertool.NewPipeline()
+	if s.mcpRuntime != nil {
+		if mcpCfg := s.mcpRuntime.GetConfig(); mcpCfg != nil {
+			for _, source := range mcpCfg.Sources {
+				if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
+					continue
+				}
+				advisorCfg := *source.Advisor
+				if advisorCfg.ProviderResolver == nil {
+					advisorCfg.ProviderResolver = s.config.GetProviderByUUID
+				}
+				pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
+				logrus.Info("mcp: registered adviser via servertool pipeline")
+				break
+			}
 		}
-		advisorCfg := *source.Advisor
 
-		if advisorCfg.ProviderResolver == nil {
-			advisorCfg.ProviderResolver = s.config.GetProviderByUUID
+		// Re-register the in-process server tools supplied by ServerOptions so
+		// they survive every pipeline rebuild, including config hot reload. The
+		// virtual registry is name-keyed, so re-registration is idempotent.
+		for _, provider := range s.servertoolProviders {
+			if provider != nil {
+				pipeline.Register(provider)
+			}
 		}
 
-		pipeline := servertool.NewPipeline()
-		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
-		pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
-		s.servertoolPipeline = pipeline
-
-		logrus.Info("mcp: registered adviser via servertool pipeline")
-		return
+		if registry := s.mcpRuntime.VirtualRegistry(); registry != nil {
+			pipeline.RegisterInto(registry)
+		}
 	}
-
-	// No advisor configured — empty pipeline.
-	s.servertoolPipeline = servertool.NewPipeline()
+	s.servertoolPipeline = pipeline
 }
 
 // setupConfigWatcher initializes the configuration hot-reload watcher
