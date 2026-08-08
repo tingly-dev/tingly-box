@@ -166,7 +166,11 @@ const AccessControl = () => {
     const [resetModelDialogOpen, setResetModelDialogOpen] = useState(false);
     const [userSuccessToken, setUserSuccessToken] = useState<string | null>(null);
     const [modelSuccessToken, setModelSuccessToken] = useState<string | null>(null);
-    const [copied, setCopied] = useState(false);
+    // Which token's copy button most recently succeeded — scoped per token so
+    // copying the user token doesn't also flash "Copied!" on the model token's
+    // button (and vice versa). The row and its own reset-success banner share
+    // a key since they display the same underlying value.
+    const [copiedKey, setCopiedKey] = useState<'user' | 'model' | null>(null);
 
     // Visibility states for showing full tokens
     const [showUserToken, setShowUserToken] = useState(false);
@@ -193,11 +197,14 @@ const AccessControl = () => {
         loadModelToken();
     }, []);
 
-    const handleCopyToken = async (token: string) => {
+    const handleCopyToken = async (token: string, key: 'user' | 'model') => {
         try {
             await navigator.clipboard.writeText(token);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            setCopiedKey(key);
+            // Only clear if nothing newer has claimed the "copied" flag —
+            // avoids a fast second copy of the same token having its
+            // feedback cut short by the first copy's timer.
+            setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 2000);
         } catch (err) {
             console.error('Failed to copy token:', err);
         }
@@ -266,54 +273,37 @@ const AccessControl = () => {
     return (
         <PageLayout loading={loading} notification={{ open: false }}>
             <Stack spacing={3}>
-                {/* Page Header Card */}
+                {/* Page Header Card. The two bullets below are the facts that
+                    AREN'T already said by each token row's own description
+                    (point2's specific endpoint list, point3's "share one but
+                    never the other" contrast) — the old point1 duplicated the
+                    User Token row's description almost verbatim and the
+                    subtitle/intro paragraph above it were pure preamble, so
+                    they're dropped rather than repeated a second time. */}
                 <UnifiedCard size="full">
                     <Stack spacing={2}>
-                        <Stack direction="row" spacing={2} sx={{
-                            alignItems: "center"
-                        }}>
-                            <Box sx={{ flex: 1 }}>
-                                <Typography component="h1" variant="h5" sx={{
-                                    fontWeight: 600
-                                }}>
-                                    {t('accessControl.pageTitle')}
-                                </Typography>
-                                <Typography variant="body2" sx={{
-                                    color: "text.secondary"
-                                }}>
-                                    {t('accessControl.pageDescription')}
-                                </Typography>
-                            </Box>
-                        </Stack>
-                        <Box sx={{ pt: 1 }}>
-                            <Typography variant="subtitle2" gutterBottom sx={{
+                        <Box>
+                            <Typography component="h1" variant="h5" sx={{
+                                fontWeight: 600
+                            }}>
+                                {t('accessControl.pageTitle')}
+                            </Typography>
+                            <Typography variant="body2" sx={{
                                 color: "text.secondary"
                             }}>
-                                {t('accessControl.securityInfo.title')}
+                                {t('accessControl.pageDescription')}
                             </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: "text.secondary",
-                                    mb: 1
-                                }}>
-                                {t('accessControl.securityInfo.description')}
-                            </Typography>
-                            <Stack spacing={0.5}>
-                                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                    <Box component="span" sx={{ color: 'success.main', minWidth: 20 }}>✓</Box>
-                                    {t('accessControl.securityInfo.point1')}
-                                </Typography>
-                                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                    <Box component="span" sx={{ color: 'success.main', minWidth: 20 }}>✓</Box>
-                                    {t('accessControl.securityInfo.point2')}
-                                </Typography>
-                                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                    <Box component="span" sx={{ color: 'warning.main', minWidth: 20 }}>!</Box>
-                                    {t('accessControl.securityInfo.point3')}
-                                </Typography>
-                            </Stack>
                         </Box>
+                        <Stack spacing={0.5}>
+                            <Typography variant="body2" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                <Box component="span" sx={{ color: 'success.main', minWidth: 20 }}>✓</Box>
+                                {t('accessControl.securityInfo.point2')}
+                            </Typography>
+                            <Typography variant="body2" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                <Box component="span" sx={{ color: 'warning.main', minWidth: 20 }}>!</Box>
+                                {t('accessControl.securityInfo.point3')}
+                            </Typography>
+                        </Stack>
                     </Stack>
                 </UnifiedCard>
 
@@ -345,8 +335,8 @@ const AccessControl = () => {
                         title={t('accessControl.userToken.resetSuccess')}
                         message={t('accessControl.userToken.resetSuccessMessage')}
                         token={userSuccessToken}
-                        copiedTooltip={copied}
-                        onCopy={() => handleCopyToken(userSuccessToken)}
+                        copiedTooltip={copiedKey === 'user'}
+                        onCopy={() => handleCopyToken(userSuccessToken, 'user')}
                         copyLabel={t('accessControl.copy')}
                         copiedLabel={t('accessControl.copied')}
                         acknowledgeLabel={t('accessControl.userToken.saved')}
@@ -360,8 +350,8 @@ const AccessControl = () => {
                         title={t('accessControl.modelToken.resetSuccess')}
                         message={t('accessControl.modelToken.resetSuccessMessage')}
                         token={modelSuccessToken}
-                        copiedTooltip={copied}
-                        onCopy={() => handleCopyToken(modelSuccessToken)}
+                        copiedTooltip={copiedKey === 'model'}
+                        onCopy={() => handleCopyToken(modelSuccessToken, 'model')}
                         copyLabel={t('accessControl.copy')}
                         copiedLabel={t('accessControl.copied')}
                         acknowledgeLabel={t('accessControl.modelToken.saved')}
@@ -401,8 +391,8 @@ const AccessControl = () => {
                                     displayValue={showUserToken ? displayUserToken : maskToken(displayUserToken)}
                                     revealed={showUserToken}
                                     onToggleReveal={() => setShowUserToken(!showUserToken)}
-                                    onCopy={() => handleCopyToken(displayUserToken)}
-                                    copiedTooltip={copied}
+                                    onCopy={() => handleCopyToken(displayUserToken, 'user')}
+                                    copiedTooltip={copiedKey === 'user'}
                                 />
                                 {!isUsingDefaultToken && !userSuccessToken && (
                                     <Typography
@@ -446,8 +436,8 @@ const AccessControl = () => {
                                     displayValue={showModelToken ? displayModelToken : maskToken(displayModelToken)}
                                     revealed={showModelToken}
                                     onToggleReveal={() => setShowModelToken(!showModelToken)}
-                                    onCopy={() => handleCopyToken(displayModelToken)}
-                                    copiedTooltip={copied}
+                                    onCopy={() => handleCopyToken(displayModelToken, 'model')}
+                                    copiedTooltip={copiedKey === 'model'}
                                 />
                             </Stack>
                         </Box>
