@@ -580,15 +580,21 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(c.ConfigFile, out, 0644); err != nil {
+
+	// Rules persist in the database, not in the file. Syncing here — inside
+	// the choke point every rule mutation already goes through — guarantees no
+	// write path can update the in-memory rules without also updating the
+	// store. The store MUST be written before the file: during the one-time
+	// legacy import the file write below replaces the JSON rules array with
+	// null, so a failed store sync must abort while the file still carries the
+	// legacy rules (the next startup then retries the import). The reverse
+	// order would open a window where the file is cleared but the database
+	// never received the rules.
+	if err := c.syncRulesToStore(); err != nil {
 		return err
 	}
 
-	// Rules persist in the database, not in the file written above. Syncing
-	// here — inside the choke point every rule mutation already goes through —
-	// guarantees no write path can update the in-memory rules without also
-	// updating the store.
-	return c.syncRulesToStore()
+	return os.WriteFile(c.ConfigFile, out, 0644)
 }
 
 // RefreshStatsFromStore hydrates service stats from the SQLite store.

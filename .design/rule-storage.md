@@ -102,10 +102,18 @@ profile 创建删除 / SmartGuide ensure / 十几个日期迁移……但它们�
 
 ```go
 func (c *Config) Save() error {
-    // ... 写 config.json（不含 rules）...
-    return c.syncRulesToStore()   // 全量 diff-sync 到 rules 表
+    // ... 序列化 config.json 内容（不含 rules）...
+    if err := c.syncRulesToStore(); err != nil {  // 先库
+        return err
+    }
+    return os.WriteFile(c.ConfigFile, out, 0644)  // 后文件
 }
 ```
+
+**顺序不变量：先写库，后写文件。** 一次性迁移时文件写入会把 rules 数组
+替换为 null；若先清文件、后写库且写库失败，就出现"文件已清空 + 库是空的"
+的丢数据窗口。先库后文件则两种失败都安全：写库失败 → 文件仍带旧 rules，
+下次启动重试导入；写库成功但写文件失败 → 库已权威，下次启动清理陈旧 JSON。
 
 - 不需要逐个改造调用点，也**不可能**出现"改了内存忘了落库"的路径——
   忘了调 Save() 的代码在旧世界同样丢数据，语义没有变差。
