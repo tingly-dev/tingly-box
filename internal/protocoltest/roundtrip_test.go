@@ -196,11 +196,12 @@ func TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses(t *testing.T) {
 	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.ErrorScenario(), true)
 
 	// The HTTP status must reflect the upstream failure rather than
-	// silently 200-with-error-event. 500 is what SendStreamingError
-	// emits, which isRetryableStatus accepts; if either side flips to
-	// 200 the buffered writer's promotion logic broke.
-	assert.Equal(t, 500, result.HTTPStatus,
-		"pre-stream prime failure must surface as a 5xx, not a 200 SSE")
+	// silently 200-with-error-event. SendStreamingError propagates the
+	// upstream status (ErrorScenario emits 429) instead of flattening it
+	// into a 500; if either side flips to 200 the buffered writer's
+	// promotion logic broke.
+	assert.Equal(t, 429, result.HTTPStatus,
+		"pre-stream prime failure must surface the upstream 429, not a 200 SSE")
 	// Parsed assistant content should be empty — no real upstream
 	// content ever streamed, so the handler had nothing to convert.
 	assert.Empty(t, result.Content,
@@ -209,10 +210,10 @@ func TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses(t *testing.T) {
 
 // Anthropic-native passthrough: client and provider both speak Anthropic,
 // so the request flows through HandleAnthropicBeta (ProcessStream over the
-// Anthropic SDK stream). A pre-content upstream error must surface as a
-// retryable 5xx, not a 200 SSE error event — the in-line !Written guard in
-// the passthrough converter + ProcessStream's no-empty-flush. This is the
-// common multi-Anthropic-account failover shape.
+// Anthropic SDK stream). A pre-content upstream error must surface with the
+// upstream's retryable status, not a 200 SSE error event — the in-line
+// !Written guard in the passthrough converter + ProcessStream's
+// no-empty-flush. This is the common multi-Anthropic-account failover shape.
 func TestRoundTrip_StreamingPreContentFailure_AnthropicNative(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
@@ -221,8 +222,8 @@ func TestRoundTrip_StreamingPreContentFailure_AnthropicNative(t *testing.T) {
 
 	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, pt.ErrorScenario(), true)
 
-	assert.Equal(t, 500, result.HTTPStatus,
-		"Anthropic-native pre-content failure must surface as a 5xx, not a 200 SSE")
+	assert.Equal(t, 429, result.HTTPStatus,
+		"Anthropic-native pre-content failure must surface the upstream 429, not a 200 SSE")
 	assert.Empty(t, result.Content,
 		"no assistant content should be assembled from a failed pre-content stream")
 }
