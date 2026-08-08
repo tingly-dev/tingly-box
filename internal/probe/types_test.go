@@ -1,9 +1,18 @@
 package probe
 
 import (
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	protocol2 "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -119,7 +128,8 @@ func TestValidateE2ERequest(t *testing.T) {
 			if err == nil {
 				t.Fatalf("ValidateE2ERequest expected error for field %q, got nil", tt.wantErr)
 			}
-			ve, ok := err.(*ValidationError)
+			var ve *ValidationError
+			ok := errors.As(err, &ve)
 			if !ok {
 				t.Fatalf("ValidateE2ERequest returned %T, want *ValidationError", err)
 			}
@@ -173,4 +183,80 @@ func TestValidationErrorMessage(t *testing.T) {
 	if got := ve.Error(); got != "scenario: scenario is required" {
 		t.Errorf("ValidationError.Error() = %q", got)
 	}
+}
+
+// ---- toProbeResult ----
+
+func TestToProbeResult_SetsSuccessAndUsage(t *testing.T) {
+	// Canonical TokenUsage is passed through unchanged — no derived/renamed
+	// fields. Input 10, output 5, cache-read 2.
+	u := protocol2.NewTokenUsageFull(10, 5, 2, 0, 0)
+	r := toProbeResult("body", 42, "https://x/y", false, u, nil)
+
+	assert.True(t, r.Success, "toProbeResult must set Success=true")
+	assert.Equal(t, int64(42), r.LatencyMs)
+	assert.False(t, r.Stream)
+	assert.Same(t, u, r.Usage, "Usage must be the canonical TokenUsage, passed through")
+	assert.Equal(t, 10, r.Usage.InputTokens)
+	assert.Equal(t, 5, r.Usage.OutputTokens)
+	assert.Equal(t, 2, r.Usage.CacheReadTokens)
+}
+
+func TestToProbeResult_NilUsageStaysNil(t *testing.T) {
+	r := toProbeResult("body", 1, "url", true, nil, nil)
+	assert.True(t, r.Success)
+	assert.Nil(t, r.Usage)
+	assert.True(t, r.Stream)
+}
+
+// ---- tool-call extractors ----
+
+func TestToolCallsFromOpenAIChat(t *testing.T) {
+	// AsFunction() reads from the union's raw JSON, so construct via unmarshal
+	// (struct literals don't populate the raw JSON the accessor needs).
+	raw := `[{"id":"call_1","type":"function",
+	          "function":{"name":"ls","arguments":"{\"dir\":\"/tmp\"}"}}]`
+	var calls []openai.ChatCompletionMessageToolCallUnion
+	require.NoError(t, json.Unmarshal([]byte(raw), &calls))
+	msg := openai.ChatCompletionMessage{ToolCalls: calls}
+
+	got := toolCallsFromOpenAIChat(msg)
+	assert.Len(t, got, 1)
+	assert.Equal(t, ToolCall{ID: "call_1", Name: "ls", Input: map[string]any{"dir": "/tmp"}}, got[0])
+}
+
+func TestToolCallsFromOpenAIChat_InvalidJSONBecomesEmptyInput(t *testing.T) {
+	raw := `[{"type":"function","function":{"name":"ls","arguments":"not-json"}}]`
+	var calls []openai.ChatCompletionMessageToolCallUnion
+	require.NoError(t, json.Unmarshal([]byte(raw), &calls))
+	msg := openai.ChatCompletionMessage{ToolCalls: calls}
+
+	got := toolCallsFromOpenAIChat(msg)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "ls", got[0].Name)
+	assert.Empty(t, got[0].Input)
+}
+
+func TestToolCallsFromOpenAIResponses(t *testing.T) {
+	// The Responses output-item union uses nested inline wrappers; build it via
+	// JSON unmarshal, exactly as it arrives from the API.
+	raw := `[{"type":"function_call","id":"fc_1","name":"get_weather","arguments":"{\"city\":\"SF\"}"},
+	         {"type":"message","id":"msg_1"}]`
+	var output []responses.ResponseOutputItemUnion
+	require.NoError(t, json.Unmarshal([]byte(raw), &output))
+
+	got := toolCallsFromOpenAIResponses(output)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "get_weather", got[0].Name)
+	assert.Equal(t, "SF", got[0].Input["city"])
+}
+
+func TestToolCallsFromAnthropic(t *testing.T) {
+	raw := `[{"type":"tool_use","id":"tu_1","name":"list_dir","input":{"path":"/"}}]`
+	var content []anthropic.ContentBlockUnion
+	require.NoError(t, json.Unmarshal([]byte(raw), &content))
+
+	got := toolCallsFromAnthropic(content)
+	assert.Len(t, got, 1)
+	assert.Equal(t, ToolCall{ID: "tu_1", Name: "list_dir", Input: map[string]any{"path": "/"}}, got[0])
 }

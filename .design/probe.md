@@ -2,10 +2,22 @@
 
 ## Overview
 
-The probe subsystem performs SDK-level end-to-end connectivity tests for providers and rules. There are two probe strategies:
+The probe subsystem provides two diagnostics for different user questions:
 
-- **Lightweight** (`internal/probe/lightweight.go`): HTTP-level checks (OPTIONS, `/models`, `/chat/completions`) with no SDK. Used during provider onboarding to validate credentials quickly.
-- **E2E** (`internal/probe/e2e.go`): Full SDK round-trip using the same client methods as production traffic (ChatCompletionsNew, ResponsesNew, MessagesNew, GenerateContent). This catches provider quirks that only show up under the real code path.
+- **Lightweight** (`../internal/probe/light_probe.go`): the Connect AI **Test Connection** path for an inline, not-yet-saved provider config. It calls the upstream directly and returns an advisory endpoint matrix: OPTIONS, models, and (for OpenAI-style providers) non-streaming Chat and Responses checks. OPTIONS is raw HTTP; models and completion checks reuse the production client/SDK methods. It does not enter `E2EProber`, TB loopback, routing, or rule evaluation.
+- **E2E** (`../internal/probe/e2e_probe.go`): the Probe dialog / troubleshooting path. It performs a full SDK round-trip for a saved provider or rule, normally through TB's loopback and production routing path. This catches provider quirks and TB middleware/routing failures that a direct connectivity check cannot distinguish.
+
+## Product entry points
+
+| User surface | Frontend call | HTTP endpoint | Backend strategy | Question answered |
+|--------------|---------------|---------------|------------------|-------------------|
+| Connect AI → Test Connection | `runProviderProbe` → `api.probeProviderLightweight` | `POST /api/v2/probe/lightweight` | `LightProber` | Are these credentials/endpoints reachable enough to continue? |
+| Probe dialog / Troubleshoot | `runProbe` | `POST /api/v2/probe` | `E2EProber` | Does a real request work, how did it route, and what came back? |
+
+The similarly named frontend helper `api.probeProvider` targets the E2E
+`provider_config` API, but Connect AI does not call it. Keep the two paths
+distinct: onboarding connectivity is advisory and direct; troubleshooting must
+exercise the real TB path.
 
 ## E2E Target Types
 
@@ -15,7 +27,7 @@ An `E2ERequest` has three `target_type` values:
 |-------------------|------------------------------------------------------------------------------|
 | `provider`        | A saved provider record by UUID, pinned to a specific model                  |
 | `rule`            | A rule by UUID — exercises all TB middleware for that rule's scenario         |
-| `provider_config` | An inline provider config (name, api_base, api_style, token) — used during onboarding before the provider is saved |
+| `provider_config` | An inline provider config for direct E2E API callers; it does not represent Connect AI's Test Connection path |
 
 ### Direct vs Through-TB (provider probes)
 
@@ -36,7 +48,11 @@ When a through-TB probe fails and a direct probe succeeds, the problem is in TB'
 |-------------|-----------------------------------------------------|
 | `simple`    | Single non-streaming completion                     |
 | `streaming` | Streaming completion (SSE)                          |
-| `tool`      | Completion with a tool definition + auto tool choice |
+| `tool`      | Streaming completion with a tool definition + auto tool choice; tool events remain in the raw chunk array |
+
+Tool mode intentionally preserves the SDK's raw streamed chunks in `content`.
+It does not assemble a parallel normalized tool-call result; the raw response is
+the diagnostic artifact.
 
 ## TB Loopback Pattern
 
@@ -137,24 +153,56 @@ Neither round tripper is installed on production clients. `ProbeProviderWithSDK`
 
 ```
 internal/probe/
-  types.go        — E2ERequest (incl. Direct field) / E2EData / E2EMode / E2ETarget, ScenarioEndpoint()
-  result.go       — ProbeResult (incl. routing trace fields)
-  e2e.go          — E2EService: resolveTargetToProviderModel, loopbackAPIBase,
-                    ProbeProviderWithSDK, applyRoutingCapture
-  sdkprobe.go     — SDK dispatch helpers: probeOpenAIChat, probeAnthropicMessages, probeGoogleGenerate, …
-  lightweight.go  — LightweightProbeService (HTTP-level, no SDK)
-  probetools.go   — Tool definitions used by E2EModeTool
+  types.go          — Result (= E2EData): Success/Content/Usage/ToolCalls + routing trace;
+                      E2ERequest (incl. Direct field) / E2EMode / E2ETarget,
+                      ScenarioEndpoint(), toProbeResult
+  e2e_probe.go      — E2EProber: resolveTargetToProviderModel, loopbackAPIBase,
+                      probeProviderWithSDK, applyRoutingCapture
+  sdk.go            — SDK dispatch helpers (probeOpenAIChat, probeOpenAIResponses,
+                      probeAnthropicMessages, probeGoogleGenerate, probeOptions) and
+                      per-provider usage extraction (via internal/protocol/usage)
+  light_probe.go    — LightProber (direct advisory connectivity matrix; reuses
+                      SDK clients for models/chat/responses)
+  probetools.go     — Tool definitions used by E2EModeTool
+  endpoint_probe_cache.go — narrow direct-endpoint capability cache
+
+internal/protocol/usage/
+  extract.go        — FromOpenAIChatCompletion / FromOpenAIResponses / FromAnthropicMessage:
+                      the canonical TokenUsage extractors reused by the SDK probes
 
 internal/client/
-  http.go         — probeHeadersKey, WithProbeHeaders, GetProbeHeaders,
-                    probeHeaderRoundTripper, ApplyProbeHeadersToClient
-                    RoutingCapture, captureRoutingRoundTripper, ApplyRoutingCaptureToClient
+  http.go           — probeHeadersKey, WithProbeHeaders, GetProbeHeaders,
+                      probeHeaderRoundTripper, ApplyProbeHeadersToClient
+                      RoutingCapture, captureRoutingRoundTripper, ApplyRoutingCaptureToClient
 
 internal/server/
-  handlers.go     — determineRuleWithScenario: X-Tingly-Probe-Rule / X-Tingly-Probe-Service handling
+  handlers.go       — determineRuleWithScenario: X-Tingly-Probe-Rule / X-Tingly-Probe-Service handling
   routing/
-    simple.go     — SelectService: X-Tingly-Probe-Service pin + X-Tingly-Debug-Routing response headers
+    simple.go       — SelectService: X-Tingly-Probe-Service pin + X-Tingly-Debug-Routing response headers
 ```
+
+## Result fields
+
+`Result` (returned as `E2EData`) carries, for one SDK round-trip:
+
+- `success`, `content` (raw marshaled upstream response — object for non-stream,
+  chunk array for stream), `latency_ms` (pure upstream call time, measured by the
+  SDK probe — the HTTP handler does not overwrite it), `error_message`.
+- `stream` — true for streaming probes (explicit; the caller's `test_mode` is the
+  other source of truth).
+- `usage` — normalized `*protocol.TokenUsage` parsed via `internal/protocol/usage`
+  for OpenAI Chat / Responses and Anthropic (non-stream always; stream when the
+  provider emits a final usage block). Uses the canonical `protocol.TokenUsage`
+  shape (`input_tokens` / `output_tokens` / `cache_read_tokens` /
+  `cache_write_tokens` / `reasoning_tokens`) — the same vocabulary the rest of
+  TB emits and the frontend renders; there are no parallel flat token fields.
+  `nil` for Google (out of scope) and cache hits.
+- OpenAI Chat requests set `stream_options.include_usage` only on the streaming
+  branch. It is a stream-only parameter and must not be sent by non-streaming or
+  lightweight Chat checks because strict OpenAI-compatible providers may reject it.
+- Tool-mode calls are represented in the raw streamed `content`; `tool_calls` is
+  not assembled as a second representation.
+- Routing trace fields (see below) — populated for TB-loopback probes only.
 
 ## Trade-offs and constraints
 

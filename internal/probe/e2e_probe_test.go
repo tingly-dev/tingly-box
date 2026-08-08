@@ -51,7 +51,7 @@ func TestResolveProviderTarget_OpenAI_RoutesLoopback(t *testing.T) {
 	}
 	addProvider(t, cfg, p)
 
-	svc := &E2EService{config: cfg}
+	svc := &E2EProber{config: cfg}
 	req := &E2ERequest{
 		TargetType:   E2ETargetProvider,
 		ProviderUUID: "p-openai",
@@ -85,7 +85,7 @@ func TestResolveProviderTarget_Anthropic_RoutesLoopback(t *testing.T) {
 	}
 	addProvider(t, cfg, p)
 
-	svc := &E2EService{config: cfg}
+	svc := &E2EProber{config: cfg}
 	req := &E2ERequest{
 		TargetType:   E2ETargetProvider,
 		ProviderUUID: "p-anthropic",
@@ -117,7 +117,7 @@ func TestResolveProviderTarget_Google_DirectSDK(t *testing.T) {
 	}
 	addProvider(t, cfg, p)
 
-	svc := &E2EService{config: cfg}
+	svc := &E2EProber{config: cfg}
 	req := &E2ERequest{
 		TargetType:   E2ETargetProvider,
 		ProviderUUID: "p-google",
@@ -148,7 +148,7 @@ func TestResolveProviderTarget_NoPort_FallsBackDirect(t *testing.T) {
 	}
 	addProvider(t, cfg, p)
 
-	svc := &E2EService{config: cfg}
+	svc := &E2EProber{config: cfg}
 	req := &E2ERequest{
 		TargetType:   E2ETargetProvider,
 		ProviderUUID: "p-openai",
@@ -178,7 +178,7 @@ func TestResolveProviderTarget_DisabledProvider_Errors(t *testing.T) {
 	p.Enabled = false
 	require.NoError(t, cfg.UpdateProvider("p-disabled", p))
 
-	svc := &E2EService{config: cfg}
+	svc := &E2EProber{config: cfg}
 	req := &E2ERequest{
 		TargetType:   E2ETargetProvider,
 		ProviderUUID: "p-disabled",
@@ -283,7 +283,7 @@ func TestProbe_CachedEndpointCheck_SkipsDispatch(t *testing.T) {
 	}
 	addProvider(t, cfg, p)
 
-	svc := NewE2EService(cfg, nil) // nil clientPool: dispatch would panic
+	svc := NewE2EProber(cfg, nil) // nil clientPool: dispatch would panic
 	svc.endpointCache.remember("p-cache", "gpt-4o", "responses")
 
 	result, err := svc.Probe(context.Background(), &E2ERequest{

@@ -17,8 +17,8 @@ func getProbeToolsAnthropic() []anthropic.ToolUnionParam {
 				Name: "bash",
 				InputSchema: anthropic.ToolInputSchemaParam{
 					Type: "object",
-					Properties: map[string]interface{}{
-						"command": map[string]interface{}{
+					Properties: map[string]any{
+						"command": map[string]any{
 							"type":        "string",
 							"description": "The bash command to execute (e.g., 'ls -la', 'pwd', 'cat file.txt')",
 						},
@@ -32,8 +32,8 @@ func getProbeToolsAnthropic() []anthropic.ToolUnionParam {
 				Name: "get_status",
 				InputSchema: anthropic.ToolInputSchemaParam{
 					Type: "object",
-					Properties: map[string]interface{}{
-						"verbose": map[string]interface{}{
+					Properties: map[string]any{
+						"verbose": map[string]any{
 							"type":        "boolean",
 							"description": "Whether to include verbose status information",
 						},
@@ -52,10 +52,10 @@ func getProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
 			Name:        "bash",
 			Description: param.NewOpt("Execute bash commands for file system operations. Supports commands like: ls, pwd, cat, grep, find, git status, etc."),
 			Parameters: shared.FunctionParameters{
-				"type:":                "object",
+				"type":                 "object",
 				"additionalProperties": false,
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
+				"properties": map[string]any{
+					"command": map[string]any{
 						"type":        "string",
 						"description": "The bash command to execute",
 					},
@@ -69,8 +69,8 @@ func getProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
 			Parameters: shared.FunctionParameters{
 				"type":                 "object",
 				"additionalProperties": false,
-				"properties": map[string]interface{}{
-					"verbose": map[string]interface{}{
+				"properties": map[string]any{
+					"verbose": map[string]any{
 						"type":        "boolean",
 						"description": "Whether to include verbose information",
 					},
@@ -89,8 +89,8 @@ func getProbeToolsResponses() []responses.ToolUnionParam {
 			map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
+				"properties": map[string]any{
+					"command": map[string]any{
 						"type":        "string",
 						"description": "The bash command to execute",
 					},
@@ -104,8 +104,8 @@ func getProbeToolsResponses() []responses.ToolUnionParam {
 			map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
-				"properties": map[string]interface{}{
-					"verbose": map[string]interface{}{
+				"properties": map[string]any{
+					"verbose": map[string]any{
 						"type":        "boolean",
 						"description": "Whether to include verbose information",
 					},

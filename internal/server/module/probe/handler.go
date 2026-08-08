@@ -2,7 +2,6 @@ package probe
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,13 +14,13 @@ import (
 // lightweight services; adaptive can be hung off the same struct when that
 // strategy is decoupled from *Server.
 type Handler struct {
-	e2e         *probe.E2EService
-	lightweight *probe.LightweightService
+	e2e   *probe.E2EProber
+	light *probe.LightProber
 }
 
 // NewHandler builds a Handler around the given probe services.
-func NewHandler(e2e *probe.E2EService, lightweight *probe.LightweightService) *Handler {
-	return &Handler{e2e: e2e, lightweight: lightweight}
+func NewHandler(e2e *probe.E2EProber, light *probe.LightProber) *Handler {
+	return &Handler{e2e: e2e, light: light}
 }
 
 // errorDetail mirrors the JSON shape of the server's global ErrorDetail so
@@ -74,18 +73,10 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	startTime := time.Now()
 
-	var (
-		data *probe.E2EData
-		err  error
-	)
-	switch req.TestMode {
-	case probe.E2EModeSimple:
-		data, err = h.e2e.Probe(ctx, &req)
-	case probe.E2EModeStreaming, probe.E2EModeTool:
-		data, err = h.e2e.ProbeStream(ctx, &req)
-	}
+	// Probe handles all test modes (simple/streaming/tool); the stream-vs-
+	// non-stream decision is made inside the SDK helpers from req.TestMode.
+	data, err := h.e2e.Probe(ctx, &req)
 
 	if err != nil {
 		c.JSON(http.StatusOK, E2EResponse{
@@ -98,7 +89,8 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 		return
 	}
 
-	data.LatencyMs = time.Since(startTime).Milliseconds()
+	// LatencyMs is owned by the SDK probe (pure upstream round-trip time) — do
+	// not overwrite it here.
 	c.JSON(http.StatusOK, E2EResponse{Success: true, Data: data})
 }
 
@@ -141,6 +133,6 @@ func (h *Handler) HandleLightweightProbe(c *gin.Context) {
 		provider.AuthType = typ.AuthType(req.AuthType)
 	}
 
-	data := h.lightweight.Probe(c.Request.Context(), provider)
+	data := h.light.Probe(c.Request.Context(), provider)
 	c.JSON(http.StatusOK, LightweightResponse{Success: true, Data: data})
 }
