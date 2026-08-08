@@ -110,7 +110,6 @@ func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	if c.providerStore == nil {
 		return nil, fmt.Errorf("provider store not initialized")
 	}
-
 	provider, err := c.providerStore.GetByUUID(uuid)
 	if err != nil {
 		return nil, fmt.Errorf("provider '%s' not found: %w", uuid, err)
