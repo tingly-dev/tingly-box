@@ -6,8 +6,8 @@ import (
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
-	"github.com/tingly-dev/tingly-box/internal/thinking"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
@@ -91,7 +91,7 @@ func BuiltinScenarios() []RuleScenario {
 type ThinkingEffortLevel = string
 
 // The canonical ladder, budget fallback mapping, and conversions live in the
-// leaf package internal/thinking (so the protocol conversion layer can use
+// leaf package internal/protocol/thinking (so the protocol conversion layer can use
 // them without an import cycle); the typ names below are re-exports.
 const (
 	// ThinkingEffortDefault is the "by client" sentinel: pass the client's

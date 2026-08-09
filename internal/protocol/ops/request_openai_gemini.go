@@ -5,7 +5,7 @@ import (
 
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/thinking"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
 // Constants and configurations for Gemini API compatibility
@@ -85,7 +85,7 @@ func applyGeminiSubsetTransform(req *openai.ChatCompletionNewParams, model strin
 }
 
 // applyGeminiThinkingConfig converts the request's thinking signal to Gemini's
-// thinking_config, driven by the canonical effort ladder (internal/thinking).
+// thinking_config, driven by the canonical effort ladder (internal/protocol/thinking).
 // ref: https://ai.google.dev/gemini-api/docs/openai?hl=zh-cn#thinking
 //
 // The effort level is resolved in priority order:

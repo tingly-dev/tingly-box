@@ -12,7 +12,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/thinking"
+	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
 // This file holds the shared core of the Anthropic→OpenAI and
