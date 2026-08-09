@@ -65,6 +65,58 @@ func TestAnthropicModelThinkingCaps(t *testing.T) {
 	}
 }
 
+func TestClampAnthropicEffort(t *testing.T) {
+	caps46 := anthropicModelThinkingCaps("claude-opus-4-6")           // low/medium/high/max
+	caps45 := anthropicModelThinkingCaps("claude-opus-4-5")           // low/medium/high
+	capsOld := anthropicModelThinkingCaps("claude-sonnet-4-20250514") // no effort
+
+	assert.Equal(t, anthropic.OutputConfigEffortMax, clampAnthropicEffort(anthropic.OutputConfigEffortMax, caps46))
+	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortXhigh, caps46),
+		"xhigh steps down to the nearest supported level")
+	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortMax, caps45),
+		"Opus 4.5 has no max, steps down to high")
+	assert.Equal(t, anthropic.OutputConfigEffortLow, clampAnthropicEffort("minimal", caps46),
+		"minimal enters the ladder at low")
+	assert.Equal(t, anthropic.OutputConfigEffort(""), clampAnthropicEffort(anthropic.OutputConfigEffortHigh, capsOld),
+		"models without effort support get the field stripped")
+}
+
+func TestApplyAnthropicModelTransform_V1_DisabledThinkingStripsStaleEffort(t *testing.T) {
+	// Regression: a client (or a stale UI selector) can send thinking=disabled
+	// together with a leftover output_config.effort. Effort only makes sense
+	// paired with active thinking, so it must be scrubbed even on a model that
+	// otherwise supports effort — not just clamped to a supported level.
+	req := &anthropic.MessageNewParams{
+		Model:        anthropic.Model("claude-opus-4-5-20251101"),
+		MaxTokens:    int64(4096),
+		Thinking:     anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}},
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-5-20251101")
+
+	assert.Equal(t, anthropic.OutputConfigEffort(""), result.OutputConfig.Effort)
+}
+
+func TestApplyAnthropicModelTransform_Beta_DisabledThinkingStripsStaleEffort(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{
+		Model:        anthropic.Model("claude-opus-4-5-20251101"),
+		MaxTokens:    int64(4096),
+		Thinking:     anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}},
+		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortHigh},
+		Messages: []anthropic.BetaMessageParam{
+			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}},
+		},
+	}
+
+	result := ApplyAnthropicBetaModelTransform(req, "claude-opus-4-5-20251101")
+
+	assert.Equal(t, anthropic.BetaOutputConfigEffort(""), result.OutputConfig.Effort)
+}
+
 func TestApplyAnthropicModelTransform_V1_AdaptiveWithEffort_FallsBackToBudget(t *testing.T) {
 	// Budget-only model + adaptive request carrying an effort level: the effort
 	// converts to enabled(budget) instead of disabling thinking outright.
