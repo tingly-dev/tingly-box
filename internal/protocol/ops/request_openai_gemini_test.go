@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestApplyGeminiTransform tests the main Gemini transformation entry point
@@ -315,13 +316,15 @@ func TestApplyGeminiThinkingConfig(t *testing.T) {
 	})
 
 	t.Run("Gemini 3 uses thinking_level", func(t *testing.T) {
-		models := []string{
-			"gemini-3.0-flash",
-			"gemini-3.5-pro",
-			"gemini-3-flash",
+		// The blob's level flows through to thinking_level; Gemini 3 Pro has
+		// no "medium" so it rounds up to "high".
+		models := map[string]string{
+			"gemini-3.0-flash": "medium",
+			"gemini-3.5-pro":   "high",
+			"gemini-3-flash":   "medium",
 		}
 
-		for _, model := range models {
+		for model, wantLevel := range models {
 			t.Run(model, func(t *testing.T) {
 				req := &openai.ChatCompletionNewParams{
 					Model: openai.ChatModel(model),
@@ -348,9 +351,75 @@ func TestApplyGeminiThinkingConfig(t *testing.T) {
 				// Should use thinking_level for Gemini 3
 				assert.Contains(t, thinkingConfig, "thinking_level")
 				assert.NotContains(t, thinkingConfig, "thinking_budget")
-				assert.Equal(t, "low", thinkingConfig["thinking_level"])
+				assert.Equal(t, wantLevel, thinkingConfig["thinking_level"])
 			})
 		}
+	})
+
+	t.Run("forced reasoning_effort drives config without a thinking blob", func(t *testing.T) {
+		// A thinking_effort rule sets ReasoningEffort and strips the blob;
+		// the Gemini transform must still emit a thinking_config from it.
+		req := &openai.ChatCompletionNewParams{
+			Model:           openai.ChatModel("gemini-2.5-flash"),
+			ReasoningEffort: shared.ReasoningEffortHigh,
+		}
+
+		result := applyGeminiThinkingConfig(req, "gemini-2.5-flash", nil)
+
+		extraBody := result.ExtraFields()["extra_body"].(map[string]interface{})
+		googleConfig := extraBody["google"].(map[string]interface{})
+		thinkingConfig := googleConfig["thinking_config"].(map[string]interface{})
+		assert.Equal(t, int(typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh]), thinkingConfig["thinking_budget"])
+		assert.Equal(t, shared.ReasoningEffort(""), result.ReasoningEffort,
+			"reasoning_effort must be cleared once translated to thinking_config")
+	})
+
+	t.Run("explicit budget_tokens tiers onto the ladder", func(t *testing.T) {
+		req := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel("gemini-3-flash"),
+		}
+		req.SetExtraFields(map[string]interface{}{
+			"thinking": map[string]interface{}{
+				"type":          "enabled",
+				"budget_tokens": float64(31999),
+			},
+		})
+
+		result := applyGeminiThinkingConfig(req, "gemini-3-flash", nil)
+
+		extraBody := result.ExtraFields()["extra_body"].(map[string]interface{})
+		googleConfig := extraBody["google"].(map[string]interface{})
+		thinkingConfig := googleConfig["thinking_config"].(map[string]interface{})
+		assert.Equal(t, "high", thinkingConfig["thinking_level"], "a 32K budget tiers to max, collapsing to Gemini high")
+	})
+
+	t.Run("flash budget capped at 24576", func(t *testing.T) {
+		req := &openai.ChatCompletionNewParams{
+			Model:           openai.ChatModel("gemini-2.5-flash"),
+			ReasoningEffort: shared.ReasoningEffortMax,
+		}
+
+		result := applyGeminiThinkingConfig(req, "gemini-2.5-flash", nil)
+
+		extraBody := result.ExtraFields()["extra_body"].(map[string]interface{})
+		googleConfig := extraBody["google"].(map[string]interface{})
+		thinkingConfig := googleConfig["thinking_config"].(map[string]interface{})
+		assert.Equal(t, 24576, thinkingConfig["thinking_budget"])
+	})
+
+	t.Run("disabled blob is consumed without emitting config", func(t *testing.T) {
+		req := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel("gemini-2.5-flash"),
+		}
+		req.SetExtraFields(map[string]interface{}{
+			"thinking": map[string]interface{}{"type": "disabled"},
+		})
+
+		result := applyGeminiThinkingConfig(req, "gemini-2.5-flash", nil)
+
+		extras := result.ExtraFields()
+		assert.NotContains(t, extras, "extra_body")
+		assert.NotContains(t, extras, "thinking", "non-standard blob must not reach Google")
 	})
 
 	t.Run("include_thoughts flag", func(t *testing.T) {
@@ -446,41 +515,53 @@ func TestApplyGeminiPoeTransform(t *testing.T) {
 	})
 }
 
-// TestGetThinkingLevel tests thinking level determination
+// TestGetThinkingLevel tests effort→thinking_level mapping
 func TestGetThinkingLevel(t *testing.T) {
 	tests := []struct {
 		name     string
 		model    string
+		effort   string
 		expected string
 	}{
-		{"default", "gemini-3.0-flash", "low"},
-		{"pro model", "gemini-3.5-pro", "low"},
-		{"flash model", "gemini-3-flash-exp", "low"},
+		{"minimal", "gemini-3.0-flash", "minimal", "minimal"},
+		{"low", "gemini-3.0-flash", "low", "low"},
+		{"medium", "gemini-3.0-flash", "medium", "medium"},
+		{"high", "gemini-3.0-flash", "high", "high"},
+		{"xhigh collapses to high", "gemini-3.0-flash", "xhigh", "high"},
+		{"max collapses to high", "gemini-3-flash-exp", "max", "high"},
+		{"pro rounds minimal up to low", "gemini-3.5-pro", "minimal", "low"},
+		{"pro rounds medium up to high", "gemini-3.5-pro", "medium", "high"},
+		{"pro keeps low", "gemini-3.5-pro", "low", "low"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getThinkingLevel(tt.model)
+			result := getThinkingLevel(tt.model, tt.effort)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-// TestGetThinkingBudget tests thinking budget determination
+// TestGetThinkingBudget tests effort→thinking_budget mapping
 func TestGetThinkingBudget(t *testing.T) {
 	tests := []struct {
 		name     string
 		model    string
+		effort   string
 		expected int
 	}{
-		{"default low", "gemini-2.5-flash", 1024},
-		{"pro model", "gemini-2.5-pro", 1024},
-		{"flash experimental", "gemini-2.0-flash-exp", 1024},
+		{"minimal", "gemini-2.5-flash", "minimal", 1024},
+		{"low", "gemini-2.5-pro", "low", 4096},
+		{"medium", "gemini-2.5-flash", "medium", 10240},
+		{"high", "gemini-2.0-flash-exp", "high", 20480},
+		{"max on pro is uncapped", "gemini-2.5-pro", "max", 31999},
+		{"max on flash caps at 24576", "gemini-2.5-flash", "max", 24576},
+		{"unknown effort falls back to low", "gemini-2.5-flash", "bogus", 4096},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getThinkingBudget(tt.model)
+			result := getThinkingBudget(tt.model, tt.effort)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -498,7 +579,7 @@ func TestBuildGeminiThinkingConfig(t *testing.T) {
 
 		for _, model := range models {
 			t.Run(model, func(t *testing.T) {
-				result := buildGeminiThinkingConfig(model)
+				result := buildGeminiThinkingConfig(model, "medium")
 
 				thinkingConfig, ok := result["thinking_config"].(map[string]interface{})
 				require.True(t, ok)
@@ -519,7 +600,7 @@ func TestBuildGeminiThinkingConfig(t *testing.T) {
 
 		for _, model := range models {
 			t.Run(model, func(t *testing.T) {
-				result := buildGeminiThinkingConfig(model)
+				result := buildGeminiThinkingConfig(model, "medium")
 
 				thinkingConfig, ok := result["thinking_config"].(map[string]interface{})
 				require.True(t, ok)
