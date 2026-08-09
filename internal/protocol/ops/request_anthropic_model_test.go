@@ -7,67 +7,182 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func TestIsThinkingSupportedModel(t *testing.T) {
+func TestAnthropicModelThinkingCaps(t *testing.T) {
 	tests := []struct {
 		name     string
 		model    string
-		expected bool
+		expected anthropicThinkingCaps
 	}{
+		{
+			name:     "Claude Opus 4.7 is adaptive-only",
+			model:    "claude-opus-4-7",
+			expected: anthropicThinkingCaps{adaptive: true, budget: false, effort: true, effortMax: true},
+		},
 		{
 			name:     "Claude Opus 4.6",
 			model:    "claude-opus-4-6",
-			expected: true,
+			expected: anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true},
 		},
 		{
 			name:     "Claude Opus 4.6 uppercase",
 			model:    "CLAUDE-OPUS-4-6",
-			expected: true,
+			expected: anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true},
 		},
 		{
 			name:     "Claude Sonnet 4.6",
 			model:    "claude-sonnet-4-6",
-			expected: true,
+			expected: anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true},
 		},
 		{
-			name:     "Claude Sonnet 4.6 uppercase",
-			model:    "CLAUDE-SONNET-4-6",
-			expected: true,
+			name:     "Claude Opus 4.5 has effort but no adaptive and no effort=max",
+			model:    "claude-opus-4-5-20251101",
+			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: true, effortMax: false},
 		},
 		{
-			name:     "Claude Haiku 3.5",
-			model:    "claude-3-5-haiku-20241022",
-			expected: false,
+			name:     "Claude Haiku 4.5 is budget-only",
+			model:    "claude-haiku-4-5-20251001",
+			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false},
 		},
 		{
-			name:     "Claude Haiku 3",
-			model:    "claude-3-haiku",
-			expected: false,
-		},
-		{
-			name:     "Claude Sonnet 3.5",
+			name:     "Claude Sonnet 3.5 is budget-only",
 			model:    "claude-3-5-sonnet-20241022",
-			expected: false,
+			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false},
 		},
 		{
-			name:     "Claude Opus 3.7",
-			model:    "claude-3-7-opus-20250214",
-			expected: false,
-		},
-		{
-			name:     "Empty model",
+			name:     "Empty model gets legacy profile",
 			model:    "",
-			expected: false,
+			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isThinkingSupportedModel(tt.model)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expected, anthropicModelThinkingCaps(tt.model))
 		})
 	}
+}
+
+func TestApplyAnthropicModelTransform_V1_AdaptiveWithEffort_FallsBackToBudget(t *testing.T) {
+	// Budget-only model + adaptive request carrying an effort level: the effort
+	// converts to enabled(budget) instead of disabling thinking outright.
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-sonnet-4-5-20250929"),
+		MaxTokens: int64(64000),
+		Thinking: anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+		},
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-sonnet-4-5-20250929")
+
+	assert.Nil(t, result.Thinking.OfAdaptive)
+	if assert.NotNil(t, result.Thinking.OfEnabled, "adaptive+effort should fall back to enabled(budget)") {
+		assert.Equal(t, typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh], result.Thinking.OfEnabled.BudgetTokens)
+	}
+	assert.Equal(t, anthropic.OutputConfigEffort(""), result.OutputConfig.Effort,
+		"effort must be stripped for models without effort support")
+}
+
+func TestApplyAnthropicModelTransform_V1_AdaptiveBudgetFallbackCappedByMaxTokens(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
+		MaxTokens: int64(2048),
+		Thinking: anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+		},
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortMax},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-haiku-20241022")
+
+	if assert.NotNil(t, result.Thinking.OfEnabled) {
+		assert.LessOrEqual(t, result.Thinking.OfEnabled.BudgetTokens, int64(2048),
+			"fallback budget must not exceed max_tokens")
+	}
+}
+
+func TestApplyAnthropicModelTransform_V1_Opus47_BudgetConvertsToAdaptive(t *testing.T) {
+	// Adaptive-only model (Opus 4.7) + enabled(budget) request: budget converts
+	// to adaptive + effort derived from the budget tier.
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-opus-4-7"),
+		MaxTokens: int64(64000),
+		Thinking:  anthropic.ThinkingConfigParamOfEnabled(31999),
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-7")
+
+	assert.Nil(t, result.Thinking.OfEnabled, "enabled(budget) is not supported on Opus 4.7")
+	assert.NotNil(t, result.Thinking.OfAdaptive, "budget request should convert to adaptive")
+	assert.Equal(t, anthropic.OutputConfigEffortMax, result.OutputConfig.Effort,
+		"a 32K budget tiers to effort=max")
+}
+
+func TestApplyAnthropicModelTransform_V1_Opus47_ExplicitEffortWins(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Model:        anthropic.Model("claude-opus-4-7"),
+		MaxTokens:    int64(64000),
+		Thinking:     anthropic.ThinkingConfigParamOfEnabled(31999),
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortLow},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-7")
+
+	assert.NotNil(t, result.Thinking.OfAdaptive)
+	assert.Equal(t, anthropic.OutputConfigEffortLow, result.OutputConfig.Effort,
+		"an explicit effort level wins over the budget-derived tier")
+}
+
+func TestApplyAnthropicModelTransform_V1_Opus45_EffortMaxClampsToHigh(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Model:        anthropic.Model("claude-opus-4-5-20251101"),
+		MaxTokens:    int64(64000),
+		Thinking:     anthropic.ThinkingConfigParamOfEnabled(20480),
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortMax},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+		},
+	}
+
+	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-5-20251101")
+
+	assert.NotNil(t, result.Thinking.OfEnabled, "budget thinking stays on Opus 4.5")
+	assert.Equal(t, anthropic.OutputConfigEffortHigh, result.OutputConfig.Effort,
+		"Opus 4.5's effort ladder stops at high")
+}
+
+func TestApplyAnthropicModelTransform_Beta_Opus47_BudgetConvertsToAdaptive(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model("claude-opus-4-7"),
+		MaxTokens: int64(64000),
+		Thinking:  anthropic.BetaThinkingConfigParamOfEnabled(4096),
+		Messages: []anthropic.BetaMessageParam{
+			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}},
+		},
+	}
+
+	result := ApplyAnthropicBetaModelTransform(req, "claude-opus-4-7")
+
+	assert.Nil(t, result.Thinking.OfEnabled)
+	assert.NotNil(t, result.Thinking.OfAdaptive)
+	assert.Equal(t, anthropic.BetaOutputConfigEffortLow, result.OutputConfig.Effort,
+		"a 4K budget tiers to effort=low")
 }
 
 func TestApplyAnthropicModelTransform_V1_Opus46_Adaptive(t *testing.T) {

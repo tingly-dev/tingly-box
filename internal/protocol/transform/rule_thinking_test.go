@@ -23,6 +23,52 @@ func TestRuleThinkingTransform_AnthropicBudget(t *testing.T) {
 	if got := req.Thinking.OfEnabled.BudgetTokens; got != typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh] {
 		t.Errorf("budget = %d, want %d", got, typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh])
 	}
+	if req.OutputConfig.Effort != anthropic.OutputConfigEffortHigh {
+		t.Errorf("output_config.effort = %q, want high", req.OutputConfig.Effort)
+	}
+}
+
+func TestRuleThinkingTransform_AnthropicAdaptivePreserved(t *testing.T) {
+	// A request already using adaptive thinking (Claude 4.6+ dialect) keeps
+	// adaptive; the forced level lands on output_config.effort only.
+	req := &anthropic.MessageNewParams{
+		Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
+	}
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortMax).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if req.Thinking.OfAdaptive == nil {
+		t.Fatalf("adaptive thinking should be preserved, got %#v", req.Thinking)
+	}
+	if req.OutputConfig.Effort != anthropic.OutputConfigEffortMax {
+		t.Errorf("output_config.effort = %q, want max", req.OutputConfig.Effort)
+	}
+}
+
+func TestRuleThinkingTransform_AnthropicEffortCollapses(t *testing.T) {
+	// Anthropic's ladder has no minimal (→low); xhigh is SDK-defined but not
+	// advertised by any current model (→high).
+	for level, want := range map[string]anthropic.OutputConfigEffort{
+		typ.ThinkingEffortMinimal: anthropic.OutputConfigEffortLow,
+		typ.ThinkingEffortXHigh:   anthropic.OutputConfigEffortHigh,
+	} {
+		req := &anthropic.MessageNewParams{}
+		ctx := &TransformContext{Request: req}
+		if err := NewRuleThinkingTransform(level).Apply(ctx); err != nil {
+			t.Fatalf("apply(%s): %v", level, err)
+		}
+		if req.OutputConfig.Effort != want {
+			t.Errorf("effort %s: output_config.effort = %q, want %q", level, req.OutputConfig.Effort, want)
+		}
+		if req.Thinking.OfEnabled == nil {
+			t.Fatalf("effort %s: expected budget thinking enabled", level)
+		}
+		if got := req.Thinking.OfEnabled.BudgetTokens; got != typ.ThinkingBudgetMapping[level] {
+			t.Errorf("effort %s: budget = %d, want %d", level, got, typ.ThinkingBudgetMapping[level])
+		}
+	}
 }
 
 func TestRuleThinkingTransform_AnthropicNewLadderLevels(t *testing.T) {
@@ -74,7 +120,7 @@ func TestRuleThinkingTransform_OpenAIChatEffort(t *testing.T) {
 }
 
 func TestRuleThinkingTransform_OpenAIFullLadderIsNative(t *testing.T) {
-	// All six ladder levels are OpenAI-defined — no collapsing.
+	// All six ladder levels are OpenAI-defined now — no collapsing.
 	cases := map[string]shared.ReasoningEffort{
 		typ.ThinkingEffortMinimal: shared.ReasoningEffortMinimal,
 		typ.ThinkingEffortLow:     shared.ReasoningEffortLow,

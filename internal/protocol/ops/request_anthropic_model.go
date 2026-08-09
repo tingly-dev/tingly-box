@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 const ClaudeCodeVersion = "2.1.86"
@@ -16,79 +17,135 @@ const ClaudeCodeVersion = "2.1.86"
 // IMPORTANT: Must stay in sync with Claude Code's FINGERPRINT_SALT constant.
 const FingerprintSalt = "59cf53e54c78"
 
-// ApplyAnthropicV1ModelTransform applies Anthropic API v1 model-specific filtering.
-// This handles model-specific limitations such as adaptive thinking only being supported by
-// Claude Opus 4.6 (claude-opus-4-6) and Claude Sonnet 4.6 (claude-sonnet-4-6).
-//
-// Parameters:
-//   - req: The Anthropic v1 request to transform
-//   - model: The target model name
-//
-// Returns the transformed request (same type as input).
+// anthropicThinkingCaps describes which thinking dialects a Claude model
+// accepts. Derived from internal/data/ref/claude.models.json — keep the
+// detection below in sync with that catalog when new models land.
+type anthropicThinkingCaps struct {
+	adaptive  bool // thinking.type=adaptive
+	budget    bool // thinking.type=enabled + budget_tokens
+	effort    bool // output_config.effort
+	effortMax bool // output_config.effort accepts "max" (4.6+; opus-4-5 stops at "high")
+}
+
+// anthropicModelThinkingCaps resolves a model name to its thinking dialect
+// support. Unknown models get the conservative legacy profile (budget only).
+func anthropicModelThinkingCaps(model string) anthropicThinkingCaps {
+	m := strings.ToLower(model)
+	switch {
+	case strings.Contains(m, "claude-opus-4-7"):
+		// Adaptive-only: budget-based thinking.enabled is no longer accepted.
+		return anthropicThinkingCaps{adaptive: true, budget: false, effort: true, effortMax: true}
+	case strings.Contains(m, "claude-opus-4-6"), strings.Contains(m, "claude-sonnet-4-6"):
+		return anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true}
+	case strings.Contains(m, "claude-opus-4-5"):
+		return anthropicThinkingCaps{adaptive: false, budget: true, effort: true, effortMax: false}
+	default:
+		return anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false}
+	}
+}
+
+// clampAnthropicEffort clamps an effort value to what the model accepts.
+// Returns "" when the model has no effort support at all.
+func clampAnthropicEffort(effort anthropic.OutputConfigEffort, caps anthropicThinkingCaps) anthropic.OutputConfigEffort {
+	if effort == "" || !caps.effort {
+		return ""
+	}
+	switch effort {
+	case "minimal": // not an Anthropic level; clamp up to the ladder minimum
+		return anthropic.OutputConfigEffortLow
+	case anthropic.OutputConfigEffortXhigh: // SDK-defined but no current model advertises it
+		return anthropic.OutputConfigEffortHigh
+	case anthropic.OutputConfigEffortMax:
+		if !caps.effortMax {
+			return anthropic.OutputConfigEffortHigh
+		}
+	}
+	return effort
+}
+
+// ApplyAnthropicV1ModelTransform reconciles the request's thinking config with
+// what the target model actually supports:
+//   - adaptive requested on a non-adaptive model → enabled(budget) derived from
+//     output_config.effort via typ.ThinkingBudgetMapping, or disabled when no
+//     effort is present (budget is the fallback dialect).
+//   - enabled(budget) requested on an adaptive-only model (Opus 4.7+) →
+//     adaptive, with output_config.effort derived from the budget via
+//     typ.ThinkingEffortFromBudget (effort is the fallback in that direction).
+//   - output_config.effort stripped/clamped to the model's supported levels.
 //
 // Note: This applies to ALL Anthropic API requests, regardless of authentication method
 // (API key or OAuth token). The limitation is in the Anthropic API itself, not the auth method.
 func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model string) *anthropic.MessageNewParams {
-	if isThinkingSupportedModel(model) {
+	if req == nil {
 		return req
 	}
-	return applyAnthropicV1ThinkingFilter(req)
+	caps := anthropicModelThinkingCaps(model)
+	if caps.adaptive && caps.budget && caps.effortMax {
+		return req
+	}
+
+	if !caps.adaptive {
+		req.Messages = filterThinkingBlocksInMessages(req.Messages)
+		if req.Thinking.OfAdaptive != nil {
+			if budget, ok := typ.ThinkingBudgetMapping[string(req.OutputConfig.Effort)]; ok {
+				if req.MaxTokens > 0 && budget > req.MaxTokens {
+					budget = req.MaxTokens
+				}
+				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
+			} else {
+				req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+			}
+		}
+	}
+
+	if !caps.budget && req.Thinking.OfEnabled != nil {
+		if req.OutputConfig.Effort == "" {
+			req.OutputConfig.Effort = anthropic.OutputConfigEffort(
+				typ.ThinkingEffortFromBudget(req.Thinking.OfEnabled.BudgetTokens))
+		}
+		req.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
+	}
+
+	req.OutputConfig.Effort = clampAnthropicEffort(req.OutputConfig.Effort, caps)
+
+	return req
 }
 
 // ApplyAnthropicBetaModelTransform applies Anthropic API beta model-specific filtering.
 // Same rules as V1 but for BetaMessageNewParams.
 func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model string) *anthropic.BetaMessageNewParams {
-	if isThinkingSupportedModel(model) {
-		return req
-	}
-	return applyAnthropicBetaThinkingFilter(req)
-}
-
-// isThinkingSupportedModel checks if the model supports adaptive thinking.
-// Only Claude Opus 4.6 and Claude Sonnet 4.6 support adaptive thinking.
-func isThinkingSupportedModel(model string) bool {
-	modelLower := strings.ToLower(model)
-	return strings.Contains(modelLower, "claude-opus-4-6") || strings.Contains(modelLower, "claude-sonnet-4-6")
-}
-
-// applyAnthropicV1ThinkingFilter removes thinking configuration from Anthropic v1 requests
-// for models that don't support adaptive thinking.
-func applyAnthropicV1ThinkingFilter(req *anthropic.MessageNewParams) *anthropic.MessageNewParams {
 	if req == nil {
 		return req
 	}
-
-	req.Messages = filterThinkingBlocksInMessages(req.Messages)
-	// Check if thinking is set to adaptive
-	if req.Thinking.OfAdaptive != nil {
-		// Remove thinking configuration for Haiku
-		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
-	}
-
-	if req.Thinking.OfEnabled == nil {
-		req.OutputConfig = anthropic.OutputConfigParam{}
-	}
-
-	return req
-}
-
-// applyAnthropicBetaThinkingFilter removes thinking configuration from Anthropic v1 requests
-// // for models that don't support adaptive thinking.
-func applyAnthropicBetaThinkingFilter(req *anthropic.BetaMessageNewParams) *anthropic.BetaMessageNewParams {
-	if req == nil {
+	caps := anthropicModelThinkingCaps(model)
+	if caps.adaptive && caps.budget && caps.effortMax {
 		return req
 	}
 
-	req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
-	// Check if thinking is set to adaptive
-	if req.Thinking.OfAdaptive != nil {
-		// Remove thinking configuration for Haiku
-		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+	if !caps.adaptive {
+		req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
+		if req.Thinking.OfAdaptive != nil {
+			if budget, ok := typ.ThinkingBudgetMapping[string(req.OutputConfig.Effort)]; ok {
+				if req.MaxTokens > 0 && budget > req.MaxTokens {
+					budget = req.MaxTokens
+				}
+				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
+			} else {
+				req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+			}
+		}
 	}
 
-	if req.Thinking.OfEnabled == nil {
-		req.OutputConfig = anthropic.BetaOutputConfigParam{}
+	if !caps.budget && req.Thinking.OfEnabled != nil {
+		if req.OutputConfig.Effort == "" {
+			req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(
+				typ.ThinkingEffortFromBudget(req.Thinking.OfEnabled.BudgetTokens))
+		}
+		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
 	}
+
+	req.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(
+		clampAnthropicEffort(anthropic.OutputConfigEffort(req.OutputConfig.Effort), caps))
 
 	return req
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ApplyCodexResponsesTransform applies Codex-specific transformations to a Responses API request.
@@ -150,18 +151,15 @@ func applyCodexToolTransforms(template string, anthropicReq *anthropic.BetaMessa
 	return template
 }
 
-// convertBudgetToEffort converts thinking budget tokens to reasoning effort level.
+// convertBudgetToEffort converts thinking budget tokens to a Codex reasoning
+// effort level via the canonical ladder (typ.ThinkingEffortFromBudget).
+// Codex's catalog tops out at "xhigh", so "max" collapses to it.
 func convertBudgetToEffort(budget int) string {
-	switch {
-	case budget <= 1000:
-		return "low"
-	case budget <= 20000:
-		return "medium"
-	case budget <= 50000:
-		return "high"
-	default:
-		return "xhigh"
+	effort := typ.ThinkingEffortFromBudget(int64(budget))
+	if effort == typ.ThinkingEffortMax {
+		return typ.ThinkingEffortXHigh
 	}
+	return effort
 }
 
 // normalizeToolParameters ensures object schemas contain at least an empty properties map.

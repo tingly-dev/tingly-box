@@ -12,6 +12,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/thinking"
 )
 
 // This file holds the shared core of the Anthropic→OpenAI and
@@ -313,7 +314,13 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 		config.HasThinking = true
 		config.ReasoningEffort = "medium"
 	}
+	if view.Thinking.OfEnabled != nil && view.Thinking.OfEnabled.BudgetTokens > 0 {
+		// Tier the explicit budget onto the effort ladder instead of flattening
+		// every budget to "medium" (a 32K ultrathink budget is not "medium").
+		config.ReasoningEffort = shared.ReasoningEffort(thinking.EffortFromBudget(view.Thinking.OfEnabled.BudgetTokens))
+	}
 	if view.OutputConfig.Effort != "" {
+		// An explicit effort level wins over the budget-derived tier.
 		config.ReasoningEffort = shared.ReasoningEffort(view.OutputConfig.Effort)
 	}
 

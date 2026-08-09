@@ -7,6 +7,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
+	"github.com/tingly-dev/tingly-box/internal/thinking"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
@@ -89,38 +90,35 @@ func BuiltinScenarios() []RuleScenario {
 // ThinkingEffortLevel represents the thinking effort level for extended thinking
 type ThinkingEffortLevel = string
 
-// The ladder covers the union of levels the providers we route to actually
-// define: OpenAI reasoning_effort has none/minimal/low/medium/high/xhigh/max;
-// Gemini 3 thinking_level has minimal/low/medium/high. "none" intentionally
-// maps to our existing "off" sentinel instead of a ladder entry.
+// The canonical ladder, budget fallback mapping, and conversions live in the
+// leaf package internal/thinking (so the protocol conversion layer can use
+// them without an import cycle); the typ names below are re-exports.
 const (
 	// ThinkingEffortDefault is the "by client" sentinel: pass the client's
 	// thinking config through unchanged. Empty string so omitempty hides it.
-	ThinkingEffortDefault ThinkingEffortLevel = ""
+	ThinkingEffortDefault ThinkingEffortLevel = thinking.LevelDefault
 	// ThinkingEffortOff is the "explicitly disabled" sentinel: strip thinking
 	// from the outbound request regardless of what the client sent.
-	ThinkingEffortOff     ThinkingEffortLevel = "off"
-	ThinkingEffortMinimal ThinkingEffortLevel = "minimal"
-	ThinkingEffortLow     ThinkingEffortLevel = "low"
-	ThinkingEffortMedium  ThinkingEffortLevel = "medium"
-	ThinkingEffortHigh    ThinkingEffortLevel = "high"
-	ThinkingEffortXHigh   ThinkingEffortLevel = "xhigh"
-	ThinkingEffortMax     ThinkingEffortLevel = "max"
+	// (OpenAI's "none" level maps here, not to a ladder entry.)
+	ThinkingEffortOff     ThinkingEffortLevel = thinking.LevelOff
+	ThinkingEffortMinimal ThinkingEffortLevel = thinking.LevelMinimal
+	ThinkingEffortLow     ThinkingEffortLevel = thinking.LevelLow
+	ThinkingEffortMedium  ThinkingEffortLevel = thinking.LevelMedium
+	ThinkingEffortHigh    ThinkingEffortLevel = thinking.LevelHigh
+	ThinkingEffortXHigh   ThinkingEffortLevel = thinking.LevelXHigh
+	ThinkingEffortMax     ThinkingEffortLevel = thinking.LevelMax
 )
 
-// ThinkingBudgetMapping defines budget_tokens for each effort level, the
-// dialect every Anthropic model accepts (Claude 4.5+ additionally accepts a
-// native output_config.effort field — not handled here, see the tracking
-// follow-up in .design/rule-flags.md).
+// ThinkingBudgetMapping defines fallback budget_tokens for each effort level,
+// used only when the target speaks budgets instead of effort levels.
 // "off" / "" are intentionally absent — they signal disabled / pass-through,
 // not a budget value, and are handled out-of-band by the transform layer.
-var ThinkingBudgetMapping = map[ThinkingEffortLevel]int64{
-	ThinkingEffortMinimal: 1024,  // ~1K tokens - Anthropic's minimum for extended thinking
-	ThinkingEffortLow:     4096,  // ~4K tokens - light reasoning (Claude Code "think")
-	ThinkingEffortMedium:  10240, // ~10K tokens - balanced (Claude Code "megathink")
-	ThinkingEffortHigh:    20480, // ~20K tokens - deep reasoning
-	ThinkingEffortXHigh:   24576, // ~24K tokens - deeper reasoning
-	ThinkingEffortMax:     31999, // ~32K tokens - maximum (Claude Code "ultrathink")
+var ThinkingBudgetMapping = thinking.BudgetMapping
+
+// ThinkingEffortFromBudget is the inverse of ThinkingBudgetMapping: it tiers
+// an explicit budget_tokens value back onto the effort ladder.
+func ThinkingEffortFromBudget(budget int64) ThinkingEffortLevel {
+	return thinking.EffortFromBudget(budget)
 }
 
 // ThinkingMode is retained for backward compatibility with the deprecated
@@ -171,8 +169,7 @@ type ScenarioFlags struct {
 
 	// ThinkingEffort is the unified extended-thinking control. Recognized
 	// values: "" (by client, default), "off" (force disabled), or one of
-	// "minimal"/"low"/"medium"/"high"/"xhigh"/"max" (force enabled with the
-	// matching budget).
+	// "minimal"/"low"/"medium"/"high"/"xhigh"/"max" (force enabled at that level).
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
 	// CustomUserAgent overrides the outbound User-Agent header for every rule
@@ -226,9 +223,9 @@ type RuleFlags struct {
 
 	// ThinkingEffort is the unified extended-thinking control. Recognized
 	// values: "" (by client, default), "off" (force disabled), or one of
-	// "minimal"/"low"/"medium"/"high"/"xhigh"/"max" (force enabled with the
-	// matching budget). Maps to budget_tokens for Anthropic and
-	// reasoning_effort for OpenAI (both accept all six levels natively).
+	// "minimal"/"low"/"medium"/"high"/"xhigh"/"max" (force enabled at that
+	// level). Maps to reasoning_effort for OpenAI and output_config.effort +
+	// budget_tokens for Anthropic (budget as fallback for budget-only models).
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
 	// CleanHeader strips x-anthropic-billing-header blocks from system messages.

@@ -159,7 +159,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
-			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on with the matching budget — mapped to budget_tokens for Anthropic targets (minimal 1K / low 4K / medium 10K / high 20K / xhigh 24K / max 32K) and to reasoning_effort for OpenAI targets (all six levels sent natively).",
+			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (minimal 1K / low 4K / medium 10K / high 20K / xhigh 24K / max 32K).",
 			Type:            FlagTypeEnum,
 			Category:        FlagCategoryReasoning,
 			Shared:          true,
