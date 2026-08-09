@@ -195,26 +195,23 @@ func buildGeminiThinkingConfig(modelLower, effort string) map[string]interface{}
 // only supports low/high, so minimal rounds up and medium rounds up to keep
 // the "real thinking" intent (Pro's own default is dynamic high).
 func getThinkingLevel(model, effort string) string {
-	var level string
+	isPro := strings.Contains(model, "pro")
 	switch effort {
 	case thinking.LevelMinimal:
-		level = "minimal"
-	case thinking.LevelLow:
-		level = "low"
-	case thinking.LevelMedium:
-		level = "medium"
-	default: // high / xhigh / max / unknown
-		level = "high"
-	}
-	if strings.Contains(model, "pro") {
-		switch level {
-		case "minimal":
-			level = "low"
-		case "medium":
-			level = "high"
+		if isPro {
+			return "low"
 		}
+		return "minimal"
+	case thinking.LevelLow:
+		return "low"
+	case thinking.LevelMedium:
+		if isPro {
+			return "high"
+		}
+		return "medium"
+	default: // high / xhigh / max / unknown
+		return "high"
 	}
-	return level
 }
 
 // getThinkingBudget maps a ladder effort level to a Gemini 2.5 thinking_budget
