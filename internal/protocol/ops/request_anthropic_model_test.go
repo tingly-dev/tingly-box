@@ -7,79 +7,21 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func TestAnthropicModelThinkingCaps(t *testing.T) {
-	tests := []struct {
-		name     string
-		model    string
-		expected anthropicThinkingCaps
-	}{
-		{
-			name:     "Claude Opus 4.7 is adaptive-only",
-			model:    "claude-opus-4-7",
-			expected: anthropicThinkingCaps{adaptive: true, budget: false, effort: true, effortMax: true},
-		},
-		{
-			name:     "Claude Opus 4.6",
-			model:    "claude-opus-4-6",
-			expected: anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true},
-		},
-		{
-			name:     "Claude Opus 4.6 uppercase",
-			model:    "CLAUDE-OPUS-4-6",
-			expected: anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true},
-		},
-		{
-			name:     "Claude Sonnet 4.6",
-			model:    "claude-sonnet-4-6",
-			expected: anthropicThinkingCaps{adaptive: true, budget: true, effort: true, effortMax: true},
-		},
-		{
-			name:     "Claude Opus 4.5 has effort but no adaptive and no effort=max",
-			model:    "claude-opus-4-5-20251101",
-			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: true, effortMax: false},
-		},
-		{
-			name:     "Claude Haiku 4.5 is budget-only",
-			model:    "claude-haiku-4-5-20251001",
-			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false},
-		},
-		{
-			name:     "Claude Sonnet 3.5 is budget-only",
-			model:    "claude-3-5-sonnet-20241022",
-			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false},
-		},
-		{
-			name:     "Empty model gets legacy profile",
-			model:    "",
-			expected: anthropicThinkingCaps{adaptive: false, budget: true, effort: false, effortMax: false},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, anthropicModelThinkingCaps(tt.model))
-		})
-	}
-}
-
 func TestClampAnthropicEffort(t *testing.T) {
-	caps46 := anthropicModelThinkingCaps("claude-opus-4-6")           // low/medium/high/max
-	caps45 := anthropicModelThinkingCaps("claude-opus-4-5")           // low/medium/high
-	capsOld := anthropicModelThinkingCaps("claude-sonnet-4-20250514") // no effort
-
-	assert.Equal(t, anthropic.OutputConfigEffortMax, clampAnthropicEffort(anthropic.OutputConfigEffortMax, caps46))
-	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortXhigh, caps46),
-		"xhigh steps down to the nearest supported level")
-	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortMax, caps45),
-		"Opus 4.5 has no max, steps down to high")
-	assert.Equal(t, anthropic.OutputConfigEffortLow, clampAnthropicEffort("minimal", caps46),
+	assert.Equal(t, anthropic.OutputConfigEffortLow, clampAnthropicEffort("minimal"),
 		"minimal enters the ladder at low")
-	assert.Equal(t, anthropic.OutputConfigEffort(""), clampAnthropicEffort(anthropic.OutputConfigEffortHigh, capsOld),
-		"models without effort support get the field stripped")
+	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortXhigh),
+		"xhigh steps down to high")
+	assert.Equal(t, anthropic.OutputConfigEffortLow, clampAnthropicEffort(anthropic.OutputConfigEffortLow))
+	assert.Equal(t, anthropic.OutputConfigEffortMedium, clampAnthropicEffort(anthropic.OutputConfigEffortMedium))
+	assert.Equal(t, anthropic.OutputConfigEffortHigh, clampAnthropicEffort(anthropic.OutputConfigEffortHigh))
+	assert.Equal(t, anthropic.OutputConfigEffortMax, clampAnthropicEffort(anthropic.OutputConfigEffortMax),
+		"max passes through unclamped — no per-model cap without a catalog")
+	assert.Equal(t, anthropic.OutputConfigEffort(""), clampAnthropicEffort(""))
 }
+
 
 func TestApplyAnthropicModelTransform_V1_DisabledThinkingStripsStaleEffort(t *testing.T) {
 	// Regression: a client (or a stale UI selector) can send thinking=disabled
@@ -117,222 +59,47 @@ func TestApplyAnthropicModelTransform_Beta_DisabledThinkingStripsStaleEffort(t *
 	assert.Equal(t, anthropic.BetaOutputConfigEffort(""), result.OutputConfig.Effort)
 }
 
-func TestApplyAnthropicModelTransform_V1_AdaptiveWithEffort_FallsBackToBudget(t *testing.T) {
-	// Budget-only model + adaptive request carrying an effort level: the effort
-	// converts to enabled(budget) instead of disabling thinking outright.
+func TestApplyAnthropicModelTransform_V1_ThinkingPassesThroughRegardlessOfModel(t *testing.T) {
+	// No model-specific caps are consulted anymore: thinking config is passed
+	// through unchanged for any model, known or not.
+	for _, model := range []string{"claude-opus-4-7", "claude-3-5-haiku-20241022", "some-unknown-model"} {
+		t.Run(model, func(t *testing.T) {
+			req := &anthropic.MessageNewParams{
+				Model:     anthropic.Model(model),
+				MaxTokens: int64(4096),
+				Thinking: anthropic.ThinkingConfigParamUnion{
+					OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+				},
+				Messages: []anthropic.MessageParam{
+					anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
+				},
+			}
+
+			result := ApplyAnthropicV1ModelTransform(req, model)
+
+			assert.NotNil(t, result.Thinking.OfAdaptive, "adaptive thinking must survive untouched")
+			assert.Nil(t, result.Thinking.OfEnabled)
+		})
+	}
+}
+
+func TestApplyAnthropicModelTransform_V1_EffortClampedAndSentForAnyModel(t *testing.T) {
 	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-sonnet-4-5-20250929"),
-		MaxTokens: int64(64000),
+		Model:     anthropic.Model("some-unknown-model"),
+		MaxTokens: int64(4096),
 		Thinking: anthropic.ThinkingConfigParamUnion{
 			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
 		},
-		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
+		OutputConfig: anthropic.OutputConfigParam{Effort: "minimal"},
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
 		},
 	}
 
-	result := ApplyAnthropicV1ModelTransform(req, "claude-sonnet-4-5-20250929")
+	result := ApplyAnthropicV1ModelTransform(req, "some-unknown-model")
 
-	assert.Nil(t, result.Thinking.OfAdaptive)
-	if assert.NotNil(t, result.Thinking.OfEnabled, "adaptive+effort should fall back to enabled(budget)") {
-		assert.Equal(t, typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh], result.Thinking.OfEnabled.BudgetTokens)
-	}
-	assert.Equal(t, anthropic.OutputConfigEffort(""), result.OutputConfig.Effort,
-		"effort must be stripped for models without effort support")
-}
-
-func TestApplyAnthropicModelTransform_V1_AdaptiveBudgetFallbackCappedByMaxTokens(t *testing.T) {
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
-		MaxTokens: int64(2048),
-		Thinking: anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		},
-		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortMax},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-haiku-20241022")
-
-	if assert.NotNil(t, result.Thinking.OfEnabled) {
-		assert.LessOrEqual(t, result.Thinking.OfEnabled.BudgetTokens, int64(2048),
-			"fallback budget must not exceed max_tokens")
-	}
-}
-
-func TestApplyAnthropicModelTransform_V1_Opus47_BudgetConvertsToAdaptive(t *testing.T) {
-	// Adaptive-only model (Opus 4.7) + enabled(budget) request: budget converts
-	// to adaptive + effort derived from the budget tier.
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-opus-4-7"),
-		MaxTokens: int64(64000),
-		Thinking:  anthropic.ThinkingConfigParamOfEnabled(31999),
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-7")
-
-	assert.Nil(t, result.Thinking.OfEnabled, "enabled(budget) is not supported on Opus 4.7")
-	assert.NotNil(t, result.Thinking.OfAdaptive, "budget request should convert to adaptive")
-	assert.Equal(t, anthropic.OutputConfigEffortMax, result.OutputConfig.Effort,
-		"a 32K budget tiers to effort=max")
-}
-
-func TestApplyAnthropicModelTransform_V1_Opus47_ExplicitEffortWins(t *testing.T) {
-	req := &anthropic.MessageNewParams{
-		Model:        anthropic.Model("claude-opus-4-7"),
-		MaxTokens:    int64(64000),
-		Thinking:     anthropic.ThinkingConfigParamOfEnabled(31999),
-		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortLow},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-7")
-
-	assert.NotNil(t, result.Thinking.OfAdaptive)
 	assert.Equal(t, anthropic.OutputConfigEffortLow, result.OutputConfig.Effort,
-		"an explicit effort level wins over the budget-derived tier")
-}
-
-func TestApplyAnthropicModelTransform_V1_Opus45_EffortMaxClampsToHigh(t *testing.T) {
-	req := &anthropic.MessageNewParams{
-		Model:        anthropic.Model("claude-opus-4-5-20251101"),
-		MaxTokens:    int64(64000),
-		Thinking:     anthropic.ThinkingConfigParamOfEnabled(20480),
-		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortMax},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-5-20251101")
-
-	assert.NotNil(t, result.Thinking.OfEnabled, "budget thinking stays on Opus 4.5")
-	assert.Equal(t, anthropic.OutputConfigEffortHigh, result.OutputConfig.Effort,
-		"Opus 4.5's effort ladder stops at high")
-}
-
-func TestApplyAnthropicModelTransform_Beta_Opus47_BudgetConvertsToAdaptive(t *testing.T) {
-	req := &anthropic.BetaMessageNewParams{
-		Model:     anthropic.Model("claude-opus-4-7"),
-		MaxTokens: int64(64000),
-		Thinking:  anthropic.BetaThinkingConfigParamOfEnabled(4096),
-		Messages: []anthropic.BetaMessageParam{
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}},
-		},
-	}
-
-	result := ApplyAnthropicBetaModelTransform(req, "claude-opus-4-7")
-
-	assert.Nil(t, result.Thinking.OfEnabled)
-	assert.NotNil(t, result.Thinking.OfAdaptive)
-	assert.Equal(t, anthropic.BetaOutputConfigEffortLow, result.OutputConfig.Effort,
-		"a 4K budget tiers to effort=low")
-}
-
-func TestApplyAnthropicModelTransform_V1_Opus46_Adaptive(t *testing.T) {
-	// Test case: Opus 4.6 model with adaptive thinking should keep thinking
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-opus-4-6"),
-		MaxTokens: int64(4096),
-		Thinking: anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-opus-4-6")
-
-	assert.NotNil(t, result)
-	assert.NotNil(t, result.Thinking.OfAdaptive, "Thinking.OfAdaptive should be preserved for Opus 4.6")
-}
-
-func TestApplyAnthropicModelTransform_V1_Sonnet46_Adaptive(t *testing.T) {
-	// Test case: Sonnet 4.6 model with adaptive thinking should keep thinking
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-sonnet-4-6"),
-		MaxTokens: int64(4096),
-		Thinking: anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-sonnet-4-6")
-
-	assert.NotNil(t, result)
-	assert.NotNil(t, result.Thinking.OfAdaptive, "Thinking.OfAdaptive should be preserved for Sonnet 4.6")
-}
-
-func TestApplyAnthropicModelTransform_V1_Haiku_Adaptive(t *testing.T) {
-	// Test case: Haiku model with adaptive thinking should remove thinking
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
-		MaxTokens: int64(4096),
-		Thinking: anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-haiku-20241022")
-
-	assert.NotNil(t, result)
-	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Haiku")
-	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Haiku")
-}
-
-func TestApplyAnthropicModelTransform_V1_Sonnet35_Adaptive(t *testing.T) {
-	// Test case: Sonnet 3.5 model with adaptive thinking should remove thinking (not 4.6)
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
-		MaxTokens: int64(4096),
-		Thinking: anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-3-5-sonnet-20241022")
-
-	assert.NotNil(t, result)
-	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Sonnet 3.5")
-	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Sonnet 3.5")
-}
-
-func TestApplyAnthropicModelTransform_V1_Opus37_Adaptive(t *testing.T) {
-	// Test case: Opus 3.7 model with adaptive thinking should remove thinking (not 4.6)
-	req := &anthropic.MessageNewParams{
-		Model:     anthropic.Model("claude-3-7-opus-20250214"),
-		MaxTokens: int64(4096),
-		Thinking: anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello")),
-		},
-	}
-
-	result := ApplyAnthropicV1ModelTransform(req, "claude-3-7-opus-20250214")
-
-	assert.NotNil(t, result)
-	assert.True(t, result.Thinking.OfAdaptive == nil, "Thinking.OfAdaptive should be nil for Opus 3.7")
-	assert.True(t, result.Thinking.OfEnabled == nil, "Thinking.OfEnabled should be nil for Opus 3.7")
+		"effort is clamped and sent even for a model this package knows nothing about")
 }
 
 func TestApplyAnthropicModelTransform_V1_Haiku_Enabled(t *testing.T) {
@@ -376,32 +143,6 @@ func TestApplyAnthropicModelTransform_NilRequest(t *testing.T) {
 	// Test case: nil request
 	result := ApplyAnthropicV1ModelTransform(nil, "claude-3-5-haiku-20241022")
 	assert.Nil(t, result)
-}
-
-func TestFilterThinkingBlocksInMessages(t *testing.T) {
-	// Test case: Filter thinking blocks from messages
-	messages := []anthropic.MessageParam{
-		{
-			Role: "user",
-			Content: []anthropic.ContentBlockParamUnion{
-				anthropic.NewTextBlock("Hello"),
-			},
-		},
-		{
-			Role: "assistant",
-			Content: []anthropic.ContentBlockParamUnion{
-				anthropic.NewTextBlock("Thinking..."),
-				// Note: Creating a thinking block requires proper construction
-				// This test demonstrates the structure; actual implementation may vary
-			},
-		},
-	}
-
-	// The filter should remove messages with only thinking blocks
-	result := filterThinkingBlocksInMessages(messages)
-	assert.NotNil(t, result)
-	// User message should be preserved
-	assert.True(t, len(result) >= 1)
 }
 
 func TestApplyAnthropicMetadataTransform(t *testing.T) {
