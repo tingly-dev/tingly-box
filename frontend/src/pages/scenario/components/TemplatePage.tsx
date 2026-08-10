@@ -33,7 +33,7 @@ let routingGuideAutoOpenedThisSession = false;
  *
  * INTERNAL MODE (recommended):
  * Just provide `scenario` prop - TemplatePage fetches all data internally.
- * <TemplatePage scenario="agent" />
+ * <TemplatePage scenario="custom" />
  *
  * HYBRID MODE (for custom logic):
  * Provide `scenario` plus override specific data props for custom behavior.

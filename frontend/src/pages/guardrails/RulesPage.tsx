@@ -1678,10 +1678,10 @@ const GuardrailsRulesPage = () => {
                     description: 'Xcode-integrated coding workflows.',
                     icon: <LaptopMac sx={{ fontSize: 18 }} />,
                 };
-            case 'agent':
+            case 'custom':
                 return {
-                    label: 'Agent',
-                    description: 'Agent-style orchestration and assistant flows.',
+                    label: 'Custom',
+                    description: 'Bring-your-own-request-model custom scenario traffic.',
                     icon: <AutoAwesome sx={{ fontSize: 18 }} />,
                 };
             default: {

@@ -28,7 +28,6 @@ export default {
     "off": "Off",
     "direct": "Direct",
     "theme": "主题",
-    "openClaw": "OpenClaw",
     "prompt": "提示词",
     "and": "和"
   },
@@ -53,6 +52,7 @@ export default {
       "useEmbed": "Embedding",
       "useImageGen": "Image Gen",
       "useTeam": "Team",
+      "useCustom": "Custom",
       "apiKeys": "API 密钥",
       "oauth": "OAuth 凭证",
       "credential": "凭证",

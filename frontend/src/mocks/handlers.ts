@@ -641,10 +641,10 @@ const mockV1Rules: Record<string, any[]> = {
             ],
         },
     ],
-    agent: [
+    custom: [
         {
-            uuid: 'mock-rule-agent-1',
-            scenario: 'agent',
+            uuid: 'mock-rule-custom-1',
+            scenario: 'custom',
             request_model: 'claude-opus-4-8',
             response_model: '',
             active: true,
@@ -652,8 +652,8 @@ const mockV1Rules: Record<string, any[]> = {
             services: [{ uuid: 'svc-ag1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-8', weight: 1, active: true }],
         },
         {
-            uuid: 'mock-rule-agent-2',
-            scenario: 'agent',
+            uuid: 'mock-rule-custom-2',
+            scenario: 'custom',
             request_model: 'gpt-5.6-sol',
             response_model: '',
             active: true,
@@ -2230,7 +2230,7 @@ export const handlers = [
                 { time: new Date(now - 15 * 60 * 1000).toISOString(), verdict: 'block', phase: 'request', scenario: 'openai', alias_hits: ['prompt_injection'], credential_names: ['OpenAI'] },
                 { time: new Date(now - 32 * 60 * 1000).toISOString(), verdict: 'mask', phase: 'request', scenario: 'claude_code', alias_hits: ['ssn'], credential_names: [] },
                 { time: new Date(now - 45 * 60 * 1000).toISOString(), verdict: 'review', phase: 'response', scenario: 'anthropic', alias_hits: ['ssn'], credential_names: [] },
-                { time: new Date(now - 60 * 60 * 1000).toISOString(), verdict: 'allow', phase: 'request', scenario: 'agent', alias_hits: [], credential_names: [] },
+                { time: new Date(now - 60 * 60 * 1000).toISOString(), verdict: 'allow', phase: 'request', scenario: 'custom', alias_hits: [], credential_names: [] },
             ],
         })
     }),
@@ -2384,7 +2384,7 @@ export const handlers = [
                     provider_uuid: 'mock-provider-openrouter',
                     provider_name: 'OpenRouter',
                     model: 'deepseek/deepseek-v4-pro',
-                    scenario: 'agent',
+                    scenario: 'custom',
                     request_count: scale(312),
                     total_tokens: scale(1350000),
                     total_input_tokens: scale(1050000),
@@ -2487,7 +2487,7 @@ export const handlers = [
             { provider_name: 'Anthropic', model: 'claude-opus-4-8',   scenario: 'claude_code', streamed: true, cacheHitRatio: 0.94 },
             { provider_name: 'OpenAI',    model: 'gpt-5.6-sol',            scenario: 'openai',      streamed: true, cacheHitRatio: 0.91 },
             { provider_name: 'OpenAI',    model: 'gpt-5.6-luna',       scenario: 'openai',      streamed: false, cacheHitRatio: 0.90 },
-            { provider_name: 'OpenRouter', model: 'deepseek/deepseek-v4-pro', scenario: 'agent', streamed: true, cacheHitRatio: 0.18 },
+            { provider_name: 'OpenRouter', model: 'deepseek/deepseek-v4-pro', scenario: 'custom', streamed: true, cacheHitRatio: 0.18 },
         ]
 
         const now = Date.now()

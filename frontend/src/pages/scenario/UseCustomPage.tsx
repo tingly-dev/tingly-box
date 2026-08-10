@@ -8,9 +8,9 @@ import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
-const scenario = "agent";
+const scenario = "custom";
 
-const UseAgentPageContent: React.FC = () => {
+const UseCustomPageContent: React.FC = () => {
     const {
         isLoading,
         notification,
@@ -25,14 +25,14 @@ const UseAgentPageContent: React.FC = () => {
                     titleHeadingLevel={1}
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Claw | Agent</span>
+                            <span>Custom</span>
                         </Box>
                     }
                     size="full"
                 >
                     <ProviderConfigCard
-                        title="Claw | Agent"
-                        baseUrlPath="/tingly/agent"
+                        title="Custom"
+                        baseUrlPath="/tingly/custom"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
                         compact={true}
@@ -50,12 +50,12 @@ const UseAgentPageContent: React.FC = () => {
     );
 };
 
-const UseAgentPage: React.FC = () => {
+const UseCustomPage: React.FC = () => {
     return (
         <ScenarioPageModalProvider>
-            <UseAgentPageContent />
+            <UseCustomPageContent />
         </ScenarioPageModalProvider>
     );
 };
 
-export default UseAgentPage;
+export default UseCustomPage;

@@ -82,7 +82,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioAgent, ScenarioClaudeDesktop, ScenarioSmartGuide:
+	case ScenarioCustom, ScenarioClaudeDesktop, ScenarioSmartGuide:
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},
@@ -130,6 +130,23 @@ func cloneScenarioDescriptor(descriptor ScenarioDescriptor) ScenarioDescriptor {
 	out := descriptor
 	out.SupportedTransport = slices.Clone(descriptor.SupportedTransport)
 	return out
+}
+
+// legacyScenarioAliases maps a deprecated scenario id to the id it was
+// renamed to. Unlike a one-time config migration, this is permanent: a
+// caller hardcoded against the old id (an external client, a bookmarked
+// URL) must keep resolving exactly like the new one forever, not just until
+// stored data is rewritten. Consulted by the gateway's routing middleware
+// (ResolveScenarioAlias) before any scenario lookup.
+var legacyScenarioAliases = map[RuleScenario]RuleScenario{
+	ScenarioAgent: ScenarioCustom, // "agent" (OpenClaw) -> "custom"
+}
+
+// ResolveScenarioAlias returns the canonical scenario id for a possibly
+// deprecated one, and whether scenario was in fact a known alias.
+func ResolveScenarioAlias(scenario RuleScenario) (RuleScenario, bool) {
+	canonical, ok := legacyScenarioAliases[scenario]
+	return canonical, ok
 }
 
 func RegisterScenario(descriptor ScenarioDescriptor) error {

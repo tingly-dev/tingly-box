@@ -72,3 +72,48 @@ func TestProfileAliasMiddleware_LeavesCanonicalAndUnknownUntouched(t *testing.T)
 		}
 	}
 }
+
+// invokeLegacyScenarioAliasMiddleware runs legacyScenarioAliasMiddleware over
+// a request whose :scenario param is rawScenario and whose path embeds it.
+func invokeLegacyScenarioAliasMiddleware(t *testing.T, ph *ProtocolHandler, rawScenario string) (param, path string) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/tingly/"+rawScenario+"/v1/messages", nil)
+	c.Params = gin.Params{{Key: "scenario", Value: rawScenario}}
+
+	ph.legacyScenarioAliasMiddleware(c)
+
+	return c.Param("scenario"), c.Request.URL.Path
+}
+
+func TestLegacyScenarioAliasMiddleware_RewritesAgentToCustom(t *testing.T) {
+	s := newAliasTestServer()
+
+	param, path := invokeLegacyScenarioAliasMiddleware(t, s, "agent")
+
+	if param != "custom" {
+		t.Errorf("param = %q, want %q", param, "custom")
+	}
+	if path != "/tingly/custom/v1/messages" {
+		t.Errorf("path = %q, want %q", path, "/tingly/custom/v1/messages")
+	}
+	if sc := ExtractScenarioFromPath(path); sc != "custom" {
+		t.Errorf("extractScenarioFromPath = %q, want %q", sc, "custom")
+	}
+}
+
+func TestLegacyScenarioAliasMiddleware_LeavesOthersUntouched(t *testing.T) {
+	s := newAliasTestServer()
+
+	for _, raw := range []string{"custom", "claude_code", "claude_code:p1", "openai"} {
+		param, path := invokeLegacyScenarioAliasMiddleware(t, s, raw)
+		if param != raw {
+			t.Errorf("param for %q = %q, want unchanged", raw, param)
+		}
+		if path != "/tingly/"+raw+"/v1/messages" {
+			t.Errorf("path for %q = %q, want unchanged", raw, path)
+		}
+	}
+}

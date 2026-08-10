@@ -12,6 +12,67 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// rewriteScenarioParam rewrites the ":scenario" path param (and the request's
+// URL path/RawPath, so anything that re-derives the scenario from the raw
+// path agrees) from rawScenario to rewritten. Shared by profileAliasMiddleware
+// and legacyScenarioAliasMiddleware — both need every downstream stage
+// (contextMiddleware, auth, routing, usage records) to see only the
+// canonical form, never the alias a caller actually used.
+func rewriteScenarioParam(c *gin.Context, rawScenario, rewritten string) {
+	for i := range c.Params {
+		if c.Params[i].Key == "scenario" {
+			c.Params[i].Value = rewritten
+		}
+	}
+
+	oldSeg := "/tingly/" + rawScenario
+	newSeg := "/tingly/" + rewritten
+	rewriteSeg := func(p string) string {
+		if rest, found := strings.CutPrefix(p, oldSeg); found {
+			return newSeg + rest
+		}
+		return p
+	}
+	c.Request.URL.Path = rewriteSeg(c.Request.URL.Path)
+	if c.Request.URL.RawPath != "" {
+		c.Request.URL.RawPath = rewriteSeg(c.Request.URL.RawPath)
+	}
+}
+
+// legacyScenarioAliasMiddleware rewrites a deprecated scenario id (e.g.
+// "agent", renamed to "custom") to its canonical id before anything else
+// runs. Unlike profileAliasMiddleware this is not a UX nicety — it is a
+// permanent compatibility guarantee: a client hardcoded against the old id
+// (an external integration, a bookmarked base URL) must keep resolving
+// exactly like the new one forever, even though stored rules are migrated to
+// the new scenario the moment the config loads (see
+// migrateAgentScenarioToCustom) and nothing is ever stored under the old id
+// again.
+func (ph *ProtocolHandler) legacyScenarioAliasMiddleware(c *gin.Context) {
+	rawScenario := c.Param("scenario")
+	base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
+
+	canonical, ok := typ.ResolveScenarioAlias(base)
+	if !ok {
+		c.Next()
+		return
+	}
+
+	rewritten := string(canonical)
+	if profileID != "" {
+		rewritten = string(typ.ProfiledScenarioName(canonical, profileID))
+	}
+
+	rewriteScenarioParam(c, rawScenario, rewritten)
+
+	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+		"legacy_scenario": rawScenario,
+		"scenario":        rewritten,
+	}).Infof("[legacy-scenario-alias] resolved %q -> %q", rawScenario, rewritten)
+
+	c.Next()
+}
+
 // profileAliasMiddleware rewrites a profile alias in the ":scenario" path
 // segment to its canonical "base:pN" form before contextMiddleware runs.
 //
@@ -45,33 +106,7 @@ func (ph *ProtocolHandler) profileAliasMiddleware(c *gin.Context) {
 	}
 
 	rewritten := string(typ.ProfiledScenarioName(base, id))
-
-	// Rewrite the routed path param — covers every handler and the
-	// contextMiddleware that derives the request-context scenario from c.Param.
-	for i := range c.Params {
-		if c.Params[i].Key == "scenario" {
-			c.Params[i].Value = rewritten
-		}
-	}
-
-	// Also rewrite the URL path so consumers that re-derive the scenario from
-	// the raw path agree on the canonical form. The usage tracker
-	// (extractScenarioFromPath) is the one that matters: without this, requests
-	// via the alias would be recorded under "claude_code:mine" instead of
-	// "claude_code:p1", splitting analytics across the alias and the ID.
-	originalPath := c.Request.URL.Path
-	oldSeg := "/tingly/" + rawScenario
-	newSeg := "/tingly/" + rewritten
-	rewriteSeg := func(p string) string {
-		if rest, found := strings.CutPrefix(p, oldSeg); found {
-			return newSeg + rest
-		}
-		return p
-	}
-	c.Request.URL.Path = rewriteSeg(c.Request.URL.Path)
-	if c.Request.URL.RawPath != "" {
-		c.Request.URL.RawPath = rewriteSeg(c.Request.URL.RawPath)
-	}
+	rewriteScenarioParam(c, rawScenario, rewritten)
 
 	// Record the mapping. After this point the original alias is gone from the
 	// path, usage records, and access logs — all of which now show the
@@ -81,7 +116,6 @@ func (ph *ProtocolHandler) profileAliasMiddleware(c *gin.Context) {
 	logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 		"profile_alias":  rawScenario,
 		"scenario":       rewritten,
-		"original_path":  originalPath,
 		"rewritten_path": c.Request.URL.Path,
 	}).Infof("[profile-alias] resolved %q -> %q", rawScenario, rewritten)
 

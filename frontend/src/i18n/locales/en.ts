@@ -28,7 +28,6 @@ export default {
     "off": "Off",
     "direct": "Direct",
     "theme": "Theme",
-    "openClaw": "OpenClaw",
     "prompt": "Prompt"
   },
   "layout": {
@@ -51,6 +50,7 @@ export default {
       "useEmbed": "Embedding",
       "useImageGen": "Image Gen",
       "useTeam": "Team",
+      "useCustom": "Custom",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
       "credential": "Credential",
@@ -1616,7 +1616,7 @@ export default {
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
       "imagegen": "Route image generation through Tingly Box.",
-      "agent": "OpenClaw — universal agent runner.",
+      "custom": "Bring your own request model name — a generic catch-all scenario. Hidden by default.",
       "team": "Shared central model deployment for your whole team. Hidden by default."
     }
   }

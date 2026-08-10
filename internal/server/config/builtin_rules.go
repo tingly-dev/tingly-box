@@ -34,12 +34,23 @@ const (
 
 	// Modern built-in rules — "builtin:<scenario>:<tier>" form.
 	// These are the target UUIDs after migrate20260612 renames the legacy ones.
-	RuleUUIDOpenAI    = "builtin:openai:default"
-	RuleUIDAnthropic  = "builtin:anthropic:default"
-	RuleUUIDCodex     = "builtin:codex:default"
-	RuleUUIDOpenCode  = "builtin:opencode:default"
+	RuleUUIDOpenAI   = "builtin:openai:default"
+	RuleUIDAnthropic = "builtin:anthropic:default"
+	RuleUUIDCodex    = "builtin:codex:default"
+	RuleUUIDOpenCode = "builtin:opencode:default"
+
+	// RuleUUIDAgent / RuleUUIDAgentClaw are deprecated — the "agent" scenario
+	// (OpenClaw) was renamed to "custom". Live configs are renamed to
+	// RuleUUIDCustom / RuleUUIDCustomClaw by migrateAgentScenarioToCustom;
+	// these constants remain so that migration (which runs before the rename)
+	// can still address pre-rename configs.
 	RuleUUIDAgent     = "builtin:agent:default"
 	RuleUUIDAgentClaw = "builtin:agent:claw"
+
+	// Custom scenario built-in rules (modern "builtin:<scenario>:<tier>" form,
+	// target of the RuleUUIDAgent* rename above).
+	RuleUUIDCustom     = "builtin:custom:default"
+	RuleUUIDCustomClaw = "builtin:custom:claw"
 
 	// Claude Code built-in rules (modern "builtin:<scenario>:<tier>" form)
 	RuleUUIDCC         = "builtin:claude_code:cc"
@@ -72,14 +83,21 @@ var legacyCCRuleUUIDs = map[string]string{
 // legacySimpleRuleUUIDs maps the remaining legacy built-in UUIDs (all
 // non-CC single-rule scenarios) to their modern "builtin:<scenario>:<model>"
 // counterparts. Used by migrate20260612 and defaultRuleByUUID.
+//
+// RuleUUIDBuiltinAgent* and RuleUUIDAgent* both map straight to the "custom"
+// UUIDs (not to each other) so a config on either pre-rename form converges
+// to the final name in the one pass normalizeBuiltinRuleIdentity makes per
+// rule, instead of needing two migrations across two restarts to land.
 var legacySimpleRuleUUIDs = map[string]string{
 	RuleUUIDTingly:           RuleUUIDOpenAI, // very old "tingly" rule preceded the openai scenario
 	RuleUUIDBuiltinOpenAI:    RuleUUIDOpenAI,
 	RuleUUIDBuiltinAnthropic: RuleUIDAnthropic,
 	RuleUUIDBuiltinCodex:     RuleUUIDCodex,
 	RuleUUIDBuiltinOpenCode:  RuleUUIDOpenCode,
-	RuleUUIDBuiltinAgent:     RuleUUIDAgent,
-	RuleUUIDBuiltinAgentClaw: RuleUUIDAgentClaw,
+	RuleUUIDBuiltinAgent:     RuleUUIDCustom,
+	RuleUUIDBuiltinAgentClaw: RuleUUIDCustomClaw,
+	RuleUUIDAgent:            RuleUUIDCustom,
+	RuleUUIDAgentClaw:        RuleUUIDCustomClaw,
 }
 
 // BuiltinRuleUUID builds a built-in rule UUID in the modern

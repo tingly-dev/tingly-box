@@ -434,6 +434,44 @@ func TestNormalizeBuiltinRuleIdentity_SkipsSimpleUUIDCollision(t *testing.T) {
 	}
 }
 
+func TestMigrateAgentScenarioToCustom_RenamesRulesAndScenarioConfig(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDAgent, Scenario: typ.ScenarioAgent, RequestModel: "tingly-agent"},
+			{UUID: "user-agent-rule", Scenario: typ.ScenarioAgent, RequestModel: "my-model"},
+			{UUID: "unrelated", Scenario: typ.ScenarioOpenAI, RequestModel: "gpt"},
+		},
+		Scenarios: []typ.ScenarioConfig{
+			{Scenario: typ.ScenarioAgent, Flags: typ.ScenarioFlags{SkipUsage: true}},
+			{Scenario: typ.ScenarioOpenAI},
+		},
+	}
+
+	migrateAgentScenarioToCustom(c)
+
+	if c.Rules[0].Scenario != typ.ScenarioCustom || c.Rules[1].Scenario != typ.ScenarioCustom {
+		t.Errorf("agent-scenario rules should be renamed to custom, got %+v", c.Rules[:2])
+	}
+	if c.Rules[2].Scenario != typ.ScenarioOpenAI {
+		t.Errorf("unrelated rule should be untouched, got %+v", c.Rules[2])
+	}
+	if c.Rules[0].RequestModel != "tingly-agent" || c.Rules[1].RequestModel != "my-model" {
+		t.Errorf("migration should preserve rule fields, got %+v", c.Rules[:2])
+	}
+	if c.Scenarios[0].Scenario != typ.ScenarioCustom || !c.Scenarios[0].Flags.SkipUsage {
+		t.Errorf("agent ScenarioConfig should be renamed to custom, preserving flags, got %+v", c.Scenarios[0])
+	}
+	if c.Scenarios[1].Scenario != typ.ScenarioOpenAI {
+		t.Errorf("unrelated ScenarioConfig should be untouched, got %+v", c.Scenarios[1])
+	}
+
+	// Idempotent: a second pass is a no-op.
+	migrateAgentScenarioToCustom(c)
+	if c.Rules[0].Scenario != typ.ScenarioCustom {
+		t.Errorf("second pass should leave already-migrated rules alone, got %+v", c.Rules[0])
+	}
+}
+
 func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
 	separate := newCCProfileRules(typ.RuleScenario("claude_code:p3"), false)
 	wantSeparate := map[string]string{

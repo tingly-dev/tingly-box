@@ -29,11 +29,11 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          RuleUUIDAgent,
-			Scenario:      typ.ScenarioAgent,
+			UUID:          RuleUUIDCustom,
+			Scenario:      typ.ScenarioCustom,
 			RequestModel:  "tingly-agent",
 			ResponseModel: "",
-			Description:   "Default proxy rule in tingly-box for agent",
+			Description:   "Default proxy rule in tingly-box for custom",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRandom,
@@ -42,11 +42,11 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          RuleUUIDAgentClaw,
-			Scenario:      typ.ScenarioAgent,
+			UUID:          RuleUUIDCustomClaw,
+			Scenario:      typ.ScenarioCustom,
 			RequestModel:  "tingly-claw",
 			ResponseModel: "",
-			Description:   "Built in model rule for agent - claw",
+			Description:   "Built in model rule for custom - claw",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRandom,

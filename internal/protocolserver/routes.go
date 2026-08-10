@@ -15,11 +15,15 @@ import (
 // owns the route shape and the handlers behind it.
 func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.HandlerFunc) {
 	// scenario routes with middleware to inject scenario into context.
-	// profileAliasMiddleware runs first so it can rewrite a profile name alias
-	// (e.g. "claude_code:mine") to its canonical ID form ("claude_code:p1")
+	// legacyScenarioAliasMiddleware runs first so a deprecated scenario id
+	// (e.g. "agent" -> "custom") is rewritten before profileAliasMiddleware
+	// parses any profile suffix on it. profileAliasMiddleware then rewrites a
+	// profile name alias (e.g. "claude_code:mine") to its canonical ID form
+	// ("claude_code:p1")
 	// before contextMiddleware validates and downstream stages consume it.
 	scenario := engine.Group("/tingly/:scenario")
 	scenario.Use(middleware.ClearServerIOTimeouts())
+	scenario.Use(ph.legacyScenarioAliasMiddleware)
 	scenario.Use(ph.profileAliasMiddleware)
 	scenario.Use(ph.contextMiddleware)
 	ph.SetupMixinEndpoints(scenario, modelAuth)
@@ -31,6 +35,7 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 	// scenario v1 routes with middleware
 	scenarioV1 := engine.Group("/tingly/:scenario/v1")
 	scenarioV1.Use(middleware.ClearServerIOTimeouts())
+	scenarioV1.Use(ph.legacyScenarioAliasMiddleware)
 	scenarioV1.Use(ph.profileAliasMiddleware)
 	scenarioV1.Use(ph.contextMiddleware)
 	ph.SetupMixinEndpoints(scenarioV1, modelAuth)

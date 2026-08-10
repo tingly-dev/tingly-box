@@ -6,7 +6,7 @@ import type { Provider } from '@/types/provider';
  *
  * INTERNAL MODE (recommended):
  * Just provide `scenario` and TemplatePage will handle all data fetching internally.
- * <TemplatePage scenario="agent" />
+ * <TemplatePage scenario="custom" />
  *
  * PROFILE MODE:
  * For profile-specific rules, provide the suffixed scenario.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
-import { OpenAI, Anthropic, Claude, OpenCode, Pi, Xcode, VSCode, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, OpenCode, Pi, Xcode, VSCode, Codex, ClaudeDesktop } from '../components/BrandIcons';
 import {
     SettingsApplications,
     BarChart as IconChartBar,
@@ -30,6 +30,7 @@ import {
     Handyman as IconTools,
     Server as IconServer,
     AiAgents as IconAiAgents,
+    Extension as IconExtension,
 } from '@/components/icons';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -113,7 +114,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'imagegen', nav: { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto sx={{ fontSize: 20 }} /> } },
         ]);
         const agentTools = visible([
-            { id: 'agent', nav: { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> } },
+            { id: 'custom', nav: { path: '/agent/custom', label: t('layout.nav.useCustom', { defaultValue: 'Custom' }), icon: <IconExtension sx={{ fontSize: 20 }} /> } },
             { id: 'team', nav: { path: '/agent/team', label: t('layout.nav.useTeam', { defaultValue: 'Team' }), icon: <IconUsers sx={{ fontSize: 20 }} /> } },
         ]);
 

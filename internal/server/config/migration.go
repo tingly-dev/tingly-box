@@ -118,6 +118,7 @@ func (c *Config) rekeyRuleUUIDState(migrationID string, renames map[string]strin
 func Migrate(c *Config) error {
 	normalizeLegacyConfigBaseline(c)
 	normalizeBuiltinRuleIdentity(c)
+	migrateAgentScenarioToCustom(c) // Rename the "agent" (OpenClaw) scenario to "custom"
 	ensureCurrentBuiltinRules(c)
 	migrate20260416(c) // Enable multi-tenant by default
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
@@ -126,6 +127,42 @@ func Migrate(c *Config) error {
 	migrate20260712(c) // Drop smart-routing partitions using removed positions (tool_use)
 	normalizeRuleDefaultsOnce(c)
 	return nil
+}
+
+// migrateAgentScenarioToCustom renames every stored Rule and ScenarioConfig
+// still on the deprecated "agent" scenario (OpenClaw) to "custom". Runs every
+// boot, un-gated: it is cheap, and — unlike a "once" marker — self-heals a
+// config restored from an old backup instead of leaving it stuck on the
+// deprecated name forever.
+//
+// This only rewrites stored data. New requests that still hit the literal
+// "/tingly/agent" URL keep working indefinitely via
+// legacyScenarioAliasMiddleware, which resolves "agent" -> "custom" at the
+// routing layer (typ.ResolveScenarioAlias) — independent of whether any rule
+// migrated here.
+func migrateAgentScenarioToCustom(c *Config) {
+	needsSave := false
+
+	for i := range c.Rules {
+		if c.Rules[i].Scenario != typ.ScenarioAgent {
+			continue
+		}
+		c.Rules[i].Scenario = typ.ScenarioCustom
+		needsSave = true
+	}
+
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario != typ.ScenarioAgent {
+			continue
+		}
+		c.Scenarios[i].Scenario = typ.ScenarioCustom
+		needsSave = true
+	}
+
+	if needsSave {
+		c.saveMigration()
+		logrus.Info("Migration agent-to-custom completed: renamed \"agent\" scenario rules/config to \"custom\"")
+	}
 }
 
 // migrate20260712 drops smart-routing partitions whose ops reference a

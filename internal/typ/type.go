@@ -52,10 +52,14 @@ func (fb FlexibleBool) MarshalJSON() ([]byte, error) {
 type RuleScenario string
 
 const (
-	ScenarioOpenAI        RuleScenario = "openai"
-	ScenarioAnthropic     RuleScenario = "anthropic"
+	ScenarioOpenAI    RuleScenario = "openai"
+	ScenarioAnthropic RuleScenario = "anthropic"
+	// ScenarioAgent is deprecated — renamed to ScenarioCustom. Kept only so
+	// legacyScenarioAliases and the config migration can still reference it;
+	// no longer in BuiltinScenarios() and never written by new code.
 	ScenarioAgent         RuleScenario = "agent"
-	ScenarioTeam          RuleScenario = "team" // Centrally deployed model shared across a team; hidden by default in the UI
+	ScenarioCustom        RuleScenario = "custom" // Generic bring-your-own-request-model catch-all (formerly "agent"/OpenClaw)
+	ScenarioTeam          RuleScenario = "team"   // Centrally deployed model shared across a team; hidden by default in the UI
 	ScenarioCodex         RuleScenario = "codex"
 	ScenarioClaudeCode    RuleScenario = "claude_code"
 	ScenarioOpenCode      RuleScenario = "opencode"
@@ -73,7 +77,7 @@ func BuiltinScenarios() []RuleScenario {
 	return []RuleScenario{
 		ScenarioOpenAI,
 		ScenarioAnthropic,
-		ScenarioAgent,
+		ScenarioCustom,
 		ScenarioTeam,
 		ScenarioCodex,
 		ScenarioClaudeCode,

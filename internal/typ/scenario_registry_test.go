@@ -123,7 +123,7 @@ func TestClaudeCodeSupportsProfiles(t *testing.T) {
 }
 
 func TestNonProfileScenariosDoNotSupportProfiles(t *testing.T) {
-	for _, s := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioAgent, ScenarioTeam} {
+	for _, s := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioCustom, ScenarioTeam} {
 		d, ok := GetScenarioDescriptor(s)
 		if !ok {
 			continue
@@ -149,6 +149,20 @@ func TestTeamScenarioDescriptor(t *testing.T) {
 		if !ScenarioSupportsTransport(ScenarioTeam, transport) {
 			t.Errorf("team should support transport %q", transport)
 		}
+	}
+}
+
+func TestResolveScenarioAlias(t *testing.T) {
+	canonical, ok := ResolveScenarioAlias(ScenarioAgent)
+	if !ok {
+		t.Fatal("expected \"agent\" to resolve as a legacy alias")
+	}
+	if canonical != ScenarioCustom {
+		t.Errorf("ResolveScenarioAlias(agent) = %q, want %q", canonical, ScenarioCustom)
+	}
+
+	if _, ok := ResolveScenarioAlias(ScenarioCustom); ok {
+		t.Error("\"custom\" itself should not resolve as an alias")
 	}
 }
 
